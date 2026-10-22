@@ -186,6 +186,40 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_resolve_installation'::text, true)))",
     null,
   ],
+  // M3 PR-2 (listings-runs): the broker's model_call_begin and model_call_end reach, as the
+  // broker's login only, the one run (and call) and tenant they name through
+  // transaction-local settings they write themselves (the resolve_call idiom), and the one
+  // parent task whose objective digest the fence binds.
+  broker_model_run: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+  ],
+  broker_model_run_child: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+  ],
+  broker_model_call: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)) OR ((id)::text = current_setting('morrow.vault_model_call'::text, true))))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+  ],
+  broker_model_tenant: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_model_tenant'::text, true)))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_model_tenant'::text, true)))",
+  ],
+  task_broker_model: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_model_task'::text, true)))",
+    null,
+  ],
 };
 // One table's policies against the template of its class and its registry extras.
 function checkPolicies(schema, table, spec) {

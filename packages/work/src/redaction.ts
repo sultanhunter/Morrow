@@ -98,5 +98,28 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       executor: "morrow_work.parameters_redact_for_store",
       executable: "M2 PR-3",
     },
+    // M3 PR-2 (listings-runs): the product text a run read and the drafts it wrote. Both are
+    // keyed by store and expire after 90 days. A run reads a product only through the
+    // connector's read path, which lands in M2 PR-3 with these handlers' executor (the
+    // orchestrator's product read stays disabled until then), so neither table holds a
+    // store's content before the handler can run.
+    {
+      table: "morrow_work.product_snapshots",
+      dataClass: "product_content_read",
+      trigger: "shop_redact",
+      action: "delete_rows",
+      storeKey: "store_id: the store the product was read from",
+      executor: null,
+      executable: "M2 PR-3",
+    },
+    {
+      table: "morrow_work.run_drafts",
+      dataClass: "product_content_drafted",
+      trigger: "shop_redact",
+      action: "delete_rows",
+      storeKey: "store_id: the store of the run that drafted it",
+      executor: null,
+      executable: "M2 PR-3",
+    },
   ].map((handler) => Object.freeze(handler as StoreContentHandler)),
 );

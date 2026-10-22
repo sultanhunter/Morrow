@@ -151,6 +151,10 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_listings_enable(text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_listings_enable('${uuid}','${digest}','corr','store_probe','${digest}','${digest}',NULL,NULL,NULL,NULL)`,
     "cmd_stop_ai_work(text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"record_probe","createdAt":"2026-10-20T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_stop_ai_work('${uuid}','${digest}','corr','store_probe','installation_probe',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex')) x`,
     "cmd_model_default_revise(text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_model_default_revise('${uuid}','${digest}','corr','1','claude_sonnet_5_5','low','1',NULL)`,
+    // M3 PR-2: run admission and reconciliation, every scalar well-formed.
+    "begin_run_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_run_command('run.admit','${uuid}','${digest}')`,
+    "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','1','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
+    "cmd_runs_reconcile(text,text,text)": `SELECT outcome FROM morrow_work.cmd_runs_reconcile('${uuid}','${digest}','corr')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -163,6 +167,15 @@ test("P1: with no context both roles see zero rows and every api function is ine
         ),
         "0",
       );
+      continue;
+    }
+    if (signature === "run_interrupted(text)") {
+      // M3 PR-2: the scalar read answers null without a context.
+      const out = db.sql(
+        `BEGIN; SET LOCAL ROLE morrow_work_api; SELECT COALESCE(morrow_work.run_interrupted('${randomUUID()}')::text,'null'); COMMIT;`,
+        { user: "morrow_api_worker" },
+      );
+      assert.equal(out, "null", signature);
       continue;
     }
     if (spec.read) {

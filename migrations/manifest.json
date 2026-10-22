@@ -269,6 +269,13 @@
       "sha256": "56426f72fe2057051df3de71dfb219959a297080b72335d3ed0dd0eae62342ff",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 34,
+      "file": "0034.listings-runs.sql",
+      "sha256": "eef07471f48d92329ebddbdb7421774c128cf91196674d6af1cdf0321a2b3359",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
     }
   ]
 }

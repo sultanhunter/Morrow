@@ -21,6 +21,9 @@ test("every registered table is classified, and every store table has exactly on
       ["morrow_identity.shopify_apps", "shop_redact", "clear_install_link", "M2 PR-3"],
       ["morrow_identity.store_installations", "shop_redact", "pseudonymise", "M2 PR-3"],
       ["morrow_work.proposal_parameters", "shop_redact", "empty_keep_digest", "M2 PR-3"],
+      // M3 PR-2: the run's product snapshots and drafts.
+      ["morrow_work.product_snapshots", "shop_redact", "delete_rows", "M2 PR-3"],
+      ["morrow_work.run_drafts", "shop_redact", "delete_rows", "M2 PR-3"],
     ],
   );
   assert.ok(Object.isFrozen(storeContentHandlers) && storeContentHandlers.every(Object.isFrozen));
@@ -30,7 +33,7 @@ test("every registered table is classified, and every store table has exactly on
   // its caller and policy (M3 PR-1 review).
   assert.deepEqual(
     storeContentHandlers.map((h) => h.executor),
-    [null, null, null, null, "morrow_work.parameters_redact_for_store"],
+    [null, null, null, null, "morrow_work.parameters_redact_for_store", null, null],
   );
 });
 
@@ -90,12 +93,12 @@ test("the check fails a new store table without a handler, and a stray or duplic
     identityTables,
   });
   assert.deepEqual(
-    contentProblems(storeContentHandlers, tables({ product_snapshots: { content: "store" } })),
-    ["STORE_CONTENT_WITHOUT_HANDLER:morrow_work.product_snapshots"],
+    contentProblems(storeContentHandlers, tables({ product_media: { content: "store" } })),
+    ["STORE_CONTENT_WITHOUT_HANDLER:morrow_work.product_media"],
   );
   assert.deepEqual(
-    contentProblems(storeContentHandlers, tables({ run_drafts: { class: "tenant_readable" } })),
-    ["CONTENT_UNCLASSIFIED:morrow_work.run_drafts"],
+    contentProblems(storeContentHandlers, tables({ run_notes: { class: "tenant_readable" } })),
+    ["CONTENT_UNCLASSIFIED:morrow_work.run_notes"],
   );
   const parameters = storeContentHandlers.find(
     (h) => h.table === "morrow_work.proposal_parameters",
