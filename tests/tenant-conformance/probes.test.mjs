@@ -145,6 +145,12 @@ test("P1: with no context both roles see zero rows and every api function is ine
       submitProbe(uuid, digest, records.A.task),
     "cmd_approval_decide(text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_approval_decide('${uuid}','${digest}','corr','proposal_absent','1','approve',NULL,'${digest}',NULL,NULL,NULL,NULL,NULL,'{"evaluatedAt":"2026-10-19T00:00:00.000Z","reviewers":[]}')`,
     "cmd_approval_withdraw(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_approval_withdraw('${uuid}','${digest}','corr','proposal_absent','1')`,
+    // M3 PR-1: the agent commands, each with well-formed scalars and documents.
+    "begin_agent_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_agent_command('installation.stop','${uuid}','${digest}')`,
+    "cmd_listings_enable_document(text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"createdAt":"2026-10-20T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_listings_enable_document('${uuid}','${digest}','corr','store_probe','enable','installation_probe','${randomUUID()}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'${digest}') x`,
+    "cmd_listings_enable(text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_listings_enable('${uuid}','${digest}','corr','store_probe','${digest}','${digest}',NULL,NULL,NULL,NULL)`,
+    "cmd_stop_ai_work(text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"record_probe","createdAt":"2026-10-20T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_stop_ai_work('${uuid}','${digest}','corr','store_probe','installation_probe',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex')) x`,
+    "cmd_model_default_revise(text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_model_default_revise('${uuid}','${digest}','corr','1','claude_sonnet_5_5','low','1',NULL)`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -166,6 +172,9 @@ test("P1: with no context both roles see zero rows and every api function is ine
         "review_candidates(text,text,text,text)":
           "morrow_work.review_candidates('governance.grants.revise','[]',NULL,'25')",
         "reviewer_snapshot(text,text)": `morrow_work.reviewer_snapshot('governance.grants.revise','["${P.B.principal}"]')`,
+        // M3 PR-1.
+        "store_association(text)": "morrow_work.store_association('store_probe')",
+        "agent_enable_document(text)": `morrow_work.agent_enable_document('${"a".repeat(64)}')`,
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(
@@ -657,6 +666,65 @@ test("P8: a lease context calling a session definer is refused, and a session ne
   // A session context cannot enter a lease: enter_lease refuses any login but the runtime
   // executor, even the command role with a valid session context.
   assert.equal(db.sql(asCommandRole(P.A, enter)).split("\n").at(-1), "denied");
+  // M3 PR-1: the api login in a session context reaches neither the runtime's agent facts
+  // nor the broker's resolver, and the command role in a session context (or the runtime
+  // login without an entered lease) gets nothing from them.
+  const factsCall = `SELECT count(*) FROM morrow_work.delegation_facts('envelope_p8','installation_1','catalog.products.read')`;
+  const resolveCall = `SELECT outcome FROM morrow_vault.resolve_call(${literal(A)},'1','model','p8_run_a')`;
+  for (const call of [factsCall + ";", resolveCall + ";"]) {
+    const r = db.tryRun(asApi(P.A, call), { user: "morrow_api_worker" });
+    assert.equal(r.ok, false, call);
+    assert.match(r.stderr, /permission denied/, call);
+  }
+  assert.equal(
+    db
+      .sql(asCommandRole(P.A, factsCall + ";"))
+      .split("\n")
+      .at(-1),
+    "0",
+  );
+  assert.equal(
+    db
+      .sql(asCommandRole(P.A, resolveCall + ";"))
+      .split("\n")
+      .at(-1),
+    "denied",
+  );
+  assert.equal(
+    db
+      .sql(`BEGIN; ${factsCall}; ROLLBACK;`, { user: "morrow_runtime_executor" })
+      .split("\n")
+      .at(-1),
+    "0",
+  );
+  // The runtime login cannot call the broker's resolver, nor the broker the runtime's facts.
+  assert.match(
+    db.tryRun(`${resolveCall};`, { user: "morrow_runtime_executor" }).stderr,
+    /permission denied/,
+  );
+  assert.match(
+    db.tryRun(`${factsCall};`, { user: "morrow_vault_broker" }).stderr,
+    /permission denied/,
+  );
+  // A broker-context setting forged outside resolve_call reaches no lease, stop or
+  // installation row: the broker login has no table privilege, and the command role reads
+  // them only through resolve_call's own settings while the session user is the broker.
+  assert.match(
+    db.tryRun(
+      `BEGIN; SELECT set_config('morrow.vault_resolve_lease',${literal(A)},true); SELECT count(*) FROM morrow_work.work_leases; ROLLBACK;`,
+      { user: "morrow_vault_broker" },
+    ).stderr,
+    /permission denied/,
+  );
+  assert.equal(
+    db
+      .sql(
+        `BEGIN; SET LOCAL ROLE morrow_work_command; SELECT set_config('morrow.vault_resolve_lease',${literal(A)},true),set_config('morrow.vault_resolve_tenant','x',true) IS NOT NULL; SELECT (SELECT count(*) FROM morrow_work.work_leases)+(SELECT count(*) FROM morrow_work.agent_installations); ROLLBACK;`,
+      )
+      .split("\n")
+      .at(-1),
+    "0",
+  );
   recordConformance("P8", true);
 });
 

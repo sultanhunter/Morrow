@@ -32,6 +32,9 @@ export const runtimeExecutorSql = Object.freeze({
   pendingStarts: "SELECT kind,subject_id,lease_id,generation FROM morrow_work.pending_starts()",
   markStarted: "SELECT morrow_work.lease_mark_started() AS outcome",
   release: "SELECT morrow_work.lease_release() AS outcome",
+  // M3 PR-1: the agent kernel's facts for one step under the entered run lease.
+  delegationFacts:
+    "SELECT lease,envelope,hops,installations,actors,store_current FROM morrow_work.delegation_facts($1,$2,$3)",
   commit: "COMMIT",
   rollback: "ROLLBACK",
 });
@@ -63,12 +66,31 @@ export interface EnteredLease extends LeaseRef {
   readonly initiatorMembershipId: string;
   readonly expiresAtMs: number;
 }
+/** One delegation_facts row (M3 PR-1): JSON texts the agent fact reader decodes. */
+export interface DelegationFactsRow {
+  readonly lease: string;
+  readonly envelope: string;
+  readonly hops: string;
+  readonly installations: string;
+  readonly actors: string;
+  readonly storeCurrent: boolean;
+}
 export interface LeaseStep {
   readonly lease: EnteredLease;
   /** The Workflow's first step: sets started_at once. */
   markStarted(): Promise<"started" | "already_started">;
   /** The Workflow's last step: the context resolves nothing afterwards. */
   release(): Promise<"released">;
+  /**
+   * The agent kernel's facts under this run lease (M3 PR-1; createLeaseDelegationReader):
+   * null when the lease is not a run lease of exactly this installation or the envelope is
+   * not the lease's tenant's.
+   */
+  delegationFacts(
+    envelopeId: string,
+    installationId: string,
+    capabilityId: string,
+  ): Promise<DelegationFactsRow | null>;
 }
 export type LeaseStepResult<T> =
   | { readonly entered: true; readonly lease: EnteredLease; readonly value: T }
@@ -245,6 +267,44 @@ export async function runLeaseStep<T>(
           | "started"
           | "already_started",
       release: async () => (await outcome(runtimeExecutorSql.release, ["released"])) as "released",
+      delegationFacts: async (envelopeId: string, installationId: string, capabilityId: string) => {
+        if (
+          !exact(recordId, envelopeId) ||
+          !exact(recordId, installationId) ||
+          !exact(/^[a-z]+(\.[a-z_]+)+$/, capabilityId)
+        )
+          throw held();
+        const rows = await query(runtimeExecutorSql.delegationFacts, [
+          envelopeId,
+          installationId,
+          capabilityId,
+        ]);
+        if (!Array.isArray(rows) || rows.length > 1) throw held();
+        if (rows.length === 0) return null;
+        const r = row(rows, [
+          "lease",
+          "envelope",
+          "hops",
+          "installations",
+          "actors",
+          "store_current",
+        ]);
+        if (
+          !["lease", "envelope", "hops", "installations", "actors"].every(
+            (name) => typeof r[name] === "string",
+          ) ||
+          (r.store_current !== "true" && r.store_current !== "false")
+        )
+          throw held();
+        return Object.freeze({
+          lease: r.lease as string,
+          envelope: r.envelope as string,
+          hops: r.hops as string,
+          installations: r.installations as string,
+          actors: r.actors as string,
+          storeCurrent: r.store_current === "true",
+        });
+      },
     });
     const value = await body(step);
     return Object.freeze({ entered: true, lease: entered, value }) as LeaseStepResult<T>;

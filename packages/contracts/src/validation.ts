@@ -128,10 +128,10 @@ const scopeStoresBound = (scope: unknown) =>
  * EventEnvelope (@2), and a StreamFrame carrying one, this is the schema plus
  * the event registry selector and the payloadRef binding; for
  * AskAdminReadRecord, the schema plus its reader and uniqueness rules; for
- * ResourceRef, Scope and Grant (v1.1), the schema plus the store rule (a store
- * resource's id is its storeId), applied to every resource a scope or grant
- * names. Product code validates these six only here, never by their exact
- * selectors.
+ * ResourceRef, Scope, Grant and AgentInstallation (v1.1), the schema plus the store
+ * rule (a store resource's id is its storeId), applied to every resource a scope,
+ * grant or installation scope names. Product code validates these seven only here,
+ * never by their exact selectors.
  */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
   if (!selected(currentDefinitionSelectors, name, value)) return false;
@@ -143,7 +143,8 @@ export function validateCurrentDefinition(name: CurrentDefinitionName, value: un
   if (name === "AskAdminReadRecord") return adminReadRecord(value);
   if (name === "ResourceRef") return storeBound(value);
   if (name === "Scope") return scopeStoresBound(value);
-  if (name === "Grant") return scopeStoresBound((value as { scope: unknown }).scope);
+  if (name === "Grant" || name === "AgentInstallation")
+    return scopeStoresBound((value as { scope: unknown }).scope);
   return true;
 }
 /** Effective billing definition: the newest billing layer that defines the name (ADR-0015). */

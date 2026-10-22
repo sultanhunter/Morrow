@@ -1,8 +1,9 @@
 import { createWorkApiHandler } from "../../packages/work/src/http.js";
+import { agentsPathPattern, createAgentsApiHandler } from "../../packages/work/src/agents/http.js";
 import type { WorkSqlConnection, WorkSqlConnector } from "../../packages/work/src/connection.js";
 
-// lab:work-workers fixture (P06.T01a AC12, AC16, AC21, AC22). The real work
-// handler runs in workerd; its SQL travels over the SQL service binding to the
+// lab:work-workers fixture (P06.T01a AC12, AC16, AC21, AC22; M3 PR-1's agents routes).
+// The real work handler (and, for the agents paths, the agents handler) runs in workerd; its SQL travels over the SQL service binding to the
 // laboratory's isolated PostgreSQL 17 engine. A per-request lease models the
 // broker lease: case "lease-revoke-after-send" revokes it once the command
 // function has been sent. No provider, credential or network access.
@@ -97,11 +98,15 @@ export default {
     } catch {
       return Response.json({ unrepresentable: true }, { status: 599 });
     }
-    const handler = createWorkApiHandler({
+    const dependencies = {
       origin,
       connector: bridge(env, spec.labCase),
       now: () => Date.now(),
-    });
+    };
+    // M3 PR-1: the api Worker's agents dispatch row, on the same dependencies.
+    const handler = agentsPathPattern.test(new URL(built.url).pathname)
+      ? createAgentsApiHandler(dependencies)
+      : createWorkApiHandler(dependencies);
     return handler.fetch(built, env, ctx);
   },
 };

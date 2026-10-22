@@ -177,7 +177,7 @@ INSERT INTO morrow_identity.sessions VALUES(${literal("session_" + p.key)},${lit
 INSERT INTO morrow_identity.workspace_memberships VALUES(${literal(p.org)},${literal(p.workspace)},${literal(p.membership)},true);
 ${grantInsert(p, grant)}`);
       db.workOwner(
-        `INSERT INTO morrow_billing.workspace_billing_routes VALUES(${literal(p.org)},${literal(p.workspace)},'website',NULL,NULL,NULL,NULL,NULL,1,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`,
+        `INSERT INTO morrow_billing.workspace_billing_routes VALUES(${literal(p.org)},${literal(p.workspace)},'website',NULL,NULL,NULL,NULL,NULL,1,date_trunc('milliseconds',transaction_timestamp()),date_trunc('milliseconds',transaction_timestamp()));`,
       );
     }
     db.workOwner(

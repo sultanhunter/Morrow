@@ -40,6 +40,14 @@ import {
   decodeTaskCreated,
   workOutcome,
 } from "./work-decoders";
+import {
+  decodeListingsChange,
+  decodeListingsDocument,
+  decodeListingsStatus,
+  decodeModelDefaultRevised,
+  decodeModels,
+  isModelKey,
+} from "./agents-decoders";
 
 export type HttpRequest =
   | { readonly method: "GET"; readonly path: string }
@@ -52,7 +60,8 @@ export type HttpRequest =
       readonly challenge?: string;
       /** M2 PR-2: the X-Morrow-CSRF value, on the store-link apply only. */
       readonly csrf?: string;
-    };
+    }
+  | { readonly method: "PUT"; readonly path: string; readonly body: string; readonly key: string };
 export const byteLimits = Object.freeze({ login: 512, signup: 2048, work: 65536, link: 256 });
 
 const workPath = (ws: string, ...parts: string[]) => `/workspace/${ws}/work/${parts.join("/")}`;
@@ -71,6 +80,16 @@ function post(path: string, body: unknown, key: string | null, limit: number): P
   return { method: "POST", path, body: text, key };
 }
 const ids = (...values: unknown[]) => values.every(isId);
+// M3 PR-1: the agents routes, beside the work API under /workspace/:ws (never /work).
+const agentsPath = (ws: string, storeId: string, ...parts: string[]) =>
+  [`/workspace/${ws}/stores/${storeId}/agents/listings`, ...parts].join("/");
+const hex64 = (value: unknown) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+const stopReason = (value: unknown) =>
+  typeof value === "string" &&
+  value.length >= 1 &&
+  value.length <= 1024 &&
+  /\S/.test(value) &&
+  !value.includes("\0");
 const cursor = (after: string | null) =>
   after === null || (after.length >= 1 && after.length <= 1024);
 const revision = (value: unknown) =>
@@ -252,6 +271,55 @@ export const requests = {
     if (!request || request.key === null) return null;
     return csrf !== null ? { ...request, csrf } : request;
   },
+  listingsStatus: (ws: string, storeId: string) =>
+    ids(ws, storeId) ? get(agentsPath(ws, storeId)) : null,
+  listingsDocument: (ws: string, storeId: string, c: Command<Record<string, never>>) =>
+    ids(ws, storeId) && Object.keys(c.body).length === 0
+      ? post(agentsPath(ws, storeId, "document"), {}, c.key, byteLimits.work)
+      : null,
+  listingsEnable(
+    ws: string,
+    storeId: string,
+    c: Command<{ documentDigest: string; nonce: string }>,
+  ) {
+    const { documentDigest, nonce } = c.body;
+    if (!ids(ws, storeId) || !hex64(documentDigest) || !hex64(nonce)) return null;
+    return post(agentsPath(ws, storeId), { documentDigest, nonce }, c.key, byteLimits.work);
+  },
+  listingsStop(ws: string, storeId: string, c: Command<{ reason: string }>) {
+    if (!ids(ws, storeId) || !stopReason(c.body.reason)) return null;
+    return post(
+      agentsPath(ws, storeId, "stop"),
+      { control: { reason: c.body.reason, sourceProposalRef: null } },
+      c.key,
+      byteLimits.work,
+    );
+  },
+  models: (ws: string) => (ids(ws) ? get(`/workspace/${ws}/models`) : null),
+  reviseModelDefault(
+    ws: string,
+    c: Command<{
+      model: string;
+      effort: string;
+      maxCreditsPerProduct: number;
+      expectedRevision: number | null;
+    }>,
+  ): HttpRequest | null {
+    const { model, effort, maxCreditsPerProduct, expectedRevision } = c.body;
+    if (
+      !ids(ws) ||
+      !isModelKey(model) ||
+      !isModelKey(effort) ||
+      !Number.isSafeInteger(maxCreditsPerProduct) ||
+      maxCreditsPerProduct < 1 ||
+      maxCreditsPerProduct > 99 ||
+      !(expectedRevision === null || revision(expectedRevision)) ||
+      !isCommandKey(c.key)
+    )
+      return null;
+    const body = JSON.stringify({ model, effort, maxCreditsPerProduct, expectedRevision });
+    return { method: "PUT", path: `/workspace/${ws}/settings/model-default`, body, key: c.key };
+  },
 } as const;
 
 export interface HttpPortOptions {
@@ -271,13 +339,15 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
   const send = (request: HttpRequest) =>
     request.method === "GET"
       ? client.get(request.path, navigationSignal())
-      : client.post(
-          request.path,
-          request.body,
-          request.key,
-          request.challenge ?? null,
-          request.csrf ?? null,
-        );
+      : request.method === "PUT"
+        ? client.put(request.path, request.body, request.key)
+        : client.post(
+            request.path,
+            request.body,
+            request.key,
+            request.challenge ?? null,
+            request.csrf ?? null,
+          );
   // people.list and session.keepAlive stay uncomposed in this build (§4.14): they
   // answer not_in_build and send nothing.
   const unbuilt = async (..._args: unknown[]) => notInBuild;
@@ -448,6 +518,56 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
           const request = requests.storeLink("status", ws, c);
           return request ? decodeStoreLinkResult(await send(request)) : refused;
         },
+      ),
+    },
+    agents: {
+      listingsStatus: gated("agents.listingsStatus", (ws: string, storeId: string) =>
+        read(requests.listingsStatus(ws, storeId), (b) => decodeListingsStatus(b, storeId)),
+      ),
+      listingsDocument: gated(
+        "agents.listingsDocument",
+        async (ws: string, storeId: string, c: Command<Record<string, never>>) => {
+          const request = requests.listingsDocument(ws, storeId, c);
+          if (!request) return refused;
+          const reply = await send(request);
+          // A replayed document never carries its nonce again (it is returned once), so
+          // it cannot be confirmed: a terminal conflict, and the person starts again.
+          if (
+            reply.kind === "response" &&
+            reply.status === 200 &&
+            reply.body !== null &&
+            typeof reply.body === "object" &&
+            (reply.body as Record<string, unknown>).replayed === true &&
+            (reply.body as Record<string, unknown>).nonce === null
+          )
+            return { kind: "conflict", recheck: true, message: "" } as const;
+          return workOutcome(reply, "command", (b) => decodeListingsDocument(b, storeId));
+        },
+      ),
+      listingsEnable: gated(
+        "agents.listingsEnable",
+        (ws: string, storeId: string, c: Command<{ documentDigest: string; nonce: string }>) =>
+          command(requests.listingsEnable(ws, storeId, c), decodeListingsChange),
+      ),
+      listingsStop: gated(
+        "agents.listingsStop",
+        (ws: string, storeId: string, c: Command<{ reason: string }>) =>
+          command(requests.listingsStop(ws, storeId, c), decodeListingsChange),
+      ),
+    },
+    models: {
+      list: gated("models.list", (ws: string) => read(requests.models(ws), decodeModels)),
+      reviseDefault: gated(
+        "models.reviseDefault",
+        (
+          ws: string,
+          c: Command<{
+            model: string;
+            effort: string;
+            maxCreditsPerProduct: number;
+            expectedRevision: number | null;
+          }>,
+        ) => command(requests.reviseModelDefault(ws, c), decodeModelDefaultRevised),
       ),
     },
   };
