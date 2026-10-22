@@ -20,6 +20,12 @@ import { join } from "node:path";
 import { StagingError } from "../../scripts/staging-common.mjs";
 
 export const fakeSha = (seed) => createHash("sha1").update(String(seed)).digest("hex");
+// git's blob object id for `text`.
+export const fakeBlobId = (text) =>
+  createHash("sha1")
+    .update(`blob ${Buffer.byteLength(text)}\0`)
+    .update(text)
+    .digest("hex");
 const ok = (stdout = "") => ({ status: 0, stdout, stderr: "" });
 const missing = () => ({ status: 1, stdout: "", stderr: "HTTP 404" });
 // Worker key -> staging script name, as in infra/environments/staging.json.
@@ -38,6 +44,8 @@ export function fakeTools(options = {}) {
     head: options.git?.head ?? options.git?.main ?? fakeSha("main"),
     status: options.git?.status ?? "",
     diff: options.git?.diff ?? "",
+    // The committed tree at main: path -> {text, mode = "100644", type = "blob"}.
+    files: options.git?.files ?? {},
     checkRuns: options.gh?.checkRuns ?? null,
     ghSecrets: options.gh?.secrets ?? [
       { name: "CLOUDFLARE_API_TOKEN", updatedAt: "2026-10-19T10:00:00Z" },
@@ -101,6 +109,23 @@ export function fakeTools(options = {}) {
       if (args[0] === "rev-parse")
         return ok((args.includes("HEAD^{commit}") ? state.head : state.main) + "\n");
       if (args[0] === "diff") return ok(state.diff);
+      // `ls-tree -z --full-tree <commit> -- <path>` and `cat-file blob <id>`, over the
+      // committed tree at main; any other commit is not an object here.
+      if (args[0] === "ls-tree") {
+        const commit = args[args.indexOf("--") - 1];
+        const path = args[args.indexOf("--") + 1];
+        if (commit !== state.main) return { status: 128, stdout: "", stderr: "" };
+        const file = Object.hasOwn(state.files, path) ? state.files[path] : null;
+        return ok(
+          file
+            ? `${file.mode ?? "100644"} ${file.type ?? "blob"} ${fakeBlobId(file.text)}\t${path}\0`
+            : "",
+        );
+      }
+      if (args[0] === "cat-file" && args[1] === "blob") {
+        const file = Object.values(state.files).find((f) => fakeBlobId(f.text) === args[2]);
+        return file ? ok(file.text) : { status: 128, stdout: "", stderr: "" };
+      }
       return { status: 2, stdout: "", stderr: "" };
     },
     async gh(args, { input } = {}) {
@@ -475,7 +500,21 @@ export function fakeDatabase(options = {}) {
       ? options.instance[database]
       : "1792526146.012127/10.0.0.1/5432";
   const provisioned = new Set(options.provisioned ? roles : []);
+  // Migration 0035's platform mark (seed-platform): absent until the seed inserts it,
+  // unless a test plants one (`platformEnvironment`); never changed once present.
+  let platformEnvironment = options.platformEnvironment ?? null;
   const rules = [
+    [
+      /^INSERT INTO morrow_billing\.platform_environment/,
+      (text, params) => {
+        if (platformEnvironment === null) platformEnvironment = params[0];
+        return [];
+      },
+    ],
+    [
+      /FROM morrow_billing\.platform_environment$/,
+      () => (platformEnvironment === null ? [] : [{ environment: platformEnvironment }]),
+    ],
     [/^SELECT session_user::text AS session_role/, (text, params, db) => [identityFor(db)]],
     [
       /FROM pg_catalog\.pg_roles WHERE rolname IN/,
@@ -649,6 +688,13 @@ export const labBinding = Object.freeze({
 
 // A synthetic Turnstile site key in the broker's `^0x` format (never a real or dummy key).
 export const labSiteKey = "0x" + "labsitekey".repeat(2);
+// M5: a synthetic STRIPE_CONFIGURATION_JSON for the switch-on world (never a real id).
+export const labStripeConfigurationJson = JSON.stringify({
+  schemaVersion: 1,
+  portalConfigurationId: "bpc_" + "LabPortal".padEnd(24, "0"),
+  automaticTax: false,
+  billingAddressCollection: "auto",
+});
 // A synthetic LOGIN_CONFIGURATION_JSON text. Gate 4 needs the api's and the broker's copies
 // present and byte-equal; its content is checked by ctx.loginConfiguration, which the
 // fakes replace.
@@ -701,6 +747,10 @@ export async function fakeContext({
   // copies of the api's LOGIN_CONFIGURATION_JSON and MORROW_DATABASE_BINDING_JSON, and
   // `apiLogin` and `apiBinding` replace the api's own two (gate 4 only reads them).
   challengeVars = {},
+  // M5: the Stripe switch (owner decision (c), 2026-10-21): "off" (the committed state) or
+  // "on". The Stripe vars follow it unless challengeVars sets them: `apiStripeMode` and
+  // `brokerStripeMode` (MORROW_STRIPE_MODE) and `brokerStripe` (STRIPE_CONFIGURATION_JSON).
+  stripe = "off",
   administrator = { name: "neondb_owner", mode: "createrole" },
   now = Date.parse("2026-10-20T12:00:00Z"),
   environment = {},
@@ -712,7 +762,7 @@ export async function fakeContext({
   );
   const { stagingFileSpecs, credentialDirectory } = await import("../../scripts/staging-files.mjs");
   const { loadMigrationChain } = await import("../../scripts/migration-chain.mjs");
-  const constants = await identityConstants();
+  const constants = await identityConstants({ stripe });
   const realRoot = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
   const repoRoot = root ?? realRoot;
   const baseStaging = JSON.parse(
@@ -769,6 +819,9 @@ export async function fakeContext({
     ),
     loginConfigurationJson: pick("brokerLogin", loginConfiguration),
     bindingJson: pick("brokerBinding", bindingJson),
+    // M5: absent while the switch is off; a valid configuration and mode while it is on.
+    stripeJson: pick("brokerStripe", stripe === "on" ? labStripeConfigurationJson : null),
+    stripeMode: pick("brokerStripeMode", stripe === "on" ? "test" : null),
   });
   const out = [];
   const err = [];
@@ -824,6 +877,7 @@ export async function fakeContext({
       loginConfigurationJson: pick("apiLogin", loginConfiguration),
       challengeJson,
       broker: brokerVars,
+      stripeMode: pick("apiStripeMode", stripe === "on" ? "test" : null),
     }),
     chain: () => loadMigrationChain({ root: repoRoot }),
     tools,
@@ -843,6 +897,8 @@ export async function fakeContext({
     },
     challengeConfiguration: (loaded) => checkChallengeConfiguration(loaded),
     async checkKeyring() {},
+    // M5 PR-1: staging's published billing terms (none until the owner's Price exists).
+    billingTerms: async () => [],
     ...overrides,
   };
   return { ctx, out, err, constants, reports, outputs, sleeps, notices };

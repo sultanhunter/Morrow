@@ -53,6 +53,10 @@
       "schema": "urn:morrow:contracts:core:v1#/$defs/AudienceRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     },
+    "BillingManageAction": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/BillingManageAction",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "Boolean": {
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/Boolean",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
@@ -88,6 +92,10 @@
     "CoverageRef": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/CoverageRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "CreditsPerProductCeiling": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/CreditsPerProductCeiling",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
     "CriteriaList": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/CriteriaList",
@@ -185,6 +193,10 @@
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/MessagePartInputs",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
+    "ModelOptionKey": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "MoneyList": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/MoneyList",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
@@ -199,6 +211,14 @@
     },
     "NullablePageCursor": {
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullablePageCursor",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "NullableRevision": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableRevision",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "NullableStripePriceKey": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableStripePriceKey",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
     "OptionList": {

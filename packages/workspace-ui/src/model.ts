@@ -97,6 +97,62 @@ export interface StoreLinkPreviewView {
 export interface StoreLinkResultView {
   readonly outcome: "applied" | "denied";
 }
+// M3 PR-1: the Listings agent of one connected store (ADR-0022 item 3 and its amendment)
+// and the workspace's model default (item 16).
+export interface ListingsAgentView {
+  readonly storeId: Id;
+  /** The store's association is current (enable and resume need it; a stop never does). */
+  readonly linked: boolean;
+  /**
+   * A platform stop, or a stop on the store's connection, is in effect: no AI work runs
+   * although the installation may be active. Only those stops' own paths lift them.
+   */
+  readonly blocked: boolean;
+  readonly installation: {
+    readonly installationId: Id;
+    readonly status: string;
+    readonly revision: number;
+    /** A person's "Stop AI work" is in effect. */
+    readonly stopped: boolean;
+    readonly updatedAt: string;
+  } | null;
+  /** What this person may do now (the server's kernel decided). */
+  readonly actions: { readonly enable: boolean; readonly resume: boolean; readonly stop: boolean };
+}
+/** The server-built installation document the owner confirms (five minutes, single use). */
+export interface ListingsDocumentView {
+  readonly documentDigest: string;
+  readonly nonce: string;
+  readonly purpose: "enable" | "resume";
+  readonly installationId: Id;
+  readonly expiresAt: string;
+  readonly releaseRevision: number;
+  /** The exact grant set: capability and verbs (scope: this store and the listing fields). */
+  readonly grants: readonly { readonly capabilityId: string; readonly verbs: readonly string[] }[];
+  readonly fields: readonly string[];
+}
+export interface ListingsChangeView {
+  readonly installationId: Id;
+  readonly status: string;
+  readonly revision: number;
+}
+export interface ModelEntryView {
+  readonly model: string;
+  readonly effort: string;
+  readonly creditsPerProduct: number;
+  readonly runProductLimit: number;
+  readonly allowedForMember: boolean;
+}
+export interface ModelCatalogueView {
+  readonly catalogueVersion: number;
+  readonly entries: readonly ModelEntryView[];
+  readonly workspaceDefault: { readonly model: string; readonly effort: string };
+  /** The member ceiling in credits per product. */
+  readonly ceiling: number;
+  /** null until the default is first changed. */
+  readonly revision: number | null;
+  readonly canRevise: boolean;
+}
 export interface Page<T> {
   readonly items: readonly T[];
   readonly next: string | null;

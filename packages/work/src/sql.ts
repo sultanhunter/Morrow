@@ -1,4 +1,6 @@
+import { agentStatements } from "./agents/sql.js";
 import { approvalStatements } from "./approvals/sql.js";
+import { billingStatements } from "./billing/sql.js";
 import { spineStatements } from "./spine-sql.js";
 
 // Every statement the work API sends (ADR-0010 item 2). Source-fixed: no caller
@@ -65,5 +67,9 @@ export const workStatements = Object.freeze({
   ...approvalStatements,
   // The M2 PR-1 spine reads: the billing route row and the stop state (migration 0020).
   ...spineStatements,
+  // M5 PR-1: billing reads, commands and the receipt ingress (migration 0029).
+  ...billingStatements,
+  // M3 PR-1: the Listings agent, Stop AI work and the model default.
+  ...agentStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

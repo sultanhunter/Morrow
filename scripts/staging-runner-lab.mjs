@@ -12,11 +12,16 @@
 //   createrole-administrator.mjs), the hosted-shape provisioning, then the last entry
 //   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
-// The chain runs through its head (M2 PR-1: 0019-0024; M2 PR-2: 0025-0027, which add no
-// login and replay after provisioning while origin/main ends at 0024), so provisioning
-// covers the eleven broker logins, the vault login included, and the first-deploy file the
-// fourteen broker names, with the owner's vault KEK read from its planted file
-// (`vault-kek-v1`).
+// The chain runs through its head (M2 PR-1: 0019-0024; M2 PR-2: 0025-0027; M5 PR-1:
+// 0028-0029; M3 PR-1: 0030-0033; the staging test entitlement: 0034-0035; none of 0025-0035
+// adds a login, and the entries after origin/main's head replay after provisioning), so
+// provisioning covers the eleven broker logins, the vault login included, and the
+// first-deploy file the broker names, with the owner's vault KEK read from its planted
+// file. The Stripe switch (owner decision (c), 2026-10-21): the superuser run turns it on,
+// so the file holds sixteen names with M5 PR-1's two Stripe secrets read from their planted
+// files; the createrole run keeps it off (the committed state), so the file holds fourteen
+// and the planted Stripe files are never read. In createrole mode the lab also runs M5
+// PR-1's billing terms seed (idempotent, drift).
 // Provisioning sends each generated plaintext once, in its own ALTER ROLE (P04.T01i M-N3
 // as amended 2026-10-20: Neon takes only plaintexts), after refusing a database whose
 // statistics cannot be read or hold the extension, non-SCRAM storage, statement logging
@@ -45,14 +50,16 @@ import { join } from "node:path";
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
 import { localPostgresLab } from "./local-postgres-lab.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
-import { identityConstants, main } from "./staging.mjs";
+import { identityConstants, main, stagingBillingTermsRows } from "./staging.mjs";
 import {
   generatePassword,
   instanceIdentityQuery,
   passwordDigest,
+  resolveHeldCustomerOperation,
   runMigrations,
   runnerSetRows,
   scramVerifier,
+  seedBillingTerms,
   statementStatsVerificationQuery,
 } from "./staging-runner.mjs";
 import { psqlConnector } from "./fixtures/staging-psql-connection.mjs";
@@ -85,6 +92,9 @@ const markers = {
   turnstile: "0x4AAAAAAA" + hex(14),
   // M2 PR-1: the owner's vault KEK file holds 64 lowercase hex characters.
   kek: hex(32),
+  // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret files.
+  stripeKey: "rk_test_" + hex(16) + "LAB",
+  stripeWebhook: "whsec_" + hex(16) + "LAB",
 };
 const ownerUrl = (user, { host = labBinding.hostname, database = "morrow" } = {}) =>
   `postgresql://${user}:${markers.ownerPassword}@${host}/${database}?sslmode=require`;
@@ -289,6 +299,8 @@ const superuserLab = async ({ id, sql, image, version }) => {
     "workos-api-key": markers.workos,
     "turnstile-secret": markers.turnstile,
     "vault-kek-v1": markers.kek,
+    "stripe-restricted-key": markers.stripeKey,
+    "stripe-webhook-secret": markers.stripeWebhook,
   });
   const connector = psqlConnector(id, { user: "postgres", database: "morrow" });
   // Just before the wipe's reset, from a separate neondb session (the run has just
@@ -326,6 +338,8 @@ const superuserLab = async ({ id, sql, image, version }) => {
     tools: fakes.tools,
     administrator: superuser,
     database: ({ binding }) => (binding.database === "neondb" ? scratchConnector : connector),
+    // M5: the Stripe switch on, so the first-deploy file carries the Stripe secrets.
+    stripe: "on",
   });
   const ctx = base.ctx;
   const run = async (argv, context = ctx) => {
@@ -635,9 +649,15 @@ const superuserLab = async ({ id, sql, image, version }) => {
   check(
     "first_deploy_file_holds_exactly_the_broker_secrets",
     Object.keys(secrets).sort().join() === constants.brokerSecrets.join() &&
-      constants.brokerSecrets.length === 14 &&
+      constants.brokerSecrets.length === 16 &&
       secrets.WORKOS_API_KEY === markers.workos &&
       secrets.TURNSTILE_SECRET_KEY === markers.turnstile,
+  );
+  // M5 PR-1: both Stripe secrets are the owner's files, byte for byte.
+  check(
+    "first_deploy_file_carries_the_owner_stripe_secrets",
+    secrets.STRIPE_RESTRICTED_KEY === markers.stripeKey &&
+      secrets.STRIPE_WEBHOOK_SECRET === markers.stripeWebhook,
   );
   // M2 PR-1: the KEK is the owner's file, byte for byte; the tool never generates one.
   check("first_deploy_file_carries_the_owner_kek", secrets.MORROW_VAULT_KEK_V1 === markers.kek);
@@ -1012,7 +1032,14 @@ const superuserLab = async ({ id, sql, image, version }) => {
     maxBuffer: 64 << 20,
   });
   const serverLog = (logs.stdout ?? "") + (logs.stderr ?? "");
-  const others = [markers.ownerPassword, markers.workos, markers.turnstile, markers.kek];
+  const others = [
+    markers.ownerPassword,
+    markers.workos,
+    markers.turnstile,
+    markers.kek,
+    markers.stripeKey,
+    markers.stripeWebhook,
+  ];
   const secretsSeen = [...others, ...passwords];
   const sentPasswords = rolePasswords(constants, secrets);
   check(
@@ -1068,6 +1095,8 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "workos-api-key": markers.workos,
     "turnstile-secret": markers.turnstile,
     "vault-kek-v1": markers.kek,
+    "stripe-restricted-key": markers.stripeKey,
+    "stripe-webhook-secret": markers.stripeWebhook,
   });
   const connector = psqlConnector(id, { user: "neondb_owner", database: "morrow" });
   const fakes = fakeTools();
@@ -1159,6 +1188,15 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
   const createroleSecrets = JSON.parse(
     readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
   );
+  // M5: the committed Stripe switch is off: the file holds the fourteen names and neither
+  // planted Stripe file is read into it.
+  check(
+    "createrole_first_deploy_file_has_no_stripe_secret_while_switched_off",
+    base.constants.stripe === "off" &&
+      Object.keys(createroleSecrets).sort().join() === base.constants.brokerSecrets.join() &&
+      base.constants.brokerSecrets.length === 14 &&
+      !Object.keys(createroleSecrets).some((name) => name.startsWith("STRIPE_")),
+  );
   const createrolePasswords = rolePasswords(base.constants, createroleSecrets);
   check(
     "createrole_passwords_stored_as_scram_and_sent_once",
@@ -1246,7 +1284,74 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "createrole_at_rest_census_is_creation_rows_and_reviewed_rows",
     morrowSetRows(id) === 0 && closed() && census().length === morrowRoles.length + 2,
   );
-  const secretsSeen = [markers.ownerPassword, markers.workos, markers.turnstile, markers.kek];
+  // M5 PR-1: the billing terms seed (seed-platform) as the work owner under D4, with the
+  // development fixture's priced revision (staging's operator-only revision 1 and the
+  // staging mark the seed also writes are lab:test-entitlement's): inserted once, a rerun
+  // is a no-op, a drifted file is refused, and no SET row persists.
+  const termsRows = await stagingBillingTermsRows(repositoryRoot, "development");
+  const seed = (rows) =>
+    seedBillingTerms({
+      connect: psqlConnector(id, { user: "neondb_owner", database: "morrow" }).connect,
+      binding: labBinding,
+      administrator: neon,
+      rows,
+    });
+  const seeded = await seed(termsRows);
+  const reseeded = await seed(termsRows);
+  const drifted = termsRows.map((row) => [
+    row[0],
+    row[1].replace('"creditUnits":"300"', '"creditUnits":"301"'),
+    row[2],
+    row[3],
+  ]);
+  const refused = await rejection(seed(drifted));
+  check(
+    "createrole_terms_seed_is_idempotent_and_refused_on_drift",
+    seeded.termsInserted === termsRows.length &&
+      reseeded.termsInserted === 0 &&
+      refused?.code === "STAGING_SEED_DRIFT" &&
+      refused.details.table === "billing_terms" &&
+      db("SELECT count(*) FROM morrow_billing.billing_terms;") === String(termsRows.length) &&
+      db(
+        "SELECT string_agg(digest::text, ',' ORDER BY terms_revision) FROM morrow_billing.billing_terms;",
+      ) === termsRows.map((row) => row[3]).join(",") &&
+      morrowSetRows(id) === 0 &&
+      closed(),
+  );
+  // M5 PR-1 (review): the operator path for a held customer operation runs as the work
+  // owner under D4 too. On an operation that does not exist the definer refuses
+  // (not_found): nothing commits and no SET row persists.
+  const resolution = await rejection(
+    resolveHeldCustomerOperation({
+      connect: psqlConnector(id, { user: "neondb_owner", database: "morrow" }).connect,
+      binding: labBinding,
+      administrator: neon,
+      input: {
+        operatorId: "operator_lab",
+        operationId: "00000000-0000-4000-8000-00000000abcd",
+        resolution: "abandon",
+        evidenceCode: "none_found",
+        // Joined, so this source never names a Markdown file.
+        evidenceRef: ["docs/evidence/live/2026-10-21-lab-stripe-customer", "md"].join("."),
+      },
+    }),
+  );
+  check(
+    "createrole_customer_resolution_runs_as_the_work_owner_and_commits_nothing_refused",
+    resolution?.code === "STAGING_RESOLVE_REFUSED" &&
+      resolution.details.outcome === "not_found" &&
+      db("SELECT count(*) FROM morrow_billing.stripe_operation_resolutions;") === "0" &&
+      morrowSetRows(id) === 0 &&
+      closed(),
+  );
+  const secretsSeen = [
+    markers.ownerPassword,
+    markers.workos,
+    markers.turnstile,
+    markers.kek,
+    markers.stripeKey,
+    markers.stripeWebhook,
+  ];
   check(
     "createrole_no_marker_in_statements_or_output",
     secretsSeen.every(

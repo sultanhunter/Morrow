@@ -78,6 +78,7 @@ const guard = () => ({
   LOGIN_START_LIMITER: limiter(),
   LOGIN_CALLBACK_LIMITER: limiter(),
   SIGNUP_LIMITER: limiter(),
+  SESSION_LIMITER: limiter(),
 });
 const env = (environment = "development", change = {}) => ({
   MORROW_ENVIRONMENT: environment,
@@ -135,6 +136,11 @@ test("AC07: any provider or credential-like binding keeps the api unbound", () =
     "ANTHROPIC_BASE_URL",
     // M2 PR-1: the vault KEK binds only to the broker (ADR-0022 item 7).
     "MORROW_VAULT_KEK_V1",
+    // M5 PR-1: every STRIPE_ name binds only to the broker, the configuration included.
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_CONFIGURATION_JSON",
+    "stripe_publishable",
     "E2B_API_KEY",
     "workos_client",
     "DEPLOY_SECRET",
@@ -311,7 +317,13 @@ const without = (record, ...names) => {
   for (const name of names) delete copy[name];
   return copy;
 };
-const limiterNames = ["LOGIN_START_LIMITER", "LOGIN_CALLBACK_LIMITER", "SIGNUP_LIMITER"];
+const limiterNames = [
+  "LOGIN_START_LIMITER",
+  "LOGIN_CALLBACK_LIMITER",
+  "SIGNUP_LIMITER",
+  "SESSION_LIMITER",
+];
+const limiterKeys = ["loginStart", "loginCallback", "signup", "session"];
 
 test("P05.T01ab-AC07: staging without the guard is API_ENV_ABUSE_GUARD_MISSING", () => {
   const record = env("staging");
@@ -331,8 +343,9 @@ test("P05.T01ab-AC07: staging without the guard is API_ENV_ABUSE_GUARD_MISSING",
     siteKey,
     actions: { login: "account_login", signup: "organization_signup" },
   });
-  assert.deepEqual(Object.keys(mapped.guard.limiters), ["loginStart", "loginCallback", "signup"]);
+  assert.deepEqual(Object.keys(mapped.guard.limiters), limiterKeys);
   assert.equal(mapped.guard.limiters.signup, record.SIGNUP_LIMITER);
+  assert.equal(mapped.guard.limiters.session, record.SESSION_LIMITER);
 });
 
 test("P05.T01ab-AC07: invalid challenge configuration or limiter bindings fail closed", () => {
@@ -358,7 +371,8 @@ test("P05.T01ab-AC07: invalid challenge configuration or limiter bindings fail c
       String(value).slice(0, 60),
     );
   for (const value of [null, "LIMITER", {}, { limit: "x" }, 1])
-    assert.equal(code({ ...record, SIGNUP_LIMITER: value }), "API_ENV_ABUSE_GUARD_MISSING");
+    for (const name of ["SIGNUP_LIMITER", "SESSION_LIMITER"])
+      assert.equal(code({ ...record, [name]: value }), "API_ENV_ABUSE_GUARD_MISSING", name);
   const getter = env("staging");
   Object.defineProperty(getter, "LOGIN_START_LIMITER", { get: limiter, enumerable: true });
   assert.equal(code(getter), "API_ENV_ABUSE_GUARD_MISSING");
@@ -383,7 +397,7 @@ test("P05.T01ab-AC07: step 10 itself needs the whole guard in staging and produc
     const full = mapAbuseGuard(guard(), environment);
     assert.ok(full && Object.isFrozen(full), environment);
     assert.equal(full.challenge.siteKey, siteKey);
-    assert.deepEqual(Object.keys(full.limiters), ["loginStart", "loginCallback", "signup"]);
+    assert.deepEqual(Object.keys(full.limiters), limiterKeys);
     for (const missing of [
       ["LOGIN_CHALLENGE_JSON"],
       limiterNames,
@@ -399,6 +413,11 @@ test("P05.T01ab-AC07: step 10 itself needs the whole guard in staging and produc
   }
   assert.deepEqual(mapAbuseGuard({}, "development"), { challenge: null, limiters: null });
   assert.equal(mapAbuseGuard(without(guard(), "SIGNUP_LIMITER"), "development"), null);
+  // The session routes' limiter is no optional extra: without it development's limiters
+  // are partial, and staging's and production's guard is missing.
+  assert.equal(mapAbuseGuard(without(guard(), "SESSION_LIMITER"), "development"), null);
+  for (const environment of ["staging", "production"])
+    assert.equal(mapAbuseGuard(without(guard(), "SESSION_LIMITER"), environment), null);
 });
 
 test("P05.T01ab-AC07: development maps with no guard, limiters only, or the full guard", () => {
@@ -415,7 +434,7 @@ test("P05.T01ab-AC07: development maps with no guard, limiters only, or the full
   assert.equal(
     code({ ...env(), LOGIN_START_LIMITER: limiter() }),
     "API_ENV_ABUSE_GUARD_MISSING",
-    "the limiters come all three or none",
+    "the limiters come all four or none",
   );
   assert.equal(
     code({ ...env(), LOGIN_CHALLENGE_JSON: challengeJson({ siteKey: "2x" + "0".repeat(22) }) }),
@@ -442,6 +461,7 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
     LOGIN_START_LIMITER: limiter(),
     LOGIN_CALLBACK_LIMITER: limiter(),
     SIGNUP_LIMITER: limiter(),
+    SESSION_LIMITER: limiter(),
   };
   assert.equal(code(bound), "API_ENV_PARTIAL");
   const mapped = map({ ...bound, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING });
@@ -450,6 +470,9 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
   assert.equal(mapped.values.login, vars.LOGIN_CONFIGURATION_JSON);
   assert.equal(mapped.values.binding, vars.MORROW_DATABASE_BINDING_JSON);
   assert.equal(mapped.guard.challenge.siteKey, "0x4AAAAAAFdwF1eDox4vfBd2");
+  // M5: the committed staging api carries no MORROW_STRIPE_MODE while the switch is off.
+  assert.equal(Object.hasOwn(vars, "MORROW_STRIPE_MODE"), false);
+  assert.equal(mapped.stripe, "off");
   assert.deepEqual(mapped.guard.challenge.actions, {
     login: "account_login",
     signup: "organization_signup",
@@ -459,5 +482,43 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
   assert.equal(
     code({ ...unguarded, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING }),
     "API_ENV_ABUSE_GUARD_MISSING",
+  );
+  const { SESSION_LIMITER: _session, ...unlimited } = bound;
+  assert.equal(
+    code({ ...unlimited, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING }),
+    "API_ENV_ABUSE_GUARD_MISSING",
+  );
+});
+
+// M5, the Stripe switch (owner decision (c), 2026-10-21): step 11. MORROW_STRIPE_MODE absent
+// is off; exactly "test" is on; any other value keeps the api on its deny-all instance. It
+// is not a credential binding (its name has no provider prefix or credential word).
+test("M5: MORROW_STRIPE_MODE absent is off, exactly test is on, anything else fails closed", () => {
+  for (const environment of ["development", "staging"]) {
+    const off = map(env(environment));
+    assert.equal(off.ok, true);
+    assert.equal(off.stripe, "off");
+    const on = map({ ...env(environment), MORROW_STRIPE_MODE: "test" });
+    assert.equal(on.ok, true, on.code);
+    assert.equal(on.stripe, "test");
+    assert.ok(Object.isFrozen(on));
+    for (const value of ["live", "TEST", "test ", "", "on", "off", 1, true, null, {}, ["test"]])
+      assert.equal(
+        code({ ...env(environment), MORROW_STRIPE_MODE: value }),
+        "API_ENV_VALUE_INVALID",
+        environment + ":" + JSON.stringify(value),
+      );
+    // An accessor is refused like any other binding read.
+    const accessor = env(environment);
+    Object.defineProperty(accessor, "MORROW_STRIPE_MODE", {
+      enumerable: true,
+      get: () => "test",
+    });
+    assert.equal(code(accessor), "API_ENV_VALUE_INVALID");
+  }
+  // Production never maps (step 7), whatever the switch.
+  assert.equal(
+    code({ ...env("production"), MORROW_STRIPE_MODE: "test" }),
+    "API_ENV_CROSS_BINDING_MISMATCH",
   );
 });

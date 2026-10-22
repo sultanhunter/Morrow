@@ -62,7 +62,16 @@ export interface StoredProposalRow {
   readonly familyRootId: string;
   readonly derivedFromId: string | null;
   readonly requester: { readonly principalId: string; readonly membershipId: string };
-  readonly proposer: { readonly principalId: string; readonly membershipId: string };
+  /**
+   * A person (membership, no installation) or, from M3, the Listings agent (installation, no
+   * membership). Either way it equals the proposal's proposedBy; a row that disagrees fails.
+   */
+  readonly proposer: {
+    readonly kind: "human" | "agent";
+    readonly principalId: string;
+    readonly membershipId: string | null;
+    readonly installationId: string | null;
+  };
   readonly parametersId: string;
   readonly scopeDigest: string;
   readonly reviewPolicyRevision: number;
@@ -120,6 +129,24 @@ export function decodeProposal(row: Row, tenant: { organizationId: string; works
     row.workspace_id !== tenant.workspaceId
   )
     fail();
+  const kind = text(row, "proposer_kind");
+  const proposer = {
+    kind: kind === "human" || kind === "agent" ? kind : fail(),
+    principalId: text(row, "proposer_principal_id"),
+    membershipId: nullableText(row, "proposer_membership_id"),
+    installationId: nullableText(row, "proposer_installation_id"),
+  } as const;
+  const by = proposal.proposedBy;
+  if (
+    (proposer.kind === "human") !== (proposer.membershipId !== null) ||
+    (proposer.kind === "agent") !== (proposer.installationId !== null) ||
+    by.kind !== proposer.kind ||
+    by.principalId !== proposer.principalId ||
+    by.membershipId !== proposer.membershipId ||
+    by.installationId !== proposer.installationId ||
+    proposal.storeId !== nullableText(row, "store_id")
+  )
+    fail();
   const stored: StoredProposalRow = {
     proposal: Object.freeze(proposal),
     familyRootId: text(row, "family_root_id"),
@@ -128,10 +155,7 @@ export function decodeProposal(row: Row, tenant: { organizationId: string; works
       principalId: text(row, "requester_principal_id"),
       membershipId: text(row, "requester_membership_id"),
     },
-    proposer: {
-      principalId: text(row, "proposer_principal_id"),
-      membershipId: text(row, "proposer_membership_id"),
-    },
+    proposer,
     parametersId: text(row, "parameters_id"),
     scopeDigest: text(row, "scope_digest"),
     reviewPolicyRevision: integer(row, "review_policy_revision"),

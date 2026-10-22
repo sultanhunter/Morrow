@@ -460,9 +460,10 @@ export const connectorPackageAllowlist = Object.freeze([
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/workos-session-status-json.ts",
 ]);
-// MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well.
+// MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well, and so
+// does STRIPE_ (M5 PR-1: the restricted key, the webhook secret and the configuration).
 const providerCredentialName =
-  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
+  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG|STRIPE_)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 // Hosted identifiers that P04.T02a must not commit (P04.T01i later allows only the
 // reviewed staging identifiers in env.staging.vars).
@@ -475,22 +476,32 @@ export const committedIdentifierPatterns = Object.freeze([
   ["neon_branch", /\bbr-[a-z0-9-]+/],
   ["neon_password", /\bnpg_[A-Za-z0-9]/],
   ["workos_key", /\bsk_(?:test|live)_/],
+  // M5 PR-1: a Stripe restricted key or a webhook signing secret is never committed; a
+  // portal configuration only as the reviewed id of docs/decisions/stripe-staging.json,
+  // inside the staging broker's STRIPE_CONFIGURATION_JSON and nowhere else.
+  ["stripe_restricted_key", /\brk_(?:test|live)_/],
+  ["stripe_webhook_secret", /\bwhsec_/],
+  ["stripe_portal_configuration", /\bbpc_[A-Za-z0-9]+/],
   ["cloudflare_account", /"account_id"|\b[0-9a-f]{32}\b/],
   ["route", /"routes?"\s*:/],
 ]);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // P05.T01ab (ADR-0019 item 8): the api's per-address sign-in limits, exact per
 // environment: login start 10, the callback 20 and signup 5 per 60 s, in namespaces
-// 7001-7003 (development), 7101-7103 (staging) and 7201-7203 (production).
+// 7001-7003 (development), 7101-7103 (staging) and 7201-7203 (production). The session
+// routes' limit (ADR-0019 item 8 applied to them; apps/api/src/session-limit.ts) is 120 per
+// 60 s in 7006, 7106 and 7206, the api's next ids after the connector's 7004-7005 block.
+// Each environment keeps its own hundred (70xx, 71xx, 72xx); no namespace is shared.
 export function edgeRateLimits(environment) {
-  const base = { development: 7001, staging: 7101, production: 7201 }[environment];
+  const base = { development: 7000, staging: 7100, production: 7200 }[environment];
   return [
-    ["LOGIN_START_LIMITER", 10],
-    ["LOGIN_CALLBACK_LIMITER", 20],
-    ["SIGNUP_LIMITER", 5],
-  ].map(([name, limit], i) => ({
+    ["LOGIN_START_LIMITER", 1, 10],
+    ["LOGIN_CALLBACK_LIMITER", 2, 20],
+    ["SIGNUP_LIMITER", 3, 5],
+    ["SESSION_LIMITER", 6, 120],
+  ].map(([name, offset, limit]) => ({
     name,
-    namespace_id: String(base + i),
+    namespace_id: String(base + offset),
     simple: { limit, period: 60 },
   }));
 }
@@ -550,10 +561,13 @@ export function edgePlacementRegion(regionId) {
   return region === null ? null : "aws:" + region;
 }
 // P04.T01i D1 (AC01): each Worker's var names, exactly, per environment. Only the staging
-// api and broker carry configuration; the orchestrator has no vars at all.
-export function edgeVarNames(worker, environment) {
+// api and broker carry configuration; the orchestrator has no vars at all. M5: while the
+// staging Stripe switch is on, the staging api and broker also carry its vars
+// (edgeStripeVarNames); while it is off, neither has them.
+export function edgeVarNames(worker, environment, stripe = "off") {
   if (worker === "orchestrator") return [];
   if (environment !== "staging" || worker === "connector") return ["MORROW_ENVIRONMENT"];
+  const stripeVars = stripe === "on" ? edgeStripeVarNames(worker, environment) : [];
   return worker === "api"
     ? [
         "MORROW_ENVIRONMENT",
@@ -562,13 +576,85 @@ export function edgeVarNames(worker, environment) {
         "LOGOUT_CONFIGURATION_JSON",
         "MORROW_DATABASE_BINDING_JSON",
         "LOGIN_CHALLENGE_JSON",
+        ...stripeVars,
       ]
     : [
         "MORROW_ENVIRONMENT",
         "LOGIN_CONFIGURATION_JSON",
         "MORROW_DATABASE_BINDING_JSON",
         "TURNSTILE_CONFIGURATION_JSON",
+        ...stripeVars,
       ];
+}
+// M5, the Stripe switch (owner decision (c), 2026-10-21): its runtime image is the var
+// MORROW_STRIPE_MODE ("test") on the staging api and broker, and on the broker also the
+// reviewed STRIPE_CONFIGURATION_JSON (docs/decisions/stripe-staging.json) and the two
+// Stripe secrets (brokerRequiredSecretsFor("staging", "on")). Development's committed
+// config never carries them (it may name no reviewed identifier), and production holds
+// Stripe until the ADR-0007 item 9 custody ADR.
+export const edgeStripeModeVar = "MORROW_STRIPE_MODE";
+export const edgeStripeModeTest = "test";
+export const edgeStripeSecretNames = Object.freeze([
+  "STRIPE_RESTRICTED_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+]);
+export function edgeStripeVarNames(worker, environment) {
+  if (environment !== "staging") return [];
+  if (worker === "api") return [edgeStripeModeVar];
+  if (worker === "broker") return [edgeStripeModeVar, "STRIPE_CONFIGURATION_JSON"];
+  return [];
+}
+// Every Stripe name a Worker's resolved configuration may carry (vars and required
+// secrets), and the set the switch requires there: all of the Worker's own while it is on
+// in staging, none otherwise. Any difference is a mixed state.
+const edgeStripeNames = [edgeStripeModeVar, "STRIPE_CONFIGURATION_JSON", ...edgeStripeSecretNames];
+export function edgeStripeNamesRequired(worker, environment, stripe) {
+  if (stripe !== "on") return [];
+  const names = edgeStripeVarNames(worker, environment);
+  return worker === "broker" && names.length ? [...names, ...edgeStripeSecretNames] : names;
+}
+// The reviewed staging Stripe record (M5 PR-1; the switch, owner decision (c), 2026-10-21):
+// test mode; `switch`, "off" until one reviewed commit turns it "on"; the portal
+// configuration id (null until the owner creates it, and required while the switch is on)
+// and the tax flags. Returns the switch and the exact STRIPE_CONFIGURATION_JSON text the
+// record admits while the switch is on (null while it is off), or throws.
+export function reviewedStripeRecord(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "automatic_tax,billing_address_collection,environment_kind,mode,observed_on,portal_configuration_id,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.mode !== "test" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.automatic_tax !== "boolean" ||
+    !["auto", "required"].includes(record.billing_address_collection) ||
+    typeof record.scope !== "string" ||
+    (record.portal_configuration_id !== null &&
+      (typeof record.portal_configuration_id !== "string" ||
+        !/^bpc_[A-Za-z0-9]{8,64}$/.test(record.portal_configuration_id) ||
+        typeof record.observed_on !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
+    (record.portal_configuration_id === null && record.observed_on !== null) ||
+    // On means fully configured: without the saved portal configuration the broker would
+    // hold Stripe after the api had already opened the checkout's rows.
+    (record.switch === "on" && record.portal_configuration_id === null)
+  )
+    throw Error("EDGE_STAGING_STRIPE_RECORD");
+  return Object.freeze({
+    switch: record.switch,
+    configurationJson:
+      record.switch === "on"
+        ? JSON.stringify({
+            schemaVersion: 1,
+            portalConfigurationId: record.portal_configuration_id,
+            automaticTax: record.automatic_tax,
+            billingAddressCollection: record.billing_address_collection,
+          })
+        : null,
+  });
 }
 // Key-order-free comparison for the observability blocks.
 const canonicalJson = (value) =>
@@ -609,6 +695,7 @@ const loadStagingParsers = () =>
       parseLoginConfiguration: login.parseLoginConfiguration,
       parseBrokerDatabaseBinding: protocol.parseBrokerDatabaseBinding,
       parseTurnstileConfiguration: protocol.parseTurnstileConfiguration,
+      parseStripeConfiguration: protocol.parseStripeConfiguration,
       turnstileHostnameMismatch: protocol.turnstileHostnameMismatch,
       parseLoginChallengeConfiguration: guard.parseLoginChallengeConfiguration,
     });
@@ -622,14 +709,20 @@ const loadStagingParsers = () =>
 // the origin. Every origin use is D1's
 // `https://${env.staging.name}.${workers_dev_subdomain}.workers.dev`, with the subdomain read
 // from staging.json; the only other URLs are its callback and the WorkOS issuer, which the
-// login parser fixes to the client. Returns the problems and the identifiers a committed
-// file may name.
-async function stagingValueChecks({ vars, apiName, staging, workos }) {
+// login parser fixes to the client. M5 PR-1: the broker's STRIPE_CONFIGURATION_JSON (only
+// while the Stripe switch is on) must be byte-equal to the text
+// docs/decisions/stripe-staging.json admits (its portal configuration id and tax flags) and
+// parse with the broker's own parser; that id is then admitted inside that one var only.
+// `stripe` is the reviewed record (reviewedStripeRecord), or null when it is unreadable or
+// invalid (already a problem). Returns the problems, the identifiers a committed file may
+// name, and `allowedIn(worker, name)`, the identifiers admitted in one var.
+async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
   const {
     captureManagedWorkspaceBinding,
     parseLoginConfiguration,
     parseBrokerDatabaseBinding,
     parseTurnstileConfiguration,
+    parseStripeConfiguration,
     turnstileHostnameMismatch,
     parseLoginChallengeConfiguration,
   } = await loadStagingParsers();
@@ -722,6 +815,22 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
   }
   if (apiActions !== null && brokerActions !== null && apiActions !== brokerActions)
     problem("EDGE_STAGING_CHALLENGE_ACTIONS", "staging");
+  // M5 PR-1: the Stripe configuration, pinned to its reviewed record (none while off).
+  const scoped = new Map();
+  const reviewedStripe = stripe?.configurationJson ?? null;
+  const stripeJson = vars.broker?.STRIPE_CONFIGURATION_JSON;
+  if (stripeJson !== undefined) {
+    let parsed = null;
+    try {
+      parsed = parseStripeConfiguration(stripeJson);
+    } catch {
+      parsed = null;
+    }
+    if (parsed === null || reviewedStripe === null || stripeJson !== reviewedStripe)
+      problem("EDGE_STAGING_STRIPE_CONFIGURATION", "broker:staging");
+    else scoped.set("broker:STRIPE_CONFIGURATION_JSON", new Set([parsed.portalConfigurationId]));
+  }
+  const allowedIn = (worker, name) => scoped.get(worker + ":" + name) ?? new Set();
   // Every value of every staging Worker: identifiers, URLs, workers.dev hosts and keys.
   const urls = new Set(
     origin === null
@@ -738,7 +847,11 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
       if (typeof value !== "string") continue;
       const where = worker + ":staging:" + name;
       for (const [kind, pattern] of committedIdentifierPatterns)
-        if (matchesOf(pattern, value).some((match) => !allowed.has(match)))
+        if (
+          matchesOf(pattern, value).some(
+            (match) => !allowed.has(match) && !allowedIn(worker, name).has(match),
+          )
+        )
           problem("EDGE_STAGING_VALUE_" + kind.toUpperCase(), where);
       if (matchesOf(/https?:\/\/[^\s"\\]*/i, value).some((url) => !urls.has(url)))
         problem("EDGE_STAGING_VALUE_URL", where);
@@ -754,7 +867,7 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
       )
         problem("EDGE_STAGING_VALUE_SITE_KEY", where);
     }
-  return { problems, allowed };
+  return { problems, allowed, allowedIn };
 }
 
 // One Worker's resolved wrangler configuration (no account, credential or network).
@@ -780,6 +893,7 @@ export async function verifyEdgeConfig({
   routesPath = join(repositoryRoot, "docs/contracts/workspace-routes.json"),
   stagingPath = join(repositoryRoot, "infra/environments/staging.json"),
   workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
+  stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -787,10 +901,8 @@ export async function verifyEdgeConfig({
     "../packages/infrastructure/src/selected-stack.ts",
     here,
   );
-  const { brokerRequiredSecretsFor } = await tsImport(
-    "../packages/identity/src/broker-protocol.ts",
-    here,
-  );
+  const { brokerRequiredSecretsFor, brokerStripeSecrets, stripeModeTest, stripeModeVar } =
+    await tsImport("../packages/identity/src/broker-protocol.ts", here);
   const { reservedWorkerPaths } = await tsImport("../apps/api/src/reserved-paths.ts", here);
   const { unstable_readConfig } = await loadWranglerApi();
   const problems = [];
@@ -800,6 +912,27 @@ export async function verifyEdgeConfig({
   const stagingPlacements = {};
   let apiStagingName = null;
   const problem = (code, where) => problems.push(code + ":" + where);
+  // M5, the Stripe switch (owner decision (c), 2026-10-21): the reviewed record decides it
+  // for the staging Workers; an unreadable or invalid record is a problem and counts as off,
+  // so nothing Stripe is admitted. Development and production are always off.
+  const stripeRecord = readJson(stripePath);
+  let stripe = null;
+  if (stripeRecord === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "stripe-staging.json");
+  else
+    try {
+      stripe = reviewedStripeRecord(stripeRecord);
+    } catch {
+      problem("EDGE_STAGING_STRIPE_RECORD", "stripe-staging.json");
+    }
+  const stripeSwitch = (environment) =>
+    environment === "staging" && stripe?.switch === "on" ? "on" : "off";
+  // The names checked here are the ones the api and the broker read.
+  if (
+    stripeModeVar !== edgeStripeModeVar ||
+    stripeModeTest !== edgeStripeModeTest ||
+    !same([...brokerStripeSecrets], [...edgeStripeSecretNames])
+  )
+    problem("EDGE_STRIPE_SWITCH_NAMES", "broker-protocol");
   for (const worker of edgeWorkers) {
     const path = workerConfigPath(worker, root);
     texts[worker.key] = readFileSync(path, "utf8");
@@ -871,17 +1004,35 @@ export async function verifyEdgeConfig({
         names.some((name) => providerCredentialName.test(name) || credentialWord.test(name))
       )
         problem("EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER", where);
-      // The var allowlist (P04.T01i AC01): exactly these names, string values, and the
-      // Worker's own environment.
-      const varNames = edgeVarNames(worker.key, environment);
+      // The var allowlist (P04.T01i AC01): exactly these names (with, M5, the Stripe
+      // switch's vars while it is on), string values, the Worker's own environment and the
+      // switch's one mode.
+      const switched = stripeSwitch(environment);
+      const varNames = edgeVarNames(worker.key, environment, switched);
       if (
         vars === null ||
         typeof vars !== "object" ||
         !same(Object.keys(vars).sort(), [...varNames].sort()) ||
         Object.values(vars).some((value) => typeof value !== "string") ||
-        (varNames.includes("MORROW_ENVIRONMENT") && vars.MORROW_ENVIRONMENT !== environment)
+        (varNames.includes("MORROW_ENVIRONMENT") && vars.MORROW_ENVIRONMENT !== environment) ||
+        (varNames.includes(edgeStripeModeVar) && vars[edgeStripeModeVar] !== edgeStripeModeTest)
       )
         problem("EDGE_VARS", where);
+      // M5: no mixed Stripe state. While the switch is off no Worker carries a Stripe var or
+      // secret; while it is on the staging api carries its mode and the staging broker its
+      // mode, its configuration and both secrets.
+      const carried = edgeStripeNames.filter(
+        (name) =>
+          (vars !== null && typeof vars === "object" && Object.hasOwn(vars, name)) ||
+          (Array.isArray(required) && required.includes(name)),
+      );
+      if (
+        !same(
+          carried.sort(),
+          [...edgeStripeNamesRequired(worker.key, environment, switched)].sort(),
+        )
+      )
+        problem("EDGE_STRIPE_SWITCH_MIXED", where);
       if (environment === "staging") {
         stagingVars[worker.key] = vars;
         if (worker.key === "api") apiStagingName = config.name;
@@ -890,7 +1041,10 @@ export async function verifyEdgeConfig({
         if (
           !Array.isArray(required) ||
           new Set(required).size !== required.length ||
-          !same([...required].sort(), [...brokerRequiredSecretsFor(environment)].sort())
+          !same(
+            [...required].sort(),
+            [...brokerRequiredSecretsFor(environment, stripeSwitch(environment))].sort(),
+          )
         )
           problem("EDGE_BROKER_SECRETS", where);
       } else if (!same(required, [])) problem("EDGE_SECRETS_REQUIRED_NOT_EMPTY", where);
@@ -973,6 +1127,7 @@ export async function verifyEdgeConfig({
     apiName: apiStagingName ?? selectedConfiguration("staging").cloudflare.workers.api,
     staging,
     workos,
+    stripe,
   });
   problems.push(...checked.problems);
   // The placement region is the region of staging.json's Neon project (`neon.region_id`,
@@ -995,10 +1150,11 @@ export async function verifyEdgeConfig({
       for (const match of matchesOf(pattern, texts[worker.key]))
         remaining.set(match, (remaining.get(match) ?? 0) + 1);
       if (["api", "broker"].includes(worker.key))
-        for (const value of Object.values(stagingVars[worker.key] ?? {}))
+        for (const [name, value] of Object.entries(stagingVars[worker.key] ?? {}))
           if (typeof value === "string")
             for (const match of matchesOf(pattern, value))
-              if (checked.allowed.has(match)) remaining.set(match, (remaining.get(match) ?? 0) - 1);
+              if (checked.allowed.has(match) || checked.allowedIn(worker.key, name).has(match))
+                remaining.set(match, (remaining.get(match) ?? 0) - 1);
       if ([...remaining.values()].some((count) => count > 0))
         problem("EDGE_COMMITTED_IDENTIFIER_" + kind.toUpperCase(), worker.key);
     }
@@ -1008,7 +1164,12 @@ export async function verifyEdgeConfig({
   for (const route of routes)
     if (bases.some((base) => route.pattern === base || route.pattern.startsWith(base + "/")))
       problem("EDGE_ROUTE_SHADOWED_BY_WORKER", route.id);
-  return { problems, resolved, reservedWorkerPaths: [...reservedWorkerPaths] };
+  return {
+    problems,
+    resolved,
+    reservedWorkerPaths: [...reservedWorkerPaths],
+    stripeSwitch: stripeSwitch("staging"),
+  };
 }
 
 const normalisedInputs = (meta, worker, root) =>
@@ -1282,7 +1443,8 @@ async function smokeDevPhase(protocol, markers, check) {
       label("broker_binds_only_morrow_environment"),
       JSON.stringify(tables["morrow-development-broker"]) === '["MORROW_ENVIRONMENT"]',
     );
-    // P05.T01ab adds the three per-address limiters; still no text or secret binding.
+    // P05.T01ab adds the three per-address sign-in limiters and the session routes their
+    // own fourth; still no text or secret binding.
     check(
       label("api_binds_only_broker_environment_and_limiters"),
       JSON.stringify([...(tables["morrow-development-api"] ?? [])].sort()) ===
@@ -1292,6 +1454,7 @@ async function smokeDevPhase(protocol, markers, check) {
             "LOGIN_CALLBACK_LIMITER",
             "LOGIN_START_LIMITER",
             "MORROW_ENVIRONMENT",
+            "SESSION_LIMITER",
             "SIGNUP_LIMITER",
           ].sort(),
         ),

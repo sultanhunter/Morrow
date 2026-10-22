@@ -33,6 +33,9 @@ import {
   selectPayers,
 } from "../packages/policy/src/billing-state.ts";
 import { isPaidWork } from "../packages/policy/src/paid-work.ts";
+import { parseTermsDocument } from "../packages/work/src/billing/terms.ts";
+import { stripeCanonicalJson } from "../packages/work/src/billing/stripe-objects.ts";
+import { createHash } from "node:crypto";
 
 // Runs under tsx (npm run verify:billing): the walkthroughs use
 // packages/policy/src/billing-state.ts as the only implementation.
@@ -474,7 +477,90 @@ for (const d of decisions.consumed_decisions) {
   if (!d.reviewRef || !existsSync(resolve(root, d.reviewRef)))
     errors.push("review record missing " + d.id);
 }
+// M5 PR-1: docs/decisions/billing-terms.json, Morrow's published BillingTerms@1 revisions
+// per environment (R10; ADR-0022 item 11). Each revision parses (parseBillingTerms and the
+// closed offers), revisions are contiguous from 1, each digest is SHA-256 of the canonical
+// JSON of {terms, offers}, and every published revision keeps its pinned digest: a change
+// is a new revision appended here deliberately. The beta subscription entry is USD 49 a
+// month with 300 credits (owner, 2026-10-19), test mode only before M6, and production has
+// no revision. ADR-0022 item 5 amendment (owner decision (b), 2026-10-21): a development or
+// staging revision may carry one operator_test_entitlement entry, the beta plan's 300 test
+// credits with no price and no offer; a revision is either priced (at least one beta
+// subscription entry) or operator-only (staging's revision 1 while the Stripe switch is off).
+const publishedTermsDigests = Object.freeze({
+  development: ["4c6ccd12dc283abcde21532208ecdabd6551865458c86ba5629b65d9c177e411"],
+  staging: ["88744622d6efbddb2136154fe11e8f4472e99519559c19d629d68e4199fed350"],
+  production: [],
+});
+const termsFile = read("docs/decisions/billing-terms.json");
+check("billing terms: closed file, three environments", () => {
+  return (
+    termsFile.schema_version === 1 &&
+    Object.keys(termsFile).sort().join() === "description,environments,schema_version" &&
+    Object.keys(termsFile.environments).sort().join() === "development,production,staging"
+  );
+});
+for (const [environment, revisions] of Object.entries(termsFile.environments ?? {}))
+  check(
+    `billing terms: ${environment} revisions parse, are contiguous and keep their digests`,
+    () => {
+      if (!Array.isArray(revisions)) return false;
+      const pinned = publishedTermsDigests[environment] ?? [];
+      if (revisions.length < pinned.length) return false;
+      if (environment === "production" && revisions.length !== 0) return false;
+      return revisions.every((revision, index) => {
+        if (Object.keys(revision).sort().join() !== "digest,offers,terms") return false;
+        const document = parseTermsDocument(revision.terms, revision.offers);
+        const digest = createHash("sha256")
+          .update(stripeCanonicalJson({ terms: revision.terms, offers: revision.offers }))
+          .digest("hex");
+        const offerFor = (priceKey) => document.offers.find((o) => o.priceKey === priceKey);
+        const subscriptions = document.terms.entries.filter(
+          (e) => e.route === "morrow_direct" && e.kind === "subscription_period",
+        );
+        const operator = document.terms.entries.filter(
+          (e) => e.kind === "operator_test_entitlement",
+        );
+        return (
+          document.terms.termsRevision === index + 1 &&
+          revision.digest === digest &&
+          (index >= pinned.length || pinned[index] === digest) &&
+          (subscriptions.length >= 1 ||
+            (operator.length === 1 && document.terms.entries.length === 1)) &&
+          operator.length <= 1 &&
+          (operator.length === 0 || environment !== "production") &&
+          operator.every(
+            (e) =>
+              e.route === "morrow_direct" &&
+              e.priceKey === "morrow:operator_plan:beta" &&
+              e.currency === "USD" &&
+              e.creditUnits === "300",
+          ) &&
+          document.offers.every((o) => !operator.some((e) => e.priceKey === o.priceKey)) &&
+          document.terms.entries.every((e) => e.mode === "test") &&
+          subscriptions.every(
+            (e) =>
+              e.currency === "USD" &&
+              e.creditUnits === "300" &&
+              offerFor(e.priceKey)?.unitAmount === "4900" &&
+              offerFor(e.priceKey)?.interval === "month",
+          )
+        );
+      });
+    },
+  );
+check("billing terms: a changed published revision is refused", () => {
+  const first = structuredClone(termsFile.environments.development[0]);
+  first.terms.entries[0].creditUnits = "400";
+  const digest = createHash("sha256")
+    .update(stripeCanonicalJson({ terms: first.terms, offers: first.offers }))
+    .digest("hex");
+  return digest !== publishedTermsDigests.development[0];
+});
+
 const inputs = [
+  "docs/decisions/billing-terms.json",
+  "packages/work/src/billing/terms.ts",
   "docs/contracts/schemas/v1/billing.schema.json",
   "docs/contracts/decision-tables/classify-payment.rules.json",
   "docs/contracts/decision-tables/classify-payment.tsv",

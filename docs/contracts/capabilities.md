@@ -1248,6 +1248,30 @@ Retention: R02. Verification: A request never grants; only a linked reviewed gra
 
 Trace: J13; P05.T02, P14.T03; P01.A01, P05.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
+### governance.billing.manage
+
+Open a Morrow-direct plan checkout or billing portal session. Owner: Morrow platform owner. Effect: control. Provider: morrow_billing (D21, Design recorded).
+
+Input: action: BillingManageAction; priceKey: NullableStripePriceKey. Output: operationId: Id.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.billing.manage. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: purchase action, plan price. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R04. Verification: Only a server-verified paid invoice fixes the route and grants credits; a checkout return or client value never does. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J13; P18.T01; P01.A01, P18.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### governance.model_default.revise
+
+Revise the workspace default model selection and member ceiling. Owner: Morrow platform owner. Effect: control. Provider: morrow (D01, Design recorded).
+
+Input: model: ModelOptionKey; effort: ModelOptionKey; maxCreditsPerProduct: CreditsPerProductCeiling; expectedRevision: NullableRevision. Output: revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.model_default.revise. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: default model, default effort, member credit ceiling. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: Only keys of the active catalogue version are accepted, and the ceiling binds members without this grant. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J13; P12.T01; P01.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
 ## Custom agents
 
 ### agents.listing.read

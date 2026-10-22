@@ -423,7 +423,7 @@ test("AC29: 20 concurrent first calls share one initialisation; a failure stays 
   for (const value of [undefined, null, "env"]) assert.equal(await brokerHealth(value), false);
 });
 
-test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404 default", async (t) => {
+test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 404 default", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "morrow-broker-entry-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bundled = await build({
@@ -451,12 +451,16 @@ test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404
   const file = join(directory, "broker.mjs");
   writeFileSync(file, bundled.outputFiles[0].text);
   const module = await import(pathToFileURL(file).href);
-  // P05.T01ab (ADR-0019 item 6) added challengeVerify.
+  // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods.
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
     "challengeVerify",
     "constructor",
     "health",
     "neonLease",
+    "stripeCheckoutCreate",
+    "stripeCustomerEnsure",
+    "stripePortalCreate",
+    "stripeWebhookVerify",
     "workosSessionPage",
   ]);
   // Trust model v1: one class per caller, exactly its own methods. M2 PR-2 gives the
@@ -495,9 +499,15 @@ test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404
   await failure(entry.workosSessionPage("a", "b"));
   await failure(entry.challengeVerify("account_login", "token"));
   await failure(entry.challengeVerify("account_login", "token", 1000, 1));
+  // M5 PR-1: each Stripe method takes exactly its ids, strings and budget.
+  const operation = "00000000-0000-4000-8000-000000000001";
+  await failure(entry.stripeCustomerEnsure(operation));
+  await failure(entry.stripeCheckoutCreate(operation, 1000, 1));
+  await failure(entry.stripePortalCreate());
+  await failure(entry.stripeWebhookVerify("e30=", "t=1"));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    Array(6).fill("INPUT_INVALID"),
+    Array(10).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);

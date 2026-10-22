@@ -28,4 +28,6 @@ export { WorkScreen } from "./screens/work";
 export { TaskScreen } from "./screens/task";
 export { InboxScreen, QuestionScreen } from "./screens/inbox";
 export { UnavailableDestination } from "./screens/unavailable";
+export { ListingsAgentCard } from "./screens/agents";
+export { ModelDefaultScreen } from "./screens/settings-models";
 export { ConnectionScreen, ConnectionsScreen } from "./screens/connections";

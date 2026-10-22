@@ -521,6 +521,41 @@ export function seedWorkFixtures(context) {
   return Object.freeze(principals);
 }
 
+// M2 PR-2's store installation of one workspace, as superuser fixture SQL (M3 PR-1 labs):
+// the app registry row inviting exactly that workspace, the StoreInstallation@1 row (born
+// unlinked, as 0026 requires), and with `link` the 0005 candidate and link and the
+// installation's unlinked -> linked change. morrow_identity.work_store_installations reads
+// exactly these rows: the store is current once linked. Synthetic development shops only;
+// the shop id is derived from the store id, so each store needs its own id.
+export function storeInstallationSql({
+  org,
+  workspace,
+  principal,
+  storeId,
+  connectionId,
+  installationId,
+  link = true,
+}) {
+  const key = storeId.toLowerCase().replaceAll("_", "-").replaceAll(".", "-").replaceAll(":", "-");
+  const app = ("lab-" + key).slice(0, 63);
+  const shop = (app + ".myshopify.com").slice(0, 255);
+  const shopId = String(BigInt("0x" + sha(storeId).slice(0, 12)) + 1n);
+  const at = "date_trunc('milliseconds',clock_timestamp())";
+  const statements = [
+    `INSERT INTO morrow_identity.shopify_apps(app_key,client_id,environment_id,intended_shop_digest,invited_organization_id,invited_workspace_id,scopes,api_version,install_url,status,revision,created_at,retired_at)
+ VALUES(${literal(app)},md5(${literal(storeId)}),'development',${literal(sha(shop))},${literal(org)},${literal(workspace)},'read_products,write_products','2026-10',${literal("https://" + shop + "/admin/oauth/install_custom_app")},'active',1,${at},NULL);`,
+    `INSERT INTO morrow_identity.store_installations(organization_id,workspace_id,id,app_key,shop_id,shop_domain,store_id,connection_id,generation,status,granted_scopes,credential_id,credential_version,development_store,link_id,revision,created_at,updated_at,reauthorised_at,linked_at)
+ SELECT ${literal(org)},${literal(workspace)},${literal(installationId)},${literal(app)},${literal(shopId)},${literal(shop)},${literal(storeId)},${literal(connectionId)},1,'unlinked',ARRAY['read_products','write_products'],${literal("credential_" + installationId)},1,true,NULL,1,t,t,NULL,NULL FROM (SELECT ${at}-interval '2 seconds' AS t) x;`,
+  ];
+  if (link)
+    statements.push(
+      `INSERT INTO morrow_identity.linking_candidates VALUES(${literal("cand_" + installationId)},'shopify','synthetic_app','synthetic_env',${literal(shopId)},${literal(shop)},${literal(installationId)},1,true,1,'controlled_fixture',${literal("proof_" + installationId)},1,${literal(sha(installationId))},${literal(principal)},clock_timestamp()-interval '2 seconds',clock_timestamp()+interval '1 hour',NULL);`,
+      `INSERT INTO morrow_identity.workspace_store_links VALUES(${literal("link_" + installationId)},${literal("cand_" + installationId)},${literal(org)},${literal(workspace)},${literal(installationId)},1,1,${literal(principal)},clock_timestamp()-interval '1 second');`,
+      `UPDATE morrow_identity.store_installations SET status='linked',link_id=${literal("link_" + installationId)},linked_at=greatest(${at}-interval '1 second',created_at),updated_at=greatest(${at}-interval '1 second',created_at),revision=revision+1 WHERE id=${literal(installationId)};`,
+    );
+  return statements.join("\n");
+}
+
 // The 0004 revocation's effect and lock order, as owner maintenance: the
 // organization interlock (0014) and the organization FOR UPDATE, the workspace
 // membership deactivated, the member's grants marked revoked and the policy

@@ -22,6 +22,8 @@ const markerKinds: readonly MarkerKind[] = [
   "question",
   "answer",
   "cancel",
+  "agent",
+  "model_default",
 ];
 export interface StorageLike {
   getItem(key: string): string | null;

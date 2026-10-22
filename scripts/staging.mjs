@@ -15,7 +15,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
-import { captureConsole, loadWranglerApi } from "./edge.mjs";
+import { captureConsole, loadWranglerApi, reviewedStripeRecord } from "./edge.mjs";
 import { buildLoginKeyring } from "./login-keyring.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
 import { StagingError, closedValue, failureRecord } from "./staging-common.mjs";
@@ -32,16 +32,26 @@ import {
   vaultKekFile,
 } from "./staging-files.mjs";
 import {
+  billingTermsSeedRows,
   connectionCensus,
+  customerResolutionInput,
+  grantTestEntitlement,
   neonConnector,
   platformSeedRows,
+  platformStop,
+  checkPlatformStopInput,
   provisionRoles,
+  resolveHeldCustomerOperation,
   roleControlFacts,
   runMigrations,
+  seedBillingTerms,
   seedPlatform,
   sessionIdentity,
   checkIdentity,
+  liveEvidenceRef,
   statementStatsScratchDatabase,
+  testEntitlementApproval,
+  testEntitlementInput,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
@@ -88,7 +98,24 @@ export const workerConfigs = Object.freeze({
 });
 export const githubSecrets = Object.freeze(["CLOUDFLARE_API_TOKEN"]);
 
-export async function identityConstants() {
+// M5, the Stripe switch (owner decision (c), 2026-10-21): the committed
+// docs/decisions/stripe-staging.json `switch`, checked with edge:check's own rule
+// (reviewedStripeRecord). "off" (the committed state) or "on"; anything else stops the
+// command before any effect.
+export function stagingStripeSwitch(root) {
+  try {
+    return reviewedStripeRecord(
+      JSON.parse(readFileSync(join(root, "docs/decisions/stripe-staging.json"), "utf8")),
+    ).switch;
+  } catch {
+    throw new StagingError("STAGING_STRIPE_RECORD_INVALID");
+  }
+}
+
+// `stripe` is the Stripe switch (stagingStripeSwitch): off by default, so a caller that
+// does not read the record never expects a Stripe secret.
+export async function identityConstants({ stripe = "off" } = {}) {
+  if (stripe !== "off" && stripe !== "on") throw new StagingError("STAGING_STRIPE_RECORD_INVALID");
   const { tsImport } = await import("tsx/esm/api");
   const protocol = await tsImport("../packages/identity/src/broker-protocol.ts", import.meta.url);
   return Object.freeze({
@@ -97,15 +124,20 @@ export async function identityConstants() {
     // item 7). Each gets LOGIN, the limit, both timeouts and a generated password.
     roles: [...protocol.brokerNeonRoleNames, protocol.brokerVaultRole],
     passwordSecret: protocol.brokerPasswordSecret,
-    // The broker's fourteen names (D1, AC02): WORKOS_API_KEY, P05.T01ab's
-    // TURNSTILE_SECRET_KEY, the eleven role passwords and M2 PR-1's MORROW_VAULT_KEK_V1.
-    // brokerRequiredSecrets is the one list: the wrangler `secrets.required` of development
-    // and staging, verify-config, gate 6, secrets-status and the first-deploy file all use
-    // it (production requires its vault-free subset, brokerRequiredSecretsFor).
-    brokerSecrets: [...protocol.brokerRequiredSecrets].sort(),
+    // The broker's names (D1, AC02): WORKOS_API_KEY, P05.T01ab's TURNSTILE_SECRET_KEY, the
+    // eleven role passwords and M2 PR-1's MORROW_VAULT_KEK_V1 (fourteen), and, only while
+    // the Stripe switch is on, M5 PR-1's STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET
+    // (sixteen). brokerRequiredSecretsFor("staging", stripe) is the one list: the staging
+    // wrangler `secrets.required`, verify-config, gate 6, secrets-status and the
+    // first-deploy file all use it (production requires its vault-free subset).
+    brokerSecrets: [...protocol.brokerRequiredSecretsFor("staging", stripe)].sort(),
     // The vault KEKs (ADR-0022 item 7) are the owner's: each is read from its owner file
     // (`vault-kek-v<n>`, written by `npm run vault -- kek`) and never generated here.
     vaultKekSecrets: [...protocol.brokerVaultKekSecrets],
+    // M5: the switch, and the Stripe secrets it requires (none while off), read from their
+    // owner files like the WorkOS key.
+    stripe,
+    stripeSecrets: stripe === "on" ? [...protocol.brokerStripeSecrets] : [],
     parseBinding: protocol.parseBrokerDatabaseBinding,
   });
 }
@@ -140,7 +172,14 @@ export async function loadStagingConfiguration(root) {
       turnstileJson: text(brokerVars, "TURNSTILE_CONFIGURATION_JSON"),
       loginConfigurationJson: text(brokerVars, "LOGIN_CONFIGURATION_JSON"),
       bindingJson: text(brokerVars, "MORROW_DATABASE_BINDING_JSON"),
+      // M5 PR-1: the saved portal configuration and tax flags, a reviewed identifier that
+      // arrives on the PR-D path, and the Stripe switch's mode; both only while the switch
+      // is on (checkStripeConfiguration).
+      stripeJson: text(brokerVars, "STRIPE_CONFIGURATION_JSON"),
+      stripeMode: text(brokerVars, "MORROW_STRIPE_MODE"),
     }),
+    // M5: the api's Stripe switch mode (only while the switch is on).
+    stripeMode: text(vars, "MORROW_STRIPE_MODE"),
   });
 }
 
@@ -223,6 +262,67 @@ export async function checkChallengeConfiguration(loaded) {
     hostname: turnstile.hostname,
     actions: challenge.actions,
   });
+}
+
+// M5 PR-1 and the Stripe switch (owner decision (c), 2026-10-21), part of gate 4 before
+// any upload. Off (the committed state): neither Worker carries MORROW_STRIPE_MODE and the
+// broker carries no STRIPE_CONFIGURATION_JSON (gate 6 then expects no Stripe secret). On:
+// both carry MORROW_STRIPE_MODE "test", and the broker's STRIPE_CONFIGURATION_JSON is
+// present and the closed shape the broker itself parses (parseStripeConfiguration). Any
+// other combination is STAGING_STRIPE_SWITCH_MIXED; edge:check (gate 5) also pins the
+// configuration to its reviewed record.
+export async function checkStripeConfiguration(loaded, stripe = "off") {
+  const json = loaded?.broker?.stripeJson ?? null;
+  const modes = [loaded?.stripeMode ?? null, loaded?.broker?.stripeMode ?? null];
+  if (stripe === "off") {
+    if (json !== null || modes.some((mode) => mode !== null))
+      throw new StagingError("STAGING_STRIPE_SWITCH_MIXED", { stripe });
+    return Object.freeze({ stripe, present: false });
+  }
+  if (stripe !== "on" || json === null || modes.some((mode) => mode !== "test"))
+    throw new StagingError("STAGING_STRIPE_SWITCH_MIXED", {
+      stripe: stripe === "on" ? "on" : null,
+    });
+  const { tsImport } = await import("tsx/esm/api");
+  const { parseStripeConfiguration } = await tsImport(
+    "../packages/identity/src/broker-protocol.ts",
+    import.meta.url,
+  );
+  try {
+    const parsed = parseStripeConfiguration(json);
+    return Object.freeze({ stripe, present: true, automaticTax: parsed.automaticTax });
+  } catch {
+    throw new StagingError("STAGING_STRIPE_CONFIGURATION_INVALID");
+  }
+}
+
+// M5 PR-1: one environment's published billing terms (docs/decisions/billing-terms.json),
+// parsed again with the billing module (parseTermsDocument, the published digest) before
+// any database effect. staging has no revision until the owner's test-mode Price exists.
+export async function stagingBillingTermsRows(root, environment = "staging") {
+  let revisions;
+  try {
+    revisions = JSON.parse(readFileSync(join(root, "docs/decisions/billing-terms.json"), "utf8"))
+      .environments[environment];
+  } catch {
+    throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  const { tsImport } = await import("tsx/esm/api");
+  const { parseTermsDocument, termsDocumentDigest } = await tsImport(
+    "../packages/work/src/billing/terms.ts",
+    import.meta.url,
+  );
+  if (!Array.isArray(revisions)) throw new StagingError("STAGING_TERMS_INVALID");
+  for (const revision of revisions) {
+    try {
+      parseTermsDocument(revision?.terms, revision?.offers);
+    } catch {
+      throw new StagingError("STAGING_TERMS_INVALID");
+    }
+    if ((await termsDocumentDigest(revision.terms, revision.offers)) !== revision.digest)
+      throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  return billingTermsSeedRows(revisions);
 }
 
 // The card is active only when the record says approved, 30 days have not passed, and no
@@ -451,20 +551,31 @@ command("provision-roles", {
       const fileNames = (names) => [...names].sort().join("\n");
       const expected = fileNames(constants.brokerSecrets);
       const kekNames = constants.vaultKekSecrets;
+      const stripeNames = constants.stripeSecrets;
       const planned = [
         "WORKOS_API_KEY",
         "TURNSTILE_SECRET_KEY",
         ...roles.map(constants.passwordSecret),
         ...kekNames,
+        // M5 PR-1: the two Stripe secrets, from their owner files, only while the Stripe
+        // switch is on (none while it is off: the owner files are then never read).
+        ...stripeNames,
       ];
       if (
         new Set(planned).size !== planned.length ||
         fileNames(planned) !== expected ||
-        !kekNames.every((name) => vaultKekFile(name) !== null)
+        !kekNames.every((name) => vaultKekFile(name) !== null) ||
+        !stripeNames.every((name) => Object.hasOwn(stripeSecretFiles, name))
       )
         throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
       const workos = readCredentialFile(ctx.directory, "workos-api-key", specs);
       const turnstile = readCredentialFile(ctx.directory, "turnstile-secret", specs);
+      const stripeValues = Object.fromEntries(
+        stripeNames.map((name) => [
+          name,
+          readCredentialFile(ctx.directory, stripeSecretFiles[name], specs),
+        ]),
+      );
       // M2 PR-1: the owner's KEK files, read like the WorkOS key; the tool never makes one.
       const keks = Object.fromEntries(
         kekNames.map((name) => [
@@ -487,7 +598,12 @@ command("provision-roles", {
         handle.abandon();
         throw error;
       }
-      const secrets = { WORKOS_API_KEY: workos, TURNSTILE_SECRET_KEY: turnstile, ...keks };
+      const secrets = {
+        WORKOS_API_KEY: workos,
+        TURNSTILE_SECRET_KEY: turnstile,
+        ...stripeValues,
+        ...keks,
+      };
       for (const role of roles)
         secrets[constants.passwordSecret(role)] = provisioned.passwords.get(role);
       if (fileNames(Object.keys(secrets)) !== expected) {
@@ -549,27 +665,40 @@ command("provision-roles", {
   },
 });
 
+// M5 PR-1 adds the two Stripe secrets, only while the Stripe switch is on (owner decision
+// (c), 2026-10-21). While it is off put-secret refuses both (STAGING_STRIPE_OFF) before
+// any effect: gate 6 and secrets-status then expect the broker to hold neither. Once a
+// reviewed commit turns the switch on, this deliberately reverses the P04.T01i note that
+// put-secret only re-places names the running broker already holds: the running broker
+// lacks both Stripe names and gate 6 holds every deploy until the owner places them, so
+// put-secret adds them (docs/packets/P04.T01i.md, the M5 PR-1 note).
+const stripeSecretFiles = Object.freeze({
+  STRIPE_RESTRICTED_KEY: "stripe-restricted-key",
+  STRIPE_WEBHOOK_SECRET: "stripe-webhook-secret",
+});
 const putSecretFiles = Object.freeze({
   WORKOS_API_KEY: "workos-api-key",
   TURNSTILE_SECRET_KEY: "turnstile-secret",
+  ...stripeSecretFiles,
 });
 // M2 PR-1: a vault KEK (MORROW_VAULT_KEK_V<n>) is re-placed from the owner's own file,
 // with the same value; a new KEK is a new version, never a new value under an old name.
 const putSecretFile = (name) =>
   Object.hasOwn(putSecretFiles, name) ? putSecretFiles[name] : vaultKekFile(name);
 command("put-secret", {
-  usage: "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|MORROW_VAULT_KEK_V1",
+  usage:
+    "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|STRIPE_RESTRICTED_KEY|STRIPE_WEBHOOK_SECRET|MORROW_VAULT_KEK_V1",
   parse(args) {
     if (args.length !== 1 || putSecretFile(args[0]) === null)
       throw new StagingError("STAGING_USAGE");
     return { name: args[0] };
   },
   async run(ctx, { name }) {
-    if (
-      !Object.hasOwn(putSecretFiles, name) &&
-      !(await ctx.constants()).vaultKekSecrets.includes(name)
-    )
+    const constants = await ctx.constants();
+    if (!Object.hasOwn(putSecretFiles, name) && !constants.vaultKekSecrets.includes(name))
       throw new StagingError("STAGING_USAGE");
+    if (Object.hasOwn(stripeSecretFiles, name) && !constants.stripeSecrets.includes(name))
+      throw new StagingError("STAGING_STRIPE_OFF");
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
     await mainPreconditions(ctx, repositoryOf(config.staging));
@@ -615,6 +744,8 @@ command("seed-platform", {
     await mainPreconditions(ctx, repositoryOf(config.staging));
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const rows = platformSeedRows(configuration, JSON.parse(configuration.verificationProfileJson));
+    // M5 PR-1: the billing terms, checked before any effect.
+    const terms = await ctx.billingTerms();
     const written = await seedPlatform({
       connect: ctx.database({ ownerUrl, binding }).connect,
       binding,
@@ -622,7 +753,195 @@ command("seed-platform", {
       rows,
       selfService,
     });
-    return { ...written, origin: configuration.origin };
+    const billing = await seedBillingTerms({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      rows: terms,
+    });
+    return { ...written, ...billing, origin: configuration.origin };
+  },
+});
+
+// M5 PR-1 (review): the operator path for a customer operation the broker held (Stripe
+// proved neither outcome). Under the active staging card, only with the live-evidence
+// record of the operator's Stripe inspection or correction committed at --evidence; the
+// definer re-checks the hold and the window. Prints the outcome only.
+command("billing-customer-resolve", {
+  usage:
+    "billing-customer-resolve --operation <uuid> --resolution retry|abandon --evidence-code <code> --evidence <docs/evidence/live/....md> --operator <id>",
+  parse(args) {
+    const flags = {};
+    for (let i = 0; i < args.length; i += 2) {
+      const [flag, value] = [args[i], args[i + 1]];
+      if (
+        !["--operation", "--resolution", "--evidence-code", "--evidence", "--operator"].includes(
+          flag,
+        ) ||
+        typeof value !== "string" ||
+        Object.hasOwn(flags, flag)
+      )
+        throw new StagingError("STAGING_USAGE");
+      flags[flag] = value;
+    }
+    const input = {
+      operatorId: flags["--operator"],
+      operationId: flags["--operation"],
+      resolution: flags["--resolution"],
+      evidenceCode: flags["--evidence-code"],
+      evidenceRef: flags["--evidence"],
+    };
+    customerResolutionInput(input);
+    return { input };
+  },
+  async run(ctx, { input }) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    if (!existsSync(join(ctx.root, input.evidenceRef)))
+      throw new StagingError("STAGING_EVIDENCE_MISSING");
+    const binding = await stagingBinding(ctx, config);
+    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    return resolveHeldCustomerOperation({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input,
+    });
+  },
+});
+
+// The staging test entitlement (owner decision (b), 2026-10-21; the ADR-0022 item 5
+// amendment; card E13). Each use needs the owner's own approval in chat for this workspace,
+// recorded in a docs/evidence/live record committed to main before the run: the record
+// must name the approval reference and the workspace (requireTestEntitlementRecord), and it
+// is read from the commit mainPreconditions verified (committedRecord), never from the
+// working tree. Under the active card that carries E13, with an approval reference of that
+// card and effect dated from the amendment to today.
+// Prints the closed result: the outcome, ids, credit units, the terms revision and the
+// period, with the approval reference, the record's path and the commit it was read at.
+export function requireTestEntitlementApproval(card, approvalRef, now) {
+  const e13 = card?.e13;
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (
+    !e13 ||
+    typeof e13 !== "object" ||
+    Object.keys(e13).join() !== "amendedOn" ||
+    !day.test(e13.amendedOn ?? "") ||
+    !(e13.amendedOn >= card.approvedOn && e13.amendedOn <= card.expiresOn)
+  )
+    throw new StagingError("STAGING_CARD_EFFECT_MISSING", { effect: "E13" });
+  const match = testEntitlementApproval.exec(approvalRef);
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (
+    !match ||
+    match[1] !== card.id ||
+    match[2] !== "e13" ||
+    !Number.isFinite(Date.parse(match[3] + "T00:00:00Z")) ||
+    match[3] < e13.amendedOn ||
+    match[3] > today
+  )
+    throw new StagingError("STAGING_APPROVAL_INVALID");
+}
+// The record names the run on two labelled lines, each exactly once: a plain line or a
+// Markdown list item, the label optionally in bold, the value alone, bare or in backticks:
+//   - Approval reference: `staging-card-1.e13.2026-10-22.1`
+//   - Workspace: `ws_...`
+// Each value must equal the run's approval reference or workspace id exactly. A substring
+// never matches (approval .1 is not named by a record of .10, nor a workspace id by a
+// longer one), and a labelled line whose value is not one delimited token, or a second
+// line with the same label, refuses the run.
+const recordLabel =
+  /^(?:[-*] +)?(?:\*\*(Approval reference|Workspace):\*\*|(Approval reference|Workspace):)(.*)$/;
+const recordValue = /^ +(?:`([^`\s]+)`|([^`\s]+)) *$/;
+export function requireTestEntitlementRecord(text, { approvalRef, workspaceId }) {
+  const named = { "Approval reference": [], Workspace: [] };
+  for (const line of String(text).split(/\r?\n/)) {
+    const label = recordLabel.exec(line.trim());
+    if (!label) continue;
+    const value = recordValue.exec(label[3]);
+    named[label[1] ?? label[2]].push(value ? (value[1] ?? value[2]) : null);
+  }
+  const approvals = named["Approval reference"];
+  const workspaces = named.Workspace;
+  if (
+    approvals.length !== 1 ||
+    approvals[0] !== approvalRef ||
+    workspaces.length !== 1 ||
+    workspaces[0] !== workspaceId
+  )
+    throw new StagingError("STAGING_EVIDENCE_MISMATCH");
+}
+// The record as committed at `commit` (the origin/main head mainPreconditions verified),
+// never the working tree: an ignored or untracked file, or one edited after the clean-tree
+// check, cannot stand in for it. One regular blob (mode 100644) at exactly that path, read
+// by its object id; a missing path, a symbolic link, an executable file or a directory is
+// STAGING_EVIDENCE_MISSING.
+const committedEntry = /^100644 blob ([0-9a-f]{40})\t([^\0]+)\0$/;
+export async function committedRecord(ctx, commit, path) {
+  if (typeof commit !== "string" || !/^[0-9a-f]{40}$/.test(commit))
+    throw new StagingError("STAGING_GIT_OUTPUT_INVALID");
+  if (typeof path !== "string" || !liveEvidenceRef.test(path))
+    throw new StagingError("STAGING_USAGE");
+  const listing = await toolOk(ctx.tools, "git", [
+    "ls-tree",
+    "-z",
+    "--full-tree",
+    commit,
+    "--",
+    path,
+  ]);
+  const entry = committedEntry.exec(listing);
+  if (!entry || entry[2] !== path) throw new StagingError("STAGING_EVIDENCE_MISSING");
+  return toolOk(ctx.tools, "git", ["cat-file", "blob", entry[1]]);
+}
+command("test-entitlement", {
+  usage:
+    "test-entitlement --workspace <id> --approval <staging-card-1.e13.YYYY-MM-DD.n> --record <docs/evidence/live/....md> --operator <id>",
+  parse(args) {
+    const flags = {};
+    for (let i = 0; i < args.length; i += 2) {
+      const [flag, value] = [args[i], args[i + 1]];
+      if (
+        !["--workspace", "--approval", "--record", "--operator"].includes(flag) ||
+        typeof value !== "string" ||
+        Object.hasOwn(flags, flag)
+      )
+        throw new StagingError("STAGING_USAGE");
+      flags[flag] = value;
+    }
+    const input = {
+      operatorId: flags["--operator"],
+      workspaceId: flags["--workspace"],
+      approvalRef: flags["--approval"],
+      evidenceRef: flags["--record"],
+    };
+    testEntitlementInput(input);
+    return { input };
+  },
+  async run(ctx, { input }) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    requireTestEntitlementApproval(config.card, input.approvalRef, ctx.now());
+    const binding = await stagingBinding(ctx, config);
+    const { sourceCommit } = await mainPreconditions(ctx, repositoryOf(config.staging));
+    requireTestEntitlementRecord(
+      await committedRecord(ctx, sourceCommit, input.evidenceRef),
+      input,
+    );
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    const granted = await grantTestEntitlement({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input,
+    });
+    return {
+      ...granted,
+      approvalRef: input.approvalRef,
+      record: input.evidenceRef,
+      recordCommit: sourceCommit,
+    };
   },
 });
 
@@ -903,7 +1222,12 @@ command("deploy", {
       checkpoint: writeReport,
       preconditions: () => mainPreconditions(ctx, github.repository),
       loginDigest: async () => (await ctx.loginConfiguration(config)).configurationDigest,
-      challenge: () => ctx.challengeConfiguration(config),
+      // Gate 4 also checks the Stripe switch's vars against the committed switch (M5): none
+      // while it is off; while it is on, both modes and a broker configuration that parses.
+      async challenge() {
+        await ctx.challengeConfiguration(config);
+        await checkStripeConfiguration(config, constants.stripe);
+      },
       // The two owner files: exact key sets (their format checks), and the keyring bound
       // to the committed login configuration's digest.
       async firstFiles(digest) {
@@ -973,6 +1297,38 @@ command("unkill", {
     requireActiveCard(config.card, ctx.now());
     identifiersSet(config.staging);
     return runUnkill(ctx, { github: githubTarget(config.staging), staging: config.staging });
+  },
+});
+
+// M3 PR-1 (ADR-0022 item 15; ADR-0005): the owner-run platform stop. `set` needs no card,
+// like `kill`: a person may always stop AI work and Shopify effects platform-wide. `lift`
+// needs the active card. Neither needs main or the foundation check, so a stop is never
+// held behind a deploy gate. The reason is a person's text: a parameter, never echoed.
+// Any hosted run is an administrator effect outside staging-card-1, so it needs the
+// owner's per-action approval and a docs/evidence/live/ record.
+command("platform-stop", {
+  usage: "platform-stop set|lift --operator <id> --reason <text>",
+  parse(args) {
+    if (
+      args.length !== 5 ||
+      (args[0] !== "set" && args[0] !== "lift") ||
+      args[1] !== "--operator" ||
+      args[3] !== "--reason"
+    )
+      throw new StagingError("STAGING_USAGE");
+    return checkPlatformStopInput({ action: args[0], operatorId: args[2], reason: args[4] });
+  },
+  async run(ctx, options) {
+    const config = await ctx.config();
+    if (options.action === "lift") requireActiveCard(config.card, ctx.now());
+    const binding = await stagingBinding(ctx, config);
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    return platformStop({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      ...options,
+    });
   },
 });
 
@@ -1204,7 +1560,8 @@ export function defaultContext() {
     stdout: (line) => process.stdout.write(line + "\n"),
     stderr: (line) => process.stderr.write(line + "\n"),
     administrator: Object.freeze({ name: "neondb_owner", mode: "createrole" }),
-    constants: async () => (constants ??= await identityConstants()),
+    constants: async () =>
+      (constants ??= await identityConstants({ stripe: stagingStripeSwitch(root) })),
     specs: async () =>
       (specs ??= stagingFileSpecs({ brokerSecretNames: (await ctx.constants()).brokerSecrets })),
     config: async () => (config ??= await loadStagingConfiguration(root)),
@@ -1223,6 +1580,7 @@ export function defaultContext() {
       return cloudflareApi({ credential: await ctx.credential(), accountId });
     },
     database: ({ ownerUrl, binding }) => neonConnector({ ownerUrl, binding }),
+    billingTerms: () => stagingBillingTermsRows(root, "staging"),
     async loginConfiguration(loaded) {
       if (loaded.loginConfigurationJson === null)
         throw new StagingError("STAGING_LOGIN_CONFIGURATION_MISSING");

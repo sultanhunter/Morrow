@@ -79,8 +79,10 @@ export function decodeLogout(reply: Reply): Outcome<"ended"> {
     return { kind: "denied", message: "", reference: null };
   if (status === 503 && identityBody(body, ["logout_unavailable"])) return unavailable();
   if (status === 503 && identityBody(body, ["logout_outcome_unknown"])) return uncertain;
-  // A request the guard refused (400, 405) never ran; any other reply can't be confirmed.
+  // A request the guard refused (400, 405) never ran, nor did one the api's per-address
+  // session limit answered (429 rate_limited); any other reply can't be confirmed.
   if (status === 400 || status === 405) return unavailable();
+  if (status === 429 && identityBody(body, ["rate_limited"])) return unavailable();
   return uncertain;
 }
 

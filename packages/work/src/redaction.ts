@@ -35,7 +35,7 @@ export interface StoreContentHandler {
   /** The definer or broker method that runs it; null until it lands. */
   readonly executor: string | null;
   /** The PR that makes the handler executable, before the table holds store content. */
-  readonly executable: "M2 PR-3" | "M3 PR-1";
+  readonly executable: "M2 PR-3";
 }
 
 export const storeContentHandlers: readonly StoreContentHandler[] = Object.freeze(
@@ -86,8 +86,17 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       trigger: "shop_redact",
       action: "empty_keep_digest",
       storeKey: "proposals.store_id through proposals.parameters_id",
-      executor: null,
-      executable: "M3 PR-1",
+      // The revisable owner helper of the M3 PR-1 agent-proposals migration: it empties the
+      // canonical text and sets redacted_at, keeping the digest; decision_bind and the
+      // approval_claims trigger refuse a redacted proposal. It runs only under the tenant's
+      // own session context (the tables' tenant_command policy) and otherwise refuses with
+      // context_unavailable, never an empty success. The shop/redact definer has no session,
+      // so the handler becomes executable in M2 PR-3, which lands that caller, the policy
+      // that lets its verified context see the tenant's rows (revising this helper), and a
+      // lab case that redacts from the connector login. No agent proposal holds a real
+      // store's content before then (no non-development store links before M6).
+      executor: "morrow_work.parameters_redact_for_store",
+      executable: "M2 PR-3",
     },
   ].map((handler) => Object.freeze(handler as StoreContentHandler)),
 );

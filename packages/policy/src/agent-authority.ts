@@ -38,8 +38,8 @@ export class AgentAuthorityError extends Error {
     this.name = "AgentAuthorityError";
   }
 }
-// Current definitions (ADR-0022 item 2): grants, scopes and resources may name the store
-// resource. AgentInstallation and AutomationMandate are unchanged v1 definitions.
+// Current definitions (ADR-0022 item 2): grants, scopes, resources and (M3 PR-1) an
+// installation's scope may name the store resource. AutomationMandate is unchanged v1.
 const valid = (name: CurrentDefinitionName, value: unknown) =>
   validateCurrentDefinition(name, value);
 const verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];

@@ -1,12 +1,16 @@
 // morrow-<env>-broker (ADR-0007): no public route, no workers.dev or preview
 // URL; reachable only through its service-binding entrypoints (ApiBroker, and under
 // trust model v1 ConnectorBroker and RuntimeBroker, ADR-0022 item 7). It is the only
-// Worker that binds provider credentials (`brokerRequiredSecrets`, 14 names): the WorkOS
-// API key, the Turnstile secret (P05.T01ab, ADR-0019 item 6), the ten leased Neon role
-// passwords, its own vault login's password and the vault KEK (MORROW_VAULT_KEK_V1);
+// Worker that binds provider credentials (`brokerRequiredSecretsFor`, 14 names): the
+// WorkOS API key, the Turnstile secret (P05.T01ab, ADR-0019 item 6), the ten leased Neon
+// role passwords, its own vault login's password and the vault KEK (MORROW_VAULT_KEK_V1);
 // production omits the last two (12 names; the vault is held there until the ADR-0007
-// item 9 production custody ADR). Only env.staging.vars hold identifiers (P04.T01i PR-D
-// part 1); the first hosted deploy fails closed until P04.T01i supplies
+// item 9 production custody ADR). M5 PR-1's Stripe restricted test key and webhook signing
+// secret (ADR-0022 items 7 and 12) join env.staging only while the reviewed Stripe switch
+// is on (docs/decisions/stripe-staging.json `switch`; off by owner decision (c),
+// 2026-10-21), with MORROW_STRIPE_MODE and STRIPE_CONFIGURATION_JSON in env.staging.vars;
+// edge:check refuses any mixed state. Only env.staging.vars hold identifiers (P04.T01i
+// PR-D part 1); the first hosted deploy fails closed until P04.T01i supplies
 // `wrangler deploy --secrets-file`. Merchant and
 // model credentials come only under trust model v1, as vault rows or the secrets
 // ADR-0022 item 7 admits, each with the PR that uses it.
@@ -99,10 +103,11 @@
         ],
       },
     },
-    // Production holds the vault until the production custody ADR (ADR-0007 item 9), so
-    // it requires neither the vault login's password nor a KEK (brokerRequiredSecretsFor).
-    // No placement in development or production, which waits for its own database and
-    // region (verify-config requires the key absent outside staging).
+    // Production holds the vault and Stripe until the production custody ADR (ADR-0007
+    // item 9), so it requires neither the vault login's password, a KEK nor a Stripe secret
+    // and has no Stripe switch (brokerRequiredSecretsFor). No placement in development or
+    // production, which waits for its own database and region (verify-config requires the
+    // key absent outside staging).
     "production": {
       "name": "morrow-production-broker",
       "vars": { "MORROW_ENVIRONMENT": "production" },

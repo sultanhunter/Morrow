@@ -105,6 +105,8 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | governance.privacy.export | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.privacy.erase | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.access.request | J13 | P05.T02, P14.T03 | P01.A01, P05.A01 | D01 |
+| governance.billing.manage | J13 | P18.T01 | P01.A01, P18.A01 | D21 |
+| governance.model_default.revise | J13 | P12.T01 | P01.A01 | D01 |
 | agents.listing.read | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |
 | agents.builder.describe | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |
 | agents.installation.stage | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |

@@ -151,6 +151,10 @@ export function inspectImports(file, code) {
       errors.push("TRUST_BOUNDARY_IMPORT");
     if (productionSource && !broker && /^@morrow\/broker(?:\/|$)/.test(specifier))
       errors.push("BROKER_SOURCE_IMPORT");
+    // M5 PR-1 (ADR-0022 items 7 and 12): Stripe is called only from the broker, with fixed
+    // fetch and no SDK (providers.json), so no product source imports a Stripe package.
+    if (productionSource && /^(?:stripe|@stripe\/[^/]+)(?:\/|$)/.test(installedPackage))
+      errors.push(broker ? "STRIPE_SDK_DENIED" : "STRIPE_OUTSIDE_BROKER");
     if (localTarget !== null) {
       const target = localTarget;
       if (productionSource && !broker && /^apps\/broker\//.test(target))
@@ -221,6 +225,16 @@ export function inspectImports(file, code) {
     }
     if (ui && ts.isIdentifier(node) && node.text === "process")
       errors.push("UI_SERVER_ENVIRONMENT");
+    // M5 PR-1: the Stripe API origin appears only in broker source.
+    if (
+      productionSource &&
+      !broker &&
+      (ts.isStringLiteralLike(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddleOrTemplateTail(node)) &&
+      /api\.stripe\.com/i.test(node.text)
+    )
+      errors.push("STRIPE_OUTSIDE_BROKER");
     if (ui) inspectUiSinks(node, path, errors);
     ts.forEachChild(node, visit);
   };
@@ -367,13 +381,14 @@ export const replacedBillingDefinitionNames = (changes) =>
 // Generated files define every exact selector and type, replaced ones included.
 const generatedContracts = /^packages\/contracts\/src\/generated\//;
 // EventEnvelope@2, the StreamFrame carrying it, AskAdminReadRecord, and the v1.1
-// ResourceRef, Scope and Grant have code rules beyond their schemas (the event
-// registry, the payloadRef binding, the admin-read reader and uniqueness rules, and
-// the store rule: a store resource's id is its storeId, ADR-0022 item 2), applied
+// ResourceRef, Scope, Grant and AgentInstallation have code rules beyond their schemas
+// (the event registry, the payloadRef binding, the admin-read reader and uniqueness
+// rules, and the store rule: a store resource's id is its storeId, ADR-0022 item 2), applied
 // only by `validateCurrentDefinition` in packages/contracts/src/validation.ts.
 // Product code under apps/ and packages/ never validates them by their exact v1.1
 // selector: a `"core-v1.1:<name>"` literal or `validateDefinition("core-v1.1", <name>)`.
 export const refinedDefinitionNames = Object.freeze([
+  "AgentInstallation",
   "AskAdminReadRecord",
   "EventEnvelope",
   "Grant",
@@ -481,6 +496,8 @@ export const entitlementWriterAllowlist = Object.freeze({
     "createHumanPolicyService",
     "createWorkspacePermissionBoundary",
   ]),
+  // M3 PR-1: the agent kernel's facts reader sets it only from entitlementFor over billing facts.
+  "packages/work/src/agents/delegation-reader.ts": Object.freeze(["createLeaseDelegationReader"]),
 });
 const entitlementField = "entitlementAllowed";
 export function inspectEntitlementWriters(file, code) {

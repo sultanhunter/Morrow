@@ -1,9 +1,9 @@
 import type {
   Core_ActorRef,
-  Core_AgentInstallation,
   Core_AutomationMandate,
   Core_PolicyDecision,
   CapabilityId,
+  Current_AgentInstallation,
   Current_Grant,
   Current_ResourceRef,
   Current_Scope,
@@ -39,7 +39,7 @@ export interface ResolvedMandateRecord {
   readonly payload: Core_AutomationMandate;
 }
 export interface InstalledAgentAuthority {
-  readonly installation: Core_AgentInstallation;
+  readonly installation: Current_AgentInstallation;
   readonly current: CurrentActorAuthority;
   readonly owner: CurrentActorAuthority;
   readonly grantRecords: readonly ResolvedGrantRecord[];
