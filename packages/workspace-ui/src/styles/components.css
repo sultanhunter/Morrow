@@ -52,8 +52,11 @@
   font-weight: 500;
 }
 .field input,
+.field select,
 .field textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 40px;
   padding: 10px;
   border: 1px solid var(--color-control-border);
@@ -69,6 +72,7 @@
   font-size: var(--type-caption-size);
 }
 .field input:disabled,
+.field select:disabled,
 .field textarea:disabled {
   background: var(--color-canvas);
 }
