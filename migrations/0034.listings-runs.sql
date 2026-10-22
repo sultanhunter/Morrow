@@ -1005,8 +1005,10 @@ END $$;
 -- uncertain at their worst case, its interrupted product's attempts accrue as unrecovered,
 -- its credits settle at the products proposed, and it moves to cancelled through the
 -- work_service edges (queued: no_submitted_effects; running: submitted_effects_reconciled).
--- At most 25 runs per call, oldest first. Returns the number closed.
-CREATE FUNCTION morrow_work.runs_close_stale(p_org text,p_ws text) RETURNS integer
+-- p_requester null closes every stale run of the workspace (before an admission); a
+-- principal closes only the runs it requested (the reconcile command). At most 25 runs per
+-- call, oldest first. Returns the number closed.
+CREATE FUNCTION morrow_work.runs_close_stale(p_org text,p_ws text,p_requester text) RETURNS integer
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE r record; c record; v_closed integer:=0; e record;
 BEGIN
@@ -1014,6 +1016,7 @@ BEGIN
    FROM morrow_work.runs x JOIN morrow_work.work_leases l ON l.organization_id=x.organization_id AND l.workspace_id=x.workspace_id AND l.id=x.lease_id
    WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.status IN ('queued','running')
     AND (l.status<>'active' OR l.expires_at<=pg_catalog.clock_timestamp())
+    AND (p_requester IS NULL OR x.requester_principal_id::text=p_requester)
    ORDER BY x.created_at,x.id LIMIT 25 LOOP
   PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',p_org,p_ws,r.id)::text,0));
   FOR c IN SELECT x.id::text AS id FROM morrow_work.run_model_calls x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.run_id=r.id
@@ -1171,7 +1174,7 @@ BEGIN
   AND x.workspace_id=p.workspace_id AND x.outcome='granted' AND x.kind='subscription_period' ORDER BY x.period_end DESC,x.recorded_at DESC LIMIT 1;
  IF NOT FOUND OR per.period_end<=v_now OR per.period_start>v_now THEN RETURN QUERY SELECT 'no_billing_period'::text,NULL::text; RETURN; END IF;
  -- The workspace's stale runs close first, so their credits are back before this reserves.
- PERFORM morrow_work.runs_close_stale(p.organization_id,p.workspace_id);
+ PERFORM morrow_work.runs_close_stale(p.organization_id,p.workspace_id,NULL);
  -- Ids derived from the run (single payer, SQL-built allocation).
  v_reservation:='credit:'||p_run_id; v_vendor:='vendor:'||p_run_id; v_allocation:='allocation:'||p_run_id;
  v_child_envelope:='envelope:'||p_hop_id;
@@ -1257,10 +1260,11 @@ BEGIN
   'run.admit',p_run_id,1,v_result,p_correlation_id,v_now);
  RETURN QUERY SELECT 'applied'::text,v_result::text;
 END $$;
--- Closes the workspace's stale runs (runs_close_stale) as one recorded command, so credits a
--- stop or an ended lease stranded return even while every new run would be refused.
--- Outcomes: applied (with the number closed), invalid, ineligible, stale_authority,
--- command_conflict.
+-- Closes the actor's own stale runs (runs_close_stale for the actor's principal) as one
+-- recorded command, so credits a stop or an ended lease stranded return even while every new
+-- run would be refused; the Worker first requires view on task.read. Another member's stale
+-- run closes at the next admission in the workspace. Outcomes: applied (with the number
+-- closed), invalid, ineligible, stale_authority, command_conflict.
 CREATE FUNCTION morrow_work.cmd_runs_reconcile(p_command_id text,p_request_digest text,p_correlation_id text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -1273,7 +1277,7 @@ BEGIN
  SELECT * INTO p FROM morrow_work.command_prelude(p_command_id,p_request_digest);
  IF p.outcome<>'ok' THEN RETURN QUERY SELECT p.outcome,NULL::text; RETURN; END IF;
  v_now:=morrow_work.db_now();
- v_closed:=morrow_work.runs_close_stale(p.organization_id,p.workspace_id);
+ v_closed:=morrow_work.runs_close_stale(p.organization_id,p.workspace_id,p.principal_id);
  v_result:=jsonb_build_object('closed',v_closed);
  PERFORM morrow_work.record_command(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,p_command_id,p_request_digest,
   'run.reconcile',p.workspace_id,1,v_result,p_correlation_id,v_now);
@@ -2091,7 +2095,7 @@ END $$;
 GRANT EXECUTE ON FUNCTION morrow_work.listing_field_array(),morrow_work.run_fields_valid(text[]),
  morrow_work.route_matches(text,text,text,text,text,text,text,text,text,text[],integer),morrow_work.snapshot_matches(text,text),
  morrow_work.draft_set_valid(text,text[]),morrow_work.draft_flags_valid(jsonb),morrow_work.run_fence_close_uncertain(text,text,text),
- morrow_work.run_end(text,text,text,text,text,text,text),morrow_work.runs_close_stale(text,text) TO morrow_work_command;
+ morrow_work.run_end(text,text,text,text,text,text,text),morrow_work.runs_close_stale(text,text,text) TO morrow_work_command;
 GRANT EXECUTE ON FUNCTION morrow_work.begin_run_command(text,text,text),
  morrow_work.cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text),
  morrow_work.cmd_runs_reconcile(text,text,text),morrow_work.run_interrupted(text) TO morrow_work_api;

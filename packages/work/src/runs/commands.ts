@@ -1,5 +1,6 @@
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import type { CapabilityId } from "@morrow/contracts";
+import { workPermissions } from "@morrow/contracts/work-permissions";
 import {
   entitlementFor,
   parseWorkspaceBillingFacts,
@@ -18,6 +19,7 @@ import { WorkReject, type WorkRejection, type WorkTx } from "../connection.js";
 import { enterWorkContext, WorkContextUnavailable, type WorkAuthority } from "../context.js";
 import { canonicalJson, sha256Hex } from "../digest.js";
 import type { GuardedWorkspaceRequest, WorkspaceRouteSpec } from "../http-guard.js";
+import { decideWork } from "../permissions.js";
 import { coordinatorRoute, listingsWorkflowVersion } from "./coordinator.js";
 import { runFieldsValid, type ListingField } from "./drafting.js";
 
@@ -390,7 +392,9 @@ async function reconcile(
   prepared: PreparedRunCommand,
   correlationId: string,
 ): Promise<RunResult> {
-  await context(tx, g);
+  // Default deny: the reconcile is offered on the task screen, so the actor must view tasks;
+  // cmd_runs_reconcile then closes only the actor's own stale runs.
+  await taskView(await context(tx, g), "list");
   const replay = await begin(tx, g, prepared);
   if (replay) return replay;
   const result = await submit(tx, "cmdRunsReconcile", [
@@ -415,6 +419,36 @@ export function runRunCommand(
 
 // ---------------------------------------------------------------------------
 // Reads: ids, statuses, counts and credits. No content, provider id or cost of a call.
+// Gated as every work read (P06.T01a §4.7): a run belongs to its task, whose read lists
+// activeRunId, so view on task.read first (a single run the actor may not view is 404,
+// identical to an absent one; a list is 403); then view on catalog.products.read on the
+// run's own store resource with the run's fields, since a run names that store's products
+// (a single run is 404; a list leaves the run out).
+async function taskView(a: WorkAuthority, kind: "list" | "single"): Promise<void> {
+  const rule = workPermissions["task.read"];
+  const decision = await decideWork(a, rule.capabilityId, "view", rule.fields);
+  if (decision.allowed) return;
+  if (decision.reason === "field_denied") throw new WorkReject("field_denied");
+  throw new WorkReject(kind === "list" ? "denied" : "not_found");
+}
+async function storeView(a: WorkAuthority, row: Record<string, unknown>): Promise<boolean> {
+  let fields: unknown;
+  try {
+    fields = JSON.parse(text(row, "fields"));
+  } catch {
+    throw new WorkContextUnavailable();
+  }
+  if (!Array.isArray(fields) || !fields.every((f) => typeof f === "string"))
+    throw new WorkContextUnavailable();
+  const store = storeResource(
+    a.actor.organizationId,
+    a.resource.workspaceId,
+    text(row, "store_id"),
+    text(row, "connection_id"),
+  );
+  const decided = await decideOn(a, store, "catalog.products.read", "view", fields as string[]);
+  return decided.decision.allowed;
+}
 const integer = (value: string | null) => {
   if (value === null) return null;
   const n = Number(value);
@@ -451,10 +485,11 @@ function runView(row: Record<string, unknown>) {
   };
 }
 async function runGet(tx: WorkTx, g: Guarded): Promise<RunResult> {
-  await context(tx, g);
+  const a = await context(tx, g);
+  await taskView(a, "single");
   const runId = g.params.runId!;
   const row = one(await tx.run("runById", [runId]));
-  if (!row) throw new WorkReject("not_found");
+  if (!row || !(await storeView(a, row))) throw new WorkReject("not_found");
   const products = (await tx.run("runProductsOfRun", [runId])).map((p) => {
     let flags: unknown = null;
     const raw = optional(p, "flags");
@@ -496,9 +531,12 @@ async function runGet(tx: WorkTx, g: Guarded): Promise<RunResult> {
   };
 }
 async function runsOfTask(tx: WorkTx, g: Guarded): Promise<RunResult> {
-  await context(tx, g);
+  const a = await context(tx, g);
+  await taskView(a, "list");
   const rows = await tx.run("runsOfTask", [g.params.taskId!]);
-  return { status: 200, body: { runs: rows.map(runView) }, outcome: "read" };
+  const visible: Record<string, unknown>[] = [];
+  for (const row of rows) if (await storeView(a, row)) visible.push(row);
+  return { status: 200, body: { runs: visible.map(runView) }, outcome: "read" };
 }
 export function runRunRead(tx: WorkTx, g: Guarded, read: RunRead): Promise<RunResult> {
   return read === "run.get" ? runGet(tx, g) : runsOfTask(tx, g);

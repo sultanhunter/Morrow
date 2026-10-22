@@ -11,7 +11,9 @@
 //      run lease, child task T' (ready, owned by the human), envelope, hop, Coordinator grant
 //      and events; a replay returns the recorded run; pending_starts lists ids only;
 //   B  refusals persist nothing: entitlement, credits, the member ceiling, the run product
-//      limit, an unknown selection, a foreign task and an inactive installation;
+//      limit, an unknown selection, a foreign task and an inactive installation; run reads
+//      need view on task.read and on the run's store (another tenant, a grantless member and
+//      a member without the store read see no run; the grantless member cannot reconcile);
 //   W  a run: products read, drafted through the gateway, checked in code, proposed as one
 //      catalog.content.publish Proposal@2 by the installation's agent on behalf of the
 //      requester, credits settled at the products proposed, cost booked from the catalogue's
@@ -790,6 +792,33 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     // Another tenant cannot read A's run.
     const foreignRead = await call(runsOn, P.Y, "GET", "/runs/" + happyRun);
     check("B7:another_tenant_reads_nothing", foreignRead.status === 404, foreignRead.body);
+    // A member of the same workspace with no grant (X): the run is 404 like an absent one, the
+    // task's runs are 403, and the reconcile is refused (default deny, P06.T01a).
+    const grantlessRun = await call(runsOn, P.X, "GET", "/runs/" + happyRun);
+    const grantlessList = await call(runsOn, P.X, "GET", "/tasks/" + T + "/runs");
+    const grantlessReconcile = await call(runsOn, P.X, "POST", "/runs-reconcile", {});
+    check(
+      "B8:a_grantless_member_reads_and_reconciles_nothing",
+      grantlessRun.status === 404 &&
+        grantlessList.status === 403 &&
+        grantlessReconcile.status === 403 &&
+        count(
+          `SELECT count(*) FROM morrow_work.commands WHERE actor_principal_id=${literal(P.X.principal)}`,
+        ) === 0,
+      { run: grantlessRun.body, list: grantlessList.body, reconcile: grantlessReconcile.body },
+    );
+    // A member who views tasks but not the store's products (C): the run is 404 and the
+    // task's runs leave it out.
+    const taskOnlyRun = await call(runsOn, P.C, "GET", "/runs/" + happyRun);
+    const taskOnlyList = await call(runsOn, P.C, "GET", "/tasks/" + T + "/runs");
+    check(
+      "B9:a_member_without_the_store_read_sees_no_run",
+      taskOnlyRun.status === 404 &&
+        taskOnlyList.status === 200 &&
+        Array.isArray(taskOnlyList.body.runs) &&
+        taskOnlyList.body.runs.length === 0,
+      { run: taskOnlyRun.body, list: taskOnlyList.body },
+    );
   }
 
   // ---------------------------------------------------------------------------

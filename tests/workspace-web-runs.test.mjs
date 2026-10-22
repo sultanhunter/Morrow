@@ -24,7 +24,9 @@ import { createPending } from "../apps/workspace-web/src/pending.ts";
 import { portMethods } from "../packages/workspace-ui/src/port.ts";
 import { copy } from "../packages/workspace-ui/src/copy.ts";
 import { parseProducts } from "../packages/workspace-ui/src/screens/ask.tsx";
-import { runRunRead } from "../packages/work/src/runs/commands.ts";
+import { runRunCommand, runRunRead } from "../packages/work/src/runs/commands.ts";
+import { workPermissions } from "../packages/contracts/src/work-permissions.ts";
+import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
 import { json, MemoryStorage, recordingTransport } from "./fixtures/workspace-web.mjs";
 
 const ws = "ws-1";
@@ -108,24 +110,75 @@ test("requests: fixed paths under /workspace/:ws/work, closed bodies, refused be
     assert.equal(refused, null);
 });
 
-// The server's own bodies, from runRunRead over a scripted transaction.
-const contextRow = {
+// The server's own bodies, from runRunRead over a scripted transaction. The reader holds
+// view on task.read (the workspace's tasks) and view on catalog.products.read on store_a.
+const reader = {
+  kind: "human",
+  principalId: "person_owner",
+  organizationId: "org_o",
+  workspaceId: "ws_w",
+  membershipId: "membership_owner",
+  installationId: null,
+  mandateId: null,
+};
+const workspaceResource = {
+  organizationId: "org_o",
+  workspaceId: "ws_w",
+  storeId: null,
+  connectionId: null,
+  kind: "workspace",
+  id: "ws_w",
+};
+const grantOf = (id, capabilityId, resource, fields) => ({
+  id,
+  principal: reader,
+  capabilityId,
+  verbs: ["view"],
+  scope: {
+    organizationId: "org_o",
+    workspaceId: "ws_w",
+    storeIds: resource.storeId === null ? [] : [resource.storeId],
+    accountIds: [],
+    resources: [resource],
+    fields: [...fields],
+  },
+  issuedBy: reader,
+  validFrom: "2026-10-01T00:00:00.000Z",
+  expiresAt: null,
+  revokedAt: null,
+  policyRevision: 1,
+});
+const taskReadGrant = grantOf(
+  "grant_task_read",
+  "workspace.task.create",
+  workspaceResource,
+  workPermissions["task.read"].fields,
+);
+const productsReadGrant = grantOf(
+  "grant_products_read",
+  "catalog.products.read",
+  storeResource("org_o", "ws_w", "store_a", "connection_a"),
+  listingFieldPaths,
+);
+const withGrants = (grants) => ({
   principal_id: "person_owner",
   organization_id: "org_o",
   workspace_id: "ws_w",
   membership_id: "membership_owner",
   policy_revision: "1",
-  grants: "[]",
-  grant_count: "0",
+  grants: JSON.stringify(grants),
+  grant_count: String(grants.length),
   grants_digest: "e".repeat(64),
   database_now_us: String(Date.parse("2026-10-22T12:00:00.000Z") * 1000),
-};
+});
+const contextRow = withGrants([taskReadGrant, productsReadGrant]);
 const runRow = {
   id: run1,
   revision: "4",
   task_id: "task_root",
   child_task_id: "00000000-0000-4000-8000-0000000000c1",
   store_id: "store_a",
+  connection_id: "connection_a",
   installation_id: "installation_a",
   status: "succeeded",
   ended_reason: null,
@@ -143,9 +196,10 @@ const runRow = {
   ended_at: "2026-10-22T11:01:00.000Z",
   updated_at: "2026-10-22T11:01:00.000Z",
 };
-function serverRead(read, params, replies) {
+function serverRead(read, params, replies, sent = []) {
   const tx = {
     async run(name) {
+      sent.push(name);
       return replies[name] ?? [];
     },
     markSubmitted() {},
@@ -290,6 +344,114 @@ test("decoders accept the server's own bodies exactly and refuse anything wider"
     assert.equal(decodeRunAdmitted(bad), null);
   assert.deepEqual(decodeReconciled({ schemaVersion: 1, closed: 2 }), { closed: 2 });
   assert.equal(decodeReconciled({ schemaVersion: 1, closed: -1 }), null);
+});
+
+test("run reads and the reconcile are gated as every work read: default deny", async () => {
+  const detailReplies = (grants) => ({
+    enterContext: [withGrants(grants)],
+    runById: [
+      {
+        ...runRow,
+        credits_reserved: "2",
+        credits_settled: "1",
+        credit_status: "settled",
+        attempts: "3",
+        input_tokens: "2700",
+        output_tokens: "900",
+      },
+    ],
+    runProductsOfRun: [],
+    runInterrupted: [{ interrupted: "false" }],
+  });
+  const rejected = async (pending) => {
+    try {
+      await pending;
+    } catch (error) {
+      return error.reason;
+    }
+    return "answered";
+  };
+  // A member of the same workspace with no grant: a single run is 404 (as an absent one)
+  // and no run row is read; the task's runs are 403.
+  const none = [];
+  assert.equal(
+    await rejected(serverRead("run.get", { runId: run1 }, detailReplies([]), none)),
+    "not_found",
+  );
+  assert.deepEqual(none, ["enterContext"]);
+  const noList = [];
+  assert.equal(
+    await rejected(
+      serverRead(
+        "run.list_of_task",
+        { taskId: "task_root" },
+        { enterContext: [withGrants([])], runsOfTask: [runRow] },
+        noList,
+      ),
+    ),
+    "denied",
+  );
+  assert.deepEqual(noList, ["enterContext"]);
+  // Tasks visible but not the run's store: the run is 404 and the list leaves it out.
+  assert.equal(
+    await rejected(serverRead("run.get", { runId: run1 }, detailReplies([taskReadGrant]))),
+    "not_found",
+  );
+  const otherStore = { ...runRow, id: "00000000-0000-4000-8000-000000000002", store_id: "store_b" };
+  const listed = await serverRead(
+    "run.list_of_task",
+    { taskId: "task_root" },
+    { enterContext: [contextRow], runsOfTask: [runRow, otherStore] },
+  );
+  assert.deepEqual(
+    listed.body.runs.map((r) => r.runId),
+    [run1],
+  );
+  const onlyTasks = await serverRead(
+    "run.list_of_task",
+    { taskId: "task_root" },
+    { enterContext: [withGrants([taskReadGrant])], runsOfTask: [runRow] },
+  );
+  assert.deepEqual(onlyTasks.body.runs, []);
+  // Both grants: the run reads.
+  const ok = await serverRead(
+    "run.get",
+    { runId: run1 },
+    detailReplies([taskReadGrant, productsReadGrant]),
+  );
+  assert.equal(ok.body.run.runId, run1);
+  // The reconcile: a grantless member is refused before any command is begun.
+  const commands = [];
+  const tx = {
+    async run(name) {
+      commands.push(name);
+      if (name === "enterContext") return [withGrants([])];
+      return [];
+    },
+    markSubmitted() {},
+    rollbackOnly() {},
+  };
+  assert.equal(
+    await rejected(
+      runRunCommand(
+        tx,
+        {
+          route: { method: "POST", pattern: "/runs-reconcile", query: [] },
+          workspaceId: "ws_w",
+          params: {},
+          query: new Map(),
+          sessionDigest: "d".repeat(64),
+          commandId: randomUUID(),
+          body: {},
+        },
+        { type: "run.reconcile", parsed: {}, digest: "f".repeat(64) },
+        "c-1",
+        "development",
+      ),
+    ),
+    "denied",
+  );
+  assert.deepEqual(commands, ["enterContext"]);
 });
 
 test("the HTTP port: admission, reads and the outcome mapping", async () => {

@@ -6,7 +6,7 @@
 
 const utc = (column: string) =>
   `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
-const runColumns = `r.id::text AS id,r.revision::text AS revision,r.task_id::text AS task_id,r.child_task_id::text AS child_task_id,r.store_id::text AS store_id,r.installation_id::text AS installation_id,r.status,r.ended_reason,r.catalogue_version::text AS catalogue_version,r.model_key,r.effort_key,r.credits_per_product::text AS credits_per_product,r.product_count::text AS product_count,to_jsonb(r.fields)::text AS fields,r.products_drafted::text AS products_drafted,r.products_failed::text AS products_failed,r.requester_principal_id::text AS requester_principal_id,${utc("r.created_at")} AS created_at,${utc("r.started_at")} AS started_at,${utc("r.ended_at")} AS ended_at,${utc("r.updated_at")} AS updated_at`;
+const runColumns = `r.id::text AS id,r.revision::text AS revision,r.task_id::text AS task_id,r.child_task_id::text AS child_task_id,r.store_id::text AS store_id,r.connection_id::text AS connection_id,r.installation_id::text AS installation_id,r.status,r.ended_reason,r.catalogue_version::text AS catalogue_version,r.model_key,r.effort_key,r.credits_per_product::text AS credits_per_product,r.product_count::text AS product_count,to_jsonb(r.fields)::text AS fields,r.products_drafted::text AS products_drafted,r.products_failed::text AS products_failed,r.requester_principal_id::text AS requester_principal_id,${utc("r.created_at")} AS created_at,${utc("r.started_at")} AS started_at,${utc("r.ended_at")} AS ended_at,${utc("r.updated_at")} AS updated_at`;
 
 export const runStatements = Object.freeze({
   beginRunCommand:

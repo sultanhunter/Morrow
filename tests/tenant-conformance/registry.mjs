@@ -478,7 +478,7 @@ export const workFunctions = Object.freeze({
     kind: "owner_helper",
     grantees: ["morrow_work_command"],
   },
-  "runs_close_stale(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "runs_close_stale(text,text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   // Run admission and reconciliation (the api) and the interrupted-run read.
   "begin_run_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
   "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)":
