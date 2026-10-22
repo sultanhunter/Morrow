@@ -91,19 +91,39 @@ const brokerRequiredSecretsWithStripe: readonly string[] = Object.freeze([
   ...brokerRequiredSecrets,
   ...brokerStripeSecrets,
 ]);
+// M3 PR-2 (ADR-0022 items 7 and 10): the Anthropic Console workspace's API key, bound only
+// to the broker and only while the reviewed model-provider switch is on. The switch is
+// docs/decisions/model-provider-staging.json `switch`, committed "off": while it is off the
+// broker requires no model secret, modelRespond answers BROKER_HELD (MODEL_UNAVAILABLE)
+// before any input, database or provider access, run admission answers 503 before any
+// reservation and ListingsRunWorkflow throws dispatch_disabled before any step. Its runtime
+// image is the var MORROW_MODEL_PROVIDER, exactly "anthropic" while the switch is on, on the
+// staging api, broker and orchestrator; any other value is off. Production has no switch
+// until the ADR-0007 item 9 custody ADR.
+export const brokerModelSecrets: readonly string[] = Object.freeze(["ANTHROPIC_API_KEY"]);
+export type BrokerModelSwitch = "off" | "on";
+export const modelProviderVar = "MORROW_MODEL_PROVIDER";
+export const modelProviderAnthropic = "anthropic";
+/** An Anthropic Console API key (sk-ant-api03-…); never logged, never returned. */
+export const anthropicKeyPattern = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
 const brokerRequiredSecretsInProduction: readonly string[] = Object.freeze(
   brokerRequiredSecrets.filter((name) => !brokerVaultSecrets.includes(name)),
 );
-// The broker's exact `secrets.required` (development and staging: 14 with the switch off,
-// 16 with it on; production: 12). Production has no Stripe switch: "on" there is refused.
+// The broker's exact `secrets.required` (development and staging: 14 with both switches off,
+// 16 with Stripe on, 15 with the model provider on, 17 with both; production: 12). Production
+// has neither switch: "on" there is refused.
 export function brokerRequiredSecretsFor(
   environment: "development" | "staging" | "production",
   stripe: BrokerStripeSwitch = "off",
+  model: BrokerModelSwitch = "off",
 ): readonly string[] {
   if ((stripe !== "off" && stripe !== "on") || (environment === "production" && stripe === "on"))
     throw Error("BROKER_STRIPE_SWITCH_INVALID");
+  if ((model !== "off" && model !== "on") || (environment === "production" && model === "on"))
+    throw Error("BROKER_MODEL_SWITCH_INVALID");
   if (environment === "production") return brokerRequiredSecretsInProduction;
-  return stripe === "on" ? brokerRequiredSecretsWithStripe : brokerRequiredSecrets;
+  const base = stripe === "on" ? brokerRequiredSecretsWithStripe : brokerRequiredSecrets;
+  return model === "on" ? Object.freeze([...base, ...brokerModelSecrets]) : base;
 }
 export const brokerLimits = Object.freeze({
   namespaceMaxBytes: 1024,
@@ -188,6 +208,68 @@ export interface RuntimeBrokerRpc {
     variablesJson: string,
     budgetMs: number,
   ): Promise<string>;
+  // M3 PR-2 (ADR-0022 item 10; spine §4 and §9): the provider-neutral model gateway. The
+  // lease is the run's; callJson is ModelCall@1 (closed: no selection, catalogue version or
+  // provider); the result is a ModelResult@1 string. The broker reads the selection and the
+  // catalogue version from the run its lease names and fences every attempt in SQL before any
+  // provider request. A held broker (the model-provider switch off, an invalid call, a stop,
+  // a spent reservation, an open call) throws BROKER_HELD.
+  modelRespond(
+    leaseId: string,
+    generation: number,
+    callJson: string,
+    budgetMs: number,
+  ): Promise<string>;
+}
+/**
+ * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant (an RPC stub
+ * answers any method name, so it is never probed), true since M2 PR-3 and M3 PR-2 were
+ * integrated. The api's run admission and the orchestrator's dispatch both require it with
+ * the model-provider switch, so the switch (committed off, docs/decisions/
+ * model-provider-staging.json) is now the only gate: no run, lease or reservation exists
+ * while it is off.
+ */
+export const runtimeProductReadAvailable: boolean = true;
+export const modelGatewayLimits = Object.freeze({
+  callMaxBytes: 200_000,
+  resultMaxBytes: 200_000,
+  budgetMinMs: 1_000,
+  // The official TypeScript SDK's default timeout for a non-streaming request of up to about
+  // 21,000 max_tokens; migration listings-runs bounds the fence's budget_ms the same way.
+  budgetMaxMs: 600_000,
+});
+// Sizing one non-streaming Messages send (ADR-0022 item 10 sends no stream): the send is
+// given the time to produce its effort's whole max_tokens at the floor output rate, plus a
+// first-token allowance, so a long reply is never cut off by a budget that could not fit it
+// (an aborted send is uncertain and booked at its worst case). The floor is 128,000 output
+// tokens an hour (about 35.6 a second), the rate the official SDK assumes when it decides a
+// non-streaming request fits its 10-minute default. It is an assumption until the staging
+// smoke measures each model and effort (M3 brief, owner question 6). A call's budget adds
+// the fence transaction's and the free count's ceilings and the close's second.
+export const modelSendTiming = Object.freeze({
+  floorOutputTokensPerHour: 128_000,
+  firstTokenAllowanceMs: 30_000,
+  fenceMaxMs: 10_000,
+  countMaxMs: 15_000,
+  closeMarginMs: 1_000,
+});
+/** The send's own window for an effort's max_tokens (the floor rate plus the allowance). */
+export function modelSendWindowMs(maxOutputTokens: number): number {
+  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 128_000)
+    throw invalid();
+  return (
+    modelSendTiming.firstTokenAllowanceMs +
+    Math.ceil((maxOutputTokens * 3_600_000) / modelSendTiming.floorOutputTokensPerHour)
+  );
+}
+/** One modelRespond's budget for an effort's max_tokens: fence, count, send and close. */
+export function modelCallBudgetMs(maxOutputTokens: number): number {
+  return (
+    modelSendTiming.fenceMaxMs +
+    modelSendTiming.countMaxMs +
+    modelSendWindowMs(maxOutputTokens) +
+    modelSendTiming.closeMarginMs
+  );
 }
 
 // P05.T01ab: the challenge protocol shared by the api guard and the broker.

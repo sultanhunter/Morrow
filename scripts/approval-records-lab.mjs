@@ -3129,6 +3129,8 @@ INSERT INTO morrow_work.approval_claims VALUES(${literal(F.O)},${literal(ws)},${
       ...["goal", "task", "question"].flatMap((m) => effective(m, "1")),
       // M2 PR-1 (0020) adds the operation rows, unchanged.
       ...effective("operation", "1"),
+      // M3 PR-2 (listings-runs) adds the run rows, unchanged.
+      ...effective("run", "1"),
     ];
     check("AC19:transition_rules_equal_json", same(rules.sort(), expected.sort()), {
       db: rules.length,

@@ -313,6 +313,10 @@ export function CommandFeedback<T>({
     readonly denied?: string;
     readonly conflict?: (outcome: Extract<Outcome<T>, { kind: "conflict" }>) => string;
     readonly rateLimited?: (seconds: number) => string;
+    /** Replaces "not saved" where earlier steps did save something (no Try again). */
+    readonly unavailable?: string;
+    /** A 400 without the server's own safe message. */
+    readonly invalid?: string;
   };
 }) {
   if (phase.phase === "uncertain")
@@ -323,6 +327,12 @@ export function CommandFeedback<T>({
     case "ok":
       return <StatusRegion message={success ?? null} />;
     case "unavailable":
+      if (messages.unavailable)
+        return (
+          <div role="status" className="notice notice-warning">
+            <p>{messages.unavailable}</p>
+          </div>
+        );
       return <OutcomeNotice kind="not_saved" onAction={onRetry} />;
     case "rate_limited":
       return (
@@ -352,10 +362,15 @@ export function CommandFeedback<T>({
         </div>
       );
     case "invalid":
-      // Only a named field can be highlighted; without one the copy says so.
+      // Only a named field can be highlighted; without one the copy says so, unless the
+      // server named its own safe message.
       return (
         <div role="status" className="notice notice-danger">
-          <p>{outcome.field === null ? copy.outcome.refused : copy.outcome.invalid}</p>
+          <p dir="auto">
+            {outcome.message ||
+              messages.invalid ||
+              (outcome.field === null ? copy.outcome.refused : copy.outcome.invalid)}
+          </p>
         </div>
       );
     case "not_in_build":

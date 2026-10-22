@@ -93,8 +93,11 @@ const routeCases = [
   ["/workspace/workspace_a/work/goals", "GET", true],
   ["/workspace/workspace_a/work/goals", "POST", true],
   ["/workspace/workspace_a/work/goals", "PUT", true],
-  // The billing, agents and catalog rows of the api Worker's dispatch table (M5 PR-1, M3 PR-1,
-  // M2 PR-3).
+  // The runs, billing, agents and catalog rows of the api Worker's dispatch table (M3 PR-2,
+  // M5 PR-1, M3 PR-1, M2 PR-3).
+  ["/workspace/workspace_a/work/tasks/task_a/runs", "POST", true],
+  ["/workspace/workspace_a/work/runs/run_a", "GET", true],
+  ["/workspace/workspace_a/work/runs-reconcile", "POST", true],
   ["/workspace/workspace_a/billing", "GET", true],
   ["/workspace/workspace_a/billing/morrow/checkout", "POST", true],
   ["/workspace/workspace_a/stores/store_a/agents/listings", "GET", true],
@@ -142,9 +145,14 @@ test("the session limit and the router agree on the session paths", async () => 
   // The work API's own paths are a subset of the counted workspace paths.
   assert.ok(workPath.test("/workspace/workspace_a/work/goals"));
   assert.equal(managedApiRoute("/workspace/workspace_a/work/goals"), "workspace");
-  // The ErrorEnvelope families are the work, billing, agents and catalog rows of the dispatch
-  // table, all under the counted workspace paths; the webhook row is never a session route.
+  // The ErrorEnvelope families are the runs, work, billing, agents and catalog rows of the
+  // dispatch table, all under the counted workspace paths; the webhook row is never a session
+  // route.
   for (const [path, family] of [
+    ["/workspace/workspace_a/work/tasks/task_a/runs", "runs"],
+    ["/workspace/workspace_a/work/runs/run_a", "runs"],
+    ["/workspace/workspace_a/work/runs-reconcile", "runs"],
+    ["/workspace/workspace_a/work/runs", "work"],
     ["/workspace/workspace_a/work/goals", "work"],
     ["/workspace/workspace_a/billing", "billing"],
     ["/workspace/workspace_a/billing/morrow/plans", "billing"],
@@ -415,7 +423,9 @@ test("fail closed: no address, a bad address or a failed limiter is the route's 
     ["/auth/rotate", "POST", exact('{"schemaVersion":1,"outcome":"rotation_unavailable"}')],
     ["/workspace/workspace_a/work/goals", "GET", envelope("safe_read_retry")],
     ["/workspace/workspace_a/work/goals", "POST", envelope("recheck_before_retry")],
-    // The agents and catalogue routes answer the work API's envelope; billing its own.
+    // The runs, agents and catalogue routes answer the work API's envelope; billing its own.
+    ["/workspace/workspace_a/work/runs/run_a", "GET", envelope("safe_read_retry")],
+    ["/workspace/workspace_a/work/tasks/task_a/runs", "POST", envelope("recheck_before_retry")],
     ["/workspace/workspace_a/models", "GET", envelope("safe_read_retry")],
     [
       "/workspace/workspace_a/stores/store_a/agents/listings/stop",

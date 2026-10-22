@@ -13,6 +13,9 @@ import type {
   Page,
   PersonRef,
   QuestionView,
+  RunAdmittedView,
+  RunDetailView,
+  RunView,
   StoreLinkPreviewView,
   StoreLinkResultView,
   TaskView,
@@ -25,7 +28,8 @@ export type Outcome<T> =
   | { readonly kind: "denied"; readonly message: string; readonly reference: string | null } // 403
   | { readonly kind: "not_found" } // 404: absent, foreign or not viewable
   | { readonly kind: "conflict"; readonly recheck: boolean; readonly message: string } // 409
-  | { readonly kind: "invalid"; readonly field: string | null } // 400
+  // 400; `message` is the server's safe message where the route names one (a run refusal).
+  | { readonly kind: "invalid"; readonly field: string | null; readonly message?: string }
   | { readonly kind: "rate_limited"; readonly retryAfterSeconds: number } // 429: nothing ran
   | { readonly kind: "unavailable"; readonly offline: boolean } // reads; commands never yet uncertain
   | { readonly kind: "uncertain" } // §4.9: only a decoded terminal reply ends it
@@ -158,6 +162,29 @@ export interface WorkspacePort {
       c: Command<{ reason: string }>,
     ): Promise<Outcome<ListingsChangeView>>;
   };
+  /**
+   * M3 PR-2: Listings runs on a task. Admission names a linked store, 1 to 25 products, the
+   * listing fields and a catalogue selection (or null for the workspace default); never a
+   * provider, price or credit amount. Reconcile closes the workspace's interrupted runs.
+   */
+  readonly runs: {
+    admit(
+      ws: Id,
+      taskId: Id,
+      c: Command<{
+        storeId: Id;
+        products: readonly string[];
+        fields: readonly string[];
+        selection: { readonly model: string; readonly effort: string } | null;
+      }>,
+    ): Promise<Outcome<RunAdmittedView>>;
+    listOfTask(ws: Id, taskId: Id): Promise<Outcome<readonly RunView[]>>;
+    get(ws: Id, runId: Id): Promise<Outcome<RunDetailView>>;
+    reconcile(
+      ws: Id,
+      c: Command<Record<string, never>>,
+    ): Promise<Outcome<{ readonly closed: number }>>;
+  };
   /** M3 PR-1: the model catalogue and the workspace's default and member ceiling. */
   readonly models: {
     list(ws: Id): Promise<Outcome<ModelCatalogueView>>;
@@ -206,6 +233,10 @@ export const portMethods = [
   "agents.listingsStop",
   "models.list",
   "models.reviseDefault",
+  "runs.admit",
+  "runs.listOfTask",
+  "runs.get",
+  "runs.reconcile",
 ] as const;
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */

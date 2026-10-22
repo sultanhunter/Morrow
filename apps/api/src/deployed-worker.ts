@@ -1,5 +1,6 @@
 import {
   parseBrokerDatabaseBinding,
+  runtimeProductReadAvailable,
   workosSessionNamespace,
   type ApiBrokerRpc,
 } from "../../../packages/identity/src/broker-protocol.js";
@@ -11,6 +12,7 @@ import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/m
 import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
 import { createConnectionKernel } from "../../../packages/policy/src/connection-authority.js";
 import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
+import type { RunsApiDependencies } from "../../../packages/work/src/runs/http.js";
 import type { BillingApiDependencies } from "../../../packages/work/src/billing/http.js";
 import type { StripeWebhookDependencies } from "../../../packages/work/src/billing/webhook.js";
 import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
@@ -27,6 +29,7 @@ import {
   mapApiEnvironment,
   type ApiEnvironmentCode,
   type ApiEnvironmentValues,
+  type ApiModelMode,
   type ApiStripeMode,
 } from "./environment.js";
 import { createSessionLimit, type SessionLimit } from "./session-limit.js";
@@ -51,12 +54,17 @@ interface Selected {
 }
 
 // The single place dependencies are assembled, and the P05.T01x extension point.
+/** Run admission opens on the model-provider switch and the product read together. */
+export const runAdmissionOpen = (modelMode: ApiModelMode, productRead: boolean): boolean =>
+  modelMode === "anthropic" && productRead === true;
 export function composeApiDependencies(
   values: Readonly<ApiEnvironmentValues>,
   broker: ApiBrokerRpc,
   now: () => number,
   environment: "development" | "staging" | "production" = "development",
   stripeMode: ApiStripeMode = "off",
+  modelMode: ApiModelMode = "off",
+  productReadAvailable: boolean = runtimeProductReadAvailable,
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
   const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
@@ -124,12 +132,23 @@ export function composeApiDependencies(
     ...work,
     reader: createBrokerShopifyReader(broker),
   });
+  // M3 PR-2: the runs routes on the work dependencies; admission only while the
+  // model-provider switch is on and M2 PR-3's product read exists (the orchestrator
+  // dispatches on the same two; the read exists since their integration, so the switch,
+  // committed off, is the only gate), otherwise 503 before any database access: no run,
+  // lease or reservation exists without a Workflow to execute it.
+  const runs: RunsApiDependencies = Object.freeze({
+    ...work,
+    environment,
+    admission: runAdmissionOpen(modelMode, productReadAvailable),
+  });
   return Object.freeze({
     dependencies,
     work,
     billing,
     webhook,
     catalog,
+    runs,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -157,6 +176,7 @@ function select(env: unknown): Selected {
         () => Date.now(),
         mapped.environment,
         mapped.stripe,
+        mapped.model,
       );
       selected = {
         api: createWorkspaceApiWorker(
@@ -165,6 +185,7 @@ function select(env: unknown): Selected {
           composed.billing,
           composed.webhook,
           composed.catalog,
+          composed.runs,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         session: createSessionLimit(mapped.guard.limiters?.session ?? null),

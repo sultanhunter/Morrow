@@ -22,6 +22,17 @@ import {
   brokerStripeWebhookVerify,
 } from "./stripe-broker.js";
 import { brokerWorkosSessionPage } from "./workos-session.js";
+import { createClaudeAdapter } from "./claude-adapter.js";
+import { createModelGateway } from "./model-gateway.js";
+import { runVaultTransaction } from "./vault-database.js";
+
+// M3 PR-2: the model gateway on the vault login's real transport, the platform fetch and
+// the clock. Claude is the only provider adapter (ADR-0022 item 10).
+const modelGateway = createModelGateway({
+  transaction: runVaultTransaction,
+  providers: Object.freeze({ anthropic: createClaudeAdapter((request) => fetch(request)) }),
+  now: () => Date.now(),
+});
 
 // Reachable only through its service-binding entrypoints (ADR-0007; trust model v1,
 // ADR-0022 item 7): one class per caller, each exposing only that caller's methods.
@@ -150,8 +161,8 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
 }
 
 // The orchestrator's entrypoint (M2 PR-1): its health and its own role lease. M2 PR-3 adds
-// shopifyRead (productContent under a run lease); modelRespond and the write methods join
-// in M3 and M4.
+// shopifyRead (productContent under a run lease) and M3 PR-2 modelRespond (the
+// provider-neutral model gateway); the write methods join in M4.
 export class RuntimeBroker extends WorkerEntrypoint<unknown> implements RuntimeBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -183,6 +194,16 @@ export class RuntimeBroker extends WorkerEntrypoint<unknown> implements RuntimeB
           budgetMs,
         )
       : brokerInputInvalid("shopifyRead", "RuntimeBroker");
+  }
+  modelRespond(
+    leaseId: string,
+    generation: number,
+    callJson: string,
+    budgetMs: number,
+  ): Promise<string> {
+    return arguments.length === 4
+      ? modelGateway.modelRespond(this.env, leaseId, generation, callJson, budgetMs)
+      : brokerInputInvalid("modelRespond", "RuntimeBroker");
   }
 }
 

@@ -117,11 +117,13 @@ check(
     })),
   ) === JSON.stringify(edgeRateLimits("development")),
 );
-// M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint (trust model v1);
-// the orchestrator binds nothing until its first caller (M3 PR-2).
+// M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint (trust model v1).
+// M3 PR-2: the orchestrator, its first caller, binds exactly the same environment's
+// RuntimeBroker entrypoint (its role lease and modelRespond) and nothing else.
 check(
-  "orchestrator_has_no_service_bindings",
-  Object.keys(options.orchestrator.serviceBindings ?? {}).length === 0,
+  "M3PR2:orchestrator_binds_only_the_runtime_broker_entrypoint",
+  JSON.stringify(options.orchestrator.serviceBindings) ===
+    JSON.stringify({ BROKER: { name: names.broker, entrypoint: "RuntimeBroker" } }),
 );
 check(
   "M2PR2:connector_binds_the_same_environment_connector_broker_entrypoint",
@@ -2160,6 +2162,30 @@ await instance(
 );
 
 check("orchestrator_bundle_built", bundle(orchestratorWorker).includes("dispatch_disabled"));
+// M3 PR-2 review: workerd starts a module only when every named export is a function or an
+// object (a boolean export fails the Worker at startup), so the orchestrator's real bundle
+// must start and answer its JSON 404 (its committed environment: dispatch disabled).
+await (async () => {
+  let started = false;
+  const mf = new Miniflare({
+    name: names.orchestrator,
+    modules: true,
+    script: bundle(orchestratorWorker),
+    compatibilityDate: options.orchestrator.compatibilityDate,
+    compatibilityFlags: options.orchestrator.compatibilityFlags,
+    bindings: { MORROW_ENVIRONMENT: "development" },
+    log: new Log(LogLevel.NONE),
+  });
+  try {
+    const response = await mf.dispatchFetch("https://orchestrator.internal/run");
+    started = response.status === 404 && (await response.text()) === '{"code":"not_found"}';
+  } catch {
+    started = false;
+  } finally {
+    await mf.dispose();
+  }
+  check("M3PR2:orchestrator_bundle_starts_in_workerd", started);
+})();
 rmSync(scratch, { recursive: true, force: true });
 
 const status =

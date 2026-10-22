@@ -41,7 +41,11 @@ const body = (text, signature) => {
 test("manifest: two contiguous rows after M3 PR-1 and the test entitlement, owners and digests", () => {
   const rows = ["shopify-privacy-identity", "shopify-privacy-work"].map(rowOf);
   assert.equal(rows[1].sequence, rows[0].sequence + 1);
-  assert.equal(rows[1].sequence, manifest.migrations.length);
+  // M3 PR-2's listings-runs is the one migration after the pair (it revises 0037's helpers).
+  assert.deepEqual(
+    manifest.migrations.slice(rows[1].sequence).map((m) => m.file.replace(/^\d{4}\./, "")),
+    ["listings-runs.sql"],
+  );
   // The merge train (2026-10-22) put the staging test entitlement's two rows between M3
   // PR-1's run-credits and these (by slug, never by number).
   assert.deepEqual(
@@ -177,15 +181,18 @@ test("constants SQL shares with TypeScript", () => {
   }
   assert.equal(stopReasonCodes.uninstalled, "shopify_app_uninstalled");
   assert.equal(stopReasonCodes.scopesChanged, "shopify_scopes_changed");
-  // The evidence admits exactly the handler tables (and M3 PR-2's two), and its actions.
+  // The evidence admits exactly the handler tables (M3 PR-2's two among them), and its
+  // actions.
   const evidence = body(identity, "morrow_identity.privacy_evidence_valid(");
   const tables = /\(h->>'table'\) NOT IN \(([^)]*)\)/.exec(evidence)[1];
   assert.deepEqual(
     [...tables.matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]).sort(),
     [
-      ...storeContentHandlers.map((h) => h.table),
-      "morrow_work.product_snapshots",
-      "morrow_work.run_drafts",
+      ...new Set([
+        ...storeContentHandlers.map((h) => h.table),
+        "morrow_work.product_snapshots",
+        "morrow_work.run_drafts",
+      ]),
     ].sort(),
   );
   // shop/redact's pseudonym: derived from the installation id, the *.myshopify.com shape.
@@ -199,6 +206,7 @@ test("constants SQL shares with TypeScript", () => {
 });
 
 test("fail closed: a run lease reads no product until M3 PR-2's runs exist; customers keep no digest", () => {
+  // 0037's text; listings-runs revises it once the runs exist (tests/listings-runs-sql.test.mjs).
   assert.match(
     work,
     /CREATE FUNCTION morrow_work\.run_product_readable\(p_org text,p_ws text,p_run_id text,p_product_id text\) RETURNS boolean\nLANGUAGE sql STABLE SET search_path=pg_catalog,morrow_work,pg_temp AS \$\$\n SELECT false\n\$\$;/,

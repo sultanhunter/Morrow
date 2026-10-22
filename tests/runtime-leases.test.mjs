@@ -168,11 +168,13 @@ test("a lease step: enter first, then the body; mark started and release are fix
     assert.equal(step.lease.leaseId, lease.leaseId);
     assert.equal(await step.markStarted(), "started");
     assert.equal(await step.release(), "released");
+    // M3 PR-2 adds `run`: the run definers' fixed statements (run-steps.ts).
     assert.deepEqual(Object.keys(step).sort(), [
       "delegationFacts",
       "lease",
       "markStarted",
       "release",
+      "run",
     ]);
     return "done";
   });

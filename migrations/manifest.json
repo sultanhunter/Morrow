@@ -297,6 +297,13 @@
       "sha256": "df8f72dc9198d142c067b73c8d4a8386248dfb27c749e3ed2319b892f156201a",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 38,
+      "file": "0038.listings-runs.sql",
+      "sha256": "4ca704d37e3e788ba86921be00a3e3b959858eb25a1997f5d2be5d21f42cddc0",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
     }
   ]
 }

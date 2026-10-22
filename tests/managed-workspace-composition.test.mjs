@@ -13,7 +13,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { composeApiDependencies } from "../apps/api/src/deployed-worker.ts";
+import { composeApiDependencies, runAdmissionOpen } from "../apps/api/src/deployed-worker.ts";
+import { runtimeProductReadAvailable } from "../packages/identity/src/broker-protocol.ts";
 import { mapApiEnvironment } from "../apps/api/src/environment.ts";
 import { createWorkersManagedWorkspaceApi } from "../packages/identity/src/managed-workspace-api.ts";
 import {
@@ -148,7 +149,11 @@ function withWorkerEnv(run) {
   }
 }
 // The deployed composition of that environment.
-function composed(extra = {}, brokerCalls = [], { modeArgument = true, broker = {} } = {}) {
+function composed(
+  extra = {},
+  brokerCalls = [],
+  { modeArgument = true, broker = {}, productRead } = {},
+) {
   const mapped = withWorkerEnv(() => mapApiEnvironment(apiEnv(extra, brokerCalls, broker)));
   assert.equal(mapped.ok, true, mapped.code);
   return modeArgument
@@ -158,6 +163,8 @@ function composed(extra = {}, brokerCalls = [], { modeArgument = true, broker = 
         () => nowMs,
         mapped.environment,
         mapped.stripe,
+        mapped.model,
+        ...(productRead === undefined ? [] : [productRead]),
       )
     : composeApiDependencies(mapped.values, mapped.broker, () => nowMs, mapped.environment);
 }
@@ -546,4 +553,32 @@ test("M2 PR-3: the deployed Worker binds the catalogue route (it reaches the dat
   assert.equal(body.code, "unavailable");
   assert.equal(body.retryClass, "safe_read_retry");
   assert.equal(reads.length, 0);
+});
+
+// M3 PR-2 review: the api's run admission opens on the model-provider switch and M2 PR-3's
+// product read together, as the orchestrator's dispatch does, so no run, lease or credit
+// reservation exists without a Workflow to execute it. The read exists since M2 PR-3 and M3
+// PR-2 were integrated, so the switch (committed off) is the only gate.
+test("M3 PR-2: run admission opens only with the model switch and the product read", () => {
+  assert.equal(runtimeProductReadAvailable, true);
+  for (const [mode, read, open] of [
+    ["off", false, false],
+    ["off", true, false],
+    ["anthropic", false, false],
+    ["anthropic", true, true],
+  ])
+    assert.equal(runAdmissionOpen(mode, read), open, mode + ":" + read);
+  // The committed state (the switch off) keeps admission closed; the switch on opens it.
+  assert.equal(composed({}).runs.admission, false);
+  assert.equal(composed({ MORROW_MODEL_PROVIDER: "anthropic" }).runs.admission, true);
+  // A build without the product read keeps it closed even with the switch on.
+  assert.equal(
+    composed({ MORROW_MODEL_PROVIDER: "anthropic" }, [], { productRead: false }).runs.admission,
+    false,
+  );
+  assert.equal(
+    composed({ MORROW_MODEL_PROVIDER: "anthropic" }, [], { productRead: true }).runs.admission,
+    true,
+  );
+  assert.equal(composed({}, [], { productRead: true }).runs.admission, false);
 });

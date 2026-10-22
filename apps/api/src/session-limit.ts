@@ -13,10 +13,10 @@ import { apiDispatch } from "./worker.js";
 // pre-publication sweep, 2026-10-22). Every route the router hands a session cookie to, and
 // that can reach SQL, is limited per address: signup by the abuse guard's SIGNUP_LIMITER
 // (abuse-guard.ts), and the rest here, by SESSION_LIMITER, 120 per 60 s: the workspace
-// handler's paths (/workspaces and /workspace/*, which include the work, billing, agents and
-// catalogue APIs) and logout and rotate. It runs in the api Worker before the router, so before any
-// broker lease or SQL, and selects requests with the router's own matcher
-// (`managedApiRoute`).
+// handler's paths (/workspaces and /workspace/*, which include the runs, work, billing,
+// agents and catalogue APIs) and logout and rotate. It runs in the api Worker before the
+// router, so before any broker lease or SQL, and selects requests with the router's own
+// matcher (`managedApiRoute`).
 //
 // Step 0 counts only a request carrying exactly one canonical `__Host-morrow_session`
 // cookie (`sessionCookieSecret`, the function every session handler uses): each handler
@@ -26,7 +26,7 @@ import { apiDispatch } from "./worker.js";
 // subresource, fetch or cross-site POST, so it cannot spend the visitor's (or their NAT's)
 // budget. Step 1 is one count per address under the route's own key: over the limit is 429
 // rate_limited with Retry-After: 60, in the route family's own shape (the sign-in routes'
-// SignInGuardOutcome, or the ErrorEnvelope on a work, billing, agents or catalog path); a
+// SignInGuardOutcome, or the ErrorEnvelope on a runs, work, billing, agents or catalog path); a
 // missing or invalid address or a failed limiter is the route's existing 503 and one fixed-code
 // `morrow_edge_guard` line. A 429 logs nothing. A passed request is forwarded unchanged, its
 // body unread. The address is hashed for the key and never stored, logged or used for
@@ -55,25 +55,31 @@ const sessionRoute = (route: ManagedApiRoute): route is SessionRoute =>
   (sessionLimitedRoutes as readonly ManagedApiRoute[]).includes(route);
 
 const retryAfterSeconds = 60;
-// The api's ErrorEnvelope families: the work, billing, agents and catalog rows of the api
-// Worker's dispatch table (worker.ts), read through `apiDispatch` itself, so there is one
-// matcher. The catalogue routes (M2 PR-3) answer the work API's envelope. The Stripe webhook
-// row is outside /workspace and never a session route.
-type EnvelopeFamily = "work" | "billing" | "agents" | "catalog";
-const envelopeFamilies: readonly string[] = Object.freeze(["work", "billing", "agents", "catalog"]);
+// The api's ErrorEnvelope families: the runs, work, billing, agents and catalog rows of the
+// api Worker's dispatch table (worker.ts), read through `apiDispatch` itself, so there is one
+// matcher. The runs routes (M3 PR-2) and the catalogue routes (M2 PR-3) answer the work API's
+// envelope. The Stripe webhook row is outside /workspace and never a session route.
+type EnvelopeFamily = "runs" | "work" | "billing" | "agents" | "catalog";
+const envelopeFamilies: readonly string[] = Object.freeze([
+  "runs",
+  "work",
+  "billing",
+  "agents",
+  "catalog",
+]);
 export function envelopeFamily(pathname: string): EnvelopeFamily | null {
   const key = apiDispatch(pathname);
   return envelopeFamilies.includes(key) ? (key as EnvelopeFamily) : null;
 }
-// Over the limit: the ErrorEnvelope rate_limited on a work, billing, agents or catalog path (the
-// read class on GET), and elsewhere the sign-in routes' 429, which the SPA's identity and
-// store-link decoders read as nothing done.
+// Over the limit: the ErrorEnvelope rate_limited on a runs, work, billing, agents or catalog
+// path (the read class on GET), and elsewhere the sign-in routes' 429, which the SPA's
+// identity and store-link decoders read as nothing done.
 function limited(pathname: string, method: string): Response {
   if (envelopeFamily(pathname))
     return workRateLimitedResponse(method === "GET", crypto.randomUUID(), retryAfterSeconds);
   return edgeRateLimited();
 }
-// The route's existing 503: logout's and rotate's own outcome bodies, the work, agents and
+// The route's existing 503: logout's and rotate's own outcome bodies, the runs, work, agents and
 // catalogue APIs' ErrorEnvelope and the billing API's own (their read class, safe_read_retry, on
 // GET and recheck_before_retry otherwise, as each handler classifies a request before its guard
 // runs), and the workspace handler's {"code":"unavailable"}. None sets a cookie.

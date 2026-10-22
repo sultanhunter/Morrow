@@ -13,6 +13,7 @@
 // Uses only WebCrypto, so the same code runs in workerd and in Node 24.
 
 import { billingVaultStatements } from "./vault-statements-billing.js";
+import { modelVaultStatements } from "./vault-statements-model.js";
 import { shopifyVaultStatements } from "./vault-statements-shopify.js";
 
 // Trust model v1 custody covers development and staging only (ADR-0022 item 7). Production
@@ -394,13 +395,15 @@ export async function openVaultRecord(
 // returns the active envelope as hex and nothing else.
 //
 // vaultStatements is THE registry of statements the vault login may send: a frozen union
-// of per-PR maps, each in its own module (M2 PR-2: Shopify; M5 PR-1: billing). The vault
+// of per-PR maps, each in its own module (M2 PR-2: Shopify; M5 PR-1: billing; M3 PR-2: the
+// model gateway's fence). The vault
 // transport (vault-database.ts) refuses any other text.
 export const vaultStatements = Object.freeze({
   appSecretGet:
     "SELECT outcome,version,kek_version,wrapped_key,sealed_value FROM morrow_vault.app_secret_get($1)",
   ...shopifyVaultStatements,
   ...billingVaultStatements,
+  ...modelVaultStatements,
 } as const);
 /** One fixed statement on a connection logged in as morrow_vault_broker. */
 export type VaultQuery = (

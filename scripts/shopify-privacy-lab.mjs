@@ -273,6 +273,16 @@ const report = await withWorkDatabase(
       ownerRows(
         `SELECT id::text,app_key,organization_id::text AS org,workspace_id::text AS ws,installation_id::text AS installation,topic,webhook_id,status,outcome,body,effects FROM morrow_identity.shopify_webhook_inbox ORDER BY received_at,id`,
       );
+    // Each evidence entry carries its handler's declared action (M3 PR-2's snapshots and drafts:
+    // delete_rows, since the integration revised store_content_redact).
+    const actionsDeclared = (evidence) =>
+      (evidence?.handlers ?? []).every(
+        (h) => storeContentHandlers.find((x) => x.table === h.table)?.action === h.action,
+      ) &&
+      ["morrow_work.product_snapshots", "morrow_work.run_drafts"].every(
+        (table) =>
+          (evidence?.handlers ?? []).find((h) => h.table === table)?.action === "delete_rows",
+      );
     const requestsOf = (inboxId) =>
       ownerRows(
         `SELECT organization_id::text AS org,workspace_id::text AS ws,topic,status,evidence,row_to_json(r)::text AS raw FROM morrow_identity.privacy_requests r WHERE inbox_id=${literal(inboxId)}`,
@@ -1009,6 +1019,7 @@ const report = await withWorkDatabase(
         JSON.stringify(done.evidence.outstanding) === "[]" &&
         JSON.stringify(handlerTables) ===
           JSON.stringify(storeContentHandlers.map((h) => h.table).sort()) &&
+        actionsDeclared(done.evidence) &&
         credentialOf(R)[0]?.status === "destroyed" &&
         inboxRows().find((r) => r.id === redactInbox.id)?.status === "applied" &&
         completedRun.targetMissed === 0 &&
@@ -1051,6 +1062,7 @@ const report = await withWorkDatabase(
         afterDone.evidence.kind === "shop_redacted" &&
         JSON.stringify((afterDone.evidence.handlers ?? []).map((h) => h.table).sort()) ===
           JSON.stringify(storeContentHandlers.map((h) => h.table).sort()) &&
+        actionsDeclared(afterDone.evidence) &&
         installationOf(G).redacted === true &&
         stopsOf(G).length === 1 &&
         installationOf(T).redacted === false,

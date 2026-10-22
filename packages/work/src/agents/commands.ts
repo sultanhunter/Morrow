@@ -742,8 +742,16 @@ async function listingsStatus(tx: WorkTx, g: GuardedWorkspaceRequest): Promise<A
   };
 }
 
-/** GET /models: the active catalogue's entries, the workspace default and the ceiling. */
-async function modelsList(tx: WorkTx, g: GuardedWorkspaceRequest): Promise<AgentResult> {
+/**
+ * GET /models: the active catalogue's entries, the workspace default and the ceiling, and
+ * whether run admission is open in this deployment (`draftingAvailable`: the reviewed
+ * model-provider switch and the product read), so Ask writes nothing while it is not.
+ */
+async function modelsList(
+  tx: WorkTx,
+  g: GuardedWorkspaceRequest,
+  draftingAvailable: boolean,
+): Promise<AgentResult> {
   const a = await context(tx, g);
   const listing = catalogueListing();
   const version = activeCatalogueVersion();
@@ -777,6 +785,7 @@ async function modelsList(tx: WorkTx, g: GuardedWorkspaceRequest): Promise<Agent
       ceiling,
       revision,
       canRevise,
+      draftingAvailable,
     },
     outcome: "read",
   };
@@ -785,6 +794,7 @@ export function runAgentRead(
   tx: WorkTx,
   g: GuardedWorkspaceRequest,
   read: AgentRead,
+  draftingAvailable = false,
 ): Promise<AgentResult> {
-  return read === "listings.status" ? listingsStatus(tx, g) : modelsList(tx, g);
+  return read === "listings.status" ? listingsStatus(tx, g) : modelsList(tx, g, draftingAvailable);
 }

@@ -473,6 +473,9 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
   // M5: the committed staging api carries no MORROW_STRIPE_MODE while the switch is off.
   assert.equal(Object.hasOwn(vars, "MORROW_STRIPE_MODE"), false);
   assert.equal(mapped.stripe, "off");
+  // M3 PR-2: nor MORROW_MODEL_PROVIDER while the model-provider switch is off.
+  assert.equal(Object.hasOwn(vars, "MORROW_MODEL_PROVIDER"), false);
+  assert.equal(mapped.model, "off");
   assert.deepEqual(mapped.guard.challenge.actions, {
     login: "account_login",
     signup: "organization_signup",
@@ -519,6 +522,38 @@ test("M5: MORROW_STRIPE_MODE absent is off, exactly test is on, anything else fa
   // Production never maps (step 7), whatever the switch.
   assert.equal(
     code({ ...env("production"), MORROW_STRIPE_MODE: "test" }),
+    "API_ENV_CROSS_BINDING_MISMATCH",
+  );
+});
+
+// M3 PR-2, the model-provider switch (step 12): MORROW_MODEL_PROVIDER absent is off; exactly
+// "anthropic" is on (run admission then reaches the database once M2 PR-3's product read
+// exists too: tests/managed-workspace-composition.test.mjs); any other value keeps the api
+// on its deny-all instance. It names no credential: the key lives only in the broker.
+test("M3 PR-2: MORROW_MODEL_PROVIDER absent is off, exactly anthropic is on, anything else fails closed", () => {
+  for (const environment of ["development", "staging"]) {
+    const off = map(env(environment));
+    assert.equal(off.ok, true);
+    assert.equal(off.model, "off");
+    const on = map({ ...env(environment), MORROW_MODEL_PROVIDER: "anthropic" });
+    assert.equal(on.ok, true, on.code);
+    assert.equal(on.model, "anthropic");
+    assert.equal(on.stripe, "off");
+    for (const value of ["Anthropic", "anthropic ", "openai", "", "on", "off", 1, true, null, {}])
+      assert.equal(
+        code({ ...env(environment), MORROW_MODEL_PROVIDER: value }),
+        "API_ENV_VALUE_INVALID",
+        environment + ":" + JSON.stringify(value),
+      );
+    const accessor = env(environment);
+    Object.defineProperty(accessor, "MORROW_MODEL_PROVIDER", {
+      enumerable: true,
+      get: () => "anthropic",
+    });
+    assert.equal(code(accessor), "API_ENV_VALUE_INVALID");
+  }
+  assert.equal(
+    code({ ...env("production"), MORROW_MODEL_PROVIDER: "anthropic" }),
     "API_ENV_CROSS_BINDING_MISMATCH",
   );
 });

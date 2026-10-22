@@ -6,7 +6,10 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-// P04.T02a AC21: dispatch is hard-disabled in the orchestrator Worker, and the connector
+// P04.T02a AC21 (its meaning revised by M3 PR-2, the ID kept): dispatch stays disabled in the
+// orchestrator Worker until the reviewed model-provider switch is on with every binding (M2
+// PR-3's product read exists since the two were integrated, so the switch, committed off, is
+// the only gate); ListingsRunWorkflow replaces MorrowWorkWorkflow. The connector
 // (M2 PR-2's worker/index.ts) is fail-closed without its reviewed identifiers. `cloudflare:*` modules are stubbed.
 const stubs = {
   "cloudflare:workers":
@@ -23,6 +26,10 @@ async function load(t, entry) {
     write: false,
     format: "esm",
     platform: "neutral",
+    // M3 PR-2: the orchestrator bundles the policy kernels (node:crypto, as nodejs_compat
+    // provides it in workerd) and the Neon driver.
+    external: ["node:*"],
+    mainFields: ["module", "main"],
     plugins: [
       {
         name: "cloudflare-stubs",
@@ -70,7 +77,7 @@ test("AC21: queue() retries the whole batch once and never acks", async (t) => {
   assert.equal(response.status, 404);
 });
 
-test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", async (t) => {
+test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step unless the switch is on", async (t) => {
   const module = await load(t, "apps/workers/src/orchestrator.ts");
   let steps = 0;
   const step = new Proxy(
@@ -82,13 +89,156 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", 
       },
     },
   );
-  const workflow = new module.MorrowWorkWorkflow({}, {});
+  assert.equal(module.MorrowWorkWorkflow, undefined);
+  // workerd starts a module only when every named export is a function or an object (a
+  // boolean export fails the Worker at startup: "Incorrect type for map entry"); the
+  // orchestrator exports its two entrypoints and nothing else. The product read's reviewed
+  // constant stays the protocol's (true since M2 PR-3 and M3 PR-2 were integrated).
+  assert.deepEqual(Object.keys(module).sort(), ["ListingsRunWorkflow", "default"]);
+  assert.ok(
+    Object.values(module).every(
+      (value) => typeof value === "function" || (typeof value === "object" && value !== null),
+    ),
+  );
+  const { runtimeProductReadAvailable } = await import(
+    "../packages/identity/src/broker-protocol.ts"
+  );
+  assert.equal(runtimeProductReadAvailable, true);
+  const binding = JSON.stringify({
+    schemaVersion: 1,
+    environment: "staging",
+    projectId: "lab-project",
+    branchId: "br-lab-branch",
+    hostname: "ep-lab-endpoint.c-1.us-east-1.aws.neon.tech",
+    database: "morrow",
+  });
+  const broker = { fetch() {}, neonLease() {}, modelRespond() {}, shopifyRead() {} };
+  const workflowBinding = { create: () => Promise.resolve() };
+  const full = {
+    MORROW_ENVIRONMENT: "staging",
+    MORROW_MODEL_PROVIDER: "anthropic",
+    MORROW_DATABASE_BINDING_JSON: binding,
+    BROKER: broker,
+    LISTINGS_RUN: workflowBinding,
+  };
+  // The committed environment (MORROW_ENVIRONMENT only), every binding but the switch, the
+  // switch on without its other bindings, and production: each is disabled before any step,
+  // with a payload or without one.
+  const { MORROW_MODEL_PROVIDER: _switch, ...switchOff } = full;
+  for (const env of [
+    { MORROW_ENVIRONMENT: "staging" },
+    switchOff,
+    { MORROW_ENVIRONMENT: "staging", MORROW_MODEL_PROVIDER: "anthropic" },
+    { ...full, MORROW_ENVIRONMENT: "production" },
+  ]) {
+    const workflow = new module.ListingsRunWorkflow({}, env);
+    for (const payload of [{}, { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 }])
+      await assert.rejects(
+        workflow.run({ payload, timestamp: new Date(), instanceId: "i" }, step),
+        (error) =>
+          error.constructor.name === "NonRetryableError" && error.message === "dispatch_disabled",
+      );
+  }
+  assert.equal(steps, 0);
+  // Every binding with the switch on: dispatch is enabled (the switch is the only gate), and
+  // a payload that is not a lease reference is refused before any step. workerd never
+  // populates process.env (nodejs_compat_do_not_populate_process_env); Node does.
+  const saved = process.env;
+  process.env = {};
+  t.after(() => (process.env = saved));
+  const enabled = new module.ListingsRunWorkflow({}, { ...full });
   await assert.rejects(
-    workflow.run({ payload: {}, timestamp: new Date(), instanceId: "i" }, step),
+    enabled.run({ payload: {}, timestamp: new Date(), instanceId: "i" }, step),
     (error) =>
-      error.constructor.name === "NonRetryableError" && error.message === "dispatch_disabled",
+      error.constructor.name === "NonRetryableError" && error.message === "payload_invalid",
   );
   assert.equal(steps, 0);
+});
+
+test("AC21: the cron starts nothing while dispatch is disabled", async (t) => {
+  const module = await load(t, "apps/workers/src/orchestrator.ts");
+  let created = 0;
+  let leased = 0;
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    await module.default.scheduled(
+      {},
+      {
+        MORROW_ENVIRONMENT: "staging",
+        MORROW_MODEL_PROVIDER: "anthropic",
+        BROKER: {
+          fetch() {},
+          neonLease: () => (leased++, Promise.reject(Error("x"))),
+          modelRespond() {},
+          shopifyRead() {},
+        },
+        LISTINGS_RUN: { create: () => (created++, Promise.resolve()) },
+      },
+      {},
+    );
+  } finally {
+    console.log = original;
+  }
+  assert.equal(created, 0);
+  assert.equal(leased, 0);
+  assert.ok(lines.includes('{"event":"morrow_orchestrator_dispatch_disabled"}'));
+});
+
+test("the orchestrator's environment is deny-all: no credential, no production, the switch's exact value", async (t) => {
+  const { mapOrchestratorEnvironment } = await import("../apps/workers/src/environment.ts");
+  // workerd never populates process.env (nodejs_compat_do_not_populate_process_env); Node does.
+  const saved = process.env;
+  process.env = {};
+  t.after(() => (process.env = saved));
+  const binding = JSON.stringify({
+    schemaVersion: 1,
+    environment: "staging",
+    projectId: "lab-project",
+    branchId: "br-lab-branch",
+    hostname: "ep-lab-endpoint.c-1.us-east-1.aws.neon.tech",
+    database: "morrow",
+  });
+  const full = {
+    MORROW_ENVIRONMENT: "staging",
+    MORROW_MODEL_PROVIDER: "anthropic",
+    MORROW_DATABASE_BINDING_JSON: binding,
+    BROKER: { fetch() {}, neonLease() {}, modelRespond() {}, shopifyRead() {} },
+    LISTINGS_RUN: { create() {} },
+  };
+  assert.equal(mapOrchestratorEnvironment(full).ok, true);
+  process.env = { PATH: "x" };
+  assert.equal(mapOrchestratorEnvironment(full).code, "ORCHESTRATOR_ENV_PROCESS_ENV_POPULATED");
+  process.env = {};
+  for (const [patch, code] of [
+    [{ MORROW_MODEL_PROVIDER: undefined }, "ORCHESTRATOR_ENV_DISPATCH_DISABLED"],
+    [{ MORROW_MODEL_PROVIDER: "on" }, "ORCHESTRATOR_ENV_DISPATCH_DISABLED"],
+    [{ MORROW_ENVIRONMENT: "production" }, "ORCHESTRATOR_ENV_DISPATCH_DISABLED"],
+    [{ ANTHROPIC_API_KEY: "sk-ant" }, "ORCHESTRATOR_ENV_FORBIDDEN_CREDENTIAL_BINDING"],
+    [
+      { MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR: "x" },
+      "ORCHESTRATOR_ENV_FORBIDDEN_CREDENTIAL_BINDING",
+    ],
+    [{ MORROW_DATABASE_BINDING_JSON: "{}" }, "ORCHESTRATOR_ENV_VALUE_INVALID"],
+    [
+      { MORROW_DATABASE_BINDING_JSON: binding.replace("staging", "development") },
+      "ORCHESTRATOR_ENV_CROSS_BINDING_MISMATCH",
+    ],
+    [{ BROKER: {} }, "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID"],
+    // M2 PR-3's product read is part of the RuntimeBroker binding's reviewed shape.
+    [
+      { BROKER: { fetch() {}, neonLease() {}, modelRespond() {} } },
+      "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID",
+    ],
+    [{ LISTINGS_RUN: {} }, "ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID"],
+  ]) {
+    const env = { ...full, ...patch };
+    for (const [key, value] of Object.entries(patch)) if (value === undefined) delete env[key];
+    const mapped = mapOrchestratorEnvironment(env);
+    assert.equal(mapped.ok, false, code);
+    assert.equal(mapped.code, code);
+  }
 });
 
 // M2 PR-2 replaced the placeholder with worker/index.ts. Its committed configuration (only
@@ -119,4 +269,105 @@ test("the unconfigured connector returns 503 except GET /healthz, which is not r
     env,
   );
   assert.equal(post.status, 405);
+});
+
+// Review (AI review, separate context, same model family): ListingsRunWorkflow.run's body
+// (listings-run.ts) on fake ports and a fake step: the run id it hands listingsRun is the
+// Workflow's instance id (a run lease naming another subject interrupts at the start step),
+// every step carries the reviewed options, a RunStepRetry stays retryable and any other
+// error is a NonRetryableError(step_fault).
+test("the Workflow's body passes its instance id as the run id, with the reviewed step options", async (t) => {
+  const module = await load(t, "apps/workers/src/listings-run.ts");
+  const runId = "00000000-0000-4000-8000-0000000000aa";
+  const payload = { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 };
+  const lease = { kind: "run", subjectId: runId };
+  const started = [];
+  const fakePorts = (leaseResult) => ({
+    lease:
+      leaseResult ??
+      (async (_ref, body) => ({
+        entered: true,
+        lease,
+        value: await body({
+          lease,
+          run: {
+            start: async () => (
+              started.push(1),
+              {
+                outcome: "ended",
+                status: "succeeded",
+              }
+            ),
+          },
+        }),
+      })),
+    modelRespond: async () => {
+      throw Error("not expected");
+    },
+    readProduct: async () => {
+      throw Error("not expected");
+    },
+    environment: "staging",
+    now: () => Date.now(),
+    sleep: async () => {},
+    ids: () => "id",
+  });
+  const configs = [];
+  const step = {
+    async do(name, config, body) {
+      configs.push([name, config]);
+      return body();
+    },
+  };
+  const event = (instanceId, p = payload) => ({ payload: p, instanceId, timestamp: new Date() });
+  assert.equal(await module.runListingsWorkflow(fakePorts(), event(runId), step), "ended");
+  assert.equal(started.length, 1);
+  assert.deepEqual(configs, [
+    [
+      "start",
+      { retries: { limit: 4, delay: "15 seconds", backoff: "exponential" }, timeout: "30 minutes" },
+    ],
+  ]);
+  // Another instance id than the lease's subject: interrupted before run_start.
+  assert.equal(
+    await module.runListingsWorkflow(
+      fakePorts(),
+      event("00000000-0000-4000-8000-0000000000bb"),
+      step,
+    ),
+    "interrupted",
+  );
+  assert.equal(started.length, 1);
+  // A failed lease transaction is a RunStepRetry, retried by the Workflow; any other error is
+  // a fault that retrying would repeat.
+  await assert.rejects(
+    module.runListingsWorkflow(
+      fakePorts(async () => "failed"),
+      event(runId),
+      step,
+    ),
+    (error) => error.name === "RunStepRetry" && error.code === "transaction",
+  );
+  await assert.rejects(
+    module.runListingsWorkflow(
+      fakePorts(async () => {
+        throw Error("RUNTIME_SQL_UNAVAILABLE");
+      }),
+      event(runId),
+      step,
+    ),
+    (error) => error.constructor.name === "NonRetryableError" && error.message === "step_fault",
+  );
+  // Without ports dispatch is disabled; a payload that is not a lease reference is refused,
+  // each before any step.
+  const before = configs.length;
+  await assert.rejects(
+    module.runListingsWorkflow(null, event(runId), step),
+    (error) => error.message === "dispatch_disabled",
+  );
+  await assert.rejects(
+    module.runListingsWorkflow(fakePorts(), event(runId, {}), step),
+    (error) => error.message === "payload_invalid",
+  );
+  assert.equal(configs.length, before);
 });

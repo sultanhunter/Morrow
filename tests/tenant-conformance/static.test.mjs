@@ -70,6 +70,9 @@ const connectorLease =
   "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (connection_id)::text) = current_setting('morrow.connector_stop'::text, true)))";
 const connectorRedact =
   "((SESSION_USER = 'morrow_connector_ingress'::name) AND (EXISTS ( SELECT 1\n   FROM morrow_work.proposals x\n  WHERE (((x.organization_id)::text = (proposal_parameters.organization_id)::text) AND ((x.workspace_id)::text = (proposal_parameters.workspace_id)::text) AND ((x.parameters_id)::text = (proposal_parameters.id)::text) AND ((((((x.organization_id)::text || '|'::text) || (x.workspace_id)::text) || '|'::text) || (x.store_id)::text) = current_setting('morrow.connector_redact'::text, true))))))";
+// M3 PR-2 with M2 PR-3: the connector's redaction context on a store-content table.
+const connectorContent =
+  "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_redact'::text, true)))";
 // The exactly-checked extra policies (registry `policies`): [command, roles, qual, check].
 const extraPolicies = {
   lease_self: [
@@ -235,12 +238,76 @@ const extraPolicies = {
     connectorRedact,
     "((redacted_at IS NOT NULL) AND (canonical = '{}'::text) AND " + connectorRedact.slice(1),
   ],
+  // M3 PR-2 (listings-runs): the broker's model_call_begin and model_call_end reach, as the
+  // broker's login only, the one run (and call) and tenant they name through
+  // transaction-local settings they write themselves (the resolve_call idiom), and the one
+  // parent task whose objective digest the fence binds.
+  broker_model_run: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+  ],
+  broker_model_run_child: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+  ],
+  broker_model_call: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)) OR ((id)::text = current_setting('morrow.vault_model_call'::text, true))))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_model_run'::text, true)))",
+  ],
+  broker_model_tenant: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_model_tenant'::text, true)))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_model_tenant'::text, true)))",
+  ],
+  task_broker_model: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_model_task'::text, true)))",
+    null,
+  ],
+  // M2 PR-3's read resolution, revised in listings-runs (0038): run_product_readable reads,
+  // as the broker's login only, the one run its own setting names and that run's products
+  // (FOR SELECT only; never a manifest or a call, never a write).
+  broker_read_run: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_read_run'::text, true)))",
+    null,
+  ],
+  broker_read_run_product: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_read_run'::text, true)))",
+    null,
+  ],
+  // shop/redact's deletion of a store's snapshots and drafts (0038's store_content_redact):
+  // read and delete in the connector's redaction context only, and a RESTRICTIVE delete
+  // policy with the same predicate, so no session or lease policy admits a DELETE.
+  connector_content_read: ["SELECT", "{morrow_work_command}", connectorContent, null],
+  connector_content_delete: ["DELETE", "{morrow_work_command}", connectorContent, null],
+  connector_content_delete_only: ["DELETE", "{morrow_work_command}", connectorContent, null],
 };
+// The only restrictive policies; every other policy is permissive.
+const restrictivePolicies = new Set(["connector_content_delete_only"]);
 // One table's policies against the template of its class and its registry extras.
 function checkPolicies(schema, table, spec) {
   const policies = rows(
-    `SELECT policyname, cmd, roles::text AS roles, qual, with_check FROM pg_policies WHERE schemaname='${schema}' AND tablename='${table}' ORDER BY policyname`,
+    `SELECT policyname, cmd, roles::text AS roles, qual, with_check, permissive FROM pg_policies WHERE schemaname='${schema}' AND tablename='${table}' ORDER BY policyname`,
   );
+  // Every policy is permissive except the registered restrictive ones.
+  for (const policy of policies)
+    assert.equal(
+      policy.permissive,
+      restrictivePolicies.has(policy.policyname) ? "RESTRICTIVE" : "PERMISSIVE",
+      table + " " + policy.policyname,
+    );
   const mixed = spec.class === "tenant_or_platform";
   const vault = spec.class === "vault_platform" || spec.class === "vault_tenant";
   // M5 PR-1: platform tables of morrow_billing, the ingress receipts and the operator's
@@ -400,13 +467,33 @@ test("S3: tenant keys, composite parents and the one tenant policy template", ()
   recordConformance("S3", true);
 });
 
-test("S4: the api role reads readable tables column by column; no runtime DELETE or TRUNCATE", () => {
+test("S4: the api role reads readable tables column by column; no runtime TRUNCATE, DELETE only for shop/redact", () => {
   const tableAcl = rows(
     "SELECT c.relname, a.grantee::regrole::text AS grantee, a.privilege_type FROM pg_class c, aclexplode(c.relacl) a WHERE c.relnamespace='morrow_work'::regnamespace AND a.grantee<>0",
   );
   assert.ok(!tableAcl.some((a) => a.grantee === workRoles.api || a.grantee === workRoles.login));
+  // SELECT and INSERT; DELETE only where the registry names shop/redact's connector context
+  // (commandDelete), which a RESTRICTIVE delete policy confines to that context (S3).
+  const deletable = Object.entries(workTables)
+    .filter(([, t]) => t.commandDelete === "connector_redact")
+    .map(([name]) => name);
+  assert.deepEqual(deletable.sort(), ["product_snapshots", "run_drafts"]);
   for (const a of tableAcl.filter((x) => x.grantee === workRoles.command))
-    assert.ok(["SELECT", "INSERT"].includes(a.privilege_type), a.relname + " " + a.privilege_type);
+    assert.ok(
+      ["SELECT", "INSERT"].includes(a.privilege_type) ||
+        (a.privilege_type === "DELETE" && deletable.includes(a.relname)),
+      a.relname + " " + a.privilege_type,
+    );
+  for (const table of deletable) {
+    assert.ok(
+      tableAcl.some(
+        (a) =>
+          a.grantee === workRoles.command && a.relname === table && a.privilege_type === "DELETE",
+      ),
+      table,
+    );
+    assert.ok(workTables[table].policies.includes("connector_content_delete_only"), table);
+  }
   const columnAcl = rows(
     "SELECT c.relname, a.grantee::regrole::text AS grantee, a.privilege_type FROM pg_attribute t JOIN pg_class c ON c.oid=t.attrelid, aclexplode(t.attacl) a WHERE c.relnamespace='morrow_work'::regnamespace AND t.attacl IS NOT NULL",
   );
@@ -426,7 +513,13 @@ test("S4: the api role reads readable tables column by column; no runtime DELETE
       const [p] = rows(
         `SELECT has_table_privilege('${role}','morrow_work.${table}','DELETE') AS d, has_table_privilege('${role}','morrow_work.${table}','TRUNCATE') AS t`,
       );
-      if (role !== workRoles.owner) assert.ok(!p.d && !p.t, role + " " + table);
+      if (role === workRoles.owner) continue;
+      assert.ok(!p.t, role + " " + table);
+      assert.equal(
+        p.d,
+        role === workRoles.command && workTables[table].commandDelete === "connector_redact",
+        role + " " + table,
+      );
     }
   for (const [table] of Object.entries(workTables).filter(([, t]) => t.class === "platform")) {
     const platformApi = rows(

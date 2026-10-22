@@ -675,8 +675,10 @@ export const keyboardWalks = [
       );
       await page.keyboard.press("Home");
       expect((await active(page)).text === "Brief", "home_key");
+      // The last tab is Runs when the fixture composes runs.listOfTask (M3 PR-2), else Questions.
+      const names = (await page.getByRole("tab").allTextContents()).map((n) => n.trim());
       await page.keyboard.press("End");
-      expect((await active(page)).text === "Questions", "end_key");
+      expect(names.length >= 2 && (await active(page)).text === names[names.length - 1], "end_key");
       await page.keyboard.press("ArrowRight");
       expect((await active(page)).text === "Brief", "wrap");
     },

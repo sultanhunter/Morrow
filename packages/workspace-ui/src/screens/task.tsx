@@ -1,4 +1,4 @@
-// Task detail (P14.T01a §4.10): Brief and Questions tabs. The conversation and activity
+// Task detail (P14.T01a §4.10): Brief, Questions and (M3 PR-2) Runs tabs. The conversation and activity
 // panes are not in this build (P14.T01b, P06.T02a); below a 1120 px content width they
 // sit behind an aria-pressed pane switch. Assign and Ask stay hidden without people.list.
 import { useCallback, useId, useState } from "react";
@@ -12,6 +12,7 @@ import { PaneSwitch, Tabs } from "../components/shell";
 import { CommandFeedback } from "./entry";
 import { Answer } from "./inbox";
 import { usePaged } from "./work";
+import { RunsPanel } from "./runs";
 
 function MarkReady({
   ws,
@@ -221,6 +222,7 @@ export function TaskScreen({
   const tabs = [
     { id: "brief", label: copy.task.brief },
     { id: "questions", label: copy.task.questions },
+    ...(services.composed["runs.listOfTask"] ? [{ id: "runs", label: copy.runs.tab }] : []),
   ];
   return (
     <div className="page task-page" data-pane={pane}>
@@ -282,6 +284,18 @@ export function TaskScreen({
               >
                 {tab === "questions" ? <QuestionsPanel ws={ws} taskId={taskId} /> : null}
               </div>
+              {services.composed["runs.listOfTask"] ? (
+                <div
+                  id="task-panel-runs"
+                  role="tabpanel"
+                  aria-labelledby="task-tab-runs"
+                  tabIndex={0}
+                  hidden={tab !== "runs"}
+                  className="tab-panel"
+                >
+                  {tab === "runs" ? <RunsPanel ws={ws} taskId={taskId} /> : null}
+                </div>
+              ) : null}
             </div>
             <aside className="task-side" aria-label={copy.task.panesLabel}>
               <section className="side-pane side-conversation" aria-labelledby="conversation-title">

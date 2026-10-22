@@ -152,6 +152,69 @@ export interface ModelCatalogueView {
   /** null until the default is first changed. */
   readonly revision: number | null;
   readonly canRevise: boolean;
+  /** Run admission is open in this deployment (M3 PR-2); while false, Ask writes nothing. */
+  readonly draftingAvailable: boolean;
+}
+// M3 PR-2: Listings runs (GET /work/tasks/:taskId/runs, GET /work/runs/:runId). Ids,
+// statuses, counts and credits only: never a draft's text, a product as read, a provider
+// id or a cost per call.
+export interface RunView {
+  readonly runId: Id;
+  readonly taskId: Id;
+  readonly storeId: Id;
+  /** queued | running | succeeded | failed | cancelled; an unknown value renders as text. */
+  readonly status: string;
+  readonly endedReason: string | null;
+  readonly selection: { readonly model: string; readonly effort: string };
+  readonly creditsPerProduct: number;
+  readonly productCount: number;
+  readonly fields: readonly string[];
+  readonly productsDrafted: number;
+  readonly productsFailed: number;
+  readonly createdAt: string;
+  readonly endedAt: string | null;
+}
+export interface RunProductView {
+  readonly index: number;
+  readonly productId: string;
+  /** pending | in_progress | drafted | failed | skipped. */
+  readonly status: string;
+  readonly attempts: number;
+  readonly failureCode: string | null;
+  /** The pending proposal this product's draft is in, once proposed. */
+  readonly proposalId: Id | null;
+  /** Reviewer flags as counts (links, emails, phones, tags added and removed). */
+  readonly flags: {
+    readonly newUrls: number;
+    readonly newEmails: number;
+    readonly newPhones: number;
+    readonly tagsAdded: number;
+    readonly tagsRemoved: number;
+  } | null;
+}
+export interface RunDetailView {
+  readonly run: RunView;
+  readonly credits: {
+    readonly reserved: number | null;
+    readonly settled: number | null;
+    readonly status: string | null;
+  };
+  readonly usage: {
+    readonly attempts: number | null;
+    readonly inputTokens: number | null;
+    readonly outputTokens: number | null;
+  };
+  readonly products: readonly RunProductView[];
+  /** Still open while its lease was revoked or ended: the stale close returns its credits. */
+  readonly interrupted: boolean;
+}
+export interface RunAdmittedView {
+  readonly runId: Id;
+  readonly childTaskId: Id;
+  readonly productCount: number;
+  readonly creditsReserved: number;
+  /** The selection the run uses (the workspace default when the request named none). */
+  readonly selection: { readonly model: string; readonly effort: string };
 }
 export interface Page<T> {
   readonly items: readonly T[];

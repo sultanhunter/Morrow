@@ -6,6 +6,7 @@ import { routeTitle, workspaceRoutes, type RouteMatch } from "@morrow/contracts/
 import {
   AccountScreen,
   AppShell,
+  AskScreen,
   Button,
   ConnectionScreen,
   ConnectionsScreen,
@@ -567,6 +568,13 @@ function WorkspaceFrame({
         return <WorkScreen workspace={workspace} />;
       case "task":
         return <TaskScreen workspace={workspace} taskId={params.taskId!} />;
+      // M3 PR-2: Ask, a Listings run on picked products.
+      case "ask":
+        return services.composed["runs.admit"] ? (
+          <AskScreen workspace={workspace} />
+        ) : (
+          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+        );
       case "inbox":
         return <InboxScreen workspace={workspace} />;
       case "question":
@@ -656,6 +664,12 @@ export function guardPort(
       listingsDocument: watch(port.agents.listingsDocument.bind(port.agents), first),
       listingsEnable: watch(port.agents.listingsEnable.bind(port.agents), first),
       listingsStop: watch(port.agents.listingsStop.bind(port.agents), first),
+    },
+    runs: {
+      admit: watch(port.runs.admit.bind(port.runs), first),
+      listOfTask: watch(port.runs.listOfTask.bind(port.runs), first),
+      get: watch(port.runs.get.bind(port.runs), first),
+      reconcile: watch(port.runs.reconcile.bind(port.runs), first),
     },
     models: {
       list: watch(port.models.list.bind(port.models), first),

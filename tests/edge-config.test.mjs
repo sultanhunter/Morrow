@@ -29,9 +29,13 @@ import {
   edgeStripeNamesRequired,
   edgeStripeSecretNames,
   edgeStripeVarNames,
+  edgeModelNamesRequired,
+  edgeModelVarNames,
   edgeVarNames,
   edgeWorkers,
+  orchestratorPackageAllowlist,
   resolvedEdgeConfig,
+  reviewedModelRecord,
   reviewedStripeRecord,
   runWrangler,
   verifyEdgeConfig,
@@ -78,7 +82,14 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
       { binding: "BROKER", service: `morrow-${environment}-broker`, entrypoint: "ApiBroker" },
     ]);
     assert.deepEqual(verdict.resolved["connector:" + environment].bindings, ["MORROW_ENVIRONMENT"]);
-    assert.deepEqual(verdict.resolved["orchestrator:" + environment].bindings, []);
+    // M3 PR-2: the orchestrator carries MORROW_ENVIRONMENT and binds the broker's
+    // RuntimeBroker entrypoint; with the model-provider switch off, nothing else.
+    assert.deepEqual(verdict.resolved["orchestrator:" + environment].bindings, [
+      "MORROW_ENVIRONMENT",
+    ]);
+    assert.deepEqual(verdict.resolved["orchestrator:" + environment].services, [
+      { binding: "BROKER", service: `morrow-${environment}-broker`, entrypoint: "RuntimeBroker" },
+    ]);
     // P04.T01i PR-D part 1: only the staging api and broker carry configuration vars.
     assert.deepEqual(
       verdict.resolved["api:" + environment].bindings,
@@ -599,17 +610,23 @@ test("AC02 (rules): bundle size bounds; the broker is at most 384 KiB minified",
     apiGzipBytes: 3_145_728,
     apiWarnGzipBytes: 1_048_576,
     brokerBytes: 393_216,
+    orchestratorGzipBytes: 3_145_728,
   });
   assert.ok(Object.isFrozen(edgeBundleLimits));
   const row = (worker, bytes, gzipBytes) => ({ worker, bytes, gzipBytes });
   assert.equal(bundleSizeFailure(row("broker", 264_479, 90_000)), null);
   assert.equal(bundleSizeFailure(row("broker", 393_216, 130_000)), null);
   assert.equal(bundleSizeFailure(row("broker", 393_217, 130_000)), "EDGE_BROKER_BUNDLE_TOO_LARGE");
-  // The broker bound is on raw bytes, the api bound on gzipped bytes; other Workers have none.
+  // The broker bound is on raw bytes, the api's and (M3 PR-2) the orchestrator's on gzipped
+  // bytes; the connector has none.
   assert.equal(bundleSizeFailure(row("api", 9_000_000, 3_145_728)), null);
   assert.equal(bundleSizeFailure(row("api", 9_000_000, 3_145_729)), "EDGE_API_BUNDLE_TOO_LARGE");
   assert.equal(bundleSizeFailure(row("connector", 9_000_000, 9_000_000)), null);
-  assert.equal(bundleSizeFailure(row("orchestrator", 9_000_000, 9_000_000)), null);
+  assert.equal(bundleSizeFailure(row("orchestrator", 9_000_000, 3_145_728)), null);
+  assert.equal(
+    bundleSizeFailure(row("orchestrator", 9_000_000, 3_145_729)),
+    "EDGE_ORCHESTRATOR_BUNDLE_TOO_LARGE",
+  );
 });
 
 test("M2 PR-2 review: the connector's ingress limiter bindings, exact per environment", () => {
@@ -668,6 +685,9 @@ test("P05.T01ab: the api's limiter bindings are the packet's D1 values and the s
 const committedStaging = JSON.parse(readFileSync("infra/environments/staging.json", "utf8"));
 const committedWorkos = JSON.parse(readFileSync("docs/decisions/workos-staging.json", "utf8"));
 const committedStripe = JSON.parse(readFileSync("docs/decisions/stripe-staging.json", "utf8"));
+const committedModel = JSON.parse(
+  readFileSync("docs/decisions/model-provider-staging.json", "utf8"),
+);
 const stagingOrigin = committedStaging.cloudflare.origin;
 const reviewedClient = committedWorkos.client_id;
 // Rewrites one JSON var: `patch` replaces members, keeping the others in place.
@@ -693,13 +713,17 @@ const records = (patch = {}) => {
   patch.workos?.(workos);
   const stripe = structuredClone(committedStripe);
   patch.stripe?.(stripe);
+  const model = structuredClone(committedModel);
+  patch.model?.(model);
   writeFileSync(join(path, "staging.json"), JSON.stringify(staging));
   writeFileSync(join(path, "workos-staging.json"), JSON.stringify(workos));
   writeFileSync(join(path, "stripe-staging.json"), JSON.stringify(stripe));
+  writeFileSync(join(path, "model-provider-staging.json"), JSON.stringify(model));
   return {
     stagingPath: join(path, "staging.json"),
     workosPath: join(path, "workos-staging.json"),
     stripePath: join(path, "stripe-staging.json"),
+    modelPath: join(path, "model-provider-staging.json"),
   };
 };
 
@@ -813,7 +837,8 @@ test("P04.T01i AC01: each Worker's staging vars are exactly its allowlist", asyn
     { broker: (c) => delete c.env.staging.vars.TURNSTILE_CONFIGURATION_JSON },
     { broker: (c) => (c.env.staging.vars.WORKSPACE_CONFIGURATION_JSON = "{}") },
     { connector: (c) => (c.env.staging.vars.MORROW_DATABASE_BINDING_JSON = "{}") },
-    { orchestrator: (c) => (c.env.staging.vars = { MORROW_ENVIRONMENT: "staging" }) },
+    { orchestrator: (c) => (c.env.staging.vars = {}) },
+    { orchestrator: (c) => (c.env.staging.vars.NOTE = "x") },
     // Development and production stay unbound.
     { api: (c) => (c.env.production.vars.LOGIN_CHALLENGE_JSON = "{}") },
     { broker: (c) => (c.vars.TURNSTILE_CONFIGURATION_JSON = "{}") },
@@ -1640,5 +1665,252 @@ test("P04.T01i D1: no placement outside the staging api and broker, an explicit 
     const found = codes(await verify(tree(mutate)));
     assert.ok(found.includes(expected), index + ": " + expected + " not in " + found.join(","));
     assert.ok(!found.includes("EDGE_UNEXPECTED_BINDING_PLACEMENT"), index + ": " + found.join(","));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// M3 PR-2: the orchestrator's bindings (ListingsRunWorkflow, the RuntimeBroker entrypoint,
+// the cron of pending starts), its reviewed package allowlist, and the model-provider
+// switch (committed off; the Stripe switch's protocol).
+test("M3 PR-2: the orchestrator binds exactly ListingsRunWorkflow, RuntimeBroker and the one-minute cron", async () => {
+  for (const environment of edgeEnvironments) {
+    const config = await resolvedEdgeConfig("orchestrator", environment);
+    assert.deepEqual(config.workflows, [
+      {
+        name: `morrow-${environment}-listings-run`,
+        binding: "LISTINGS_RUN",
+        class_name: "ListingsRunWorkflow",
+      },
+    ]);
+    assert.deepEqual(config.triggers, { crons: ["* * * * *"] });
+    assert.deepEqual(config.vars, { MORROW_ENVIRONMENT: environment });
+  }
+  for (const [index, mutate] of [
+    { orchestrator: (c) => (c.workflows[0].class_name = "MorrowWorkWorkflow") },
+    { orchestrator: (c) => (c.env.staging.workflows[0].name = "morrow-staging-work") },
+    { orchestrator: (c) => (c.services[0].entrypoint = "ApiBroker") },
+    { orchestrator: (c) => (c.env.staging.services[0].service = "morrow-development-broker") },
+    { orchestrator: (c) => delete c.env.production.services },
+    { orchestrator: (c) => (c.triggers.crons = ["*/5 * * * *"]) },
+    { orchestrator: (c) => (c.env.staging.triggers = { crons: [] }) },
+    { orchestrator: (c) => c.workflows.push({ name: "x", binding: "X", class_name: "X" }) },
+  ].entries()) {
+    const found = codes(await verify(tree(mutate)));
+    assert.ok(found.includes("EDGE_ORCHESTRATOR_BINDINGS"), index + ": " + found.join(","));
+  }
+  // No secret, credential or other binding kind on the orchestrator.
+  for (const [mutate, code] of [
+    [
+      { orchestrator: (c) => (c.vars.ANTHROPIC_API_KEY = "x") },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      { orchestrator: (c) => (c.kv_namespaces = [{ binding: "KV", id: "x" }]) },
+      "EDGE_UNEXPECTED_BINDING_KV_NAMESPACES",
+    ],
+  ]) {
+    const found = codes(await verify(tree(mutate)));
+    assert.ok(found.includes(code), code + " not in " + found.join(","));
+  }
+});
+
+test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allowlist", () => {
+  const orchestrator = edgeWorkers.find((worker) => worker.key === "orchestrator");
+  assert.deepEqual(
+    bundleExclusions(
+      orchestrator,
+      [
+        "apps/workers/src/orchestrator.ts",
+        "node_modules/@neondatabase/serverless/index.mjs",
+        ...orchestratorPackageAllowlist,
+      ],
+      "",
+    ),
+    [],
+  );
+  assert.deepEqual(
+    bundleExclusions(
+      orchestrator,
+      [
+        "apps/broker/src/vault.ts",
+        "apps/api/src/worker.ts",
+        "node_modules/ajv/dist/compile/index.js",
+        "node_modules/@shopify/shopify-api/dist/esm/index.mjs",
+        "packages/work/src/http.ts",
+      ],
+      "",
+    ),
+    ["other_worker_source", "ajv_compile", "shopify_library", "package_source"],
+  );
+  // The run's own modules, the lease steps and the kernels are on it; no api handler is.
+  for (const path of [
+    "packages/work/src/runs/workflow.ts",
+    "packages/work/src/runtime/leases.ts",
+    "packages/policy/src/agent-authority.ts",
+    // Each run's call budget comes from the catalogue's data, not its rules module.
+    "packages/policy/src/generated/model-catalogue.ts",
+  ])
+    assert.ok(orchestratorPackageAllowlist.includes(path), path);
+  for (const path of [
+    "packages/policy/src/model-catalogue.ts",
+    "packages/work/src/runs/http.ts",
+    "packages/work/src/runs/commands.ts",
+    "packages/work/src/agents/commands.ts",
+  ])
+    assert.ok(!orchestratorPackageAllowlist.includes(path), path);
+});
+
+const modelOn = (r) => {
+  r.switch = "on";
+  r.monthly_spend_limit_usd = "50.00";
+  r.observed_on = "2026-10-22";
+};
+const modelTurnedOn = ({ api, broker, orchestrator } = {}) => ({
+  api: (c) => {
+    c.env.staging.vars.MORROW_MODEL_PROVIDER = "anthropic";
+    api?.(c);
+  },
+  broker: (c) => {
+    c.env.staging.vars.MORROW_MODEL_PROVIDER = "anthropic";
+    c.env.staging.secrets.required.push("ANTHROPIC_API_KEY");
+    broker?.(c);
+  },
+  orchestrator: (c) => {
+    c.env.staging.vars.MORROW_MODEL_PROVIDER = "anthropic";
+    // The binding byte-equal to the api's (the reviewed staging identifiers).
+    c.env.staging.vars.MORROW_DATABASE_BINDING_JSON = committedApiBinding;
+    orchestrator?.(c);
+  },
+});
+const committedApiBinding = parseConfig(readFileSync("apps/api/wrangler.jsonc", "utf8")).env.staging
+  .vars.MORROW_DATABASE_BINDING_JSON;
+
+test("M3 PR-2: the committed model-provider record is off, and the record rule", () => {
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(committedModel).filter(([key]) => key !== "scope")),
+    {
+      schema_version: 1,
+      environment_kind: "staging",
+      provider: "anthropic",
+      switch: "off",
+      monthly_spend_limit_usd: null,
+      observed_on: null,
+    },
+  );
+  assert.deepEqual({ ...reviewedModelRecord(committedModel) }, { switch: "off" });
+  const on = structuredClone(committedModel);
+  modelOn(on);
+  assert.deepEqual({ ...reviewedModelRecord(on) }, { switch: "on" });
+  for (const edit of [
+    (r) => (r.switch = "on"),
+    (r) => (r.provider = "openai"),
+    (r) => (r.switch = true),
+    (r) => delete r.switch,
+    (r) => (r.extra = 1),
+    (r) => (r.monthly_spend_limit_usd = "50"),
+    (r) => ((r.monthly_spend_limit_usd = "-1"), (r.observed_on = "2026-10-22")),
+    (r) => (r.observed_on = "2026-10-22"),
+    (r) => (r.environment_kind = "production"),
+  ]) {
+    const record = structuredClone(committedModel);
+    edit(record);
+    assert.throws(() => reviewedModelRecord(record), /EDGE_STAGING_MODEL_RECORD/);
+  }
+  // The names each Worker carries while on, none while off or outside staging.
+  assert.deepEqual(edgeModelVarNames("api", "staging"), ["MORROW_MODEL_PROVIDER"]);
+  assert.deepEqual(edgeModelNamesRequired("broker", "staging", "on"), [
+    "MORROW_MODEL_PROVIDER",
+    "ANTHROPIC_API_KEY",
+  ]);
+  assert.deepEqual(edgeModelNamesRequired("orchestrator", "staging", "on"), [
+    "MORROW_MODEL_PROVIDER",
+    "MORROW_DATABASE_BINDING_JSON",
+  ]);
+  for (const worker of ["api", "broker", "connector", "orchestrator"]) {
+    assert.deepEqual(edgeModelNamesRequired(worker, "staging", "off"), [], worker);
+    for (const environment of ["development", "production"])
+      assert.deepEqual(edgeModelNamesRequired(worker, environment, "on"), [], worker);
+  }
+  assert.deepEqual(edgeModelNamesRequired("connector", "staging", "on"), []);
+});
+
+test("M3 PR-2: switched off, any model-provider var or key is a mixed state", async () => {
+  assert.equal((await verify(tree())).modelSwitch, "off");
+  for (const [index, [mutate, expected]] of [
+    [modelTurnedOn(), ["EDGE_MODEL_SWITCH_MIXED", "EDGE_VARS", "EDGE_BROKER_SECRETS"]],
+    [
+      { api: (c) => (c.env.staging.vars.MORROW_MODEL_PROVIDER = "anthropic") },
+      ["EDGE_MODEL_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      { broker: (c) => c.env.staging.secrets.required.push("ANTHROPIC_API_KEY") },
+      ["EDGE_MODEL_SWITCH_MIXED", "EDGE_BROKER_SECRETS"],
+    ],
+    [
+      {
+        orchestrator: (c) =>
+          (c.env.staging.vars.MORROW_DATABASE_BINDING_JSON = committedApiBinding),
+      },
+      ["EDGE_MODEL_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      { connector: (c) => (c.vars.MORROW_MODEL_PROVIDER = "anthropic") },
+      ["EDGE_MODEL_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+  ].entries()) {
+    const found = codes(await verify(tree(mutate)));
+    for (const code of expected)
+      assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
+  }
+});
+
+test("M3 PR-2: switched on, the full model set is required and the orchestrator binding is the api's", async () => {
+  const on = records({ model: modelOn });
+  const verdict = await verify(tree(modelTurnedOn()), undefined, on);
+  assert.deepEqual(verdict.problems, []);
+  assert.equal(verdict.modelSwitch, "on");
+  assert.ok(verdict.resolved["broker:staging"].bindings.includes("ANTHROPIC_API_KEY"));
+  assert.deepEqual(verdict.resolved["orchestrator:staging"].bindings.sort(), [
+    "MORROW_DATABASE_BINDING_JSON",
+    "MORROW_ENVIRONMENT",
+    "MORROW_MODEL_PROVIDER",
+  ]);
+  // Development and production stay off; the files off with the record on is mixed.
+  for (const environment of ["development", "production"])
+    assert.ok(!verdict.resolved["broker:" + environment].bindings.includes("ANTHROPIC_API_KEY"));
+  assert.ok(codes(await verify(tree(), undefined, on)).includes("EDGE_MODEL_SWITCH_MIXED"));
+  for (const [index, [mutate, expected]] of [
+    [
+      modelTurnedOn({ broker: (c) => c.env.staging.secrets.required.pop() }),
+      ["EDGE_MODEL_SWITCH_MIXED", "EDGE_BROKER_SECRETS"],
+    ],
+    [
+      modelTurnedOn({ api: (c) => (c.env.staging.vars.MORROW_MODEL_PROVIDER = "openai") }),
+      ["EDGE_VARS"],
+    ],
+    [
+      modelTurnedOn({
+        orchestrator: (c) => delete c.env.staging.vars.MORROW_DATABASE_BINDING_JSON,
+      }),
+      ["EDGE_MODEL_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      modelTurnedOn({
+        orchestrator: (c) =>
+          (c.env.staging.vars.MORROW_DATABASE_BINDING_JSON = committedApiBinding.replace(
+            '"database":"morrow"',
+            '"database":"other"',
+          )),
+      }),
+      ["EDGE_STAGING_SHARED_VARS"],
+    ],
+    [
+      modelTurnedOn({ orchestrator: (c) => (c.vars.MORROW_MODEL_PROVIDER = "anthropic") }),
+      ["EDGE_MODEL_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+  ].entries()) {
+    const found = codes(await verify(tree(mutate), undefined, on));
+    for (const code of expected)
+      assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
   }
 });

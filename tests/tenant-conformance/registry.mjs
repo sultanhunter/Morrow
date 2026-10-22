@@ -23,25 +23,46 @@ export const workRoles = Object.freeze({
 // the operator in platform audit rows; never a store's content) or "store" (a store's
 // content, identity or credential): every "store" table, in every schema the registry
 // covers (identityTables included), has exactly one cleanup handler in
-// packages/work/src/redaction.ts (S8).
+// packages/work/src/redaction.ts (S8). `commandDelete: "connector_redact"` (M3 PR-2
+// integrated with M2 PR-3) marks the one exception to "no runtime DELETE": the command role
+// holds DELETE on that store-content table for shop/redact's connector context alone, which
+// a RESTRICTIVE FOR DELETE policy (connector_content_delete_only) enforces; S3 and S4 check
+// the grant, the restrictive policy and that no other table has either.
 export const workTables = Object.freeze({
   goals: { class: "tenant_readable", parents: ["workspace_streams"], content: "workspace" },
-  tasks: { class: "tenant_readable", parents: ["goals"], content: "workspace" },
+  // M3 PR-2 (listings-runs): the run steps read tasks under their lease (tenant_lease_read),
+  // and the broker's model_call_begin reads the one parent task it names.
+  tasks: {
+    class: "tenant_readable",
+    parents: ["goals"],
+    policies: ["task_broker_model", "tenant_lease_read"],
+    content: "workspace",
+  },
   questions: { class: "tenant_readable", parents: ["tasks"], content: "workspace" },
   question_answers: { class: "tenant_readable", parents: ["questions"], content: "workspace" },
+  // M3 PR-2: the run steps append run and proposal events under their lease.
   workspace_streams: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
+    lease: true,
     content: "none",
   },
   task_assignments: { class: "tenant_internal", parents: ["tasks"], content: "none" },
   commands: { class: "tenant_internal", parents: ["workspace_streams"], content: "none" },
-  outbox_events: { class: "tenant_internal", parents: ["workspace_streams"], content: "none" },
+  outbox_events: {
+    class: "tenant_internal",
+    parents: ["workspace_streams"],
+    lease: true,
+    content: "none",
+  },
   transition_rules: { class: "platform", parents: [], content: "none" },
   // P06.T01b approval records (migration 0018).
+  // M3 PR-2: the agent submit (submit_agent_proposal) writes the approval records under the
+  // run's lease (tenant_lease) and reads claims (tenant_lease_read).
   review_policies: {
     class: "tenant_readable",
     parents: ["workspace_streams"],
+    lease: true,
     content: "workspace",
   },
   proposal_parameters: {
@@ -50,6 +71,7 @@ export const workTables = Object.freeze({
     // M2 PR-3 (0037): shop/redact empties a store's parameters in the connector's own
     // redaction context (read, and the one change to redacted).
     policies: ["connector_redact", "connector_redact_read"],
+    lease: true,
     content: "store",
   },
   proposals: {
@@ -57,11 +79,17 @@ export const workTables = Object.freeze({
     parents: ["proposal_parameters", "review_policies"],
     // M2 PR-3 (0037): the connector's redaction context reads its store's proposals.
     policies: ["connector_redact_proposal"],
+    lease: true,
     content: "workspace",
   },
-  approvals: { class: "tenant_readable", parents: ["proposals"], content: "none" },
+  approvals: { class: "tenant_readable", parents: ["proposals"], lease: true, content: "none" },
   approval_decisions: { class: "tenant_readable", parents: ["approvals"], content: "workspace" },
-  approval_claims: { class: "tenant_internal", parents: ["approvals"], content: "none" },
+  approval_claims: {
+    class: "tenant_internal",
+    parents: ["approvals"],
+    policies: ["tenant_lease_read"],
+    content: "none",
+  },
   review_capabilities: { class: "platform", parents: [], content: "none" },
   review_risk_by_effect: { class: "platform", parents: [], content: "none" },
   review_policy_defaults: { class: "platform", parents: [], content: "none" },
@@ -153,6 +181,87 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     content: "none",
+  },
+  // M3 PR-2 listings runs (migration 0038 listings-runs). The catalogue's per-token rates and
+  // provider model ids (platform; the command role reads them, the api never).
+  model_catalogue_rates: {
+    class: "platform",
+    parents: [],
+    policies: ["platform_command_read"],
+    content: "none",
+  },
+  // One run, its products, manifest and model calls: ids, digests, codes, counts and times.
+  // The session context admits and closes stale runs (tenant_command), the run steps work
+  // under the run lease (tenant_lease), and the broker's model definers reach exactly the
+  // run they name (broker_model_run, broker_model_run_child, broker_model_call). M2 PR-3's
+  // read resolution reads one run and its products' status through run_product_readable
+  // (broker_read_run, broker_read_run_product: FOR SELECT, its own setting).
+  runs: {
+    class: "tenant_readable",
+    parents: [
+      "morrow_identity.workspaces",
+      "tasks",
+      "agent_installations",
+      "work_envelopes",
+      "delegation_hops",
+      "work_leases",
+      "morrow_billing.billing_accounts",
+    ],
+    lease: true,
+    policies: ["broker_model_run", "broker_read_run"],
+    content: "none",
+  },
+  // A run product names the proposal that packed its draft (content-free), so a run settles
+  // from these rows even after shop/redact deleted its drafts.
+  run_products: {
+    class: "tenant_readable",
+    parents: ["runs", "proposals"],
+    lease: true,
+    policies: ["broker_model_run_child", "broker_read_run_product"],
+    content: "none",
+  },
+  run_manifests: {
+    class: "tenant_readable",
+    parents: ["runs"],
+    lease: true,
+    policies: ["broker_model_run_child"],
+    content: "none",
+  },
+  run_model_calls: {
+    class: "tenant_readable",
+    parents: ["run_products"],
+    lease: true,
+    policies: ["broker_model_call"],
+    content: "none",
+  },
+  // The product text a run read (content-addressed, 90 days) and the drafts it wrote: store
+  // content, each with its cleanup handler (S8): shop/redact deletes a store's rows through
+  // morrow_work.store_content_redact in the connector's redaction context
+  // (connector_content_read, connector_content_delete and the restrictive
+  // connector_content_delete_only).
+  product_snapshots: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    policies: [
+      "connector_content_delete",
+      "connector_content_delete_only",
+      "connector_content_read",
+    ],
+    commandDelete: "connector_redact",
+    content: "store",
+  },
+  run_drafts: {
+    class: "tenant_readable",
+    parents: ["run_products", "proposals"],
+    lease: true,
+    policies: [
+      "connector_content_delete",
+      "connector_content_delete_only",
+      "connector_content_read",
+    ],
+    commandDelete: "connector_redact",
+    content: "store",
   },
 });
 
@@ -422,6 +531,58 @@ export const workFunctions = Object.freeze({
   },
   // The agent kernel's facts under a run lease (ids and grant payloads; the kernel decides).
   "delegation_facts(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  // M3 PR-2 listings runs. Pure functions of the CHECKs.
+  "listing_field_array()": { kind: "check", grantees: ["morrow_work_command"] },
+  "run_fields_valid(text[])": { kind: "check", grantees: ["morrow_work_command"] },
+  "route_matches(text,text,text,text,text,text,text,text,text,text[],integer)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "snapshot_matches(text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "draft_set_valid(text,text[])": { kind: "check", grantees: ["morrow_work_command"] },
+  "draft_flags_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "run_guard()": { kind: "trigger", grantees: [] },
+  "run_product_guard()": { kind: "trigger", grantees: [] },
+  "run_manifest_guard()": { kind: "trigger", grantees: [] },
+  "model_call_guard()": { kind: "trigger", grantees: [] },
+  "run_draft_guard()": { kind: "trigger", grantees: [] },
+  // Revisable owner helpers the run definers call: the uncertain fence close, the run end
+  // (credits, accrual, envelope and hop) and the session's stale-run close.
+  "run_fence_close_uncertain(text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "run_end(text,text,text,text,text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "runs_close_stale(text,text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  // Run admission and reconciliation (the api) and the interrupted-run read.
+  "begin_run_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)":
+    { kind: "api", grantees: ["morrow_work_api"], command: "run.admit" },
+  "cmd_runs_reconcile(text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "run.reconcile",
+  },
+  "run_interrupted(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  // The run steps under the run lease (ids, digests, codes and canonical documents only).
+  "run_start()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_billing_facts()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_product_begin(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_snapshot_put(text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_product_finish(text,text,text,text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+  },
+  "run_drafts_pending()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_review_context()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "submit_agent_proposal(text,text,text,text,text,text,text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+  },
+  "run_finish(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
 });
 // The identity bridges (0014, 0017): definers owned by the identity owner, EXECUTE
 // for the command role only.
@@ -508,7 +669,8 @@ export const billingTables = Object.freeze({
     parents: ["morrow_identity.workspaces"],
     // M2 PR-2 (0025): route_link_read, the linking rule's one-row read. M5 PR-1 (0029):
     // receipt_apply fixes the route from a verified receipt.
-    policies: ["receipt_apply", "route_link_read", "route_signup"],
+    // M3 PR-2: tenant_lease_read, run_billing_facts under the run lease.
+    policies: ["receipt_apply", "route_link_read", "route_signup", "tenant_lease_read"],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -550,7 +712,7 @@ export const billingTables = Object.freeze({
   checkout_intents: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces", "morrow_work.operations"],
-    policies: ["broker_billing", "receipt_apply"],
+    policies: ["broker_billing", "receipt_apply", "tenant_lease_read"],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -579,7 +741,7 @@ export const billingTables = Object.freeze({
   stripe_operations: {
     class: "tenant_readable",
     parents: ["morrow_billing.checkout_intents", "morrow_work.operations"],
-    policies: ["broker_billing", "receipt_apply"],
+    policies: ["broker_billing", "receipt_apply", "tenant_lease_read"],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -632,7 +794,7 @@ export const billingTables = Object.freeze({
   billing_accounts: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
-    policies: ["receipt_apply"],
+    policies: ["receipt_apply", "tenant_lease_read"],
     commandRead: true,
     content: "none",
     ...aclSpec(
@@ -655,7 +817,7 @@ export const billingTables = Object.freeze({
   entitlement_snapshots: {
     class: "tenant_readable",
     parents: ["morrow_billing.billing_accounts", "morrow_billing.stripe_event_receipts"],
-    policies: ["receipt_apply"],
+    policies: ["receipt_apply", "tenant_lease_read"],
     commandRead: true,
     content: "none",
     ...aclSpec(
@@ -680,7 +842,7 @@ export const billingTables = Object.freeze({
   verified_payment_events: {
     class: "tenant_readable",
     parents: ["morrow_billing.stripe_event_receipts", "morrow_identity.workspaces"],
-    policies: ["receipt_apply"],
+    policies: ["receipt_apply", "tenant_lease_read"],
     commandRead: true,
     content: "none",
     ...aclSpec(
@@ -803,11 +965,13 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
+  // M3 PR-2: broker_model_tenant, the broker's model definers book a call's cost in the
+  // one tenant they name.
   vendor_cost_reservations: {
     class: "tenant_readable",
     parents: ["morrow_billing.credit_reservations"],
     lease: true,
-    policies: [],
+    policies: ["broker_model_tenant"],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -840,7 +1004,7 @@ export const billingTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_billing.vendor_cost_reservations"],
     lease: true,
-    policies: [],
+    policies: ["broker_model_tenant"],
     content: "none",
     ...aclSpec(["INSERT", "SELECT"]),
   },
@@ -848,7 +1012,7 @@ export const billingTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     lease: true,
-    policies: [],
+    policies: ["broker_model_tenant"],
     content: "none",
     ...aclSpec(["INSERT", "SELECT"], ["amount_usd", "revision", "updated_at"]),
   },
@@ -860,7 +1024,7 @@ export const billingTables = Object.freeze({
       "morrow_billing.run_cost_bookings",
     ],
     lease: true,
-    policies: [],
+    policies: ["broker_model_tenant"],
     content: "none",
     ...aclSpec(["INSERT", "SELECT"]),
   },
@@ -957,6 +1121,11 @@ export const billingFunctions = Object.freeze({
   },
   "run_settle(text,text,text,integer)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "run_release(text,text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  // M3 PR-2 (listings-runs): a failed product's attempt bookings accrue as unrecovered.
+  "run_product_unrecovered(text,text,text,integer)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
 });
 export const vaultTables = Object.freeze({
   app_secrets: {
@@ -1017,6 +1186,16 @@ export const vaultFunctions = Object.freeze({
     grantees: ["morrow_vault_broker"],
   },
   "shopify_webhook_record(text,text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
+  // and counts only; the broker's login).
+  "model_call_begin(text,text,text,text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "model_call_end(text,text,text,text,text,text,text,text,text,text)": {
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
@@ -1108,6 +1287,16 @@ export const executorLogins = Object.freeze({
     "morrow_work.lease_mark_started()",
     "morrow_work.lease_release()",
     "morrow_work.pending_starts()",
+    // M3 PR-2 (listings-runs): the run steps.
+    "morrow_work.run_billing_facts()",
+    "morrow_work.run_drafts_pending()",
+    "morrow_work.run_finish(text)",
+    "morrow_work.run_product_begin(text)",
+    "morrow_work.run_product_finish(text,text,text,text,text,text)",
+    "morrow_work.run_review_context()",
+    "morrow_work.run_snapshot_put(text,text)",
+    "morrow_work.run_start()",
+    "morrow_work.submit_agent_proposal(text,text,text,text,text,text,text,text,text)",
   ],
   morrow_vault_broker: [
     // M5 PR-1 (0029).
@@ -1126,6 +1315,9 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_credential_destroy(text,text)",
     "morrow_vault.shopify_read_resolve(text,text,text,text,text)",
     "morrow_vault.shopify_webhook_record(text,text,text,text,text,text)",
+    // M3 PR-2 (listings-runs).
+    "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
+    "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

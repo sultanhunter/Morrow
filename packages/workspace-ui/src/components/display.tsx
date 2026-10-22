@@ -76,12 +76,15 @@ const tones: Readonly<Record<string, TagTone>> = {
   unlinked: "warning",
   suspended: "warning",
   uninstalled: "danger",
+  // M3 PR-2: runs and their products.
+  in_progress: "accent",
+  drafted: "success",
 };
 export function StatusTag({
   family,
   status,
 }: {
-  readonly family: "task" | "goal" | "question" | "installation";
+  readonly family: "task" | "goal" | "question" | "installation" | "run" | "runProduct";
   readonly status: string;
 }) {
   return (
