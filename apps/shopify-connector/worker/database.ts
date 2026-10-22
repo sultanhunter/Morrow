@@ -5,7 +5,7 @@
 // exactly the connector login, every attribute is off, it is a member of nothing), the
 // timeouts, one fixed statement and COMMIT. The login executes exactly five definers:
 // morrow_identity.connector_oauth_state_open (M2 PR-2) and, since M2 PR-3 (migration
-// 0035), the inbox applier morrow_work.connector_inbox_apply, the two ids-only re-drives
+// 0037), the inbox applier morrow_work.connector_inbox_apply, the two ids-only re-drives
 // connector_inbox_pending and connector_credentials_pending, and the count-only privacy
 // deadline check connector_privacy_overdue. Every failure is CONNECTOR_SQL_UNAVAILABLE;
 // nothing is logged and the password never appears in an error.
@@ -34,7 +34,7 @@ export const connectorSql = Object.freeze({
   idleTimeout: "SET LOCAL idle_in_transaction_session_timeout='5s'",
   stateOpen:
     "SELECT outcome,client_id,scopes FROM morrow_identity.connector_oauth_state_open($1,$2,$3)",
-  // M2 PR-3 (0035): the inbox applier and the two re-drives (ids only).
+  // M2 PR-3 (0037): the inbox applier and the two re-drives (ids only).
   inboxApply:
     "SELECT outcome,topic,installation_id,credential,reason FROM morrow_work.connector_inbox_apply($1)",
   inboxPending: "SELECT inbox_id FROM morrow_work.connector_inbox_pending()",

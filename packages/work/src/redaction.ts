@@ -10,7 +10,7 @@
 // `uninstall_or_disconnect` handler. Since M2 PR-3 every handler names its executor (the
 // conformance check refuses a null one: invariant 16, no non-development store links before
 // every handler runs, mvp.md M6):
-//   * shop/redact: morrow_work.connector_inbox_apply (0035) first ends the installation (the
+//   * shop/redact: morrow_work.connector_inbox_apply (0037) first ends the installation (the
 //     uninstall path, so a shop/redact that arrives first still destroys the token), then
 //     runs morrow_work.store_content_redact (every work-schema handler, here the proposal
 //     parameters through parameters_redact_for_store) and
@@ -103,7 +103,7 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       storeKey: "proposals.store_id through proposals.parameters_id",
       // The revisable owner helper of the M3 PR-1 agent-proposals migration: it empties the
       // canonical text and sets redacted_at, keeping the digest; decision_bind and the
-      // approval_claims trigger refuse a redacted proposal. M2 PR-3 (0035) revises it to run
+      // approval_claims trigger refuse a redacted proposal. M2 PR-3 (0037) revises it to run
       // under the tenant's own session context or the connector's redaction context for
       // exactly that store (morrow.connector_redact, which only connector_inbox_apply writes),
       // with the connector_redact policies; anything else is still context_unavailable,

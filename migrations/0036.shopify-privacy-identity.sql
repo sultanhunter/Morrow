@@ -1,7 +1,7 @@
 BEGIN;
 -- M2 PR-3: the identity side of uninstall, the compliance topics and Shopify reads
 -- (ADR-0022 items 4, 7, 13-15; mvp-architecture §4, §6 and §11; P09.T04a, P09.T05a).
--- Executes AS morrow_identity_owner, after 0033. It adds:
+-- Executes AS morrow_identity_owner, after 0035. It adds:
 --   * the webhook inbox (shopify_webhook_inbox: one row per verified delivery, unique by
 --     app, shop and webhook id, holding only the minimised body of spine §11; 7 days) and
 --     privacy_requests (one per compliance delivery, with its 24-hour target, its 30-day
@@ -12,7 +12,7 @@ BEGIN;
 --     the installation id, never the domain), and linking_candidates.redacted_at, each
 --     admitted once by the replaced guards (shopify_preserve_record and 0005's
 --     preserve_linking_record);
---   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0035's
+--   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0037's
 --     vault and connector definers call them): the webhook record, the inbox take, settle
 --     and pending ids, the installation end, the identity redaction, the privacy request
 --     completion and its overdue counts, the credential end and its pending ids, and the
@@ -393,7 +393,7 @@ END $$;
 
 -- ---------------------------------------------------------------------------
 -- The identity bridges: definers owned by the identity owner, EXECUTE for
--- morrow_work_command only. 0035's vault definers (the broker's own login) and connector
+-- morrow_work_command only. 0037's vault definers (the broker's own login) and connector
 -- definers (the connector's login) call them; each takes ids, verified shop facts or the
 -- tenant its caller read from a row, never a value from a client.
 -- The webhook record (the broker's verifying transaction, after the signature over the raw

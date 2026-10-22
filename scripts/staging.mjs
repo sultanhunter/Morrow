@@ -35,6 +35,7 @@ import {
   billingTermsSeedRows,
   connectionCensus,
   customerResolutionInput,
+  grantTestEntitlement,
   neonConnector,
   platformSeedRows,
   platformStop,
@@ -47,7 +48,10 @@ import {
   seedPlatform,
   sessionIdentity,
   checkIdentity,
+  liveEvidenceRef,
   statementStatsScratchDatabase,
+  testEntitlementApproval,
+  testEntitlementInput,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
@@ -804,6 +808,140 @@ command("billing-customer-resolve", {
       administrator: ctx.administrator,
       input,
     });
+  },
+});
+
+// The staging test entitlement (owner decision (b), 2026-10-21; the ADR-0022 item 5
+// amendment; card E13). Each use needs the owner's own approval in chat for this workspace,
+// recorded in a docs/evidence/live record committed to main before the run: the record
+// must name the approval reference and the workspace (requireTestEntitlementRecord), and it
+// is read from the commit mainPreconditions verified (committedRecord), never from the
+// working tree. Under the active card that carries E13, with an approval reference of that
+// card and effect dated from the amendment to today.
+// Prints the closed result: the outcome, ids, credit units, the terms revision and the
+// period, with the approval reference, the record's path and the commit it was read at.
+export function requireTestEntitlementApproval(card, approvalRef, now) {
+  const e13 = card?.e13;
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (
+    !e13 ||
+    typeof e13 !== "object" ||
+    Object.keys(e13).join() !== "amendedOn" ||
+    !day.test(e13.amendedOn ?? "") ||
+    !(e13.amendedOn >= card.approvedOn && e13.amendedOn <= card.expiresOn)
+  )
+    throw new StagingError("STAGING_CARD_EFFECT_MISSING", { effect: "E13" });
+  const match = testEntitlementApproval.exec(approvalRef);
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (
+    !match ||
+    match[1] !== card.id ||
+    match[2] !== "e13" ||
+    !Number.isFinite(Date.parse(match[3] + "T00:00:00Z")) ||
+    match[3] < e13.amendedOn ||
+    match[3] > today
+  )
+    throw new StagingError("STAGING_APPROVAL_INVALID");
+}
+// The record names the run on two labelled lines, each exactly once: a plain line or a
+// Markdown list item, the label optionally in bold, the value alone, bare or in backticks:
+//   - Approval reference: `staging-card-1.e13.2026-10-22.1`
+//   - Workspace: `ws_...`
+// Each value must equal the run's approval reference or workspace id exactly. A substring
+// never matches (approval .1 is not named by a record of .10, nor a workspace id by a
+// longer one), and a labelled line whose value is not one delimited token, or a second
+// line with the same label, refuses the run.
+const recordLabel =
+  /^(?:[-*] +)?(?:\*\*(Approval reference|Workspace):\*\*|(Approval reference|Workspace):)(.*)$/;
+const recordValue = /^ +(?:`([^`\s]+)`|([^`\s]+)) *$/;
+export function requireTestEntitlementRecord(text, { approvalRef, workspaceId }) {
+  const named = { "Approval reference": [], Workspace: [] };
+  for (const line of String(text).split(/\r?\n/)) {
+    const label = recordLabel.exec(line.trim());
+    if (!label) continue;
+    const value = recordValue.exec(label[3]);
+    named[label[1] ?? label[2]].push(value ? (value[1] ?? value[2]) : null);
+  }
+  const approvals = named["Approval reference"];
+  const workspaces = named.Workspace;
+  if (
+    approvals.length !== 1 ||
+    approvals[0] !== approvalRef ||
+    workspaces.length !== 1 ||
+    workspaces[0] !== workspaceId
+  )
+    throw new StagingError("STAGING_EVIDENCE_MISMATCH");
+}
+// The record as committed at `commit` (the origin/main head mainPreconditions verified),
+// never the working tree: an ignored or untracked file, or one edited after the clean-tree
+// check, cannot stand in for it. One regular blob (mode 100644) at exactly that path, read
+// by its object id; a missing path, a symbolic link, an executable file or a directory is
+// STAGING_EVIDENCE_MISSING.
+const committedEntry = /^100644 blob ([0-9a-f]{40})\t([^\0]+)\0$/;
+export async function committedRecord(ctx, commit, path) {
+  if (typeof commit !== "string" || !/^[0-9a-f]{40}$/.test(commit))
+    throw new StagingError("STAGING_GIT_OUTPUT_INVALID");
+  if (typeof path !== "string" || !liveEvidenceRef.test(path))
+    throw new StagingError("STAGING_USAGE");
+  const listing = await toolOk(ctx.tools, "git", [
+    "ls-tree",
+    "-z",
+    "--full-tree",
+    commit,
+    "--",
+    path,
+  ]);
+  const entry = committedEntry.exec(listing);
+  if (!entry || entry[2] !== path) throw new StagingError("STAGING_EVIDENCE_MISSING");
+  return toolOk(ctx.tools, "git", ["cat-file", "blob", entry[1]]);
+}
+command("test-entitlement", {
+  usage:
+    "test-entitlement --workspace <id> --approval <staging-card-1.e13.YYYY-MM-DD.n> --record <docs/evidence/live/....md> --operator <id>",
+  parse(args) {
+    const flags = {};
+    for (let i = 0; i < args.length; i += 2) {
+      const [flag, value] = [args[i], args[i + 1]];
+      if (
+        !["--workspace", "--approval", "--record", "--operator"].includes(flag) ||
+        typeof value !== "string" ||
+        Object.hasOwn(flags, flag)
+      )
+        throw new StagingError("STAGING_USAGE");
+      flags[flag] = value;
+    }
+    const input = {
+      operatorId: flags["--operator"],
+      workspaceId: flags["--workspace"],
+      approvalRef: flags["--approval"],
+      evidenceRef: flags["--record"],
+    };
+    testEntitlementInput(input);
+    return { input };
+  },
+  async run(ctx, { input }) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    requireTestEntitlementApproval(config.card, input.approvalRef, ctx.now());
+    const binding = await stagingBinding(ctx, config);
+    const { sourceCommit } = await mainPreconditions(ctx, repositoryOf(config.staging));
+    requireTestEntitlementRecord(
+      await committedRecord(ctx, sourceCommit, input.evidenceRef),
+      input,
+    );
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    const granted = await grantTestEntitlement({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input,
+    });
+    return {
+      ...granted,
+      approvalRef: input.approvalRef,
+      record: input.evidenceRef,
+      recordCommit: sourceCommit,
+    };
   },
 });
 

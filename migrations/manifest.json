@@ -272,15 +272,29 @@
     },
     {
       "sequence": 34,
-      "file": "0034.shopify-privacy-identity.sql",
-      "sha256": "10ce3aaba8440bb767a3f9e890144eeac3383fcae5f50014223c8e5f6ab2d93a",
+      "file": "0034.staging-entitlement-identity-bridge.sql",
+      "sha256": "91aeb0a200ad85ad39ed9e5e9602b955478651ff2fe141cf004c528cd5fc7851",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/staging-test-entitlement.md"
+    },
+    {
+      "sequence": 35,
+      "file": "0035.staging-test-entitlement.sql",
+      "sha256": "fc658ae305e177a94eb400435d33a9242483487cf3da6cb19576ecad41d38ce9",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/staging-test-entitlement.md"
+    },
+    {
+      "sequence": 36,
+      "file": "0036.shopify-privacy-identity.sql",
+      "sha256": "cc7768b8753fbeeba327818d3b7db04522c7208ffee87cbdd89695b300243fce",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
     },
     {
-      "sequence": 35,
-      "file": "0035.shopify-privacy-work.sql",
-      "sha256": "214388abadb3523d2c80db83945b01fac649ccfcd88fdaf59f10ba3321a5f6c9",
+      "sequence": 37,
+      "file": "0037.shopify-privacy-work.sql",
+      "sha256": "df8f72dc9198d142c067b73c8d4a8386248dfb27c749e3ed2319b892f156201a",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
     }

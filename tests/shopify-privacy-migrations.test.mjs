@@ -38,11 +38,18 @@ const body = (text, signature) => {
   return text.slice(start, text.indexOf("END $$;", start));
 };
 
-test("manifest: two contiguous rows after M3 PR-1, their owners and digests", () => {
+test("manifest: two contiguous rows after M3 PR-1 and the test entitlement, owners and digests", () => {
   const rows = ["shopify-privacy-identity", "shopify-privacy-work"].map(rowOf);
   assert.equal(rows[1].sequence, rows[0].sequence + 1);
   assert.equal(rows[1].sequence, manifest.migrations.length);
-  assert.ok(manifest.migrations[rows[0].sequence - 2].file.endsWith(".run-credits.sql"));
+  // The merge train (2026-10-22) put the staging test entitlement's two rows between M3
+  // PR-1's run-credits and these (by slug, never by number).
+  assert.deepEqual(
+    manifest.migrations
+      .slice(rows[0].sequence - 4, rows[0].sequence - 1)
+      .map((m) => m.file.replace(/^\d{4}\./, "")),
+    ["run-credits.sql", "staging-entitlement-identity-bridge.sql", "staging-test-entitlement.sql"],
+  );
   assert.deepEqual(
     rows.map((r) => [r.executeAs, r.reviewRef, r.prerequisites]),
     [

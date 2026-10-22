@@ -262,7 +262,9 @@ export interface BillingRecords {
 /**
  * The exact parseWorkspaceBillingFacts input (§8.8): Morrow-direct has one storeless payer
  * once its route is fixed and its account exists; no payer before the route is fixed. The
- * test seed is never read (the MVP has none: ADR-0022 item 5).
+ * test seed is never read (the MVP has none: ADR-0022 item 5). A staging operator test
+ * entitlement (item 5 as amended 2026-10-21) is not a seed: it fixes the route and gives the
+ * Morrow-direct payer its account and snapshot, read here like a verified payment's.
  */
 export function billingFactsInput(records: BillingRecords, scope: BillingScope) {
   const same = (r: { organizationId: string | null; workspaceId: string | null }) =>

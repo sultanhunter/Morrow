@@ -15,6 +15,7 @@ import {
   vaultTables,
   workDomains,
   workFunctions,
+  workOwnerBridges,
   workRouteProbes,
   workRoles,
   workTables,
@@ -64,7 +65,7 @@ const tenantPredicate =
 const leasePredicate =
   "(((organization_id)::text, (workspace_id)::text) = ( SELECT c.organization_id,\n    c.workspace_id\n   FROM morrow_work.current_lease() c(organization_id, workspace_id, lease_id, generation, kind, subject_id, store_id, connection_id, installation_id, initiator_principal_id, initiator_membership_id, expires_at)))";
 const orPlatform = (predicate) => "((organization_id IS NULL) OR " + predicate + ")";
-// M2 PR-3 (0035): the connector context's lease and redaction predicates.
+// M2 PR-3 (0037): the connector context's lease and redaction predicates.
 const connectorLease =
   "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (connection_id)::text) = current_setting('morrow.connector_stop'::text, true)))";
 const connectorRedact =
@@ -191,7 +192,7 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_resolve_installation'::text, true)))",
     null,
   ],
-  // M2 PR-3 (0035): the connector's context. Each names exactly the tenant, store and
+  // M2 PR-3 (0037): the connector's context. Each names exactly the tenant, store and
   // connection (or store) that connector_inbox_apply wrote into its transaction-local
   // setting, only while the session user is the connector's login: the system connection
   // stop (set, never lifted), its StopRecord@1, the revocation of that connection's leases
@@ -520,9 +521,13 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       const [p] = rows(
         `SELECT has_function_privilege('${role}','morrow_identity.${signature}','EXECUTE') AS x, p.prosecdef, p.proowner::regrole::text AS owner FROM pg_proc p WHERE p.oid='morrow_identity.${signature}'::regprocedure`,
       );
+      // The command role executes every bridge; the work owner only its registered ones
+      // (workOwnerBridges: 0034, the operator test entitlement's association read).
       assert.equal(
         p.x,
-        role === workRoles.command || role === "morrow_identity_owner",
+        role === workRoles.command ||
+          role === "morrow_identity_owner" ||
+          (role === workRoles.owner && workOwnerBridges.includes(signature)),
         role + " " + signature,
       );
       assert.ok(p.prosecdef && p.owner === "morrow_identity_owner");
@@ -587,13 +592,24 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       )
       .sort(),
   );
+  // Besides them, the work owner executes exactly its registered identity bridges (0034:
+  // the store-association read of the operator test entitlement, 0035).
   for (const f of identityFunctions) {
-    const bridge = bridgeFunctions.includes(f.signature.replace("morrow_identity.", ""));
+    const name = f.signature.replace("morrow_identity.", "");
+    const bridge = bridgeFunctions.includes(name);
     assert.equal(f.c, bridge, f.signature);
-    assert.equal(f.o, workOwnerHelpers.includes(f.signature), f.signature);
+    assert.equal(
+      f.o,
+      workOwnerHelpers.includes(f.signature) || workOwnerBridges.includes(name),
+      f.signature,
+    );
     assert.ok(!f.a && !f.l, f.signature);
   }
-  assert.equal(identityFunctions.filter((f) => f.o).length, workOwnerHelpers.length);
+  assert.ok(workOwnerBridges.every((name) => bridgeFunctions.includes(name)));
+  assert.equal(
+    identityFunctions.filter((f) => f.o).length,
+    workOwnerHelpers.length + workOwnerBridges.length,
+  );
   // The five ADR-0020 helpers: owned by the identity owner, no PUBLIC EXECUTE, and no
   // executor may run any of them.
   const helperAcl = rows(

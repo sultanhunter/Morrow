@@ -37,15 +37,17 @@ type Handler = Readonly<{
 //   /workspace/:ws/stores/:storeId/agents/, /workspace/:ws/models, /workspace/:ws/settings/model-default
 //                                                agents (M3 PR-1)
 //   /workspace/:ws/stores/:storeId/catalog/      catalogue reads (M2 PR-3)
+// The api's per-address session limit (session-limit.ts) runs before this table and answers
+// a path of the work, billing, agents or catalog row in that family's ErrorEnvelope, through
+// `apiDispatch` itself, so there is one matcher.
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
+export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
+const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
 type RowKey = "work" | "billing" | "stripe_webhook" | "agents" | "catalog";
 export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
   Object.freeze([
-    ["work", (path: string) => new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`).test(path)],
-    [
-      "billing",
-      (path: string) => new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`).test(path),
-    ],
+    ["work", (path: string) => workPath.test(path)],
+    ["billing", (path: string) => billingPath.test(path)],
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
     // M3 PR-1: the agents routes, on the work dependencies (packages/work/src/agents/http.ts).
     ["agents", (path: string) => agentsPathPattern.test(path)],

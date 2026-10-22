@@ -91,6 +91,11 @@
         }
       ]
     },
+    "OperatorEntitlementKey": {
+      "description": "A staging operator test entitlement (ADR-0022 item 5 amendment, 2026-10-21): morrow:operator_entitlement:<id>. It names the operator grant that fixed a Morrow-direct route in test mode and the entitlement it gives; it is never a payment key, a subscription key of a provider, or a price.",
+      "type": "string",
+      "pattern": "^morrow:operator_entitlement:[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$"
+    },
     "UsdBillingMoney": {
       "description": "An exact non-negative USD amount (App Pricing prices are USD only).",
       "type": "object",
@@ -111,7 +116,7 @@
       "additionalProperties": false
     },
     "WorkspaceBillingRoute": {
-      "description": "The server-held billing route of one workspace. Written only by trusted server writers; never a request field. route, mode, routeFixedAt and fixingPaymentKey are all null or all set. Morrow-direct is fixed only for a website workspace that was never Shopify-bound; Shopify only for a Shopify-bound one.",
+      "description": "The server-held billing route of one workspace. Written only by trusted server writers; never a request field. route, mode, routeFixedAt and fixingPaymentKey are all null or all set. Morrow-direct is fixed only for a website workspace that was never Shopify-bound; Shopify only for a Shopify-bound one. A Morrow-direct route fixed by a staging operator test entitlement (ADR-0022 item 5 amendment) names its OperatorEntitlementKey in place of a payment key and is always test mode.",
       "oneOf": [
         {
           "type": "object",
@@ -202,6 +207,55 @@
             },
             "fixingPaymentKey": {
               "$ref": "#/$defs/StripePaymentKey"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "origin",
+            "shopifyBoundAt",
+            "route",
+            "mode",
+            "routeFixedAt",
+            "fixingPaymentKey",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "origin": {
+              "type": "string",
+              "const": "website"
+            },
+            "shopifyBoundAt": {
+              "type": "null"
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "const": "test"
+            },
+            "routeFixedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "fixingPaymentKey": {
+              "$ref": "#/$defs/OperatorEntitlementKey"
             },
             "revision": {
               "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
@@ -1162,7 +1216,7 @@
       ]
     },
     "BillingTerms": {
-      "description": "Morrow's versioned terms table: the only source of creditUnits (R10). Keyed by the provider price or plan read back from the provider object. A Shopify entry is a USD subscription_period. The schema rejects only an exactly repeated entry; the billing library rejects a table that repeats a (route, mode, priceKey) with different values. Values are fixtures until P18 pricing.",
+      "description": "Morrow's versioned terms table: the only source of creditUnits (R10). Keyed by the provider price or plan read back from the provider object. A Shopify entry is a USD subscription_period. The schema rejects only an exactly repeated entry; the billing library rejects a table that repeats a (route, mode, priceKey) with different values. Values are fixtures until P18 pricing. A development or staging revision may carry one operator_test_entitlement entry (ADR-0022 item 5 amendment): the beta plan's credits for a staging operator test entitlement, with no provider price (priceKey morrow:operator_plan:beta), test mode only; it is never a purchasable offer.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -1232,6 +1286,38 @@
                   },
                   "currency": {
                     "type": "string",
+                    "const": "USD"
+                  },
+                  "creditUnits": {
+                    "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+                  }
+                },
+                "required": [
+                  "route",
+                  "mode",
+                  "priceKey",
+                  "kind",
+                  "currency",
+                  "creditUnits"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "const": "morrow_direct"
+                  },
+                  "mode": {
+                    "const": "test"
+                  },
+                  "priceKey": {
+                    "const": "morrow:operator_plan:beta"
+                  },
+                  "kind": {
+                    "const": "operator_test_entitlement"
+                  },
+                  "currency": {
                     "const": "USD"
                   },
                   "creditUnits": {
@@ -1507,7 +1593,7 @@
       ]
     },
     "EntitlementSnapshot": {
-      "description": "EntitlementSnapshot@2 (replaces billing v1 EntitlementSnapshot; changes.json): a server projection of a fresh provider read. subscriptionId holds the SubscriptionKey; installation and store follow the account's rule.",
+      "description": "EntitlementSnapshot@2 (replaces billing v1 EntitlementSnapshot; changes.json): a server projection of a fresh provider read. subscriptionId holds the SubscriptionKey; installation and store follow the account's rule. A staging operator test entitlement's snapshot (ADR-0022 item 5 amendment) is Morrow-direct, test mode, with its OperatorEntitlementKey as subscriptionId and the grant record's digest as providerEvidenceRef.",
       "oneOf": [
         {
           "type": "object",
@@ -1538,6 +1624,77 @@
             },
             "subscriptionId": {
               "$ref": "#/$defs/StripeSubscriptionKey"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "pending",
+                "past_due",
+                "suspended",
+                "cancelled"
+              ]
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "validUntil": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "billingAccountId",
+            "route",
+            "mode",
+            "installationId",
+            "organizationId",
+            "workspaceId",
+            "storeId",
+            "subscriptionId",
+            "status",
+            "providerEvidenceRef",
+            "verifiedAt",
+            "validUntil",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 2
+            },
+            "billingAccountId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "const": "test"
+            },
+            "installationId": {
+              "type": "null"
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "subscriptionId": {
+              "$ref": "#/$defs/OperatorEntitlementKey"
             },
             "status": {
               "type": "string",

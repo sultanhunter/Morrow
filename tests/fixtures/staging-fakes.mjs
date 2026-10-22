@@ -20,6 +20,12 @@ import { join } from "node:path";
 import { StagingError } from "../../scripts/staging-common.mjs";
 
 export const fakeSha = (seed) => createHash("sha1").update(String(seed)).digest("hex");
+// git's blob object id for `text`.
+export const fakeBlobId = (text) =>
+  createHash("sha1")
+    .update(`blob ${Buffer.byteLength(text)}\0`)
+    .update(text)
+    .digest("hex");
 const ok = (stdout = "") => ({ status: 0, stdout, stderr: "" });
 const missing = () => ({ status: 1, stdout: "", stderr: "HTTP 404" });
 // Worker key -> staging script name, as in infra/environments/staging.json.
@@ -38,6 +44,8 @@ export function fakeTools(options = {}) {
     head: options.git?.head ?? options.git?.main ?? fakeSha("main"),
     status: options.git?.status ?? "",
     diff: options.git?.diff ?? "",
+    // The committed tree at main: path -> {text, mode = "100644", type = "blob"}.
+    files: options.git?.files ?? {},
     checkRuns: options.gh?.checkRuns ?? null,
     ghSecrets: options.gh?.secrets ?? [
       { name: "CLOUDFLARE_API_TOKEN", updatedAt: "2026-10-19T10:00:00Z" },
@@ -101,6 +109,23 @@ export function fakeTools(options = {}) {
       if (args[0] === "rev-parse")
         return ok((args.includes("HEAD^{commit}") ? state.head : state.main) + "\n");
       if (args[0] === "diff") return ok(state.diff);
+      // `ls-tree -z --full-tree <commit> -- <path>` and `cat-file blob <id>`, over the
+      // committed tree at main; any other commit is not an object here.
+      if (args[0] === "ls-tree") {
+        const commit = args[args.indexOf("--") - 1];
+        const path = args[args.indexOf("--") + 1];
+        if (commit !== state.main) return { status: 128, stdout: "", stderr: "" };
+        const file = Object.hasOwn(state.files, path) ? state.files[path] : null;
+        return ok(
+          file
+            ? `${file.mode ?? "100644"} ${file.type ?? "blob"} ${fakeBlobId(file.text)}\t${path}\0`
+            : "",
+        );
+      }
+      if (args[0] === "cat-file" && args[1] === "blob") {
+        const file = Object.values(state.files).find((f) => fakeBlobId(f.text) === args[2]);
+        return file ? ok(file.text) : { status: 128, stdout: "", stderr: "" };
+      }
       return { status: 2, stdout: "", stderr: "" };
     },
     async gh(args, { input } = {}) {
@@ -475,7 +500,21 @@ export function fakeDatabase(options = {}) {
       ? options.instance[database]
       : "1792526146.012127/10.0.0.1/5432";
   const provisioned = new Set(options.provisioned ? roles : []);
+  // Migration 0035's platform mark (seed-platform): absent until the seed inserts it,
+  // unless a test plants one (`platformEnvironment`); never changed once present.
+  let platformEnvironment = options.platformEnvironment ?? null;
   const rules = [
+    [
+      /^INSERT INTO morrow_billing\.platform_environment/,
+      (text, params) => {
+        if (platformEnvironment === null) platformEnvironment = params[0];
+        return [];
+      },
+    ],
+    [
+      /FROM morrow_billing\.platform_environment$/,
+      () => (platformEnvironment === null ? [] : [{ environment: platformEnvironment }]),
+    ],
     [/^SELECT session_user::text AS session_role/, (text, params, db) => [identityFor(db)]],
     [
       /FROM pg_catalog\.pg_roles WHERE rolname IN/,

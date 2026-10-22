@@ -26,7 +26,7 @@ export type Outcome<T> =
   | { readonly kind: "not_found" } // 404: absent, foreign or not viewable
   | { readonly kind: "conflict"; readonly recheck: boolean; readonly message: string } // 409
   | { readonly kind: "invalid"; readonly field: string | null } // 400
-  | { readonly kind: "rate_limited"; readonly retryAfterSeconds: number } // 429 (signup only)
+  | { readonly kind: "rate_limited"; readonly retryAfterSeconds: number } // 429: nothing ran
   | { readonly kind: "unavailable"; readonly offline: boolean } // reads; commands never yet uncertain
   | { readonly kind: "uncertain" } // §4.9: only a decoded terminal reply ends it
   | { readonly kind: "not_in_build" };
