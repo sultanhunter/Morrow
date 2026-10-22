@@ -1,7 +1,9 @@
 BEGIN;
 -- M3 PR-2 listings runs (ADR-0022 items 2, 3, 9-11, 15 and 16; mvp-architecture §2 steps 7-9,
 -- §5, §7, §9 and §11; P13.T01a-T03a, P05.T04b, P11.T04a and P11.T05a minimum). Executes AS
--- morrow_work_owner, after M3 PR-1's run credits. On the ADR-0010 tenant pattern: composite
+-- morrow_work_owner, after M3 PR-1's run credits (0033) and M2 PR-3's Shopify reads and
+-- privacy (0034-0035), whose two revisable helpers it revises (pinned below as 0035 wrote
+-- them). On the ADR-0010 tenant pattern: composite
 -- tenant keys, ENABLE and FORCE RLS, definers owned by morrow_work_command, INVOKER triggers
 -- and checks owned by the owner. No external effect: nothing here sends a request.
 --   * Platform: model_catalogue_rates, the per-token rates and provider model id of every
@@ -83,6 +85,16 @@ DO $$ BEGIN
   IS DISTINCT FROM 'f43f5e5735c63eb994358362938d9e59'
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_billing.unrecovered_cost_entries'::regclass AND c.conname='unrecovered_cost_entries_kind_check')
   IS DISTINCT FROM '668e746c6b0b8ed7e21156f4600666bd'
+ -- M2 PR-3 (0035): the read resolution that calls run_product_readable, and the two
+ -- revisable owner helpers this file replaces, exactly as 0035 wrote them (shared protocol:
+ -- a later revision is never overwritten blind).
+ OR to_regprocedure('morrow_vault.shopify_read_resolve(text,text,text,text,text)') IS NULL
+ OR to_regprocedure('morrow_work.store_content_redact(text,text,text)') IS NULL
+ OR to_regprocedure('morrow_work.run_product_readable(text,text,text,text)') IS NULL
+ OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure('morrow_work.store_content_redact(text,text,text)'))
+  IS DISTINCT FROM '75bf566fa593783e27ae1cb610135eae'
+ OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure('morrow_work.run_product_readable(text,text,text,text)'))
+  IS DISTINCT FROM '9df3d7271b898326a1cd0c4ac9cd9785'
  THEN RAISE EXCEPTION 'LISTINGS_RUNS_PREREQUISITES_INVALID'; END IF;
 END $$;
 

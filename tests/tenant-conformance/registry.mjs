@@ -178,7 +178,7 @@ export const workTables = Object.freeze({
     parents: ["morrow_identity.workspaces"],
     content: "none",
   },
-  // M3 PR-2 listings runs (migration listings-runs). The catalogue's per-token rates and
+  // M3 PR-2 listings runs (migration 0036 listings-runs). The catalogue's per-token rates and
   // provider model ids (platform; the command role reads them, the api never).
   model_catalogue_rates: {
     class: "platform",
