@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "provider": "anthropic",
+  "switch": "off",
+  "monthly_spend_limit_usd": null,
+  "observed_on": null,
+  "scope": "The reviewed model-provider switch of the staging Workers (M3 PR-2; ADR-0022 items 7 and 10; the M5 Stripe switch's protocol). Committed off: the broker requires no model secret and its modelRespond answers BROKER_HELD (MODEL_UNAVAILABLE) before any input, database or provider access; run admission answers 503 runs_unavailable before any reservation; ListingsRunWorkflow throws dispatch_disabled before any step and the cron starts nothing. It is turned on only by one reviewed commit that sets switch to on with the staging Anthropic Console workspace's monthly spend limit (the owner's action, recorded with the date observed), adds MORROW_MODEL_PROVIDER anthropic to the staging api, broker and orchestrator vars, the reviewed MORROW_DATABASE_BINDING_JSON to the orchestrator's, ANTHROPIC_API_KEY to the broker's secrets.required and the staging tooling's key placement, and only after the owner approves the first model call (CLAUDE.md: provider effects need per-action approval). edge:check refuses any mixed state; production has no switch until the ADR-0007 item 9 custody ADR."
+}

@@ -6,11 +6,14 @@ import {
   type LoginControl,
 } from "../../../packages/identity/src/standalone-login-protocol.js";
 import {
+  anthropicKeyPattern,
   brokerCallerRoles,
   brokerPasswordSecret,
   brokerPasswordValid,
   brokerVaultKekSecrets,
   brokerVaultRole,
+  modelProviderAnthropic,
+  modelProviderVar,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
   parseStripeConfiguration,
@@ -49,7 +52,9 @@ export type BrokerMethod =
   | "stripeCustomerEnsure"
   | "stripeCheckoutCreate"
   | "stripePortalCreate"
-  | "stripeWebhookVerify";
+  | "stripeWebhookVerify"
+  // M3 PR-2 (RuntimeBroker): the provider-neutral model gateway.
+  | "modelRespond";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"
@@ -60,7 +65,9 @@ export type BrokerFailureCode =
   | "INGRESS_BUSY"
   | "STATE_INVALID"
   // M5 (owner decision (c), 2026-10-21): the Stripe switch is off; no Stripe method runs.
-  | "STRIPE_UNAVAILABLE";
+  | "STRIPE_UNAVAILABLE"
+  // M3 PR-2: the model-provider switch is off (or its key is missing); no model call runs.
+  | "MODEL_UNAVAILABLE";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
     super("BROKER_HELD");
@@ -88,6 +95,12 @@ export interface BrokerChallenge {
   readonly hostname: string;
   readonly actions: readonly string[];
 }
+// M3 PR-2 (ADR-0022 items 7 and 10): the model provider's credential, the Anthropic Console
+// workspace's API key. It never crosses RPC; the Claude adapter receives it per request.
+export interface BrokerModel {
+  readonly provider: "anthropic";
+  readonly apiKey: string;
+}
 export interface BrokerCapabilities {
   readonly sessions: Readonly<BrokerSessions> | null;
   /** The api caller's eight role leases (ApiBroker). */
@@ -106,6 +119,10 @@ export interface BrokerCapabilities {
    * Stripe secret or configuration is read.
    */
   readonly stripeMode: "off" | "test";
+  /** M3 PR-2: the model provider's key, only while the model-provider switch is on. */
+  readonly model: Readonly<BrokerModel> | null;
+  /** The model-provider switch as this broker sees it (MORROW_MODEL_PROVIDER "anthropic"). */
+  readonly modelMode: "off" | "anthropic";
   // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
   // health also needs the challenge capability; development may run without it.
   readonly challengeRequired: boolean;
@@ -120,6 +137,8 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   challenge: null,
   stripe: null,
   stripeMode: "off",
+  model: null,
+  modelMode: "off",
   challengeRequired: true,
 });
 const environments = ["development", "staging", "production"] as const;
@@ -314,6 +333,27 @@ function stripe(
   }
 }
 
+// The model-provider switch (M3 PR-2): on only with MORROW_MODEL_PROVIDER exactly
+// "anthropic", in development or staging, with the vault (the fence's definers run on the
+// broker's own login) and an Anthropic Console key of the expected shape. Absent (the
+// committed state while the switch is off) or anything else is off, and then the key is not
+// read at all.
+function modelMode(env: object, environment: string): "off" | "anthropic" {
+  return environment !== "production" && own(env, modelProviderVar) === modelProviderAnthropic
+    ? "anthropic"
+    : "off";
+}
+function model(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): Readonly<BrokerModel> | null {
+  if (modelMode(env, environment) !== "anthropic" || vaultCapability === null) return null;
+  const apiKey = own(env, "ANTHROPIC_API_KEY");
+  if (typeof apiKey !== "string" || anthropicKeyPattern.exec(apiKey)?.[0] !== apiKey) return null;
+  return Object.freeze({ provider: "anthropic" as const, apiKey });
+}
+
 async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
   let result = nothing;
   try {
@@ -332,6 +372,8 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         challenge: challenge(env),
         stripe: stripe(env, environment, vaultCapability),
         stripeMode: stripeMode(env, environment),
+        model: model(env, environment, vaultCapability),
+        modelMode: modelMode(env, environment),
         challengeRequired: environment !== "development",
       });
     }
@@ -349,6 +391,8 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       challenge: result.challenge !== null,
       stripe: result.stripe !== null,
       stripeMode: result.stripeMode,
+      model: result.model !== null,
+      modelMode: result.modelMode,
     }),
   );
   return result;

@@ -15,7 +15,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
-import { captureConsole, loadWranglerApi, reviewedStripeRecord } from "./edge.mjs";
+import {
+  captureConsole,
+  loadWranglerApi,
+  reviewedModelRecord,
+  reviewedStripeRecord,
+} from "./edge.mjs";
 import { buildLoginKeyring } from "./login-keyring.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
 import { StagingError, closedValue, failureRecord } from "./staging-common.mjs";
@@ -108,10 +113,29 @@ export function stagingStripeSwitch(root) {
   }
 }
 
+// M3 PR-2, the model-provider switch: the committed docs/decisions/model-provider-staging.json
+// `switch`, checked with edge:check's own rule (reviewedModelRecord). "off" (the committed
+// state) or "on"; anything else stops the command before any effect.
+export function stagingModelSwitch(root) {
+  try {
+    return reviewedModelRecord(
+      JSON.parse(readFileSync(join(root, "docs/decisions/model-provider-staging.json"), "utf8")),
+    ).switch;
+  } catch {
+    throw new StagingError("STAGING_MODEL_RECORD_INVALID");
+  }
+}
+
 // `stripe` is the Stripe switch (stagingStripeSwitch): off by default, so a caller that
-// does not read the record never expects a Stripe secret.
-export async function identityConstants({ stripe = "off" } = {}) {
+// does not read the record never expects a Stripe secret. `model` is the model-provider
+// switch (stagingModelSwitch): while it is off the broker expects no model secret. The tooling
+// that places ANTHROPIC_API_KEY lands with the reviewed commit that turns it on, so "on" stops
+// every command here before any effect (STAGING_MODEL_SWITCH_UNSUPPORTED) instead of
+// deploying a broker without its key.
+export async function identityConstants({ stripe = "off", model = "off" } = {}) {
   if (stripe !== "off" && stripe !== "on") throw new StagingError("STAGING_STRIPE_RECORD_INVALID");
+  if (model === "on") throw new StagingError("STAGING_MODEL_SWITCH_UNSUPPORTED");
+  if (model !== "off") throw new StagingError("STAGING_MODEL_RECORD_INVALID");
   const { tsImport } = await import("tsx/esm/api");
   const protocol = await tsImport("../packages/identity/src/broker-protocol.ts", import.meta.url);
   return Object.freeze({
@@ -1423,7 +1447,10 @@ export function defaultContext() {
     stderr: (line) => process.stderr.write(line + "\n"),
     administrator: Object.freeze({ name: "neondb_owner", mode: "createrole" }),
     constants: async () =>
-      (constants ??= await identityConstants({ stripe: stagingStripeSwitch(root) })),
+      (constants ??= await identityConstants({
+        stripe: stagingStripeSwitch(root),
+        model: stagingModelSwitch(root),
+      })),
     specs: async () =>
       (specs ??= stagingFileSpecs({ brokerSecretNames: (await ctx.constants()).brokerSecrets })),
     config: async () => (config ??= await loadStagingConfiguration(root)),

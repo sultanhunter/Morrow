@@ -91,19 +91,39 @@ const brokerRequiredSecretsWithStripe: readonly string[] = Object.freeze([
   ...brokerRequiredSecrets,
   ...brokerStripeSecrets,
 ]);
+// M3 PR-2 (ADR-0022 items 7 and 10): the Anthropic Console workspace's API key, bound only
+// to the broker and only while the reviewed model-provider switch is on. The switch is
+// docs/decisions/model-provider-staging.json `switch`, committed "off": while it is off the
+// broker requires no model secret, modelRespond answers BROKER_HELD (MODEL_UNAVAILABLE)
+// before any input, database or provider access, run admission answers 503 before any
+// reservation and ListingsRunWorkflow throws dispatch_disabled before any step. Its runtime
+// image is the var MORROW_MODEL_PROVIDER, exactly "anthropic" while the switch is on, on the
+// staging api, broker and orchestrator; any other value is off. Production has no switch
+// until the ADR-0007 item 9 custody ADR.
+export const brokerModelSecrets: readonly string[] = Object.freeze(["ANTHROPIC_API_KEY"]);
+export type BrokerModelSwitch = "off" | "on";
+export const modelProviderVar = "MORROW_MODEL_PROVIDER";
+export const modelProviderAnthropic = "anthropic";
+/** An Anthropic Console API key (sk-ant-api03-…); never logged, never returned. */
+export const anthropicKeyPattern = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
 const brokerRequiredSecretsInProduction: readonly string[] = Object.freeze(
   brokerRequiredSecrets.filter((name) => !brokerVaultSecrets.includes(name)),
 );
-// The broker's exact `secrets.required` (development and staging: 14 with the switch off,
-// 16 with it on; production: 12). Production has no Stripe switch: "on" there is refused.
+// The broker's exact `secrets.required` (development and staging: 14 with both switches off,
+// 16 with Stripe on, 15 with the model provider on, 17 with both; production: 12). Production
+// has neither switch: "on" there is refused.
 export function brokerRequiredSecretsFor(
   environment: "development" | "staging" | "production",
   stripe: BrokerStripeSwitch = "off",
+  model: BrokerModelSwitch = "off",
 ): readonly string[] {
   if ((stripe !== "off" && stripe !== "on") || (environment === "production" && stripe === "on"))
     throw Error("BROKER_STRIPE_SWITCH_INVALID");
+  if ((model !== "off" && model !== "on") || (environment === "production" && model === "on"))
+    throw Error("BROKER_MODEL_SWITCH_INVALID");
   if (environment === "production") return brokerRequiredSecretsInProduction;
-  return stripe === "on" ? brokerRequiredSecretsWithStripe : brokerRequiredSecrets;
+  const base = stripe === "on" ? brokerRequiredSecretsWithStripe : brokerRequiredSecrets;
+  return model === "on" ? Object.freeze([...base, ...brokerModelSecrets]) : base;
 }
 export const brokerLimits = Object.freeze({
   namespaceMaxBytes: 1024,
@@ -163,7 +183,25 @@ export interface ConnectorBrokerRpc {
 export interface RuntimeBrokerRpc {
   health(): Promise<boolean>;
   neonLease(namespaceJson: string): Promise<string>;
+  // M3 PR-2 (ADR-0022 item 10; spine §4 and §9): the provider-neutral model gateway. The
+  // lease is the run's; callJson is ModelCall@1 (closed: no selection, catalogue version or
+  // provider); the result is a ModelResult@1 string. The broker reads the selection and the
+  // catalogue version from the run its lease names and fences every attempt in SQL before any
+  // provider request. A held broker (the model-provider switch off, an invalid call, a stop,
+  // a spent reservation, an open call) throws BROKER_HELD.
+  modelRespond(
+    leaseId: string,
+    generation: number,
+    callJson: string,
+    budgetMs: number,
+  ): Promise<string>;
 }
+export const modelGatewayLimits = Object.freeze({
+  callMaxBytes: 200_000,
+  resultMaxBytes: 200_000,
+  budgetMinMs: 1_000,
+  budgetMaxMs: 120_000,
+});
 
 // P05.T01ab: the challenge protocol shared by the api guard and the broker.
 export type ChallengeVerdict = "passed" | "failed";

@@ -464,7 +464,7 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
     "workosSessionPage",
   ]);
   // Trust model v1: one class per caller, exactly its own methods. M2 PR-2 gives the
-  // connector its three Shopify methods; the orchestrator's are unchanged.
+  // connector its three Shopify methods; M3 PR-2 gives the orchestrator modelRespond.
   assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
     "constructor",
     "health",
@@ -476,6 +476,7 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
   assert.deepEqual(Object.getOwnPropertyNames(module.RuntimeBroker.prototype).sort(), [
     "constructor",
     "health",
+    "modelRespond",
     "neonLease",
   ]);
   assert.deepEqual(Object.keys(module).sort(), [
