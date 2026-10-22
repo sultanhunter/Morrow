@@ -29,6 +29,11 @@ import type {
 //   after the wait, no attempt used); a 429 without retry-after or naming a limit ->
 //   spend_limit.
 //   500, 504, a timeout or any transport failure -> uncertain (counted at the worst case).
+//   Every other status of 500 or above but 529 (502, 503, 520-524 and the rest) is uncertain
+//   too: a gateway or edge failure after the request was sent does not prove nothing was
+//   generated (a 524 means the origin was still working), so item 10's "transport loss after
+//   the request was sent" row applies, never the free provider_error. A non-200 status below
+//   400 is uncertain for the same reason.
 //   Deviation (recorded in the brief): fetch cannot tell a connection that failed before the
 //   request was sent from a loss after it, so item 10's "not sent" row is never produced; the
 //   conservative uncertain is used instead.
@@ -210,7 +215,8 @@ export function createClaudeAdapter(fetch: Fetch): ModelProvider {
           return result({ outcome: "invalid_output", ...common });
         }
       }
-      if (response.status === 500 || response.status === 504)
+      // Only a 4xx proves nothing was generated; 529 is the provider's own overload signal.
+      if (response.status < 400 || (response.status >= 500 && response.status !== 529))
         return result({ outcome: "uncertain", providerRequestId });
       if (response.status === 529)
         return result({
@@ -233,7 +239,9 @@ export function createClaudeAdapter(fetch: Fetch): ModelProvider {
   });
 }
 
-// The refusals both endpoints share: nothing was generated.
+// The refusals both endpoints share. On the free count every status of 500 or above but 529
+// is not_sent (counting generates nothing); respond never reaches that row, because it
+// answers those statuses as uncertain first.
 async function countRefusal(response: Response): Promise<CountResult> {
   const status = response.status;
   if (status === 529) return { outcome: "throttled", retryAfterMs: retryAfter(response) ?? 2_000 };

@@ -977,7 +977,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     ]);
     oracle.count(ids[2], { tokens: 7500 });
     oracle.script(ids[3], [{ kind: "invalid_json" }, { kind: "invalid_json" }]);
-    oracle.script(ids[4], [{ kind: "status", status: 500 }, { kind: "completed" }]);
+    // A 503 after the send (a gateway failure, not a refusal): uncertain, counted at its
+    // worst case like a 500 or 504, never a free provider_error.
+    oracle.script(ids[4], [{ kind: "status", status: 503 }, { kind: "completed" }]);
     // Product text that steers the draft to another product: product_mismatch, twice.
     const steered = (p) => ({
       productId: "product:999",

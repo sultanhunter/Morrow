@@ -261,6 +261,17 @@ test("Claude adapter: item 10's outcome table", async () => {
     [() => json(200, reply({ usage: { input_tokens: -1, output_tokens: 3 } })), "uncertain", false],
     [() => json(500, errorBody("api_error", "Internal")), "uncertain", false],
     [() => json(504, errorBody("timeout_error", "Timeout")), "uncertain", false],
+    // Every other 5xx but 529 is a loss after the send, never a free provider_error: a
+    // gateway or edge failure (502, 503, Cloudflare's 520-524, where 524 means the origin was
+    // still working) does not prove nothing was generated.
+    ...[501, 502, 503, 505, 520, 521, 522, 523, 524, 599].map((status) => [
+      () => json(status, errorBody("api_error", "Bad gateway")),
+      "uncertain",
+      false,
+    ]),
+    // A non-200 status below 400 proves nothing either.
+    [() => json(201, reply()), "uncertain", false],
+    [() => new Response(null, { status: 302, headers: { location: "/x" } }), "uncertain", false],
     [() => json(529, errorBody("overloaded_error", "Overloaded")), "throttled", false],
     [
       () => json(429, errorBody("rate_limit_error", "Slow down"), { "retry-after": "7" }),
@@ -828,6 +839,28 @@ test("gateway: the input cap with headroom, throttles, uncertain sends and repla
     assert.deepEqual(
       f.state.ends.map((e) => e[1]),
       [outcome],
+    );
+  }
+  // The real Claude adapter behind the gateway: a 502, 503 or 524 on the send is closed as
+  // uncertain (the fence counts it and books its worst case; lab:listings-runs O3), never
+  // as a free provider_error.
+  for (const status of [502, 503, 524]) {
+    const { fetch, seen } = fakeFetch((request) =>
+      request.url.endsWith("/count_tokens")
+        ? json(200, { input_tokens: 900 })
+        : json(status, errorBody("api_error", "upstream")),
+    );
+    const { f, g } = gateway({
+      provider: { calls: { count: [], respond: [] }, provider: createClaudeAdapter(fetch) },
+    });
+    const text = await respond(g, env);
+    const r = JSON.parse(text);
+    assert.ok(validateCurrentDefinition("ModelResult", r), text);
+    assert.deepEqual([r.outcome, r.output, r.usage], ["uncertain", null, null], String(status));
+    assert.equal(seen.filter((x) => x.url.endsWith("/v1/messages")).length, 1);
+    assert.deepEqual(
+      f.state.ends.map((e) => e[1]),
+      ["uncertain"],
     );
   }
   // A close that cannot commit: uncertain, no output (the open fence is booked later).
