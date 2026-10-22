@@ -81,6 +81,16 @@ Listings authority, stops and credits (M3 PR-1; ADR-0022 items 3, 11, 13, 15 and
 | `morrow_work.proposal_parameters` (`redacted_at`) | Parameters keep their digest; a store's shop/redact empties the text in place (`parameters_redact_for_store`), after which the proposal can never be decided or claimed. The helper runs only under the tenant's own session context and otherwise refuses (`context_unavailable`); M2 PR-3 lands the shop/redact caller with the policy its context needs, so the handler is executable from M2 PR-3 | `parameters_redact_for_store` |
 | `morrow_billing.credit_reservations`, `vendor_cost_reservations`, `run_cost_bookings`, `unrecovered_costs`, `unrecovered_cost_entries` | Financial records: credits and US$ amounts, ids and catalogue keys, no content. Kept for the financial period; their retention basis is settled with M5 PR-1's billing records before live money (M6) | None in the MVP; no delete path exists |
 
+Listings runs (M3 PR-2; ADR-0022 items 2, 10, 11 and 13; migration listings-runs). Store content is held only in `product_snapshots` and `run_drafts` (and, once proposed, in `proposal_parameters` above); the Workflow's durable state holds ids and codes only, and Morrow stores no prompt or raw model output.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_work.runs`, `run_products`, `run_manifests` | Content-free: ids, the selection and catalogue version, digests (route, prompt, schema), statuses, counters and token totals; 365 days | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.run_model_calls` | Content-free audit of each model call's fence: the outcome, the provider request and model ids, the raw stop reason (a bounded token), token counts and the booked cost; 365 days. Never readable by the api role column by column | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.product_snapshots` | Store content: one product's listing fields as read, content-addressed; 90 days (`expires_at`) | shop/redact deletes the store's rows (`delete_rows`, executable from M2 PR-3, before any real store content can reach the table: the product read lands there); P09.T05 prunes at `expires_at` |
+| `morrow_work.run_drafts` | Store content: the validated change set of one product and its reviewer flags (counts); 90 days (`expires_at`) | shop/redact deletes the store's rows (`delete_rows`, from M2 PR-3); P09.T05 prunes at `expires_at` |
+| `morrow_work.model_catalogue_rates` | Platform record: per-token rates, the provider model id and the input cap of each catalogue entry; kept for the life of the platform | None needed |
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.

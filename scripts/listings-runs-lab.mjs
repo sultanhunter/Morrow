@@ -16,13 +16,19 @@
 //      catalog.content.publish Proposal@2 by the installation's agent on behalf of the
 //      requester, credits settled at the products proposed, cost booked from the catalogue's
 //      rates, the lease released; durable step results carry ids and codes only;
+//   M  the selection: none is the workspace default; a member picks Opus high once the owner
+//      raises the ceiling; xhigh is refused;
 //   O  item 10's outcomes in one run: a refusal then a draft, a throttle resent within the
 //      attempt, an input over the cap never sent, invalid output twice (failed, accrued as
-//      unrecovered), an uncertain send booked at its worst case;
+//      unrecovered), an uncertain send booked at its worst case, a draft steered to another
+//      product (product_mismatch, twice);
 //   E  a spend limit ends the run (drafted work is still proposed); K the three-failure breaker;
+//   U  the unrecovered-cost cap stops a running run before its next product and refuses
+//      admission;
 //   F  the fence as the broker's login: replay, in flight, one open call per run, attempts,
 //      digests, closed inputs, a reply from another model, cost overflow never dropped and the
-//      run stopped, forged settings reaching nothing and no other login executing it;
+//      run stopped, a spent reservation refused at the fence with no request, forged settings
+//      reaching nothing and no other login executing it;
 //   S  "Stop AI work" mid-run: the next step is refused, the run reads as interrupted, and
 //      the stale close returns its credits and accrues its cost; admission is refused; a
 //      call in flight at the stop is still recorded and booked (its close needs no lease);
@@ -904,9 +910,66 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   }
 
   // ---------------------------------------------------------------------------
+  phase("selection");
+  {
+    // M1: no selection is the workspace default (Sonnet low, 1 credit), within A1's ceiling.
+    const memberGoal = await work(P.A1, "/goals", {
+      objective: "Member's runs",
+      storeIds: [],
+      successCriteria: [
+        { description: "Done", verificationCapabilityId: null, evidenceRequired: false },
+      ],
+    });
+    const memberTask = await taskOf(P.A1, "Member's runs", memberGoal.body.goalId);
+    const defaulted = await admit(P.A1, memberTask, admitBody([product(81)], { selection: null }));
+    check(
+      "M1:no_selection_is_the_workspace_default",
+      defaulted.status === 201 &&
+        defaulted.body.selection.model === "claude_sonnet_5_5" &&
+        defaulted.body.selection.effort === "low" &&
+        defaulted.body.creditsReserved === 1,
+      defaulted.body,
+    );
+    // M2: the owner raises the ceiling to 6; the member may then pick Opus high.
+    const raised = await agentsCall(P.A, "PUT", "/settings/model-default", {
+      model: "claude_sonnet_5_5",
+      effort: "low",
+      maxCreditsPerProduct: 6,
+      expectedRevision: null,
+    });
+    const opus = await admit(
+      P.A1,
+      memberTask,
+      admitBody([product(82)], { selection: { model: "claude_opus_5_5", effort: "high" } }),
+    );
+    check(
+      "M2:a_member_picks_opus_high_after_the_ceiling_is_raised",
+      raised.status === 200 && opus.status === 201 && opus.body.creditsReserved === 6,
+      { raised: raised.body, opus: opus.body },
+    );
+    // M3: xhigh is never in the catalogue.
+    const xhigh = await admit(
+      P.A,
+      T,
+      admitBody([product(83)], { selection: { model: "claude_opus_5_5", effort: "xhigh" } }),
+    );
+    check("M3:xhigh_is_refused", xhigh.status === 400, xhigh.body);
+    // Both runs complete, so no admitted run lingers into the later sections.
+    const ended = [await execute(defaulted.body.runId), await execute(opus.body.runId)];
+    check(
+      "M4:both_member_runs_draft_and_settle",
+      ended.every((r) => r.kind === "ended" && r.status === "succeeded") &&
+        credit(defaulted.body.runId)?.settled === 1 &&
+        credit(opus.body.runId)?.settled === 6 &&
+        oracle.requests.some((r) => r.model === "claude-opus-5-5"),
+      { ended },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   phase("outcomes");
   {
-    const ids = [product(11), product(12), product(13), product(14), product(15)];
+    const ids = [product(11), product(12), product(13), product(14), product(15), product(16)];
     oracle.script(ids[0], [{ kind: "stop", reason: "refusal" }, { kind: "completed" }]);
     oracle.script(ids[1], [
       { kind: "status", status: 429, retryAfter: "1", type: "rate_limit_error", message: "Slow" },
@@ -915,6 +978,18 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     oracle.count(ids[2], { tokens: 7500 });
     oracle.script(ids[3], [{ kind: "invalid_json" }, { kind: "invalid_json" }]);
     oracle.script(ids[4], [{ kind: "status", status: 500 }, { kind: "completed" }]);
+    // Product text that steers the draft to another product: product_mismatch, twice.
+    const steered = (p) => ({
+      productId: "product:999",
+      title: p.title + " - improved",
+      descriptionHtml: null,
+      seo: null,
+      tags: null,
+    });
+    oracle.script(ids[5], [
+      { kind: "completed", draft: steered },
+      { kind: "completed", draft: steered },
+    ]);
     const unrecoveredBefore = count(
       "SELECT coalesce(sum(amount_usd),0)*100000000 FROM morrow_billing.unrecovered_cost_entries",
     );
@@ -927,7 +1002,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       `SELECT kind,amount_usd::text AS amount FROM morrow_billing.unrecovered_cost_entries WHERE root_run_id=${literal(runId)} ORDER BY kind,amount_usd`,
     );
     check(
-      "O1:item_10_outcomes_in_one_run",
+      "O1:item_10_outcomes_and_a_steered_draft_in_one_run",
       result.kind === "ended" &&
         result.status === "succeeded" &&
         JSON.stringify(products.map((p) => [p.status, p.attempts, p.failure_code])) ===
@@ -937,6 +1012,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
             ["failed", 0, "input_over_cap"],
             ["failed", 2, "invalid_output"],
             ["drafted", 2, null],
+            ["failed", 2, "product_mismatch"],
           ]) &&
         JSON.stringify(c.map((x) => [x.i, x.a, x.s, x.outcome, x.counted])) ===
           JSON.stringify([
@@ -949,6 +1025,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
             [3, 2, 1, "invalid_output", true],
             [4, 1, 1, "uncertain", true],
             [4, 2, 1, "completed", true],
+            [5, 1, 1, "completed", true],
+            [5, 2, 1, "completed", true],
           ]),
       { result, products, calls: c },
     );
@@ -963,7 +1041,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         entries.some(
           (e) => e.kind === "uncertain_attempt" && Number(e.amount) === Number(worst.attempt),
         ) &&
-        entries.filter((e) => e.kind === "failed_product").length === 2 &&
+        entries.filter((e) => e.kind === "failed_product").length === 4 &&
         entries
           .filter((e) => e.kind === "failed_product")
           .every((e) => Number(e.amount) === Number(completedCost)) &&
@@ -1032,6 +1110,40 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
           `SELECT count(*) FROM morrow_billing.unrecovered_cost_entries WHERE root_run_id=${literal(run2)} AND kind='failed_product'`,
         ) === 6,
       { result2, run: runRow(run2), credit: credit(run2) },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  phase("unrecovered_cap");
+  {
+    // U1: once this period's unrecovered cost plus one product's worst case would pass the
+    // cap (US$4.50), a running run stops before its next product and admission refuses new
+    // runs until the next period. The ledger is raised near the cap (sim), then restored.
+    const ids = [product(91), product(92)];
+    const admitted = await admit(P.A, T, admitBody(ids));
+    const runId = admitted.body.runId;
+    const saved = one(
+      `SELECT period_start::text AS period,amount_usd::text AS amount FROM morrow_billing.unrecovered_costs WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)}`,
+    );
+    replica(
+      `UPDATE morrow_billing.unrecovered_costs SET amount_usd=4.45 WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};`,
+    );
+    const result = await execute(runId);
+    const refused = await admit(P.A, T, admitBody([product(93)]));
+    replica(
+      `UPDATE morrow_billing.unrecovered_costs SET amount_usd=${saved.amount} WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};`,
+    );
+    check(
+      "U1:the_unrecovered_cost_cap_stops_the_run_and_refuses_admission",
+      result.kind === "ended" &&
+        result.status === "failed" &&
+        runRow(runId).ended_reason === "unrecovered_cost_cap" &&
+        oracle.sends(ids[0]) === 0 &&
+        credit(runId)?.status === "released" &&
+        refused.status === 409 &&
+        refused.body.safeMessage ===
+          "Too many products failed this billing period. Drafting resumes next period.",
+      { result, run: runRow(runId), refused: refused.body },
     );
   }
 
@@ -1176,6 +1288,61 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         runtimeDenied &&
         forged === "0",
       { forged },
+    );
+  }
+
+  {
+    // F7: a call whose worst case the run's remaining vendor reservation cannot hold is
+    // refused at the fence, before any provider request (the reservation used up: sim).
+    const id = product(45);
+    const admitted = await admit(P.A, T, admitBody([id]));
+    const runId = admitted.body.runId;
+    const ref = leaseOf(runId);
+    await ports.lease(ref, async (step) => {
+      await step.run.start();
+      await step.run.productBegin(0);
+      return step.run.snapshotPut(0, snapshotCanonical(catalog.get(id)));
+    });
+    replica(
+      `UPDATE morrow_billing.vendor_cost_reservations SET booked_cost_usd=maximum_cost_usd WHERE root_run_id=${literal(runId)};`,
+    );
+    const sent = oracle.requests.length;
+    const exhausted = last(
+      db.sql(
+        `SELECT outcome FROM morrow_vault.model_call_begin(${literal(ref.leaseId)},${literal(String(ref.generation))},'0','1','1','90000',${literal(await listingPromptDigest())},${literal(listingDraftSchemaDigest)});`,
+        { user: "morrow_vault_broker" },
+      ),
+    );
+    const held = await modelRespond(
+      ref.leaseId,
+      ref.generation,
+      JSON.stringify({
+        schemaVersion: 1,
+        purpose: "listing_draft",
+        productIndex: 0,
+        attempt: 1,
+        sequence: 1,
+        request: objective,
+        fields: ["descriptionHtml", "title"],
+        product: catalog.get(id),
+      }),
+      90000,
+    ).then(
+      () => "answered",
+      (error) => error.message,
+    );
+    const finished = await ports.lease(ref, async (step) => {
+      await step.run.productFinish(0, { outcome: "failed", code: "reservation_exhausted" });
+      return step.run.finish("reservation_exhausted");
+    });
+    check(
+      "F7:a_spent_reservation_is_refused_at_the_fence_with_no_request",
+      exhausted === "reservation_exhausted" &&
+        held === "BROKER_HELD" &&
+        oracle.requests.length === sent &&
+        finished.value?.status === "failed" &&
+        credit(runId)?.status === "released",
+      { exhausted, held, finished },
     );
   }
 
