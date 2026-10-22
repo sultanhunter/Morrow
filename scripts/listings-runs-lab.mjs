@@ -2818,8 +2818,9 @@ COMMIT;`,
     // billingPeriodLatest reads it, so admission and the run's billing facts read the same
     // two sources. Sim, and the lab's last phase: W's payment events are removed and its route
     // and latest snapshot name an operator grant, with the triggers off (lab:test-entitlement
-    // proves the grant that writes them). R7 left "Stop AI work" on S, so it resumes first.
-    const resumed = await enableListings(S);
+    // proves the grant that writes them). R7's "Stop AI work" on S was lifted by the redaction
+    // phase's enable, so S's Listings agent is enabled here; a second enable would answer 400.
+    // The admission below (201, queued) is what proves it.
     const grantKey = "morrow:operator_entitlement:" + randomUUID();
     const revision = count(
       `SELECT max(revision) FROM morrow_billing.entitlement_snapshots WHERE billing_account_id=${literal(account)}`,
@@ -2845,14 +2846,13 @@ INSERT INTO morrow_billing.entitlement_snapshots VALUES(${literal(O)},${literal(
     );
     check(
       "T1:an_operator_entitled_workspace_admits_a_run_in_the_snapshot_period",
-      resumed.status === 200 &&
-        payments === 0 &&
+      payments === 0 &&
         snapshot !== null &&
         admitted.status === 201 &&
         admitted.body.status === "queued" &&
         runPeriod?.same === true &&
         credit(runId)?.status === "reserved",
-      { resumed: resumed.status, payments, snapshot, admitted: admitted.body, runPeriod },
+      { payments, snapshot, admitted: admitted.body, runPeriod },
     );
     // The run's billing facts (run_billing_facts under its lease) carry the snapshot's period,
     // and the run drafts, proposes and settles through the agent kernel's entitlement.
