@@ -59,7 +59,11 @@
 //      stop key and write nothing, a write that commits first is deleted by the pass, and an
 //      agent submit that commits first has its parameters emptied by the pass; the request
 //      completes once the token is destroyed, with per-pass deletion counts; a run it stopped
-//      still settles its proposed products and accrues its pending draft's cost.
+//      still settles its proposed products and accrues its pending draft's cost;
+//   T  a staging operator test entitlement (sim, the last phase: no verified payment event,
+//      the route and the latest snapshot name the operator grant): admission reads the
+//      snapshot's period, as the api's billingPeriodLatest does, the run's billing facts
+//      carry the same period, and the run succeeds.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
 // marked sim stand in for states no API path reaches yet. CI pg-work group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -2801,6 +2805,75 @@ COMMIT;`,
         vendorLost,
         products: productsOf(closeRunId),
       },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  phase("operator_entitlement");
+  {
+    // T1-T2: a staging operator test entitlement (migrations 0034-0035; the ADR-0022 item 5
+    // amendment) fixes the route and writes the account, the wallet and one snapshot keyed
+    // morrow:operator_entitlement:<id>, valid for its period, and no verified payment event.
+    // Its billing period is that snapshot's (billing-entitlements.md), as the api's
+    // billingPeriodLatest reads it, so admission and the run's billing facts read the same
+    // two sources. Sim, and the lab's last phase: W's payment events are removed and its route
+    // and latest snapshot name an operator grant, with the triggers off (lab:test-entitlement
+    // proves the grant that writes them). R7 left "Stop AI work" on S, so it resumes first.
+    const resumed = await enableListings(S);
+    const grantKey = "morrow:operator_entitlement:" + randomUUID();
+    const revision = count(
+      `SELECT max(revision) FROM morrow_billing.entitlement_snapshots WHERE billing_account_id=${literal(account)}`,
+    );
+    replica(`DELETE FROM morrow_billing.verified_payment_events WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};
+UPDATE morrow_billing.workspace_billing_routes SET fixing_payment_key=${literal(grantKey)} WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};
+INSERT INTO morrow_billing.entitlement_snapshots VALUES(${literal(O)},${literal(W)},${literal(account)},${revision + 1},'morrow_direct','test',${literal(grantKey)},'active',${literal("f".repeat(64))},${ms}-interval '2 hours',${ms}+interval '29 days',NULL,${ms});`);
+    if (wallet().available < 1)
+      replica(
+        `UPDATE morrow_billing.credit_wallets SET available=available+1 WHERE billing_account_id=${literal(account)};`,
+      );
+    const payments = count(
+      `SELECT count(*) FROM morrow_billing.verified_payment_events WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)}`,
+    );
+    const snapshot = one(
+      `SELECT verified_at::text AS start,valid_until::text AS "end",extract(epoch FROM verified_at)*1000 AS start_ms,extract(epoch FROM valid_until)*1000 AS end_ms FROM morrow_billing.entitlement_snapshots WHERE billing_account_id=${literal(account)} AND subscription_key=${literal(grantKey)}`,
+    );
+    const ids = [product(131)];
+    const admitted = await admit(P.A, T, admitBody(ids));
+    const runId = admitted.body.runId ?? "";
+    const runPeriod = one(
+      `SELECT r.period_start=s.verified_at AS same FROM morrow_work.runs r JOIN morrow_billing.entitlement_snapshots s ON s.organization_id=r.organization_id AND s.workspace_id=r.workspace_id AND s.billing_account_id=r.billing_account_id AND s.subscription_key=${literal(grantKey)} WHERE r.id=${literal(runId)}`,
+    );
+    check(
+      "T1:an_operator_entitled_workspace_admits_a_run_in_the_snapshot_period",
+      resumed.status === 200 &&
+        payments === 0 &&
+        snapshot !== null &&
+        admitted.status === 201 &&
+        admitted.body.status === "queued" &&
+        runPeriod?.same === true &&
+        credit(runId)?.status === "reserved",
+      { resumed: resumed.status, payments, snapshot, admitted: admitted.body, runPeriod },
+    );
+    // The run's billing facts (run_billing_facts under its lease) carry the snapshot's period,
+    // and the run drafts, proposes and settles through the agent kernel's entitlement.
+    const facts =
+      admitted.status === 201
+        ? await ports.lease(leaseOf(runId), (step) => step.run.billingFacts())
+        : null;
+    const period = facts?.value?.billingPeriodLatest ?? [];
+    const result = admitted.status === 201 ? await execute(runId) : null;
+    check(
+      "T2:the_run_billing_facts_carry_the_snapshot_period_and_the_run_succeeds",
+      facts?.entered === true &&
+        period.length === 1 &&
+        Date.parse(period[0].period_start) === Number(snapshot?.start_ms) &&
+        Date.parse(period[0].period_end) === Number(snapshot?.end_ms) &&
+        result?.kind === "ended" &&
+        result.status === "succeeded" &&
+        runRow(runId)?.status === "succeeded" &&
+        credit(runId)?.status === "settled" &&
+        credit(runId).settled === 1,
+      { facts: facts?.value ? period : facts, snapshot, result, row: runRow(runId) },
     );
   }
   return { checks, failures, retries };

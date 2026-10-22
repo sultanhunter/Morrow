@@ -1406,8 +1406,14 @@ BEGIN
  SELECT x.status,x.valid_until INTO snap FROM morrow_billing.entitlement_snapshots x WHERE x.organization_id=p.organization_id
   AND x.workspace_id=p.workspace_id AND x.billing_account_id=a.id ORDER BY x.revision DESC LIMIT 1;
  IF NOT FOUND OR snap.status<>'active' OR snap.valid_until<=v_now THEN RETURN QUERY SELECT 'entitlement'::text,NULL::text; RETURN; END IF;
- SELECT x.period_start,x.period_end INTO per FROM morrow_billing.verified_payment_events x WHERE x.organization_id=p.organization_id
-  AND x.workspace_id=p.workspace_id AND x.outcome='granted' AND x.kind='subscription_period' ORDER BY x.period_end DESC,x.recorded_at DESC LIMIT 1;
+ -- The billing period, from the same two sources as the api's billingPeriodLatest: the line
+ -- period of the latest granted subscription invoice, or a staging operator test
+ -- entitlement's snapshot, valid for exactly its period (ADR-0022 item 5 amendment,
+ -- 2026-10-21; billing-entitlements.md); the later end wins.
+ SELECT y.period_start,y.period_end INTO per FROM (SELECT x.period_start,x.period_end,x.recorded_at FROM morrow_billing.verified_payment_events x
+  WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.outcome='granted' AND x.kind='subscription_period'
+  UNION ALL SELECT z.verified_at,z.valid_until,z.recorded_at FROM morrow_billing.entitlement_snapshots z WHERE z.organization_id=p.organization_id
+  AND z.workspace_id=p.workspace_id AND z.subscription_key ~ '^morrow:operator_entitlement:') y ORDER BY y.period_end DESC,y.recorded_at DESC LIMIT 1;
  IF NOT FOUND OR per.period_end<=v_now OR per.period_start>v_now THEN RETURN QUERY SELECT 'no_billing_period'::text,NULL::text; RETURN; END IF;
  -- The pending approvals cap (submit_agent_proposal's 1,000 live under the current policy),
  -- before any spend: one proposal per product at most must still fit.
@@ -1635,8 +1641,11 @@ BEGIN
     'expires_at',morrow_work.utc_text(i.expires_at))) FROM morrow_billing.checkout_intents i WHERE i.organization_id=l.organization_id
     AND i.workspace_id=l.workspace_id AND i.status IN ('open','completed')),'[]'::jsonb),
   'period',COALESCE((SELECT jsonb_agg(jsonb_build_object('period_start',morrow_work.utc_text(v.period_start),'period_end',morrow_work.utc_text(v.period_end)))
-    FROM (SELECT * FROM morrow_billing.verified_payment_events x WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id
-    AND x.outcome='granted' AND x.kind='subscription_period' ORDER BY x.period_end DESC,x.recorded_at DESC LIMIT 1) v),'[]'::jsonb),
+    FROM (SELECT y.period_start,y.period_end FROM (SELECT x.period_start,x.period_end,x.recorded_at FROM morrow_billing.verified_payment_events x
+    WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.outcome='granted' AND x.kind='subscription_period'
+    UNION ALL SELECT z.verified_at,z.valid_until,z.recorded_at FROM morrow_billing.entitlement_snapshots z WHERE z.organization_id=l.organization_id
+    AND z.workspace_id=l.workspace_id AND z.subscription_key ~ '^morrow:operator_entitlement:') y ORDER BY y.period_end DESC,y.recorded_at DESC LIMIT 1) v),
+   '[]'::jsonb),
   'hold',COALESCE((SELECT jsonb_agg(jsonb_build_object('operation_id',s.operation_id::text,'held_at',morrow_work.utc_text(s.held_at))) FROM (
     SELECT x.operation_id,x.held_at FROM morrow_billing.stripe_operations x JOIN morrow_work.operations o ON o.organization_id=x.organization_id
     AND o.workspace_id=x.workspace_id AND o.id=x.operation_id WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id

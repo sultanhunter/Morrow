@@ -8,9 +8,13 @@
 //     row; the stale close never waits on a run's lock while its caller holds the stream.
 //   * FOUND is read straight after the SELECT INTO it reports on: a PERFORM between them
 //     resets it (an unknown fence or lease would read as found).
+//   * The billing period: run admission and the run's billing facts read the same two
+//     sources as the api's billingPeriodLatest (a granted subscription period, or a staging
+//     operator test entitlement's snapshot), so a test-entitled workspace is not refused.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
+import { billingStatements } from "../packages/work/src/billing/sql.ts";
 
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const file = manifest.migrations.find((m) => m.file.endsWith(".listings-runs.sql")).file;
@@ -292,4 +296,58 @@ test("the settlement reads the content-free run_products, never the drafts shop/
     sql,
     /GRANT UPDATE \(revision,status,attempts,snapshot_digest,draft_id,proposal_id,failure_code,updated_at\) ON morrow_work\.run_products TO morrow_work_command;/,
   );
+});
+
+/**
+ * The billing period's sources in one statement: each UNION ALL branch's selected columns,
+ * table and filters (tenant predicates apart), and the ordering. Whitespace and aliases are
+ * normalised, so 0038's definers compare equal to the api's statement.
+ */
+function periodSources(text) {
+  const flat = text.replace(/\s+/g, " ");
+  const m = flat.match(
+    /\(SELECT (\w)\.(\w+),\1\.(\w+),\1\.(\w+) FROM (morrow_billing\.\w+) \1 WHERE (.*?) UNION ALL SELECT (\w)\.(\w+),\7\.(\w+),\7\.(\w+) FROM (morrow_billing\.\w+) \7 WHERE (.*?)\) (\w) ORDER BY \13\.(\w+) DESC,\13\.(\w+) DESC LIMIT 1/,
+  );
+  assert.ok(m, "no period union in: " + flat.slice(0, 120));
+  const branch = (alias, columns, table, where) => {
+    const conditions = where.split(" AND ").map((c) => c.replaceAll(alias + ".", ""));
+    const tenant = conditions.filter((c) => /^(organization_id|workspace_id)=/.test(c));
+    return {
+      columns,
+      table,
+      filters: conditions.filter((c) => !tenant.includes(c)).sort(),
+      tenant: tenant.map((c) => c.split("=")[0]).sort(),
+    };
+  };
+  return {
+    sources: [
+      branch(m[1], [m[2], m[3], m[4]], m[5], m[6]),
+      branch(m[7], [m[8], m[9], m[10]], m[11], m[12]),
+    ],
+    order: [m[14], m[15]],
+  };
+}
+
+test("run admission and the run's billing facts read the billing period as billingPeriodLatest does", () => {
+  const api = periodSources(billingStatements.billingPeriodLatest);
+  // The api's statement: the granted subscription period, or an operator entitlement's
+  // snapshot (verified_at to valid_until); the later end wins.
+  assert.deepEqual(
+    api.sources.map((s) => s.table),
+    ["morrow_billing.verified_payment_events", "morrow_billing.entitlement_snapshots"],
+  );
+  assert.deepEqual(api.sources[1].columns, ["verified_at", "valid_until", "recorded_at"]);
+  assert.deepEqual(api.sources[1].filters, ["subscription_key ~ '^morrow:operator_entitlement:'"]);
+  assert.deepEqual(api.order, ["period_end", "recorded_at"]);
+  const strip = (x) => ({
+    sources: x.sources.map(({ tenant: _tenant, ...rest }) => rest),
+    order: x.order,
+  });
+  for (const name of ["morrow_work.cmd_run_admit", "morrow_work.run_billing_facts"]) {
+    const definer = periodSources(body(name));
+    assert.deepEqual(strip(definer), strip(api), name);
+    // Each branch is scoped to the tenant by both keys (the api's by its session policies).
+    for (const source of definer.sources)
+      assert.deepEqual(source.tenant, ["organization_id", "workspace_id"], name);
+  }
 });
