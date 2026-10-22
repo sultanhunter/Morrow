@@ -14,7 +14,16 @@
 //             the api's connections screen with the continuation token in the fragment
 //             (#handoff=..., never sent to any server); the cookie is always cleared.
 //   status    a Shopify-signed GET: a status page with no workspace data.
-//   webhooks  see webhooks.ts.
+//   webhooks  see webhooks.ts. M2 PR-3: the broker verifies the signature and records the
+//             delivery in the inbox in one vault transaction; the connector answers 200
+//             only once that row exists (an unknown outcome is 503, and Shopify's retry
+//             finds the row by its webhook id), then applies the row after the response
+//             (waitUntil) through its own login's applier (connector_inbox_apply), and asks
+//             the broker to destroy the installation's token when the applier says so.
+//   cron      (M2 PR-3; review finding B8) every five minutes, the ids-only re-drives:
+//             inbox rows still received two minutes after they arrived are applied again,
+//             and every installation whose token's destruction is not yet recorded is
+//             destroyed again. The inbox row is the queue: no Queue resource exists.
 // Ingress limits (M2 PR-2 review, layer 1 of apps/broker/src/shopify-install.ts; ADR-0019
 // items 6 and 8 applied to the second public Worker): every request that would reach the
 // broker is first counted per client address (CF-Connecting-IP, the api's P05.T01ab key),
@@ -26,10 +35,12 @@
 // address or a failed limiter fails closed (503) with one fixed-code
 // morrow_connector_guard line.
 import {
+  decodeShopifyCredentialResult,
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
   decodeShopifyWebhookVerdict,
   type ConnectorBrokerRpc,
+  type ShopifyCredentialReason,
 } from "../../../packages/identity/src/broker-protocol.js";
 import { limitAddress } from "../../../packages/identity/src/edge-limiter.js";
 import type { ConnectorConfiguration, ConnectorLimiters } from "./environment.js";
@@ -50,7 +61,10 @@ export interface ConnectorDependencies {
   readonly configuration: Readonly<ConnectorConfiguration>;
   readonly broker: Pick<
     ConnectorBrokerRpc,
-    "shopifyLaunchVerify" | "shopifyInstallComplete" | "shopifyWebhookVerify"
+    | "shopifyLaunchVerify"
+    | "shopifyInstallComplete"
+    | "shopifyWebhookVerify"
+    | "shopifyCredentialDestroy"
   >;
   readonly database: ConnectorDatabase;
   /** The ingress limits; null or absent only in development (a lab without them). */
@@ -66,7 +80,17 @@ export const connectorBudgets = Object.freeze({
   installMs: 9000,
   installSlackMs: 1500,
   webhookMs: 4000,
+  // M2 PR-3: one inbox row's applier transaction, the token's destruction, a re-drive's id
+  // read, and the whole cron run (its last apply starts before this much has passed).
+  applyMs: 6000,
+  destroyMs: 4000,
+  pendingMs: 3000,
+  redriveMs: 60000,
 });
+/** A request's context: the response may return before work handed to waitUntil ends. */
+export type ConnectorContext = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
+const log = (event: string, value: Record<string, string | number>) =>
+  console.log(JSON.stringify({ event, ...value }));
 const held = () => Error("CONNECTOR_BROKER_HELD");
 
 // One RPC raced against a timer; a late reply is discarded and nothing is retried.
@@ -235,7 +259,57 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     }
   }
 
-  async function webhooks(request: Request, appKey: string): Promise<Response> {
+  // The token of an ended installation, with the reason its row records (idempotent).
+  async function destroy(installationId: string, reason: ShopifyCredentialReason) {
+    try {
+      const outcome = decodeShopifyCredentialResult(
+        await rpc(
+          () => broker.shopifyCredentialDestroy(installationId, reason),
+          connectorBudgets.destroyMs,
+        ),
+      );
+      if (outcome === "destroyed" || outcome === "already_destroyed") return true;
+      log("morrow_connector_credential", { code: "DESTROY_" + outcome.toUpperCase() });
+    } catch {
+      log("morrow_connector_credential", { code: "DESTROY_UNAVAILABLE" });
+    }
+    return false;
+  }
+  // Applies one recorded inbox row; when the applier reports the installation's token still
+  // to destroy, destroys it, and a shop/redact waiting on that destruction is applied once
+  // more so its privacy request completes. Anything left is the cron's.
+  async function apply(inboxId: string): Promise<"applied" | "pending" | "failed"> {
+    for (let round = 0; round < 2; round++) {
+      let applied;
+      try {
+        applied = await database.inboxApply(inboxId, connectorBudgets.applyMs);
+      } catch {
+        log("morrow_connector_inbox", { code: "APPLY_UNAVAILABLE" });
+        return "failed";
+      }
+      const tokenPending =
+        applied.credential === "pending" &&
+        applied.installationId !== null &&
+        applied.reason !== null;
+      if (applied.outcome === "applied" || applied.outcome === "settled") {
+        if (tokenPending) await destroy(applied.installationId!, applied.reason!);
+        return "applied";
+      }
+      if (applied.outcome !== "pending") {
+        log("morrow_connector_inbox", { code: "APPLY_" + applied.outcome.toUpperCase() });
+        return "failed";
+      }
+      if (!tokenPending || !(await destroy(applied.installationId!, applied.reason!)))
+        return "pending";
+    }
+    return "pending";
+  }
+
+  async function webhooks(
+    request: Request,
+    appKey: string,
+    ctx: ConnectorContext,
+  ): Promise<Response> {
     // Counted before the body is read: only Shopify sends webhooks, so a junk sender
     // spends only its own address's budget.
     const admitted = await admit(request, "webhooks");
@@ -256,15 +330,56 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
         ),
       );
     } catch {
+      // Not recorded, or not known to be: Shopify retries, de-duplicated by webhook id.
       return connectorJson(503, { code: "unavailable" });
     }
-    if (verdict.verdict !== "verified") return connectorJson(401, { code: "unauthorized" });
-    // M2 PR-3 adds the durable inbox; until then Shopify retries a verified delivery.
-    return connectorJson(503, { code: "webhook_inbox_unavailable" });
+    if (verdict.verdict === "refused") return connectorJson(401, { code: "unauthorized" });
+    if (verdict.verdict === "invalid") {
+      log("morrow_connector_webhook", { code: "WEBHOOK_BODY_INVALID" });
+      return connectorJson(400, { code: "invalid_request" });
+    }
+    // The delivery is durable: applied after the response; a settled duplicate needs nothing.
+    if (!verdict.settled) {
+      const inboxId = verdict.inboxId;
+      ctx.waitUntil(apply(inboxId).catch(() => "failed"));
+    }
+    return connectorJson(200, { schemaVersion: 1, received: true });
+  }
+
+  // The cron's re-drives (ids only, both cross-tenant): received inbox rows, then the tokens
+  // of ended installations whose destruction is not yet recorded.
+  async function redrive(): Promise<Readonly<Record<string, number>>> {
+    const deadline = Date.now() + connectorBudgets.redriveMs;
+    const counts = { inbox: 0, applied: 0, credentials: 0, destroyed: 0, unavailable: 0 };
+    let ids: readonly string[] = [];
+    try {
+      ids = await database.inboxPending(connectorBudgets.pendingMs);
+    } catch {
+      counts.unavailable++;
+    }
+    for (const id of ids) {
+      if (Date.now() > deadline) break;
+      counts.inbox++;
+      if ((await apply(id)) === "applied") counts.applied++;
+    }
+    let tokens: Awaited<ReturnType<typeof database.credentialsPending>> = [];
+    try {
+      tokens = await database.credentialsPending(connectorBudgets.pendingMs);
+    } catch {
+      counts.unavailable++;
+    }
+    for (const token of tokens) {
+      if (Date.now() > deadline) break;
+      counts.credentials++;
+      if (await destroy(token.installationId, token.reason)) counts.destroyed++;
+    }
+    log("morrow_connector_redrive", counts);
+    return Object.freeze(counts);
   }
 
   return Object.freeze({
-    async fetch(request: Request): Promise<Response> {
+    redrive,
+    async fetch(request: Request, ctx: ConnectorContext): Promise<Response> {
       const selected = selectConnectorRoute(request);
       if ("refused" in selected)
         return connectorJson(selected.refused, {
@@ -275,7 +390,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
                 ? "method_not_allowed"
                 : "invalid_request",
         });
-      if (selected.route === "webhooks") return webhooks(request, selected.appKey);
+      if (selected.route === "webhooks") return webhooks(request, selected.appKey, ctx);
       if (selected.route === "callback")
         return callback(request, selected.appKey, selected.rawQuery);
       return launch(request, selected.appKey, selected.rawQuery, selected.route === "status");

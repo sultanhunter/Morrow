@@ -1,12 +1,15 @@
 // M2 PR-2: the connector Worker (apps/shopify-connector/worker) with a faked broker and a
 // faked database login: the fail-closed environment, the exact route table, the state
 // cookie, the authorize redirect, the callback's cookie rule and continuation redirect,
-// the webhook 401/503 contract, the per-address ingress limits and the fixed pages. No
-// network and no database.
+// the webhook contract (M2 PR-3: 200 only once the broker recorded the delivery, the row
+// applied after the response and the token destroyed when the applier says so; 401, 400 and
+// 503 otherwise), the cron's re-drives, the per-address ingress limits and the fixed pages.
+// No network and no database.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import test from "node:test";
 import {
+  encodeShopifyCredentialResult,
   encodeShopifyInstallResult,
   encodeShopifyLaunchVerdict,
   encodeShopifyWebhookVerdict,
@@ -262,7 +265,16 @@ function harness(answers = {}, limiters = undefined) {
     },
     async shopifyWebhookVerify(appKey, headersJson, body) {
       calls.push(["webhook", appKey, JSON.parse(headersJson), body]);
-      return answers.webhook ?? encodeShopifyWebhookVerdict({ verdict: "refused" });
+      if (answers.webhookThrows) throw new Error("BROKER_HELD");
+      return (
+        answers.webhook ??
+        encodeShopifyWebhookVerdict({ verdict: "refused", inboxId: null, settled: null })
+      );
+    },
+    async shopifyCredentialDestroy(installationId, reason) {
+      calls.push(["destroy", installationId, reason]);
+      if (answers.destroyThrows) throw new Error("BROKER_HELD");
+      return encodeShopifyCredentialResult(answers.destroy ?? "destroyed");
     },
   };
   const database = {
@@ -275,6 +287,21 @@ function harness(answers = {}, limiters = undefined) {
           scopes: "read_products,write_products",
         }
       );
+    },
+    async inboxApply(inboxId, budget) {
+      calls.push(["apply", inboxId, budget]);
+      const next = answers.apply?.shift?.() ?? answers.applyDefault;
+      if (next === "throw" || next === undefined) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return next;
+    },
+    async inboxPending(budget) {
+      calls.push(["inboxPending", budget]);
+      if (answers.pendingThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return answers.inboxPending ?? [];
+    },
+    async credentialsPending(budget) {
+      calls.push(["credentialsPending", budget]);
+      return answers.credentialsPending ?? [];
     },
   };
   const handler = createConnectorHandler({
@@ -447,7 +474,25 @@ test("callback outcomes map to fixed pages; a linked re-authorisation redirects 
   assert.equal(held.status, 503);
 });
 
-test("webhooks: missing headers or a refused signature are 401; a verified delivery is 503 until PR-3", async () => {
+// A request context recording what the handler leaves running after its response.
+const context = () => {
+  const pending = [];
+  return {
+    pending,
+    ctx: { waitUntil: (p) => pending.push(p) },
+    settle: () => Promise.all(pending),
+  };
+};
+const inboxId = "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043";
+const applied = (overrides = {}) => ({
+  outcome: "applied",
+  topic: "app/uninstalled",
+  installationId: "installation_1",
+  credential: "pending",
+  reason: "uninstalled",
+  ...overrides,
+});
+test("webhooks: 401 unsigned, 400 invalid, 503 unknown; 200 only once recorded, applied after the response", async () => {
   const body = '{"shop_id":1}';
   const headers = {
     "x-shopify-api-version": "2026-10",
@@ -456,13 +501,14 @@ test("webhooks: missing headers or a refused signature are 401; a verified deliv
     "x-shopify-topic": "shop/redact",
     "x-shopify-webhook-id": "id-1",
   };
-  const post = (h, extra = {}) =>
+  const post = (h, ctx = context().ctx, extra = {}) =>
     h.handler.fetch(
       new Request(origin + "/shopify/a/dev-app/webhooks", {
         method: "POST",
         body,
         headers: { ...headers, ...extra },
       }),
+      ctx,
     );
   const refused = harness();
   assert.equal((await post(refused)).status, 401);
@@ -472,6 +518,7 @@ test("webhooks: missing headers or a refused signature are 401; a verified deliv
   const { ["x-shopify-topic"]: _, ...rest } = headers;
   const response = await missing.handler.fetch(
     new Request(origin + "/shopify/a/dev-app/webhooks", { method: "POST", body, headers: rest }),
+    context().ctx,
   );
   assert.equal(response.status, 401);
   assert.deepEqual(missing.calls, []);
@@ -484,23 +531,181 @@ test("webhooks: missing headers or a refused signature are 401; a verified deliv
           body: "x".repeat(262145),
           headers,
         }),
+        context().ctx,
       )
     ).status,
     401,
   );
   assert.deepEqual(big.calls, []);
-  const verified = harness({
-    webhook: encodeShopifyWebhookVerdict({
-      verdict: "verified",
-      topic: "shop/redact",
-      shopDomain: "dev-1.myshopify.com",
-      webhookId: "id-1",
-      minimisedBody: { shopId: "1" },
-    }),
+  // A Shopify-signed body that is not its topic's: 400, one fixed log line, nothing applied.
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  try {
+    const invalid = harness({
+      webhook: encodeShopifyWebhookVerdict({ verdict: "invalid", inboxId: null, settled: null }),
+    });
+    const r = await post(invalid);
+    assert.equal(r.status, 400);
+    assert.deepEqual(
+      invalid.calls.map((c) => c[0]),
+      ["webhook"],
+    );
+    assert.deepEqual(logged, [{ event: "morrow_connector_webhook", code: "WEBHOOK_BODY_INVALID" }]);
+  } finally {
+    console.log = saved;
+  }
+  // Not recorded, or not known to be: 503, so Shopify retries (de-duplicated by webhook id).
+  const held = harness({ webhookThrows: true });
+  assert.equal((await post(held)).status, 503);
+  // Recorded: 200 at once; the row is applied after the response and the installation's
+  // token destroyed with the reason its row records.
+  const c = context();
+  const recorded = harness({
+    webhook: encodeShopifyWebhookVerdict({ verdict: "recorded", inboxId, settled: false }),
+    apply: [applied()],
   });
-  const delivered = await post(verified);
-  assert.equal(delivered.status, 503);
-  assert.deepEqual(await delivered.json(), { code: "webhook_inbox_unavailable" });
+  const delivered = await post(recorded, c.ctx);
+  assert.equal(delivered.status, 200);
+  assert.deepEqual(await delivered.json(), { schemaVersion: 1, received: true });
+  assert.equal(c.pending.length, 1);
+  await c.settle();
+  assert.deepEqual(
+    recorded.calls.slice(1).map((x) => x.slice(0, 3)),
+    [
+      ["apply", inboxId, 6000],
+      ["destroy", "installation_1", "uninstalled"],
+    ],
+  );
+  // A redelivery of an unsettled row is applied again; a settled one needs nothing.
+  const again = context();
+  const unsettled = harness({
+    webhook: encodeShopifyWebhookVerdict({ verdict: "duplicate", inboxId, settled: false }),
+    apply: [applied({ outcome: "settled", credential: null, reason: null })],
+  });
+  assert.equal((await post(unsettled, again.ctx)).status, 200);
+  await again.settle();
+  assert.deepEqual(
+    unsettled.calls.map((x) => x[0]),
+    ["webhook", "apply"],
+  );
+  const done = context();
+  const settled = harness({
+    webhook: encodeShopifyWebhookVerdict({ verdict: "duplicate", inboxId, settled: true }),
+  });
+  assert.equal((await post(settled, done.ctx)).status, 200);
+  assert.equal(done.pending.length, 0);
+});
+
+test("apply: shop/redact waits on the token, then completes; failures are the cron's", async () => {
+  const run = async (answers) => {
+    const c = context();
+    const h = harness({
+      webhook: encodeShopifyWebhookVerdict({ verdict: "recorded", inboxId, settled: false }),
+      ...answers,
+    });
+    const r = await h.handler.fetch(
+      new Request(origin + "/shopify/a/dev-app/webhooks", {
+        method: "POST",
+        body: "{}",
+        headers: {
+          "x-shopify-api-version": "2026-10",
+          "x-shopify-hmac-sha256": "x".repeat(43) + "=",
+          "x-shopify-shop-domain": "dev-1.myshopify.com",
+          "x-shopify-topic": "shop/redact",
+          "x-shopify-webhook-id": "id-2",
+        },
+      }),
+      c.ctx,
+    );
+    assert.equal(r.status, 200);
+    await c.settle();
+    return h.calls.slice(1).map((x) => (x[0] === "apply" ? "apply" : x.slice(0, 3).join(":")));
+  };
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  try {
+    // shop/redact with the token still live: destroy it, then apply once more to complete.
+    assert.deepEqual(
+      await run({
+        apply: [
+          applied({ outcome: "pending", topic: "shop/redact" }),
+          applied({ topic: "shop/redact", credential: "destroyed" }),
+        ],
+      }),
+      ["apply", "destroy:installation_1:uninstalled", "apply"],
+    );
+    // The token is already destroyed: nothing more.
+    assert.deepEqual(await run({ apply: [applied({ credential: "destroyed" })] }), ["apply"]);
+    // A destruction that fails leaves the redaction pending (the cron's), logged.
+    assert.deepEqual(
+      await run({
+        apply: [applied({ outcome: "pending", topic: "shop/redact" })],
+        destroyThrows: true,
+      }),
+      ["apply", "destroy:installation_1:uninstalled"],
+    );
+    assert.deepEqual(
+      await run({
+        apply: [applied({ outcome: "pending", topic: "shop/redact" })],
+        destroy: "ineligible",
+      }),
+      ["apply", "destroy:installation_1:uninstalled"],
+    );
+    // The applier unavailable: nothing else runs.
+    assert.deepEqual(await run({ apply: ["throw"] }), ["apply"]);
+  } finally {
+    console.log = saved;
+  }
+  assert.deepEqual(
+    logged.map((row) => row.code),
+    ["DESTROY_UNAVAILABLE", "DESTROY_INELIGIBLE", "APPLY_UNAVAILABLE"],
+  );
+});
+
+test("cron: the ids-only re-drives apply received rows, then destroy pending tokens", async () => {
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  try {
+    const ids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
+    const h = harness({
+      inboxPending: ids,
+      apply: [applied({ credential: "destroyed" }), "throw"],
+      credentialsPending: [
+        { installationId: "installation_2", reason: "scopes_changed" },
+        { installationId: "installation_3", reason: "uninstalled" },
+      ],
+    });
+    const counts = await h.handler.redrive();
+    assert.deepEqual(
+      h.calls.map((c) => c.slice(0, 3).join(":")),
+      [
+        "inboxPending:3000",
+        "apply:" + ids[0] + ":6000",
+        "apply:" + ids[1] + ":6000",
+        "credentialsPending:3000",
+        "destroy:installation_2:scopes_changed",
+        "destroy:installation_3:uninstalled",
+      ],
+    );
+    assert.deepEqual(
+      { ...counts },
+      { inbox: 2, applied: 1, credentials: 2, destroyed: 2, unavailable: 0 },
+    );
+    // An unavailable id read still runs the credential re-drive.
+    const down = harness({ pendingThrows: true });
+    assert.equal((await down.handler.redrive()).unavailable, 1);
+    assert.deepEqual(
+      down.calls.map((c) => c[0]),
+      ["inboxPending", "credentialsPending"],
+    );
+  } finally {
+    console.log = saved;
+  }
+  assert.deepEqual(logged.filter((row) => row.event === "morrow_connector_redrive").length, 2);
+  assert.ok(!JSON.stringify(logged).includes("installation_2"));
 });
 
 test("ingress limits: counted per address before any broker call; 429 over, 503 without an address", async () => {
@@ -652,6 +857,10 @@ test("the deployed entry: unconfigured is 503 everywhere and /healthz ready fals
     const down = await deployed.fetch(new Request(origin + "/healthz"), unhealthy);
     assert.equal((await down.json()).ready, false);
     assert.equal((await deployed.fetch(new Request(origin + "/x"), configured)).status, 404);
+    // M2 PR-3: an unconfigured connector's cron does nothing.
+    const scheduled = context();
+    await deployed.scheduled({}, { MORROW_ENVIRONMENT: "staging" }, scheduled.ctx);
+    assert.equal(scheduled.pending.length, 0);
   } finally {
     process.env = saved;
   }

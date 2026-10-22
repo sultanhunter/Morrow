@@ -10,7 +10,10 @@
 // per-address ingress limits, launch, status and callback 20 and webhooks 300 per 60 s
 // (Shopify's delivery addresses are shared by every store's app), one namespace per limit
 // and environment (development 7004-7005, staging 7104-7105, production 7204-7205).
-// `ratelimits` is not inherited, so every environment names its own.
+// `ratelimits` is not inherited, so every environment names its own. M2 PR-3 (review
+// finding B8): one cron trigger, every five minutes, runs the ids-only re-drives of the
+// webhook inbox and of ended installations' tokens (worker/index.ts scheduled); named in
+// every environment, exactly as scripts/edge.mjs edgeConnectorCrons pins it.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-connector",
@@ -36,6 +39,7 @@
     { "name": "INSTALL_LIMITER", "namespace_id": "7004", "simple": { "limit": 20, "period": 60 } },
     { "name": "WEBHOOK_LIMITER", "namespace_id": "7005", "simple": { "limit": 300, "period": 60 } },
   ],
+  "triggers": { "crons": ["*/5 * * * *"] },
   "secrets": { "required": [] },
   "env": {
     // P04.T01i D1 and D6: no workers.dev, preview URL or route; Workers Logs as the api's.
@@ -74,6 +78,7 @@
           "simple": { "limit": 300, "period": 60 },
         },
       ],
+      "triggers": { "crons": ["*/5 * * * *"] },
       "secrets": { "required": [] },
     },
     "production": {
@@ -98,6 +103,7 @@
           "simple": { "limit": 300, "period": 60 },
         },
       ],
+      "triggers": { "crons": ["*/5 * * * *"] },
       "secrets": { "required": [] },
     },
   },

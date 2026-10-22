@@ -1,10 +1,11 @@
 // M2 PR-2: the owner-run Shopify app script (scripts/shopify-app.mjs). The TOML points the
 // app at the connector's exact launch and callback paths with the fixed scopes, the
-// authorization-code install flow, no embedding and no webhook subscription before PR-3;
+// authorization-code install flow, no embedding and (M2 PR-3) the five webhook topics;
 // the registration statement digests the intended shop and matches the 0026 operator
 // function; production, malformed values and paths inside the repository are refused.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { shopifyWebhookTopics } from "../packages/identity/src/broker-protocol.ts";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,7 +44,7 @@ const code = (fn) => {
   return null;
 };
 
-test("toml: the connector's exact paths, fixed scopes, no embedding and no webhook subscription", () => {
+test("toml: the connector's exact paths, fixed scopes, no embedding and the five webhook topics", () => {
   const toml = shopifyAppToml(tomlOptions);
   const base = "https://morrow-staging-connector.example.workers.dev/shopify/a/beta-store-1";
   const lines = toml.split("\n").filter((l) => l !== "" && !l.startsWith("#"));
@@ -59,14 +60,23 @@ test("toml: the connector's exact paths, fixed scopes, no embedding and no webho
     `redirect_urls = [ "${base}/callback" ]`,
     "[webhooks]",
     'api_version = "2026-10"',
+    "[[webhooks.subscriptions]]",
+    'topics = [ "app/uninstalled", "app/scopes_update" ]',
+    `uri = "${base}/webhooks"`,
+    "[[webhooks.subscriptions]]",
+    'compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]',
+    `uri = "${base}/webhooks"`,
     "[build]",
     "automatically_update_urls_on_dev = false",
     "include_config_on_deploy = true",
   ]);
-  assert.doesNotMatch(lines.join("\n"), /subscriptions|compliance_topics|uri\s*=/);
+  // M2 PR-3: exactly the five topics of ADR-0022 item 4 (no product topic), the topics the
+  // broker accepts.
+  const topics = [...toml.matchAll(/"([a-z_]+\/[a-z_]+)"/g)].map((m) => m[1]).sort();
+  assert.deepEqual(topics, [...shopifyWebhookTopics].sort());
   // The paths are the connector's own route table.
   const route = /^\/shopify\/a\/([a-z0-9][a-z0-9-]{2,62})\/(launch|callback|webhooks|status)$/;
-  for (const url of [`${base}/launch`, `${base}/callback`])
+  for (const url of [`${base}/launch`, `${base}/callback`, `${base}/webhooks`])
     assert.match(new URL(url).pathname, route);
 });
 

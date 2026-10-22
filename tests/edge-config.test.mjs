@@ -290,6 +290,15 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       },
       "EDGE_UNEXPECTED_BINDING_RATELIMITS",
     ],
+    // M2 PR-3: the connector's one cron trigger, exact per environment; no other Worker has
+    // a trigger.
+    [{ connector: (c) => (c.triggers.crons = ["* * * * *"]) }, "EDGE_CONNECTOR_TRIGGERS"],
+    [{ connector: (c) => (c.env.production.triggers = { crons: [] }) }, "EDGE_CONNECTOR_TRIGGERS"],
+    [
+      { connector: (c) => c.env.staging.triggers.crons.push("0 * * * *") },
+      "EDGE_CONNECTOR_TRIGGERS",
+    ],
+    [{ api: (c) => (c.triggers = { crons: ["*/5 * * * *"] }) }, "EDGE_UNEXPECTED_BINDING_TRIGGERS"],
     [
       {
         broker: (c) =>
