@@ -1,6 +1,12 @@
-// morrow-<env>-orchestrator (P04.T02a D8): one Workflow class and one Queue
-// consumer with a dead-letter queue, dispatch hard-disabled. No producer,
-// service binding, secret or route.
+// morrow-<env>-orchestrator (P04.T02a D8; M3 PR-2, mvp-architecture §3): ListingsRunWorkflow
+// (one instance per run, ids only), the dispatch Queue consumer with its dead-letter queue
+// (no producer: the cron starts runs), a one-minute cron over pending_starts(), and the
+// broker's RuntimeBroker entrypoint (its role lease and modelRespond). No secret, route or
+// provider credential. MORROW_ENVIRONMENT is its only committed var: dispatch stays disabled
+// (every Workflow throws dispatch_disabled before any step) until the reviewed model-provider
+// switch (docs/decisions/model-provider-staging.json) is turned on by its own reviewed commit,
+// which adds MORROW_MODEL_PROVIDER and the reviewed MORROW_DATABASE_BINDING_JSON to
+// env.staging.vars (edge:check refuses any mixed state).
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-orchestrator",
@@ -14,8 +20,16 @@
   "keep_vars": false,
   "send_metrics": false,
   "observability": { "enabled": false },
+  "vars": { "MORROW_ENVIRONMENT": "development" },
+  "services": [
+    { "binding": "BROKER", "service": "morrow-development-broker", "entrypoint": "RuntimeBroker" },
+  ],
   "workflows": [
-    { "name": "morrow-development-work", "binding": "WORK", "class_name": "MorrowWorkWorkflow" },
+    {
+      "name": "morrow-development-listings-run",
+      "binding": "LISTINGS_RUN",
+      "class_name": "ListingsRunWorkflow",
+    },
   ],
   "queues": {
     "consumers": [
@@ -27,6 +41,7 @@
       },
     ],
   },
+  "triggers": { "crons": ["* * * * *"] },
   "secrets": { "required": [] },
   "env": {
     // P04.T01i D1 and D6: no workers.dev, preview URL or route; Workers Logs as the api's.
@@ -45,8 +60,16 @@
           "persist": true,
         },
       },
+      "vars": { "MORROW_ENVIRONMENT": "staging" },
+      "services": [
+        { "binding": "BROKER", "service": "morrow-staging-broker", "entrypoint": "RuntimeBroker" },
+      ],
       "workflows": [
-        { "name": "morrow-staging-work", "binding": "WORK", "class_name": "MorrowWorkWorkflow" },
+        {
+          "name": "morrow-staging-listings-run",
+          "binding": "LISTINGS_RUN",
+          "class_name": "ListingsRunWorkflow",
+        },
       ],
       "queues": {
         "consumers": [
@@ -58,12 +81,25 @@
           },
         ],
       },
+      "triggers": { "crons": ["* * * * *"] },
       "secrets": { "required": [] },
     },
     "production": {
       "name": "morrow-production-orchestrator",
+      "vars": { "MORROW_ENVIRONMENT": "production" },
+      "services": [
+        {
+          "binding": "BROKER",
+          "service": "morrow-production-broker",
+          "entrypoint": "RuntimeBroker",
+        },
+      ],
       "workflows": [
-        { "name": "morrow-production-work", "binding": "WORK", "class_name": "MorrowWorkWorkflow" },
+        {
+          "name": "morrow-production-listings-run",
+          "binding": "LISTINGS_RUN",
+          "class_name": "ListingsRunWorkflow",
+        },
       ],
       "queues": {
         "consumers": [
@@ -75,6 +111,7 @@
           },
         ],
       },
+      "triggers": { "crons": ["* * * * *"] },
       "secrets": { "required": [] },
     },
   },

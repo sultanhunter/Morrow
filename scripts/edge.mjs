@@ -445,7 +445,9 @@ const settingKeys = new Set([
 const allowedBindings = Object.freeze({
   api: ["vars", "services", "secrets", "assets", "ratelimits"],
   broker: ["vars", "secrets"],
-  orchestrator: ["workflows", "queues", "secrets"],
+  // M3 PR-2: the orchestrator binds the broker's RuntimeBroker entrypoint, its one var
+  // (two more while the model-provider switch is on) and the cron of pending starts.
+  orchestrator: ["vars", "services", "workflows", "queues", "triggers", "secrets"],
   // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint and, since the
   // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits).
   connector: ["vars", "services", "secrets", "ratelimits"],
@@ -459,6 +461,45 @@ export const connectorPackageAllowlist = Object.freeze([
   "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/workos-session-status-json.ts",
+]);
+// The reviewed packages/ files the orchestrator bundle may include (M3 PR-2, replacing
+// P04.T02a's ban on all package source): ListingsRunWorkflow's logic (runs/), the run lease
+// steps (runtime/), the agent kernel and its SQL fact reader, M5's billing facts reader, the
+// review library the producer uses, the generated validators (the drafts are validated
+// against ListingDraft@1 and CatalogContentChangeSet@1) and the broker protocol. No api
+// handler, command definer client, pool of another login, Shopify library or broker source.
+// A new import is a reviewed change to this list.
+export const orchestratorPackageAllowlist = Object.freeze([
+  "packages/contracts/src/generated/runtime-validators.mjs",
+  "packages/contracts/src/validation.ts",
+  "packages/identity/src/broker-protocol.ts",
+  "packages/identity/src/executor-role-preflight.ts",
+  "packages/identity/src/fixed-sql-transaction.ts",
+  "packages/identity/src/index.ts",
+  "packages/identity/src/standalone-login-protocol.ts",
+  "packages/identity/src/workos-session-status-json.ts",
+  "packages/policy/src/agent-authority.ts",
+  "packages/policy/src/billing-state.ts",
+  "packages/policy/src/index.ts",
+  "packages/policy/src/json-boundary.ts",
+  "packages/policy/src/paid-work.ts",
+  "packages/policy/src/review-facts.ts",
+  "packages/policy/src/review.ts",
+  "packages/policy/src/store-link-template.ts",
+  "packages/policy/src/store-resource.ts",
+  "packages/work/src/agents/delegation-reader.ts",
+  "packages/work/src/approvals/digests.ts",
+  "packages/work/src/billing-route.ts",
+  "packages/work/src/billing/facts.ts",
+  "packages/work/src/context.ts",
+  "packages/work/src/digest.ts",
+  "packages/work/src/runs/drafting.ts",
+  "packages/work/src/runs/html.ts",
+  "packages/work/src/runs/producer.ts",
+  "packages/work/src/runs/workflow.ts",
+  "packages/work/src/runtime/leases.ts",
+  "packages/work/src/runtime/run-steps.ts",
+  "packages/work/src/spine-sql.ts",
 ]);
 // MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well, and so
 // does STRIPE_ (M5 PR-1: the restricted key, the webhook secret and the configuration).
@@ -557,11 +598,14 @@ export function edgePlacementRegion(regionId) {
   return region === null ? null : "aws:" + region;
 }
 // P04.T01i D1 (AC01): each Worker's var names, exactly, per environment. Only the staging
-// api and broker carry configuration; the orchestrator has no vars at all. M5: while the
-// staging Stripe switch is on, the staging api and broker also carry its vars
-// (edgeStripeVarNames); while it is off, neither has them.
-export function edgeVarNames(worker, environment, stripe = "off") {
-  if (worker === "orchestrator") return [];
+// api and broker carry configuration; the orchestrator carries MORROW_ENVIRONMENT (M3 PR-2).
+// M5: while the staging Stripe switch is on, the staging api and broker also carry its vars
+// (edgeStripeVarNames); while it is off, neither has them. M3 PR-2: likewise the
+// model-provider switch's vars (edgeModelVarNames) on the staging api, broker and
+// orchestrator.
+export function edgeVarNames(worker, environment, stripe = "off", model = "off") {
+  const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
+  if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
   if (environment !== "staging" || worker === "connector") return ["MORROW_ENVIRONMENT"];
   const stripeVars = stripe === "on" ? edgeStripeVarNames(worker, environment) : [];
   return worker === "api"
@@ -573,6 +617,7 @@ export function edgeVarNames(worker, environment, stripe = "off") {
         "MORROW_DATABASE_BINDING_JSON",
         "LOGIN_CHALLENGE_JSON",
         ...stripeVars,
+        ...modelVars,
       ]
     : [
         "MORROW_ENVIRONMENT",
@@ -580,7 +625,63 @@ export function edgeVarNames(worker, environment, stripe = "off") {
         "MORROW_DATABASE_BINDING_JSON",
         "TURNSTILE_CONFIGURATION_JSON",
         ...stripeVars,
+        ...modelVars,
       ];
+}
+// M3 PR-2, the model-provider switch (ADR-0022 items 7 and 10; committed off): its runtime
+// image is the var MORROW_MODEL_PROVIDER ("anthropic") on the staging api, broker and
+// orchestrator, the orchestrator's reviewed MORROW_DATABASE_BINDING_JSON (byte-equal to the
+// api's), and the broker's ANTHROPIC_API_KEY (brokerRequiredSecretsFor("staging", stripe,
+// "on")). Development's committed config never carries them, and production has no switch.
+export const edgeModelProviderVar = "MORROW_MODEL_PROVIDER";
+export const edgeModelProviderValue = "anthropic";
+export const edgeModelSecretNames = Object.freeze(["ANTHROPIC_API_KEY"]);
+export function edgeModelVarNames(worker, environment) {
+  if (environment !== "staging") return [];
+  if (worker === "api" || worker === "broker") return [edgeModelProviderVar];
+  if (worker === "orchestrator") return [edgeModelProviderVar, "MORROW_DATABASE_BINDING_JSON"];
+  return [];
+}
+// Every model-switch name a Worker's resolved configuration may carry, and the set the switch
+// requires there: all of the Worker's own while it is on in staging, none otherwise. (The
+// orchestrator's database binding counts only on the orchestrator: the api and broker carry
+// theirs whatever the switch.)
+export function edgeModelNamesRequired(worker, environment, model) {
+  if (model !== "on") return [];
+  const names = edgeModelVarNames(worker, environment);
+  return worker === "broker" && names.length ? [...names, ...edgeModelSecretNames] : names;
+}
+const edgeModelNames = (worker) =>
+  worker === "orchestrator"
+    ? [edgeModelProviderVar, "MORROW_DATABASE_BINDING_JSON", ...edgeModelSecretNames]
+    : [edgeModelProviderVar, ...edgeModelSecretNames];
+// The reviewed staging model-provider record (M3 PR-2; committed off): provider anthropic;
+// `switch` "off" until one reviewed commit turns it "on"; the Anthropic Console workspace's
+// monthly spend limit (a decimal USD string, required while on) and the date the owner
+// observed it. Returns the switch, or throws.
+export function reviewedModelRecord(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "environment_kind,monthly_spend_limit_usd,observed_on,provider,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.provider !== "anthropic" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.scope !== "string" ||
+    (record.monthly_spend_limit_usd !== null &&
+      (typeof record.monthly_spend_limit_usd !== "string" ||
+        !/^[1-9][0-9]{0,5}(\.[0-9]{2})?$/.test(record.monthly_spend_limit_usd) ||
+        typeof record.observed_on !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
+    (record.monthly_spend_limit_usd === null && record.observed_on !== null) ||
+    // On means a spend-limited Console workspace exists (ADR-0022 item 10 "Accounts").
+    (record.switch === "on" && record.monthly_spend_limit_usd === null)
+  )
+    throw Error("EDGE_STAGING_MODEL_RECORD");
+  return Object.freeze({ switch: record.switch });
 }
 // M5, the Stripe switch (owner decision (c), 2026-10-21): its runtime image is the var
 // MORROW_STRIPE_MODE ("test") on the staging api and broker, and on the broker also the
@@ -783,6 +884,14 @@ async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
   for (const name of ["LOGIN_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"])
     if (text("broker", name) === null || text("broker", name) !== text("api", name))
       problem("EDGE_STAGING_SHARED_VARS", "broker:staging:" + name);
+  // M3 PR-2: the orchestrator's binding (only while the model-provider switch is on) is the
+  // api's, byte for byte.
+  if (
+    text("orchestrator", "MORROW_DATABASE_BINDING_JSON") !== null &&
+    text("orchestrator", "MORROW_DATABASE_BINDING_JSON") !==
+      text("api", "MORROW_DATABASE_BINDING_JSON")
+  )
+    problem("EDGE_STAGING_SHARED_VARS", "orchestrator:staging:MORROW_DATABASE_BINDING_JSON");
   // The two challenge vars: each runtime's parser, the Turnstile hostname the origin's, and
   // the actions byte-equal (both parsers refuse a duplicate member, so JSON.parse agrees).
   // The site key is staging.json's widget's: another well-formed `0x` key fails.
@@ -890,6 +999,7 @@ export async function verifyEdgeConfig({
   stagingPath = join(repositoryRoot, "infra/environments/staging.json"),
   workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
   stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
+  modelPath = join(repositoryRoot, "docs/decisions/model-provider-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -897,8 +1007,15 @@ export async function verifyEdgeConfig({
     "../packages/infrastructure/src/selected-stack.ts",
     here,
   );
-  const { brokerRequiredSecretsFor, brokerStripeSecrets, stripeModeTest, stripeModeVar } =
-    await tsImport("../packages/identity/src/broker-protocol.ts", here);
+  const {
+    brokerRequiredSecretsFor,
+    brokerStripeSecrets,
+    stripeModeTest,
+    stripeModeVar,
+    brokerModelSecrets,
+    modelProviderVar,
+    modelProviderAnthropic,
+  } = await tsImport("../packages/identity/src/broker-protocol.ts", here);
   const { reservedWorkerPaths } = await tsImport("../apps/api/src/reserved-paths.ts", here);
   const { unstable_readConfig } = await loadWranglerApi();
   const problems = [];
@@ -922,6 +1039,25 @@ export async function verifyEdgeConfig({
     }
   const stripeSwitch = (environment) =>
     environment === "staging" && stripe?.switch === "on" ? "on" : "off";
+  // M3 PR-2, the model-provider switch: the same protocol as Stripe's.
+  const modelRecord = readJson(modelPath);
+  let model = null;
+  if (modelRecord === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "model-provider-staging.json");
+  else
+    try {
+      model = reviewedModelRecord(modelRecord);
+    } catch {
+      problem("EDGE_STAGING_MODEL_RECORD", "model-provider-staging.json");
+    }
+  const modelSwitch = (environment) =>
+    environment === "staging" && model?.switch === "on" ? "on" : "off";
+  if (
+    modelProviderVar !== edgeModelProviderVar ||
+    modelProviderAnthropic !== edgeModelProviderValue ||
+    !same([...brokerModelSecrets], [...edgeModelSecretNames])
+  )
+    problem("EDGE_MODEL_SWITCH_NAMES", "broker-protocol");
   // The names checked here are the ones the api and the broker read.
   if (
     stripeModeVar !== edgeStripeModeVar ||
@@ -1004,16 +1140,33 @@ export async function verifyEdgeConfig({
       // switch's vars while it is on), string values, the Worker's own environment and the
       // switch's one mode.
       const switched = stripeSwitch(environment);
-      const varNames = edgeVarNames(worker.key, environment, switched);
+      const modelSwitched = modelSwitch(environment);
+      const varNames = edgeVarNames(worker.key, environment, switched, modelSwitched);
       if (
         vars === null ||
         typeof vars !== "object" ||
         !same(Object.keys(vars).sort(), [...varNames].sort()) ||
         Object.values(vars).some((value) => typeof value !== "string") ||
         (varNames.includes("MORROW_ENVIRONMENT") && vars.MORROW_ENVIRONMENT !== environment) ||
-        (varNames.includes(edgeStripeModeVar) && vars[edgeStripeModeVar] !== edgeStripeModeTest)
+        (varNames.includes(edgeStripeModeVar) && vars[edgeStripeModeVar] !== edgeStripeModeTest) ||
+        (varNames.includes(edgeModelProviderVar) &&
+          vars[edgeModelProviderVar] !== edgeModelProviderValue)
       )
         problem("EDGE_VARS", where);
+      // M3 PR-2: no mixed model-provider state, as for Stripe.
+      const modelCarried = edgeModelNames(worker.key).filter(
+        (name) =>
+          (worker.key === "orchestrator" || name !== "MORROW_DATABASE_BINDING_JSON") &&
+          ((vars !== null && typeof vars === "object" && Object.hasOwn(vars, name)) ||
+            (Array.isArray(required) && required.includes(name))),
+      );
+      if (
+        !same(
+          modelCarried.sort(),
+          [...edgeModelNamesRequired(worker.key, environment, modelSwitched)].sort(),
+        )
+      )
+        problem("EDGE_MODEL_SWITCH_MIXED", where);
       // M5: no mixed Stripe state. While the switch is off no Worker carries a Stripe var or
       // secret; while it is on the staging api carries its mode and the staging broker its
       // mode, its configuration and both secrets.
@@ -1039,7 +1192,13 @@ export async function verifyEdgeConfig({
           new Set(required).size !== required.length ||
           !same(
             [...required].sort(),
-            [...brokerRequiredSecretsFor(environment, stripeSwitch(environment))].sort(),
+            [
+              ...brokerRequiredSecretsFor(
+                environment,
+                stripeSwitch(environment),
+                modelSwitch(environment),
+              ),
+            ].sort(),
           )
         )
           problem("EDGE_BROKER_SECRETS", where);
@@ -1084,10 +1243,20 @@ export async function verifyEdgeConfig({
       }
       if (worker.key === "orchestrator") {
         const prefix = "morrow-" + environment;
+        // M3 PR-2: ListingsRunWorkflow replaces MorrowWorkWorkflow; the broker's
+        // RuntimeBroker entrypoint and the one-minute cron of pending starts.
         if (
           !same(config.workflows, [
-            { name: prefix + "-work", binding: "WORK", class_name: "MorrowWorkWorkflow" },
+            {
+              name: prefix + "-listings-run",
+              binding: "LISTINGS_RUN",
+              class_name: "ListingsRunWorkflow",
+            },
           ]) ||
+          !same(config.services, [
+            { binding: "BROKER", service: expected.broker, entrypoint: "RuntimeBroker" },
+          ]) ||
+          !same(config.triggers, { crons: ["* * * * *"] }) ||
           !same(config.queues, {
             consumers: [
               {
@@ -1145,7 +1314,7 @@ export async function verifyEdgeConfig({
       const remaining = new Map();
       for (const match of matchesOf(pattern, texts[worker.key]))
         remaining.set(match, (remaining.get(match) ?? 0) + 1);
-      if (["api", "broker"].includes(worker.key))
+      if (["api", "broker", "orchestrator"].includes(worker.key))
         for (const [name, value] of Object.entries(stagingVars[worker.key] ?? {}))
           if (typeof value === "string")
             for (const match of matchesOf(pattern, value))
@@ -1165,6 +1334,7 @@ export async function verifyEdgeConfig({
     resolved,
     reservedWorkerPaths: [...reservedWorkerPaths],
     stripeSwitch: stripeSwitch("staging"),
+    modelSwitch: modelSwitch("staging"),
   };
 }
 
@@ -1200,7 +1370,12 @@ export function bundleExclusions(worker, inputs, bundleText) {
               [/runtime-validators\.mjs$/, "runtime_validators"],
               [/(^|\/)@shopify\//, "shopify_library"],
             ]
-          : [[/^packages\//, "package_source"]];
+          : [
+              // M3 PR-2: the orchestrator includes only its reviewed packages/ allowlist.
+              [/^apps\/(api|broker|shopify-connector|workspace-web)\//, "other_worker_source"],
+              [/(^|\/)ajv\/dist\/compile\//, "ajv_compile"],
+              [/(^|\/)@shopify\//, "shopify_library"],
+            ];
   for (const [pattern, name] of banned)
     if (inputs.some((input) => pattern.test(input))) failures.push(name);
   // The connector may include only its reviewed packages/ allowlist.
@@ -1208,6 +1383,13 @@ export function bundleExclusions(worker, inputs, bundleText) {
     worker.key === "connector" &&
     inputs.some(
       (input) => input.startsWith("packages/") && !connectorPackageAllowlist.includes(input),
+    )
+  )
+    failures.push("package_source");
+  if (
+    worker.key === "orchestrator" &&
+    inputs.some(
+      (input) => input.startsWith("packages/") && !orchestratorPackageAllowlist.includes(input),
     )
   )
     failures.push("package_source");
@@ -1271,6 +1453,10 @@ export function edgeDryRun({
         failures.push("EDGE_API_BUNDLE_TOO_LARGE:" + where);
       if (worker.key === "broker" && row.bytes > 256 * 1024)
         failures.push("EDGE_BROKER_BUNDLE_TOO_LARGE:" + where);
+      // M3 PR-2: the orchestrator now bundles the validators and the kernels; it keeps the
+      // api's limit (3 MiB gzipped, the Workers free-plan cap).
+      if (worker.key === "orchestrator" && row.gzipBytes > 3 * 1024 * 1024)
+        failures.push("EDGE_ORCHESTRATOR_BUNDLE_TOO_LARGE:" + where);
       if (worker.key === "api" && row.gzipBytes > 1024 * 1024)
         row.warning = "api_bundle_over_1_MiB_gzipped";
       rows.push(row);
@@ -1284,6 +1470,7 @@ export function edgeDryRun({
         apiGzipBytes: 3 * 1024 * 1024,
         apiWarnGzipBytes: 1024 * 1024,
         brokerBytes: 256 * 1024,
+        orchestratorGzipBytes: 3 * 1024 * 1024,
       },
       bundles: rows,
       failures: failures.map((failure) => failure.split("\n")[0]),

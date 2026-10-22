@@ -6,7 +6,10 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-// P04.T02a AC21: dispatch is hard-disabled in the orchestrator Worker, and the connector
+// P04.T02a AC21 (its meaning revised by M3 PR-2, the ID kept): dispatch stays disabled in the
+// orchestrator Worker until the reviewed model-provider switch is on with every binding and
+// M2 PR-3's product read exists; ListingsRunWorkflow then replaces MorrowWorkWorkflow. The
+// connector
 // (M2 PR-2's worker/index.ts) is fail-closed without its reviewed identifiers. `cloudflare:*` modules are stubbed.
 const stubs = {
   "cloudflare:workers":
@@ -23,6 +26,10 @@ async function load(t, entry) {
     write: false,
     format: "esm",
     platform: "neutral",
+    // M3 PR-2: the orchestrator bundles the policy kernels (node:crypto, as nodejs_compat
+    // provides it in workerd) and the Neon driver.
+    external: ["node:*"],
+    mainFields: ["module", "main"],
     plugins: [
       {
         name: "cloudflare-stubs",
@@ -82,13 +89,122 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", 
       },
     },
   );
-  const workflow = new module.MorrowWorkWorkflow({}, {});
-  await assert.rejects(
-    workflow.run({ payload: {}, timestamp: new Date(), instanceId: "i" }, step),
-    (error) =>
-      error.constructor.name === "NonRetryableError" && error.message === "dispatch_disabled",
-  );
+  assert.equal(module.MorrowWorkWorkflow, undefined);
+  assert.equal(module.productReadAvailable, false);
+  const binding = JSON.stringify({
+    schemaVersion: 1,
+    environment: "staging",
+    projectId: "lab-project",
+    branchId: "br-lab-branch",
+    hostname: "ep-lab-endpoint.c-1.us-east-1.aws.neon.tech",
+    database: "morrow",
+  });
+  const broker = { fetch() {}, neonLease() {}, modelRespond() {} };
+  const workflowBinding = { create: () => Promise.resolve() };
+  // The committed environment (MORROW_ENVIRONMENT only), the switch on without its other
+  // bindings, and every binding present: M2 PR-3's product read is still missing, so each
+  // is disabled before any step, with a payload or without one.
+  for (const env of [
+    { MORROW_ENVIRONMENT: "staging" },
+    { MORROW_ENVIRONMENT: "staging", MORROW_MODEL_PROVIDER: "anthropic" },
+    {
+      MORROW_ENVIRONMENT: "staging",
+      MORROW_MODEL_PROVIDER: "anthropic",
+      MORROW_DATABASE_BINDING_JSON: binding,
+      BROKER: broker,
+      LISTINGS_RUN: workflowBinding,
+    },
+    { MORROW_ENVIRONMENT: "production", MORROW_MODEL_PROVIDER: "anthropic" },
+  ]) {
+    const workflow = new module.ListingsRunWorkflow({}, env);
+    for (const payload of [{}, { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 }])
+      await assert.rejects(
+        workflow.run({ payload, timestamp: new Date(), instanceId: "i" }, step),
+        (error) =>
+          error.constructor.name === "NonRetryableError" && error.message === "dispatch_disabled",
+      );
+  }
   assert.equal(steps, 0);
+});
+
+test("AC21: the cron starts nothing while dispatch is disabled", async (t) => {
+  const module = await load(t, "apps/workers/src/orchestrator.ts");
+  let created = 0;
+  let leased = 0;
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    await module.default.scheduled(
+      {},
+      {
+        MORROW_ENVIRONMENT: "staging",
+        MORROW_MODEL_PROVIDER: "anthropic",
+        BROKER: {
+          fetch() {},
+          neonLease: () => (leased++, Promise.reject(Error("x"))),
+          modelRespond() {},
+        },
+        LISTINGS_RUN: { create: () => (created++, Promise.resolve()) },
+      },
+      {},
+    );
+  } finally {
+    console.log = original;
+  }
+  assert.equal(created, 0);
+  assert.equal(leased, 0);
+  assert.ok(lines.includes('{"event":"morrow_orchestrator_dispatch_disabled"}'));
+});
+
+test("the orchestrator's environment is deny-all: no credential, no production, the switch's exact value", async (t) => {
+  const { mapOrchestratorEnvironment } = await import("../apps/workers/src/environment.ts");
+  // workerd never populates process.env (nodejs_compat_do_not_populate_process_env); Node does.
+  const saved = process.env;
+  process.env = {};
+  t.after(() => (process.env = saved));
+  const binding = JSON.stringify({
+    schemaVersion: 1,
+    environment: "staging",
+    projectId: "lab-project",
+    branchId: "br-lab-branch",
+    hostname: "ep-lab-endpoint.c-1.us-east-1.aws.neon.tech",
+    database: "morrow",
+  });
+  const full = {
+    MORROW_ENVIRONMENT: "staging",
+    MORROW_MODEL_PROVIDER: "anthropic",
+    MORROW_DATABASE_BINDING_JSON: binding,
+    BROKER: { fetch() {}, neonLease() {}, modelRespond() {} },
+    LISTINGS_RUN: { create() {} },
+  };
+  assert.equal(mapOrchestratorEnvironment(full).ok, true);
+  process.env = { PATH: "x" };
+  assert.equal(mapOrchestratorEnvironment(full).code, "ORCHESTRATOR_ENV_PROCESS_ENV_POPULATED");
+  process.env = {};
+  for (const [patch, code] of [
+    [{ MORROW_MODEL_PROVIDER: undefined }, "ORCHESTRATOR_ENV_DISPATCH_DISABLED"],
+    [{ MORROW_MODEL_PROVIDER: "on" }, "ORCHESTRATOR_ENV_DISPATCH_DISABLED"],
+    [{ MORROW_ENVIRONMENT: "production" }, "ORCHESTRATOR_ENV_DISPATCH_DISABLED"],
+    [{ ANTHROPIC_API_KEY: "sk-ant" }, "ORCHESTRATOR_ENV_FORBIDDEN_CREDENTIAL_BINDING"],
+    [
+      { MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR: "x" },
+      "ORCHESTRATOR_ENV_FORBIDDEN_CREDENTIAL_BINDING",
+    ],
+    [{ MORROW_DATABASE_BINDING_JSON: "{}" }, "ORCHESTRATOR_ENV_VALUE_INVALID"],
+    [
+      { MORROW_DATABASE_BINDING_JSON: binding.replace("staging", "development") },
+      "ORCHESTRATOR_ENV_CROSS_BINDING_MISMATCH",
+    ],
+    [{ BROKER: {} }, "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID"],
+    [{ LISTINGS_RUN: {} }, "ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID"],
+  ]) {
+    const env = { ...full, ...patch };
+    for (const [key, value] of Object.entries(patch)) if (value === undefined) delete env[key];
+    const mapped = mapOrchestratorEnvironment(env);
+    assert.equal(mapped.ok, false, code);
+    assert.equal(mapped.code, code);
+  }
 });
 
 // M2 PR-2 replaced the placeholder with worker/index.ts. Its committed configuration (only
