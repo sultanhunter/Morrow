@@ -191,7 +191,9 @@ export const systemStopReasons = Object.freeze({
  * The system's connection stop for an app/uninstalled webhook (ADR-0022 items 13-15):
  * every lease on the connection is revoked, and its StopRecord@1 is a system record.
  * M2 PR-3: the same stop with its own reason when app/scopes_update reports scopes that are
- * no longer exactly the app's (the installation is suspended until a reinstall, M6).
+ * no longer exactly the app's. The installation stays suspended: this release has no
+ * reinstall path, so reconnecting needs a new app (a deviation from ADR-0022 items 13 and
+ * 15 that the M2 brief's PR-3 owner questions name; spine §10 and §11).
  */
 export function uninstallConnectionStop(
   target: {

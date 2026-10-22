@@ -652,7 +652,15 @@ await withWorkDatabase(
         redelivered.status === 200 &&
           inbox().length === 1 &&
           JSON.stringify(redrive) ===
-            JSON.stringify({ inbox: 0, applied: 0, credentials: 0, destroyed: 0, unavailable: 0 }),
+            JSON.stringify({
+              inbox: 0,
+              applied: 0,
+              credentials: 0,
+              destroyed: 0,
+              targetMissed: 0,
+              dueMissed: 0,
+              unavailable: 0,
+            }),
         { redelivered: redelivered.status, redrive },
       );
 

@@ -71,13 +71,17 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
     },
     // M2 PR-2 review (0026): the app registry's install link names the shop (a
     // *.myshopify.com host, or the shop in a custom-distribution link's signed parameter).
-    // Retirement clears it already; shop/redact clears it for the store's apps.
+    // Retirement clears it already; shop/redact clears it for the redacted installation's
+    // own app only. An app registered later for the same shop (after the first was
+    // uninstalled and retired), which may invite another tenant, keeps its link (M2 PR-3
+    // review: shop/redact covers what Morrow holds through the app it was sent to).
     {
       table: "morrow_identity.shopify_apps",
       dataClass: "shop_identity",
       trigger: "shop_redact",
       action: "clear_install_link",
-      storeKey: "intended_shop_digest: sha256 of the store's *.myshopify.com domain",
+      storeKey:
+        "app_key and invited tenant: the redacted store installation's own app (never another app for the same shop digest)",
       executor: "morrow_identity.work_shopify_redact_identity",
       executable: "M2 PR-3",
     },

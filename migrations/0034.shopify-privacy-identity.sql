@@ -15,10 +15,13 @@ BEGIN;
 --   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0035's
 --     vault and connector definers call them): the webhook record, the inbox take, settle
 --     and pending ids, the installation end, the identity redaction, the privacy request
---     completion, the credential end and its pending ids, and the read target;
+--     completion and its overdue counts, the credential end and its pending ids, and the
+--     read target;
 --   * work_shopify_launch and workspace_connections replaced with the same signatures: a
 --     launch reports a suspended or uninstalled installation even after its domain was
---     pseudonymised, and the connections read leaves out redacted installations.
+--     pseudonymised, and the connections read leaves out redacted installations and offers
+--     no install link for an app whose installation has ended (a reinstall under the same
+--     app is refused, so reconnecting needs a new app).
 -- The tenant always comes from the app registry (the invited workspace) or from the
 -- inbox row it named; never from a shop, header, body or caller (invariant 1).
 DO $$ BEGIN
@@ -147,7 +150,8 @@ REVOKE ALL ON FUNCTION morrow_identity.shop_pseudonym(text),morrow_identity.shop
 -- login writes one). The tenant is the registry's invited workspace of the app that
 -- signed it; the installation is found from the verified shop facts. Born received; one
 -- change, received -> applied or ignored, with content-free effects. 7 days (the purge is
--- M6's, P09.T05).
+-- M6's, P09.T05; it must skip a row whose privacy request is still open, which the
+-- applier still needs).
 CREATE TABLE morrow_identity.shopify_webhook_inbox (
  id morrow_identity.record_id PRIMARY KEY CHECK (id::text ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'),
  app_key text NOT NULL REFERENCES morrow_identity.shopify_apps(app_key),
@@ -557,14 +561,17 @@ BEGIN
 END $$;
 -- shop/redact's identity handlers (spine §11), on an uninstalled installation only: the
 -- installation's and its candidate's domain become the pseudonym (ids kept), and the
--- install link of every app registered for the shop is cleared. Idempotent; the counts are
--- of the rows now in the redacted state, so a re-run reports the same evidence.
--- Outcomes: applied, ineligible (not uninstalled), not_found, invalid.
+-- install link of the installation's own app (its app key, inviting this tenant) is
+-- cleared. Shopify's shop/redact covers what Morrow holds through that app only: an app
+-- registered later for the same shop, which may invite another tenant, keeps its link and
+-- is not counted (review finding: a redaction writes only the tenant the event names).
+-- Idempotent; the counts are of the rows now in the redacted state, so a re-run reports
+-- the same evidence. Outcomes: applied, ineligible (not uninstalled), not_found, invalid.
 CREATE FUNCTION morrow_identity.work_shopify_redact_identity(p_org text,p_ws text,p_installation_id text)
 RETURNS TABLE(outcome text,installations integer,candidates integer,apps integer)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
 #variable_conflict use_column
-DECLARE i morrow_identity.store_installations%ROWTYPE; v_shop text; v_at timestamptz; v_digest text; v_pseudonym text;
+DECLARE i morrow_identity.store_installations%ROWTYPE; v_shop text; v_at timestamptz; v_pseudonym text;
  n_candidates integer; n_apps integer;
 BEGIN
  IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -580,7 +587,6 @@ BEGIN
  IF i.status<>'uninstalled' THEN RETURN QUERY SELECT 'ineligible'::text,NULL::integer,NULL::integer,NULL::integer; RETURN; END IF;
  v_at:=greatest(date_trunc('milliseconds',clock_timestamp()),i.updated_at);
  v_pseudonym:=morrow_identity.shop_pseudonym(i.id::text);
- SELECT a.intended_shop_digest INTO v_digest FROM morrow_identity.shopify_apps a WHERE a.app_key=i.app_key;
  IF i.redacted_at IS NULL THEN
   UPDATE morrow_identity.store_installations x SET shop_domain=v_pseudonym,redacted_at=v_at,revision=x.revision+1,updated_at=v_at
    WHERE x.organization_id=i.organization_id AND x.workspace_id=i.workspace_id AND x.id=i.id;
@@ -588,9 +594,12 @@ BEGIN
  UPDATE morrow_identity.linking_candidates c SET shop_domain=v_pseudonym,redacted_at=v_at,proof_revoked_at=COALESCE(c.proof_revoked_at,v_at)
   WHERE c.installation_id=i.id AND c.redacted_at IS NULL;
  UPDATE morrow_identity.shopify_apps a SET install_url=NULL,revision=a.revision+1
-  WHERE a.intended_shop_digest=v_digest AND a.install_url IS NOT NULL;
+  WHERE a.app_key=i.app_key AND a.invited_organization_id=i.organization_id AND a.invited_workspace_id=i.workspace_id
+   AND a.install_url IS NOT NULL;
  SELECT count(*)::integer INTO n_candidates FROM morrow_identity.linking_candidates c WHERE c.installation_id=i.id AND c.redacted_at IS NOT NULL;
- SELECT count(*)::integer INTO n_apps FROM morrow_identity.shopify_apps a WHERE a.intended_shop_digest=v_digest AND a.install_url IS NULL;
+ SELECT count(*)::integer INTO n_apps FROM morrow_identity.shopify_apps a
+  WHERE a.app_key=i.app_key AND a.invited_organization_id=i.organization_id AND a.invited_workspace_id=i.workspace_id
+   AND a.install_url IS NULL;
  RETURN QUERY SELECT 'applied'::text,1,n_candidates,n_apps;
 END $$;
 -- Completes the open privacy request of one inbox row with its evidence (the CHECK refuses
@@ -612,6 +621,17 @@ BEGIN
   WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.id=r.id;
  RETURN 'completed';
 END $$;
+-- The cross-tenant deadline check of the connector's cron (ADR-0022 item 14; M2 PR-3
+-- review): how many privacy requests are still open past their target (shop/redact 24
+-- hours; customers/* at once, with ten minutes' grace for the inbox re-drive, two minutes
+-- plus the five-minute cron) and past their 30-day due time. Counts only, content-free.
+CREATE FUNCTION morrow_identity.work_privacy_overdue()
+RETURNS TABLE(target_missed integer,due_missed integer)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT (count(*) FILTER (WHERE r.target_at<pg_catalog.clock_timestamp()-interval '10 minutes'))::integer,
+  (count(*) FILTER (WHERE r.due_at<pg_catalog.clock_timestamp()))::integer
+ FROM morrow_identity.privacy_requests r WHERE r.status='open'
+$$;
 -- The broker's credential destruction (the vault transaction that erases the key material
 -- calls this first): only for an installation that records its end, and only with the
 -- reason its row records (uninstalled; or the suspension's reason). It marks the
@@ -681,12 +701,14 @@ REVOKE ALL ON FUNCTION morrow_identity.work_shopify_webhook_record(text,text,tex
  morrow_identity.work_shopify_inbox_take(text),morrow_identity.work_shopify_inbox_settle(text,text,text,jsonb),
  morrow_identity.work_shopify_inbox_pending(),morrow_identity.work_shopify_installation_end(text,text,text,text),
  morrow_identity.work_shopify_redact_identity(text,text,text),morrow_identity.work_privacy_request_complete(text,text,text,jsonb),
+ morrow_identity.work_privacy_overdue(),
  morrow_identity.work_shopify_credential_end(text,text),morrow_identity.work_shopify_credentials_pending(),
  morrow_identity.work_shopify_read_target(text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_identity.work_shopify_webhook_record(text,text,text,text,text,text),
  morrow_identity.work_shopify_inbox_take(text),morrow_identity.work_shopify_inbox_settle(text,text,text,jsonb),
  morrow_identity.work_shopify_inbox_pending(),morrow_identity.work_shopify_installation_end(text,text,text,text),
  morrow_identity.work_shopify_redact_identity(text,text,text),morrow_identity.work_privacy_request_complete(text,text,text,jsonb),
+ morrow_identity.work_privacy_overdue(),
  morrow_identity.work_shopify_credential_end(text,text),morrow_identity.work_shopify_credentials_pending(),
  morrow_identity.work_shopify_read_target(text,text,text,text) TO morrow_work_command;
 
@@ -714,8 +736,13 @@ BEGIN
   ORDER BY i.created_at DESC,i.id LIMIT 1;
  RETURN QUERY SELECT 'found'::text,a.client_id,a.invited_organization_id::text,a.invited_workspace_id::text,COALESCE(v_status,'none');
 END $$;
--- workspace_connections (0026), same signature, owner and ACL, with one change: a redacted
--- installation (shop/redact) is left out of the list. WorkspaceConnections@1 is unchanged.
+-- workspace_connections (0026), same signature, owner and ACL, with two changes: a redacted
+-- installation (shop/redact) is left out of the list, and an active app with a suspended
+-- or uninstalled installation offers no install link (M2 PR-3 review). A reinstall under
+-- the same app is refused (0026's UNIQUE (app_key, shop_id), and the launch shows the
+-- ineligible page), so its link would lead nowhere: the read reports no registered app
+-- (InstallLinkOffer reason not_registered) until the operator retires it and registers a
+-- new one. WorkspaceConnections@1 is unchanged.
 CREATE OR REPLACE FUNCTION morrow_identity.workspace_connections(p_session text,p_workspace text)
 RETURNS TABLE(installations jsonb,app_registered boolean,install_url text,route text,linked boolean,owner boolean)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
@@ -729,6 +756,8 @@ BEGIN
  SELECT a.install_url INTO v_url FROM morrow_identity.shopify_apps a
   WHERE a.invited_organization_id=e.organization_id AND a.invited_workspace_id=e.workspace_id AND a.status='active'
    AND a.install_url IS NOT NULL
+   AND NOT EXISTS(SELECT 1 FROM morrow_identity.store_installations i WHERE i.app_key=a.app_key
+    AND i.status IN ('suspended','uninstalled'))
   ORDER BY a.created_at,a.app_key LIMIT 1;
  SELECT COALESCE(jsonb_agg(r.o ORDER BY r.created_at,r.id),'[]'::jsonb) INTO v_rows FROM (
   SELECT i.created_at,i.id::text AS id,jsonb_build_object('schemaVersion',1,'id',i.id::text,'organizationId',i.organization_id::text,

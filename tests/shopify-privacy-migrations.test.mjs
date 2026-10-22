@@ -90,6 +90,7 @@ test("the connector context: settings written only by the applier, overwritten o
     "morrow_work.connector_inbox_apply(",
     "morrow_work.connector_inbox_pending(",
     "morrow_work.connector_credentials_pending(",
+    "morrow_work.connector_privacy_overdue(",
   ]) {
     const b = body(work, signature);
     const begin = b.indexOf("BEGIN\n");

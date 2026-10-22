@@ -945,6 +945,7 @@ test("P10: a forged connector context confers nothing; the applier acts only on 
       `SELECT * FROM morrow_work.connector_inbox_apply(${literal(inbox)})`,
       "SELECT * FROM morrow_work.connector_inbox_pending()",
       "SELECT * FROM morrow_work.connector_credentials_pending()",
+      "SELECT * FROM morrow_work.connector_privacy_overdue()",
     ]) {
       const r = db.tryRun(call + ";", { user });
       assert.equal(r.ok, false, user + " " + call);

@@ -387,6 +387,13 @@ export const workFunctions = Object.freeze({
     crossTenant: true,
     columns: ["installation_id", "reason"],
   },
+  // M2 PR-3 review (0035): the cron's privacy deadline check (counts only).
+  "connector_privacy_overdue()": {
+    kind: "connector",
+    grantees: ["morrow_connector_ingress"],
+    crossTenant: true,
+    columns: ["target_missed", "due_missed"],
+  },
   // M2 PR-3 (0035): the catalogue routes' read lease (session only).
   "catalog_read_lease(text,text)": { kind: "api", grantees: ["morrow_work_api"] },
   // The agent commands and their read definer.
@@ -456,6 +463,7 @@ export const bridgeFunctions = Object.freeze([
   "work_shopify_installation_end(text,text,text,text)",
   "work_shopify_redact_identity(text,text,text)",
   "work_privacy_request_complete(text,text,text,jsonb)",
+  "work_privacy_overdue()",
   "work_shopify_credential_end(text,text)",
   "work_shopify_credentials_pending()",
   "work_shopify_read_target(text,text,text,text)",
@@ -1062,10 +1070,12 @@ export const executorLogins = Object.freeze({
   // M2 PR-2 (0026): the connector's one definer, in the identity schema.
   morrow_connector_ingress: [
     "morrow_identity.connector_oauth_state_open(text,text,text)",
-    // M2 PR-3 (0035): the inbox applier and the two ids-only re-drives.
+    // M2 PR-3 (0035): the inbox applier, the two ids-only re-drives and the privacy
+    // deadline check.
     "morrow_work.connector_credentials_pending()",
     "morrow_work.connector_inbox_apply(text)",
     "morrow_work.connector_inbox_pending()",
+    "morrow_work.connector_privacy_overdue()",
   ],
   morrow_runtime_executor: [
     "morrow_work.delegation_facts(text,text,text)",

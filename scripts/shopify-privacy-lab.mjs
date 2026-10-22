@@ -19,7 +19,9 @@
 // U  app/uninstalled ends the installation, stops the connection, revokes its leases and
 // destroys the token (idempotent, tenant-local); G  scope changes; D  the cron re-drives a
 // lost apply and a failed destruction; S  shop/redact executes every store-content handler
-// and completes only when nothing is outstanding; K  no other login applies deliveries or
+// and completes only when nothing is outstanding, an overdue request is counted and logged,
+// an ended installation's app offers no install link, and the redaction clears only its own
+// app's link, never a replacement app's in another tenant; K  no other login applies deliveries or
 // ends an installation, and the connector's login cannot forge its context; O  logs and
 // outbound requests. Owner-seeded synthetic fixtures only (two tenants, four linked
 // development stores); no provider, credential or merchant data. Runs in the CI pg-work
@@ -37,6 +39,7 @@ import {
   decodeShopifyCredentialResult,
   decodeShopifyLaunchVerdict,
   decodeShopifyWebhookVerdict,
+  shopifyReadLimits,
 } from "../packages/identity/src/broker-protocol.ts";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
@@ -651,7 +654,7 @@ const report = await withWorkDatabase(
     const invalid = [
       await read(A, S, "products", "query=" + encodeURIComponent("title:*")),
       await read(A, S, "products", "vendor=x"),
-      await read(A, S, "collections", "after=" + "a".repeat(600)),
+      await read(A, S, "collections", "after=" + "a".repeat(shopifyReadLimits.cursorMaxChars + 1)),
       await read(A, S, "products", "collectionId=11"),
     ];
     check(
@@ -970,6 +973,26 @@ const report = await withWorkDatabase(
         credentialOf(R)[0]?.status === "active",
       { shopRedact, redactInbox, openRequest, installation: installationOf(R) },
     );
+    // The privacy deadline check (M2 PR-3 review; ADR-0022 item 14): R's request is still
+    // open; sim: backdated 31 days, so it is past its 24-hour target and its 30-day due
+    // time. The cron counts it and logs both fixed codes; nothing else is open.
+    db.sql(
+      `SET session_replication_role=replica; UPDATE morrow_identity.privacy_requests SET received_at=received_at-interval '31 days',target_at=target_at-interval '31 days',due_at=due_at-interval '31 days' WHERE inbox_id=${literal(redactInbox.id)}; SET session_replication_role=origin;`,
+    );
+    const linesBefore = consoleLines.length;
+    const overdueRun = await connector.redrive();
+    const privacyLines = consoleLines
+      .slice(linesBefore)
+      .filter((l) => l.includes('"event":"morrow_connector_privacy"'));
+    check(
+      "S6:an_open_shop_redact_past_its_target_and_due_time_is_counted_and_logged",
+      overdueRun.targetMissed === 1 &&
+        overdueRun.dueMissed === 1 &&
+        privacyLines.some((l) => l.includes('"code":"PRIVACY_TARGET_MISSED","requests":1')) &&
+        privacyLines.some((l) => l.includes('"code":"PRIVACY_DUE_MISSED","requests":1')) &&
+        requestsOf(redactInbox.id)[0]?.status === "open",
+      { overdueRun, privacyLines },
+    );
     faults.destroy = false;
     backdate(redactInbox.id);
     const completedRun = await connector.redrive();
@@ -987,7 +1010,9 @@ const report = await withWorkDatabase(
         JSON.stringify(handlerTables) ===
           JSON.stringify(storeContentHandlers.map((h) => h.table).sort()) &&
         credentialOf(R)[0]?.status === "destroyed" &&
-        inboxRows().find((r) => r.id === redactInbox.id)?.status === "applied",
+        inboxRows().find((r) => r.id === redactInbox.id)?.status === "applied" &&
+        completedRun.targetMissed === 0 &&
+        completedRun.dueMissed === 0,
       { completedRun, done },
     );
     const noInstallation = await deliver(S, "shop/redact", compliance(S, { shop_id: 999 }));
@@ -1031,6 +1056,96 @@ const report = await withWorkDatabase(
         installationOf(T).redacted === false,
       { afterRow, afterDone },
     );
+    // M2 PR-3 review: an app whose installation ended offers no install link (a reinstall
+    // under the same app is refused). A's workspace has two active apps: S's (uninstalled in
+    // U, its link kept) and G's (redacted above, its link cleared), so none is offered.
+    const connectionsRead = (p) =>
+      db.rows(
+        `SELECT app_registered,install_url FROM morrow_identity.workspace_connections(${literal(p.digest)},${literal(p.workspace)})`,
+        { user: "morrow_identity_linking" },
+      )[0] ?? null;
+    const appOf = (key) =>
+      ownerRows(
+        `SELECT status,install_url,revision FROM morrow_identity.shopify_apps WHERE app_key=${literal(key)}`,
+      )[0] ?? null;
+    const endedOffer = connectionsRead(A);
+    check(
+      "S7:an_app_whose_installation_ended_offers_no_install_link",
+      appOf(S.appKey)?.status === "active" &&
+        appOf(S.appKey).install_url !== null &&
+        installationOf(S).status === "uninstalled" &&
+        endedOffer?.app_registered === false &&
+        endedOffer.install_url === null,
+      { endedOffer, app: appOf(S.appKey) },
+    );
+    // M2 PR-3 review: shop/redact clears only its own app's install link. T (uninstalled in
+    // D, token destroyed) has its app retired, and a replacement app is registered for T's
+    // shop that invites A's workspace, another tenant. T's shop/redact, applied and then
+    // re-driven (recorded again with its apply lost), clears and counts T's app only: the
+    // replacement keeps its link and A's workspace is still offered it.
+    const retired = ownerRows(
+      `SELECT outcome FROM morrow_identity.shopify_app_retire(${literal(T.appKey)})`,
+    )[0]?.outcome;
+    const replacementKey = "lab-store-tenant-replacement";
+    const replacementUrl = "https://" + T.shop + "/admin/oauth/install_custom_app?app=replacement";
+    const registered = ownerRows(
+      `SELECT outcome FROM morrow_identity.shopify_app_register(${literal(replacementKey)},${literal(randomBytes(16).toString("hex"))},'development',${literal(sha(T.shop))},${literal(A.org)},${literal(A.workspace)},${literal(replacementUrl)})`,
+    )[0]?.outcome;
+    const offeredBefore = connectionsRead(A);
+    const linkRows = (request) =>
+      request?.evidence?.handlers?.find((h) => h.table === "morrow_identity.shopify_apps")?.rows;
+    const tRedact = await deliver(T, "shop/redact", compliance(T));
+    const tRow = inboxRows().find((r) => r.webhook_id === tRedact.webhookId);
+    const tDone = requestsOf(tRow?.id ?? "")[0];
+    const hookRedactT = T.oracle.webhook("shop/redact", JSON.stringify(compliance(T)));
+    const lostRedact = decodeShopifyWebhookVerdict(
+      await broker.webhookVerify(
+        brokerEnv,
+        T.appKey,
+        JSON.stringify(hookRedactT.headers),
+        Buffer.from(hookRedactT.body).toString("base64"),
+      ),
+    );
+    backdate(lostRedact.inboxId);
+    const tRedrive = await connector.redrive();
+    const tAgain = requestsOf(lostRedact.inboxId ?? "")[0];
+    const offeredAfter = connectionsRead(A);
+    check(
+      "S8:shop_redact_clears_only_its_own_apps_link_never_a_replacement_apps_in_another_tenant",
+      retired === "retired" &&
+        registered === "registered" &&
+        offeredBefore?.app_registered === true &&
+        offeredBefore.install_url === replacementUrl &&
+        tRedact.status === 200 &&
+        tRedact.applied === "applied" &&
+        tDone?.status === "completed" &&
+        tDone.org === T.org &&
+        tDone.ws === T.ws &&
+        linkRows(tDone) === 1 &&
+        installationOf(T).redacted === true &&
+        lostRedact.verdict === "recorded" &&
+        tRedrive.applied >= 1 &&
+        tAgain?.status === "completed" &&
+        linkRows(tAgain) === 1 &&
+        appOf(T.appKey)?.install_url === null &&
+        appOf(replacementKey)?.status === "active" &&
+        appOf(replacementKey).install_url === replacementUrl &&
+        appOf(replacementKey).revision === 1 &&
+        offeredAfter?.app_registered === true &&
+        offeredAfter.install_url === replacementUrl,
+      {
+        retired,
+        registered,
+        offeredBefore,
+        tRow,
+        tDone,
+        lostRedact,
+        tRedrive,
+        tAgain,
+        replacement: appOf(replacementKey),
+        offeredAfter,
+      },
+    );
 
     // -------------------------------------------------------------------------
     // K: only Shopify's verified deliveries end an installation in this release (a person's
@@ -1045,7 +1160,8 @@ const report = await withWorkDatabase(
         (user) =>
           !asUser(user, `SELECT * FROM morrow_work.connector_inbox_apply(${literal(anyInbox)});`) &&
           !asUser(user, "SELECT * FROM morrow_work.connector_inbox_pending();") &&
-          !asUser(user, "SELECT * FROM morrow_work.connector_credentials_pending();"),
+          !asUser(user, "SELECT * FROM morrow_work.connector_credentials_pending();") &&
+          !asUser(user, "SELECT * FROM morrow_work.connector_privacy_overdue();"),
       ),
     );
     check(

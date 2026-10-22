@@ -307,6 +307,11 @@ function harness(answers = {}, limiters = undefined) {
       calls.push(["credentialsPending", budget]);
       return answers.credentialsPending ?? [];
     },
+    async privacyOverdue(budget) {
+      calls.push(["privacyOverdue", budget]);
+      if (answers.overdueThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return answers.privacyOverdue ?? { targetMissed: 0, dueMissed: 0 };
+    },
   };
   const handler = createConnectorHandler({
     configuration: { origin, apiOrigin },
@@ -716,24 +721,65 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
         "credentialsPending:3000",
         "destroy:installation_2:scopes_changed",
         "destroy:installation_3:uninstalled",
+        "privacyOverdue:3000",
       ],
     );
     assert.deepEqual(
       { ...counts },
-      { inbox: 2, applied: 1, credentials: 2, destroyed: 2, unavailable: 0 },
+      {
+        inbox: 2,
+        applied: 1,
+        credentials: 2,
+        destroyed: 2,
+        targetMissed: 0,
+        dueMissed: 0,
+        unavailable: 0,
+      },
     );
-    // An unavailable id read still runs the credential re-drive.
+    // An unavailable id read still runs the credential re-drive and the deadline check.
     const down = harness({ pendingThrows: true });
     assert.equal((await down.handler.redrive()).unavailable, 1);
     assert.deepEqual(
       down.calls.map((c) => c[0]),
-      ["inboxPending", "credentialsPending"],
+      ["inboxPending", "credentialsPending", "privacyOverdue"],
     );
   } finally {
     console.log = saved;
   }
   assert.deepEqual(logged.filter((row) => row.event === "morrow_connector_redrive").length, 2);
   assert.ok(!JSON.stringify(logged).includes("installation_2"));
+  // Nothing overdue logs no privacy line.
+  assert.equal(logged.filter((row) => row.event === "morrow_connector_privacy").length, 0);
+});
+
+test("cron: open privacy requests past their target or due time log fixed codes (M2 PR-3 review)", async () => {
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  let overdue, partial, failed;
+  try {
+    overdue = await harness({
+      privacyOverdue: { targetMissed: 3, dueMissed: 1 },
+    }).handler.redrive();
+    partial = await harness({
+      privacyOverdue: { targetMissed: 2, dueMissed: 0 },
+    }).handler.redrive();
+    failed = await harness({ overdueThrows: true }).handler.redrive();
+  } finally {
+    console.log = saved;
+  }
+  assert.deepEqual([overdue.targetMissed, overdue.dueMissed, overdue.unavailable], [3, 1, 0]);
+  assert.deepEqual([partial.targetMissed, partial.dueMissed], [2, 0]);
+  assert.deepEqual([failed.targetMissed, failed.dueMissed, failed.unavailable], [0, 0, 1]);
+  assert.deepEqual(
+    logged.filter((row) => row.event === "morrow_connector_privacy"),
+    [
+      { event: "morrow_connector_privacy", code: "PRIVACY_TARGET_MISSED", requests: 3 },
+      { event: "morrow_connector_privacy", code: "PRIVACY_DUE_MISSED", requests: 1 },
+      { event: "morrow_connector_privacy", code: "PRIVACY_TARGET_MISSED", requests: 2 },
+      { event: "morrow_connector_privacy", code: "PRIVACY_CHECK_UNAVAILABLE" },
+    ],
+  );
 });
 
 test("ingress limits: counted per address before any broker call; 429 over, 503 without an address", async () => {

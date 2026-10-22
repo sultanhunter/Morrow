@@ -23,7 +23,9 @@
 //   cron      (M2 PR-3; review finding B8) every five minutes, the ids-only re-drives:
 //             inbox rows still received two minutes after they arrived are applied again,
 //             and every installation whose token's destruction is not yet recorded is
-//             destroyed again. The inbox row is the queue: no Queue resource exists.
+//             destroyed again. The inbox row is the queue: no Queue resource exists. Then
+//             (M2 PR-3 review) the count of open privacy requests past their target or
+//             their 30-day due time, logged as PRIVACY_TARGET_MISSED / PRIVACY_DUE_MISSED.
 // Ingress limits (M2 PR-2 review, layer 1 of apps/broker/src/shopify-install.ts; ADR-0019
 // items 6 and 8 applied to the second public Worker): every request that would reach the
 // broker is first counted per client address (CF-Connecting-IP, the api's P05.T01ab key),
@@ -81,7 +83,8 @@ export const connectorBudgets = Object.freeze({
   installSlackMs: 1500,
   webhookMs: 4000,
   // M2 PR-3: one inbox row's applier transaction, the token's destruction, a re-drive's id
-  // read, and the whole cron run (its last apply starts before this much has passed).
+  // read (and the privacy deadline check), and the whole cron run (its last apply starts
+  // before this much has passed).
   applyMs: 6000,
   destroyMs: 4000,
   pendingMs: 3000,
@@ -347,10 +350,20 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   }
 
   // The cron's re-drives (ids only, both cross-tenant): received inbox rows, then the tokens
-  // of ended installations whose destruction is not yet recorded.
+  // of ended installations whose destruction is not yet recorded; then the privacy deadline
+  // check (M2 PR-3 review; ADR-0022 item 14): open requests past their target or their
+  // 30-day due time, each logged with a fixed code an alert can match.
   async function redrive(): Promise<Readonly<Record<string, number>>> {
     const deadline = Date.now() + connectorBudgets.redriveMs;
-    const counts = { inbox: 0, applied: 0, credentials: 0, destroyed: 0, unavailable: 0 };
+    const counts = {
+      inbox: 0,
+      applied: 0,
+      credentials: 0,
+      destroyed: 0,
+      targetMissed: 0,
+      dueMissed: 0,
+      unavailable: 0,
+    };
     let ids: readonly string[] = [];
     try {
       ids = await database.inboxPending(connectorBudgets.pendingMs);
@@ -372,6 +385,24 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       if (Date.now() > deadline) break;
       counts.credentials++;
       if (await destroy(token.installationId, token.reason)) counts.destroyed++;
+    }
+    try {
+      const overdue = await database.privacyOverdue(connectorBudgets.pendingMs);
+      counts.targetMissed = overdue.targetMissed;
+      counts.dueMissed = overdue.dueMissed;
+      if (overdue.targetMissed > 0)
+        log("morrow_connector_privacy", {
+          code: "PRIVACY_TARGET_MISSED",
+          requests: overdue.targetMissed,
+        });
+      if (overdue.dueMissed > 0)
+        log("morrow_connector_privacy", {
+          code: "PRIVACY_DUE_MISSED",
+          requests: overdue.dueMissed,
+        });
+    } catch {
+      counts.unavailable++;
+      log("morrow_connector_privacy", { code: "PRIVACY_CHECK_UNAVAILABLE" });
     }
     log("morrow_connector_redrive", counts);
     return Object.freeze(counts);

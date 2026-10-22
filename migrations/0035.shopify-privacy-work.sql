@@ -11,9 +11,9 @@ BEGIN;
 --     the store's proposal parameters (redacted, canonical '{}');
 --   * the connector definers (EXECUTE for morrow_connector_ingress only): the inbox
 --     applier, which ends the installation, sets the stop, redacts the store's content and
---     identity and completes privacy requests from the verified inbox row alone, and the
---     two ids-only re-drives (inbox rows still received; installations whose token is not
---     yet destroyed);
+--     identity and completes privacy requests from the verified inbox row alone, the two
+--     ids-only re-drives (inbox rows still received; installations whose token is not yet
+--     destroyed) and the count-only privacy deadline check;
 --   * the vault definers (EXECUTE for morrow_vault_broker only): the webhook record in the
 --     broker's verifying transaction, the credential destruction (recorded on the
 --     installation in the transaction that erases the key material) and the read
@@ -50,6 +50,7 @@ DO $$ BEGIN
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_installation_end(text,text,text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_redact_identity(text,text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_privacy_request_complete(text,text,text,jsonb)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_privacy_overdue()','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_credential_end(text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_credentials_pending()','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_read_target(text,text,text,text)','EXECUTE')
@@ -59,7 +60,9 @@ DO $$ BEGIN
  THEN RAISE EXCEPTION 'SHOPIFY_PRIVACY_WORK_PREREQUISITES_INVALID'; END IF;
 END $$;
 
--- A scope change also ends the token (the installation is suspended until a reinstall, M6).
+-- A scope change also ends the token. The installation stays suspended: no reinstall path
+-- exists in this release (0026's UNIQUE (app_key, shop_id)); reconnecting needs a new app
+-- once the merchant uninstalls the old one (the M2 brief's PR-3 owner questions).
 ALTER TABLE morrow_vault.credentials DROP CONSTRAINT credentials_destroy_reason_check,
  ADD CONSTRAINT credentials_destroy_reason_check CHECK (destroy_reason IN ('uninstalled','disconnected','reauthorised','scopes_changed'));
 -- The connector login executes its own work definers (below) and nothing else here.
@@ -339,6 +342,19 @@ BEGIN
  RETURN QUERY SELECT p.installation_id,p.reason FROM morrow_identity.work_shopify_credentials_pending() p;
 END $$;
 
+-- The connector's privacy deadline check (ADR-0022 item 14; M2 PR-3 review): the number of
+-- open privacy requests past their target and past their due time, across tenants. Counts
+-- only, content-free; the cron logs fixed codes an alert can match.
+CREATE FUNCTION morrow_work.connector_privacy_overdue()
+RETURNS TABLE(target_missed integer,due_missed integer)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+#variable_conflict use_column
+BEGIN
+ PERFORM pg_catalog.set_config('morrow.connector_stop','',true),pg_catalog.set_config('morrow.connector_redact','',true);
+ IF NOT morrow_identity.work_executor_safe('morrow_connector_ingress') THEN RETURN; END IF;
+ RETURN QUERY SELECT p.target_missed,p.due_missed FROM morrow_identity.work_privacy_overdue() p;
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- The vault definers: SECURITY DEFINER, owned by the command role after the transfer,
 -- EXECUTE for morrow_vault_broker only.
@@ -458,13 +474,13 @@ END $$;
 -- Explicit ACLs per function (S5 and S7 read proacl), then the ownership transfer.
 REVOKE ALL ON FUNCTION morrow_work.parameters_redact_for_store(text,text,text),morrow_work.store_content_redact(text,text,text),
  morrow_work.run_product_readable(text,text,text,text),morrow_work.connector_inbox_apply(text),morrow_work.connector_inbox_pending(),
- morrow_work.connector_credentials_pending(),morrow_work.catalog_read_lease(text,text),
+ morrow_work.connector_credentials_pending(),morrow_work.connector_privacy_overdue(),morrow_work.catalog_read_lease(text,text),
  morrow_vault.shopify_webhook_record(text,text,text,text,text,text),morrow_vault.shopify_credential_destroy(text,text),
  morrow_vault.shopify_read_resolve(text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_work.parameters_redact_for_store(text,text,text),morrow_work.store_content_redact(text,text,text),
  morrow_work.run_product_readable(text,text,text,text) TO morrow_work_command;
 GRANT EXECUTE ON FUNCTION morrow_work.connector_inbox_apply(text),morrow_work.connector_inbox_pending(),
- morrow_work.connector_credentials_pending() TO morrow_connector_ingress;
+ morrow_work.connector_credentials_pending(),morrow_work.connector_privacy_overdue() TO morrow_connector_ingress;
 GRANT EXECUTE ON FUNCTION morrow_vault.shopify_webhook_record(text,text,text,text,text,text),
  morrow_vault.shopify_credential_destroy(text,text),morrow_vault.shopify_read_resolve(text,text,text,text,text) TO morrow_vault_broker;
 GRANT EXECUTE ON FUNCTION morrow_work.catalog_read_lease(text,text) TO morrow_work_api;
@@ -472,6 +488,7 @@ GRANT CREATE ON SCHEMA morrow_work,morrow_vault TO morrow_work_command;
 ALTER FUNCTION morrow_work.connector_inbox_apply(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.connector_inbox_pending() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.connector_credentials_pending() OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.connector_privacy_overdue() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_read_lease(text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.shopify_webhook_record(text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.shopify_credential_destroy(text,text) OWNER TO morrow_work_command;

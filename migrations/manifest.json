@@ -273,14 +273,14 @@
     {
       "sequence": 34,
       "file": "0034.shopify-privacy-identity.sql",
-      "sha256": "786fb031550bb0d4153e3dcfe611dfcfb41768c24111b6a3d8f89210aaf6258b",
+      "sha256": "10ce3aaba8440bb767a3f9e890144eeac3383fcae5f50014223c8e5f6ab2d93a",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
     },
     {
       "sequence": 35,
       "file": "0035.shopify-privacy-work.sql",
-      "sha256": "ab5cb785c74d62264f5767661b47acc5f8cdf9e82ef27d2582855c593e540f28",
+      "sha256": "214388abadb3523d2c80db83945b01fac649ccfcd88fdaf59f10ba3321a5f6c9",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
     }

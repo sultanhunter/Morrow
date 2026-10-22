@@ -3,11 +3,12 @@
 // for this request only, over the one pinned WebSocket endpoint of the binding. Each
 // transaction is BEGIN, the ADR-0020 D5 role preflight (the session and current user are
 // exactly the connector login, every attribute is off, it is a member of nothing), the
-// timeouts, one fixed statement and COMMIT. The login executes exactly four definers:
+// timeouts, one fixed statement and COMMIT. The login executes exactly five definers:
 // morrow_identity.connector_oauth_state_open (M2 PR-2) and, since M2 PR-3 (migration
-// 0035), the inbox applier morrow_work.connector_inbox_apply and the two ids-only re-drives
-// connector_inbox_pending and connector_credentials_pending. Every failure is
-// CONNECTOR_SQL_UNAVAILABLE; nothing is logged and the password never appears in an error.
+// 0035), the inbox applier morrow_work.connector_inbox_apply, the two ids-only re-drives
+// connector_inbox_pending and connector_credentials_pending, and the count-only privacy
+// deadline check connector_privacy_overdue. Every failure is CONNECTOR_SQL_UNAVAILABLE;
+// nothing is logged and the password never appears in an error.
 import { Client } from "@neondatabase/serverless";
 import {
   brokerLimits,
@@ -39,6 +40,8 @@ export const connectorSql = Object.freeze({
   inboxPending: "SELECT inbox_id FROM morrow_work.connector_inbox_pending()",
   credentialsPending:
     "SELECT installation_id,reason FROM morrow_work.connector_credentials_pending()",
+  // M2 PR-3 review: open privacy requests past their target and their due time (counts).
+  privacyOverdue: "SELECT target_missed,due_missed FROM morrow_work.connector_privacy_overdue()",
   commit: "COMMIT",
   rollback: "ROLLBACK",
 });
@@ -87,7 +90,10 @@ export interface ConnectorDatabase {
   credentialsPending(
     budgetMs: number,
   ): Promise<readonly Readonly<{ installationId: string; reason: ShopifyCredentialReason }>[]>;
+  privacyOverdue(budgetMs: number): Promise<PrivacyOverdue>;
 }
+/** Open privacy requests past their target and past their due time, across tenants. */
+export type PrivacyOverdue = Readonly<{ targetMissed: number; dueMissed: number }>;
 const inboxIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const applyOutcomes: readonly string[] = [
   "applied",
@@ -358,6 +364,17 @@ export function createConnectorDatabase(
             return Object.freeze({ installationId: r.installation_id, reason: r.reason });
           }),
         );
+      });
+    },
+    privacyOverdue(budgetMs: number): Promise<PrivacyOverdue> {
+      return transaction(budgetMs, async (send) => {
+        const rows = await send(connectorSql.privacyOverdue);
+        const r = columns(rows.length === 1 ? rows[0] : undefined, "due_missed,target_missed");
+        const count = (v: unknown): v is number =>
+          typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+        if (!count(r.target_missed) || !count(r.due_missed) || r.due_missed > r.target_missed)
+          throw unavailable();
+        return Object.freeze({ targetMissed: r.target_missed, dueMissed: r.due_missed });
       });
     },
     stateOpen(appKey: string, shop: string, stateDigest: string, budgetMs: number) {
