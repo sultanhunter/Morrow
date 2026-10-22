@@ -371,18 +371,122 @@ test("Shopify verdicts: closed shapes both ways; no secret, token or extra field
     { outcome: "stored", workspaceId: null, continuationToken: null },
   ])
     assert.throws(() => encodeShopifyInstallResult(bad), /BROKER_PROTOCOL_INVALID/);
-  const webhook = {
-    verdict: "verified",
-    topic: "customers/redact",
-    shopDomain: "dev-1.myshopify.com",
-    webhookId: "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043",
-    minimisedBody: { shopId: "1", customerDigest: "a".repeat(64) },
-  };
-  assert.deepEqual(decodeShopifyWebhookVerdict(encodeShopifyWebhookVerdict(webhook)), webhook);
+  // M2 PR-3: the webhook verdict carries only the inbox row's id (the broker recorded the
+  // delivery in the verifying transaction) and whether a duplicate is already settled.
+  const inboxId = "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043";
+  for (const verdict of [
+    { verdict: "recorded", inboxId, settled: false },
+    { verdict: "duplicate", inboxId, settled: true },
+    { verdict: "duplicate", inboxId, settled: false },
+    { verdict: "refused", inboxId: null, settled: null },
+    { verdict: "invalid", inboxId: null, settled: null },
+  ])
+    assert.deepEqual(decodeShopifyWebhookVerdict(encodeShopifyWebhookVerdict(verdict)), verdict);
   for (const bad of [
-    { ...webhook, topic: "orders/create" },
-    { ...webhook, minimisedBody: { email: "a@b.test" } },
-    { ...webhook, minimisedBody: { shopId: "1", note: "free text with spaces" } },
+    { verdict: "recorded", inboxId, settled: true },
+    { verdict: "recorded", inboxId: "inbox_1", settled: false },
+    { verdict: "refused", inboxId, settled: null },
+    { verdict: "verified", inboxId, settled: false },
+    { verdict: "duplicate", inboxId, settled: "true" },
   ])
     assert.throws(() => encodeShopifyWebhookVerdict(bad), /BROKER_PROTOCOL_INVALID/);
+  assert.throws(
+    () =>
+      decodeShopifyWebhookVerdict(
+        JSON.stringify({
+          schemaVersion: 1,
+          verdict: "recorded",
+          inboxId,
+          settled: false,
+          minimisedBody: {},
+        }),
+      ),
+    /BROKER_PROTOCOL_INVALID/,
+  );
+});
+
+// M2 PR-3: the token's destruction and the reads' closed results, both ways.
+test("Shopify credential and read results: closed shapes both ways", async () => {
+  const {
+    decodeShopifyCredentialResult,
+    encodeShopifyCredentialResult,
+    decodeShopifyReadResult,
+    parseShopifyReadVariables,
+    shopifyCredentialReasons,
+    shopifyReadQueries,
+  } = await import("../packages/identity/src/broker-protocol.ts");
+  assert.deepEqual(
+    [...shopifyCredentialReasons],
+    ["uninstalled", "scopes_changed", "disconnected"],
+  );
+  for (const outcome of ["destroyed", "already_destroyed", "ineligible", "not_found"])
+    assert.equal(decodeShopifyCredentialResult(encodeShopifyCredentialResult(outcome)), outcome);
+  assert.throws(() => encodeShopifyCredentialResult("denied"), /BROKER_PROTOCOL_INVALID/);
+  // The api serves the pages and the shop identity, the orchestrator one product.
+  assert.deepEqual(
+    { api: [...shopifyReadQueries.api], runtime: [...shopifyReadQueries.runtime] },
+    {
+      api: ["shopIdentity", "collectionsPage", "productsPage"],
+      runtime: ["productContent"],
+    },
+  );
+  const product = {
+    schemaVersion: 1,
+    outcome: "read",
+    product: {
+      productId: "product:7",
+      title: "Shirt",
+      descriptionHtml: "<p>x</p>",
+      seo: { title: null, description: "d" },
+      tags: ["a"],
+    },
+  };
+  assert.deepEqual(decodeShopifyReadResult("productContent", JSON.stringify(product)), product);
+  const notFound = { schemaVersion: 1, outcome: "not_found" };
+  assert.deepEqual(decodeShopifyReadResult("productContent", JSON.stringify(notFound)), notFound);
+  assert.deepEqual(decodeShopifyReadResult("productsPage", JSON.stringify(notFound)), notFound);
+  for (const [query, value] of [
+    ["collectionsPage", notFound],
+    ["shopIdentity", notFound],
+    ["productContent", { ...product, product: { ...product.product, vendor: "x" } }],
+    ["productContent", { ...product, product: { ...product.product, productId: "7" } }],
+    [
+      "productsPage",
+      {
+        schemaVersion: 1,
+        outcome: "read",
+        products: [{ id: "product:1", title: "x", status: "ACTIVE" }],
+        nextCursor: null,
+      },
+    ],
+    [
+      "collectionsPage",
+      {
+        schemaVersion: 1,
+        outcome: "read",
+        collections: [{ id: "product:1", title: "x" }],
+        nextCursor: null,
+      },
+    ],
+    [
+      "collectionsPage",
+      { schemaVersion: 1, outcome: "read", collections: [], nextCursor: "has space" },
+    ],
+    [
+      "shopIdentity",
+      { schemaVersion: 1, outcome: "read", shop: { shopId: "1", development: "yes" } },
+    ],
+  ])
+    assert.throws(
+      () => decodeShopifyReadResult(query, JSON.stringify(value)),
+      /BROKER_PROTOCOL_INVALID/,
+      query,
+    );
+  assert.deepEqual(
+    parseShopifyReadVariables(
+      "productsPage",
+      '{"after":null,"collectionId":null,"search":"Été 2"}',
+    ),
+    { query: "productsPage", after: null, collectionId: null, search: "Été 2" },
+  );
 });

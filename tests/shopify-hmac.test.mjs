@@ -182,48 +182,103 @@ test("webhook HMAC is base64 over the raw bytes, compared in constant time", asy
 
 test("compliance bodies are minimised to ids and a keyed customer digest", async () => {
   const secret = "app-secret";
-  const redact = await minimiseShopifyWebhook(secret, "customers/redact", {
-    shop_id: 954889,
-    shop_domain: "x.myshopify.com",
-    customer: { id: 191167, email: "john@example.com", phone: "555-625-1199" },
-    orders_to_redact: [299938, 280263, 220458],
-  });
+  const shop = "x.myshopify.com";
+  const redact = await minimiseShopifyWebhook(
+    secret,
+    "customers/redact",
+    {
+      shop_id: 954889,
+      shop_domain: shop,
+      customer: { id: 191167, email: "john@example.com", phone: "555-625-1199" },
+      orders_to_redact: [299938, 280263, 220458],
+    },
+    shop,
+  );
   assert.deepEqual(Object.keys(redact).sort(), ["customerDigest", "shopId"]);
   assert.equal(redact.shopId, "954889");
   assert.match(redact.customerDigest, /^[a-f0-9]{64}$/);
   assert.ok(!JSON.stringify(redact).includes("john") && !JSON.stringify(redact).includes("299938"));
-  const request = await minimiseShopifyWebhook(secret, "customers/data_request", {
-    shop_id: 954889,
-    customer: { id: 191167, email: "john@example.com" },
-    orders_requested: [299938],
-    data_request: { id: 9999 },
-  });
+  const request = await minimiseShopifyWebhook(
+    secret,
+    "customers/data_request",
+    {
+      shop_id: 954889,
+      shop_domain: shop,
+      customer: { id: 191167, email: "john@example.com" },
+      orders_requested: [299938],
+      data_request: { id: 9999 },
+    },
+    shop,
+  );
   assert.deepEqual(request, {
     shopId: "954889",
     customerDigest: redact.customerDigest,
     dataRequestId: "9999",
   });
   assert.deepEqual(
-    await minimiseShopifyWebhook(secret, "shop/redact", { shop_id: 954889, shop_domain: "x" }),
-    {
-      shopId: "954889",
-    },
+    await minimiseShopifyWebhook(
+      secret,
+      "shop/redact",
+      { shop_id: 954889, shop_domain: shop },
+      shop,
+    ),
+    { shopId: "954889" },
   );
   assert.deepEqual(
-    await minimiseShopifyWebhook(secret, "app/uninstalled", { id: 1, email: "a@b.c" }),
-    {
-      shopId: "1",
-    },
+    await minimiseShopifyWebhook(
+      secret,
+      "app/uninstalled",
+      { id: 1, email: "a@b.c", myshopify_domain: shop },
+      shop,
+    ),
+    { shopId: "1" },
   );
   assert.deepEqual(
-    await minimiseShopifyWebhook(secret, "app/scopes_update", {
-      previous: ["read_products"],
-      current: ["write_products", "read_products"],
-    }),
+    await minimiseShopifyWebhook(secret, "app/uninstalled", { id: 1, email: "a@b.c" }, shop),
+    { shopId: "1" },
+  );
+  assert.deepEqual(
+    await minimiseShopifyWebhook(
+      secret,
+      "app/scopes_update",
+      { previous: ["read_products"], current: ["write_products", "read_products"] },
+      shop,
+    ),
     { previous: ["read_products"], current: ["read_products", "write_products"] },
   );
-  assert.equal(await minimiseShopifyWebhook(secret, "orders/create", { id: 1 }), null);
-  assert.equal(await minimiseShopifyWebhook(secret, "shop/redact", []), null);
+  // M2 PR-3: the topic header is not signed, so a body must be its topic's: another topic's
+  // body, a body naming another shop than the header's, or a missing id is refused.
+  for (const [topic, body] of [
+    ["orders/create", { id: 1 }],
+    ["shop/redact", []],
+    ["shop/redact", { shop_id: 954889, shop_domain: "other.myshopify.com" }],
+    ["shop/redact", { shop_id: 954889 }],
+    ["shop/redact", { shop_id: 954889, shop_domain: shop, customer: { id: 1 } }],
+    ["shop/redact", { shop_id: 954889, shop_domain: shop, orders_to_redact: [] }],
+    ["app/uninstalled", { shop_id: 954889, shop_domain: shop }],
+    ["app/uninstalled", { id: 1, myshopify_domain: "other.myshopify.com" }],
+    ["app/uninstalled", { name: "no id" }],
+    ["customers/redact", { shop_id: 954889, shop_domain: shop }],
+    [
+      "customers/redact",
+      { shop_id: 954889, shop_domain: shop, customer: {}, data_request: { id: 1 } },
+    ],
+    ["customers/data_request", { shop_id: 954889, shop_domain: shop, customer: { id: 1 } }],
+    ["app/scopes_update", { previous: ["read_products"] }],
+    ["app/scopes_update", { previous: [], current: ["Read"] }],
+    ["app/scopes_update", { previous: [], current: [], shop_id: 1 }],
+  ])
+    assert.equal(await minimiseShopifyWebhook(secret, topic, body, shop), null, topic);
+  // A customer without an id is still a request to answer: its digest is null.
+  assert.deepEqual(
+    await minimiseShopifyWebhook(
+      secret,
+      "customers/redact",
+      { shop_id: 954889, shop_domain: shop, customer: { email: "x@y.z" }, orders_to_redact: [] },
+      shop,
+    ),
+    { shopId: "954889", customerDigest: null },
+  );
 });
 
 // A recording fetch over fixed replies.
