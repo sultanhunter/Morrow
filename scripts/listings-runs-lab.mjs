@@ -44,7 +44,15 @@
 //      a fence a dead broker left open is booked as uncertain at its worst case, and a late
 //      close is refused (never promoted to success);
 //   L  no provider id, model id, stop reason, request text, product or draft content reaches
-//      the api's reads, the outbox or a durable step result.
+//      the api's reads, the outbox or a durable step result;
+//   R  M2 PR-3's read resolution (shopify_read_resolve, as the broker's login) under a real run
+//      lease: the run's own product in progress resolves, a product not in progress in the run,
+//      another run's id, a read lease, a released lease and a stop are refused;
+//   X  shop/redact (connector_inbox_apply, as the connector's login) deletes a store's
+//      snapshots and drafts and leaves other stores' content; racing it, a snapshot put, a
+//      draft finish and an agent submit that entered their lease first wait on the store's
+//      stop key and write nothing, and a write that commits first is deleted by the pass; the
+//      request completes once the token is destroyed, with per-pass deletion counts.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
 // marked sim stand in for states no API path reaches yet. CI pg-work group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -56,12 +64,19 @@ import { createAgentsApiHandler } from "../packages/work/src/agents/http.ts";
 import { createWorkApiHandler } from "../packages/work/src/http.ts";
 import { createRunsApiHandler } from "../packages/work/src/runs/http.ts";
 import { snapshotCanonical } from "../packages/work/src/runs/drafting.ts";
-import { listingsRun, RunStepRetry } from "../packages/work/src/runs/workflow.ts";
+import {
+  listingsRun,
+  proposeDrafts,
+  RunStepRetry,
+  runModelBudgetMs,
+} from "../packages/work/src/runs/workflow.ts";
+import { storeContentHandlers } from "../packages/work/src/redaction.ts";
 import { createRuntimeAttempt, runLeaseStep } from "../packages/work/src/runtime/leases.ts";
 import { brokerCapabilities } from "../apps/broker/src/capabilities.ts";
 import { createClaudeAdapter } from "../apps/broker/src/claude-adapter.ts";
 import { createModelGateway, listingPromptDigest } from "../apps/broker/src/model-gateway.ts";
 import { runVaultTransactionWithDriver } from "../apps/broker/src/vault-database.ts";
+import { sealVaultRecord, vaultBytesHex } from "../apps/broker/src/vault.ts";
 import { listingDraftSchemaDigest } from "../packages/policy/src/generated/listing-draft-schema.ts";
 import {
   capabilityFields,
@@ -141,7 +156,13 @@ export async function runListingsRunsLab(db) {
   });
   function storeGrant(p, capabilityId, verbs, fields = [...listingFieldPaths], resource = store) {
     const g = {
-      id: "g_" + p.key.toLowerCase() + "_" + capabilityId.replaceAll(".", "_"),
+      // Another store's grant names that store (the redaction phase's stores).
+      id:
+        "g_" +
+        p.key.toLowerCase() +
+        "_" +
+        capabilityId.replaceAll(".", "_") +
+        (resource.storeId === null || resource.storeId === S ? "" : "_" + resource.storeId),
       principal: actorOf(p),
       capabilityId,
       verbs,
@@ -1832,6 +1853,480 @@ COMMIT;`,
       { sample: workerLines.slice(0, 3), broker: brokerLines.slice(0, 3) },
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // M2 PR-3 integrated: the vault credential of a linked store's installation (the
+  // envelope binds the tenant, the credential and the store installation as its subject),
+  // as M2 PR-2's install would store it; the read resolution returns it, and shop/redact
+  // completes once the broker destroys it.
+  const storeCredential = async (installationId) => {
+    const sealed = await sealVaultRecord(
+      capabilities.vault.keyring,
+      {
+        kind: "shopify_offline_token",
+        organizationId: O,
+        workspaceId: W,
+        credentialId: "credential_" + installationId,
+        subjectId: installationId,
+        provider: "shopify",
+        version: 1,
+      },
+      new TextEncoder().encode("shpat_" + randomBytes(16).toString("hex")),
+    );
+    db.workOwner(
+      `INSERT INTO morrow_vault.credentials(organization_id,workspace_id,id,version,provider,kind,subject_id,status,kek_version,wrapped_key,sealed_value,created_at) VALUES(${literal(O)},${literal(W)},${literal("credential_" + installationId)},1,'shopify','shopify_offline_token',${literal(installationId)},'active',1,${literal("\\x" + vaultBytesHex(sealed.wrappedKey))}::bytea,${literal("\\x" + vaultBytesHex(sealed.sealedValue))}::bytea,date_trunc('milliseconds',clock_timestamp()));`,
+    );
+  };
+  const enableListings = async (storeId) => {
+    const path = `/stores/${storeId}/agents/listings`;
+    const doc = await agentsCall(P.A, "POST", path + "/document", {});
+    return agentsCall(P.A, "POST", path, {
+      documentDigest: doc.body.documentDigest,
+      nonce: doc.body.nonce,
+    });
+  };
+  // A run's state up to one write: started, its first product begun, and optionally its
+  // snapshot, a counted attempt (the broker's fence opened and closed as the broker's login)
+  // and a pending draft.
+  const draftSet = (n) => canonicalize({ title: "Linen shirt " + n + ", an airy summer cut" });
+  const noFlags = { newUrls: 0, newEmails: 0, newPhones: 0, tagsAdded: 0, tagsRemoved: 0 };
+  async function prepared(storeId, n, through) {
+    const id = product(n);
+    const runId = (await admit(P.A, T, admitBody([id], { storeId }))).body.runId;
+    const ref = leaseOf(runId);
+    const canonical = snapshotCanonical(catalog.get(id));
+    const steps = await ports.lease(ref, async (step) => {
+      const started = await step.run.start();
+      const begun = await step.run.productBegin(0);
+      const put = through === "begun" ? null : await step.run.snapshotPut(0, canonical);
+      return { started: started?.outcome, begun: begun.outcome, put: put?.outcome ?? null };
+    });
+    let call = null,
+      finished = null;
+    if (through === "attempted" || through === "drafted") {
+      const open = last(
+        db.sql(
+          `SELECT outcome||'|'||coalesce(call_id,'') FROM morrow_vault.model_call_begin(${literal(ref.leaseId)},${literal(String(ref.generation))},'0','1','1','90000',${literal(await listingPromptDigest())},${literal(listingDraftSchemaDigest)});`,
+          { user: "morrow_vault_broker" },
+        ),
+      ).split("|");
+      call = [
+        open[0],
+        last(
+          db.sql(
+            `SELECT outcome FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn','req_redact','claude-sonnet-5-5','900','900','300','0','0');`,
+            { user: "morrow_vault_broker" },
+          ),
+        ),
+      ];
+    }
+    if (through === "drafted")
+      finished = await ports.lease(ref, (step) =>
+        step.run.productFinish(0, {
+          outcome: "drafted",
+          setCanonical: draftSet(n),
+          fields: ["title"],
+          flags: noFlags,
+        }),
+      );
+    return { runId, ref, id, canonical, steps: steps.value ?? steps, call, finished };
+  }
+
+  // ---------------------------------------------------------------------------
+  phase("product_read");
+  {
+    // R1-R5: M2 PR-3's read resolution (morrow_vault.shopify_read_resolve, as the broker's
+    // login) under a real run lease, with run_product_readable as listings-runs revises it:
+    // a product of the lease's own running run, while that product is in progress.
+    const resumed = await enableListings(S);
+    await storeCredential("storeinst_runs");
+    const resolveAs = (ref, subject, productId, user = "morrow_vault_broker") => {
+      const r = db.tryRun(
+        `SELECT outcome||'|'||COALESCE(installation_id,'') FROM morrow_vault.shopify_read_resolve(${literal(ref.leaseId)},${literal(String(ref.generation))},${literal(subject)},'productContent',${literal(productId)});`,
+        { user },
+      );
+      return r.ok ? last(r.stdout) : "error";
+    };
+    const ids = [product(81), product(82)];
+    const runId = (await admit(P.A, T, admitBody(ids))).body.runId;
+    const ref = leaseOf(runId);
+    const queued = resolveAs(ref, runId, ids[0]);
+    await ports.lease(ref, async (step) => {
+      await step.run.start();
+      return step.run.productBegin(0);
+    });
+    check(
+      "R1:a_run_lease_reads_its_own_product_in_progress",
+      resumed.status === 200 &&
+        queued === "product_not_in_run|" &&
+        resolveAs(ref, runId, ids[0]) === "resolved|storeinst_runs" &&
+        ["morrow_api_worker", "morrow_connector_ingress", "morrow_runtime_executor"].every(
+          (user) => resolveAs(ref, runId, ids[0], user) === "error",
+        ),
+      { resumed: resumed.status, queued, resolved: resolveAs(ref, runId, ids[0]) },
+    );
+    // Another run's id names no product of this lease; a product of this run not yet begun,
+    // and a product of no run, are refused.
+    const other = (await admit(P.A, T, admitBody([product(83)]))).body.runId;
+    check(
+      "R2:a_product_not_in_progress_in_the_run_is_refused",
+      resolveAs(ref, runId, ids[1]) === "product_not_in_run|" &&
+        resolveAs(ref, runId, "product:999") === "product_not_in_run|" &&
+        resolveAs(ref, runId, product(83)) === "product_not_in_run|" &&
+        resolveAs(ref, other, ids[0]) === "subject_mismatch|",
+      { pending: resolveAs(ref, runId, ids[1]), foreign: resolveAs(ref, other, ids[0]) },
+    );
+    // A read lease (the catalogue routes') never reads product content.
+    const readLease = db.rows(
+      `SELECT * FROM morrow_work.catalog_read_lease(${literal(S)},${literal(C)})`,
+      {
+        prefix: `BEGIN; SET LOCAL ROLE morrow_work_api; SELECT count(*) FROM morrow_work.enter_context(${literal(P.A.digest)},${literal(P.A.workspace)});\n`,
+        suffix: "\nCOMMIT;",
+        user: "morrow_api_worker",
+      },
+    )[0];
+    check(
+      "R3:product_content_under_a_read_lease_is_a_purpose_mismatch",
+      readLease?.outcome === "opened" &&
+        resolveAs(
+          { leaseId: readLease.lease_id, generation: readLease.generation },
+          readLease.subject_id,
+          ids[0],
+        ) === "purpose_mismatch|",
+      readLease,
+    );
+    // A run whose finish released its lease reads nothing.
+    const ended = (await admit(P.A, T, admitBody([product(84)]))).body.runId;
+    const endedRef = leaseOf(ended);
+    await ports.lease(endedRef, (step) => step.run.start());
+    const endedFinish = await ports.lease(endedRef, (step) => step.run.finish("time_budget"));
+    check(
+      "R4:after_run_finish_released_the_lease_the_read_is_ended",
+      endedFinish.value?.outcome === "ended" &&
+        resolveAs(endedRef, ended, product(84)) === "ended|",
+      { endedFinish },
+    );
+    // A stop the lease outlived (sim: a connection stop inserted with the triggers off, so
+    // its revocation never ran) is stopped; "Stop AI work" itself revokes the run's lease in
+    // its own transaction, so the read is then ended.
+    const simStop = randomUUID();
+    db.sql(`BEGIN; SET LOCAL session_replication_role=replica; SET LOCAL ROLE morrow_work_owner;
+INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,set_by_operator_id,reason_code,reason,created_at) VALUES(${literal(O)},${literal(W)},${literal(simStop)},'connection',${literal(S)},${literal(C)},'system',NULL,NULL,NULL,'shopify_app_uninstalled','sim',date_trunc('milliseconds',clock_timestamp()));
+COMMIT;`);
+    const stoppedRead = resolveAs(ref, runId, ids[0]);
+    db.sql(`BEGIN; SET LOCAL session_replication_role=replica; SET LOCAL ROLE morrow_work_owner;
+DELETE FROM morrow_work.stop_controls WHERE id=${literal(simStop)};
+COMMIT;`);
+    const again = resolveAs(ref, runId, ids[0]);
+    const stop = await agentsCall(P.A, "POST", listings + "/stop", {
+      control: { reason: "Pause the drafts", sourceProposalRef: null },
+    });
+    check(
+      "R5:a_stop_refuses_the_read_stopped_or_with_its_revoked_lease_ended",
+      stoppedRead === "stopped|" &&
+        again === "resolved|storeinst_runs" &&
+        stop.status === 200 &&
+        resolveAs(ref, runId, ids[0]) === "ended|",
+      { stoppedRead, again, stop: stop.status, after: resolveAs(ref, runId, ids[0]) },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  phase("redaction");
+  {
+    // X1-X6: shop/redact (M2 PR-3's connector_inbox_apply, as the connector's login) deletes a
+    // store's snapshots and drafts (store_content_redact as listings-runs revises it), and it
+    // races the run steps that write store content. Each store-content writer takes the
+    // store's stop key shared before its run's lock and reads its lease again; shop/redact
+    // holds that key exclusively from its system stop through the redaction. Four more linked
+    // stores, each with the Listings agent, so each shop/redact ends only its own store; S
+    // keeps its content throughout (the two-store case).
+    const stores = ["store_runs2", "store_runs3", "store_runs4", "store_runs5"].map((storeId) => {
+      const installationId = storeId.replace(/^store_/, "storeinst_");
+      const app = ("lab-" + storeId.replaceAll("_", "-")).slice(0, 63);
+      return {
+        storeId,
+        connectionId:
+          storeId === S2 ? "connection_runs2" : storeId.replace(/^store_/, "connection_"),
+        installationId,
+        app,
+        shop: app + ".myshopify.com",
+        shopId: String(BigInt("0x" + sha(storeId).slice(0, 12)) + 1n),
+      };
+    });
+    const [X2, X3, X4, X5] = stores;
+    db.admin(
+      [X3, X4, X5]
+        .map((x) =>
+          storeInstallationSql({
+            org: O,
+            workspace: W,
+            principal: P.A.principal,
+            storeId: x.storeId,
+            connectionId: x.connectionId,
+            installationId: x.installationId,
+          }),
+        )
+        .join("\n"),
+    );
+    db.admin(
+      stores
+        .flatMap((x) => {
+          const resource = storeResource(O, W, x.storeId, x.connectionId);
+          return [
+            storeGrant(P.A, "catalog.products.read", ["view", "delegate"], undefined, resource),
+            storeGrant(
+              P.A,
+              "catalog.content.propose",
+              ["execute", "delegate"],
+              undefined,
+              resource,
+            ),
+            storeGrant(
+              P.A,
+              "catalog.content.publish",
+              ["propose", "approve", "execute", "delegate"],
+              undefined,
+              resource,
+            ),
+            storeGrant(
+              P.A,
+              "agents.installation.activate",
+              ["execute"],
+              ["evaluation", "grant", "installationId", "revision"],
+              resource,
+            ),
+          ];
+        })
+        .join("\n"),
+    );
+    const enabled = [];
+    for (const x of stores) enabled.push((await enableListings(x.storeId)).status);
+    await storeCredential(X2.installationId);
+    const resumed = await enableListings(S);
+    // The broker's record of a verified shop/redact (morrow_vault.shopify_webhook_record, in
+    // the transaction that verified the signature), as the broker's login.
+    const recordShopRedact = (x) => {
+      const r = last(
+        db.sql(
+          `SELECT outcome||'|'||COALESCE(inbox_id,'') FROM morrow_vault.shopify_webhook_record(${literal(x.app)},${literal(x.shop)},'shop/redact',${literal("redact-" + randomUUID())},'2026-10',${literal(JSON.stringify({ shopId: x.shopId }))});`,
+          { user: "morrow_vault_broker" },
+        ),
+      ).split("|");
+      return r[0] === "recorded" ? r[1] : null;
+    };
+    const apply = (inboxId) =>
+      `SELECT 'applied:'||outcome FROM morrow_work.connector_inbox_apply(${literal(inboxId)});`;
+    const contentOf = (storeId) => ({
+      snapshots: count(
+        `SELECT count(*) FROM morrow_work.product_snapshots WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND store_id=${literal(storeId)}`,
+      ),
+      drafts: count(
+        `SELECT count(*) FROM morrow_work.run_drafts WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND store_id=${literal(storeId)}`,
+      ),
+      parameters: count(
+        `SELECT count(*) FROM morrow_work.proposal_parameters q JOIN morrow_work.proposals p ON p.organization_id=q.organization_id AND p.workspace_id=q.workspace_id AND p.parameters_id=q.id WHERE p.organization_id=${literal(O)} AND p.workspace_id=${literal(W)} AND p.store_id=${literal(storeId)} AND q.redacted_at IS NULL`,
+      ),
+    });
+    const keptS = contentOf(S);
+    // X1: S2 holds content of a whole run (snapshots, packed drafts, its proposal's parameters).
+    const s2Run = (await admit(P.A, T, admitBody([product(91), product(92)], { storeId: S2 }))).body
+      .runId;
+    const s2Result = await execute(s2Run);
+    const s2Content = contentOf(S2);
+    check(
+      "X1:four_more_stores_with_the_listings_agent_and_one_drafted_run",
+      enabled.every((status) => status === 200) &&
+        resumed.status === 200 &&
+        s2Result.kind === "ended" &&
+        s2Result.status === "succeeded" &&
+        s2Content.snapshots === 2 &&
+        s2Content.drafts === 2 &&
+        s2Content.parameters === 1 &&
+        keptS.snapshots > 0 &&
+        keptS.drafts > 0 &&
+        keptS.parameters > 0,
+      { enabled, resumed: resumed.status, s2Result, s2Content, keptS },
+    );
+    // X2-X4: shop/redact first. A session applies it as the connector does and, before it
+    // commits (its system stop, the leases' revocation and the redaction all done), waits
+    // until a run step is blocked behind it. That step entered its lease before the stop
+    // committed (enter_lease takes no row lock), then waits on the store's stop key, reads its
+    // lease again once the stop commits, and writes nothing: the snapshot put (S3), the draft
+    // finish (S4), the agent submit (S5). Each within the step's 1 s lock_timeout.
+    const blockedBehindMe =
+      "EXISTS(SELECT 1 FROM pg_catalog.pg_locks l WHERE NOT l.granted AND pg_catalog.pg_backend_pid()=ANY(pg_catalog.pg_blocking_pids(l.pid)))";
+    const redactFirst = async (x, name, write) => {
+      const inboxId = recordShopRedact(x);
+      const session = db.runAsync(
+        `BEGIN;
+${apply(inboxId)}
+DO $gate$ BEGIN
+ FOR i IN 1..1500 LOOP
+  EXIT WHEN ${blockedBehindMe};
+  PERFORM pg_catalog.pg_sleep(0.02);
+ END LOOP;
+END $gate$;
+SELECT 'blocked:'||${blockedBehindMe}::text;
+COMMIT;`,
+        { user: "morrow_connector_ingress", applicationName: name },
+      );
+      const deadline = Date.now() + 30000;
+      let holding = false;
+      while (!holding && Date.now() < deadline) {
+        const r = await db.runAsync(
+          `SELECT count(*) FROM pg_stat_activity WHERE application_name=${literal(name)} AND wait_event='PgSleep';`,
+        );
+        holding = r.ok && last(r.stdout) === "1";
+        if (!holding) await sleep(25);
+      }
+      const written = await write();
+      const applied = await session;
+      return {
+        inboxId,
+        holding,
+        written,
+        applied: applied.stdout + (applied.ok ? "" : applied.stderr.slice(0, 400)),
+        ok:
+          applied.ok &&
+          applied.stdout.includes("applied:pending") &&
+          applied.stdout.includes("blocked:true"),
+      };
+    };
+    const putRun = await prepared(X3.storeId, 93, "begun");
+    const put = await redactFirst(X3, "runs_redact_x2", () =>
+      ports.lease(putRun.ref, (step) => step.run.snapshotPut(0, putRun.canonical)),
+    );
+    check(
+      "X2:a_snapshot_put_racing_shop_redact_waits_and_writes_nothing",
+      putRun.steps.begun === "begun" &&
+        put.holding &&
+        put.ok &&
+        put.written?.entered === true &&
+        put.written.value?.outcome === "denied" &&
+        JSON.stringify(contentOf(X3.storeId)) ===
+          JSON.stringify({ snapshots: 0, drafts: 0, parameters: 0 }),
+      { putRun: putRun.steps, put, content: contentOf(X3.storeId) },
+    );
+    const finishRun = await prepared(X4.storeId, 94, "attempted");
+    const finish = await redactFirst(X4, "runs_redact_x3", () =>
+      ports.lease(finishRun.ref, (step) =>
+        step.run.productFinish(0, {
+          outcome: "drafted",
+          setCanonical: draftSet(94),
+          fields: ["title"],
+          flags: noFlags,
+        }),
+      ),
+    );
+    check(
+      "X3:a_draft_finish_racing_shop_redact_waits_and_writes_nothing",
+      finishRun.steps.put === "stored" &&
+        JSON.stringify(finishRun.call) === JSON.stringify(["begun", "closed"]) &&
+        finish.holding &&
+        finish.ok &&
+        finish.written?.entered === true &&
+        finish.written.value?.outcome === "denied" &&
+        JSON.stringify(contentOf(X4.storeId)) ===
+          JSON.stringify({ snapshots: 0, drafts: 0, parameters: 0 }),
+      { finishRun: finishRun.steps, call: finishRun.call, finish, content: contentOf(X4.storeId) },
+    );
+    const submitRun = await prepared(X5.storeId, 95, "drafted");
+    const envelope = one(
+      `SELECT envelope_id::text AS envelope FROM morrow_work.runs WHERE id=${literal(submitRun.runId)}`,
+    ).envelope;
+    const submit = await redactFirst(X5, "runs_redact_x4", () =>
+      proposeDrafts(ports, submitRun.ref, {
+        runId: submitRun.runId,
+        envelopeId: envelope,
+        fields: ["descriptionHtml", "title"],
+        modelBudgetMs: runModelBudgetMs(1, "claude_sonnet_5_5", "low"),
+      }),
+    );
+    check(
+      "X4:an_agent_submit_racing_shop_redact_waits_and_proposes_nothing",
+      submitRun.finished?.value?.outcome === "recorded" &&
+        submit.holding &&
+        submit.ok &&
+        submit.written?.kind === "proposed" &&
+        submit.written.proposals === 0 &&
+        submit.written.stop === "proposal_refused" &&
+        count(
+          `SELECT count(*) FROM morrow_work.proposals WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND store_id=${literal(X5.storeId)}`,
+        ) === 0 &&
+        JSON.stringify(contentOf(X5.storeId)) ===
+          JSON.stringify({ snapshots: 0, drafts: 0, parameters: 0 }),
+      { finished: submitRun.finished, submit, content: contentOf(X5.storeId) },
+    );
+    // X5: the write first. A snapshot put on S2 holds the store's stop key shared until the
+    // connector's shop/redact waits behind it; the write commits, and the pass then deletes
+    // it with the rest of S2's content. S keeps its own (the two-store case).
+    const lateRun = await prepared(S2, 96, "begun");
+    const inboxS2 = recordShopRedact(X2);
+    let redactS2 = null;
+    const held = await ports.lease(lateRun.ref, async (step) => {
+      const stored = await step.run.snapshotPut(0, lateRun.canonical);
+      redactS2 = db.runAsync(apply(inboxS2), {
+        user: "morrow_connector_ingress",
+        applicationName: "runs_redact_x5",
+      });
+      const waited = await db.waitForLockWait("application_name='runs_redact_x5'", 4000);
+      return { stored: stored.outcome, waited };
+    });
+    const afterS2 = await redactS2;
+    check(
+      "X5:a_snapshot_committed_first_is_deleted_by_the_pass_and_another_store_keeps_its_content",
+      held.entered === true &&
+        held.value.stored === "stored" &&
+        held.value.waited === true &&
+        afterS2.ok &&
+        afterS2.stdout.includes("applied:pending") &&
+        JSON.stringify(contentOf(S2)) ===
+          JSON.stringify({ snapshots: 0, drafts: 0, parameters: 0 }) &&
+        JSON.stringify(contentOf(S)) === JSON.stringify(keptS),
+      {
+        held,
+        afterS2: afterS2.stdout + afterS2.stderr.slice(0, 400),
+        s2: contentOf(S2),
+        s: contentOf(S),
+      },
+    );
+    // X6: S2's token destroyed (the broker, the uninstall reason the installation records),
+    // the re-drive completes the request: every handler in the evidence, nothing
+    // outstanding, and the deletions counted per pass (this pass deleted nothing more).
+    const destroyed = last(
+      db.sql(
+        `SELECT morrow_vault.shopify_credential_destroy(${literal(X2.installationId)},'uninstalled');`,
+        { user: "morrow_vault_broker" },
+      ),
+    );
+    const completed = db.tryRun(apply(inboxS2), { user: "morrow_connector_ingress" });
+    const request = db.rows(
+      `SELECT status,evidence FROM morrow_identity.privacy_requests WHERE inbox_id=${literal(inboxS2)}`,
+      { role: "morrow_identity_owner" },
+    )[0];
+    const handlers = request?.evidence?.handlers ?? [];
+    const rowsOf = (table) => handlers.find((h) => h.table === table)?.rows;
+    check(
+      "X6:the_request_completes_with_every_handler_and_per_pass_deletion_counts",
+      destroyed === "destroyed" &&
+        completed.ok &&
+        completed.stdout.includes("applied:applied") &&
+        request?.status === "completed" &&
+        JSON.stringify(handlers.map((h) => h.table).sort()) ===
+          JSON.stringify(storeContentHandlers.map((h) => h.table).sort()) &&
+        handlers
+          .filter((h) =>
+            ["morrow_work.product_snapshots", "morrow_work.run_drafts"].includes(h.table),
+          )
+          .every((h) => h.action === "delete_rows") &&
+        rowsOf("morrow_work.product_snapshots") === 0 &&
+        rowsOf("morrow_work.run_drafts") === 0 &&
+        rowsOf("morrow_work.proposal_parameters") === 1 &&
+        JSON.stringify(request.evidence.outstanding) === "[]",
+      { destroyed, completed: completed.stdout, request },
+    );
+  }
   return { checks, failures, retries };
 }
 
@@ -1864,7 +2359,8 @@ async function main() {
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The runs handler, the Workflow logic and the broker's gateway run in Node over psql connectors (morrow_api_worker, morrow_runtime_executor, morrow_vault_broker), not in workerd over the Neon transport; the Messages API is an in-process stand-in.",
-      "The product read is a lab stand-in for M2 PR-3's shopifyRead productContent; the orchestrator keeps dispatch disabled until it lands.",
+      "The Workflow's product read is a lab stand-in for M2 PR-3's shopifyRead productContent (the R cases call its vault resolution directly as the broker's login); the workerd leg with the Shopify and Anthropic oracles is open.",
+      "The shop/redact deliveries are recorded through the broker's own definer (morrow_vault.shopify_webhook_record) without the signature check, which lab:shopify-privacy covers; the sim connection stop of R5 is inserted with the triggers off.",
       "M5's billing records (route, account, entitlement, period, wallet) are owner-seeded with the triggers off (sim); lab:billing proves the receipt path that writes them.",
       "Durable steps are an in-process stand-in for Cloudflare Workflows' step.do (a RunStepRetry is retried; results cross a JSON boundary).",
     ],
