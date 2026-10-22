@@ -11,17 +11,21 @@ import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/m
 import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
 import { createConnectionKernel } from "../../../packages/policy/src/connection-authority.js";
 import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
+import type { BillingApiDependencies } from "../../../packages/work/src/billing/http.js";
+import type { StripeWebhookDependencies } from "../../../packages/work/src/billing/webhook.js";
 import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
 import {
   createBrokerChallengeVerifier,
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
   createBrokerSessionPageReader,
+  createBrokerStripe,
 } from "./broker-client.js";
 import {
   mapApiEnvironment,
   type ApiEnvironmentCode,
   type ApiEnvironmentValues,
+  type ApiStripeMode,
 } from "./environment.js";
 import { createSessionLimit, type SessionLimit } from "./session-limit.js";
 import { createWorkspaceApiWorker } from "./worker.js";
@@ -49,6 +53,8 @@ export function composeApiDependencies(
   values: Readonly<ApiEnvironmentValues>,
   broker: ApiBrokerRpc,
   now: () => number,
+  environment: "development" | "staging" | "production" = "development",
+  stripeMode: ApiStripeMode = "off",
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
   const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
@@ -90,9 +96,31 @@ export function composeApiDependencies(
     ),
     now,
   });
+  // M5 PR-1: the billing API and the Stripe webhook on the same origin and work login, with
+  // the broker's Stripe methods behind the ApiBroker binding. The environment is the
+  // Worker's own (production never maps, ADR-0007 item 9). While the Stripe switch is off
+  // (owner decision (c), 2026-10-21) there are no Stripe adapters: checkout and portal
+  // answer 503 unavailable before any database access and the webhook 503 before reading
+  // its body; the billing view and the plans keep working from the database.
+  const stripe = stripeMode === "test" ? createBrokerStripe(broker) : null;
+  const billing: BillingApiDependencies = Object.freeze({
+    origin: work.origin,
+    connector: work.connector,
+    environment,
+    broker: stripe,
+    now,
+  });
+  const webhook: StripeWebhookDependencies = Object.freeze({
+    connector: work.connector,
+    environment,
+    broker: stripe,
+    now,
+  });
   return Object.freeze({
     dependencies,
     work,
+    billing,
+    webhook,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -114,9 +142,20 @@ function select(env: unknown): Selected {
   if (!mapped.ok) selected = unbound(mapped.code);
   else
     try {
-      const composed = composeApiDependencies(mapped.values, mapped.broker, () => Date.now());
+      const composed = composeApiDependencies(
+        mapped.values,
+        mapped.broker,
+        () => Date.now(),
+        mapped.environment,
+        mapped.stripe,
+      );
       selected = {
-        api: createWorkspaceApiWorker(composed.dependencies, composed.work),
+        api: createWorkspaceApiWorker(
+          composed.dependencies,
+          composed.work,
+          composed.billing,
+          composed.webhook,
+        ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         session: createSessionLimit(mapped.guard.limiters?.session ?? null),
         readiness: composed.readiness,

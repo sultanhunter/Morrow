@@ -48,6 +48,9 @@ const markers = {
   malformed: "badfile" + alnum(10),
   // M2 PR-1: the owner's vault KEK, 64 lowercase hex characters.
   kek: alnum(32),
+  // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret.
+  stripeKey: "stripekey" + alnum(12),
+  stripeWebhook: "stripehook" + alnum(12),
 };
 const files = () => ({
   "workos-api-key": "sk_test_" + markers.workos,
@@ -56,6 +59,8 @@ const files = () => ({
   "neon-project-api-key": "napi_" + markers.neonKey,
   "cloudflare-operator-token": markers.operator,
   "vault-kek-v1": markers.kek,
+  "stripe-restricted-key": "rk_test_" + markers.stripeKey,
+  "stripe-webhook-secret": "whsec_" + markers.stripeWebhook,
 });
 const everyMarker = () => Object.values(markers);
 const contains = (text, values) => values.filter((value) => value && String(text).includes(value));
@@ -72,10 +77,12 @@ async function status({
   tools = {},
   database = {},
   ages = {},
+  // M5: the Stripe switch (owner decision (c), 2026-10-21); off is the committed state.
+  stripe = "off",
 } = {}) {
   const planted = plantedHome(plant, { modes, links, directoryMode });
   try {
-    const constants = (await fakeContext({ home: planted.home, tools: fakeTools().tools }))
+    const constants = (await fakeContext({ home: planted.home, tools: fakeTools().tools, stripe }))
       .constants;
     const tracked = [...constants.brokerSecrets, "LOGIN_CAPSULE_KEYRING"];
     const record = {
@@ -115,6 +122,7 @@ async function status({
       tools: fake.tools,
       database: db.connector,
       now,
+      stripe,
     });
     const code = await main(["secrets-status"], ctx);
     const report = JSON.parse(out[0] ?? err[0]);
@@ -124,20 +132,28 @@ async function status({
   }
 }
 
-// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8) and M2 PR-1 (ADR-0022 items 7-8): the
-// broker's exact secret set is `brokerRequiredSecrets`, fourteen names: WORKOS_API_KEY,
-// TURNSTILE_SECRET_KEY, the eleven role passwords (the ten leased roles and the broker's
-// own `morrow_vault_broker`) and MORROW_VAULT_KEK_V1. secrets-status, gate 6 and the
-// first-deploy file all use that set, and it is the broker's wrangler `secrets.required`
-// in development and staging; production requires its vault-free subset (twelve names,
-// `brokerRequiredSecretsFor("production")`) until the ADR-0007 item 9 custody ADR.
-// ADR-0022's Anthropic, Shopify and Stripe credentials join only with their milestones.
-// The staging api keeps P05.T01ab's three limiters and no required secret.
-test("AC02: the broker's fourteen secret names are brokerRequiredSecrets and wrangler's secrets.required", async () => {
-  const constants = await identityConstants();
+// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8), M2 PR-1 (ADR-0022 items 7-8) and M5
+// PR-1 (ADR-0022 items 7 and 12) with the Stripe switch (owner decision (c), 2026-10-21):
+// the broker's exact secret set is `brokerRequiredSecretsFor("staging", switch)`. Off (the
+// committed switch in docs/decisions/stripe-staging.json), fourteen names, the deployed
+// broker's: WORKOS_API_KEY, TURNSTILE_SECRET_KEY, the eleven role passwords (the ten leased
+// roles and the broker's own `morrow_vault_broker`) and MORROW_VAULT_KEK_V1. On, sixteen
+// with STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET. secrets-status, gate 6 and the
+// first-deploy file all use that set, and it is the broker's wrangler `secrets.required` in
+// staging (development is always off); production requires its vault-free and Stripe-free
+// subset (twelve names, `brokerRequiredSecretsFor("production")`) until the ADR-0007 item 9
+// custody ADR. ADR-0022's Anthropic and Shopify credentials join only with their
+// milestones. The staging api keeps P05.T01ab's three limiters and no required secret.
+test("AC02: the broker's secret names follow the Stripe switch and wrangler's secrets.required", async () => {
+  const { stagingStripeSwitch } = await import("../scripts/staging.mjs");
+  const committed = stagingStripeSwitch(process.cwd());
+  assert.equal(committed, "off");
+  const constants = await identityConstants({ stripe: committed });
   assert.equal(constants.roles.length, 11);
   assert.equal(constants.roles.at(-1), "morrow_vault_broker");
   assert.deepEqual(constants.vaultKekSecrets, ["MORROW_VAULT_KEK_V1"]);
+  assert.equal(constants.stripe, "off");
+  assert.deepEqual(constants.stripeSecrets, []);
   const expected = [
     "WORKOS_API_KEY",
     "TURNSTILE_SECRET_KEY",
@@ -146,8 +162,22 @@ test("AC02: the broker's fourteen secret names are brokerRequiredSecrets and wra
   ].sort();
   assert.equal(constants.brokerSecrets.length, 14);
   assert.deepEqual(constants.brokerSecrets, expected);
+  // The default is off, whatever the record says.
+  assert.deepEqual((await identityConstants()).brokerSecrets, expected);
+  const on = await identityConstants({ stripe: "on" });
+  assert.equal(on.stripe, "on");
+  assert.deepEqual(on.stripeSecrets, ["STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"]);
+  assert.equal(on.brokerSecrets.length, 16);
+  assert.deepEqual(
+    on.brokerSecrets,
+    [...expected, "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"].sort(),
+  );
+  await assert.rejects(identityConstants({ stripe: "test" }), {
+    code: "STAGING_STRIPE_RECORD_INVALID",
+  });
   const { brokerRequiredSecretsFor } = await import("../packages/identity/src/broker-protocol.ts");
   const production = [...brokerRequiredSecretsFor("production")].sort();
+  assert.equal(production.length, 12);
   assert.deepEqual(
     production,
     constants.brokerSecrets.filter(
@@ -168,6 +198,41 @@ test("AC02: the broker's fourteen secret names are brokerRequiredSecrets and wra
   assert.deepEqual(api.secrets.required, []);
 });
 
+// M5: the switch is read with edge:check's own record rule; an invalid record stops the
+// staging tools before any effect.
+test("M5: the staging tools read the Stripe switch from the reviewed record only", async () => {
+  const { stagingStripeSwitch } = await import("../scripts/staging.mjs");
+  const root = mkdtempSync(join(tmpdir(), "morrow-stripe-switch-"));
+  try {
+    mkdirSync(join(root, "docs/decisions"), { recursive: true });
+    const committed = JSON.parse(readFileSync("docs/decisions/stripe-staging.json", "utf8"));
+    const write = (record) =>
+      writeFileSync(join(root, "docs/decisions/stripe-staging.json"), JSON.stringify(record));
+    write(committed);
+    assert.equal(stagingStripeSwitch(root), "off");
+    write({
+      ...committed,
+      switch: "on",
+      portal_configuration_id: "bpc_" + "Switch".padEnd(24, "0"),
+      observed_on: "2026-10-21",
+    });
+    assert.equal(stagingStripeSwitch(root), "on");
+    for (const record of [
+      { ...committed, switch: "test" },
+      { ...committed, switch: "on" },
+      (({ switch: _, ...rest }) => rest)(committed),
+      { ...committed, mode: "live" },
+    ]) {
+      write(record);
+      assert.throws(() => stagingStripeSwitch(root), { code: "STAGING_STRIPE_RECORD_INVALID" });
+    }
+    rmSync(join(root, "docs/decisions/stripe-staging.json"));
+    assert.throws(() => stagingStripeSwitch(root), { code: "STAGING_STRIPE_RECORD_INVALID" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("AC08: a healthy staging reports presence, mode, format and age, and exits 0", async () => {
   const { code, report, text } = await status();
   assert.equal(code, 0, JSON.stringify(report.mismatches));
@@ -175,9 +240,12 @@ test("AC08: a healthy staging reports presence, mode, format and age, and exits 
   assert.equal(report.directory.ok, true);
   assert.equal(report.directory.mode, "0700");
   const required = report.files.filter((f) => f.required);
-  // Five operator files and M2 PR-1's vault KEK (`vault-kek-v1`, the owner's own).
+  // Five operator files and M2 PR-1's vault KEK (`vault-kek-v1`, the owner's own). With the
+  // Stripe switch off no Stripe file is required or read (the planted ones are ignored).
   assert.equal(required.length, 6);
   assert.ok(required.some((f) => f.file === "vault-kek-v1"));
+  assert.ok(!report.files.some((f) => f.file.startsWith("stripe-")));
+  assert.equal(report.workers.broker.names.length, 14);
   for (const f of required)
     assert.deepEqual(
       [f.exists, f.mode, f.owner, f.nonEmpty, f.format, f.ok],
@@ -195,6 +263,48 @@ test("AC08: a healthy staging reports presence, mode, format and age, and exits 
   assert.deepEqual(contains(text, everyMarker()), []);
 });
 
+// M5 PR-1 with the switch on: the two Stripe owner files are required and the broker holds
+// sixteen names.
+test("AC08: with the Stripe switch on, the Stripe files are required and the broker holds 16", async () => {
+  const { code, report } = await status({ stripe: "on" });
+  assert.equal(code, 0, JSON.stringify(report.mismatches));
+  const required = report.files.filter((f) => f.required);
+  assert.equal(required.length, 8);
+  for (const file of ["stripe-restricted-key", "stripe-webhook-secret"])
+    assert.ok(
+      required.some((f) => f.file === file && f.ok),
+      file,
+    );
+  assert.equal(report.workers.broker.names.length, 16);
+  assert.ok(report.ages.some((a) => a.name === "STRIPE_WEBHOOK_SECRET"));
+  // On, a broker still without them (deployed while the switch was off) is a mismatch until
+  // the owner places them with put-secret.
+  const { brokerRequiredSecrets } = await import("../packages/identity/src/broker-protocol.ts");
+  const missing = await status({
+    stripe: "on",
+    tools: { secrets: { broker: [...brokerRequiredSecrets] } },
+  });
+  assert.equal(missing.code, 1);
+  assert.deepEqual(missing.report.workers.broker.missing, [
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+  ]);
+  assert.ok(missing.report.mismatches.includes("worker:broker"));
+  // Off, a broker that holds them is the mixed state: a mismatch (extra names).
+  const extra = await status({
+    tools: {
+      secrets: {
+        broker: [...brokerRequiredSecrets, "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"],
+      },
+    },
+  });
+  assert.equal(extra.code, 1);
+  assert.deepEqual(extra.report.workers.broker.extra, [
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+  ]);
+});
+
 test("AC08: a missing, extra or malformed secret, a wrong mode or a symlink exits non-zero", async () => {
   const cases = [
     [{ plant: (({ "workos-api-key": _, ...rest }) => rest)(files()) }, "file:workos-api-key"],
@@ -202,6 +312,31 @@ test("AC08: a missing, extra or malformed secret, a wrong mode or a symlink exit
     [{ plant: (({ "vault-kek-v1": _, ...rest }) => rest)(files()) }, "file:vault-kek-v1"],
     [{ plant: { ...files(), "vault-kek-v1": markers.malformed } }, "file:vault-kek-v1"],
     [{ modes: { "vault-kek-v1": 0o640 } }, "file:vault-kek-v1"],
+    // M5 PR-1, with the Stripe switch on: only a restricted test key and a webhook signing
+    // secret are admitted.
+    [
+      { stripe: "on", plant: (({ "stripe-restricted-key": _, ...rest }) => rest)(files()) },
+      "file:stripe-restricted-key",
+    ],
+    [
+      {
+        stripe: "on",
+        plant: { ...files(), "stripe-restricted-key": "sk_test_" + markers.malformed },
+      },
+      "file:stripe-restricted-key",
+    ],
+    [
+      {
+        stripe: "on",
+        plant: { ...files(), "stripe-restricted-key": "rk_live_" + markers.malformed },
+      },
+      "file:stripe-restricted-key",
+    ],
+    [
+      { stripe: "on", plant: { ...files(), "stripe-webhook-secret": "wh_" + markers.malformed } },
+      "file:stripe-webhook-secret",
+    ],
+    [{ stripe: "on", modes: { "stripe-webhook-secret": 0o644 } }, "file:stripe-webhook-secret"],
     [
       { plant: { ...files(), "workos-api-key": "pk_live_" + markers.malformed } },
       "file:workos-api-key",
@@ -466,7 +601,19 @@ test("AC07: role passwords reach only their ALTER ROLE, then the 0600 first-depl
   assert.equal(secrets.WORKOS_API_KEY, "sk_test_" + markers.workos);
   // The owner's KEK file, byte for byte: the tool reads it and generates none.
   assert.equal(secrets.MORROW_VAULT_KEK_V1, markers.kek);
+  // M5: with the Stripe switch off (committed) the file holds the fourteen names and no
+  // Stripe value, although both Stripe owner files are planted.
+  assert.equal(Object.keys(secrets).length, 14);
+  assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
   noMarkers(first, [], rolePasswords(constants, secrets));
+  // M5 PR-1, the switch on: the owner's two Stripe files, byte for byte (sixteen names).
+  const firstStripe = runChild("provision-first-stripe");
+  assert.equal(firstStripe.status, 0, firstStripe.stderr);
+  const stripeSecrets = JSON.parse(firstStripe.brokerFile);
+  assert.equal(stripeSecrets.STRIPE_RESTRICTED_KEY, "rk_test_" + markers.stripeKey);
+  assert.equal(stripeSecrets.STRIPE_WEBHOOK_SECRET, "whsec_" + markers.stripeWebhook);
+  assert.equal(Object.keys(stripeSecrets).length, 16);
+  noMarkers(firstStripe, [], rolePasswords(constants, stripeSecrets));
   assert.deepEqual(sentPasswords(first), rolePasswords(constants, secrets));
   assert.equal(first.dump.statements.filter((s) => / PASSWORD /.test(s.text)).length, 11);
   assert.ok(first.dump.statements.every((s) => !s.text.includes("SCRAM-SHA-256$")));
@@ -566,6 +713,28 @@ test("AC07: role passwords reach only their ALTER ROLE, then the 0600 first-depl
   assert.equal(oneLine(kek, "stdout").secret, "MORROW_VAULT_KEK_V1");
   assert.deepEqual(JSON.parse(kek.dump.bulkInputs[0].input), { MORROW_VAULT_KEK_V1: markers.kek });
   noMarkers(kek);
+
+  // M5: with the Stripe switch off put-secret refuses a Stripe name before reading its
+  // file or running any tool.
+  const off = runChild("put-secret-stripe-off");
+  assert.equal(off.status, 1);
+  assert.deepEqual(oneLine(off, "stderr"), { command: "put-secret", code: "STAGING_STRIPE_OFF" });
+  assert.deepEqual(off.dump.bulkInputs, []);
+  assert.deepEqual(off.dump.calls, []);
+  noMarkers(off);
+  // M5 PR-1, the switch on: each Stripe owner file reaches the broker only through
+  // `secret bulk` stdin, also when the running broker does not hold the name yet (placed
+  // after the reviewed commit that turns the switch on).
+  for (const [scenario, name, value] of [
+    ["put-secret-stripe-key", "STRIPE_RESTRICTED_KEY", "rk_test_" + markers.stripeKey],
+    ["put-secret-stripe-webhook", "STRIPE_WEBHOOK_SECRET", "whsec_" + markers.stripeWebhook],
+  ]) {
+    const stripe = runChild(scenario);
+    assert.equal(stripe.status, 0, stripe.stderr);
+    assert.equal(oneLine(stripe, "stdout").secret, name);
+    assert.deepEqual(JSON.parse(stripe.dump.bulkInputs[0].input), { [name]: value });
+    noMarkers(stripe);
+  }
 });
 
 test("AC07: connections count unknown names without printing them; keyring prints metadata only", () => {

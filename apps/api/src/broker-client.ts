@@ -4,9 +4,16 @@ import {
   challengeLimits,
   challengeTokenValid,
   decodeNeonLeaseGrant,
+  decodeStripeCheckoutResult,
+  decodeStripeCustomerResult,
+  decodeStripePortalResult,
+  decodeStripeWebhookResult,
+  stripeLimits,
+  stripeOperationIdValid,
   type ApiBrokerRpc,
   type ChallengeVerdict,
 } from "../../../packages/identity/src/broker-protocol.js";
+import type { BillingBrokerPort } from "../../../packages/work/src/billing/port.js";
 import type { LoginControl } from "../../../packages/identity/src/standalone-login-protocol.js";
 import type { WorkosSessionPageReader } from "../../../packages/identity/src/workos-session-status.js";
 
@@ -198,4 +205,57 @@ export function createBrokerChallengeVerifier(
     if (verdict !== "passed" && verdict !== "failed") throw held();
     return verdict;
   };
+}
+
+// M5 PR-1: the billing port over the ApiBroker's four Stripe methods. Ids and strings only
+// cross RPC; each call is exactly one RPC raced against the caller's signal and a budget
+// plus a small RPC allowance, never retried (a retry is the client's, with the same
+// Idempotency-Key, which reconciles the same operation). A result that is not the closed
+// JSON, a late reply or a throw is API_BROKER_HELD.
+export const brokerStripeBudgetMs = 8000;
+export function createBrokerStripe(broker: ApiBrokerRpc): BillingBrokerPort {
+  const budget = brokerStripeBudgetMs;
+  const allowance = budget + 500;
+  const operation = (id: unknown): string => {
+    if (!stripeOperationIdValid(id)) throw held();
+    return id;
+  };
+  return Object.freeze({
+    async customerEnsure(operationId: string, signal: AbortSignal) {
+      const id = operation(operationId);
+      return decodeStripeCustomerResult(
+        await raceBrokerCall(() => broker.stripeCustomerEnsure(id, budget), signal, allowance),
+      );
+    },
+    async checkoutCreate(operationId: string, signal: AbortSignal) {
+      const id = operation(operationId);
+      return decodeStripeCheckoutResult(
+        await raceBrokerCall(() => broker.stripeCheckoutCreate(id, budget), signal, allowance),
+      );
+    },
+    async portalCreate(operationId: string, signal: AbortSignal) {
+      const id = operation(operationId);
+      return decodeStripePortalResult(
+        await raceBrokerCall(() => broker.stripePortalCreate(id, budget), signal, allowance),
+      );
+    },
+    async webhookVerify(rawBodyBase64: string, signatureHeader: string, signal: AbortSignal) {
+      if (
+        typeof rawBodyBase64 !== "string" ||
+        rawBodyBase64.length === 0 ||
+        rawBodyBase64.length > stripeLimits.webhookBase64MaxBytes ||
+        typeof signatureHeader !== "string" ||
+        signatureHeader.length === 0 ||
+        signatureHeader.length > stripeLimits.signatureMaxBytes
+      )
+        throw held();
+      return decodeStripeWebhookResult(
+        await raceBrokerCall(
+          () => broker.stripeWebhookVerify(rawBodyBase64, signatureHeader, budget),
+          signal,
+          allowance,
+        ),
+      );
+    },
+  });
 }

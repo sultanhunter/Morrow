@@ -10,6 +10,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   checkChallengeConfiguration,
+  checkStripeConfiguration,
   committedCsp,
   commands,
   identityConstants,
@@ -43,6 +44,8 @@ const head = schemaHead(loadMigrationChain());
 const digest = "c".repeat(64);
 const csp = committedCsp(process.cwd());
 const constants = await identityConstants();
+// M5: the Stripe switch on (owner decision (c), 2026-10-21); `constants` is the committed off.
+const constantsOn = await identityConstants({ stripe: "on" });
 const accountId = "0".repeat(31) + "1";
 const origin = "https://morrow-staging-api.lab.workers.dev";
 const ciEnvironment = (overrides = {}) => ({
@@ -71,6 +74,7 @@ async function world({
   challengeVars,
   overrides = {},
   tools = {},
+  stripe = "off",
 } = {}) {
   const cloud = fakeCloudflare({ scripts, ...cloudflare });
   const hooks = { onDeploy: null };
@@ -89,7 +93,7 @@ async function world({
     wrangler: {
       secrets: {
         api: ["LOGIN_CAPSULE_KEYRING"],
-        broker: constants.brokerSecrets,
+        broker: (stripe === "on" ? constantsOn : constants).brokerSecrets,
         orchestrator: [],
         connector: [],
         ...(wrangler.secrets ?? {}),
@@ -108,6 +112,7 @@ async function world({
     staging,
     environment,
     challengeVars,
+    stripe,
     fetch: site.fetch,
     overrides: {
       loginConfiguration: async () => ({ configurationDigest: digest, origin }),
@@ -557,6 +562,146 @@ test("AC04: the committed login configuration passes gate 4's digest step", asyn
     }),
     { code: "STAGING_LOGIN_CONFIGURATION_INVALID" },
   );
+});
+
+// M5 PR-1 and the Stripe switch (owner decision (c), 2026-10-21). Gate 4 holds the Stripe
+// vars to the committed switch before anything is uploaded: off (committed), neither
+// Worker carries MORROW_STRIPE_MODE and the broker no STRIPE_CONFIGURATION_JSON; on, both
+// carry "test" and the broker's configuration parses with its own parser. Anything else
+// is STAGING_STRIPE_SWITCH_MIXED (or _CONFIGURATION_INVALID) and deploys nothing. Gate 6
+// then expects the broker's fourteen names off and sixteen on.
+test("AC04: gate 4 holds the Stripe vars to the switch; gate 6 its secrets; a mixed state deploys nothing", async () => {
+  const valid = {
+    schemaVersion: 1,
+    portalConfigurationId: "bpc_" + "A".repeat(24),
+    automaticTax: false,
+    billingAddressCollection: "auto",
+  };
+  const committed = await import("../scripts/staging.mjs").then((m) =>
+    m.loadStagingConfiguration(process.cwd()),
+  );
+  assert.equal(committed.broker.stripeJson, null);
+  assert.equal(committed.broker.stripeMode, null);
+  assert.equal(committed.stripeMode, null);
+  assert.deepEqual(await checkStripeConfiguration(committed), { stripe: "off", present: false });
+  assert.deepEqual(await checkStripeConfiguration(committed, "off"), {
+    stripe: "off",
+    present: false,
+  });
+  const on = (change = {}, broker = {}) => ({
+    stripeMode: "test",
+    ...change,
+    broker: { stripeJson: JSON.stringify(valid), stripeMode: "test", ...broker },
+  });
+  assert.deepEqual(await checkStripeConfiguration(on(), "on"), {
+    stripe: "on",
+    present: true,
+    automaticTax: false,
+  });
+  // Mixed states, either way.
+  for (const [loaded, stripe] of [
+    [{ broker: { stripeJson: JSON.stringify(valid) } }, "off"],
+    [{ stripeMode: "test", broker: {} }, "off"],
+    [{ broker: { stripeMode: "test" } }, "off"],
+    [on(), "off"],
+    [committed, "on"],
+    [on({}, { stripeJson: null }), "on"],
+    [on({ stripeMode: null }), "on"],
+    [on({}, { stripeMode: null }), "on"],
+    [on({ stripeMode: "live" }), "on"],
+    [on({}, { stripeMode: "TEST" }), "on"],
+    [on(), "maybe"],
+  ])
+    await assert.rejects(
+      checkStripeConfiguration(loaded, stripe),
+      { code: "STAGING_STRIPE_SWITCH_MIXED" },
+      stripe + ":" + JSON.stringify(loaded),
+    );
+  for (const bad of [
+    { ...valid, extra: 1 },
+    { ...valid, portalConfigurationId: "bpc_short" },
+    { ...valid, portalConfigurationId: "pc_" + "A".repeat(24) },
+    { ...valid, automaticTax: "false" },
+    { ...valid, billingAddressCollection: "never" },
+    { ...valid, schemaVersion: 2 },
+  ])
+    await assert.rejects(
+      checkStripeConfiguration(on({}, { stripeJson: JSON.stringify(bad) }), "on"),
+      { code: "STAGING_STRIPE_CONFIGURATION_INVALID" },
+      JSON.stringify(bad),
+    );
+  await assert.rejects(checkStripeConfiguration(on({}, { stripeJson: "{" }), "on"), {
+    code: "STAGING_STRIPE_CONFIGURATION_INVALID",
+  });
+  // Through the deploy, local and CI: nothing reaches wrangler.
+  for (const [label, options, code] of [
+    [
+      "configuration while off",
+      { challengeVars: { brokerStripe: JSON.stringify(valid) } },
+      "STAGING_STRIPE_SWITCH_MIXED",
+    ],
+    [
+      "api mode while off",
+      { challengeVars: { apiStripeMode: "test" } },
+      "STAGING_STRIPE_SWITCH_MIXED",
+    ],
+    [
+      "no configuration while on",
+      { stripe: "on", challengeVars: { brokerStripe: null } },
+      "STAGING_STRIPE_SWITCH_MIXED",
+    ],
+    [
+      "malformed while on",
+      { stripe: "on", challengeVars: { brokerStripe: JSON.stringify({ ...valid, x: 1 }) } },
+      "STAGING_STRIPE_CONFIGURATION_INVALID",
+    ],
+  ])
+    for (const ci of [false, true]) {
+      const bad = await world({ ...options, ...(ci ? { environment: ciEnvironment() } : {}) });
+      try {
+        const { code: exit, result } = await bad.run(ci ? ["deploy", "--ci"] : ["deploy"]);
+        assert.equal(exit, 1, label);
+        assert.equal(result.outcome, "failed", label);
+        assert.equal(result.code, code, label);
+        assert.equal(result.gates.challenge, "invalid", label);
+        assert.deepEqual(wranglerCalls(bad), [], label);
+      } finally {
+        bad.planted.cleanup();
+      }
+    }
+  // Gate 6 follows the switch: off, a broker that holds the Stripe names (or, on, one that
+  // lacks them) stops before any upload.
+  const { brokerRequiredSecrets } = await import("../packages/identity/src/broker-protocol.ts");
+  for (const [label, options] of [
+    ["stripe names while off", { wrangler: { secrets: { broker: constantsOn.brokerSecrets } } }],
+    [
+      "no stripe names while on",
+      { stripe: "on", wrangler: { secrets: { broker: [...brokerRequiredSecrets] } } },
+    ],
+  ]) {
+    const mismatch = await world({ ...options, environment: ciEnvironment() });
+    try {
+      const { result } = await mismatch.run(["deploy", "--ci"]);
+      assert.equal(result.gates.challenge, "ok", label);
+      assert.equal(result.gates.brokerSecrets, "mismatch", label);
+      assert.equal(result.code, "STAGING_BROKER_SECRETS_MISMATCH", label);
+      assert.deepEqual(deploys(mismatch), [], label);
+    } finally {
+      mismatch.planted.cleanup();
+    }
+  }
+  // The committed state (off, fourteen names) and the switch on (sixteen) both deploy.
+  for (const options of [{}, { stripe: "on" }]) {
+    const ok = await world({ ...options, environment: ciEnvironment() });
+    try {
+      const { result } = await ok.run(["deploy", "--ci"]);
+      assert.equal(result.gates.challenge, "ok");
+      assert.equal(result.gates.brokerSecrets, "ok");
+      assert.equal(result.outcome, "deployed");
+    } finally {
+      ok.planted.cleanup();
+    }
+  }
 });
 
 test("AC04: a local deploy refuses a HEAD that is not origin/main, a missing or failed foundation, a dirty tree", async () => {
@@ -1498,6 +1643,10 @@ const files = () => ({
   "cloudflare-operator-token": "R".repeat(40),
   // M2 PR-1: the owner's vault KEK (`npm run vault -- kek`).
   "vault-kek-v1": "5eed".repeat(16),
+  // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret (read only
+  // while the Stripe switch is on).
+  "stripe-restricted-key": "rk_test_" + "K".repeat(32),
+  "stripe-webhook-secret": "whsec_" + "H".repeat(32),
 });
 test("preflight: reports pending owner steps without values and blocks on the card or a tool pin", async () => {
   const w = await world({ files: files() });
@@ -2214,6 +2363,8 @@ test("neon-probe: refusals send no plaintext, and failures after it keep what wa
 
 test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation drills or the keyring deploy", () => {
   assert.deepEqual([...commands.keys()].sort(), [
+    // M5 PR-1 (review): the operator path for a held customer operation.
+    "billing-customer-resolve",
     "census",
     "ci-gates",
     "connections",
@@ -2222,6 +2373,8 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     "kill",
     "migrate",
     "neon-probe",
+    // M3 PR-1: the owner-run platform stop (tests/platform-stop.test.mjs).
+    "platform-stop",
     "preflight",
     "provision-roles",
     "put-secret",
@@ -2231,6 +2384,8 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     "seed-platform",
     "smoke",
     "status",
+    // The staging test entitlement (owner decision (b), 2026-10-21; card E13).
+    "test-entitlement",
     "turnstile-create",
     "unkill",
   ]);

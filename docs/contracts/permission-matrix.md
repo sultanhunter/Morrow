@@ -119,6 +119,8 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | governance.privacy.export | human_or_bounded_installation_with_explicit_capability_grant | verified subject data | Grant checks | human_only | No |
 | governance.privacy.erase | human_or_bounded_installation_with_explicit_capability_grant | subject records and permitted derived content | Required | human_only | No |
 | governance.access.request | human_or_bounded_installation_with_explicit_capability_grant | capability, resource, field, reason | Grant checks | human_only | No |
+| governance.billing.manage | human_or_bounded_installation_with_explicit_capability_grant | purchase action, plan price | Grant checks | human_only | No |
+| governance.model_default.revise | human_or_bounded_installation_with_explicit_capability_grant | default model, default effort, member credit ceiling | Grant checks | human_only | No |
 | agents.listing.read | human_or_bounded_installation_with_explicit_capability_grant | public listing and authorized readiness fields | Grant checks | agent_direct_read | No |
 | agents.builder.describe | human_or_bounded_installation_with_explicit_capability_grant | purpose, proposed skills, inputs, outputs, capabilities | Grant checks | agent_direct_write | No |
 | agents.installation.stage | human_or_bounded_installation_with_explicit_capability_grant | release lockfile, configuration, proposed grants | Grant checks | agent_direct_write | No |

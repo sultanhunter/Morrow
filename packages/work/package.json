@@ -6,12 +6,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./http": "./src/http.ts",
+    "./agents": "./src/agents/index.ts",
     "./approvals": "./src/approvals/index.ts",
     "./runtime": "./src/runtime/leases.ts",
     "./operations": "./src/operations/ledger.ts",
     "./stops": "./src/stops.ts",
     "./billing-route": "./src/billing-route.ts",
-    "./redaction": "./src/redaction.ts"
+    "./redaction": "./src/redaction.ts",
+    "./billing": "./src/billing/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

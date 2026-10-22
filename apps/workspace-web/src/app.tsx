@@ -13,6 +13,7 @@ import {
   EntryLayout,
   HomeScreen,
   InboxScreen,
+  ModelDefaultScreen,
   NotFoundScreen,
   QuestionScreen,
   ReentryNotice,
@@ -581,6 +582,14 @@ function WorkspaceFrame({
         );
       case "connection":
         return <ConnectionScreen workspace={workspace} connectionId={params.connectionId!} />;
+      // M3 PR-1: the model default under Settings > Governance (the Listings agent card is
+      // on the connection screen above).
+      case "settings_section":
+        return params.section === "governance" ? (
+          <ModelDefaultScreen workspace={workspace} />
+        ) : (
+          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+        );
       default:
         return <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />;
     }
@@ -641,6 +650,16 @@ export function guardPort(
       preview: watch(port.storeLinks.preview.bind(port.storeLinks), first),
       apply: watch(port.storeLinks.apply.bind(port.storeLinks), first),
       status: watch(port.storeLinks.status.bind(port.storeLinks), first),
+    },
+    agents: {
+      listingsStatus: watch(port.agents.listingsStatus.bind(port.agents), first),
+      listingsDocument: watch(port.agents.listingsDocument.bind(port.agents), first),
+      listingsEnable: watch(port.agents.listingsEnable.bind(port.agents), first),
+      listingsStop: watch(port.agents.listingsStop.bind(port.agents), first),
+    },
+    models: {
+      list: watch(port.models.list.bind(port.models), first),
+      reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
     },
   };
 }

@@ -136,6 +136,11 @@ test("AC07: any provider or credential-like binding keeps the api unbound", () =
     "ANTHROPIC_BASE_URL",
     // M2 PR-1: the vault KEK binds only to the broker (ADR-0022 item 7).
     "MORROW_VAULT_KEK_V1",
+    // M5 PR-1: every STRIPE_ name binds only to the broker, the configuration included.
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_CONFIGURATION_JSON",
+    "stripe_publishable",
     "E2B_API_KEY",
     "workos_client",
     "DEPLOY_SECRET",
@@ -465,6 +470,9 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
   assert.equal(mapped.values.login, vars.LOGIN_CONFIGURATION_JSON);
   assert.equal(mapped.values.binding, vars.MORROW_DATABASE_BINDING_JSON);
   assert.equal(mapped.guard.challenge.siteKey, "0x4AAAAAAFdwF1eDox4vfBd2");
+  // M5: the committed staging api carries no MORROW_STRIPE_MODE while the switch is off.
+  assert.equal(Object.hasOwn(vars, "MORROW_STRIPE_MODE"), false);
+  assert.equal(mapped.stripe, "off");
   assert.deepEqual(mapped.guard.challenge.actions, {
     login: "account_login",
     signup: "organization_signup",
@@ -479,5 +487,38 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
   assert.equal(
     code({ ...unlimited, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING }),
     "API_ENV_ABUSE_GUARD_MISSING",
+  );
+});
+
+// M5, the Stripe switch (owner decision (c), 2026-10-21): step 11. MORROW_STRIPE_MODE absent
+// is off; exactly "test" is on; any other value keeps the api on its deny-all instance. It
+// is not a credential binding (its name has no provider prefix or credential word).
+test("M5: MORROW_STRIPE_MODE absent is off, exactly test is on, anything else fails closed", () => {
+  for (const environment of ["development", "staging"]) {
+    const off = map(env(environment));
+    assert.equal(off.ok, true);
+    assert.equal(off.stripe, "off");
+    const on = map({ ...env(environment), MORROW_STRIPE_MODE: "test" });
+    assert.equal(on.ok, true, on.code);
+    assert.equal(on.stripe, "test");
+    assert.ok(Object.isFrozen(on));
+    for (const value of ["live", "TEST", "test ", "", "on", "off", 1, true, null, {}, ["test"]])
+      assert.equal(
+        code({ ...env(environment), MORROW_STRIPE_MODE: value }),
+        "API_ENV_VALUE_INVALID",
+        environment + ":" + JSON.stringify(value),
+      );
+    // An accessor is refused like any other binding read.
+    const accessor = env(environment);
+    Object.defineProperty(accessor, "MORROW_STRIPE_MODE", {
+      enumerable: true,
+      get: () => "test",
+    });
+    assert.equal(code(accessor), "API_ENV_VALUE_INVALID");
+  }
+  // Production never maps (step 7), whatever the switch.
+  assert.equal(
+    code({ ...env("production"), MORROW_STRIPE_MODE: "test" }),
+    "API_ENV_CROSS_BINDING_MISMATCH",
   );
 });

@@ -94,6 +94,120 @@
         ]
       }
     ],
+    "owner-bootstrap-v2": [
+      {
+        "capabilityId": "governance.membership.invite",
+        "verbs": [
+          "execute",
+          "approve"
+        ],
+        "fields": [
+          "identity",
+          "grantProposal"
+        ]
+      },
+      {
+        "capabilityId": "governance.membership.revoke",
+        "verbs": [
+          "execute",
+          "approve"
+        ],
+        "fields": [
+          "membershipId",
+          "expectedRevision",
+          "control"
+        ]
+      },
+      {
+        "capabilityId": "governance.grants.revise",
+        "verbs": [
+          "execute",
+          "approve"
+        ],
+        "fields": [
+          "proposalRef",
+          "approvalRef"
+        ]
+      },
+      {
+        "capabilityId": "governance.connection.connect",
+        "verbs": [
+          "administer",
+          "approve"
+        ],
+        "fields": [
+          "providerId",
+          "installationProof",
+          "scope"
+        ]
+      },
+      {
+        "capabilityId": "governance.connection.disconnect",
+        "verbs": [
+          "execute",
+          "approve"
+        ],
+        "fields": [
+          "connectionId",
+          "expectedRevision",
+          "control"
+        ]
+      },
+      {
+        "capabilityId": "governance.approval.decide",
+        "verbs": [
+          "approve"
+        ],
+        "fields": [
+          "proposalRef",
+          "decision",
+          "expectedRevision"
+        ]
+      },
+      {
+        "capabilityId": "governance.approval.preview",
+        "verbs": [
+          "view"
+        ],
+        "fields": [
+          "proposalRef",
+          "selectedTargetIndexes"
+        ]
+      },
+      {
+        "capabilityId": "governance.usage.read",
+        "verbs": [
+          "view"
+        ],
+        "fields": [
+          "scope",
+          "period"
+        ]
+      },
+      {
+        "capabilityId": "governance.billing.manage",
+        "verbs": [
+          "view",
+          "execute"
+        ],
+        "fields": [
+          "action",
+          "priceKey"
+        ]
+      },
+      {
+        "capabilityId": "governance.model_default.revise",
+        "verbs": [
+          "execute"
+        ],
+        "fields": [
+          "effort",
+          "expectedRevision",
+          "maxCreditsPerProduct",
+          "model"
+        ]
+      }
+    ],
     "workspace-member-v1": [
       {
         "capabilityId": "workspace.goal.create",

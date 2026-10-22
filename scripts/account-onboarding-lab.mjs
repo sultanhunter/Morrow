@@ -1117,6 +1117,8 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
         created.body.outcome === "created" &&
         validateDefinition("core-v1.1", "OrganizationSignupResult", created.body),
     );
+    // This lab applies 0001-0013 only, so signup records 0013's owner-bootstrap-v1 here;
+    // lab:billing A asserts M5 PR-1's owner-bootstrap-v2 signup on the whole chain.
     check(
       "ac17_records_active_policy_revision_one",
       rows("organizations", `id=${lit(O)} AND active AND policy_revision=1`) === 1 &&

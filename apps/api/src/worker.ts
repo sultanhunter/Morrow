@@ -2,25 +2,72 @@ import {
   createWorkersManagedWorkspaceApi,
   type ManagedWorkspaceApiDependencies,
 } from "../../../packages/identity/src/managed-workspace-api.js";
+import {
+  createBillingApiHandler,
+  type BillingApiDependencies,
+} from "../../../packages/work/src/billing/http.js";
+import {
+  createStripeWebhookHandler,
+  stripeWebhookPath,
+  type StripeWebhookDependencies,
+} from "../../../packages/work/src/billing/webhook.js";
 import { createWorkApiHandler, type WorkApiDependencies } from "../../../packages/work/src/http.js";
+import {
+  agentsPathPattern,
+  createAgentsApiHandler,
+} from "../../../packages/work/src/agents/http.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
-// P06.T01a: /workspace/<Id>/work(/|$) goes to the work API; every other path is
-// the unchanged P05 handler. Both share the /workspace/* namespace that the api
-// Worker serves ahead of Static Assets (run_worker_first).
-// Exported so the session limiter (session-limit.ts) answers a work path in the work
-// API's own error shape; there is one matcher.
-export const workPath = /^\/workspace\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\/work(?:\/|$)/;
+type Handler = Readonly<{
+  fetch(request: Request, env: unknown, ctx: Context): Promise<Response>;
+}>;
+// The api Worker's ordered dispatch table (integration "Workspace request guard and api
+// dispatch"; M5 PR-1). The first matching row owns the request and its response is returned
+// unchanged; anything else goes to the unchanged P05 handler (/connections and /store-links
+// among it). Every family shares the /workspace/* and /api/* namespaces that the api Worker
+// serves ahead of Static Assets (run_worker_first). Later PRs add one row each:
+//   /workspace/:ws/work(/|$)                     work API (P06.T01a)
+//   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)
+//   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
+//   /workspace/:ws/stores/:storeId/agents/, /workspace/:ws/models, /workspace/:ws/settings/model-default
+//                                                agents (M3 PR-1)
+//   /workspace/:ws/stores/:storeId/catalog/      reserved for M2 PR-3
+// The api's per-address session limit (session-limit.ts) runs before this table and answers
+// a path of the work, billing or agents row in that family's ErrorEnvelope, through
+// `apiDispatch` itself, so there is one matcher.
+const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
+export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
+const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
+type RowKey = "work" | "billing" | "stripe_webhook" | "agents";
+export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
+  Object.freeze([
+    ["work", (path: string) => workPath.test(path)],
+    ["billing", (path: string) => billingPath.test(path)],
+    ["stripe_webhook", (path: string) => path === stripeWebhookPath],
+    // M3 PR-1: the agents routes, on the work dependencies (packages/work/src/agents/http.ts).
+    ["agents", (path: string) => agentsPathPattern.test(path)],
+  ] as const);
+export function apiDispatch(path: string): RowKey | "workspace" {
+  for (const [key, matches] of apiDispatchRows) if (matches(path)) return key;
+  return "workspace";
+}
 
-// The configured local fixture imports this exact entry constructor. The
-// ordinary artifact intentionally has no account/secret/environment binding:
-// without work dependencies every work route is 401 with no network or database.
+// The configured local fixture imports this exact entry constructor. The ordinary artifact
+// intentionally has no account/secret/environment binding: without dependencies every work,
+// billing and agents route is 401 and the webhook 404, with no network or database.
 export function createWorkspaceApiWorker(
   dependencies?: ManagedWorkspaceApiDependencies,
   work?: WorkApiDependencies,
+  billing?: BillingApiDependencies,
+  webhook?: StripeWebhookDependencies,
 ) {
   const workspace = createWorkersManagedWorkspaceApi(dependencies);
-  const workApi = createWorkApiHandler(work);
+  const handlers: Readonly<Record<RowKey, Handler>> = Object.freeze({
+    work: createWorkApiHandler(work),
+    billing: createBillingApiHandler(billing),
+    stripe_webhook: createStripeWebhookHandler(webhook),
+    agents: createAgentsApiHandler(work),
+  });
   return Object.freeze({
     fetch(request: Request, env: unknown, ctx: Context): Promise<Response> {
       let path = "";
@@ -30,7 +77,8 @@ export function createWorkspaceApiWorker(
         path = "";
       }
       // No await precedes the selected owner; its response is returned unchanged.
-      if (workPath.test(path)) return workApi.fetch(request, env, ctx);
+      const key = apiDispatch(path);
+      if (key !== "workspace") return handlers[key].fetch(request, env, ctx);
       return workspace.fetch(request, env, ctx);
     },
   });

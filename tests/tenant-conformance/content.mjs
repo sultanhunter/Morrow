@@ -49,7 +49,7 @@ export function contentProblems(handlers = storeContentHandlers, tables = defaul
       typeof handler.storeKey !== "string" ||
       handler.storeKey.length < 3 ||
       !(handler.executor === null || /^[a-z_]+\.[a-z_]+(\(\))?$/.test(handler.executor)) ||
-      !["M2 PR-3", "M3 PR-1"].includes(handler.executable)
+      handler.executable !== "M2 PR-3"
     ) {
       problems.push("HANDLER_INVALID:" + table);
       continue;
