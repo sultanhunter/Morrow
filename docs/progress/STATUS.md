@@ -58,7 +58,7 @@ None for local work. Testing on the owner's live store (decision (a)) needs M6's
 
 Answered 2026-10-21: the four above, "set the flag" (which also settles setting the flag ahead of a passing smoke) and (a) to (c). Still open:
 1. Acknowledge that items 2–5 of P04.T01j's M-N1+ were recorded after `migrate` (`2026-10-21-neon-mn1plus-catalog.md`; all five match ADR-0020).
-2. Confirm P04.T02a-AC02's broker bound of 384 KiB (PR-0; 512 KiB is one line in `scripts/edge.mjs`). The hand-written Shopify checks and the plain HTTPS Claude adapter stay either way.
+2. Answered 2026-10-22 ("yes to all recommended, for CI lets use our mac"): P04.T02a-AC02's broker bound is 384 KiB (PR-0).
 
 ## Pending owner actions
 

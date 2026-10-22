@@ -1180,7 +1180,7 @@ const normalisedInputs = (meta, worker, root) =>
 // minified bytes. It was 256 KiB until 2026-10-22, when M2 PR-3 plus M3 PR-2 measured
 // 264,479 bytes (the Neon driver is 56%); 384 KiB still keeps the broker small and
 // auditable, and the hand-written Shopify checks (ADR-0008) and the plain HTTPS Claude
-// adapter remain the choice. Owner confirmation pending; 512 KiB would be this one line.
+// adapter remain the choice. Owner-approved on 2026-10-22; 512 KiB would be this one line.
 export const edgeBundleLimits = Object.freeze({
   apiGzipBytes: 3 * 1024 * 1024,
   apiWarnGzipBytes: 1024 * 1024,
