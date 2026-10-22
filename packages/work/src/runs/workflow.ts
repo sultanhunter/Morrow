@@ -34,7 +34,8 @@ import { packListingProposals } from "./producer.js";
 //            and provider_error end the run, incomplete, refusal, invalid output and
 //            uncertain use the next attempt, input_over_cap fails the product at once.
 //   propose  decideDelegation (propose on catalog.content.publish), the drafts packed by
-//            bytes into Proposal@2 records, each submitted by the agent submit definer.
+//            bytes into Proposal@2 records, each submitted by the agent submit definer; it
+//            also runs after a run-ending outcome, so drafted products are still proposed.
 //   finish   run_finish: settles at the products proposed, ends the run, releases the lease.
 
 export type ProductRead =
@@ -441,11 +442,12 @@ export async function listingsRun(
     if (r.kind === "interrupted") return r;
     if (r.kind === "product") stop = r.stop;
   }
-  if (stop === null) {
-    const proposed = await steps.do("propose", () => proposeDrafts(ports, ref, facts));
-    if (proposed.kind === "interrupted") return proposed;
-    if (proposed.kind === "proposed") stop = proposed.stop;
-  }
+  // Drafts already validated are proposed even when the run stops early (one credit per
+  // product drafted, ADR-0022 item 11): the propose step reruns decideDelegation, so a run
+  // that lost its authority proposes nothing, and with no pending draft it is a no-op.
+  const proposed = await steps.do("propose", () => proposeDrafts(ports, ref, facts));
+  if (proposed.kind === "interrupted") return proposed;
+  if (proposed.kind === "proposed" && stop === null) stop = proposed.stop;
   return steps.do("finish", async () => {
     for (let wait = 0; wait < 30; wait++) {
       const r = await under(ports, ref, (step) => step.run.finish(stop));

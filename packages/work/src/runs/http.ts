@@ -193,11 +193,23 @@ export function createRunsApiHandler(d?: RunsApiDependencies) {
       }
       try {
         const options = { readOnly: read, deadlineMs, signal: abort.signal, now: configured.now };
-        const result = await withWorkTransaction(connection, options, (tx) =>
-          prepared
-            ? runRunCommand(tx, g, prepared, correlationId, configured.environment)
-            : runRunRead(tx, g, g.route.op as RunRead),
-        );
+        // A run refusal is a value of the transaction, which then ends in ROLLBACK (persisting
+        // nothing); withWorkTransaction passes only its own typed rejections through.
+        const result = await withWorkTransaction(connection, options, async (tx) => {
+          try {
+            return prepared
+              ? await runRunCommand(tx, g, prepared, correlationId, configured.environment)
+              : await runRunRead(tx, g, g.route.op as RunRead);
+          } catch (error) {
+            if (!(error instanceof RunReject)) throw error;
+            tx.rollbackOnly();
+            return { refusal: error.reason } as const;
+          }
+        });
+        if ("refusal" in result) {
+          log.outcome = result.refusal;
+          return { log, response: refusalResponse(result.refusal, correlationId) };
+        }
         log.outcome = result.outcome;
         return { log, response: json(result.status, { schemaVersion: 1, ...result.body }) };
       } finally {
