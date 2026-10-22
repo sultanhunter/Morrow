@@ -70,10 +70,12 @@ jobs:
     runs-on: ${{ fromJSON(vars.MORROW_CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 15
     steps:
+      # Full history: graph:check (in verify) builds the merged pull request nodes from it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
