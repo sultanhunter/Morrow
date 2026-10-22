@@ -38,7 +38,7 @@ Staging pays through Stripe test mode, so steps 2–3 run there too; the MVP has
 | Worker | Public | Owns | Database login | Broker entrypoint |
 | --- | --- | --- | --- | --- |
 | `morrow-<env>-api` | yes, workers.dev (ADR-0019) | sessions, work API, store links, Listings enablement, run admission, approvals, claims, billing routes, the Stripe webhook route | `morrow_api_worker` plus the P05 pools | `ApiBroker` |
-| `morrow-<env>-connector` | yes, own hostname (ADR-0022 item 6) | Shopify launch, callback, webhooks, continuation, status; the webhook Queue consumer | `morrow_connector_ingress` (new) | `ConnectorBroker` (new) |
+| `morrow-<env>-connector` | yes, own hostname (ADR-0022 item 6) | Shopify launch, callback, webhooks, continuation, status; the webhook inbox's apply and its cron re-drive (as built in M2 PR-3, see the note in §4) | `morrow_connector_ingress` (new) | `ConnectorBroker` (new) |
 | `morrow-<env>-orchestrator` | no | `ListingsRunWorkflow`, `OperationWorkflow`, the dispatch Queue consumer (ids only), a cron that starts pending Workflows | `morrow_runtime_executor` (new) | `RuntimeBroker` (new) |
 | `morrow-<env>-broker` | no | every provider credential and call; the vault | `morrow_vault_broker` (new, never leased) | – |
 
@@ -60,9 +60,9 @@ The v0 rules stay for `health`, `neonLease`, `workosSessionPage` and `challengeV
 | --- | --- | --- | --- |
 | Connector | `shopifyLaunchVerify(appKey, rawQuery)` | `{verdict, shop, installation (none, unlinked, linked, suspended or uninstalled), workspaceId}` (as built in M2 PR-2) | M2 |
 | Connector | `shopifyInstallComplete(appKey, rawCallbackQuery, stateDigest, budgetMs)` | `{outcome, workspaceId, continuationToken}`; never the token (as built in M2 PR-2, see the note below) | M2 |
-| Connector | `shopifyWebhookVerify(appKey, headersJson, rawBodyBase64)` | `{verdict, topic, shopDomain, webhookId, minimisedBody}` | M2 |
-| Connector, Api | `shopifyCredentialDestroy(installationId, reason)`: only when the row records uninstall or disconnect | `"destroyed"` | M2 |
-| Api, Runtime | `shopifyRead(leaseId, generation, queryName, variablesJson, budgetMs)` | minimised JSON for `shopIdentity`, `collectionsPage`, `productsPage`, `productContent` | M2 |
+| Connector | `shopifyWebhookVerify(appKey, headersJson, rawBodyBase64)` | `{verdict: recorded, duplicate, refused or invalid, inboxId, settled}`: the broker records the minimised delivery itself (as built in M2 PR-3) | M2 |
+| Connector (Api with the disconnect command) | `shopifyCredentialDestroy(installationId, reason)`: only with the end reason the row records (`uninstalled`, `scopes_changed`; `disconnected` with the disconnect command) | `destroyed`, `already_destroyed`, `ineligible` or `not_found` (as built in M2 PR-3) | M2 |
+| Api, Runtime | `shopifyRead(leaseId, generation, subjectId, queryName, variablesJson, budgetMs)` | minimised JSON for `shopIdentity`, `collectionsPage`, `productsPage` (Api) and `productContent` (Runtime) (as built in M2 PR-3) | M2 |
 | Runtime | `modelRespond(leaseId, generation, callJson, budgetMs)`: the broker reads the selection and catalogue version from the lease's run, never from `callJson`; the entry picks the `ModelProvider` adapter (§9) | `ModelResult@1` (provider-neutral, with an opaque `traceRef`) | M3 |
 | Runtime | `shopifyProductUpdate(operationId, generation, budgetMs)` | `{outcome: submitted, rejected, not_sent or uncertain, codes}` | M4 |
 | Runtime | `shopifyReconcileRead(operationId, budgetMs)` | readback verdict and field digests | M4 |
@@ -70,6 +70,12 @@ The v0 rules stay for `health`, `neonLease`, `workosSessionPage` and `challengeV
 | Api | `stripeWebhookVerify(rawBody, signatureHeader, budgetMs)` | a receipt id for a verified, de-duplicated, read-back object | M5 |
 
 Note (M2 PR-2, a deviation from the first table row for `shopifyInstallComplete`): the broker records the install itself, so the connector never writes an installation from ids it was handed. In one transaction on its own `morrow_vault_broker` login it seals the token, stores the credential version and, through identity bridges (`work_shopify_install_prepare`, `work_shopify_install_record`), writes the installation, the `shopify_oauth` candidate and the install continuation. The vault row and the install record therefore commit together (no orphaned live token), and the method returns only `{outcome, workspaceId, continuationToken}`. This widens the vault login's definers beyond pure vault functions; `resolve_call` (M3 PR-1) and the send fence (M4) widen them anyway.
+
+Note (M2 PR-3, deviations from the rows above and from §3's connector row):
+- `shopifyWebhookVerify` records the delivery. In the transaction that read the app secret and verified the raw-body HMAC, the broker minimises the body and calls `morrow_vault.shopify_webhook_record`, which writes the inbox row (and a compliance topic's `privacy_requests` row) under the tenant the app registry names for the verified shop. The connector answers 200 only after that row exists, so it never handles body content; a lost COMMIT is `OUTCOME_UNKNOWN` and the connector answers 503 (Shopify's retry finds the row by its webhook id).
+- The inbox row is the queue: the connector applies a recorded row after the response (`waitUntil`, `morrow_work.connector_inbox_apply` on its own login) and a five-minute cron re-applies rows still `received` after two minutes and re-destroys tokens whose destruction is not yet recorded. No Queue resource exists (review finding B8): five low-volume topics need no fan-out, and creating one is a provider resource. Owner question recorded in the M2 brief.
+- `shopifyRead` takes the lease's `subjectId` (the read's request id or the run id), which `resolve_call` checks, so a lease cannot be used under another subject. `productContent` is the Runtime's only and reads only a product of the lease's run; until M3 PR-2's runs exist, `morrow_work.run_product_readable` refuses every product (fail closed). The read resolution runs alone in its own vault transaction, never held across the Shopify call.
+- `shopifyCredentialDestroy` is on `ConnectorBroker` only; the `ApiBroker` half arrives with the disconnect command, which waits on the owner (M2 brief).
 
 Broker secrets (owner-placed with `morrow_put` and `staging:put-secret`): `MORROW_VAULT_KEK_V1`, `ANTHROPIC_API_KEY` (scoped to the environment's Anthropic Console workspace), `STRIPE_RESTRICTED_KEY`, `STRIPE_WEBHOOK_SECRET`, the `morrow_vault_broker` password. Shopify app client secrets are vault rows (`morrow_vault.app_secrets`), written by an owner-run script. Leased role passwords: `morrow_connector_ingress`, `morrow_runtime_executor`.
 

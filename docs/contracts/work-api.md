@@ -85,6 +85,19 @@ An internal JSON contract beside the work API, under `/workspace/:ws` (not `/wor
 - **Stop AI work** needs `agents.installation.disable` `{execute}` on the installation resource (fields `control`, `installationId`). `checkKillSwitchTarget` accepts the target, and the KillSwitchRecord commits with the installation stop, which revokes its run and operation leases, and with `kill_switch.executed`. Stopping again records `already_stopped`. The record's `priorStateObserved` is the Worker's read; if another stop committed before the definer's lock, the request is 409 conflict (recheck), and a retry records `already_stopped`. `blocked` in the status read is true while a platform stop or a stop on the store's connection is open: no AI work runs although the installation may be active. It never reads entitlement or credits, and it works whether or not the store's association is current.
 - **Models.** Any current member may read `GET /models`. It names opaque catalogue keys only, never a provider model string, price, cost or token limit. `allowedForMember` applies the member ceiling unless the reader holds `governance.model_default.revise`. `PUT` needs that capability. It accepts only keys of the active catalogue version and a ceiling (1–99) that admits the default. `expectedRevision` is null for the first row; anything else stale is 409 conflict.
 
+## Catalogue routes (M2 PR-3)
+
+Two reads of a linked store's catalogue for the Ask screen's picker, under `/workspace/:ws` on the same api Worker, dependencies and guard rules (`packages/work/src/catalog/http.ts`; spine §4; the M2 brief's api routes). They take only their own query parameters, with closed values: `after` is an opaque cursor of at most 512 characters; `collectionId` is `collection:<digits>`; `query` is at most 64 letters, digits and single spaces. Anything else is 400 before any SQL or Shopify call.
+
+| Route under `/workspace/:ws` | Query | Success |
+| --- | --- | --- |
+| `GET /stores/:storeId/catalog/collections` | `after` | 200 `{schemaVersion: 1, collections: [{id, title}], nextCursor, storeId}` |
+| `GET /stores/:storeId/catalog/products` | `after`, `collectionId`, `query` | 200 `{schemaVersion: 1, products: [{id, title, status}], nextCursor, storeId}` |
+
+- One READ WRITE transaction: the session's authority, the store's current association, then the human kernel must allow `view` on `catalog.products.read` on the store resource with the listing fields (403 otherwise), then `morrow_work.catalog_read_lease` opens a 60-second `read` lease for the session's tenant and actor (409 conflict under a connection stop; 404 when the store has no current connection). The lease selects the tenant of the one read; it grants nothing.
+- After COMMIT, one `ApiBroker.shopifyRead` under that lease. The broker resolves the lease, its stops, the store connection and the credential itself, runs one fixed Admin GraphQL document with variables it builds (a title search becomes `title:<word>*` terms) and returns ids (`collection:<n>`, `product:<n>`), titles and a lower-case product status only. A missing collection is 404. A refused, failed or throttled-past-budget read is 503 unavailable / safe_read_retry. Page size is 25; the whole request has a 9-second deadline and the read at most 15 seconds of it.
+- Shopify's reply, the token and any provider text never reach the response or a log; each request logs one fixed `morrow_catalog` line (route and outcome).
+
 ## Published limits
 
 Pages of 1–25 goals or 1–50 tasks or questions; bodies of at most 64 KiB; `successCriteria` ≤ 20; `allowedResources` ≤ 1; per workspace up to 10,000 goals, per goal 200 tasks, per task 50 open questions.

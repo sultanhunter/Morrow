@@ -492,6 +492,17 @@ const report = await withWorkDatabase(
       compliance(S, { customer, orders_requested: [1], data_request: { id: 9001 } }),
       { webhookId: dataRequest.webhookId },
     );
+    // The same data request delivered again under a new webhook id: its own inbox row,
+    // ignored, and still one privacy request for that request id.
+    const sameRequest = await deliver(
+      S,
+      "customers/data_request",
+      compliance(S, { customer, orders_requested: [1], data_request: { id: 9001 } }),
+    );
+    const sameRequestRow = inboxRows().find((r) => r.webhook_id === sameRequest.webhookId);
+    const requestsFor9001 = ownerRows(
+      "SELECT count(*)::int AS n FROM morrow_identity.privacy_requests WHERE data_request_id='9001'",
+    )[0].n;
     const redact = await deliver(
       S,
       "customers/redact",
@@ -503,11 +514,15 @@ const report = await withWorkDatabase(
       again.status === 200 &&
         inboxRows().filter((r) => r.webhook_id === dataRequest.webhookId).length === 1 &&
         requestsOf(dataRow.id).length === 1 &&
+        sameRequest.status === 200 &&
+        sameRequestRow?.status === "ignored" &&
+        sameRequestRow.outcome === "duplicate_request" &&
+        requestsFor9001 === 1 &&
         redact.status === 200 &&
         redactRow?.status === "applied" &&
         requestsOf(redactRow.id)[0]?.status === "completed" &&
         requestsOf(redactRow.id)[0]?.evidence.kind === "none_held",
-      { again: again.status, redactRow },
+      { again: again.status, sameRequestRow, requestsFor9001, redactRow },
     );
     check(
       "C3:no_customer_id_email_or_phone_is_stored",
@@ -831,11 +846,11 @@ const report = await withWorkDatabase(
     const unchanged = await deliver(G, "app/scopes_update", {
       id: 1,
       previous: ["write_products"],
-      current: ["write_products", "read_products"],
+      current: ["write_products"],
     });
     const unchangedRow = inboxRows().find((r) => r.webhook_id === unchanged.webhookId);
     check(
-      "G1:unchanged_expanded_scopes_are_ignored",
+      "G1:write_products_alone_is_unchanged_scopes_and_ignored",
       unchanged.status === 200 &&
         unchangedRow?.status === "ignored" &&
         unchangedRow.outcome === "scopes_unchanged" &&
@@ -996,6 +1011,25 @@ const report = await withWorkDatabase(
       [S, G, T].every(
         (s) => installationOf(s).shop_domain === s.shop && !installationOf(s).redacted,
       ),
+    );
+    // shop/redact after the uninstall (G: uninstalled, its token destroyed at the scope
+    // change): completes in one apply, with the same handlers.
+    const redactedAfter = await deliver(G, "shop/redact", compliance(G));
+    const afterRow = inboxRows().find((r) => r.webhook_id === redactedAfter.webhookId);
+    const afterDone = requestsOf(afterRow?.id ?? "")[0];
+    check(
+      "S5:shop_redact_after_the_uninstall_completes_at_once_with_every_handler",
+      redactedAfter.status === 200 &&
+        redactedAfter.applied === "applied" &&
+        afterRow?.status === "applied" &&
+        afterDone?.status === "completed" &&
+        afterDone.evidence.kind === "shop_redacted" &&
+        JSON.stringify((afterDone.evidence.handlers ?? []).map((h) => h.table).sort()) ===
+          JSON.stringify(storeContentHandlers.map((h) => h.table).sort()) &&
+        installationOf(G).redacted === true &&
+        stopsOf(G).length === 1 &&
+        installationOf(T).redacted === false,
+      { afterRow, afterDone },
     );
 
     // -------------------------------------------------------------------------

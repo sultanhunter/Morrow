@@ -7,14 +7,17 @@
 // No network and no database.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import test from "node:test";
+import test, { mock } from "node:test";
 import {
   encodeShopifyCredentialResult,
   encodeShopifyInstallResult,
   encodeShopifyLaunchVerdict,
   encodeShopifyWebhookVerdict,
 } from "../packages/identity/src/broker-protocol.ts";
-import { createConnectorHandler } from "../apps/shopify-connector/worker/connector.ts";
+import {
+  connectorBudgets,
+  createConnectorHandler,
+} from "../apps/shopify-connector/worker/connector.ts";
 import { mapConnectorEnvironment as mapEnvironment } from "../apps/shopify-connector/worker/environment.ts";
 import {
   readStateCookie,
@@ -266,6 +269,7 @@ function harness(answers = {}, limiters = undefined) {
     async shopifyWebhookVerify(appKey, headersJson, body) {
       calls.push(["webhook", appKey, JSON.parse(headersJson), body]);
       if (answers.webhookThrows) throw new Error("BROKER_HELD");
+      if (answers.webhookHangs) return new Promise(() => {});
       return (
         answers.webhook ??
         encodeShopifyWebhookVerdict({ verdict: "refused", inboxId: null, settled: null })
@@ -558,6 +562,30 @@ test("webhooks: 401 unsigned, 400 invalid, 503 unknown; 200 only once recorded, 
   // Not recorded, or not known to be: 503, so Shopify retries (de-duplicated by webhook id).
   const held = harness({ webhookThrows: true });
   assert.equal((await post(held)).status, 503);
+  // A record still pending when the webhook budget (connectorBudgets.webhookMs) ends is
+  // 503 too, before Shopify's own timeout; nothing is applied (mock timers: no real wait).
+  {
+    const slow = harness({ webhookHangs: true });
+    const c = context();
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      const pending = post(slow, c.ctx);
+      for (let i = 0; i < 20 && slow.calls.length === 0; i++) await new Promise(setImmediate);
+      assert.deepEqual(
+        slow.calls.map((x) => x[0]),
+        ["webhook"],
+      );
+      mock.timers.tick(connectorBudgets.webhookMs - 1);
+      await new Promise(setImmediate);
+      mock.timers.tick(1);
+      const r = await pending;
+      assert.equal(r.status, 503);
+      assert.equal(c.pending.length, 0);
+    } finally {
+      mock.timers.reset();
+    }
+    assert.ok(connectorBudgets.webhookMs < 5000, "inside Shopify's five-second delivery timeout");
+  }
   // Recorded: 200 at once; the row is applied after the response and the installation's
   // token destroyed with the reason its row records.
   const c = context();
