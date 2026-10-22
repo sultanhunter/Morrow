@@ -4,7 +4,8 @@
 // catalogue (the workspace default, or an entry within the member's ceiling; credits per
 // product and the run's product limit shown). Starting is three commands in order, each with
 // its own key and the usual uncertain handling: the goal, the task (the request is its
-// objective) and the run's admission on that task; then the task opens on its Runs tab.
+// objective) and the run's admission on that task; then the task opens (on its Brief tab:
+// task routes carry no tab; its Runs tab shows the run).
 // Nothing is written unless a run could be admitted: while GET /models says drafting is not
 // available the form is not shown, and only stores whose Listings agent is active (and not
 // stopped or blocked) are offered. A refusal after the task was saved says so.

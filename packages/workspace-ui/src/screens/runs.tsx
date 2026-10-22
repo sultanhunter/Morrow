@@ -130,7 +130,7 @@ function RunRow({
 }: {
   readonly ws: Id;
   readonly run: RunView;
-  readonly n: number;
+  readonly n: number | null;
   readonly onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -138,7 +138,7 @@ function RunRow({
   return (
     <li className="item item-stacked">
       <p>
-        <strong>{copy.runs.run(n)}</strong>{" "}
+        <strong>{n === null ? copy.runs.runUnnumbered : copy.runs.run(n)}</strong>{" "}
         <span className="muted">
           {copy.runs.selection(label(run.selection.model), label(run.selection.effort))}
         </span>
@@ -177,12 +177,25 @@ export function RunsPanel({ ws, taskId }: { readonly ws: Id; readonly taskId: Id
   );
   if (runs.kind !== "ok") return <>{outcomeState(runs, reload)}</>;
   if (runs.value.length === 0) return <StateView kind="empty" message={copy.runs.empty} />;
-  // Newest first from the server; numbered from the oldest.
+  // Newest first from the server; numbered from the oldest only when the list is whole (the
+  // server returns at most runsListLimit, so a full list may leave older runs out).
+  const whole = runs.value.length < runsListLimit;
   return (
     <ul className="item-list" data-testid="task-runs">
       {runs.value.map((run, i) => (
-        <RunRow key={run.runId} ws={ws} run={run} n={runs.value.length - i} onChanged={reload} />
+        <RunRow
+          key={run.runId}
+          ws={ws}
+          run={run}
+          n={runNumber(runs.value.length, i, whole)}
+          onChanged={reload}
+        />
       ))}
     </ul>
   );
 }
+/** GET /work/tasks/:taskId/runs returns at most this many runs, newest first. */
+export const runsListLimit = 20;
+/** A run's number from the oldest, or null when older runs may be left out of the list. */
+export const runNumber = (count: number, index: number, whole: boolean): number | null =>
+  whole ? count - index : null;

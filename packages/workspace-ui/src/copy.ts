@@ -400,6 +400,7 @@ export const copy = {
     tab: "Runs",
     empty: "No runs on this task yet.",
     run: (n: number) => `Run ${n}`,
+    runUnnumbered: "Run",
     selection: (model: string, effort: string) => `${model} · ${effort}`,
     progress: (drafted: number, failed: number, total: number) =>
       `${drafted} drafted · ${failed} failed · ${total} products`,

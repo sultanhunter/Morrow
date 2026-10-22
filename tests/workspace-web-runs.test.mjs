@@ -29,6 +29,7 @@ import {
   runnableStoreIds,
 } from "../packages/workspace-ui/src/screens/ask.tsx";
 import { CommandFeedback } from "../packages/workspace-ui/src/screens/entry.tsx";
+import { runNumber, runsListLimit } from "../packages/workspace-ui/src/screens/runs.tsx";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -606,6 +607,18 @@ test("Ask writes nothing unless a run could be admitted, and says what was saved
   );
   // Elsewhere the default copy is unchanged.
   assert.ok(html({ kind: "invalid", field: null }, {}).includes("Nothing was changed"));
+});
+
+test("the Runs tab numbers runs only when the list holds every run", () => {
+  // Newest first: three runs are Run 3, 2, 1.
+  assert.deepEqual(
+    [0, 1, 2].map((i) => runNumber(3, i, 3 < runsListLimit)),
+    [3, 2, 1],
+  );
+  // A full list (the server's limit) may leave older runs out: no numbers.
+  assert.equal(runsListLimit, 20);
+  assert.equal(runNumber(20, 0, 20 < runsListLimit), null);
+  assert.equal(copy.runs.runUnnumbered, "Run");
 });
 
 test("Ask: product numbers or product ids, one per line, no repeats", () => {
