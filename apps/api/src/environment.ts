@@ -1,4 +1,6 @@
 import {
+  modelProviderAnthropic,
+  modelProviderVar,
   stripeModeTest,
   stripeModeVar,
   type ApiBrokerRpc,
@@ -14,7 +16,8 @@ import {
 } from "./abuse-guard.js";
 
 // Synchronous Worker env -> ManagedWorkspaceApiDependencies inputs (P04.T02a D6),
-// plus the P05.T01ab abuse-guard bindings (step 10) and the M5 Stripe switch (step 11).
+// plus the P05.T01ab abuse-guard bindings (step 10), the M5 Stripe switch (step 11) and
+// the M3 PR-2 model-provider switch (step 12).
 // It never throws; the first failing check decides the code, and any failure
 // keeps the api on the existing deny-all instance. Production never maps here
 // (ADR-0007 item 9).
@@ -49,9 +52,13 @@ export type ApiEnvironmentMapping =
       // "test"; "off" when it is absent. While off, the billing purchase routes and the
       // Stripe webhook answer unavailable with no broker call.
       stripe: ApiStripeMode;
+      // M3 PR-2: "anthropic" only with MORROW_MODEL_PROVIDER exactly "anthropic"; "off" when
+      // it is absent. While off, run admission answers 503 before any database access.
+      model: ApiModelMode;
     }>
   | Readonly<{ ok: false; code: ApiEnvironmentCode }>;
 export type ApiStripeMode = "off" | "test";
+export type ApiModelMode = "off" | "anthropic";
 
 // Binding name, value key and the identity byte limit it must not exceed.
 export const apiEnvironmentValueBindings = Object.freeze([
@@ -223,7 +230,18 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
   } catch {
     return fail("API_ENV_VALUE_INVALID");
   }
-  return Object.freeze({ ok: true, environment, values: mapped, broker, guard, stripe });
+  // 12. The model-provider switch (M3 PR-2): absent is off; present, exactly "anthropic".
+  let model: ApiModelMode = "off";
+  try {
+    const value = dataProperty(record, modelProviderVar);
+    if (value.present) {
+      if (value.value !== modelProviderAnthropic) return fail("API_ENV_VALUE_INVALID");
+      model = "anthropic";
+    }
+  } catch {
+    return fail("API_ENV_VALUE_INVALID");
+  }
+  return Object.freeze({ ok: true, environment, values: mapped, broker, guard, stripe, model });
 }
 
 // Step 10 as a pure function of the record and the environment, so its rule is tested

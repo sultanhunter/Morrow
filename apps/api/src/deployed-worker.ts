@@ -11,6 +11,7 @@ import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/m
 import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
 import { createConnectionKernel } from "../../../packages/policy/src/connection-authority.js";
 import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
+import type { RunsApiDependencies } from "../../../packages/work/src/runs/http.js";
 import type { BillingApiDependencies } from "../../../packages/work/src/billing/http.js";
 import type { StripeWebhookDependencies } from "../../../packages/work/src/billing/webhook.js";
 import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
@@ -25,6 +26,7 @@ import {
   mapApiEnvironment,
   type ApiEnvironmentCode,
   type ApiEnvironmentValues,
+  type ApiModelMode,
   type ApiStripeMode,
 } from "./environment.js";
 import { createWorkspaceApiWorker } from "./worker.js";
@@ -52,6 +54,7 @@ export function composeApiDependencies(
   now: () => number,
   environment: "development" | "staging" | "production" = "development",
   stripeMode: ApiStripeMode = "off",
+  modelMode: ApiModelMode = "off",
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
   const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
@@ -113,11 +116,19 @@ export function composeApiDependencies(
     broker: stripe,
     now,
   });
+  // M3 PR-2: the runs routes on the work dependencies; admission only while the
+  // model-provider switch is on (otherwise 503 before any database access).
+  const runs: RunsApiDependencies = Object.freeze({
+    ...work,
+    environment,
+    admission: modelMode === "anthropic",
+  });
   return Object.freeze({
     dependencies,
     work,
     billing,
     webhook,
+    runs,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -145,6 +156,7 @@ function select(env: unknown): Selected {
         () => Date.now(),
         mapped.environment,
         mapped.stripe,
+        mapped.model,
       );
       selected = {
         api: createWorkspaceApiWorker(
@@ -152,6 +164,7 @@ function select(env: unknown): Selected {
           composed.work,
           composed.billing,
           composed.webhook,
+          composed.runs,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         readiness: composed.readiness,

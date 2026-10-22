@@ -16,6 +16,11 @@ import {
   agentsPathPattern,
   createAgentsApiHandler,
 } from "../../../packages/work/src/agents/http.js";
+import {
+  createRunsApiHandler,
+  runsPathPattern,
+  type RunsApiDependencies,
+} from "../../../packages/work/src/runs/http.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 type Handler = Readonly<{
@@ -26,6 +31,8 @@ type Handler = Readonly<{
 // unchanged; anything else goes to the unchanged P05 handler (/connections and /store-links
 // among it). Every family shares the /workspace/* and /api/* namespaces that the api Worker
 // serves ahead of Static Assets (run_worker_first). Later PRs add one row each:
+//   /workspace/:ws/work/{tasks/:taskId/runs, runs/:runId, runs-reconcile}
+//                                                runs (M3 PR-2), ahead of the work API
 //   /workspace/:ws/work(/|$)                     work API (P06.T01a)
 //   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)
 //   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
@@ -33,9 +40,11 @@ type Handler = Readonly<{
 //                                                agents (M3 PR-1)
 //   /workspace/:ws/stores/:storeId/catalog/      reserved for M2 PR-3
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
-type RowKey = "work" | "billing" | "stripe_webhook" | "agents";
+type RowKey = "runs" | "work" | "billing" | "stripe_webhook" | "agents";
 export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
   Object.freeze([
+    // M3 PR-2: the runs routes (packages/work/src/runs/http.ts), before the work API's row.
+    ["runs", (path: string) => runsPathPattern.test(path)],
     ["work", (path: string) => new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`).test(path)],
     [
       "billing",
@@ -52,15 +61,17 @@ export function apiDispatch(path: string): RowKey | "workspace" {
 
 // The configured local fixture imports this exact entry constructor. The ordinary artifact
 // intentionally has no account/secret/environment binding: without dependencies every work,
-// billing and agents route is 401 and the webhook 404, with no network or database.
+// billing, agents and runs route is 401 and the webhook 404, with no network or database.
 export function createWorkspaceApiWorker(
   dependencies?: ManagedWorkspaceApiDependencies,
   work?: WorkApiDependencies,
   billing?: BillingApiDependencies,
   webhook?: StripeWebhookDependencies,
+  runs?: RunsApiDependencies,
 ) {
   const workspace = createWorkersManagedWorkspaceApi(dependencies);
   const handlers: Readonly<Record<RowKey, Handler>> = Object.freeze({
+    runs: createRunsApiHandler(runs),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),
