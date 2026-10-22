@@ -1186,42 +1186,41 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   {
     // D1-D2: one lock order, the workspace stream first, then the run, then the rest (every
     // API command's prelude takes the stream first). A session takes the stream as an
-    // admission's or a stop's prelude does, then waits on a gate; a run step starts and
-    // must wait on the stream before it takes the run, the wallet or the lease; the gate
-    // opens and the session takes the wallet (an admission's run_reserve, D1) or the run
-    // lease (a stop's revocation, D2). The old order (the stream last) deadlocked both.
-    const gateKey = 734012301;
+    // admission's or a stop's prelude does and waits, inside the database, until another
+    // backend is blocked behind it; a run step starts and must wait on the stream before it
+    // takes the run, the wallet or the lease; the session then takes the wallet (an
+    // admission's run_reserve, D1) or the run lease (a stop's revocation, D2) and commits
+    // well within the step's 1 s lock_timeout. The old order (the stream last) deadlocked
+    // both: the step held the wallet or the lease while it waited on the stream.
+    const blockedBehindMe =
+      "EXISTS(SELECT 1 FROM pg_catalog.pg_locks l WHERE NOT l.granted AND pg_catalog.pg_backend_pid()=ANY(pg_catalog.pg_blocking_pids(l.pid)))";
     const gated = async (name, then) => {
-      const controller = db.runAsync(`SELECT pg_advisory_lock(${gateKey}); SELECT pg_sleep(55);`, {
-        applicationName: name + "_gate",
-      });
-      const deadline = Date.now() + 30000;
-      while (Date.now() < deadline) {
-        const r = await db.runAsync(
-          `SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND granted AND classid=0 AND objid=${gateKey} AND objsubid=1;`,
-        );
-        if (r.ok && last(r.stdout) === "1") break;
-        await sleep(25);
-      }
       const session = db.runAsync(
         `BEGIN;
 SELECT 1 FROM morrow_work.workspace_streams WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} FOR UPDATE;
-SELECT pg_advisory_xact_lock(${gateKey});
+DO $gate$ BEGIN
+ FOR i IN 1..1500 LOOP
+  EXIT WHEN ${blockedBehindMe};
+  PERFORM pg_catalog.pg_sleep(0.02);
+ END LOOP;
+END $gate$;
+SELECT 'blocked:'||${blockedBehindMe}::text;
 ${then}
 COMMIT;`,
         { applicationName: name },
       );
-      const holding = await db.waitForLockWait(`application_name=${literal(name)}`);
-      const open = async () => {
-        await db.runAsync(
-          `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name=${literal(name + "_gate")};`,
+      // The session holds the stream once it waits in its loop.
+      const deadline = Date.now() + 30000;
+      let holding = false;
+      while (!holding && Date.now() < deadline) {
+        const r = await db.runAsync(
+          `SELECT count(*) FROM pg_stat_activity WHERE application_name=${literal(name)} AND wait_event='PgSleep';`,
         );
-        await controller;
-        return session;
-      };
-      return { holding, open };
+        holding = r.ok && last(r.stdout) === "1";
+        if (!holding) await sleep(25);
+      }
+      return { holding, session };
     };
-    const runtimeWaiting = () => db.waitForLockWait("usename='morrow_runtime_executor'");
     // D1: a run finishing (settle: the wallet) while an admission holds the stream.
     const d1Run = (await admit(P.A, T, admitBody([product(101)]))).body.runId;
     const d1Ref = leaseOf(d1Run);
@@ -1230,19 +1229,21 @@ COMMIT;`,
       "runs_lock_order_d1",
       `SELECT 1 FROM morrow_billing.credit_wallets WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} FOR UPDATE;`,
     );
-    const d1Finish = ports.lease(d1Ref, (step) => step.run.finish("time_budget"));
-    const d1Waited = await runtimeWaiting();
-    const d1Session = await d1.open();
-    const d1Finished = await d1Finish;
+    const d1Finished = await ports.lease(d1Ref, (step) => step.run.finish("time_budget"));
+    const d1Session = await d1.session;
     check(
       "D1:a_run_finish_waits_on_the_stream_an_admission_holds_and_neither_deadlocks",
       d1.holding &&
-        d1Waited &&
         d1Session.ok &&
+        d1Session.stdout.includes("blocked:true") &&
         d1Finished.value?.outcome === "ended" &&
         runRow(d1Run).status === "failed" &&
         credit(d1Run)?.status === "released",
-      { d1, d1Waited, session: d1Session.stderr.slice(0, 400), d1Finished },
+      {
+        holding: d1.holding,
+        session: d1Session.stdout + d1Session.stderr.slice(0, 400),
+        d1Finished,
+      },
     );
     // D2: a run starting (its lease marked started) while a stop holds the stream.
     const d2Run = (await admit(P.A, T, admitBody([product(102)]))).body.runId;
@@ -1251,20 +1252,23 @@ COMMIT;`,
       "runs_lock_order_d2",
       `SELECT 1 FROM morrow_work.work_leases WHERE id=${literal(d2Ref.leaseId)} FOR UPDATE;`,
     );
-    const d2Start = ports.lease(d2Ref, (step) => step.run.start());
-    const d2Waited = await runtimeWaiting();
-    const d2Session = await d2.open();
-    const d2Started = await d2Start;
+    const d2Started = await ports.lease(d2Ref, (step) => step.run.start());
+    const d2Session = await d2.session;
     const d2Ended = await ports.lease(d2Ref, (step) => step.run.finish("time_budget"));
     check(
       "D2:a_run_start_waits_on_the_stream_a_stop_holds_and_neither_deadlocks",
       d2.holding &&
-        d2Waited &&
         d2Session.ok &&
+        d2Session.stdout.includes("blocked:true") &&
         d2Started.value?.outcome === "started" &&
         d2Ended.value?.outcome === "ended" &&
         credit(d2Run)?.status === "released",
-      { d2, d2Waited, session: d2Session.stderr.slice(0, 400), d2Started, d2Ended },
+      {
+        holding: d2.holding,
+        session: d2Session.stdout + d2Session.stderr.slice(0, 400),
+        d2Started,
+        d2Ended,
+      },
     );
   }
 
