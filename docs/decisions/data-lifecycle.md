@@ -65,6 +65,8 @@ Billing records (M5 PR-1, ADR-0022 item 13, migration `billing-records`). Financ
 | `morrow_billing.billing_accounts`, `morrow_billing.entitlement_snapshots` | Financial record, seven years after the account's last payment (proposed) | Deleted with the workspace after the period by P09.T05 |
 | `morrow_billing.verified_payment_events`, `morrow_billing.credit_grants` | Financial record, seven years (proposed); append-only | P09.T05 prunes after the period |
 | `morrow_billing.credit_wallets` | Workspace lifetime; balances only | Deleted with the workspace by P09.T05 |
+| `morrow_billing.platform_environment` | Platform configuration (migration `staging-test-entitlement`): one row naming the database's environment, written once by `staging:seed-platform` | None: no personal data |
+| `morrow_billing.operator_test_entitlements` | Content-free operator audit (the staging test entitlement, ADR-0022 item 5 amendment), staging only: ids, the approval reference, the operator id, the path of the docs/evidence/live record, credit units, the terms revision, the period and a digest; no free text. Kept with its billing account | Deleted with the workspace by P09.T05; never present in production |
 
 Listings authority, stops and credits (M3 PR-1; ADR-0022 items 3, 11, 13, 15 and 16; migrations listings-identity-bridge, listings-authority, agent-proposals and run-credits). Apart from a person's stop reason and the parameters of a proposal, no row holds merchant or user content.
 

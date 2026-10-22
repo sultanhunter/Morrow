@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Morrow's versioned BillingTerms@1 revisions per environment (P01.T04a R10; ADR-0022 item 11: US$49 a month with 300 credits; M5 PR-1). Each revision carries its display offers (the price a subscription entry charges, in minor units, per month) and the published digest: SHA-256 of the canonical JSON of {terms, offers}. A published revision never changes; a new price, credit quantity or offer is the next revision. staging:seed-platform writes an environment's revisions, in order, to morrow_billing.billing_terms and refuses on drift; npm run verify:billing checks this file. development is a synthetic fixture for labs and the fake Stripe origin. staging gets its first revision only after the owner creates the test-mode Product and Price (owner action 2 of docs/briefs/M5-billing.md); until then staging checkout fails closed. production has none until M6.",
+  "description": "Morrow's versioned BillingTerms@1 revisions per environment (P01.T04a R10; ADR-0022 item 11: US$49 a month with 300 credits; M5 PR-1). Each revision carries its display offers (the price a subscription entry charges, in minor units, per month) and the published digest: SHA-256 of the canonical JSON of {terms, offers}. A published revision never changes; a new price, credit quantity or offer is the next revision. staging:seed-platform writes an environment's revisions, in order, to morrow_billing.billing_terms and refuses on drift; npm run verify:billing checks this file. development is a synthetic fixture for labs and the fake Stripe origin. staging's revision 1 (ADR-0022 item 5 amendment, owner decision (b), 2026-10-21) carries only the operator test entitlement's entry: the beta plan's 300 test credits with no provider price and no offer, read only by the owner's operator path (staging:test-entitlement, card E13); staging's first priced revision follows the owner's test-mode Product and Price (owner action 2 of docs/briefs/M5-billing.md) when the Stripe switch is turned on, and until then staging checkout fails closed. production has none until M6.",
   "environments": {
     "development": [
       {
@@ -30,7 +30,27 @@
         "digest": "4c6ccd12dc283abcde21532208ecdabd6551865458c86ba5629b65d9c177e411"
       }
     ],
-    "staging": [],
+    "staging": [
+      {
+        "terms": {
+          "schemaVersion": 1,
+          "termsRevision": 1,
+          "entries": [
+            {
+              "route": "morrow_direct",
+              "mode": "test",
+              "priceKey": "morrow:operator_plan:beta",
+              "kind": "operator_test_entitlement",
+              "currency": "USD",
+              "creditUnits": "300"
+            }
+          ],
+          "planChanges": []
+        },
+        "offers": [],
+        "digest": "88744622d6efbddb2136154fe11e8f4472e99519559c19d629d68e4199fed350"
+      }
+    ],
     "production": []
   }
 }

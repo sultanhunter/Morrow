@@ -29,8 +29,10 @@ export const billingStatements = Object.freeze({
   // The workspace's customer operation held for the operator, if any (the setup hold):
   // still uncertain, its hold set, and no customer mapped.
   billingSetupHold: `SELECT s.operation_id::text AS operation_id,${utc("s.held_at")} AS held_at FROM morrow_billing.stripe_operations s JOIN morrow_work.operations o ON o.organization_id=s.organization_id AND o.workspace_id=s.workspace_id AND o.id=s.operation_id WHERE s.workspace_id=$1::text AND s.purpose='customer_create' AND s.held_at IS NOT NULL AND o.status='uncertain' ORDER BY s.held_at DESC,s.operation_id::text COLLATE "C" LIMIT 2`,
-  // The billing period: the line period of the latest granted subscription invoice.
-  billingPeriodLatest: `SELECT ${utc("v.period_start")} AS period_start,${utc("v.period_end")} AS period_end FROM morrow_billing.verified_payment_events v WHERE v.workspace_id=$1::text AND v.outcome='granted' AND v.kind='subscription_period' ORDER BY v.period_end DESC,v.recorded_at DESC LIMIT 1`,
+  // The billing period: the line period of the latest granted subscription invoice, or of a
+  // staging operator test entitlement (ADR-0022 item 5 amendment, 2026-10-21), whose one
+  // snapshot is valid for exactly its period; the later end wins.
+  billingPeriodLatest: `SELECT ${utc("p.period_start")} AS period_start,${utc("p.period_end")} AS period_end FROM (SELECT v.period_start,v.period_end,v.recorded_at FROM morrow_billing.verified_payment_events v WHERE v.workspace_id=$1::text AND v.outcome='granted' AND v.kind='subscription_period' UNION ALL SELECT s.verified_at,s.valid_until,s.recorded_at FROM morrow_billing.entitlement_snapshots s WHERE s.workspace_id=$1::text AND s.subscription_key ~ '^morrow:operator_entitlement:') p ORDER BY p.period_end DESC,p.recorded_at DESC LIMIT 1`,
   cmdCheckoutOpen: "SELECT outcome,result FROM morrow_billing.cmd_checkout_open($1,$2,$3,$4,$5,$6)",
   cmdPortalOpen: "SELECT outcome,result FROM morrow_billing.cmd_portal_open($1,$2,$3)",
   // The receipt-only ingress (sessionless: no enter_context in its transaction).

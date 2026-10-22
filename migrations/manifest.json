@@ -269,6 +269,20 @@
       "sha256": "56426f72fe2057051df3de71dfb219959a297080b72335d3ed0dd0eae62342ff",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 34,
+      "file": "0034.staging-entitlement-identity-bridge.sql",
+      "sha256": "91aeb0a200ad85ad39ed9e5e9602b955478651ff2fe141cf004c528cd5fc7851",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/staging-test-entitlement.md"
+    },
+    {
+      "sequence": 35,
+      "file": "0035.staging-test-entitlement.sql",
+      "sha256": "fc658ae305e177a94eb400435d33a9242483487cf3da6cb19576ecad41d38ce9",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/staging-test-entitlement.md"
     }
   ]
 }

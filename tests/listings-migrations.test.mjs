@@ -44,8 +44,14 @@ test("manifest: contiguous rows after the published head, executeAs, digests, no
     rows.map((r) => r.sequence),
     rows.map((_, i) => first + i),
   );
-  // Nothing of another milestone sits between them, and they end the chain in this branch.
-  assert.equal(rows.at(-1).sequence, manifest.migrations.length);
+  // Nothing of another milestone sits between them. Later links of the merge train append
+  // after them (the staging test entitlement's two, by slug), never between.
+  const later = manifest.migrations.slice(rows.at(-1).sequence);
+  assert.ok(later.every((m) => m.reviewRef !== brief));
+  assert.deepEqual(
+    later.slice(0, 2).map((m) => m.file.replace(/^\d{4}\./, "")),
+    ["staging-entitlement-identity-bridge.sql", "staging-test-entitlement.sql"],
+  );
   for (const [i, [slug, executeAs, reviewRef]] of slugs.entries()) {
     const row = rows[i];
     assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
