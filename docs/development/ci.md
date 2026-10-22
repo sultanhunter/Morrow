@@ -163,6 +163,7 @@ The stack is `infra/ci-runner/compose.yaml`: two containers in Docker Desktop, b
 - Apply. Docker Desktop restarts, so do this while nothing runs in Docker.
 - `up` reads Docker Desktop's settings file (`~/Library/Group Containers/group.com.docker/settings-store.json`). It refuses with `CI_RUNNER_HOST_SHARE_TOO_BROAD` while any shared folder is or contains your home folder or `/Volumes`. It also refuses when a shared folder is, contains or lies inside the checkout, `/tmp` (where agents keep their worktrees) or `/var/folders`, or lies inside `~/Library` or a dot entry of your home folder. That includes Docker Desktop's defaults. `status` reports the same check.
 - Workflows from fork pull requests must stay disabled for this repository (today they are). `up` refuses with `CI_RUNNER_FORK_PR_WORKFLOWS_ON` otherwise.
+- The repository must be private. A self-hosted runner never serves a public repository, where any fork pull request could name the runner's labels in its own workflow. `up` refuses with `CI_RUNNER_REPOSITORY_PUBLIC` otherwise. On 2026-10-22 the owner made the repository public, and the runner was taken `down` first (registration deleted, volumes removed). CI runs on GitHub-hosted runners.
 
 **Commands.** The owner runs these, or an agent with the owner's per-action go-ahead in chat (ADR-0014 item 1).
 
