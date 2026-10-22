@@ -61,7 +61,8 @@ function select(env: unknown): Selected {
         },
         modelRespond: (leaseId: string, generation: number, callJson: string, budgetMs: number) =>
           mapping.broker.modelRespond(leaseId, generation, callJson, budgetMs),
-        readProduct: (ref: LeaseRef, productId: string) => readProduct(mapping, ref, productId),
+        readProduct: (ref: LeaseRef, runId: string, productId: string) =>
+          readProduct(mapping, ref, runId, productId),
         environment: mapping.environment,
         now: () => Date.now(),
         sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
@@ -88,6 +89,7 @@ function select(env: unknown): Selected {
 async function readProduct(
   mapping: OrchestratorEnvironmentMapping,
   ref: LeaseRef,
+  runId: string,
   productId: string,
 ): Promise<ProductRead> {
   if (!mapping.ok) return { outcome: "unavailable" };
@@ -95,6 +97,7 @@ async function readProduct(
     const text = await mapping.broker.shopifyRead(
       ref.leaseId,
       ref.generation,
+      runId,
       "productContent",
       JSON.stringify({ productId }),
       productBudgetMs,
@@ -148,6 +151,7 @@ export class ListingsRunWorkflow extends WorkflowEntrypoint<unknown, unknown> {
           ) as Promise<T>,
       },
       ref,
+      event.instanceId,
     );
     return result.kind;
   }

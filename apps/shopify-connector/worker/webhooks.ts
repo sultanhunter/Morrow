@@ -1,11 +1,9 @@
-// The webhook route (M2 PR-2 part of P09.T04): the raw body (at most 256 KiB) and the
-// selected X-Shopify-* headers go to the broker, which checks the HMAC over the raw bytes
-// before any parse. A missing header or a refused signature is 401 with no state change.
-// A verified delivery is 503 until M2 PR-3 adds the durable inbox, so Shopify retries it;
-// the generated app TOML subscribes no topic before PR-3, so none is delivered yet. That
-// includes app/uninstalled: an uninstall before PR-3 is never delivered and its offline
-// token stays active, so a development store keeps the app installed until PR-3 is
-// deployed (docs/briefs/M2-shopify-connect.md, owner gates).
+// The webhook route (P09.T04): the raw body (at most 256 KiB) and the selected X-Shopify-*
+// headers go to the broker, which checks the HMAC over the raw bytes before any parse. A
+// missing header or a refused signature is 401 with no state change. M2 PR-3: a verified
+// delivery is recorded in the durable inbox by the broker, in the transaction that verified
+// it, before the connector answers 200 (connector.ts); the generated app TOML subscribes the
+// five topics from PR-3 on.
 import {
   shopifyLimits,
   shopifyWebhookHeaderNames,

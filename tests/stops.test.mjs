@@ -192,6 +192,23 @@ test("the uninstall stop is a system connection stop with a fixed reason", () =>
         }),
       StopBoundaryError,
     );
+  // M2 PR-3: the same system stop when app/scopes_update reports changed scopes; no other
+  // reason code is a system stop.
+  assert.deepEqual(
+    uninstallConnectionStop(
+      { ...tenant, storeId: "store_a", connectionId: "connection_a" },
+      "shopify_scopes_changed",
+    ).reason,
+    "The Shopify app's access scopes changed.",
+  );
+  assert.throws(
+    () =>
+      uninstallConnectionStop(
+        { ...tenant, storeId: "store_a", connectionId: "connection_a" },
+        "human_disconnect",
+      ),
+    StopBoundaryError,
+  );
   // Every reason code fits the 0020 CHECK; the platform ones are the definers' literals.
   const migration = readFileSync("migrations/0020.spine-foundation.sql", "utf8");
   for (const code of Object.values(stopReasonCodes)) assert.match(code, /^[a-z][a-z0-9_]{2,63}$/);

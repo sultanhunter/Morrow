@@ -47,11 +47,26 @@
 //      install record together. A lost COMMIT acknowledgement is outcome_unknown; the
 //      merchant relaunches and the database reconciles.
 // The offline token never leaves the broker, and nothing here logs.
+//
+// M2 PR-3: shopifyWebhookVerify also records the delivery. In one ingress transaction it
+// reads the app secret, verifies the signature over the raw body, minimises the body (a body
+// of another topic, or naming another shop, is invalid) and records it through
+// morrow_vault.shopify_webhook_record (the app active or retired, only for its own shop; the
+// tenant is the registry's), so the inbox row exists before the connector answers 200 and
+// the connector login never writes one. A lost COMMIT acknowledgement is OUTCOME_UNKNOWN: the
+// connector answers 5xx and Shopify's retry is de-duplicated by its webhook id.
+// shopifyCredentialDestroy erases an ended installation's token and records the
+// destruction on it in one vault transaction; it is idempotent, so any failure is retried
+// (the connector's cron re-drives every installation whose destruction is not recorded).
 import {
   brokerUtf8Bytes,
+  encodeShopifyCredentialResult,
   encodeShopifyInstallResult,
   encodeShopifyLaunchVerdict,
   encodeShopifyWebhookVerdict,
+  shopifyCredentialOutcomes,
+  shopifyCredentialReasons,
+  shopifyInstallationIdPattern,
   shopifyAppKeyPattern,
   shopifyDigestPattern,
   shopifyLimits,
@@ -59,8 +74,10 @@ import {
   shopifyShopPattern,
   shopifyWebhookHeaderNames,
   shopifyWebhookTopics,
+  type ShopifyCredentialOutcome,
   type ShopifyInstallOutcome,
   type ShopifyInstallationState,
+  type ShopifyWebhookVerdict,
 } from "../../../packages/identity/src/broker-protocol.js";
 import { loginJson } from "../../../packages/identity/src/standalone-login-protocol.js";
 import {
@@ -551,7 +568,8 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       typeof rawBodyBase64 !== "string"
     )
       throw new BrokerHold("INPUT_INVALID");
-    const refused = encodeShopifyWebhookVerdict({ verdict: "refused" });
+    const verdict = (v: ShopifyWebhookVerdict) => encodeShopifyWebhookVerdict(v);
+    const refused = verdict({ verdict: "refused", inboxId: null, settled: null });
     if (!exact(shopifyAppKeyPattern, appKey)) return refused;
     let headers: Readonly<Record<string, unknown>>;
     try {
@@ -566,6 +584,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     const topic = headers["x-shopify-topic"];
     const shop = headers["x-shopify-shop-domain"];
     const webhookId = headers["x-shopify-webhook-id"];
+    const apiVersion = headers["x-shopify-api-version"];
     const body = bytesFromBase64(rawBodyBase64, shopifyLimits.webhookBodyMaxBytes);
     if (
       !body ||
@@ -573,7 +592,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       !(shopifyWebhookTopics as readonly unknown[]).includes(topic) ||
       !exact(shopifyShopPattern, shop) ||
       !exact(/^[A-Za-z0-9-]{1,128}$/, webhookId) ||
-      !exact(/^[0-9]{4}-[0-9]{2}$|^unstable$/, headers["x-shopify-api-version"]) ||
+      !exact(/^[0-9]{4}-[0-9]{2}$|^unstable$/, apiVersion) ||
       !exact(shopifyWebhookHmacPattern, headers["x-shopify-hmac-sha256"])
     )
       return refused;
@@ -585,31 +604,114 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       verifyShopifyWebhookHmac(secret, body, hmac),
     );
     if (preverified === "refused") return refused;
-    const read = await ingress(preverified === "verified", () =>
-      launchContext(deps, vault, appKey, shop, readBudgetMs),
-    );
-    remember(vault, appKey, read.secret);
-    const context = read.context;
-    if (!context) return refused;
-    if (!(await verifyShopifyWebhookHmac(context.secret, body, hmac))) return refused;
-    let parsed: unknown;
+    let read: { secret: string | null; verdict: ShopifyWebhookVerdict };
     try {
-      parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(body));
-    } catch {
-      return refused;
+      read = await ingress(preverified === "verified", () =>
+        deps.transaction(vault, readBudgetMs, async (query) => {
+          const secret = await readAppSecret(vault.keyring, query, appKey);
+          if (secret.outcome !== "found")
+            return { secret: null, verdict: { verdict: "refused", inboxId: null, settled: null } };
+          const deny = (kind: "refused" | "invalid") => ({
+            secret: secret.secret,
+            verdict: { verdict: kind, inboxId: null, settled: null } as ShopifyWebhookVerdict,
+          });
+          if (!(await verifyShopifyWebhookHmac(secret.secret, body, hmac))) return deny("refused");
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(
+              new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(body),
+            );
+          } catch {
+            return deny("invalid");
+          }
+          const minimised = await minimiseShopifyWebhook(
+            secret.secret,
+            topic as string,
+            parsed,
+            shop,
+          );
+          if (!minimised) return deny("invalid");
+          const r = row(
+            await query(vaultStatements.shopifyWebhookRecord, [
+              appKey,
+              shop,
+              topic as string,
+              webhookId,
+              apiVersion,
+              JSON.stringify(minimised),
+            ]),
+            ["outcome", "inbox_id", "settled"],
+          );
+          if (r.outcome === "not_found") return deny("refused");
+          if (r.outcome === "invalid") return deny("invalid");
+          if (
+            (r.outcome !== "recorded" && r.outcome !== "duplicate") ||
+            typeof r.inbox_id !== "string" ||
+            (r.settled !== "true" && r.settled !== "false")
+          )
+            throw new VaultError("VAULT_RECORD_INVALID");
+          return {
+            secret: secret.secret,
+            verdict:
+              r.outcome === "recorded"
+                ? ({ verdict: "recorded", inboxId: r.inbox_id, settled: false } as const)
+                : ({
+                    verdict: "duplicate",
+                    inboxId: r.inbox_id,
+                    settled: r.settled === "true",
+                  } as const),
+          };
+        }),
+      );
+    } catch (error) {
+      // A lost COMMIT acknowledgement: the row may exist. The connector answers 5xx and
+      // Shopify's retry finds it by its webhook id.
+      if (error instanceof VaultError && error.code === "VAULT_OUTCOME_UNKNOWN")
+        throw new BrokerHold("OUTCOME_UNKNOWN");
+      throw error;
     }
-    const minimised = await minimiseShopifyWebhook(context.secret, topic as string, parsed);
-    if (!minimised) return refused;
-    return encodeShopifyWebhookVerdict({
-      verdict: "verified",
-      topic: topic as (typeof shopifyWebhookTopics)[number],
-      shopDomain: shop,
-      webhookId,
-      minimisedBody: minimised,
-    });
+    remember(vault, appKey, read.secret);
+    return verdict(read.verdict);
   }
 
-  return Object.freeze({ launchVerify, installComplete, webhookVerify });
+  // The token of an ended installation (ADR-0022 item 13): only with the end reason its row
+  // records; the destruction is recorded on the installation in the same transaction.
+  async function credentialDestroy(
+    env: unknown,
+    installationId: unknown,
+    reason: unknown,
+  ): Promise<string> {
+    if (
+      !exact(shopifyInstallationIdPattern, installationId) ||
+      !(shopifyCredentialReasons as readonly unknown[]).includes(reason)
+    )
+      throw new BrokerHold("INPUT_INVALID");
+    const vault = await vaultOf(env);
+    let outcome: ShopifyCredentialOutcome;
+    try {
+      outcome = await ingress(true, () =>
+        deps.transaction(vault, readBudgetMs, async (query) => {
+          const r = row(
+            await query(vaultStatements.shopifyCredentialDestroy, [
+              installationId,
+              reason as string,
+            ]),
+            ["outcome"],
+          );
+          if (!(shopifyCredentialOutcomes as readonly unknown[]).includes(r.outcome))
+            throw new VaultError("VAULT_RECORD_INVALID");
+          return r.outcome as ShopifyCredentialOutcome;
+        }),
+      );
+    } catch (error) {
+      if (error instanceof VaultError && error.code === "VAULT_OUTCOME_UNKNOWN")
+        throw new BrokerHold("OUTCOME_UNKNOWN");
+      throw error;
+    }
+    return encodeShopifyCredentialResult(outcome);
+  }
+
+  return Object.freeze({ launchVerify, installComplete, webhookVerify, credentialDestroy });
 }
 
 const live = createShopifyBroker({
@@ -642,5 +744,14 @@ export function brokerShopifyWebhookVerify(
 ) {
   return connector("shopifyWebhookVerify", () =>
     live.webhookVerify(env, appKey, headersJson, rawBodyBase64),
+  );
+}
+export function brokerShopifyCredentialDestroy(
+  env: unknown,
+  installationId: unknown,
+  reason: unknown,
+) {
+  return connector("shopifyCredentialDestroy", () =>
+    live.credentialDestroy(env, installationId, reason),
   );
 }

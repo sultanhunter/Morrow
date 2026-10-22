@@ -1,6 +1,7 @@
 import { agentStatements } from "./agents/sql.js";
 import { approvalStatements } from "./approvals/sql.js";
 import { billingStatements } from "./billing/sql.js";
+import { catalogStatements } from "./catalog/sql.js";
 import { runStatements } from "./runs/sql.js";
 import { spineStatements } from "./spine-sql.js";
 
@@ -72,6 +73,8 @@ export const workStatements = Object.freeze({
   ...billingStatements,
   // M3 PR-1: the Listings agent, Stop AI work and the model default.
   ...agentStatements,
+  // M2 PR-3: the catalogue routes' read lease.
+  ...catalogStatements,
   // M3 PR-2: run admission, the stale-run close and the run reads.
   ...runStatements,
 } as const);

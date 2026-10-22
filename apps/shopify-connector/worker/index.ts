@@ -4,8 +4,10 @@
 // /healthz answers ready false. It binds MORROW_ENVIRONMENT, the reviewed identifiers
 // (CONNECTOR_CONFIGURATION_JSON, MORROW_DATABASE_BINDING_JSON), the broker's
 // ConnectorBroker entrypoint and its two ingress rate limits; no secret and no Shopify
-// library (ADR-0008 items 1-2).
-import { createConnectorHandler } from "./connector.js";
+// library (ADR-0008 items 1-2). M2 PR-3: webhooks are applied after the response
+// (waitUntil), and a cron trigger runs the ids-only re-drives (an unbound connector does
+// nothing).
+import { createConnectorHandler, type ConnectorContext } from "./connector.js";
 import { createConnectorDatabase } from "./database.js";
 import { mapConnectorEnvironment, type ConnectorEnvironmentCode } from "./environment.js";
 import { connectorJson } from "./pages.js";
@@ -63,7 +65,7 @@ async function ready(selected: Selected): Promise<boolean> {
 }
 
 export default {
-  async fetch(request: Request, env: unknown): Promise<Response> {
+  async fetch(request: Request, env: unknown, ctx: ConnectorContext): Promise<Response> {
     const selected = select(env);
     let pathname = "";
     try {
@@ -81,9 +83,15 @@ export default {
     }
     if (!selected.handler) return connectorJson(503, { code: "connector_unavailable" });
     try {
-      return await selected.handler.fetch(request);
+      return await selected.handler.fetch(request, ctx);
     } catch {
       return connectorJson(503, { code: "connector_unavailable" });
     }
+  },
+  async scheduled(_controller: unknown, env: unknown, ctx: ConnectorContext): Promise<void> {
+    const selected = select(env);
+    if (!selected.handler) return;
+    const handler = selected.handler;
+    ctx.waitUntil(handler.redrive().catch(() => undefined));
   },
 };

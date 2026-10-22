@@ -232,11 +232,15 @@ export const copy = {
     back: "Back to Connections",
     shop: "Store",
     status: "Status",
+    // M2 PR-3 review: an uninstall or a scope change ends the store's connection for good in
+    // this build (no reinstall under the same app); reconnecting needs a new app from Morrow.
     statusHelp: {
       unlinked: "Installed on Shopify, not linked to this workspace yet.",
       linked: "Linked to this workspace.",
-      suspended: "Paused. Morrow doesn't use this store until it resumes.",
-      uninstalled: "The app was uninstalled from Shopify. Reinstall it to reconnect.",
+      suspended:
+        "Disconnected. Morrow no longer uses this store. Reconnecting isn't available in this build; contact Morrow support to connect it again.",
+      uninstalled:
+        "The app was uninstalled from Shopify, so Morrow no longer uses this store. Reconnecting isn't available in this build; contact Morrow support to connect it again.",
     } as Readonly<Record<string, string>>,
     disconnectLater: "Disconnecting a store isn't available in this build.",
   },
@@ -518,8 +522,8 @@ export const copy = {
     installation: {
       unlinked: "Not linked",
       linked: "Connected",
-      suspended: "Paused",
-      uninstalled: "Reinstall needed",
+      suspended: "Disconnected",
+      uninstalled: "Uninstalled",
     },
   },
 } as const;

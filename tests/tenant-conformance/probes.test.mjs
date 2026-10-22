@@ -17,6 +17,7 @@ import {
   revocationSql,
   seedWorkFixtures,
   sha,
+  storeInstallationSql,
   withWorkDatabase,
   workFixtureOrigin,
   workRequest,
@@ -151,6 +152,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_listings_enable(text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_listings_enable('${uuid}','${digest}','corr','store_probe','${digest}','${digest}',NULL,NULL,NULL,NULL)`,
     "cmd_stop_ai_work(text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"record_probe","createdAt":"2026-10-20T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_stop_ai_work('${uuid}','${digest}','corr','store_probe','installation_probe',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex')) x`,
     "cmd_model_default_revise(text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_model_default_revise('${uuid}','${digest}','corr','1','claude_sonnet_5_5','low','1',NULL)`,
+    // M2 PR-3: the catalogue routes' read lease.
+    "catalog_read_lease(text,text)": `SELECT outcome FROM morrow_work.catalog_read_lease('store_probe','connection_probe')`,
     // M3 PR-2: run admission and reconciliation, every scalar well-formed.
     "begin_run_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_run_command('run.admit','${uuid}','${digest}')`,
     "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','1','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
@@ -831,4 +834,147 @@ SELECT outcome FROM morrow_billing.receipt_apply(${literal(receipt)},${literal(d
     "0",
   );
   recordConformance("P9", true);
+});
+
+// M2 PR-3 (review finding B3): the connector's context. Its policies admit rows only while
+// the session user is the connector's login and only for the tenant, store and connection
+// that connector_inbox_apply wrote from the broker-recorded inbox row, after overwriting
+// both settings on entry. A setting the connector login forges reaches nothing (it holds no
+// table privilege, and the applier overwrites it), and the same settings from any other
+// login reach nothing either.
+test("P10: a forged connector context confers nothing; the applier acts only on its inbox row's tenant", () => {
+  const stores = {};
+  for (const [key, p] of [
+    ["a", P.A],
+    ["y", P.Y],
+  ]) {
+    const store = {
+      storeId: "p10_store_" + key,
+      connectionId: "p10_conn_" + key,
+      installationId: "p10_inst_" + key,
+    };
+    db.sql(
+      storeInstallationSql({
+        org: p.org,
+        workspace: p.workspace,
+        principal: p.principal,
+        ...store,
+      }),
+    );
+    const row = db.rows(
+      `SELECT app_key,shop_id,shop_domain FROM morrow_identity.store_installations WHERE id=${literal(store.installationId)}`,
+    )[0];
+    db.sql(
+      `INSERT INTO morrow_vault.credentials(organization_id,workspace_id,id,version,provider,kind,subject_id,status,kek_version,wrapped_key,sealed_value,created_at,destroyed_at,destroy_reason) VALUES(${literal(p.org)},${literal(p.workspace)},${literal("credential_" + store.installationId)},1,'shopify','shopify_offline_token',${literal(store.installationId)},'active',1,decode(repeat('ab',60),'hex'),decode(repeat('cd',40),'hex'),date_trunc('milliseconds',clock_timestamp()),NULL,NULL);`,
+    );
+    const lease = db
+      .sql(
+        asCommandRole(
+          p,
+          `SELECT outcome||'|'||COALESCE(lease_id,'') FROM morrow_work.lease_open('read',${literal("p10_read_" + key)},${literal(store.storeId)},${literal(store.connectionId)},NULL);`,
+          { end: "COMMIT" },
+        ),
+      )
+      .split("\n")
+      .at(-1)
+      .split("|");
+    assert.equal(lease[0], "opened");
+    stores[key] = { ...store, ...row, p, lease: lease[1] };
+  }
+  const { a, y } = stores;
+  const stopSetting = (s) => `${s.p.org}|${s.p.workspace}|${s.storeId}|${s.connectionId}`;
+  const forge = (s) =>
+    `SELECT set_config('morrow.connector_stop',${literal(stopSetting(s))},true),set_config('morrow.connector_redact',${literal(`${s.p.org}|${s.p.workspace}|${s.storeId}`)},true) IS NOT NULL;`;
+  // The connector login holds no table privilege: a forged setting reads nothing directly.
+  for (const table of [
+    "morrow_work.stop_controls",
+    "morrow_work.work_leases",
+    "morrow_work.proposal_parameters",
+  ]) {
+    const r = db.tryRun(`BEGIN; ${forge(y)} SELECT count(*) FROM ${table}; ROLLBACK;`, {
+      user: "morrow_connector_ingress",
+    });
+    assert.equal(r.ok, false, table);
+    assert.match(r.stderr, /permission denied/, table);
+  }
+  // The same settings from every other login, and in the command role from any session
+  // user but the connector's: zero rows.
+  for (const user of ["morrow_vault_broker", "morrow_runtime_executor", "morrow_api_worker"]) {
+    const r = db.tryRun(
+      `BEGIN; ${forge(y)} SELECT count(*) FROM morrow_work.stop_controls; ROLLBACK;`,
+      { user },
+    );
+    assert.equal(r.ok, false, user);
+  }
+  assert.equal(
+    db
+      .sql(
+        `BEGIN; SET LOCAL ROLE morrow_work_command; ${forge(y)} SELECT (SELECT count(*) FROM morrow_work.work_leases)+(SELECT count(*) FROM morrow_work.stop_controls WHERE organization_id IS NOT NULL)+(SELECT count(*) FROM morrow_work.proposals); ROLLBACK;`,
+      )
+      .split("\n")
+      .at(-1),
+    "0",
+  );
+  // A's uninstall, recorded by the broker's login; the connector applies it with Y's
+  // settings forged first: only A's installation, stop and lease change.
+  const inbox = db
+    .sql(
+      `SELECT inbox_id FROM morrow_vault.shopify_webhook_record(${literal(a.app_key)},${literal(a.shop_domain)},'app/uninstalled','p10-uninstall','2026-10',${literal(JSON.stringify({ shopId: a.shop_id }))});`,
+      { user: "morrow_vault_broker" },
+    )
+    .split("\n")
+    .at(-1);
+  assert.match(inbox, /^[a-f0-9-]{36}$/);
+  const applied = db
+    .sql(
+      `BEGIN; ${forge(y)} SELECT outcome||'|'||topic||'|'||credential FROM morrow_work.connector_inbox_apply(${literal(inbox)}); SELECT '['||current_setting('morrow.connector_stop',true)||']['||current_setting('morrow.connector_redact',true)||']'; COMMIT;`,
+      { user: "morrow_connector_ingress" },
+    )
+    .split("\n");
+  assert.deepEqual(applied.slice(-2), ["applied|app/uninstalled|pending", "[][]"]);
+  const state = (s) =>
+    db.rows(
+      `SELECT (SELECT status FROM morrow_identity.store_installations WHERE id=${literal(s.installationId)}) AS installation,(SELECT status||'|'||COALESCE(revoked_reason,'') FROM morrow_work.work_leases WHERE id=${literal(s.lease)}) AS lease,(SELECT count(*)::int FROM morrow_work.stop_controls WHERE scope='connection' AND target_id=${literal(s.connectionId)}) AS stops`,
+    )[0];
+  assert.deepEqual(state(a), { installation: "uninstalled", lease: "revoked|stop", stops: 1 });
+  assert.deepEqual(state(y), { installation: "linked", lease: "active|", stops: 0 });
+  // A connector context reaches no session or lease definer, and no other login reaches
+  // the connector's definers.
+  for (const call of [
+    `SELECT count(*) FROM morrow_work.enter_context(${literal(P.A.digest)},${literal(P.A.workspace)})`,
+    `SELECT outcome FROM morrow_work.cmd_goal_create('${randomUUID()}','${"a".repeat(64)}','corr','x','[]')`,
+    `SELECT outcome FROM morrow_work.catalog_read_lease(${literal(a.storeId)},${literal(a.connectionId)})`,
+    `SELECT outcome FROM morrow_work.enter_lease(${literal(a.lease)},'1')`,
+    `SELECT outcome FROM morrow_vault.shopify_credential_destroy(${literal(a.installationId)},'uninstalled')`,
+  ]) {
+    const r = db.tryRun(`BEGIN; ${forge(a)} ${call}; ROLLBACK;`, {
+      user: "morrow_connector_ingress",
+    });
+    assert.equal(r.ok, false, call);
+    assert.match(r.stderr, /permission denied/, call);
+  }
+  for (const user of ["morrow_vault_broker", "morrow_runtime_executor", "morrow_api_worker"])
+    for (const call of [
+      `SELECT * FROM morrow_work.connector_inbox_apply(${literal(inbox)})`,
+      "SELECT * FROM morrow_work.connector_inbox_pending()",
+      "SELECT * FROM morrow_work.connector_credentials_pending()",
+      "SELECT * FROM morrow_work.connector_privacy_overdue()",
+    ]) {
+      const r = db.tryRun(call + ";", { user });
+      assert.equal(r.ok, false, user + " " + call);
+      assert.match(r.stderr, /permission denied/, user);
+    }
+  // The command role with a forged connector context and no connector session gets
+  // "denied" from the applier and changes nothing.
+  assert.equal(
+    db
+      .sql(
+        `BEGIN; SET LOCAL ROLE morrow_work_command; ${forge(y)} SELECT outcome FROM morrow_work.connector_inbox_apply(${literal(inbox)}); ROLLBACK;`,
+      )
+      .split("\n")
+      .at(-1),
+    "denied",
+  );
+  assert.deepEqual(state(y), { installation: "linked", lease: "active|", stops: 0 });
+  recordConformance("P10", true);
 });

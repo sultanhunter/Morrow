@@ -48,6 +48,10 @@ export type BrokerMethod =
   | "shopifyLaunchVerify"
   | "shopifyInstallComplete"
   | "shopifyWebhookVerify"
+  // M2 PR-3: the token's destruction (ConnectorBroker) and the fixed reads (ApiBroker,
+  // RuntimeBroker).
+  | "shopifyCredentialDestroy"
+  | "shopifyRead"
   // M5 PR-1 (ApiBroker): Stripe on one pinned API version, ids only.
   | "stripeCustomerEnsure"
   | "stripeCheckoutCreate"
@@ -66,6 +70,13 @@ export type BrokerFailureCode =
   | "STATE_INVALID"
   // M5 (owner decision (c), 2026-10-21): the Stripe switch is off; no Stripe method runs.
   | "STRIPE_UNAVAILABLE"
+  // M2 PR-3: a read the vault resolution refused (lease, stop, store or credential), or a
+  // reply Shopify refused; and a vault COMMIT whose acknowledgement was lost (the caller
+  // retries: every M2 PR-3 write is idempotent).
+  | "READ_REFUSED"
+  // M2 PR-3 review: the isolate's read slots on the vault login are all in use.
+  | "READ_BUSY"
+  | "OUTCOME_UNKNOWN"
   // M3 PR-2: the model-provider switch is off (or its key is missing); no model call runs.
   | "MODEL_UNAVAILABLE";
 export class BrokerHold extends Error {

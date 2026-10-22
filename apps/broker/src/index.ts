@@ -9,10 +9,12 @@ import { brokerCallerHealth, brokerHealth, brokerInputInvalid } from "./capabili
 import { brokerChallengeVerify } from "./challenge.js";
 import { brokerNeonLease } from "./neon-lease.js";
 import {
+  brokerShopifyCredentialDestroy,
   brokerShopifyInstallComplete,
   brokerShopifyLaunchVerify,
   brokerShopifyWebhookVerify,
 } from "./shopify-install.js";
+import { brokerShopifyRead } from "./shopify-read.js";
 import {
   brokerStripeCheckoutCreate,
   brokerStripeCustomerEnsure,
@@ -37,9 +39,10 @@ const modelGateway = createModelGateway({
 // Each method checks its arity and forwards to a module-scope handler. Results are
 // strings or booleans only.
 
-// The api Worker's entrypoint: exactly eight prototype methods (v0's four, ADR-0019 item 6
+// The api Worker's entrypoint: exactly nine prototype methods (v0's four, ADR-0019 item 6
 // added challengeVerify; M5 PR-1 adds the four Stripe methods, which take ids, strings and
-// budgets only, as v1 requires: the broker loads every Stripe parameter itself).
+// budgets only, as v1 requires: the broker loads every Stripe parameter itself; M2 PR-3 adds
+// shopifyRead under a read lease).
 export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0 ? brokerHealth(this.env) : brokerInputInvalid("health");
@@ -87,12 +90,34 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
       ? brokerStripeWebhookVerify(this.env, rawBodyBase64, signatureHeader, budgetMs)
       : brokerInputInvalid("stripeWebhookVerify");
   }
+  shopifyRead(
+    leaseId: string,
+    generation: number,
+    subjectId: string,
+    queryName: string,
+    variablesJson: string,
+    budgetMs: number,
+  ): Promise<string> {
+    return arguments.length === 6
+      ? brokerShopifyRead(
+          this.env,
+          "api",
+          leaseId,
+          generation,
+          subjectId,
+          queryName,
+          variablesJson,
+          budgetMs,
+        )
+      : brokerInputInvalid("shopifyRead");
+  }
 }
 
 // The connector Worker's entrypoint (M2 PR-1): its health and its own role lease. M2 PR-2
 // adds the three Shopify methods (ADR-0008 item 2, item 1 as amended): the launch and
 // webhook signature checks and the install's claim, exchange, identity read and vault
-// write. shopifyCredentialDestroy and shopifyRead join in M2 PR-3.
+// write. M2 PR-3 makes the webhook check record the delivery and adds the token's
+// destruction (shopifyRead is the api's and the orchestrator's, never the connector's).
 export class ConnectorBroker extends WorkerEntrypoint<unknown> implements ConnectorBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -128,11 +153,16 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
       ? brokerShopifyWebhookVerify(this.env, appKey, headersJson, rawBodyBase64)
       : brokerInputInvalid("shopifyWebhookVerify", "ConnectorBroker");
   }
+  shopifyCredentialDestroy(installationId: string, reason: string): Promise<string> {
+    return arguments.length === 2
+      ? brokerShopifyCredentialDestroy(this.env, installationId, reason)
+      : brokerInputInvalid("shopifyCredentialDestroy", "ConnectorBroker");
+  }
 }
 
-// The orchestrator's entrypoint (M2 PR-1): its health and its own role lease. M3 PR-2 adds
-// modelRespond (the provider-neutral model gateway); shopifyRead and the write methods join
-// in M2 PR-3 and M4.
+// The orchestrator's entrypoint (M2 PR-1): its health and its own role lease. M2 PR-3 adds
+// shopifyRead (productContent under a run lease) and M3 PR-2 modelRespond (the
+// provider-neutral model gateway); the write methods join in M4.
 export class RuntimeBroker extends WorkerEntrypoint<unknown> implements RuntimeBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -143,6 +173,27 @@ export class RuntimeBroker extends WorkerEntrypoint<unknown> implements RuntimeB
     return arguments.length === 1
       ? brokerNeonLease(this.env, namespaceJson, "runtime")
       : brokerInputInvalid("neonLease", "RuntimeBroker");
+  }
+  shopifyRead(
+    leaseId: string,
+    generation: number,
+    subjectId: string,
+    queryName: string,
+    variablesJson: string,
+    budgetMs: number,
+  ): Promise<string> {
+    return arguments.length === 6
+      ? brokerShopifyRead(
+          this.env,
+          "runtime",
+          leaseId,
+          generation,
+          subjectId,
+          queryName,
+          variablesJson,
+          budgetMs,
+        )
+      : brokerInputInvalid("shopifyRead", "RuntimeBroker");
   }
   modelRespond(
     leaseId: string,

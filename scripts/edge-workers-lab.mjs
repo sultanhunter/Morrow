@@ -1533,11 +1533,48 @@ await instance(
       );
       const others = [];
       for (const binding of ["BROKER", "BROKER_RUNTIME"])
-        for (const op of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"])
+        for (const op of [
+          "shopifyLaunchVerify",
+          "shopifyInstallComplete",
+          "shopifyWebhookVerify",
+          "shopifyCredentialDestroy",
+        ])
           others.push((await probe({ op, binding, args: [] }))[0]);
       check(
         "M2PR2:api_and_runtime_entrypoints_have_no_shopify_method",
         others.every((r) => r.ok === false && r.name === "TypeError"),
+      );
+      // M2 PR-3: shopifyRead on ApiBroker and RuntimeBroker only (a malformed lease is held
+      // before any vault read); the token's destruction on ConnectorBroker only.
+      const reads = [];
+      for (const binding of ["BROKER", "BROKER_RUNTIME"])
+        reads.push(
+          (
+            await probe({
+              op: "shopifyRead",
+              binding,
+              args: ["not-a-lease", 1, "read_1", "collectionsPage", '{"after":null}', 1000],
+            })
+          )[0],
+        );
+      const [connectorRead] = await probe({
+        op: "shopifyRead",
+        binding: "BROKER_CONNECTOR",
+        args: [],
+      });
+      const [destroy] = await probe({
+        op: "shopifyCredentialDestroy",
+        binding: "BROKER_CONNECTOR",
+        args: ["bad id", "uninstalled"],
+      });
+      check(
+        "M2PR3:shopify_read_on_api_and_runtime_only_and_destroy_on_the_connector_only",
+        reads.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
+          connectorRead.ok === false &&
+          connectorRead.name === "TypeError" &&
+          destroy.ok === false &&
+          destroy.message === "BROKER_HELD",
+        { reads, connectorRead, destroy },
       );
       check("M2PR2:no_unexpected_outbound", observed.unexpected === 0);
     },

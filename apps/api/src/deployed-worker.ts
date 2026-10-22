@@ -21,8 +21,10 @@ import {
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
   createBrokerSessionPageReader,
+  createBrokerShopifyReader,
   createBrokerStripe,
 } from "./broker-client.js";
+import type { CatalogApiDependencies } from "../../../packages/work/src/catalog/http.js";
 import {
   mapApiEnvironment,
   type ApiEnvironmentCode,
@@ -121,6 +123,12 @@ export function composeApiDependencies(
     broker: stripe,
     now,
   });
+  // M2 PR-3: the catalogue routes on the same origin and work login, with the broker's
+  // shopifyRead behind the ApiBroker binding.
+  const catalog: CatalogApiDependencies = Object.freeze({
+    ...work,
+    reader: createBrokerShopifyReader(broker),
+  });
   // M3 PR-2: the runs routes on the work dependencies; admission only while the
   // model-provider switch is on and M2 PR-3's product read exists (the orchestrator
   // dispatches on the same two), otherwise 503 before any database access: no run, lease
@@ -135,6 +143,7 @@ export function composeApiDependencies(
     work,
     billing,
     webhook,
+    catalog,
     runs,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
@@ -171,6 +180,7 @@ function select(env: unknown): Selected {
           composed.work,
           composed.billing,
           composed.webhook,
+          composed.catalog,
           composed.runs,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),

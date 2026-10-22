@@ -521,7 +521,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       }
     },
     modelRespond,
-    async readProduct(_ref, productId) {
+    async readProduct(_ref, _runId, productId) {
       const p = catalog.get(productId);
       return p ? { outcome: "read", product: structuredClone(p) } : { outcome: "not_found" };
     },
@@ -587,7 +587,11 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   const completedUnits = 900 * rates.input + 300 * rates.output;
   const completedCost = usd8(completedUnits);
   async function execute(runId, hooks) {
-    return within(listingsRun(ports, durable(hooks), leaseOf(runId)), 600000, "run " + runId);
+    return within(
+      listingsRun(ports, durable(hooks), leaseOf(runId), runId),
+      600000,
+      "run " + runId,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -1607,6 +1611,7 @@ COMMIT;`,
           },
         }),
         leaseOf(runId),
+        runId,
       ),
       600000,
       "stopped run",

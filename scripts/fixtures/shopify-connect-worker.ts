@@ -1,7 +1,8 @@
-// lab:shopify-connect-workers fixture (M2 PR-2). Inside workerd it runs the real code of
-// the three hosts of the Shopify install and link:
-//   connector  createConnectorHandler (launch, callback, status, webhooks) with its own
-//              login's transport (createConnectorDatabase, morrow_connector_ingress);
+// lab:shopify-connect-workers fixture (M2 PR-2; M2 PR-3's webhook inbox). Inside workerd it
+// runs the real code of the three hosts of the Shopify install and link:
+//   connector  createConnectorHandler (launch, callback, status, webhooks and the waitUntil
+//              apply; the cron's redrive on the lab path "lab:redrive") with its own login's
+//              transport (createConnectorDatabase, morrow_connector_ingress);
 //   broker     createShopifyBroker (the ConnectorBroker methods' handlers) on the vault
 //              login's transport (runVaultTransactionWithDriver, morrow_vault_broker), with
 //              the broker's own capabilities (the vault keyring from its bindings) and its
@@ -118,11 +119,56 @@ export default {
   },
 };
 
+// The connector's real handler with its broker and its own login's transport.
+function connectorHandler(env: Env) {
+  const binding = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
+  const vaultDriver: VaultDriverFactory = (config) => bridgedClient(env, config.user);
+  const shopify = createShopifyBroker({
+    transaction: (vault, budgetMs, body) =>
+      runVaultTransactionWithDriver(
+        vaultDriver,
+        vault,
+        Math.min(10000, budgetMs * 3),
+        body,
+        Date.now,
+        NoSocket,
+      ),
+    fetch: (target, init) => fetch(target, init),
+    now: () => Date.now(),
+  });
+  const connectorDriver: ConnectorDriverFactory = (config) => bridgedClient(env, config.user);
+  return createConnectorHandler({
+    configuration: { origin: env.LAB_CONNECTOR_ORIGIN, apiOrigin: env.LAB_API_ORIGIN },
+    broker: {
+      shopifyLaunchVerify: (appKey, rawQuery) => shopify.launchVerify(env, appKey, rawQuery),
+      shopifyInstallComplete: (appKey, rawQuery, digest, budgetMs) =>
+        shopify.installComplete(env, appKey, rawQuery, digest, budgetMs),
+      shopifyWebhookVerify: (appKey, headersJson, rawBodyBase64) =>
+        shopify.webhookVerify(env, appKey, headersJson, rawBodyBase64),
+      shopifyCredentialDestroy: (installationId, reason) =>
+        shopify.credentialDestroy(env, installationId, reason),
+    },
+    // The ConnectorBroker lease: the lab's login takes any password, so the grant is
+    // the one fixed lab value (the real lease is proved by lab:edge-workers).
+    database: createConnectorDatabase(
+      binding,
+      {
+        neonLease: async () =>
+          JSON.stringify({ schemaVersion: 1, password: env.LAB_LEASE_PASSWORD }),
+      },
+      connectorDriver,
+      Date.now,
+      NoSocket,
+    ),
+  });
+}
+
 async function handle(request: Request, env: Env): Promise<Response> {
   {
     // Miniflare's dispatchFetch rewrites Host; the exact browser- or Shopify-shaped request
     // is built here, inside workerd.
     const spec = (await request.json()) as LabRequest;
+    if (spec.url === "lab:redrive") return Response.json(await connectorHandler(env).redrive());
     const built = new Request(spec.url, {
       method: spec.method,
       headers: spec.headers,
@@ -130,46 +176,14 @@ async function handle(request: Request, env: Env): Promise<Response> {
       ...(spec.body !== null ? { body: spec.body } : {}),
     });
     const url = new URL(spec.url);
-    const binding = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
     if (url.origin === env.LAB_CONNECTOR_ORIGIN) {
-      const vaultDriver: VaultDriverFactory = (config) => bridgedClient(env, config.user);
-      const shopify = createShopifyBroker({
-        transaction: (vault, budgetMs, body) =>
-          runVaultTransactionWithDriver(
-            vaultDriver,
-            vault,
-            Math.min(10000, budgetMs * 3),
-            body,
-            Date.now,
-            NoSocket,
-          ),
-        fetch: (target, init) => fetch(target, init),
-        now: () => Date.now(),
-      });
-      const connectorDriver: ConnectorDriverFactory = (config) => bridgedClient(env, config.user);
-      const handler = createConnectorHandler({
-        configuration: { origin: env.LAB_CONNECTOR_ORIGIN, apiOrigin: env.LAB_API_ORIGIN },
-        broker: {
-          shopifyLaunchVerify: (appKey, rawQuery) => shopify.launchVerify(env, appKey, rawQuery),
-          shopifyInstallComplete: (appKey, rawQuery, digest, budgetMs) =>
-            shopify.installComplete(env, appKey, rawQuery, digest, budgetMs),
-          shopifyWebhookVerify: (appKey, headersJson, rawBodyBase64) =>
-            shopify.webhookVerify(env, appKey, headersJson, rawBodyBase64),
-        },
-        // The ConnectorBroker lease: the lab's login takes any password, so the grant is
-        // the one fixed lab value (the real lease is proved by lab:edge-workers).
-        database: createConnectorDatabase(
-          binding,
-          {
-            neonLease: async () =>
-              JSON.stringify({ schemaVersion: 1, password: env.LAB_LEASE_PASSWORD }),
-          },
-          connectorDriver,
-          Date.now,
-          NoSocket,
-        ),
-      });
-      return handler.fetch(built);
+      const handler = connectorHandler(env);
+      // The work handed to waitUntil (the inbox apply) is awaited here, so the laboratory
+      // reads the applied state; the response itself was already final.
+      const pending: Promise<unknown>[] = [];
+      const response = await handler.fetch(built, { waitUntil: (p) => pending.push(p) });
+      await Promise.allSettled(pending);
+      return response;
     }
     const route = url.origin === env.LAB_API_ORIGIN ? apiRoute.exec(url.pathname)?.[1] : undefined;
     if (!route) return new Response(null, { status: 404 });

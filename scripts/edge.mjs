@@ -449,8 +449,9 @@ const allowedBindings = Object.freeze({
   // (two more while the model-provider switch is on) and the cron of pending starts.
   orchestrator: ["vars", "services", "workflows", "queues", "triggers", "secrets"],
   // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint and, since the
-  // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits).
-  connector: ["vars", "services", "secrets", "ratelimits"],
+  // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits). M2 PR-3: its
+  // one cron trigger (edgeConnectorCrons).
+  connector: ["vars", "services", "secrets", "ratelimits", "triggers"],
 });
 // The reviewed packages/ files the connector bundle may include (M2 PR-2): the shared
 // broker protocol and the role preflight text, with the JSON helpers they import, and the
@@ -564,6 +565,14 @@ export function edgeConnectorRateLimits(environment) {
     simple: { limit, period: 60 },
   }));
 }
+
+// M2 PR-3 (review finding B8): the connector's one cron trigger, exact in every
+// environment: every five minutes it re-drives, by id only, the webhook inbox rows still
+// received two minutes after they arrived and the tokens of ended installations whose
+// destruction is not yet recorded. It is a schedule on the existing Worker, not a new
+// resource: the inbox row is the queue (no Queue binding), and no other Worker has a
+// trigger.
+export const edgeConnectorCrons = Object.freeze(["*/5 * * * *"]);
 
 // P04.T01i D1 and D6 (AC01, AC02): only the staging api is on workers.dev; every staging
 // Worker keeps Workers Logs (invocation logs and traces off); development and production
@@ -1218,6 +1227,8 @@ export async function verifyEdgeConfig({
         !same(config.ratelimits, edgeConnectorRateLimits(environment))
       )
         problem("EDGE_CONNECTOR_RATELIMITS", where);
+      if (worker.key === "connector" && !same(config.triggers, { crons: [...edgeConnectorCrons] }))
+        problem("EDGE_CONNECTOR_TRIGGERS", where);
       if (worker.key === "api") {
         if (
           !same(config.services, [

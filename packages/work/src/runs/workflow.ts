@@ -56,8 +56,11 @@ export interface ListingsRunPorts {
     callJson: string,
     budgetMs: number,
   ): Promise<string>;
-  /** The product read of the run's store under the lease (M2 PR-3's shopifyRead productContent). */
-  readProduct(ref: LeaseRef, productId: string): Promise<ProductRead>;
+  /**
+   * The product read of the run's store under the lease (M2 PR-3's shopifyRead
+   * productContent); runId is the lease's subject, which the vault resolution requires.
+   */
+  readProduct(ref: LeaseRef, runId: string, productId: string): Promise<ProductRead>;
   // The billing environment of the entitlement fact (BillingEnvironment), named literally so
   // this module's declarations reach no policy source (the orchestrator's edge typecheck).
   readonly environment: "development" | "staging" | "production";
@@ -200,6 +203,8 @@ async function decide(
 }
 
 interface RunFacts {
+  /** The run id: the Workflow instance id and the run lease's subject. */
+  readonly runId: string;
   readonly envelopeId: string;
   readonly fields: readonly ListingField[];
   /** One modelRespond's budget for the run's selection (runModelBudgetMs). */
@@ -278,7 +283,7 @@ export async function draftProduct(
   };
   // 2. The product as read and its snapshot (re-read after a retried step: a bound snapshot
   //    with counted attempts must be exactly what the calls used).
-  const read = await ports.readProduct(ref, b.productId);
+  const read = await ports.readProduct(ref, facts.runId, b.productId);
   if (read.outcome !== "read") return finish({ outcome: "failed", code: "read_failed" }, null);
   if (read.product.productId !== b.productId)
     return finish({ outcome: "failed", code: "product_mismatch" }, null);
@@ -472,12 +477,14 @@ function proposeUnder(
 
 /**
  * The whole run: start, one step per product (stopping at the first run-ending outcome),
- * propose, finish. `params` is the Workflow's payload (the lease reference only).
+ * propose, finish. `ref` is the Workflow's payload (the lease reference only) and `runId`
+ * its instance id (the run id).
  */
 export async function listingsRun(
   ports: ListingsRunPorts,
   steps: DurableSteps,
   ref: LeaseRef,
+  runId: string,
 ): Promise<RunStepResult> {
   const started = await steps.do("start", async () => {
     const r = await under(ports, ref, (step) => step.run.start());
@@ -506,6 +513,7 @@ export async function listingsRun(
     modelBudgetMs: number;
   };
   const facts: RunFacts = Object.freeze({
+    runId,
     envelopeId: s.envelopeId,
     fields: s.fields,
     modelBudgetMs: s.modelBudgetMs,

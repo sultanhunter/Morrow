@@ -29,16 +29,6 @@ export type OrchestratorEnvironmentCode =
   | "ORCHESTRATOR_ENV_CROSS_BINDING_MISMATCH"
   | "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID"
   | "ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID";
-/** The product read M2 PR-3 adds to RuntimeBroker (spine §4): minimised JSON. */
-export interface RuntimeProductReader {
-  shopifyRead(
-    leaseId: string,
-    generation: number,
-    queryName: string,
-    variablesJson: string,
-    budgetMs: number,
-  ): Promise<string>;
-}
 export interface WorkflowBinding {
   create(options: { id: string; params: unknown }): Promise<unknown>;
 }
@@ -47,7 +37,7 @@ export type OrchestratorEnvironmentMapping =
       ok: true;
       environment: "development" | "staging";
       binding: Readonly<BrokerDatabaseBinding>;
-      broker: RuntimeBrokerRpc & RuntimeProductReader;
+      broker: RuntimeBrokerRpc;
       workflow: WorkflowBinding;
     }>
   | Readonly<{ ok: false; code: OrchestratorEnvironmentCode }>;
@@ -107,7 +97,8 @@ export function mapOrchestratorEnvironment(env: unknown): OrchestratorEnvironmen
     if (
       !callable(broker, "fetch") ||
       !callable(broker, "modelRespond") ||
-      !callable(broker, "neonLease")
+      !callable(broker, "neonLease") ||
+      !callable(broker, "shopifyRead")
     )
       return fail("ORCHESTRATOR_ENV_BROKER_BINDING_INVALID");
     const workflow = own(record, "LISTINGS_RUN");
@@ -116,7 +107,7 @@ export function mapOrchestratorEnvironment(env: unknown): OrchestratorEnvironmen
       ok: true,
       environment: binding.environment,
       binding,
-      broker: broker as RuntimeBrokerRpc & RuntimeProductReader,
+      broker: broker as RuntimeBrokerRpc,
       workflow: workflow as WorkflowBinding,
     });
   } catch {

@@ -15,6 +15,7 @@ import {
 import { modelCallBudgetMs, modelGatewayLimits } from "../packages/identity/src/broker-protocol.ts";
 
 const ref = { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 };
+const runId = "00000000-0000-4000-8000-0000000000aa";
 function steps() {
   const names = [];
   return {
@@ -71,6 +72,7 @@ test("a refused lease interrupts the run at its first step; an ended run ends", 
       ports(async () => ({ entered: false, refusal })),
       s.steps,
       ref,
+      runId,
     );
     assert.deepEqual(result, { kind: "interrupted", refusal });
     assert.deepEqual(s.names, ["start"]);
@@ -86,6 +88,7 @@ test("a refused lease interrupts the run at its first step; an ended run ends", 
     })),
     s.steps,
     ref,
+    runId,
   );
   assert.deepEqual(ended, { kind: "ended", status: "succeeded" });
   const denied = await listingsRun(
@@ -96,6 +99,7 @@ test("a refused lease interrupts the run at its first step; an ended run ends", 
     })),
     steps().steps,
     ref,
+    runId,
   );
   assert.deepEqual(denied, { kind: "interrupted", refusal: "denied" });
 });
@@ -106,6 +110,7 @@ test("a failed transaction is a RunStepRetry, so the durable step retries it", a
       ports(async () => "failed"),
       steps().steps,
       ref,
+      runId,
     ),
     (error) => error instanceof RunStepRetry && error.code === "transaction",
   );
@@ -126,6 +131,7 @@ test("past its time budget a run skips its products, still proposes, and finishe
     ports(async (_r, body) => ({ entered: true, lease: {}, value: await body({ run }) })),
     s.steps,
     ref,
+    runId,
   );
   assert.deepEqual(result, { kind: "ended", status: "failed" });
   assert.deepEqual(s.names, ["start", "product-0", "propose", "finish"]);
@@ -146,6 +152,7 @@ test("a finish that finds an open call waits and asks again", async () => {
     ports(async (_r, body) => ({ entered: true, lease: {}, value: await body({ run }) })),
     steps().steps,
     ref,
+    runId,
   );
   assert.deepEqual(result, { kind: "ended", status: "failed" });
   assert.equal(calls, 3);
@@ -191,6 +198,7 @@ test("each run's model budget is its effort's whole call; the product margin fol
       },
     },
     ref,
+    runId,
   );
   assert.deepEqual(result, { kind: "ended", status: "failed" });
   assert.equal(results[0][1].modelBudgetMs, modelCallBudgetMs(16_000));

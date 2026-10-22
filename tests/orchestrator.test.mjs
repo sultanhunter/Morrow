@@ -99,7 +99,7 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", 
     hostname: "ep-lab-endpoint.c-1.us-east-1.aws.neon.tech",
     database: "morrow",
   });
-  const broker = { fetch() {}, neonLease() {}, modelRespond() {} };
+  const broker = { fetch() {}, neonLease() {}, modelRespond() {}, shopifyRead() {} };
   const workflowBinding = { create: () => Promise.resolve() };
   // The committed environment (MORROW_ENVIRONMENT only), the switch on without its other
   // bindings, and every binding present: M2 PR-3's product read is still missing, so each
@@ -144,6 +144,7 @@ test("AC21: the cron starts nothing while dispatch is disabled", async (t) => {
           fetch() {},
           neonLease: () => (leased++, Promise.reject(Error("x"))),
           modelRespond() {},
+          shopifyRead() {},
         },
         LISTINGS_RUN: { create: () => (created++, Promise.resolve()) },
       },
@@ -175,7 +176,7 @@ test("the orchestrator's environment is deny-all: no credential, no production, 
     MORROW_ENVIRONMENT: "staging",
     MORROW_MODEL_PROVIDER: "anthropic",
     MORROW_DATABASE_BINDING_JSON: binding,
-    BROKER: { fetch() {}, neonLease() {}, modelRespond() {} },
+    BROKER: { fetch() {}, neonLease() {}, modelRespond() {}, shopifyRead() {} },
     LISTINGS_RUN: { create() {} },
   };
   assert.equal(mapOrchestratorEnvironment(full).ok, true);
@@ -197,6 +198,11 @@ test("the orchestrator's environment is deny-all: no credential, no production, 
       "ORCHESTRATOR_ENV_CROSS_BINDING_MISMATCH",
     ],
     [{ BROKER: {} }, "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID"],
+    // M2 PR-3's product read is part of the RuntimeBroker binding's reviewed shape.
+    [
+      { BROKER: { fetch() {}, neonLease() {}, modelRespond() {} } },
+      "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID",
+    ],
     [{ LISTINGS_RUN: {} }, "ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID"],
   ]) {
     const env = { ...full, ...patch };

@@ -10,7 +10,9 @@
 //   * Webhook HMAC: base64 HMAC-SHA256 over the raw body bytes, before any parse.
 //   * The authorization-code exchange: POST https://{shop}/admin/oauth/access_token with a
 //     non-expiring offline token requested; never retried (a code is single use).
-//   * One fixed Admin GraphQL document (API version 2026-10): ShopIdentity.
+//   * Fixed Admin GraphQL documents (API version 2026-10): ShopIdentity at the install, and
+//     M2 PR-3's reads (shopifyReadDocuments: the shop identity, a collections page, a
+//     products page, one collection's products page and one product's listing fields).
 // Replies are bounded, redirects are never followed, and every failure is a fixed code:
 // no provider text, token, secret or value reaches a log, an error or a verdict.
 
@@ -276,9 +278,101 @@ export async function exchangeShopifyCode(
   return Object.freeze({ kind: "token", token, scopes: scope });
 }
 
+export type ShopifyAdminReply =
+  | Readonly<{ kind: "data"; data: unknown }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "unauthorized" }>;
+/**
+ * One fixed Admin GraphQL document with its variables. A THROTTLED reply waits once, within
+ * the deadline, until the bucket holds the query's cost again: Shopify's
+ * extensions.cost.requestedQueryCost (or the document's known cost, shopifyReadCosts, when
+ * the reply omits it) less currentlyAvailable, at restoreRate points a second (M2 PR-3
+ * review: a page read costs about 27 points, so waiting for 10 left it throttled again).
+ * A wait that would pass the deadline is refused at once. Any other error, status or shape
+ * is refused (401 is unauthorized: the token was revoked; the uninstall webhook is the
+ * state change, so a read changes nothing). The reply is bounded by `limit` bytes.
+ */
+export async function shopifyAdminGraphql(
+  fetcher: ShopifyFetch,
+  shop: string,
+  token: string,
+  document: string,
+  variables: Readonly<Record<string, unknown>>,
+  deadlineMs: number,
+  now: () => number = Date.now,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+  limit: number = shopifyReplyMaxBytes,
+): Promise<ShopifyAdminReply> {
+  const refused = Object.freeze({ kind: "refused" as const });
+  if (!shopPattern.test(shop)) return refused;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const remaining = deadlineMs - now();
+    if (remaining <= 0) return refused;
+    let response: Response;
+    try {
+      response = await fetcher(`https://${shop}/admin/api/${shopifyApiVersion}/graphql.json`, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          "x-shopify-access-token": token,
+        },
+        // The install's ShopIdentity takes no variables and sends none (M2 PR-2's body).
+        body: JSON.stringify(
+          Object.keys(variables).length === 0
+            ? { query: document }
+            : { query: document, variables },
+        ),
+        signal: AbortSignal.timeout(remaining),
+      });
+    } catch {
+      return refused;
+    }
+    if (response.status !== 200) {
+      await response.body?.cancel().catch(() => {});
+      return response.status === 401 ? Object.freeze({ kind: "unauthorized" }) : refused;
+    }
+    const reply = await boundedJson(response, limit);
+    const errors = own(reply, "errors");
+    if (errors !== undefined) {
+      const throttled =
+        Array.isArray(errors) &&
+        errors.length > 0 &&
+        errors.every((e) => own(own(e, "extensions"), "code") === "THROTTLED");
+      if (!throttled || attempt > 0) return refused;
+      const cost = own(own(reply, "extensions"), "cost");
+      const status = own(cost, "throttleStatus");
+      const available = own(status, "currentlyAvailable");
+      const rate = own(status, "restoreRate");
+      const reported = own(cost, "requestedQueryCost");
+      const requested =
+        typeof reported === "number" && Number.isFinite(reported) && reported > 0
+          ? reported
+          : shopifyDocumentCost(document);
+      const wait =
+        typeof available === "number" &&
+        Number.isFinite(available) &&
+        typeof rate === "number" &&
+        Number.isFinite(rate) &&
+        rate > 0
+          ? Math.ceil((Math.max(0, requested - Math.max(0, available)) / rate) * 1000)
+          : 1000;
+      if (now() + wait >= deadlineMs) return refused;
+      await sleep(wait);
+      continue;
+    }
+    const data = own(reply, "data");
+    if (data === undefined || data === null || typeof data !== "object") return refused;
+    return Object.freeze({ kind: "data", data });
+  }
+  return refused;
+}
+
 export type ShopifyIdentity =
   | Readonly<{ kind: "identity"; shopId: string; domain: string; development: boolean }>
   | Readonly<{ kind: "refused" }>;
+const shopGid = /^gid:\/\/shopify\/Shop\/([1-9][0-9]{0,19})$/;
 /**
  * The one fixed Admin GraphQL read of the install (ShopIdentity): the shop's numeric id,
  * its myshopify domain and whether it is a Partner development store. THROTTLED waits for
@@ -293,59 +387,25 @@ export async function readShopifyIdentity(
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<ShopifyIdentity> {
   const refused = Object.freeze({ kind: "refused" as const });
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const remaining = deadlineMs - now();
-    if (remaining <= 0) return refused;
-    let response: Response;
-    try {
-      response = await fetcher(`https://${shop}/admin/api/${shopifyApiVersion}/graphql.json`, {
-        method: "POST",
-        redirect: "manual",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
-          "x-shopify-access-token": token,
-        },
-        body: JSON.stringify({ query: shopifyShopIdentityDocument }),
-        signal: AbortSignal.timeout(remaining),
-      });
-    } catch {
-      return refused;
-    }
-    if (response.status !== 200) {
-      await response.body?.cancel().catch(() => {});
-      return refused;
-    }
-    const reply = await boundedJson(response, shopifyReplyMaxBytes);
-    const errors = own(reply, "errors");
-    if (errors !== undefined) {
-      const throttled =
-        Array.isArray(errors) &&
-        errors.length > 0 &&
-        errors.every((e) => own(own(e, "extensions"), "code") === "THROTTLED");
-      if (!throttled || attempt > 0) return refused;
-      const status = own(own(own(reply, "extensions"), "cost"), "throttleStatus");
-      const available = own(status, "currentlyAvailable");
-      const rate = own(status, "restoreRate");
-      const wait =
-        typeof available === "number" && typeof rate === "number" && rate > 0
-          ? Math.ceil(((10 - Math.min(available, 10)) / rate) * 1000)
-          : 1000;
-      if (now() + wait >= deadlineMs) return refused;
-      await sleep(wait);
-      continue;
-    }
-    const s = own(own(reply, "data"), "shop");
-    const id = own(s, "id");
-    const domain = own(s, "myshopifyDomain");
-    const development = own(own(s, "plan"), "partnerDevelopment");
-    const match =
-      typeof id === "string" ? /^gid:\/\/shopify\/Shop\/([1-9][0-9]{0,19})$/.exec(id) : null;
-    if (!match || typeof domain !== "string" || domain !== shop || typeof development !== "boolean")
-      return refused;
-    return Object.freeze({ kind: "identity", shopId: match[1]!, domain, development });
-  }
-  return refused;
+  const reply = await shopifyAdminGraphql(
+    fetcher,
+    shop,
+    token,
+    shopifyShopIdentityDocument,
+    {},
+    deadlineMs,
+    now,
+    sleep,
+  );
+  if (reply.kind !== "data") return refused;
+  const s = own(reply.data, "shop");
+  const id = own(s, "id");
+  const domain = own(s, "myshopifyDomain");
+  const development = own(own(s, "plan"), "partnerDevelopment");
+  const match = typeof id === "string" ? shopGid.exec(id) : null;
+  if (!match || typeof domain !== "string" || domain !== shop || typeof development !== "boolean")
+    return refused;
+  return Object.freeze({ kind: "identity", shopId: match[1]!, domain, development });
 }
 
 /** The webhook signature: base64 HMAC-SHA256 of the raw body, compared in constant time. */
@@ -358,53 +418,236 @@ export async function verifyShopifyWebhookHmac(
   return constantTimeEqual(await shopifyHmacBase64(secret, body), received);
 }
 
-// The minimised body of a verified compliance or app webhook (spine §11): ids and a keyed
-// digest of the customer id only; never an email, phone, name, address or order id.
+// The minimised body of a verified compliance or app webhook (spine §11): ids, scope names
+// and a keyed digest of the customer id only; never an email, phone, name, address or order
+// id. M2 PR-3: the body must be its topic's (the topic header is not signed, so a body of
+// another topic is refused rather than reread), and a body that names its shop must name the
+// header's shop. Null when the body is not one of its topic.
 const idText = (value: unknown): string | null =>
   typeof value === "number" && Number.isSafeInteger(value) && value > 0
     ? String(value)
     : typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value)
       ? value
       : null;
+const scopeList = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length <= 32 &&
+  value.every((s) => typeof s === "string" && /^[a-z][a-z_]{0,63}$/.test(s))
+    ? Object.freeze([...new Set(value as string[])].sort())
+    : null;
+const has = (body: object, key: string) => Object.hasOwn(body, key);
 export async function minimiseShopifyWebhook(
   secret: string,
   topic: string,
   body: unknown,
+  shop: string,
 ): Promise<Readonly<Record<string, string | readonly string[] | null>> | null> {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const customerDigest = async (customer: unknown) => {
     const id = idText(own(customer, "id"));
     return id === null ? null : shopifyHmacHex(secret, "morrow.shopify.customer.v1|" + id);
   };
+  // A compliance body names its shop by id and domain; the domain must be the header's.
+  const compliance = () => {
+    const shopId = idText(own(body, "shop_id"));
+    return shopId !== null && own(body, "shop_domain") === shop ? shopId : null;
+  };
   switch (topic) {
-    case "app/uninstalled":
-      return Object.freeze({ shopId: idText(own(body, "id")) });
+    case "app/uninstalled": {
+      // The Shop resource: its id (and, when present, its myshopify domain, the header's).
+      const shopId = idText(own(body, "id"));
+      const domain = own(body, "myshopify_domain");
+      if (
+        shopId === null ||
+        (domain !== undefined && domain !== shop) ||
+        ["shop_id", "customer", "orders_to_redact", "data_request"].some((k) => has(body, k))
+      )
+        return null;
+      return Object.freeze({ shopId });
+    }
     case "app/scopes_update": {
-      const list = (value: unknown) =>
-        Array.isArray(value) &&
-        value.length <= 32 &&
-        value.every((s) => typeof s === "string" && /^[a-z][a-z_]{0,63}$/.test(s))
-          ? Object.freeze([...(value as string[])].sort())
-          : null;
+      const previous = scopeList(own(body, "previous"));
+      const current = scopeList(own(body, "current"));
+      if (!previous || !current || ["shop_id", "customer"].some((k) => has(body, k))) return null;
+      return Object.freeze({ previous, current });
+    }
+    case "customers/data_request": {
+      const shopId = compliance();
+      const dataRequestId = idText(own(own(body, "data_request"), "id"));
+      if (shopId === null || dataRequestId === null || !has(body, "customer")) return null;
       return Object.freeze({
-        previous: list(own(body, "previous")),
-        current: list(own(body, "current")),
+        shopId,
+        customerDigest: await customerDigest(own(body, "customer")),
+        dataRequestId,
       });
     }
-    case "customers/data_request":
-      return Object.freeze({
-        shopId: idText(own(body, "shop_id")),
-        customerDigest: await customerDigest(own(body, "customer")),
-        dataRequestId: idText(own(own(body, "data_request"), "id")),
-      });
-    case "customers/redact":
-      return Object.freeze({
-        shopId: idText(own(body, "shop_id")),
-        customerDigest: await customerDigest(own(body, "customer")),
-      });
-    case "shop/redact":
-      return Object.freeze({ shopId: idText(own(body, "shop_id")) });
+    case "customers/redact": {
+      const shopId = compliance();
+      if (shopId === null || !has(body, "customer") || has(body, "data_request")) return null;
+      return Object.freeze({ shopId, customerDigest: await customerDigest(own(body, "customer")) });
+    }
+    case "shop/redact": {
+      const shopId = compliance();
+      if (
+        shopId === null ||
+        ["customer", "orders_to_redact", "data_request", "orders_requested"].some((k) =>
+          has(body, k),
+        )
+      )
+        return null;
+      return Object.freeze({ shopId });
+    }
     default:
       return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// M2 PR-3: the fixed read documents (spine §4), one per query, and the minimised result of
+// each. Only ids, titles, a product's status and its listing fields leave Shopify's reply.
+// The products page searches titles with Shopify's search syntax, built here from the
+// closed variables (letters and digits only), never from caller text.
+export const shopifyReadPageSize = 25;
+export const shopifyReadDocuments = Object.freeze({
+  shopIdentity: shopifyShopIdentityDocument,
+  collectionsPage:
+    "query CollectionsPage($first: Int!, $after: String) { collections(first: $first, after: $after, sortKey: TITLE) { nodes { id title } pageInfo { hasNextPage endCursor } } }",
+  productsPage:
+    "query ProductsPage($first: Int!, $after: String, $query: String) { products(first: $first, after: $after, query: $query, sortKey: TITLE) { nodes { id title status } pageInfo { hasNextPage endCursor } } }",
+  collectionProductsPage:
+    "query CollectionProductsPage($id: ID!, $first: Int!, $after: String) { collection(id: $id) { products(first: $first, after: $after) { nodes { id title status } pageInfo { hasNextPage endCursor } } } }",
+  productContent:
+    "query ProductContent($id: ID!) { product(id: $id) { id title descriptionHtml tags seo { title description } } }",
+} as const);
+// The requested cost of each fixed document as Shopify's calculator prices it (a connection
+// is 2 plus its page size, each object 1, scalars 0). The THROTTLED wait uses it when the
+// reply omits extensions.cost.requestedQueryCost.
+export const shopifyReadCosts = Object.freeze({
+  shopIdentity: 2,
+  collectionsPage: 2 + shopifyReadPageSize,
+  productsPage: 2 + shopifyReadPageSize,
+  collectionProductsPage: 3 + shopifyReadPageSize,
+  productContent: 2,
+} as const satisfies Record<keyof typeof shopifyReadDocuments, number>);
+/** A fixed document's known cost; an unknown one is priced as the dearest page. */
+export function shopifyDocumentCost(document: string): number {
+  for (const [name, text] of Object.entries(shopifyReadDocuments))
+    if (text === document) return shopifyReadCosts[name as keyof typeof shopifyReadCosts];
+  return Math.max(...Object.values(shopifyReadCosts));
+}
+const gidTail = (value: unknown, kind: "Product" | "Collection") => {
+  const match =
+    typeof value === "string"
+      ? new RegExp(`^gid://shopify/${kind}/([1-9][0-9]{0,19})$`).exec(value)
+      : null;
+  return match ? match[1]! : null;
+};
+const text = (value: unknown): value is string => typeof value === "string";
+/** One page of nodes and its next cursor, or null. */
+function pageOf(connection: unknown, node: (n: unknown) => unknown | null) {
+  const nodes = own(connection, "nodes");
+  const info = own(connection, "pageInfo");
+  const next = own(info, "hasNextPage");
+  const cursor = own(info, "endCursor");
+  if (!Array.isArray(nodes) || nodes.length > shopifyReadPageSize || typeof next !== "boolean")
+    return null;
+  const mapped = nodes.map(node);
+  if (mapped.some((n) => n === null)) return null;
+  if (next && (!text(cursor) || !/^[A-Za-z0-9+/=_-]{1,1536}$/.test(cursor))) return null;
+  return { items: mapped, nextCursor: next ? (cursor as string) : null };
+}
+const productNode = (n: unknown) => {
+  const id = gidTail(own(n, "id"), "Product");
+  const title = own(n, "title");
+  const status = own(n, "status");
+  return id && text(title) && text(status) && /^[A-Z][A-Z_]{0,31}$/.test(status)
+    ? { id: "product:" + id, title, status: status.toLowerCase() }
+    : null;
+};
+/**
+ * The minimised result of one read reply, as the protocol's closed JSON value, or null
+ * when the reply is not the document's shape. `products` with a collection id reads that
+ * collection's products; a missing collection or product is not_found.
+ */
+export function shopifyReadResult(
+  query:
+    | "shopIdentity"
+    | "collectionsPage"
+    | "productsPage"
+    | "collectionProductsPage"
+    | "productContent",
+  data: unknown,
+  shop: string,
+): Record<string, unknown> | null {
+  switch (query) {
+    case "shopIdentity": {
+      const s = own(data, "shop");
+      const id = own(s, "id");
+      const development = own(own(s, "plan"), "partnerDevelopment");
+      const match = text(id) ? shopGid.exec(id) : null;
+      if (!match || own(s, "myshopifyDomain") !== shop || typeof development !== "boolean")
+        return null;
+      return { schemaVersion: 1, outcome: "read", shop: { shopId: match[1], development } };
+    }
+    case "collectionsPage": {
+      const page = pageOf(own(data, "collections"), (n) => {
+        const id = gidTail(own(n, "id"), "Collection");
+        const title = own(n, "title");
+        return id && text(title) ? { id: "collection:" + id, title } : null;
+      });
+      return page
+        ? {
+            schemaVersion: 1,
+            outcome: "read",
+            collections: page.items,
+            nextCursor: page.nextCursor,
+          }
+        : null;
+    }
+    case "productsPage":
+    case "collectionProductsPage": {
+      let connection = own(data, "products");
+      if (query === "collectionProductsPage") {
+        const collection = own(data, "collection");
+        if (collection === null) return { schemaVersion: 1, outcome: "not_found" };
+        connection = own(collection, "products");
+      }
+      const page = pageOf(connection, productNode);
+      return page
+        ? { schemaVersion: 1, outcome: "read", products: page.items, nextCursor: page.nextCursor }
+        : null;
+    }
+    case "productContent": {
+      const p = own(data, "product");
+      if (p === null) return { schemaVersion: 1, outcome: "not_found" };
+      const id = gidTail(own(p, "id"), "Product");
+      const title = own(p, "title");
+      const descriptionHtml = own(p, "descriptionHtml");
+      const tags = own(p, "tags");
+      const seo = own(p, "seo");
+      const seoTitle = own(seo, "title");
+      const seoDescription = own(seo, "description");
+      if (
+        !id ||
+        !text(title) ||
+        !text(descriptionHtml) ||
+        !Array.isArray(tags) ||
+        !tags.every(text) ||
+        !(seoTitle === null || text(seoTitle)) ||
+        !(seoDescription === null || text(seoDescription))
+      )
+        return null;
+      return {
+        schemaVersion: 1,
+        outcome: "read",
+        product: {
+          productId: "product:" + id,
+          title,
+          descriptionHtml,
+          seo: { title: seoTitle, description: seoDescription },
+          tags: [...tags],
+        },
+      };
+    }
   }
 }

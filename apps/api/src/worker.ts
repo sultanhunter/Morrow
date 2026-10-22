@@ -17,6 +17,11 @@ import {
   createAgentsApiHandler,
 } from "../../../packages/work/src/agents/http.js";
 import {
+  catalogPathPattern,
+  createCatalogApiHandler,
+  type CatalogApiDependencies,
+} from "../../../packages/work/src/catalog/http.js";
+import {
   createRunsApiHandler,
   runsPathPattern,
   type RunsApiDependencies,
@@ -38,9 +43,9 @@ type Handler = Readonly<{
 //   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
 //   /workspace/:ws/stores/:storeId/agents/, /workspace/:ws/models, /workspace/:ws/settings/model-default
 //                                                agents (M3 PR-1)
-//   /workspace/:ws/stores/:storeId/catalog/      reserved for M2 PR-3
+//   /workspace/:ws/stores/:storeId/catalog/      catalogue reads (M2 PR-3)
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
-type RowKey = "runs" | "work" | "billing" | "stripe_webhook" | "agents";
+type RowKey = "runs" | "work" | "billing" | "stripe_webhook" | "agents" | "catalog";
 export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
   Object.freeze([
     // M3 PR-2: the runs routes (packages/work/src/runs/http.ts), before the work API's row.
@@ -53,6 +58,8 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
     // M3 PR-1: the agents routes, on the work dependencies (packages/work/src/agents/http.ts).
     ["agents", (path: string) => agentsPathPattern.test(path)],
+    // M2 PR-3: the catalogue reads, on the work dependencies and the broker's shopifyRead.
+    ["catalog", (path: string) => catalogPathPattern.test(path)],
   ] as const);
 export function apiDispatch(path: string): RowKey | "workspace" {
   for (const [key, matches] of apiDispatchRows) if (matches(path)) return key;
@@ -61,12 +68,14 @@ export function apiDispatch(path: string): RowKey | "workspace" {
 
 // The configured local fixture imports this exact entry constructor. The ordinary artifact
 // intentionally has no account/secret/environment binding: without dependencies every work,
-// billing, agents and runs route is 401 and the webhook 404, with no network or database.
+// billing, agents, catalogue and runs route is 401 and the webhook 404, with no network or
+// database.
 export function createWorkspaceApiWorker(
   dependencies?: ManagedWorkspaceApiDependencies,
   work?: WorkApiDependencies,
   billing?: BillingApiDependencies,
   webhook?: StripeWebhookDependencies,
+  catalog?: CatalogApiDependencies,
   runs?: RunsApiDependencies,
 ) {
   const workspace = createWorkersManagedWorkspaceApi(dependencies);
@@ -77,6 +86,7 @@ export function createWorkspaceApiWorker(
     stripe_webhook: createStripeWebhookHandler(webhook),
     // GET /models reports whether run admission is open (the runs handler's own flag).
     agents: createAgentsApiHandler(work, runs?.admission === true),
+    catalog: createCatalogApiHandler(catalog),
   });
   return Object.freeze({
     fetch(request: Request, env: unknown, ctx: Context): Promise<Response> {

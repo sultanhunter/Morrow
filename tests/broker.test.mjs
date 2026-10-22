@@ -423,7 +423,7 @@ test("AC29: 20 concurrent first calls share one initialisation; a failure stays 
   for (const value of [undefined, null, "env"]) assert.equal(await brokerHealth(value), false);
 });
 
-test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 404 default", async (t) => {
+test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404 default", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "morrow-broker-entry-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bundled = await build({
@@ -451,12 +451,14 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
   const file = join(directory, "broker.mjs");
   writeFileSync(file, bundled.outputFiles[0].text);
   const module = await import(pathToFileURL(file).href);
-  // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods.
+  // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods; M2
+  // PR-3 shopifyRead (the catalogue routes' reads under a read lease).
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
     "challengeVerify",
     "constructor",
     "health",
     "neonLease",
+    "shopifyRead",
     "stripeCheckoutCreate",
     "stripeCustomerEnsure",
     "stripePortalCreate",
@@ -464,11 +466,13 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
     "workosSessionPage",
   ]);
   // Trust model v1: one class per caller, exactly its own methods. M2 PR-2 gives the
-  // connector its three Shopify methods; M3 PR-2 gives the orchestrator modelRespond.
+  // connector its three Shopify methods and M2 PR-3 the token's destruction; M2 PR-3 gives
+  // the orchestrator shopifyRead (one product under a run lease) and M3 PR-2 modelRespond.
   assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
     "constructor",
     "health",
     "neonLease",
+    "shopifyCredentialDestroy",
     "shopifyInstallComplete",
     "shopifyLaunchVerify",
     "shopifyWebhookVerify",
@@ -478,6 +482,7 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
     "health",
     "modelRespond",
     "neonLease",
+    "shopifyRead",
   ]);
   assert.deepEqual(Object.keys(module).sort(), [
     "ApiBroker",
@@ -506,9 +511,13 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
   await failure(entry.stripeCheckoutCreate(operation, 1000, 1));
   await failure(entry.stripePortalCreate());
   await failure(entry.stripeWebhookVerify("e30=", "t=1"));
+  // M2 PR-3: shopifyRead takes exactly its six values.
+  const readLease = "00000000-0000-4000-8000-000000000002";
+  await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}"));
+  await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}", 1000, 1));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    Array(10).fill("INPUT_INVALID"),
+    Array(12).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
@@ -546,13 +555,58 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
   await failure(connector.shopifyInstallComplete("app-1", "q", "d"));
   await failure(connector.shopifyInstallComplete("app-1", "q", "d", 1000, 1));
   await failure(connector.shopifyWebhookVerify("app-1", "{}"));
+  await failure(connector.shopifyCredentialDestroy("installation_1"));
+  await failure(connector.shopifyCredentialDestroy("installation_1", "uninstalled", 1));
   assert.deepEqual(
     logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
-    Array(5).fill(["ConnectorBroker", "INPUT_INVALID"]),
+    Array(7).fill(["ConnectorBroker", "INPUT_INVALID"]),
   );
-  for (const name of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"]) {
+  for (const name of [
+    "shopifyLaunchVerify",
+    "shopifyInstallComplete",
+    "shopifyWebhookVerify",
+    "shopifyCredentialDestroy",
+  ]) {
     assert.equal(typeof new module.ApiBroker({}, env)[name], "undefined");
     assert.equal(typeof new module.RuntimeBroker({}, env)[name], "undefined");
   }
+  // shopifyRead is the api's and the orchestrator's, each with its own queries, never the
+  // connector's; the orchestrator's checks its arity and refuses the api's queries.
+  assert.equal(typeof connector.shopifyRead, "undefined");
+  const runtime = new module.RuntimeBroker({}, env);
+  logs.length = 0;
+  await failure(runtime.shopifyRead(readLease, 1, "run_1", "productContent", "{}"));
+  await failure(
+    runtime.shopifyRead(
+      readLease,
+      1,
+      "run_1",
+      "productsPage",
+      '{"after":null,"collectionId":null,"search":null}',
+      1000,
+    ),
+  );
+  await failure(
+    entry.shopifyRead(
+      readLease,
+      1,
+      "subject_1",
+      "productContent",
+      '{"productId":"product:1"}',
+      1000,
+    ),
+  );
+  assert.deepEqual(
+    logs.map((line) => [
+      JSON.parse(line).entrypoint,
+      JSON.parse(line).method,
+      JSON.parse(line).code,
+    ]),
+    [
+      ["RuntimeBroker", "shopifyRead", "INPUT_INVALID"],
+      ["RuntimeBroker", "shopifyRead", "INPUT_INVALID"],
+      ["ApiBroker", "shopifyRead", "INPUT_INVALID"],
+    ],
+  );
   await failure(entry.neonLease(neonLeaseNamespace(parsed, "morrow_runtime_executor")));
 });
