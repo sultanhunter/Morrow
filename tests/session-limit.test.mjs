@@ -4,10 +4,11 @@ import test from "node:test";
 import deployed from "../apps/api/src/deployed-worker.ts";
 import {
   createSessionLimit,
+  envelopeFamily,
   sessionLimitedRoutes,
   sessionLimitKeys,
 } from "../apps/api/src/session-limit.ts";
-import { workPath } from "../apps/api/src/worker.ts";
+import { apiDispatch, workPath } from "../apps/api/src/worker.ts";
 import {
   decodeStoreLinkPreview,
   decodeStoreLinkResult,
@@ -92,6 +93,13 @@ const routeCases = [
   ["/workspace/workspace_a/work/goals", "GET", true],
   ["/workspace/workspace_a/work/goals", "POST", true],
   ["/workspace/workspace_a/work/goals", "PUT", true],
+  // The billing and agents rows of the api Worker's dispatch table (M5 PR-1, M3 PR-1).
+  ["/workspace/workspace_a/billing", "GET", true],
+  ["/workspace/workspace_a/billing/morrow/checkout", "POST", true],
+  ["/workspace/workspace_a/stores/store_a/agents/listings", "GET", true],
+  ["/workspace/workspace_a/stores/store_a/agents/listings/stop", "POST", true],
+  ["/workspace/workspace_a/models", "GET", true],
+  ["/workspace/workspace_a/settings/model-default", "PUT", true],
   ["/auth/logout", "POST", true],
   ["/auth/rotate", "POST", true],
   ["/workspaces/", "GET", false],
@@ -105,6 +113,8 @@ const routeCases = [
   ["/auth/challenge", "GET", false],
   ["/auth/result", "GET", false],
   ["/api/x", "GET", false],
+  // The Stripe webhook is outside the session routes: Stripe sends no cookie.
+  ["/api/billing/stripe/webhook", "POST", false],
   ["/healthz", "GET", false],
   ["/", "GET", false],
 ];
@@ -129,6 +139,27 @@ test("the session limit and the router agree on the session paths", async () => 
   // The work API's own paths are a subset of the counted workspace paths.
   assert.ok(workPath.test("/workspace/workspace_a/work/goals"));
   assert.equal(managedApiRoute("/workspace/workspace_a/work/goals"), "workspace");
+  // The ErrorEnvelope families are the work, billing and agents rows of the dispatch table,
+  // all under the counted workspace paths; the webhook row is never a session route.
+  for (const [path, family] of [
+    ["/workspace/workspace_a/work/goals", "work"],
+    ["/workspace/workspace_a/billing", "billing"],
+    ["/workspace/workspace_a/billing/morrow/plans", "billing"],
+    ["/workspace/workspace_a/stores/store_a/agents/listings", "agents"],
+    ["/workspace/workspace_a/models", "agents"],
+    ["/workspace/workspace_a/settings/model-default", "agents"],
+    ["/workspace/workspace_a/billingx", null],
+    ["/workspace/workspace_a/store-links", null],
+    ["/workspace/workspace_a/bootstrap", null],
+    ["/workspaces", null],
+    ["/api/billing/stripe/webhook", null],
+  ]) {
+    assert.equal(envelopeFamily(path), family, path);
+    if (family) assert.equal(apiDispatch(path), family, path);
+    if (family) assert.equal(managedApiRoute(path), "workspace", path);
+  }
+  assert.equal(apiDispatch("/api/billing/stripe/webhook"), "stripe_webhook");
+  assert.equal(managedApiRoute("/api/billing/stripe/webhook"), "not_found");
 });
 
 test("step 0: without exactly one canonical session cookie nothing is counted", async () => {
@@ -287,7 +318,7 @@ test("over the limit: 429 rate_limited with Retry-After: 60, no router and no lo
     const { calls, send } = harness("deny");
     const reply = await bodyOf(await send(request(path, { method, body: bodyFor(method) })));
     assert.equal(reply.status, 429, path + " " + method);
-    if (workPath.test(new URL(origin + path).pathname))
+    if (envelopeFamily(new URL(origin + path).pathname))
       assert.ok(workLimited(method)(reply), path + " " + method + " " + reply.body);
     else {
       assert.equal(reply.body, rateLimited);
@@ -355,18 +386,20 @@ test("fail closed: no address, a bad address or a failed limiter is the route's 
     [address, () => ({ success: "yes" }), "LIMITER_FAILED"],
     [address, () => null, "LIMITER_FAILED"],
   ];
-  const envelope = (retryClass) => (body) => {
-    const value = JSON.parse(body);
-    return (
-      validateCurrentDefinition("ErrorEnvelope", value) &&
-      value.code === "unavailable" &&
-      value.retryClass === retryClass &&
-      value.safeMessage === "Work is temporarily unavailable." &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-        value.correlationId,
-      )
-    );
-  };
+  const envelope =
+    (retryClass, safeMessage = "Work is temporarily unavailable.") =>
+    (body) => {
+      const value = JSON.parse(body);
+      return (
+        validateCurrentDefinition("ErrorEnvelope", value) &&
+        value.code === "unavailable" &&
+        value.retryClass === retryClass &&
+        value.safeMessage === safeMessage &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+          value.correlationId,
+        )
+      );
+    };
   const exact = (text) => (body) => body === text;
   const routes = [
     ["/workspaces", "GET", exact('{"code":"unavailable"}')],
@@ -376,6 +409,23 @@ test("fail closed: no address, a bad address or a failed limiter is the route's 
     ["/auth/rotate", "POST", exact('{"schemaVersion":1,"outcome":"rotation_unavailable"}')],
     ["/workspace/workspace_a/work/goals", "GET", envelope("safe_read_retry")],
     ["/workspace/workspace_a/work/goals", "POST", envelope("recheck_before_retry")],
+    // The agents routes answer the work API's envelope; billing its own.
+    ["/workspace/workspace_a/models", "GET", envelope("safe_read_retry")],
+    [
+      "/workspace/workspace_a/stores/store_a/agents/listings/stop",
+      "POST",
+      envelope("recheck_before_retry"),
+    ],
+    [
+      "/workspace/workspace_a/billing",
+      "GET",
+      envelope("safe_read_retry", "Billing is temporarily unavailable."),
+    ],
+    [
+      "/workspace/workspace_a/billing/morrow/checkout",
+      "POST",
+      envelope("recheck_before_retry", "Billing is temporarily unavailable."),
+    ],
   ];
   for (const [path, method, expected] of routes)
     for (const [from, limiter, code] of causes) {

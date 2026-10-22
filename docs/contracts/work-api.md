@@ -71,7 +71,7 @@ Errors are v1 `ErrorEnvelope`s with a fixed `safeMessage`; a not-found body is b
 
 ## Agents routes (M3 PR-1)
 
-An internal JSON contract beside the work API, under `/workspace/:ws` (not `/work`), on the same api Worker, dependencies and guard rules (`packages/work/src/agents/http.ts`; ADR-0022 items 3, 15 and 16, with the item 3 amendment of 2026-10-20). `PUT` follows the `POST` rules: exact `Origin`, Fetch Metadata, `X-Morrow-Request: 1`, `Content-Type: application/json` and an `Idempotency-Key`. Bodies are closed and never carry a tenant, store connection, installation or actor value: the store comes from the path and is resolved against its current association. Every command runs the human kernel on the exact resource first, then its definer, which rechecks authority under lock. An unbound api answers 401 with no network or database access.
+An internal JSON contract beside the work API, under `/workspace/:ws` (not `/work`), on the same api Worker, dependencies and guard rules (`packages/work/src/agents/http.ts`; ADR-0022 items 3, 15 and 16, with the item 3 amendment of 2026-10-20). `PUT` follows the `POST` rules: exact `Origin`, Fetch Metadata, `X-Morrow-Request: 1`, `Content-Type: application/json` and an `Idempotency-Key`. Bodies are closed and never carry a tenant, store connection, installation or actor value: the store comes from the path and is resolved against its current association. Every command runs the human kernel on the exact resource first, then its definer, which rechecks authority under lock. An unbound api answers 401 with no network or database access. Errors are the work API's envelopes (above), the session limit's 429 included.
 
 | Route under `/workspace/:ws` | Body | Success |
 | --- | --- | --- |
