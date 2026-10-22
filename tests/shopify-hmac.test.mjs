@@ -438,7 +438,39 @@ test("ShopIdentity: one fixed document; development flag, id and domain; THROTTL
     },
   );
   assert.equal(after.kind, "identity");
-  assert.deepEqual(slept, [100]);
+  // ShopIdentity's known cost (2 points) at 100 a second (M2 PR-3 review: the wait covers
+  // the query's cost, not a fixed 10 points).
+  assert.deepEqual(slept, [20]);
+  // The reply's requestedQueryCost, when present, prices the wait.
+  const reported = [];
+  const priced = fakeFetch([
+    json({
+      errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
+      extensions: {
+        cost: {
+          requestedQueryCost: 7,
+          throttleStatus: { currentlyAvailable: 1, restoreRate: 100 },
+        },
+      },
+    }),
+    reply(true),
+  ]);
+  assert.equal(
+    (
+      await readShopifyIdentity(
+        priced.fetcher,
+        "dev.myshopify.com",
+        "t",
+        Date.now() + 5000,
+        Date.now,
+        async (ms) => {
+          reported.push(ms);
+        },
+      )
+    ).kind,
+    "identity",
+  );
+  assert.deepEqual(reported, [60]);
   const twice = fakeFetch([throttled(), throttled()]);
   assert.equal(
     (

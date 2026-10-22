@@ -674,10 +674,15 @@ export type ShopifyReadQuery =
 export const shopifyReadLimits = Object.freeze({
   /** The whole read: the vault resolution, the Admin call and a THROTTLED wait. */
   budgetMaxMs: 15000,
-  variablesMaxBytes: 1024,
+  variablesMaxBytes: 2048,
   resultMaxBytes: 262144,
   pageSize: 25,
-  cursorMaxChars: 512,
+  /**
+   * Shopify's opaque page cursor (M2 PR-3 review): a title-sorted cursor is base64 of JSON
+   * that holds the last node's title, so a 255-character title in 4-byte UTF-8 with its
+   * JSON stays within this; the variables carrying it within variablesMaxBytes.
+   */
+  cursorMaxChars: 1536,
   searchMaxChars: 64,
 });
 export type ShopifyReadVariables =
@@ -690,7 +695,7 @@ export type ShopifyReadVariables =
       search: string | null;
     }>
   | Readonly<{ query: "productContent"; productId: string }>;
-const cursorPattern = /^[A-Za-z0-9+/=_-]{1,512}$/;
+const cursorPattern = /^[A-Za-z0-9+/=_-]{1,1536}$/;
 const gidRef = (kind: "product" | "collection") => new RegExp(`^${kind}:[1-9][0-9]{0,19}$`);
 // Letters, digits and single spaces only: the broker builds Shopify's search syntax itself.
 const searchPattern = /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+){0,4}$/u;

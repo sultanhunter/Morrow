@@ -489,4 +489,44 @@ test("Shopify credential and read results: closed shapes both ways", async () =>
     ),
     { query: "productsPage", after: null, collectionId: null, search: "Été 2" },
   );
+  // M2 PR-3 review: a title-sorted cursor holds the last node's title, so a 255-character
+  // title in 4-byte UTF-8 (with its JSON) needs more than 512 characters; up to 1,536 pass
+  // both ways, with the largest variables that carry one.
+  const { shopifyReadLimits } = await import("../packages/identity/src/broker-protocol.ts");
+  assert.equal(shopifyReadLimits.cursorMaxChars, 1536);
+  const cursor = Buffer.from(
+    JSON.stringify({ last_id: 98765432101234, last_value: "\u{1F600}".repeat(255) }),
+  ).toString("base64");
+  assert.ok(cursor.length > 512 && cursor.length <= shopifyReadLimits.cursorMaxChars);
+  const longest = "A+/=".repeat(384);
+  const variables = JSON.stringify({
+    after: longest,
+    collectionId: "collection:12345678901234567890",
+    search: null,
+  });
+  assert.ok(new TextEncoder().encode(variables).length <= shopifyReadLimits.variablesMaxBytes);
+  assert.deepEqual(parseShopifyReadVariables("productsPage", variables), {
+    query: "productsPage",
+    after: longest,
+    collectionId: "collection:12345678901234567890",
+    search: null,
+  });
+  assert.deepEqual(
+    parseShopifyReadVariables("collectionsPage", JSON.stringify({ after: cursor })),
+    {
+      query: "collectionsPage",
+      after: cursor,
+    },
+  );
+  assert.equal(
+    parseShopifyReadVariables("collectionsPage", JSON.stringify({ after: longest + "A" })),
+    null,
+  );
+  const page = (nextCursor) =>
+    JSON.stringify({ schemaVersion: 1, outcome: "read", collections: [], nextCursor });
+  assert.equal(decodeShopifyReadResult("collectionsPage", page(longest)).nextCursor, longest);
+  assert.throws(
+    () => decodeShopifyReadResult("collectionsPage", page(longest + "A")),
+    /BROKER_PROTOCOL_INVALID/,
+  );
 });

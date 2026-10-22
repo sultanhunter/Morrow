@@ -6,14 +6,15 @@
 // variables built in the broker, THROTTLED once within the budget, 401 and any other error
 // refused with nothing changed, and results minimised to the protocol's closed JSON.
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import test from "node:test";
 import {
   decodeShopifyReadResult,
   parseShopifyReadVariables,
   shopifyReadLimits,
 } from "../packages/identity/src/broker-protocol.ts";
-import { createShopifyReader } from "../apps/broker/src/shopify-read.ts";
+import { createShopifyReader, shopifyReadSlots } from "../apps/broker/src/shopify-read.ts";
+import { createShopifyBroker } from "../apps/broker/src/shopify-install.ts";
 import { shopifyReadDocuments } from "../apps/broker/src/shopify.ts";
 import {
   VaultError,
@@ -75,6 +76,7 @@ async function harness(options = {}) {
     assert.ok(vault.keyring && vault.binding, "the vault capability");
     assert.ok(Number.isSafeInteger(budgetMs) && budgetMs >= 1 && budgetMs <= 3000);
     events.push("begin");
+    if (options.gate) await options.gate;
     const value = await body(async (text, values) => {
       assert.equal(text, vaultStatements.shopifyReadResolve);
       assert.ok(values.every((x) => typeof x === "string"));
@@ -401,6 +403,85 @@ test("reads: a refused resolution reaches no provider; the token opens only for 
   assert.equal(h.requests.length, 0);
 });
 
+// A leaky bucket on the harness clock (Shopify's: restoreRate points a second up to
+// maximumAvailable); each reply costs the document's points or is THROTTLED with the
+// bucket's state and the query's requested cost.
+const productsVariables = Object.freeze({ after: null, collectionId: null, search: null });
+function leakyBucket({ available, rate = 50, cost, reportCost = true }) {
+  const bucket = { available, at: null, clock: null };
+  const level = () =>
+    Math.min(1000, bucket.available + ((bucket.clock.ms - bucket.at) / 1000) * rate);
+  return {
+    bucket,
+    start(clock) {
+      bucket.clock = clock;
+      bucket.at = clock.ms;
+    },
+    reply(body) {
+      const now = level();
+      bucket.at = bucket.clock.ms;
+      if (now < cost) {
+        bucket.available = now;
+        return Response.json({
+          errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
+          extensions: {
+            cost: {
+              ...(reportCost ? { requestedQueryCost: cost } : {}),
+              throttleStatus: {
+                maximumAvailable: 1000,
+                currentlyAvailable: Math.floor(now),
+                restoreRate: rate,
+              },
+            },
+          },
+        });
+      }
+      bucket.available = now - cost;
+      return defaultReply(body);
+    },
+  };
+}
+
+test("reads: a THROTTLED page waits until the bucket holds the page's cost (M2 PR-3 review)", async () => {
+  const sleeps = (h) => h.events.filter((e) => e.startsWith("sleep:"));
+  // A 27-point page against 5 available: (27 - 5) / 50 s, then the retry is served.
+  const low = leakyBucket({ available: 5, cost: 27 });
+  const h1 = await harness({ reply: (body) => low.reply(body) });
+  low.start(h1.clock);
+  assert.equal(
+    JSON.parse(await h1.read("api", "collectionsPage", { after: null })).outcome,
+    "read",
+  );
+  assert.deepEqual(sleeps(h1), ["sleep:440"]);
+  assert.equal(h1.requests.length, 2);
+  // 15 available (at least 10, fewer than 27): the old rule waited 0 ms and was throttled
+  // again; the wait now covers the 12 missing points.
+  const mid = leakyBucket({ available: 15, cost: 27 });
+  const h2 = await harness({ reply: (body) => mid.reply(body) });
+  mid.start(h2.clock);
+  assert.equal(JSON.parse(await h2.read("api", "productsPage", productsVariables)).outcome, "read");
+  assert.deepEqual(sleeps(h2), ["sleep:240"]);
+  // No requestedQueryCost in the reply: the document's known cost (a collection's products
+  // page, 28) prices the wait.
+  const silent = leakyBucket({ available: 0, cost: 28, reportCost: false });
+  const h3 = await harness({ reply: (body) => silent.reply(body) });
+  silent.start(h3.clock);
+  assert.equal(
+    JSON.parse(
+      await h3.read("api", "productsPage", { ...productsVariables, collectionId: "collection:7" }),
+    ).outcome,
+    "read",
+  );
+  assert.deepEqual(sleeps(h3), ["sleep:560"]);
+  // A wait past the deadline is refused at once, with one request and no sleep.
+  const slow = leakyBucket({ available: 0, rate: 2, cost: 27 });
+  const h4 = await harness({ reply: (body) => slow.reply(body) });
+  slow.start(h4.clock);
+  await assert.rejects(() => h4.read("api", "collectionsPage", { after: null }, 5000), refused);
+  assert.deepEqual(sleeps(h4), []);
+  assert.equal(h4.requests.length, 1);
+});
+
 test("reads: THROTTLED waits once within the budget; 401, errors and other shapes are refused", async () => {
   const throttled = await harness({
     reply: (body, n) =>
@@ -413,7 +494,8 @@ test("reads: THROTTLED waits once within the budget; 401, errors and other shape
   });
   const read = JSON.parse(await throttled.read("api", "collectionsPage", { after: null }));
   assert.equal(read.outcome, "read");
-  assert.ok(throttled.events.includes("sleep:200"));
+  // No requestedQueryCost in the reply: the page's known cost (27) at 50 points a second.
+  assert.ok(throttled.events.includes("sleep:540"));
   // Not within the budget: refused without waiting.
   const tight = await harness({
     reply: () =>
@@ -461,4 +543,80 @@ test("reads: THROTTLED waits once within the budget; 401, errors and other shape
     () => broken.read("runtime", "productContent", { productId: "product:1" }),
     refused,
   );
+});
+
+test("reads: at most shopifyReadSlots resolutions at once per isolate; one more is held before the vault (M2 PR-3 review)", async () => {
+  assert.equal(shopifyReadSlots, 2);
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const h = await harness({ gate });
+  const begins = () => h.events.filter((e) => e === "begin").length;
+  const first = h.read("api", "shopIdentity", {});
+  const second = h.read("api", "collectionsPage", { after: null });
+  for (const started = Date.now(); begins() < 2 && Date.now() - started < 5000; )
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(begins(), 2);
+  // The third concurrent read is held with a fixed code and opens no transaction.
+  await assert.rejects(
+    () => h.read("api", "productsPage", { after: null, collectionId: null, search: null }),
+    (error) => error.code === "READ_BUSY",
+  );
+  assert.equal(begins(), 2);
+  assert.equal(h.requests.length, 0);
+  // Ingress keeps its own slots: a webhook on the same isolate still reaches the vault.
+  const ingress = [];
+  const broker = createShopifyBroker({
+    transaction: async () => {
+      ingress.push("begin");
+      return { secret: null, verdict: { verdict: "refused", inboxId: null, settled: null } };
+    },
+    fetch: async () => {
+      throw Error("no provider call");
+    },
+    now: () => Date.now(),
+  });
+  const body = '{"shop_id":987}';
+  await broker.webhookVerify(
+    env(),
+    "dev-app",
+    JSON.stringify({
+      "x-shopify-api-version": "2026-10",
+      "x-shopify-hmac-sha256": createHmac("sha256", "x").update(body).digest("base64"),
+      "x-shopify-shop-domain": shop,
+      "x-shopify-topic": "shop/redact",
+      "x-shopify-webhook-id": "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043",
+    }),
+    Buffer.from(body).toString("base64"),
+  );
+  assert.deepEqual(ingress, ["begin"]);
+  // Released, the two reads finish and the slots are free again.
+  release();
+  assert.equal(JSON.parse(await first).outcome, "read");
+  assert.equal(JSON.parse(await second).outcome, "read");
+  assert.equal(JSON.parse(await h.read("api", "shopIdentity", {})).outcome, "read");
+  // A resolution that fails frees its slot too.
+  const failing = await harness({ outcome: "lease_inactive" });
+  for (let i = 0; i < shopifyReadSlots + 1; i++)
+    await assert.rejects(() => failing.read("api", "shopIdentity", {}), refused);
+});
+
+test("reads: Shopify's page cursor up to the protocol's 1,536 characters passes; a longer one is refused (M2 PR-3 review)", async () => {
+  const page = (endCursor) => () =>
+    Response.json({
+      data: {
+        collections: {
+          nodes: [{ id: "gid://shopify/Collection/5", title: "Summer" }],
+          pageInfo: { hasNextPage: true, endCursor },
+        },
+      },
+    });
+  const longest = "A+/=".repeat(shopifyReadLimits.cursorMaxChars / 4);
+  const ok = await harness({ reply: page(longest) });
+  assert.equal(
+    JSON.parse(await ok.read("api", "collectionsPage", { after: longest })).nextCursor,
+    longest,
+  );
+  assert.equal(ok.requests[0].body.variables.after, longest);
+  const tooLong = await harness({ reply: page(longest + "A") });
+  await assert.rejects(() => tooLong.read("api", "collectionsPage", { after: null }), refused);
 });

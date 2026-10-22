@@ -69,6 +69,8 @@ export type BrokerFailureCode =
   // reply Shopify refused; and a vault COMMIT whose acknowledgement was lost (the caller
   // retries: every M2 PR-3 write is idempotent).
   | "READ_REFUSED"
+  // M2 PR-3 review: the isolate's read slots on the vault login are all in use.
+  | "READ_BUSY"
   | "OUTCOME_UNKNOWN";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {

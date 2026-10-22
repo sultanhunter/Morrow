@@ -1,3 +1,7 @@
+// M2 PR-3 review: the deployed catalogue routes, composed with the work origin and
+// connector and the ApiBroker's shopifyRead reader, and passed by the deployed Worker as
+// createWorkspaceApiWorker's fifth argument (a catalogue GET reaches the fake broker with
+// the lease, query, variables and budget; a bound route reaches the database step).
 // M2 PR-2 review: the deployed composition of the Shopify link. apps/api/src/deployed-worker.ts
 // composes the policy package's connection kernel into the managed workspace api, whose
 // handler selects the route by path and runs createManagedWorkspaceExecution on the
@@ -19,6 +23,8 @@ import {
 import { createStandaloneRequestGuard } from "../packages/identity/src/standalone-request-guard.ts";
 import { workspaceStoreLinkingControlSql as sql } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
+import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
+import { workStatements } from "../packages/work/src/sql.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 
 const sha = (t) => createHash("sha256").update(t).digest("hex");
@@ -68,74 +74,82 @@ const connectGrant = {
 };
 const nowMs = Date.parse("2026-10-21T00:00:00.000Z");
 
-// The deployed composition: a development environment the api's mapper accepts. `extra`
-// adds bindings (M5: MORROW_STRIPE_MODE); `brokerCalls` counts every broker method call.
-function composed(extra = {}, brokerCalls = [], { modeArgument = true } = {}) {
+// The deployed environment: a development environment the api's mapper accepts. `extra`
+// adds bindings (M5: MORROW_STRIPE_MODE); `brokerCalls` counts every Stripe method call;
+// `brokerMethods` adds ApiBroker methods (M2 PR-3: shopifyRead).
+function apiEnv(extra = {}, brokerCalls = [], brokerMethods = {}) {
   const provider = createPlatformWorkosProviderOracle({ origin });
   const base = JSON.parse(provider.configurationJson);
   const auth = JSON.parse(base.authenticationBindingJson);
-  // Workers with nodejs_compat_do_not_populate_process_env expose an empty process.env.
+  return {
+    MORROW_ENVIRONMENT: "development",
+    BROKER: Object.freeze({
+      fetch() {},
+      health() {},
+      neonLease() {
+        throw Error("NO_DATABASE_IN_THIS_TEST");
+      },
+      workosSessionPage() {},
+      challengeVerify() {},
+      ...Object.fromEntries(
+        [
+          "stripeCustomerEnsure",
+          "stripeCheckoutCreate",
+          "stripePortalCreate",
+          "stripeWebhookVerify",
+        ].map((name) => [
+          name,
+          async () => {
+            brokerCalls.push(name);
+            throw Error("BROKER_HELD");
+          },
+        ]),
+      ),
+      ...brokerMethods,
+    }),
+    ...extra,
+    LOGIN_CONFIGURATION_JSON: JSON.stringify({ ...base, retentionTier: "development" }),
+    WORKSPACE_CONFIGURATION_JSON: config,
+    LOGOUT_CONFIGURATION_JSON: JSON.stringify({
+      schemaVersion: 1,
+      protocol: "morrow-self-logout-v1",
+      origin,
+      providerId: "workos",
+      environmentId: auth.environmentId,
+      applicationId: auth.applicationId,
+      clientId: auth.clientId,
+      profileId: base.profileId,
+    }),
+    MORROW_DATABASE_BINDING_JSON: JSON.stringify({
+      schemaVersion: 1,
+      environment: "development",
+      projectId: "morrow-composition-unit",
+      branchId: "br-composition-unit",
+      hostname: "ep-composition-unit.c-14.us-east-1.aws.neon.tech",
+      database: "morrow",
+    }),
+    LOGIN_CAPSULE_KEYRING: JSON.stringify({
+      schemaVersion: 1,
+      purpose: "morrow.login.capsule/1",
+      configurationDigest: "a".repeat(64),
+      currentKeyId: "5d6e7f80-1a2b-4c3d-8e9f-0a1b2c3d4e5f",
+      versions: [],
+    }),
+  };
+}
+// Workers with nodejs_compat_do_not_populate_process_env expose an empty process.env.
+function withWorkerEnv(run) {
   const saved = process.env;
   process.env = {};
-  let mapped;
   try {
-    mapped = mapApiEnvironment({
-      MORROW_ENVIRONMENT: "development",
-      BROKER: Object.freeze({
-        fetch() {},
-        health() {},
-        neonLease() {
-          throw Error("NO_DATABASE_IN_THIS_TEST");
-        },
-        workosSessionPage() {},
-        challengeVerify() {},
-        ...Object.fromEntries(
-          [
-            "stripeCustomerEnsure",
-            "stripeCheckoutCreate",
-            "stripePortalCreate",
-            "stripeWebhookVerify",
-          ].map((name) => [
-            name,
-            async () => {
-              brokerCalls.push(name);
-              throw Error("BROKER_HELD");
-            },
-          ]),
-        ),
-      }),
-      ...extra,
-      LOGIN_CONFIGURATION_JSON: JSON.stringify({ ...base, retentionTier: "development" }),
-      WORKSPACE_CONFIGURATION_JSON: config,
-      LOGOUT_CONFIGURATION_JSON: JSON.stringify({
-        schemaVersion: 1,
-        protocol: "morrow-self-logout-v1",
-        origin,
-        providerId: "workos",
-        environmentId: auth.environmentId,
-        applicationId: auth.applicationId,
-        clientId: auth.clientId,
-        profileId: base.profileId,
-      }),
-      MORROW_DATABASE_BINDING_JSON: JSON.stringify({
-        schemaVersion: 1,
-        environment: "development",
-        projectId: "morrow-composition-unit",
-        branchId: "br-composition-unit",
-        hostname: "ep-composition-unit.c-14.us-east-1.aws.neon.tech",
-        database: "morrow",
-      }),
-      LOGIN_CAPSULE_KEYRING: JSON.stringify({
-        schemaVersion: 1,
-        purpose: "morrow.login.capsule/1",
-        configurationDigest: "a".repeat(64),
-        currentKeyId: "5d6e7f80-1a2b-4c3d-8e9f-0a1b2c3d4e5f",
-        versions: [],
-      }),
-    });
+    return run();
   } finally {
     process.env = saved;
   }
+}
+// The deployed composition of that environment.
+function composed(extra = {}, brokerCalls = [], { modeArgument = true, broker = {} } = {}) {
+  const mapped = withWorkerEnv(() => mapApiEnvironment(apiEnv(extra, brokerCalls, broker)));
   assert.equal(mapped.ok, true, mapped.code);
   return modeArgument
     ? composeApiDependencies(
@@ -380,4 +394,156 @@ test("M5: the deployed composition has Stripe adapters only while the switch is 
   const defaulted = composed({ MORROW_STRIPE_MODE: "test" }, calls, { modeArgument: false });
   assert.equal(defaulted.billing.broker, null);
   assert.equal(defaulted.webhook.broker, null);
+});
+
+// M2 PR-3 review: the catalogue routes of the deployed composition.
+const store = "store_a",
+  connection = "connection_a",
+  lease = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const catalogGrant = {
+  ...connectGrant,
+  id: "grant_catalog_read",
+  capabilityId: "catalog.products.read",
+  verbs: ["view"],
+  scope: {
+    organizationId: org,
+    workspaceId: ws,
+    storeIds: [store],
+    accountIds: [],
+    resources: [storeResource(org, ws, store, connection)],
+    fields: [...listingFieldPaths],
+  },
+  issuedBy: { ...actor, kind: "service", principalId: "morrow.linking", membershipId: null },
+};
+// A scripted work connection: the session's authority, the store association and the read
+// lease; every other statement (the prologue, COMMIT) answers no rows.
+function catalogConnection(sent) {
+  const names = new Map(Object.entries(workStatements).map(([name, text]) => [text, name]));
+  return {
+    async query(text) {
+      const name = names.get(text) ?? text;
+      sent.push(name);
+      if (name === "enterContext")
+        return {
+          rows: [
+            {
+              principal_id: actor.principalId,
+              organization_id: org,
+              workspace_id: ws,
+              membership_id: actor.membershipId,
+              policy_revision: "1",
+              grants: JSON.stringify([catalogGrant]),
+              grant_count: "1",
+              grants_digest: "a".repeat(64),
+              database_now_us: String(nowMs * 1000),
+            },
+          ],
+        };
+      if (name === "storeAssociation")
+        return {
+          rows: [
+            {
+              store_id: store,
+              connection_id: connection,
+              database_now: "2026-10-21T00:00:00.000Z",
+            },
+          ],
+        };
+      if (name === "catalogReadLease")
+        return {
+          rows: [
+            {
+              outcome: "opened",
+              lease_id: lease,
+              generation: "1",
+              expires_at_ms: "1",
+              subject_id: "subject_1",
+            },
+          ],
+        };
+      return { rows: [] };
+    },
+    async close() {},
+  };
+}
+const catalogRequest = () =>
+  new Request(origin + `/workspace/${ws}/stores/${store}/catalog/collections`, {
+    headers: { Cookie: "__Host-morrow_session=" + secret, "Sec-Fetch-Site": "same-origin" },
+  });
+
+test("M2 PR-3: the composed catalogue route reads under its lease through ApiBroker.shopifyRead", async (t) => {
+  t.mock.method(console, "log", () => {});
+  const reads = [];
+  const reply = JSON.stringify({
+    schemaVersion: 1,
+    outcome: "read",
+    collections: [{ id: "collection:5", title: "Summer" }],
+    nextCursor: null,
+  });
+  const deps = composed({}, [], {
+    broker: {
+      async shopifyRead(...args) {
+        reads.push(args);
+        return reply;
+      },
+    },
+  });
+  // The catalogue dependencies are the work origin and connector and the broker's reader.
+  assert.equal(deps.catalog.origin, deps.work.origin);
+  assert.equal(deps.catalog.connector, deps.work.connector);
+  assert.equal(typeof deps.catalog.reader?.read, "function");
+  const { createWorkspaceApiWorker } = await import("../apps/api/src/worker.ts");
+  const sent = [];
+  // The composed reader over a scripted work connection (the Neon connector needs a database).
+  const api = createWorkspaceApiWorker(deps.dependencies, deps.work, deps.billing, deps.webhook, {
+    ...deps.catalog,
+    connector: { open: async () => catalogConnection(sent) },
+  });
+  const response = await api.fetch(catalogRequest(), {}, { waitUntil() {} });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    schemaVersion: 1,
+    collections: [{ id: "collection:5", title: "Summer" }],
+    nextCursor: null,
+    storeId: store,
+  });
+  assert.ok(sent.includes("catalogReadLease"));
+  assert.equal(reads.length, 1);
+  const [leaseId, generation, subjectId, queryName, variables, budget] = reads[0];
+  assert.deepEqual(
+    [leaseId, generation, subjectId, queryName, variables],
+    [lease, 1, "subject_1", "collectionsPage", '{"after":null}'],
+  );
+  assert.ok(Number.isSafeInteger(budget) && budget >= 1 && budget <= 8750, String(budget));
+  // Without the fifth argument the catalogue route is unbound: 401, no read.
+  const unbound = createWorkspaceApiWorker(
+    deps.dependencies,
+    deps.work,
+    deps.billing,
+    deps.webhook,
+  );
+  assert.equal((await unbound.fetch(catalogRequest(), {}, { waitUntil() {} })).status, 401);
+  assert.equal(reads.length, 1);
+});
+
+test("M2 PR-3: the deployed Worker binds the catalogue route (it reaches the database step, never 401)", async (t) => {
+  t.mock.method(console, "log", () => {});
+  const reads = [];
+  const env = apiEnv({}, [], {
+    async shopifyRead(...args) {
+      reads.push(args);
+      return "{}";
+    },
+  });
+  const { default: deployed } = await import("../apps/api/src/deployed-worker.ts");
+  const response = await withWorkerEnv(() =>
+    deployed.fetch(catalogRequest(), env, { waitUntil() {} }),
+  );
+  // The work connector asked the broker for its lease, which this test refuses: 503
+  // unavailable (a safe read retry). An unbound catalogue route would have answered 401.
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.code, "unavailable");
+  assert.equal(body.retryClass, "safe_read_retry");
+  assert.equal(reads.length, 0);
 });

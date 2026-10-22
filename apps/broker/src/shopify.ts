@@ -283,10 +283,14 @@ export type ShopifyAdminReply =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unauthorized" }>;
 /**
- * One fixed Admin GraphQL document with its variables. A THROTTLED reply waits for the
- * restore time once, within the deadline; any other error, status or shape is refused
- * (401 is unauthorized: the token was revoked; the uninstall webhook is the state change,
- * so a read changes nothing). The reply is bounded by `limit` bytes.
+ * One fixed Admin GraphQL document with its variables. A THROTTLED reply waits once, within
+ * the deadline, until the bucket holds the query's cost again: Shopify's
+ * extensions.cost.requestedQueryCost (or the document's known cost, shopifyReadCosts, when
+ * the reply omits it) less currentlyAvailable, at restoreRate points a second (M2 PR-3
+ * review: a page read costs about 27 points, so waiting for 10 left it throttled again).
+ * A wait that would pass the deadline is refused at once. Any other error, status or shape
+ * is refused (401 is unauthorized: the token was revoked; the uninstall webhook is the
+ * state change, so a read changes nothing). The reply is bounded by `limit` bytes.
  */
 export async function shopifyAdminGraphql(
   fetcher: ShopifyFetch,
@@ -337,12 +341,22 @@ export async function shopifyAdminGraphql(
         errors.length > 0 &&
         errors.every((e) => own(own(e, "extensions"), "code") === "THROTTLED");
       if (!throttled || attempt > 0) return refused;
-      const status = own(own(own(reply, "extensions"), "cost"), "throttleStatus");
+      const cost = own(own(reply, "extensions"), "cost");
+      const status = own(cost, "throttleStatus");
       const available = own(status, "currentlyAvailable");
       const rate = own(status, "restoreRate");
+      const reported = own(cost, "requestedQueryCost");
+      const requested =
+        typeof reported === "number" && Number.isFinite(reported) && reported > 0
+          ? reported
+          : shopifyDocumentCost(document);
       const wait =
-        typeof available === "number" && typeof rate === "number" && rate > 0
-          ? Math.ceil(((10 - Math.min(available, 10)) / rate) * 1000)
+        typeof available === "number" &&
+        Number.isFinite(available) &&
+        typeof rate === "number" &&
+        Number.isFinite(rate) &&
+        rate > 0
+          ? Math.ceil((Math.max(0, requested - Math.max(0, available)) / rate) * 1000)
           : 1000;
       if (now() + wait >= deadlineMs) return refused;
       await sleep(wait);
@@ -505,6 +519,22 @@ export const shopifyReadDocuments = Object.freeze({
   productContent:
     "query ProductContent($id: ID!) { product(id: $id) { id title descriptionHtml tags seo { title description } } }",
 } as const);
+// The requested cost of each fixed document as Shopify's calculator prices it (a connection
+// is 2 plus its page size, each object 1, scalars 0). The THROTTLED wait uses it when the
+// reply omits extensions.cost.requestedQueryCost.
+export const shopifyReadCosts = Object.freeze({
+  shopIdentity: 2,
+  collectionsPage: 2 + shopifyReadPageSize,
+  productsPage: 2 + shopifyReadPageSize,
+  collectionProductsPage: 3 + shopifyReadPageSize,
+  productContent: 2,
+} as const satisfies Record<keyof typeof shopifyReadDocuments, number>);
+/** A fixed document's known cost; an unknown one is priced as the dearest page. */
+export function shopifyDocumentCost(document: string): number {
+  for (const [name, text] of Object.entries(shopifyReadDocuments))
+    if (text === document) return shopifyReadCosts[name as keyof typeof shopifyReadCosts];
+  return Math.max(...Object.values(shopifyReadCosts));
+}
 const gidTail = (value: unknown, kind: "Product" | "Collection") => {
   const match =
     typeof value === "string"
@@ -523,7 +553,7 @@ function pageOf(connection: unknown, node: (n: unknown) => unknown | null) {
     return null;
   const mapped = nodes.map(node);
   if (mapped.some((n) => n === null)) return null;
-  if (next && (!text(cursor) || !/^[A-Za-z0-9+/=_-]{1,512}$/.test(cursor))) return null;
+  if (next && (!text(cursor) || !/^[A-Za-z0-9+/=_-]{1,1536}$/.test(cursor))) return null;
   return { items: mapped, nextCursor: next ? (cursor as string) : null };
 }
 const productNode = (n: unknown) => {

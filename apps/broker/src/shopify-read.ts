@@ -6,7 +6,12 @@
 //      identity and the collection and product pages under a read lease; RuntimeBroker: one
 //      product's listing fields under a run lease), with its closed variables.
 //   2. One vault transaction, alone (review finding B1: never held across the Shopify call;
-//      the vault login's CONNECTION LIMIT 10 is shared with ingress and Stripe):
+//      the vault login's CONNECTION LIMIT 10 is shared with ingress and Stripe), and at most
+//      shopifyReadSlots of them at once per isolate (M2 PR-3 review: the catalogue routes
+//      are signed-in but not rate limited, so a member's burst of reads could otherwise hold
+//      every connection that webhook recording, install stores, credential destructions and
+//      Stripe receipts need; one more is held, READ_BUSY, before any transaction; ingress
+//      keeps its own three slots, apps/broker/src/shopify-install.ts):
 //      morrow_vault.shopify_read_resolve runs resolve_call with the subject the caller names
 //      (lease active, of this generation, unexpired, its member current, no stop, the store's
 //      connection current), fits the query to the lease kind (and a run lease to its run's
@@ -60,6 +65,8 @@ const leasePattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 // The resolution gets at most this much of the budget; the rest is Shopify's.
 const resolveBudgetMs = 3000;
+/** Read resolutions on the vault login at once per broker isolate (step 2). */
+export const shopifyReadSlots = 2;
 const resolveColumns = [
   "outcome",
   "organization_id",
@@ -120,6 +127,18 @@ function documentFor(v: ShopifyReadVariables) {
 }
 
 export function createShopifyReader(deps: Readonly<ShopifyReadDependencies>) {
+  // Step 2's slots: one counter per reader, which is one per isolate for the live broker.
+  // Only the resolution's transaction is counted; the Shopify call holds no connection.
+  let resolving = 0;
+  async function resolution<T>(run: () => Promise<T>): Promise<T> {
+    if (resolving >= shopifyReadSlots) throw new BrokerHold("READ_BUSY");
+    resolving++;
+    try {
+      return await run();
+    } finally {
+      resolving--;
+    }
+  }
   async function read(
     env: unknown,
     caller: ShopifyReadCaller,
@@ -154,24 +173,26 @@ export function createShopifyReader(deps: Readonly<ShopifyReadDependencies>) {
     const capabilities = await brokerCapabilities(env);
     const vault = capabilities.vault;
     if (!vault) throw new BrokerHold("CAPABILITY_UNAVAILABLE");
-    // 2. The resolution, alone in its transaction.
+    // 2. The resolution, alone in its transaction, within the isolate's read slots.
     const productId = variables.query === "productContent" ? variables.productId : "";
-    const r = await deps.transaction(
-      vault,
-      Math.max(1, Math.min(resolveBudgetMs, deadline - deps.now())),
-      async (query) => {
-        const rows = await query(vaultStatements.shopifyReadResolve, [
-          leaseId,
-          String(generation),
-          subjectId,
-          queryName,
-          productId,
-        ]);
-        const row = rows.length === 1 ? rows[0]! : undefined;
-        if (!row || Object.keys(row).sort().join(",") !== [...resolveColumns].sort().join(","))
-          throw new VaultError("VAULT_RECORD_INVALID");
-        return row;
-      },
+    const r = await resolution(() =>
+      deps.transaction(
+        vault,
+        Math.max(1, Math.min(resolveBudgetMs, deadline - deps.now())),
+        async (query) => {
+          const rows = await query(vaultStatements.shopifyReadResolve, [
+            leaseId,
+            String(generation),
+            subjectId,
+            queryName,
+            productId,
+          ]);
+          const row = rows.length === 1 ? rows[0]! : undefined;
+          if (!row || Object.keys(row).sort().join(",") !== [...resolveColumns].sort().join(","))
+            throw new VaultError("VAULT_RECORD_INVALID");
+          return row;
+        },
+      ),
     );
     if (r.outcome !== "resolved") throw refused();
     const { organization_id: org, workspace_id: ws, credential_id: credential } = r;

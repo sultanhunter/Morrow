@@ -20,6 +20,7 @@ import {
   type GuardedWorkspaceRequest,
   type WorkspaceRouteSpec,
 } from "../http-guard.js";
+import { workBodyLimits } from "../http-bodies.js";
 import { workErrorResponse, type WorkApiDependencies } from "../http.js";
 
 // The catalogue routes of the workspace API (M2 PR-3; the M2 brief's api routes; spine §4):
@@ -80,6 +81,14 @@ export const catalogPathPattern =
 // The whole request, the transaction and the broker read share this deadline; the read
 // keeps what the transaction leaves, at most the protocol's budget.
 export const catalogDeadlineMs = 9000;
+// The guard's limits for these routes (M2 PR-3 review): a page cursor of up to
+// shopifyReadLimits.cursorMaxChars characters, and a URL that holds it percent-encoded
+// (three characters per byte at worst) with the path, a collection id and a search.
+export const catalogGuardOptions = Object.freeze({
+  bodyLimitBytes: workBodyLimits.bytes,
+  queryValueMaxChars: shopifyReadLimits.cursorMaxChars,
+  urlMaxChars: 6144,
+});
 
 type Context = Readonly<{ waitUntil(p: Promise<unknown>): void }>;
 const headers = Object.freeze({
@@ -200,6 +209,7 @@ export function createCatalogApiHandler(d?: CatalogApiDependencies) {
           catalogRoutes,
           request,
           abort.signal,
+          catalogGuardOptions,
         );
       } catch (error) {
         if (!(error instanceof WorkGuardError)) throw error;

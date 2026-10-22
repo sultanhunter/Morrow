@@ -87,7 +87,7 @@ An internal JSON contract beside the work API, under `/workspace/:ws` (not `/wor
 
 ## Catalogue routes (M2 PR-3)
 
-Two reads of a linked store's catalogue for the Ask screen's picker, under `/workspace/:ws` on the same api Worker, dependencies and guard rules (`packages/work/src/catalog/http.ts`; spine §4; the M2 brief's api routes). They take only their own query parameters, with closed values: `after` is an opaque cursor of at most 512 characters; `collectionId` is `collection:<digits>`; `query` is at most 64 letters, digits and single spaces. Anything else is 400 before any SQL or Shopify call.
+Two reads of a linked store's catalogue for the Ask screen's picker, under `/workspace/:ws` on the same api Worker, dependencies and guard rules (`packages/work/src/catalog/http.ts`; spine §4; the M2 brief's api routes). They take only their own query parameters, with closed values: `after` is an opaque cursor of at most 1,536 base64 characters (Shopify's title-sorted cursors hold the last title; these routes accept a URL of up to 6,144 characters to carry one percent-encoded, where other routes keep 512 a value and 2,048 a URL); `collectionId` is `collection:<digits>`; `query` is at most 64 letters, digits and single spaces. Anything else is 400 before any SQL or Shopify call.
 
 | Route under `/workspace/:ws` | Query | Success |
 | --- | --- | --- |
@@ -95,7 +95,7 @@ Two reads of a linked store's catalogue for the Ask screen's picker, under `/wor
 | `GET /stores/:storeId/catalog/products` | `after`, `collectionId`, `query` | 200 `{schemaVersion: 1, products: [{id, title, status}], nextCursor, storeId}` |
 
 - One READ WRITE transaction: the session's authority, the store's current association, then the human kernel must allow `view` on `catalog.products.read` on the store resource with the listing fields (403 otherwise), then `morrow_work.catalog_read_lease` opens a 60-second `read` lease for the session's tenant and actor (409 conflict under a connection stop; 404 when the store has no current connection). The lease selects the tenant of the one read; it grants nothing.
-- After COMMIT, one `ApiBroker.shopifyRead` under that lease. The broker resolves the lease, its stops, the store connection and the credential itself, runs one fixed Admin GraphQL document with variables it builds (a title search becomes `title:<word>*` terms) and returns ids (`collection:<n>`, `product:<n>`), titles and a lower-case product status only. A missing collection is 404. A refused, failed or throttled-past-budget read is 503 unavailable / safe_read_retry. Page size is 25; the whole request has a 9-second deadline and the read at most 15 seconds of it.
+- After COMMIT, one `ApiBroker.shopifyRead` under that lease. The broker resolves the lease, its stops, the store connection and the credential itself, runs one fixed Admin GraphQL document with variables it builds (a title search becomes `title:<word>*` terms) and returns ids (`collection:<n>`, `product:<n>`), titles and a lower-case product status only. A missing collection is 404. A refused, failed or throttled-past-budget read, or one held because the broker's read slots are busy, is 503 unavailable / safe_read_retry. Page size is 25. The whole request has a 9-second deadline; the read gets whatever the transaction leaves of it less 250 ms, never more than the protocol's 15-second budget.
 - Shopify's reply, the token and any provider text never reach the response or a log; each request logs one fixed `morrow_catalog` line (route and outcome).
 
 ## Published limits

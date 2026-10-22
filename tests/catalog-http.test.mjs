@@ -4,17 +4,28 @@
 // kernel (view on catalog.products.read on the store resource) and the read lease in one
 // transaction, then one broker read under that lease, decoded by the protocol's closed
 // decoder. A denial sends no lease statement and no broker call; the api Worker sends
-// exactly the catalogue paths here. lab:shopify-connect-workers drives the same routes
-// through workerd against PostgreSQL 17.
+// exactly the catalogue paths here. The api's broker reader (createBrokerShopifyReader:
+// closed inputs, the budget-plus-250-ms race, the result size) is unit-tested below and
+// the deployed composition in tests/managed-workspace-composition.test.mjs.
+// lab:shopify-privacy runs the same handler in Node against PostgreSQL 17 over psql
+// bridges (T1-T7, U4); no workerd lab drives the catalogue routes yet.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createBrokerShopifyReader } from "../apps/api/src/broker-client.ts";
 import { apiDispatch } from "../apps/api/src/worker.ts";
+import { shopifyReadLimits } from "../packages/identity/src/broker-protocol.ts";
 import {
+  catalogGuardOptions,
   catalogPathPattern,
   catalogRoutes,
   catalogVariables,
   createCatalogApiHandler,
 } from "../packages/work/src/catalog/http.ts";
+import {
+  WorkGuardError,
+  guardWorkspaceRequest,
+  workspaceGuardLimits,
+} from "../packages/work/src/http-guard.ts";
 import { workStatements } from "../packages/work/src/sql.ts";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
 import {
@@ -303,6 +314,104 @@ test("a read: kernel, lease and one broker read under it; closed results only", 
   assert.deepEqual((await page.json()).collections, [{ id: "collection:5", title: "Summer" }]);
 });
 
+test("a page cursor of up to 1,536 characters crosses the guard percent-encoded; a longer one is 400 (M2 PR-3 review)", async (t) => {
+  const grants = [storeGrant("catalog.products.read", ["view"])];
+  // A title-sorted cursor: base64 of JSON holding the last node's title (here 255 4-byte
+  // characters), with the +, / and = that a client percent-encodes.
+  const cursor = Buffer.from(
+    JSON.stringify({ last_id: 98765432101234, last_value: "\u{1F600}".repeat(255) }),
+  ).toString("base64");
+  assert.ok(cursor.length <= shopifyReadLimits.cursorMaxChars && cursor.length > 512);
+  const maximal = "+/=A".repeat(shopifyReadLimits.cursorMaxChars / 4);
+  for (const after of [cursor, maximal]) {
+    const db = scripted({ grants });
+    const r = readAll(
+      JSON.stringify({ schemaVersion: 1, outcome: "read", products: [], nextCursor: after }),
+    );
+    const handler = createCatalogApiHandler({
+      origin: workGuardOrigin,
+      connector: db.connector,
+      now: Date.now,
+      reader: r.reader,
+    });
+    const query = new URLSearchParams({
+      after,
+      collectionId: "collection:12345678901234567890",
+    }).toString();
+    const { result } = await quiet(t, () =>
+      handler.fetch(request("GET", products + "?" + query), undefined, ctx),
+    );
+    assert.equal(result.status, 200);
+    assert.equal((await result.json()).nextCursor, after);
+    assert.deepEqual(r.reads[0].variables, {
+      after,
+      collectionId: "collection:12345678901234567890",
+      search: null,
+    });
+  }
+  // One character more: 400 before any SQL connection.
+  let opens = 0;
+  const handler = createCatalogApiHandler({
+    origin: workGuardOrigin,
+    connector: {
+      open: async () => {
+        opens++;
+        throw Error("NO_DATABASE");
+      },
+    },
+    now: Date.now,
+    reader: readAll("{}").reader,
+  });
+  const { result } = await quiet(t, () =>
+    handler.fetch(
+      request("GET", collections + "?after=" + "A".repeat(shopifyReadLimits.cursorMaxChars + 1)),
+      undefined,
+      ctx,
+    ),
+  );
+  await expectEnvelope(result, 400, "cursor_too_long");
+  assert.equal(opens, 0);
+});
+
+test("the guard's query-value and URL limits: defaults unchanged, raised only by the catalogue's options", async () => {
+  const guard = (path, options) =>
+    guardWorkspaceRequest(
+      workGuardOrigin,
+      "stores",
+      catalogRoutes,
+      request("GET", path),
+      new AbortController().signal,
+      options,
+    ).then(
+      (g) => g.query.get("after"),
+      (error) => {
+        if (!(error instanceof WorkGuardError)) throw error;
+        return error.status;
+      },
+    );
+  const at = (n) => collections + "?after=" + "A".repeat(n);
+  // Every other route family keeps 512 characters a value and 2,048 a URL.
+  assert.equal(await guard(at(512)), "A".repeat(512));
+  assert.equal(await guard(at(513)), 400);
+  assert.equal(await guard(at(513), catalogGuardOptions), "A".repeat(513));
+  assert.equal(await guard(at(1536), catalogGuardOptions), "A".repeat(1536));
+  assert.equal(await guard(at(1537), catalogGuardOptions), 400);
+  // Percent-encoded at worst (three characters a byte): within the catalogue's URL limit.
+  const encoded = collections + "?after=" + "%2B".repeat(1536);
+  assert.ok(encoded.length > workspaceGuardLimits.urlChars);
+  assert.equal(await guard(encoded), 400);
+  assert.equal(await guard(encoded, catalogGuardOptions), "+".repeat(1536));
+  // Options outside the guard's ceilings are a configuration error, not a request error.
+  for (const options of [
+    { ...catalogGuardOptions, queryValueMaxChars: 0 },
+    { ...catalogGuardOptions, queryValueMaxChars: workspaceGuardLimits.queryValueMaxChars + 1 },
+    { ...catalogGuardOptions, urlMaxChars: workspaceGuardLimits.urlChars - 1 },
+    { ...catalogGuardOptions, urlMaxChars: workspaceGuardLimits.urlMaxChars + 1 },
+    { ...catalogGuardOptions, urlMaxChars: 4096.5 },
+  ])
+    await assert.rejects(() => guard(at(1), options), /WORKSPACE_ROUTE_LIMIT_INVALID/);
+});
+
 test("denials send no lease and no read; a broker failure or a malformed reply is 503", async (t) => {
   const view = storeGrant("catalog.products.read", ["view"]);
   for (const [name, options, status, statements] of [
@@ -405,4 +514,80 @@ test("denials send no lease and no read; a broker failure or a malformed reply i
     await expectEnvelope(result, status, name);
   }
   assert.ok(validateCurrentDefinition("Grant", view));
+});
+
+test("the api's broker reader: closed inputs, the budget plus 250 ms, a bounded result, never retried", async () => {
+  const calls = [];
+  const broker = (reply) => ({
+    shopifyRead: (...args) => {
+      calls.push(args);
+      return typeof reply === "function" ? reply() : reply;
+    },
+  });
+  const leaseRef = { leaseId: lease, generation: 3, subjectId: "subject_9" };
+  const signal = new AbortController().signal;
+  const ok = JSON.stringify({
+    schemaVersion: 1,
+    outcome: "read",
+    collections: [],
+    nextCursor: null,
+  });
+  // The six RPC arguments, in order, and the text returned as is.
+  assert.equal(
+    await createBrokerShopifyReader(broker(ok)).read(
+      leaseRef,
+      "collectionsPage",
+      '{"after":null}',
+      signal,
+      4000,
+    ),
+    ok,
+  );
+  assert.deepEqual(calls, [[lease, 3, "subject_9", "collectionsPage", '{"after":null}', 4000]]);
+  // A budget out of range or variables over the limit: refused before any RPC.
+  calls.length = 0;
+  const reader = createBrokerShopifyReader(broker(ok));
+  for (const [variables, budget] of [
+    ['{"after":null}', 0],
+    ['{"after":null}', shopifyReadLimits.budgetMaxMs + 1],
+    ['{"after":null}', 1.5],
+    ["x".repeat(shopifyReadLimits.variablesMaxBytes + 1), 1000],
+  ])
+    await assert.rejects(
+      () => reader.read(leaseRef, "collectionsPage", variables, signal, budget),
+      /API_BROKER_HELD/,
+    );
+  assert.equal(calls.length, 0);
+  // An oversized or non-text result is refused.
+  for (const reply of ["x".repeat(shopifyReadLimits.resultMaxBytes + 1), 42, null])
+    await assert.rejects(
+      () =>
+        createBrokerShopifyReader(broker(reply)).read(
+          leaseRef,
+          "collectionsPage",
+          '{"after":null}',
+          signal,
+          1000,
+        ),
+      /API_BROKER_HELD/,
+    );
+  // A broker that never answers is abandoned at the budget plus 250 ms, once; an aborted
+  // caller is refused at once.
+  calls.length = 0;
+  const hanging = createBrokerShopifyReader(broker(() => new Promise(() => {})));
+  const started = Date.now();
+  await assert.rejects(
+    () => hanging.read(leaseRef, "collectionsPage", '{"after":null}', signal, 50),
+    /API_BROKER_HELD/,
+  );
+  const waited = Date.now() - started;
+  assert.ok(waited >= 290 && waited < 5000, String(waited));
+  assert.equal(calls.length, 1);
+  const aborted = new AbortController();
+  aborted.abort();
+  await assert.rejects(
+    () => hanging.read(leaseRef, "collectionsPage", '{"after":null}', aborted.signal, 1000),
+    /API_BROKER_HELD/,
+  );
+  assert.equal(calls.length, 1);
 });

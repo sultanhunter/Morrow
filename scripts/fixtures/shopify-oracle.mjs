@@ -204,10 +204,16 @@ export function createShopifyOracle({
           return json({ errors: [{ message: "unexpected document" }] }, 200);
         if (state.fault === "throttled_once") {
           state.fault = null;
+          // Shopify's THROTTLED reply names the query's requested cost (a page of 25 costs
+          // 27, a collection's page 28, an object read 2) and the bucket's state.
+          const requestedQueryCost =
+            { CollectionsPage: 27, ProductsPage: 27, CollectionProductsPage: 28 }[call.operation] ??
+            2;
           return json({
             errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
             extensions: {
               cost: {
+                requestedQueryCost,
                 throttleStatus: { maximumAvailable: 1000, currentlyAvailable: 0, restoreRate: 50 },
               },
             },
