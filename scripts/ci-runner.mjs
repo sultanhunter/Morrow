@@ -1,7 +1,8 @@
 // The self-hosted runner that runs ci.yml on the owner's Mac (ADR-0014, amendment of
 // 2026-10-22; docs/development/ci.md, "Self-hosted runner on the owner's Mac"). The owner
 // runs it, or an agent with the owner's per-action go-ahead in chat.
-//   up [--instance=2]      refuse unless Docker Desktop's File sharing is narrowed and
+//   up [--instance=2]      refuse unless the repository is private, Docker Desktop's
+//                          File sharing is narrowed and
 //                          workflows from fork pull requests stay off; pull the pinned
 //                          images; register the runner unless its registration is still
 //                          valid (one registration token, kept in memory and written only
@@ -54,6 +55,7 @@ export const variableValue = JSON.stringify(ciRunner.labels);
 const githubUrl = "https://github.com/" + ciRunner.repository;
 const runnersPath = `repos/${ciRunner.repository}/actions/runners`;
 const variablePath = `repos/${ciRunner.repository}/actions/variables/${ciRunner.variable}`;
+const repositoryPath = `repos/${ciRunner.repository}`;
 const forkPath = `repos/${ciRunner.repository}/actions/permissions/fork-pr-workflows-private-repos`;
 const registrationFiles = Object.freeze([".runner", ".credentials", ".credentials_rsaparams"]);
 const registrationCheck =
@@ -425,6 +427,18 @@ export async function runCiRunner(
   const shareProblem = () =>
     hostShareProblem(tools.readDockerSettings(), { home: tools.home, root: tools.root });
   const sharesNarrowed = "narrowed (no home, /Volumes, temporary or checkout folder)";
+  // A self-hosted runner never serves a public repository: any fork pull request could
+  // name its labels in its own workflow and run code on the Mac.
+  const checkPrivate = async () => {
+    const text = await gh(["api", repositoryPath], "CI_RUNNER_GH_REPOSITORY_FAILED");
+    let value;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      throw new CiRunnerError("CI_RUNNER_GH_OUTPUT_INVALID");
+    }
+    if (value?.private !== true) throw new CiRunnerError("CI_RUNNER_REPOSITORY_PUBLIC");
+  };
   // While the runner is online, any workflow run of this repository can reach it (risk (a)).
   const checkForkWorkflows = async () => {
     const text = await gh(["api", forkPath], "CI_RUNNER_GH_FORK_SETTING_FAILED");
@@ -511,6 +525,8 @@ export async function runCiRunner(
 
   if (command === "up") {
     await checkGh();
+    await checkPrivate();
+    write("repository: private");
     await checkDocker();
     write("docker: Docker Desktop, linux/aarch64");
     const problem = shareProblem();
