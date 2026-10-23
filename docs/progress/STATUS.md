@@ -50,7 +50,7 @@ None for local work. **E2B's written answers** (G5) gate the E2B adapter code un
 
 ## Pending owner actions
 
-- **v1 setup (owner):** the private Shopify app for the owner's store and its secret sealed by the owner; the Anthropic workspace spend limit and key placed by the owner; the E2B key placed by the owner; new Cloudflare tokens before 2026-11-18. ADR-0033 and ADR-0034 (the project flow) await approval when drafted.
+- **v1 setup (owner):** the private Shopify app for the owner's store and its secret sealed by the owner; the Anthropic workspace spend limit and key placed by the owner; the E2B key placed by the owner; new Cloudflare tokens before 2026-11-18. ADR-0033 and ADR-0034 (the project flow) were accepted on 2026-10-24 (OD-2026-10-24-1).
 - **Confirm with catalogue version 2 and rate card v1 (by W8):** the Coordinator's 30-minute wall time and `max_tokens` 16,000 at high (ADR-0027 question 2); ADR-0026's run-hold rules written after the answer; the look-for-work 1% cap against the price (at US$99 no default pass fits); the Morrow address shape `<shop-name>@replies.<domain>`; whether a deleted shop's address may be reissued.
 - **For the tracks:** G3 (Partner account, `morrow` and `morrow-staging` app records, two or three development stores; App Pricing left off); G4 (Anthropic staging workspace with a monthly spend limit, key placed by the owner); G7 (the sending domain); G16 (entity, payout and tax, privacy policy, terms, DPAs); forward E2B's answers.
 - **Old credential rotations:** the Cloudflare Global API Key; a new WorkOS key that revokes the old ones; delete Neon project `cool-butterfly-64820147`; delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files; `tmutil addexclusion ~/.config/morrow`.
