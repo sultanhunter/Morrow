@@ -186,6 +186,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     empty: scenario === "empty",
     solo: scenario === "team_solo",
     teammateSavesFirst: scenario === "team_thinking_conflict",
+    notificationsSavedElsewhereFirst: scenario === "notifications_conflict",
     isWorkspace: ws,
     workspaceDefault: () => ({
       model: modelDefault.model,

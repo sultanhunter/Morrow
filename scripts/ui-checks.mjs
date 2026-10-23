@@ -733,6 +733,23 @@ fixtureCases.push(
       );
     },
   }),
+  // A save the record moved past (saved from another tab first): the real 409's reread
+  // replaces the draft, so the screen shows what the server has, with nothing unsaved.
+  fixtureCase("settings", "notifications_conflict", `/w/${ws}/settings/notifications`, {
+    widths: two,
+    scenario: "notifications_conflict",
+    setup: async (page) => {
+      const monday = page.getByRole("switch", { name: "Email me each Monday project update" });
+      await monday.click();
+      await page.getByRole("button", { name: "Save" }).click();
+      await page.getByText("These settings changed since you opened them.").waitFor();
+      expect((await monday.getAttribute("aria-checked")) === "true", "draft_replaced");
+      expect(
+        (await page.getByRole("region", { name: "You have unsaved changes" }).count()) === 0,
+        "nothing_unsaved",
+      );
+    },
+  }),
   fixtureCase("settings", "notifications_member", `/w/${ws}/settings/notifications`, {
     widths: two,
     scenario: "team_member",

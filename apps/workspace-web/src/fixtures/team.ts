@@ -55,6 +55,12 @@ export interface TeamFixtureDeps {
    * the record moves on (a new choice and revision), so that save meets a real 409.
    */
   readonly teammateSavesFirst: boolean;
+  /**
+   * The viewer's notifications are saved from another tab just before their first save
+   * here: the record moves on (a new morning hour and revision), so that save meets a real
+   * 409 and the reread shows the new choices.
+   */
+  readonly notificationsSavedElsewhereFirst: boolean;
   readonly isWorkspace: (id: string) => boolean;
   /** The workspace model default (the Listings agent's choice; models.* revises it). */
   readonly workspaceDefault: () => ThinkingChoice & { readonly revision: number | null };
@@ -104,6 +110,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
 } {
   const { viewer, empty, solo, reply, command } = deps;
   let teammateFirst = deps.teammateSavesFirst;
+  let savedElsewhereFirst = deps.notificationsSavedElsewhereFirst;
   // The server's rule as the fixture models it (ADR-0027 item 12): the Owner changes how
   // any helper thinks; an Admin only added agents'; a member none.
   const mayChange = (target: Target) =>
@@ -153,7 +160,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       name: "Listings",
       summary: "Keeps product pages complete and easy to find.",
       category: "product_pages",
-      addedAs: "agent-listings",
+      addedAs: empty ? null : "agent-listings",
       waitingReview: false,
       worksIn: "Product pages, Autumn collection, Everyday Tote in AI answers",
       does: [
@@ -181,7 +188,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       name: "Business Analyst",
       summary: "Sends a morning summary and spots what changed.",
       category: "sales",
-      addedAs: "agent-analyst",
+      addedAs: empty ? null : "agent-analyst",
       waitingReview: false,
       worksIn: "Sales and numbers, Everyday Tote in AI answers, Autumn collection",
       does: ["Sends a summary every morning", "Explains what changed and why"],
@@ -205,7 +212,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       name: "Inventory",
       summary: "Watches stock and suggests what to reorder.",
       category: "stock",
-      addedAs: "agent-inventory",
+      addedAs: empty ? null : "agent-inventory",
       waitingReview: false,
       worksIn: "Stock, Autumn collection, Black Friday sale",
       does: ["Checks stock every morning", "Suggests what to reorder and how much"],
@@ -229,7 +236,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       name: "Support",
       summary: "Drafts replies to customer emails for you to approve.",
       category: "customer_emails",
-      addedAs: "agent-support",
+      addedAs: empty ? null : "agent-support",
       waitingReview: false,
       worksIn: "Customer emails",
       does: ["Drafts a reply to each customer email", "Looks up the customer’s order"],
@@ -303,6 +310,11 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   ];
   const documents = new Map<string, AddDocumentView>();
   const usedDocuments = new Set<string>();
+  // Agents added here, as the document the person confirmed set them up (by agent id).
+  const addedWith = new Map<
+    string,
+    { readonly worksIn: string; readonly monthlyCreditLimit: number }
+  >();
   let issued = 0;
   const mayAdd = viewer === "owner" || viewer === "admin";
 
@@ -312,8 +324,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     text,
   });
   const addedAgents = (): AgentSummaryView[] => {
-    if (empty) return [];
-    const agents: AgentSummaryView[] = [
+    const sample: AgentSummaryView[] = [
       {
         agentId: "agent-listings",
         character: "listings",
@@ -381,19 +392,24 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         thinking: ownThinking("agent-support", "agent", sonnetLow, agentDailyLimit),
       },
     ];
-    const marketing = catalogue.find((e) => e.releaseId === "release-marketing")!;
-    if (marketing.addedAs !== null) {
-      own["agent-marketing"] ??= { choice: sonnetLow, revision: 1 };
+    // The empty scenario starts with none: its catalogue lists none as added either.
+    const agents: AgentSummaryView[] = empty ? [] : sample;
+    // Each agent added here, with the thinking and monthly limit its confirmed document named.
+    for (const entry of catalogue) {
+      const agentId = entry.addedAs;
+      const added = agentId === null ? undefined : addedWith.get(agentId);
+      if (agentId === null || added === undefined) continue;
+      const first = entry.schedule[0];
       agents.push({
-        agentId: marketing.addedAs,
-        character: "marketing",
-        name: "Marketing",
-        summary: marketing.summary,
+        agentId,
+        character: entry.character,
+        name: entry.name,
+        summary: entry.summary,
         status: "active",
-        worksIn: ["Promotions"],
-        lines: [line("next", "Weekly promotion plan · Tue, Oct 27, 9:00 am")],
-        credits: { used: 0, limit: marketing.defaultMonthlyLimit },
-        thinking: ownThinking("agent-marketing", "agent", sonnetLow, agentDailyLimit),
+        worksIn: [added.worksIn],
+        lines: first === undefined ? [] : [line("next", first)],
+        credits: { used: 0, limit: added.monthlyCreditLimit },
+        thinking: ownThinking(agentId, "agent", entry.startsOn, agentDailyLimit),
       });
     }
     return agents;
@@ -477,7 +493,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   // ---- one agent's page
   const detail = (summary: AgentSummaryView): AgentDetailView => {
     const entry = catalogue.find((e) => e.addedAs === summary.agentId)!;
-    const listings = summary.character === "listings";
+    // The sample Listings agent's history; one added here has none yet.
+    const listings = summary.character === "listings" && !addedWith.has(summary.agentId);
     return {
       agentId: summary.agentId,
       character: summary.character,
@@ -746,8 +763,14 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           entry.waitingReview = true;
           return ok({ status: "waiting_review" as const, agentId: null });
         }
-        entry.addedAs = "agent-" + entry.character;
-        return ok({ status: "added" as const, agentId: entry.addedAs });
+        const agentId = "agent-" + entry.character;
+        entry.addedAs = agentId;
+        own[agentId] = { choice: document.thinking, revision: 1 };
+        addedWith.set(agentId, {
+          worksIn: document.worksIn,
+          monthlyCreditLimit: document.monthlyCreditLimit,
+        });
+        return ok({ status: "added" as const, agentId });
       }),
   };
 
@@ -1104,6 +1127,14 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         if (!deps.isWorkspace(ws)) return notFound;
         const body = c.body;
         if (!validChoices(body)) return { kind: "invalid", field: null };
+        if (savedElsewhereFirst) {
+          savedElsewhereFirst = false;
+          prefs.choices = {
+            ...prefs.choices,
+            summaryHour: prefs.choices.summaryHour === 7 ? 9 : 7,
+          };
+          prefs.revision += 1;
+        }
         if (body.expectedRevision !== prefs.revision)
           return changed("These settings changed since you opened them.");
         if (body.timeZone !== prefs.choices.timeZone && viewer !== "owner")

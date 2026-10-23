@@ -310,7 +310,7 @@ test("adding: a one-person shop adds at once; members, bad limits and repeats ar
     await solo.team.addDocument(
       ws,
       "release-marketing",
-      command({ model: "claude_sonnet_5_5", effort: "low", monthlyCreditLimit: 200 }),
+      command({ model: "claude_haiku_5_5", effort: "medium", monthlyCreditLimit: 250 }),
     )
   ).value;
   assert.equal(doc.reviewer, null);
@@ -322,6 +322,14 @@ test("adding: a one-person shop adds at once; members, bad limits and repeats ar
   assert.deepEqual([added.value.status, added.value.agentId], ["added", "agent-marketing"]);
   const team = (await solo.team.overview(ws)).value;
   assert.equal(team.agents.at(-1).name, "Marketing");
+  // The new agent is what the confirmed document said: its thinking and its monthly limit.
+  const marketing = team.agents.at(-1);
+  assert.deepEqual(
+    [marketing.thinking.model, marketing.thinking.effort, marketing.credits.limit],
+    ["claude_haiku_5_5", "medium", 250],
+  );
+  const page = (await solo.team.agent(ws, "agent-marketing")).value;
+  assert.deepEqual([page.creditsMonth.limit, page.thinking.model], [250, "claude_haiku_5_5"]);
   assert.equal(team.people.length, 1);
   assert.equal(
     (
@@ -509,6 +517,27 @@ test("settings: one Morrow address, the default; linked mailboxes are reserved k
   assert.equal((await empty.library.files(ws)).value.files.length, 0);
   assert.equal((await empty.library.knowledge(ws)).value.items.length, 0);
   assert.equal((await empty.team.overview(ws)).value.agents.length, 0);
+  // With no agents, the catalogue lists none as added either.
+  const offered = (await empty.team.catalogue(ws)).value.entries;
+  assert.deepEqual(
+    offered.filter((e) => e.addedAs !== null).map((e) => e.name),
+    [],
+  );
+});
+
+test("the catalogue and Team agree: every agent listed as added has a page", async () => {
+  for (const scenario of ["ready", "empty", "team_member", "team_admin", "team_solo"]) {
+    const port = createFixtureAdapter(scenario);
+    const team = (await port.team.overview(ws)).value;
+    const added = (await port.team.catalogue(ws)).value.entries.filter((e) => e.addedAs !== null);
+    assert.deepEqual(
+      added.map((e) => e.addedAs).sort(),
+      team.agents.map((a) => a.agentId).sort(),
+      scenario,
+    );
+    for (const e of added)
+      assert.equal((await port.team.agent(ws, e.addedAs)).kind, "ok", `${scenario} ${e.name}`);
+  }
 });
 
 test("plan and credits: the period and projection dates are the server's, not the screen's", async () => {
@@ -602,6 +631,27 @@ test("notifications: each person's own, closed values; the time zone is the Owne
   );
   assert.equal(own.kind, "ok");
   assert.equal((await member.settings.notifications("ws-other")).kind, "not_found");
+});
+
+test("notifications: a save the record moved past meets a real 409; the reread is new", async () => {
+  const port = createFixtureAdapter("notifications_conflict");
+  const view = (await port.settings.notifications(ws)).value;
+  const off = { ...view.email, monday: false };
+  const first = await port.settings.reviseNotifications(
+    ws,
+    command(prefsBody(view, { email: off })),
+  );
+  assert.deepEqual([first.kind, first.recheck], ["conflict", true]);
+  // The reread has moved on: a new revision (so the screen drops its draft) and new choices.
+  const now = (await port.settings.notifications(ws)).value;
+  assert.equal(now.revision, view.revision + 1);
+  assert.notEqual(now.summaryHour, view.summaryHour);
+  assert.equal(now.email.monday, true);
+  const second = await port.settings.reviseNotifications(
+    ws,
+    command(prefsBody(now, { email: off })),
+  );
+  assert.equal(second.kind, "ok");
 });
 
 test("activity: who did what, by day; filters are closed; no conversations", async () => {

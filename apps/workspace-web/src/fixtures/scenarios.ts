@@ -345,17 +345,10 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   stop_all_uncertain: {
     "agents.listingsStop": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
-  // A notifications save whose record moved on (the server's 409: reread).
-  notifications_conflict: {
-    "settings.reviseNotifications": (call) =>
-      call === 0
-        ? {
-            kind: "conflict",
-            recheck: true,
-            message: "These settings changed since you opened them.",
-          }
-        : null,
-  },
+  // The viewer's notifications are saved from another tab just before their first save
+  // here: the record moves on (the team fixture does it), so the save meets a real 409 and
+  // the reread shows the new choices.
+  notifications_conflict: {},
   // A teammate changes how a helper thinks just before the viewer's first save: the record
   // moves on (a new choice and revision; the team fixture does it), so the save meets a real
   // 409 and only a save of the reread revision goes through.
