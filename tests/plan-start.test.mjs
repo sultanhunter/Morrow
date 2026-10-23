@@ -294,6 +294,14 @@ test("the records code computes, and one kernel check per piece", () => {
     startChecks(changeCard, changeRecords, "principal_maya")[0].capabilityId,
     "workspace.goal.revise",
   );
+  // Ownership selects the verb, as the revise route does: execute on the actor's own goal
+  // record, administer on another member's (and when ownership is unknown).
+  const verbOf = (targetOwner) =>
+    startChecks(card({ ...changeCard, targetOwner }), changeRecords, "principal_maya")[0].verb;
+  assert.equal(verbOf("own"), "execute");
+  assert.equal(verbOf("other"), "administer");
+  assert.equal(verbOf(undefined), "administer");
+  assert.equal(verbOf(null), "administer");
   // An invalid draft computes nothing.
   assert.equal(startRecords(card({ draft: { ...draft, title: "x" } })), null);
 });

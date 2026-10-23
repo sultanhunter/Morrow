@@ -33,7 +33,7 @@ export const projectStatements = Object.freeze({
   planDraftLatest:
     "SELECT d.message_id::text AS message_id,d.revision::text AS revision,d.kind,d.canonical,d.digest::text AS digest,d.asker_principal_id::text AS asker_principal_id,d.asker_membership_id::text AS asker_membership_id,d.context_taint FROM morrow_work.plan_draft_revisions d WHERE d.message_id=$1::text ORDER BY d.revision DESC LIMIT 1",
   // A plan change's target: the project and its goal record's revision and date.
-  projectTarget: `SELECT j.id::text AS id,g.id::text AS goal_id,g.revision::text AS revision,${utc("g.due_at")} AS due_at FROM morrow_work.projects j JOIN morrow_work.goals g ON g.organization_id=j.organization_id AND g.workspace_id=j.workspace_id AND g.id=j.goal_id WHERE j.id=$1::text`,
+  projectTarget: `SELECT j.id::text AS id,g.id::text AS goal_id,g.revision::text AS revision,${utc("g.due_at")} AS due_at,g.owner_principal_id::text AS owner_principal_id,g.owner_membership_id::text AS owner_membership_id FROM morrow_work.projects j JOIN morrow_work.goals g ON g.organization_id=j.organization_id AND g.workspace_id=j.workspace_id AND g.id=j.goal_id WHERE j.id=$1::text`,
   // An area's or Quick tasks' existing record, if any.
   areaGoal: "SELECT g.id::text AS id FROM morrow_work.goals g WHERE g.area_template_id=$1::text",
   // An area's agent is added (ADR-0033 item 6): an installation of its release that was not

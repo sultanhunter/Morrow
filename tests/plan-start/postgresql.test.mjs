@@ -289,11 +289,12 @@ function insertCard(p, messageId, revision, draft, { taint = "none", editor = nu
   const r = commandRole(
     p,
     `INSERT INTO morrow_work.plan_draft_revisions(organization_id,workspace_id,message_id,revision,kind,canonical,digest,asker_principal_id,asker_membership_id,editor_principal_id,editor_membership_id,context_taint,restricted_sources,created_at)
- VALUES(${literal(p.org)},${literal(p.workspace)},${literal(messageId)},${revision},${literal(draft.kind)},${literal(text)},${literal(sha(text))},${literal(P.A.principal)},${literal(P.A.membership)},${editorSql},${literal(taint)},'[]',${now});`,
+ VALUES(${literal(p.org)},${literal(p.workspace)},${literal(messageId)},${revision},${literal(draft.kind)},${literal(text)},${literal(sha(text))},${literal(p.principal)},${literal(p.membership)},${editorSql},${literal(taint)},'[]',${now});`,
   );
   return { ...r, digest: sha(text) };
 }
 
+let cardProject;
 test("a Morrow card: only the asker, only the held digest; an edit keeps its taint; the start creates every piece", async () => {
   const first = insertCard(P.A, "message_card", 1, projectCard(), { taint: "untrusted_external" });
   assert.ok(first.ok, first.stderr);
@@ -375,6 +376,7 @@ test("a Morrow card: only the asker, only the held digest; an edit keeps its tai
   assert.equal(done.status, 201, JSON.stringify(done.body));
   assert.equal(done.body.taskIds.length, 2);
   assert.deepEqual(done.body.runs, []);
+  cardProject = { projectId: done.body.projectId, goalId: done.body.goalId };
   const [goal] = db.rows(
     `SELECT status,area_template_id,to_char(due_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS due,success_criteria FROM morrow_work.goals WHERE id=${literal(done.body.goalId)}`,
   );
@@ -453,6 +455,117 @@ test("a Morrow card: only the asker, only the held digest; an edit keeps its tai
   assert.equal(r2.status, 409);
   assert.equal(r2.body.safeMessage, "Repeating tasks can't be started from a card yet.");
   assert.deepEqual(counts(), beforeRepeat);
+});
+
+test("a plan change: revised against the project's current revision; another member's record needs administer", async () => {
+  const revisionOf = () =>
+    Number(
+      db.sql(`SELECT revision FROM morrow_work.goals WHERE id=${literal(cardProject.goalId)};`),
+    );
+  const revision = revisionOf();
+  const change = (p, goalRevision, title = "Add a photo check") => ({
+    schemaVersion: 1,
+    kind: "plan_change",
+    title,
+    why: "The photos need a second look.",
+    doneWhen: "The tote's page has all 12 facts and its photos.",
+    goals: [
+      projectCard().goals[0],
+      {
+        key: "photos",
+        description: "Three photos",
+        measure: {
+          kind: "checklist",
+          checklistId: "product_facts_complete",
+          productIds: ["product:2"],
+          target: 12,
+          dueAt: null,
+          startRef: null,
+        },
+      },
+    ],
+    steps: [
+      {
+        key: "photo_check",
+        title: "Check the photos",
+        assignee: { kind: "person", principalId: p.principal },
+        dependsOn: [],
+        repeat: null,
+      },
+    ],
+    target: { kind: "existing_project", projectId: cardProject.projectId, goalRevision },
+  });
+  const own = insertCard(P.A, "message_change", 1, change(P.A, revision));
+  assert.ok(own.ok, own.stderr);
+  const d = await send(open, P.A, "POST", "/plans/start-document", {
+    messageId: "message_change",
+    draftDigest: own.digest,
+  });
+  assert.equal(d.status, 201, JSON.stringify(d.body));
+  assert.equal(d.body.document.records.project, null);
+  assert.equal(d.body.document.records.goal.dueAt, dueAt);
+  const tasksBefore = count("tasks", `goal_id=${literal(cardProject.goalId)}`);
+  const r = await send(open, P.A, "POST", "/plans/start", {
+    documentDigest: d.body.documentDigest,
+    nonce: d.body.nonce,
+  });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.deepEqual([r.body.goalId, r.body.projectId], [cardProject.goalId, null]);
+  assert.equal(revisionOf(), revision + 1);
+  const [goal] = db.rows(
+    `SELECT success_criteria FROM morrow_work.goals WHERE id=${literal(cardProject.goalId)}`,
+  );
+  assert.deepEqual(
+    goal.success_criteria.map((c) => c.key),
+    ["facts", "photos"],
+  );
+  assert.equal(count("tasks", `goal_id=${literal(cardProject.goalId)}`), tasksBefore + 1);
+  assert.equal(count("projects", `goal_id=${literal(cardProject.goalId)}`), 1);
+  // A card drafted against the old revision is stale.
+  const old = insertCard(P.A, "message_change_old", 1, change(P.A, revision, "Add a size check"));
+  assert.ok(old.ok, old.stderr);
+  const stale = await send(open, P.A, "POST", "/plans/start-document", {
+    messageId: "message_change_old",
+    draftDigest: old.digest,
+  });
+  assert.equal(stale.status, 409);
+  // Another member's goal record: execute on workspace.goal.revise is not enough (the
+  // revise route's own -> execute, other -> administer); administer is.
+  db.admin(
+    grantInsert(
+      P.C,
+      fixtureGrant(
+        P.C,
+        "workspace.goal.revise",
+        ["execute"],
+        ["dueAt", "expectedRevision", "goalId", "objective", "successCriteria"],
+      ),
+    ),
+  );
+  const theirs = insertCard(
+    P.C,
+    "message_change_c",
+    1,
+    change(P.C, revision + 1, "Add a care check"),
+  );
+  assert.ok(theirs.ok, theirs.stderr);
+  const refused = await send(open, P.C, "POST", "/plans/start-document", {
+    messageId: "message_change_c",
+    draftDigest: theirs.digest,
+  });
+  assert.equal(refused.status, 403);
+  const admin = insertCard(
+    P.R,
+    "message_change_r",
+    1,
+    change(P.R, revision + 1, "Add a fit check"),
+  );
+  assert.ok(admin.ok, admin.stderr);
+  const allowed = await send(open, P.R, "POST", "/plans/start-document", {
+    messageId: "message_change_r",
+    draftDigest: admin.digest,
+  });
+  assert.equal(allowed.status, 201, JSON.stringify(allowed.body));
 });
 
 // A measured area record, written directly by the command role (the area card needs an

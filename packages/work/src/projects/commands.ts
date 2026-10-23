@@ -512,12 +512,18 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
   const draft = parsed(text(row, "canonical"));
   if (!planDraftValid(draft)) throw new WorkContextUnavailable();
   let currentDueAt: string | null = null;
+  let targetOwner: "own" | "other" | null = null;
   const d = draft as Current_PlanDraft;
   if (d.target.kind === "existing_project") {
     const target = one(await tx.run("projectTarget", [d.target.projectId]));
     if (!target || integer(text(target, "revision")) !== d.target.goalRevision)
       throw new ProjectReject("stale");
     currentDueAt = optional(target, "due_at");
+    targetOwner =
+      text(target, "owner_principal_id") === a.actor.principalId &&
+      text(target, "owner_membership_id") === a.actor.membershipId
+        ? "own"
+        : "other";
   }
   return {
     kind: "draft",
@@ -528,6 +534,7 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
     askerPrincipalId: text(row, "asker_principal_id"),
     contextTaint: text(row, "context_taint") as "none" | "untrusted_external",
     currentDueAt,
+    targetOwner,
   };
 }
 /** An area card needs its agent added (ADR-0033 item 6); Quick tasks needs none. */
@@ -539,8 +546,11 @@ async function areaAgentAdded(tx: WorkTx, card: StartCard): Promise<void> {
   if (!row || text(row, "added") === "0") throw new ProjectReject("agent_not_added");
 }
 const pieceDecider = (a: WorkAuthority) => ({
-  decide: (check: { capabilityId: CapabilityId; verb: "execute"; fields: readonly string[] }) =>
-    decideOn(a, a.resource, check.capabilityId, check.verb, check.fields),
+  decide: (check: {
+    capabilityId: CapabilityId;
+    verb: "execute" | "administer";
+    fields: readonly string[];
+  }) => decideOn(a, a.resource, check.capabilityId, check.verb, check.fields),
 });
 async function startDocument(
   tx: WorkTx,

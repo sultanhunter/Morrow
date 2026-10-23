@@ -48,6 +48,12 @@ export type StartCard =
       readonly contextTaint: Current_ContextTaint;
       /** For a plan change or a dated target already set: the project's current date. */
       readonly currentDueAt: string | null;
+      /**
+       * For a plan change: whether the project's goal record is the actor's own. Ownership
+       * selects the verb of workspace.goal.revise (own -> execute, other -> administer), as
+       * the revise route does; a goal record's owner never changes.
+       */
+      readonly targetOwner?: "own" | "other" | null;
     }
   | { readonly kind: "area"; readonly areaTemplateId: AreaId }
   | { readonly kind: "quick_tasks" };
@@ -150,7 +156,7 @@ export function startRecords(card: StartCard): Current_PlanStartRecords | null {
 export interface PieceCheck {
   readonly piece: string;
   readonly capabilityId: CapabilityId;
-  readonly verb: "execute";
+  readonly verb: "execute" | "administer";
   readonly fields: readonly string[];
 }
 const goalCreateFields = ["objective", "storeIds", "successCriteria"] as const;
@@ -158,7 +164,8 @@ const goalCreateFields = ["objective", "storeIds", "successCriteria"] as const;
  * Every grant the start needs, one per piece: the goal record, the project and its pin
  * (both human_only), each task and its assignment to someone else, each repeating task
  * (a routine configured disabled), and a plan change's revision. The person who creates
- * the records owns them, so every verb is `execute`.
+ * the records owns them, so every verb is `execute`, except a plan change's revision of
+ * another member's goal record, which needs `administer` (the revise route's rule).
  */
 export function startChecks(
   card: StartCard,
@@ -166,18 +173,21 @@ export function startChecks(
   actorPrincipalId: string,
 ): readonly PieceCheck[] {
   const checks: PieceCheck[] = [];
-  const add = (piece: string, capabilityId: CapabilityId, fields: readonly string[]) =>
-    checks.push({ piece, capabilityId, verb: "execute", fields });
+  const add = (
+    piece: string,
+    capabilityId: CapabilityId,
+    fields: readonly string[],
+    verb: PieceCheck["verb"] = "execute",
+  ) => checks.push({ piece, capabilityId, verb, fields });
   const changing = card.kind === "draft" && card.draft.kind === "plan_change";
   if (records.goal !== null) {
     if (changing)
-      add("goal", "workspace.goal.revise", [
-        "goalId",
-        "expectedRevision",
-        "objective",
-        "dueAt",
-        "successCriteria",
-      ]);
+      add(
+        "goal",
+        "workspace.goal.revise",
+        ["goalId", "expectedRevision", "objective", "dueAt", "successCriteria"],
+        card.kind === "draft" && card.targetOwner === "own" ? "execute" : "administer",
+      );
     else add("goal", "workspace.goal.create", goalCreateFields);
   }
   if (records.project !== null) {
