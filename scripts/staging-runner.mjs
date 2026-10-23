@@ -1450,8 +1450,7 @@ export async function grantTestEntitlement({
           platformEnvironment,
           values[1],
         ]);
-        if (owned?.n !== 1)
-          throw new StagingError("STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE");
+        if (owned?.n !== 1) throw new StagingError("STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE");
         await connection.exec("RESET ROLE");
         if (administrator.mode === "createrole")
           await connection.exec(`REVOKE morrow_identity_owner FROM ${admin} GRANTED BY ${admin}`);
@@ -1487,22 +1486,30 @@ export async function grantTestEntitlement({
 //   1. as morrow_identity_owner: the workspace's organization, then
 //      morrow_identity.shopify_app_register_live (migration shopify-live-store-identity),
 //      committed only on `registered`. An `exists` or `live_store_taken` whose row is this
-//      very registration (same client id, environment, intended shop digest, workspace,
-//      mark, active) is a replay (`already_registered`, nothing written); anything else
-//      refuses (STAGING_SHOPIFY_APP_REFUSED with the definer's outcome).
-//   2. as morrow_work_owner: morrow_vault.app_secret_put with the envelope, committed only
-//      on `stored` at exactly the envelope's version (its additional data binds it); any
-//      other version rolls back (STAGING_APP_SECRET_VERSION_MISMATCH: after a lost
-//      acknowledgement, a reported version 2 means version 1 is stored).
+//      very registration (same client id, environment, intended shop digest, organization,
+//      workspace, install link, mark, active) is a replay (`already_registered`, nothing
+//      written); anything else refuses (STAGING_SHOPIFY_APP_REFUSED with the definer's
+//      outcome) and nothing of step 2 runs.
+//   2. as morrow_work_owner: under app_secret_put's own per-app advisory lock, the app's
+//      next secret version is read, `seal(version)` makes the envelope for exactly that
+//      version (its additional data binds it), and morrow_vault.app_secret_put stores it,
+//      committed only on `stored` at that version. A rerun with the same values therefore
+//      replays the registration and stores the next version (a rotation), never a
+//      mismatched envelope.
 // The shop is a digest here; its domain never reaches this module. The envelope holds
-// ciphertext only. Fixed statements; values travel only as parameters.
+// ciphertext only and never leaves this function. Fixed statements; values travel only as
+// parameters.
 export const shopifyAppStatements = Object.freeze({
   workspace:
     "SELECT organization_id::text AS organization_id FROM morrow_identity.workspaces WHERE id = $1::text AND active",
   register:
     "SELECT outcome, app_key FROM morrow_identity.shopify_app_register_live($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text)",
   existing:
-    "SELECT client_id, environment_id, intended_shop_digest, invited_organization_id::text AS organization_id, invited_workspace_id::text AS workspace_id, status, live_store::text AS live_store FROM morrow_identity.shopify_apps WHERE app_key = $1::text",
+    "SELECT client_id, environment_id, intended_shop_digest, invited_organization_id::text AS organization_id, invited_workspace_id::text AS workspace_id, install_url, status, live_store::text AS live_store FROM morrow_identity.shopify_apps WHERE app_key = $1::text",
+  secretLock:
+    "SELECT true AS locked FROM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.vault.app_secret', $1::text)::text, 0))",
+  secretNext:
+    "SELECT (COALESCE(max(version), 0) + 1)::text AS version FROM morrow_vault.app_secrets WHERE app_key = $1::text",
   secretPut: "SELECT outcome, version FROM morrow_vault.app_secret_put($1, $2, $3, $4)",
 });
 const shopifyRegisterOutcomes = Object.freeze([
@@ -1512,9 +1519,14 @@ const shopifyRegisterOutcomes = Object.freeze([
   "invalid",
   "denied",
 ]);
+const shopifyInstallUrl =
+  /^https:\/\/(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)\/[!-~]+$/;
 export function shopifyAppRegistrationInput(input) {
-  const { appKey, clientId, shopDigest, workspaceId, installUrl, envelope } = input ?? {};
+  const { appKey, clientId, shopDigest, workspaceId, installUrl } = input ?? {};
   if (
+    input === null ||
+    typeof input !== "object" ||
+    Object.keys(input).sort().join() !== "appKey,clientId,installUrl,shopDigest,workspaceId" ||
     typeof appKey !== "string" ||
     !/^[a-z0-9][a-z0-9-]{2,62}$/.test(appKey) ||
     typeof clientId !== "string" ||
@@ -1525,15 +1537,24 @@ export function shopifyAppRegistrationInput(input) {
     !recordId.test(workspaceId) ||
     typeof installUrl !== "string" ||
     installUrl.length > 2048 ||
-    !/^https:\/\/(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)\/[!-~]+$/.test(
-      installUrl,
-    ) ||
+    !shopifyInstallUrl.test(installUrl)
+  )
+    throw new StagingError("STAGING_USAGE");
+  return Object.freeze({ appKey, clientId, shopDigest, workspaceId, installUrl });
+}
+// The envelope `seal` returned for `appKey` at `version`: the vault script's closed shape
+// (scripts/vault.mjs), for the staging vault only.
+export function checkSealedEnvelope(envelope, appKey, version) {
+  if (
     envelope === null ||
     typeof envelope !== "object" ||
+    Object.keys(envelope).sort().join() !==
+      "appKey,environment,kekVersion,kind,schemaVersion,sealedValueHex,version,wrappedKeyHex" ||
+    envelope.schemaVersion !== 1 ||
+    envelope.kind !== "morrow.vault.app_secret_envelope" ||
     envelope.appKey !== appKey ||
     envelope.environment !== platformEnvironment ||
-    !Number.isSafeInteger(envelope.version) ||
-    envelope.version < 1 ||
+    envelope.version !== version ||
     !Number.isSafeInteger(envelope.kekVersion) ||
     envelope.kekVersion < 1 ||
     envelope.kekVersion > 999 ||
@@ -1542,115 +1563,112 @@ export function shopifyAppRegistrationInput(input) {
     typeof envelope.sealedValueHex !== "string" ||
     !/^(?:[a-f0-9]{2}){29,4124}$/.test(envelope.sealedValueHex)
   )
-    throw new StagingError("STAGING_USAGE");
-  return Object.freeze({ appKey, clientId, shopDigest, workspaceId, installUrl, envelope });
+    throw new StagingError("STAGING_SEAL_FAILED");
+  return envelope;
 }
-export async function registerShopifyApp({ connect, binding, administrator, input }) {
+export async function registerShopifyApp({ connect, binding, administrator, input, seal }) {
   checkAdministrator(administrator);
-  const { appKey, clientId, shopDigest, workspaceId, installUrl, envelope } =
+  const { appKey, clientId, shopDigest, workspaceId, installUrl } =
     shopifyAppRegistrationInput(input);
+  if (typeof seal !== "function") throw new StagingError("STAGING_USAGE");
   const admin = administrator.name;
-  const inRole = async (connection, role, body) => {
-    await connection.exec("BEGIN");
-    if (administrator.mode === "createrole")
-      await connection.exec(`GRANT ${role} TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`);
-    await connection.exec(`SET LOCAL ROLE ${role}`);
-    const value = await body();
-    await connection.exec("RESET ROLE");
-    if (administrator.mode === "createrole")
-      await connection.exec(`REVOKE ${role} FROM ${admin} GRANTED BY ${admin}`);
-    await connection.exec("COMMIT");
-    return value;
+  // One administrator transaction in `role` (the D4 SET-row protocol): committed only when
+  // `body` returns; any throw leaves it uncommitted, and the connection is closed.
+  const inRole = async (role, failureCode, body) => {
+    const connection = await connectChecked(connect, binding, administrator);
+    try {
+      let value;
+      try {
+        await connection.exec("BEGIN");
+        if (administrator.mode === "createrole")
+          await connection.exec(
+            `GRANT ${role} TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+          );
+        await connection.exec(`SET LOCAL ROLE ${role}`);
+        value = await body(connection);
+        await connection.exec("RESET ROLE");
+        if (administrator.mode === "createrole")
+          await connection.exec(`REVOKE ${role} FROM ${admin} GRANTED BY ${admin}`);
+        await connection.exec("COMMIT");
+      } catch (error) {
+        throw sqlFailure(failureCode, error);
+      }
+      await assertNoSetRows(connection);
+      return value;
+    } finally {
+      await connection.close();
+    }
   };
-  let registration, organizationId;
-  {
-    const connection = await connectChecked(connect, binding, administrator);
-    try {
-      try {
-        [registration, organizationId] = await inRole(
-          connection,
-          "morrow_identity_owner",
-          async () => {
-            const [workspace] = await connection.query(shopifyAppStatements.workspace, [
-              workspaceId,
-            ]);
-            const org = workspace?.organization_id;
-            if (typeof org !== "string" || !recordId.test(org))
-              throw new StagingError("STAGING_SHOPIFY_APP_WORKSPACE_UNKNOWN");
-            const [row] = await connection.query(shopifyAppStatements.register, [
-              appKey,
-              clientId,
-              platformEnvironment,
-              shopDigest,
-              org,
-              workspaceId,
-              installUrl,
-            ]);
-            const outcome = shopifyRegisterOutcomes.includes(row?.outcome) ? row.outcome : "other";
-            if (outcome === "registered") return ["registered", org];
-            if (outcome === "exists" || outcome === "live_store_taken") {
-              const [existing] = await connection.query(shopifyAppStatements.existing, [appKey]);
-              if (
-                existing?.client_id === clientId &&
-                existing.environment_id === platformEnvironment &&
-                existing.intended_shop_digest === shopDigest &&
-                existing.organization_id === org &&
-                existing.workspace_id === workspaceId &&
-                existing.status === "active" &&
-                existing.live_store === "true"
-              )
-                return ["already_registered", org];
-            }
-            throw new StagingError("STAGING_SHOPIFY_APP_REFUSED", { outcome });
-          },
-        );
-      } catch (error) {
-        throw sqlFailure("STAGING_SHOPIFY_APP_FAILED", error);
+  const [registration, organizationId] = await inRole(
+    "morrow_identity_owner",
+    "STAGING_SHOPIFY_APP_FAILED",
+    async (connection) => {
+      const [workspace] = await connection.query(shopifyAppStatements.workspace, [workspaceId]);
+      const org = workspace?.organization_id;
+      if (typeof org !== "string" || !recordId.test(org))
+        throw new StagingError("STAGING_SHOPIFY_APP_WORKSPACE_UNKNOWN");
+      const [row] = await connection.query(shopifyAppStatements.register, [
+        appKey,
+        clientId,
+        platformEnvironment,
+        shopDigest,
+        org,
+        workspaceId,
+        installUrl,
+      ]);
+      const outcome = shopifyRegisterOutcomes.includes(row?.outcome) ? row.outcome : "other";
+      if (outcome === "registered" && row.app_key === appKey) return ["registered", org];
+      if (outcome === "exists" || outcome === "live_store_taken") {
+        const [existing] = await connection.query(shopifyAppStatements.existing, [appKey]);
+        if (
+          existing?.client_id === clientId &&
+          existing.environment_id === platformEnvironment &&
+          existing.intended_shop_digest === shopDigest &&
+          existing.organization_id === org &&
+          existing.workspace_id === workspaceId &&
+          existing.install_url === installUrl &&
+          existing.status === "active" &&
+          existing.live_store === "true"
+        )
+          return ["already_registered", org];
       }
-      await assertNoSetRows(connection);
-    } finally {
-      await connection.close();
-    }
-  }
-  let stored;
-  {
-    const connection = await connectChecked(connect, binding, administrator);
-    try {
-      try {
-        stored = await inRole(connection, "morrow_work_owner", async () => {
-          const [row] = await connection.query(shopifyAppStatements.secretPut, [
-            appKey,
-            String(envelope.kekVersion),
-            envelope.wrappedKeyHex,
-            envelope.sealedValueHex,
-          ]);
-          const version = typeof row?.version === "string" ? row.version : null;
-          if (row?.outcome !== "stored")
-            throw new StagingError("STAGING_APP_SECRET_REFUSED", {
-              outcome: typeof row?.outcome === "string" ? row.outcome : null,
-            });
-          if (version !== String(envelope.version))
-            throw new StagingError("STAGING_APP_SECRET_VERSION_MISMATCH", {
-              expected: String(envelope.version),
-              stored: version !== null && /^[1-9][0-9]{0,15}$/.test(version) ? version : null,
-            });
-          return version;
+      throw new StagingError("STAGING_SHOPIFY_APP_REFUSED", { outcome });
+    },
+  );
+  const secretVersion = await inRole(
+    "morrow_work_owner",
+    "STAGING_APP_SECRET_FAILED",
+    async (connection) => {
+      await connection.query(shopifyAppStatements.secretLock, [appKey]);
+      const [next] = await connection.query(shopifyAppStatements.secretNext, [appKey]);
+      const version = /^[1-9][0-9]{0,15}$/.test(next?.version ?? "") ? Number(next.version) : 0;
+      if (!Number.isSafeInteger(version) || version < 1)
+        throw new StagingError("STAGING_APP_SECRET_VERSION_UNREADABLE");
+      const envelope = checkSealedEnvelope(await seal(version), appKey, version);
+      const [row] = await connection.query(shopifyAppStatements.secretPut, [
+        appKey,
+        String(envelope.kekVersion),
+        envelope.wrappedKeyHex,
+        envelope.sealedValueHex,
+      ]);
+      if (row?.outcome !== "stored")
+        throw new StagingError("STAGING_APP_SECRET_REFUSED", {
+          outcome: typeof row?.outcome === "string" ? row.outcome : null,
         });
-      } catch (error) {
-        throw sqlFailure("STAGING_APP_SECRET_FAILED", error);
-      }
-      await assertNoSetRows(connection);
-    } finally {
-      await connection.close();
-    }
-  }
+      if (row.version !== String(version))
+        throw new StagingError("STAGING_APP_SECRET_VERSION_MISMATCH", {
+          expected: String(version),
+        });
+      return { version: String(version), kekVersion: envelope.kekVersion };
+    },
+  );
   return Object.freeze({
     appKey,
     registration,
     organizationId,
     workspaceId,
-    secretVersion: stored,
-    kekVersion: envelope.kekVersion,
+    secretVersion: secretVersion.version,
+    kekVersion: secretVersion.kekVersion,
   });
 }
 

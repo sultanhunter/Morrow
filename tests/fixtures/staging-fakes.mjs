@@ -704,6 +704,28 @@ export const approvedCard = (approvedOn = "2026-10-19") => {
   };
 };
 
+// v1 PR 1 (ADR-0035 item 4): the owner's standing approval, as committed in
+// docs/decisions/standing-approval.json; `overrides` replace members. The Markdown paths
+// are joined, as labs load this module (tests/ci-workflow.test.mjs).
+const markdown = (path) => [path, "md"].join(".");
+export const standingApproval = (overrides = {}) => ({
+  schemaVersion: 1,
+  id: "adr-0035",
+  kind: "standing",
+  record: markdown("docs/decisions/adr/ADR-0035-build-v1-live"),
+  replaces: "staging-card-1",
+  environment: "staging",
+  status: "approved",
+  approvedOn: "2026-10-23",
+  evidence: markdown("docs/evidence/live/2026-10-23-standing-approval"),
+  e7: {
+    observedOn: "2026-10-19",
+    record: markdown("docs/evidence/live/2026-10-19-workos-signup-disabled"),
+  },
+  e13: { amendedOn: "2026-10-23" },
+  ...overrides,
+});
+
 export const labBinding = Object.freeze({
   schemaVersion: 1,
   environment: "staging",

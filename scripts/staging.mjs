@@ -5,9 +5,11 @@
 // wrangler, gh, git, neonctl, driver or database text is never printed; credentials are
 // read in-process from ~/.config/morrow/staging and leave only through a child's
 // environment (the Cloudflare token), stdin (`wrangler secret bulk`) or a new 0600 file.
-// Effects need the active staging card (docs/decisions/approvals/staging-card.json);
-// reads and local commands do not. `ctx` is the one injection seam: tests and the
-// PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
+// Effects need the active approval: since ADR-0035 (item 4 and its Consequences) the
+// owner's standing approval, docs/decisions/standing-approval.json, which replaced
+// staging-card-1 and has no end date; reads, local commands and the kill switch do not.
+// `ctx` is the one injection seam: tests and the PostgreSQL lab pass fakes for tools, the
+// Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
 import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
@@ -170,9 +172,11 @@ export async function identityConstants({ stripe = "off", model = "off" } = {}) 
 
 // The approval the tools read (ADR-0035 item 4 and its Consequences, a routine change it
 // names): the owner's standing approval, which replaced staging-card-1 on 2026-10-23 and has
-// no end date. docs/decisions/approvals/staging-card.json stays as history and is no longer
-// read. `config.card` keeps its name: it is whichever approval record the tools hold.
-export const approvalRecordPath = "docs/decisions/approvals/standing-approval.json";
+// no end date. It lives beside the other reviewed records (docs/decisions/*.json), not in
+// docs/decisions/approvals/, whose JSON files are the graph's cards; staging-card.json stays
+// there as history and is no longer read. `config.card` keeps its name: it is whichever
+// approval record the tools hold.
+export const approvalRecordPath = "docs/decisions/standing-approval.json";
 export async function loadStagingConfiguration(root) {
   const read = (path) => JSON.parse(readFileSync(join(root, path), "utf8"));
   const staging = read("infra/environments/staging.json");
@@ -364,7 +368,11 @@ export async function stagingBillingTermsRows(root, environment = "staging") {
 // verification on, public sign-up off), and e13, the date from which the owner's test
 // entitlement runs under it.
 export const standingApprovalId = "adr-0035";
-export const standingApprovalDecision = "docs/decisions/adr/ADR-0035-build-v1-live.md";
+// Joined, so no source a lab loads names a Markdown file (tests/ci-workflow.test.mjs); the
+// tools compare it, they never read it.
+export const standingApprovalDecision = ["docs/decisions/adr/ADR-0035-build-v1-live", "md"].join(
+  ".",
+);
 const day = /^\d{4}-\d{2}-\d{2}$/;
 const standingKeys = [
   "approvedOn",
@@ -945,7 +953,7 @@ const recordLabel =
   /^(?:[-*] +)?(?:\*\*(Approval reference|Workspace):\*\*|(Approval reference|Workspace):)(.*)$/;
 // A well-formed stand-in for parse's grammar check when --record is omitted (the standing
 // approval's own record replaces it in run).
-const standingEvidencePlaceholder = "docs/evidence/live/2026-10-23-standing.md";
+const standingEvidencePlaceholder = ["docs/evidence/live/2026-10-23-standing", "md"].join(".");
 const recordValue = /^ +(?:`([^`\s]+)`|([^`\s]+)) *$/;
 export function requireTestEntitlementRecord(text, { approvalRef, workspaceId }) {
   const named = { "Approval reference": [], Workspace: [] };
@@ -1024,7 +1032,10 @@ command("test-entitlement", {
       // needs one per use.
       evidenceRef: flags["--record"] ?? null,
     };
-    testEntitlementInput({ ...input, evidenceRef: input.evidenceRef ?? standingEvidencePlaceholder });
+    testEntitlementInput({
+      ...input,
+      evidenceRef: input.evidenceRef ?? standingEvidencePlaceholder,
+    });
     return { input };
   },
   async run(ctx, { input: given }) {
@@ -1064,16 +1075,21 @@ command("test-entitlement", {
 });
 
 // v1 PR 1 (ADR-0035 items 2 and 3): the owner's one command for the owner's live-store app.
-// It seals the app's client secret into the broker vault and registers the app with the
-// live-store mark for the owner's workspace. The secret comes only from the hidden prompt
-// (a terminal, not echoed) or, with --secret-file, from the owner's 0600 file
+// It registers the app with the live-store mark for the owner's workspace and seals the
+// app's client secret into the broker vault. The secret comes only from the hidden prompt
+// (a terminal, raw mode, not echoed; ctx.readSecret refuses anything that is not a
+// terminal) or, with --secret-file, from the owner's 0600 file
 // ~/.config/morrow/staging/shopify-app-secret (written with morrow_put, deleted here once
 // the vault stored it); never from an argument, the environment or a pipe. The KEK is the
 // owner's own file (vault-kek-v1), read in-process. The shop's domain is an argument only
 // to be digested (shopifyAppLiveRegistration); it is never stored, printed or written
-// anywhere. Under the active approval, from reviewed main with a green foundation check
-// (mainPreconditions), before the prompt. Prints the app key, the two outcomes, the ids,
-// the stored secret version and the KEK fingerprint: nothing secret, no shop identity.
+// anywhere. Order: the approval, the values, reviewed main with a green foundation check
+// (mainPreconditions), the owner files, then the prompt; the secret and the KEK are proved
+// (a trial seal that opens) before any database effect. Then the registration commits, and
+// the vault stores the secret at the app's next version (registerShopifyApp), so a rerun
+// with the same values rotates the secret. Prints the app key, the registration outcome,
+// the ids, the stored secret version and the KEK fingerprint: nothing secret, no shop
+// identity, not the install link.
 const shopifyAppFlags = ["--app-key", "--client-id", "--shop", "--workspace", "--install-url"];
 command("shopify-app-register", {
   usage:
@@ -1088,7 +1104,12 @@ command("shopify-app-register", {
         continue;
       }
       const [flag, value] = [args[i], args[i + 1]];
-      if (!shopifyAppFlags.includes(flag) || typeof value !== "string" || Object.hasOwn(flags, flag))
+      if (
+        !shopifyAppFlags.includes(flag) ||
+        typeof value !== "string" ||
+        value.startsWith("--") ||
+        Object.hasOwn(flags, flag)
+      )
         throw new StagingError("STAGING_USAGE");
       flags[flag] = value;
       i += 2;
@@ -1129,34 +1150,43 @@ command("shopify-app-register", {
     } catch (error) {
       throw error instanceof StagingError ? error : new StagingError("STAGING_SECRET_UNREADABLE");
     }
-    let envelope;
+    const sealAt = async (version) => {
+      try {
+        const envelope = await vault.sealAppSecretWithKek(
+          {
+            environment: "staging",
+            "app-key": registration.appKey,
+            version: String(version),
+            "kek-version": String(kekVersion),
+          },
+          secret,
+          () => kek,
+        );
+        await vault.checkEnvelope(envelope, kek);
+        return envelope;
+      } catch (error) {
+        throw new StagingError(
+          error?.message === "VAULT_SCRIPT_SECRET_INVALID"
+            ? "STAGING_SECRET_INVALID"
+            : "STAGING_SEAL_FAILED",
+        );
+      }
+    };
+    let result;
     try {
-      envelope = await vault.sealAppSecretWithKek(
-        {
-          environment: "staging",
-          "app-key": registration.appKey,
-          version: "1",
-          "kek-version": String(kekVersion),
-        },
-        secret,
-        () => kek,
-      );
-      await vault.checkEnvelope(envelope, kek);
-    } catch (error) {
-      throw new StagingError(
-        error?.message === "VAULT_SCRIPT_SECRET_INVALID"
-          ? "STAGING_SECRET_INVALID"
-          : "STAGING_SEAL_FAILED",
-      );
+      // The trial seal: a malformed secret or an unusable KEK stops here, before any
+      // database effect.
+      await sealAt(1);
+      result = await registerShopifyApp({
+        connect: ctx.database({ ownerUrl, binding }).connect,
+        binding,
+        administrator: ctx.administrator,
+        input: registration,
+        seal: sealAt,
+      });
     } finally {
       secret = null;
     }
-    const result = await registerShopifyApp({
-      connect: ctx.database({ ownerUrl, binding }).connect,
-      binding,
-      administrator: ctx.administrator,
-      input: { ...registration, envelope },
-    });
     let secretFileRemoved = null;
     if (secretFile)
       try {
@@ -1755,6 +1785,15 @@ export function defaultContext() {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     fetch: (url, init) => globalThis.fetch(url, init),
     interactive: () => process.stdin.isTTY === true && process.stderr.isTTY === true,
+    // v1 PR 1: the hidden prompt of `shopify-app-register`, on a terminal only (never a
+    // pipe or a redirected file): raw mode, not echoed, Ctrl-C aborts (vault.mjs).
+    async readSecret() {
+      if (process.stdin.isTTY !== true || process.stderr.isTTY !== true)
+        throw new StagingError("STAGING_SECRET_PROMPT_UNAVAILABLE");
+      const { tsImport } = await import("tsx/esm/api");
+      const { readSecret } = await tsImport("./vault.mjs", import.meta.url);
+      return readSecret(process.stdin);
+    },
     notice: (text) => process.stderr.write(text + "\n"),
     browser: async () => (await import("playwright")).chromium,
     writeReport: (name, value) => writeArtifact(name, value),

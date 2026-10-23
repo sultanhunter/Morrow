@@ -12,7 +12,8 @@
 // cases: one app per environment carries the live-store mark for one intended shop; its
 // live store installs and links into the owner's workspace; another live store using its
 // install link stores nothing; a second marked app is refused; every unmarked app still
-// refuses live stores, in the broker and in the database.
+// refuses live stores, in the broker and in the database; its end states (uninstall, the
+// credential's destruction, shop/redact) still pass.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import canonicalize from "canonicalize";
@@ -1420,6 +1421,27 @@ UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='t
         applied: liveApplied?.outcome,
         grants: liveGrants,
       },
+    );
+    // The live store's end states pass the live-store guard (sim, rolled back): an
+    // uninstall, the credential's destruction and shop/redact's pseudonym change neither the
+    // development flag nor the credential version, so Shopify's uninstall and deletion
+    // requests still end the owner's store through M2 PR-3's paths (0036's record guard
+    // holds each shape).
+    const at = "greatest(date_trunc('milliseconds',clock_timestamp()),x.updated_at)";
+    const ended = db.tryRun(
+      `BEGIN; SET LOCAL ROLE morrow_identity_owner;
+UPDATE morrow_identity.store_installations x SET status='uninstalled',uninstalled_at=${at},revision=x.revision+1,updated_at=${at} WHERE x.app_key=${literal(liveKey)};
+UPDATE morrow_identity.store_installations x SET credential_destroyed_at=${at},revision=x.revision+1,updated_at=${at} WHERE x.app_key=${literal(liveKey)};
+UPDATE morrow_identity.store_installations x SET shop_domain=morrow_identity.shop_pseudonym(x.id::text),redacted_at=${at},revision=x.revision+1,updated_at=${at} WHERE x.app_key=${literal(liveKey)};
+SELECT concat_ws('|',status,development_store::text,(credential_destroyed_at IS NOT NULL)::text,(redacted_at IS NOT NULL)::text,(shop_domain<>${literal(liveShop)})::text) FROM morrow_identity.store_installations WHERE app_key=${literal(liveKey)};
+ROLLBACK;`,
+    );
+    check(
+      "V8:the_live_stores_uninstall_credential_destruction_and_redaction_pass_the_guard",
+      ended.ok &&
+        ended.stdout.split("\n").includes("uninstalled|false|true|true|true") &&
+        liveInstallations()[0].status === "linked",
+      { ok: ended.ok, stdout: ended.stdout, stderr: ended.stderr?.slice(0, 300) },
     );
   },
   { administrator: "createrole" },

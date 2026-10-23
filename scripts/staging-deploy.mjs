@@ -678,8 +678,7 @@ export async function runKill(ctx, { github, staging }) {
   let api = null;
   // Each public Worker's own step, so one failure never skips the other.
   try {
-    if (staging.cloudflare.account_id === null)
-      throw new StagingError("STAGING_IDENTIFIERS_UNSET");
+    if (staging.cloudflare.account_id === null) throw new StagingError("STAGING_IDENTIFIERS_UNSET");
     api = await ctx.cloudflareApi(staging.cloudflare.account_id);
   } catch (error) {
     api = null;
@@ -722,7 +721,9 @@ export async function runKill(ctx, { github, staging }) {
   return {
     steps,
     checks,
-    fallback: ok ? null : "dashboard_workers_dev_disable_api_and_connector_and_github_workflow_disable",
+    fallback: ok
+      ? null
+      : "dashboard_workers_dev_disable_api_and_connector_and_github_workflow_disable",
     exitCode: ok ? 0 : 1,
   };
 }

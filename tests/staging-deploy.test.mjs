@@ -1029,10 +1029,7 @@ test("census: workers.dev on the api and the connector only; any other Worker is
     dispatchNamespaces: 0,
     members: 1,
   });
-  assert.deepEqual(
-    censusFindings(snapshot([scriptOf.api, scriptOf.connector]), staging),
-    [],
-  );
+  assert.deepEqual(censusFindings(snapshot([scriptOf.api, scriptOf.connector]), staging), []);
   assert.deepEqual(censusFindings(snapshot(Object.values(scriptOf)), staging), [
     { code: "WORKERS_DEV_EXPOSED", name: scriptOf.broker },
     { code: "WORKERS_DEV_EXPOSED", name: scriptOf.orchestrator },
@@ -1217,10 +1214,10 @@ test("AC14: kill sets the flag to 0, disables the workflow, cancels queued and r
     });
     // Each check probed both hostnames' own /healthz.
     const probed = w.site.requests.filter((r) => r.path === "/healthz").map((r) => r.host);
-    assert.deepEqual(
-      [...new Set(probed)].sort(),
-      ["morrow-staging-api.lab.workers.dev", "morrow-staging-connector.lab.workers.dev"],
-    );
+    assert.deepEqual([...new Set(probed)].sort(), [
+      "morrow-staging-api.lab.workers.dev",
+      "morrow-staging-connector.lab.workers.dev",
+    ]);
     assert.equal(w.cloud.workersDev(scriptOf.connector), false);
     assert.deepEqual(
       w.sleeps,
@@ -1600,11 +1597,9 @@ test("smoke: no guard means no login start; failures name the check; --acceptanc
     const w = await world(options);
     try {
       if (options.cloudflare)
-        await w.cloud.api.request(
-          "POST",
-          ["workers", "scripts", scriptOf.connector, "subdomain"],
-          { body: { enabled: false, previews_enabled: false } },
-        );
+        await w.cloud.api.request("POST", ["workers", "scripts", scriptOf.connector, "subdomain"], {
+          body: { enabled: false, previews_enabled: false },
+        });
       const { code, result } = await w.run(["smoke"]);
       assert.equal(code, 1);
       assert.deepEqual(result.failures, failures);
@@ -1861,6 +1856,9 @@ test("preflight: reports pending owner steps without values and blocks on the ca
       "workersDevSubdomain",
     ]);
     assert.ok(!result.pending.some((p) => p.startsWith("identifier:")));
+    // v1 PR 1 (ADR-0035 item 4): the committed approval the tools read is the owner's
+    // standing approval, active with no end date.
+    assert.deepEqual(result.card, { active: true, reason: null, expiresOn: null });
   } finally {
     committed.planted.cleanup();
   }
@@ -2539,6 +2537,9 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     "schema-head",
     "secrets-status",
     "seed-platform",
+    // v1 PR 1 (ADR-0035 items 2 and 3): the owner's live-store app registration and its
+    // sealed client secret (tests/staging-runner.test.mjs).
+    "shopify-app-register",
     "smoke",
     "status",
     // The staging test entitlement (owner decision (b), 2026-10-21; card E13).
