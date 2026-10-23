@@ -807,11 +807,18 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
 }
 
 /**
- * One dispatching operation through the broker: the apply (a `held` pre-send read is tried
- * once more after a second: nothing was fenced or sent), then, when Shopify may have applied
- * it (submitted, uncertain, or a call that threw: its outcome is unknown and it is never sent
- * again), one immediate read-back. A read-back that cannot run yet is left for the person's
- * "Check again" (POST /operations/:id/reconcile); nothing here ever resends.
+ * One dispatching operation through the broker: the apply, then, when Shopify may have applied
+ * it (submitted, uncertain, or a call that threw: its outcome is unknown), one immediate
+ * read-back. A read-back that cannot run yet is left for the person's "Check again" (POST
+ * /operations/:id/reconcile).
+ *
+ * A `held` pre-send read (nothing fenced or sent) and a call that threw (BROKER_HELD: the
+ * isolate's one write slot busy, a vault timeout; or a lost RPC) are tried again after a
+ * second, at most twice, while the request has time (review F4). Only this request ever drives
+ * the operation (the apply loop dispatches authorized operations only), so giving up after one
+ * throw would leave it unsent until R1 closes it as not_sent. A repeat never sends twice: T1
+ * answers in_flight once the operation is fenced and refuses after its 120-second dispatch
+ * window, and T2 fences under the product and row locks.
  */
 export async function applyThroughBroker(
   broker: ApplyBrokerPort,
@@ -822,19 +829,31 @@ export async function applyThroughBroker(
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<ShopifyApplyResult | null> {
   let result: ShopifyApplyResult | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // A call that threw may still have reached Shopify (its RPC lost after the send), whatever a
+  // later attempt answers: the read-back below runs whenever one threw.
+  let threw = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      if (signal.aborted) break;
+      await sleep(1000);
+    }
     const budget = Math.min(shopifyWriteLimits.budgetMaxMs, deadlineMs - now() - 2000);
     if (budget < 5000) break;
     try {
       result = decodeShopifyApplyResult(await broker.apply(operationId, budget, signal));
     } catch {
       result = null;
-      break;
+      threw = true;
+      continue;
     }
     if (result.outcome !== "held") break;
-    await sleep(1000);
   }
-  if (result === null || result.outcome === "submitted" || result.outcome === "uncertain") {
+  if (
+    threw ||
+    result === null ||
+    result.outcome === "submitted" ||
+    result.outcome === "uncertain"
+  ) {
     const budget = Math.min(reviewLimits.reconcileBudgetMs, deadlineMs - now() - 1000);
     if (budget >= 3000)
       try {

@@ -953,7 +953,35 @@ test("apply through the broker: an unknown outcome is read back, never sent agai
     );
     return calls;
   };
-  assert.deepEqual(await run([Error("rpc lost")]), ["apply", "reconcile"]);
+  // A call that threw (BROKER_HELD such as WRITE_BUSY, a vault timeout, a lost RPC) is tried
+  // again, at most twice, then read back (it may have reached Shopify): never left undriven.
+  assert.deepEqual(
+    await run([
+      Error("BROKER_HELD"),
+      { outcome: "submitted", status: "submitted", reason: "provider_accepted" },
+    ]),
+    ["apply", "apply", "reconcile"],
+  );
+  assert.deepEqual(await run([Error("rpc lost"), Error("rpc lost"), Error("rpc lost")]), [
+    "apply",
+    "apply",
+    "apply",
+    "reconcile",
+  ]);
+  // The first call fenced before its RPC was lost: the repeat answers in_flight and sends
+  // nothing; the read-back still runs.
+  assert.deepEqual(
+    await run([Error("rpc lost"), { outcome: "in_flight", status: "dispatching", reason: null }]),
+    ["apply", "apply", "reconcile"],
+  );
+  // A repeat that the broker refuses durably (nothing sent) is final.
+  assert.deepEqual(
+    await run([
+      Error("rpc lost"),
+      { outcome: "refused", status: "failed", reason: "window_passed" },
+    ]),
+    ["apply", "apply", "reconcile"],
+  );
   assert.deepEqual(
     await run([{ outcome: "uncertain", status: "uncertain", reason: "transport_lost" }]),
     ["apply", "reconcile"],
@@ -970,13 +998,21 @@ test("apply through the broker: an unknown outcome is read back, never sent agai
     await run([{ outcome: "failed", status: "failed", reason: "provider_rejected" }]),
     ["apply"],
   );
-  // A held pre-send read (nothing fenced, nothing sent) is tried once more, then left.
+  // A held pre-send read (nothing fenced, nothing sent) is tried twice more, then left.
   assert.deepEqual(
     await run([
       { outcome: "held", status: "dispatching", reason: null },
       { outcome: "held", status: "dispatching", reason: null },
+      { outcome: "held", status: "dispatching", reason: null },
     ]),
-    ["apply", "apply"],
+    ["apply", "apply", "apply"],
+  );
+  assert.deepEqual(
+    await run([
+      { outcome: "held", status: "dispatching", reason: null },
+      { outcome: "uncertain", status: "uncertain", reason: "transport_lost" },
+    ]),
+    ["apply", "apply", "reconcile"],
   );
   // No time left: nothing is called.
   const calls = [];
