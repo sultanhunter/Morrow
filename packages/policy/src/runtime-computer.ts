@@ -813,7 +813,14 @@ const xmlDeclaration = new RegExp(
 );
 const xmlReferences = "amp|lt|gt|quot|apos|#x0*[9aAdD]|#0*(?:9|10|13)";
 const xmlReference = new RegExp(`&(${xmlReferences});`, "g");
-const xmlStrayAmpersand = new RegExp(`&(?!(?:${xmlReferences});)`);
+const xmlKnownReference = new RegExp(`&(?:${xmlReferences});`, "y");
+const xmlReferencesKnown = (text: string): boolean => {
+  for (let i = text.indexOf("&"); i >= 0; i = text.indexOf("&", i + 1)) {
+    xmlKnownReference.lastIndex = i;
+    if (!xmlKnownReference.test(text)) return false;
+  }
+  return true;
+};
 const xmlEntities: Readonly<Record<string, string>> = Object.freeze({
   amp: "&",
   lt: "<",
@@ -854,7 +861,7 @@ interface XmlPart {
 }
 /** The formulas, relationships and hyperlinks of one XML part, or null if unreadable. */
 function readXmlPart(text: string): XmlPart | null {
-  if (text.includes("\u0000") || xmlStrayAmpersand.test(text)) return null;
+  if (text.includes("\u0000") || !xmlReferencesKnown(text)) return null;
   let at = 0;
   const declaration = xmlDeclaration.exec(text);
   if (declaration) {
@@ -874,10 +881,10 @@ function readXmlPart(text: string): XmlPart | null {
     const lt = text.indexOf("<", at);
     const next = lt < 0 ? text.length : lt;
     if (next > at) {
-      const chunk = text.slice(at, next);
       const top = open.at(-1);
-      if (top === undefined && /[^ \t\r\n]/.test(chunk)) return null;
-      if (top !== undefined && top.text !== null) top.text += chunk;
+      if (top === undefined) {
+        if (/[^ \t\r\n]/.test(text.slice(at, next))) return null;
+      } else if (top.text !== null) top.text += text.slice(at, next);
       at = next;
       continue;
     }
@@ -889,31 +896,32 @@ function readXmlPart(text: string): XmlPart | null {
       const formula = xmlFormulaElements.has(local);
       if ((open.at(-1)?.text != null && !formula) || (open.length === 0 && roots > 0)) return null;
       if (open.length === 0) roots++;
+      // Attribute values are decoded only where they are checked.
+      const relationship =
+        local === "relationship"
+          ? { targets: [] as string[], modes: [] as string[], types: [] as string[] }
+          : null;
       const list = start[2]!;
-      const attributes: [string, string][] = [];
-      const seen = new Set<string>();
+      const names: string[] = [];
       xmlAttribute.lastIndex = 0;
       while (xmlAttribute.lastIndex < list.length) {
         const attribute = xmlAttribute.exec(list);
-        if (!attribute || seen.has(attribute[1]!)) return null;
-        seen.add(attribute[1]!);
-        attributes.push([xmlLocal(attribute[1]!), xmlDecode(attribute[2] ?? attribute[3]!)]);
+        if (!attribute || names.includes(attribute[1]!)) return null;
+        const key = attribute[1]!;
+        names.push(key);
+        const keyLocal = xmlLocal(key);
+        const raw = attribute[2] ?? attribute[3]!;
+        if (keyLocal === "formula") formulas.push(xmlDecode(raw));
+        else if (relationship !== null && keyLocal === "target")
+          relationship.targets.push(xmlDecode(raw));
+        else if (relationship !== null && keyLocal === "targetmode")
+          relationship.modes.push(xmlDecode(raw));
+        else if (relationship !== null && keyLocal === "type")
+          relationship.types.push(xmlDecode(raw));
+        else if (local === "hyperlink" && keyLocal === "id" && key.includes(":"))
+          hyperlinkRelationship = true;
       }
-      for (const [key, value] of attributes) if (key === "formula") formulas.push(value);
-      const values = (key: string) => attributes.filter(([k]) => k === key).map(([, v]) => v);
-      if (local === "relationship")
-        relationships.push(
-          Object.freeze({
-            targets: values("target"),
-            modes: values("targetmode"),
-            types: values("type"),
-          }),
-        );
-      if (
-        local === "hyperlink" &&
-        [...seen].some((key) => key.includes(":") && xmlLocal(key) === "id")
-      )
-        hyperlinkRelationship = true;
+      if (relationship !== null) relationships.push(Object.freeze(relationship));
       if (start[3] !== "/") open.push({ name, text: formula ? "" : null });
       at = xmlStartTag.lastIndex;
       continue;
