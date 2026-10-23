@@ -36,6 +36,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0030](ADR-0030-email.md) | Email: inbound support mail by forwarding, approved replies through Resend, template-only notifications | Accepted 2026-10-23 (OD-2026-10-23-7, as recommended; owner question 1 changed); ADR-0023 companion; amends ADR-0022 items 7 and 15 |
 | [0031](ADR-0031-data-retention-visibility-regions.md) | Data: retention of the new classes, per-viewer read tags and data regions | Accepted 2026-10-23 (OD-2026-10-23-7, as recommended); ADR-0023 companion; amends ADR-0022 items 9, 13 and 14 and refines ADR-0016 items 4 and 5 |
 | [0032](ADR-0032-sunrise-visual-direction.md) | Sunrise visual direction: a warm, Shopify-admin-like look with friendly agent characters, replacing Visual option 1 | Accepted 2026-10-23 (OD-2026-10-23-6, OD-2026-10-23-7); replaces Visual option 1; amends ADR-0003 decision 3's first bullet |
+| [0035](ADR-0035-build-v1-live.md) | Build v1 live: the owner's own store, one environment, a standing approval | Accepted 2026-10-23 (OD-2026-10-23-9); supersedes staging card 2, gates G6 and G15 and the CLAUDE.md live-shop and per-action lines; amends ADR-0019, ADR-0021, ADR-0022 item 4, ADR-0023 decisions 2 and 10, ADR-0025, ADR-0026, ADR-0029 and ADR-0031 for the owner's store |
 
 ADR-0012 and ADR-0013 record how the P03.T04c overhaul implemented ADR-0002; earlier drafts of them used the numbers 0001, 0007 and 0008.
 
