@@ -3,6 +3,7 @@ import type {
   Current_HumanActorRef,
   Current_Proposal,
   Current_ProposalTarget,
+  Current_ResourceRef,
 } from "@morrow/contracts";
 import {
   approvalPermissions,
@@ -15,8 +16,14 @@ import {
   type PermissionResult,
   type PermissionVerb,
 } from "@morrow/policy";
-import { reviewerEligible, type ReviewerPermissionPort } from "@morrow/policy/review";
-import { decodeGrants } from "../context.js";
+import {
+  reviewerEligible,
+  reviewerEligibleOnStore,
+  type ReviewerPermissionPort,
+} from "@morrow/policy/review";
+import { storeResource, type StoreResource } from "@morrow/policy/store-resource";
+import type { WorkTx } from "../connection.js";
+import { decodeGrants, WorkContextUnavailable } from "../context.js";
 import type { WorkAuthority } from "../context.js";
 
 // Every grant question of the approval records goes to the packages/policy
@@ -24,13 +31,79 @@ import type { WorkAuthority } from "../context.js";
 // reviewer's grants, at database time. SQL selects grant rows by capability id
 // only and never interprets them. Approvals are never paid work (P01.T04a §1),
 // so `entitlementAllowed` is the literal false every non-billing builder passes.
+//
+// v1 PR 3 (ADR-0022 item 3): a store-bound catalogue proposal is read, decided and
+// claimed on its store resource {kind: "store", id: S, storeId: S, connectionId: C}, the
+// resource the store-link template and every catalogue grant name. The governance
+// requirements (decide, preview) stay on the workspace resource. The kernel port
+// therefore admits exactly two resources: the session's workspace and the one
+// server-built store resource of the proposal; any other resource is scope_denied.
 
-/** The kernel port for one principal's grants at an instant (epoch ms). */
+/**
+ * The store resource of a store-bound proposal: its store and the connection its targets
+ * name, the same on every target. Null for a storeless proposal; "invalid" when the
+ * targets disagree with the proposal's store or with each other (never reviewable).
+ */
+export function proposalStore(p: {
+  readonly organizationId: string;
+  readonly workspaceId: string;
+  readonly storeId: string | null;
+  readonly targets: readonly Current_ProposalTarget[];
+}): StoreResource | null | "invalid" {
+  if (p.storeId === null) return null;
+  const first = p.targets[0]?.resource;
+  if (!first || first.connectionId === null) return "invalid";
+  for (const t of p.targets) {
+    const r = t.resource;
+    if (
+      r.organizationId !== p.organizationId ||
+      r.workspaceId !== p.workspaceId ||
+      r.storeId !== p.storeId ||
+      r.connectionId !== first.connectionId
+    )
+      return "invalid";
+  }
+  try {
+    return storeResource(p.organizationId, p.workspaceId, p.storeId, first.connectionId);
+  } catch {
+    return "invalid";
+  }
+}
+
+/**
+ * Whether the store is still linked through the store resource's connection, now
+ * (store_association, the session tenant's current association). The commands recheck it
+ * under lock (cmd_catalog_apply, cmd_catalog_dispatch).
+ */
+export async function storeLinkCurrent(tx: WorkTx, store: StoreResource): Promise<boolean> {
+  const rows = await tx.run("storeAssociation", [store.storeId]);
+  if (rows.length === 0) return false;
+  const row = rows[0];
+  if (rows.length !== 1 || !row || row.store_id !== store.storeId)
+    throw new WorkContextUnavailable();
+  return row.connection_id === store.connectionId;
+}
+
+const sameResource = (x: Current_ResourceRef, y: Current_ResourceRef) =>
+  x.organizationId === y.organizationId &&
+  x.workspaceId === y.workspaceId &&
+  x.storeId === y.storeId &&
+  x.connectionId === y.connectionId &&
+  x.kind === y.kind &&
+  x.id === y.id;
+
+/**
+ * The kernel port for one principal's grants at an instant (epoch ms). With `store`, a
+ * request on exactly that store resource is decided on it; every other request is decided
+ * on the session's workspace resource (so a request naming any other resource is
+ * scope_denied).
+ */
 export function kernelPort(
   a: WorkAuthority,
   atMs: number = a.databaseNowMs,
+  store: StoreResource | null = null,
 ): ReviewerPermissionPort {
-  const authority: HumanAuthority = {
+  const authority = (resource: Current_ResourceRef): HumanAuthority => ({
     actor: a.actor,
     policyRevision: a.policyRevision,
     grantsRevision: a.policyRevision,
@@ -39,14 +112,19 @@ export function kernelPort(
     workspaceActive: true,
     membershipActive: true,
     sessionCurrent: true,
-    resource: a.resource,
+    resource,
     accountId: null,
     providerAllowed: true,
     entitlementAllowed: false,
     grants: a.grants,
-  };
+  });
   const service = createHumanPolicyService(
-    { readCurrent: async () => authority },
+    {
+      readCurrent: async (request) =>
+        authority(
+          store !== null && sameResource(request.resource, store) ? store : a.resource,
+        ),
+    },
     () => new Date(atMs),
   );
   return { decide: (request: unknown): Promise<PermissionResult> => service.decide(request) };
@@ -105,11 +183,12 @@ export async function allowed(
   verb: PermissionVerb,
   fields: readonly string[],
   atMs?: number,
+  store: StoreResource | null = null,
 ): Promise<boolean> {
-  const result = await kernelPort(a, atMs).decide({
+  const result = await kernelPort(a, atMs, store).decide({
     capabilityId,
     verb,
-    resource: a.resource,
+    resource: store ?? a.resource,
     accountId: null,
     fields: [...fields],
   });
@@ -119,15 +198,25 @@ export async function allowed(
 /**
  * One §6 operation for the actor on a proposal: every requirement of the rule,
  * with "proposal" the proposal's capability and "targets" its target fields.
- * Ownership-selected verbs need `basis`.
+ * Ownership-selected verbs need `basis`. A store-bound proposal's own capability is
+ * decided on its store resource (proposalStore), the governance requirements on the
+ * workspace; a store-bound proposal whose targets disagree is never permitted.
  */
 export async function permits(
   a: WorkAuthority,
   op: ApprovalPermissionKey,
-  proposal: { readonly capabilityId: string; readonly targets: readonly Current_ProposalTarget[] },
+  proposal: {
+    readonly organizationId: string;
+    readonly workspaceId: string;
+    readonly storeId: string | null;
+    readonly capabilityId: string;
+    readonly targets: readonly Current_ProposalTarget[];
+  },
   basis: "own" | "other" | null = null,
   atMs?: number,
 ): Promise<boolean> {
+  const store = proposalStore(proposal);
+  if (store === "invalid") return false;
   for (const r of approvalPermissions[op].requirements) {
     const capabilityId = r.capabilityId === "proposal" ? proposal.capabilityId : r.capabilityId;
     let verb = r.verb;
@@ -137,18 +226,26 @@ export async function permits(
     }
     const resolved: PermissionVerb = verb === "proposer" ? proposerVerb(capabilityId) : verb;
     const fields = r.fields === "targets" ? targetFields(proposal) : [...r.fields];
-    if (!(await allowed(a, capabilityId, resolved, fields, atMs))) return false;
+    const on = r.capabilityId === "proposal" ? store : null;
+    if (!(await allowed(a, capabilityId, resolved, fields, atMs, on))) return false;
   }
   return true;
 }
 
-/** The library's reviewer rule for the actor (decide approve, capability approve per target). */
-export function eligibleReviewer(
+/**
+ * The library's reviewer rule for the actor (decide approve, capability approve per target);
+ * for a store-bound proposal, the store-resource rule (reviewerEligibleOnStore).
+ */
+export async function eligibleReviewer(
   a: WorkAuthority,
   proposal: Current_Proposal,
   selected: readonly number[] | null,
   atMs?: number,
 ): Promise<boolean> {
+  const store = proposalStore(proposal);
+  if (store === "invalid") return false;
+  if (store !== null)
+    return reviewerEligibleOnStore(kernelPort(a, atMs, store), proposal, selected, store);
   return reviewerEligible(
     kernelPort(a, atMs),
     proposal,

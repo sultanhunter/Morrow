@@ -618,12 +618,16 @@ export function edgePlacementRegion(regionId) {
 // M5: while the staging Stripe switch is on, the staging api and broker also carry its vars
 // (edgeStripeVarNames); while it is off, neither has them. M3 PR-2: likewise the
 // model-provider switch's vars (edgeModelVarNames) on the staging api, broker and
-// orchestrator.
-export function edgeVarNames(worker, environment, stripe = "off", model = "off") {
+// orchestrator. v1 PR 3: likewise the apply switch's var (edgeApplyVarNames) on the staging
+// api and broker.
+export function edgeVarNames(worker, environment, stripe = "off", model = "off", apply = "off") {
   const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
   if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
   if (environment !== "staging" || worker === "connector") return ["MORROW_ENVIRONMENT"];
-  const stripeVars = stripe === "on" ? edgeStripeVarNames(worker, environment) : [];
+  const stripeVars = [
+    ...(stripe === "on" ? edgeStripeVarNames(worker, environment) : []),
+    ...(apply === "on" ? edgeApplyVarNames(worker, environment) : []),
+  ];
   return worker === "api"
     ? [
         "MORROW_ENVIRONMENT",
@@ -697,6 +701,32 @@ export function reviewedModelRecord(record) {
     (record.switch === "on" && record.monthly_spend_limit_usd === null)
   )
     throw Error("EDGE_STAGING_MODEL_RECORD");
+  return Object.freeze({ switch: record.switch });
+}
+// v1 PR 3, the apply switch (ADR-0022 items 7 and 9; committed off): its runtime image is
+// the var MORROW_SHOPIFY_WRITE ("on") on the staging api and broker; no secret (the store
+// tokens are already the vault's). Development's committed config never carries it, and
+// production has no switch until the ADR-0007 item 9 custody ADR.
+export const edgeApplyVar = "MORROW_SHOPIFY_WRITE";
+export const edgeApplyValue = "on";
+export function edgeApplyVarNames(worker, environment) {
+  if (environment !== "staging") return [];
+  return worker === "api" || worker === "broker" ? [edgeApplyVar] : [];
+}
+// The reviewed staging apply record (v1 PR 3; committed off): `switch` "off" until one
+// reviewed commit turns it "on". Returns the switch, or throws.
+export function reviewedApplyRecord(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== "environment_kind,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_APPLY_RECORD");
   return Object.freeze({ switch: record.switch });
 }
 // M5, the Stripe switch (owner decision (c), 2026-10-21): its runtime image is the var
@@ -1016,6 +1046,7 @@ export async function verifyEdgeConfig({
   workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
   stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
   modelPath = join(repositoryRoot, "docs/decisions/model-provider-staging.json"),
+  applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -1031,6 +1062,8 @@ export async function verifyEdgeConfig({
     brokerModelSecrets,
     modelProviderVar,
     modelProviderAnthropic,
+    shopifyWriteVar,
+    shopifyWriteOn,
   } = await tsImport("../packages/identity/src/broker-protocol.ts", here);
   const { reservedWorkerPaths } = await tsImport("../apps/api/src/reserved-paths.ts", here);
   const { unstable_readConfig } = await loadWranglerApi();
@@ -1068,6 +1101,20 @@ export async function verifyEdgeConfig({
     }
   const modelSwitch = (environment) =>
     environment === "staging" && model?.switch === "on" ? "on" : "off";
+  // v1 PR 3, the apply switch: the same protocol, with no secret.
+  const applyRecord = readJson(applyPath);
+  let applied = null;
+  if (applyRecord === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "shopify-write-staging.json");
+  else
+    try {
+      applied = reviewedApplyRecord(applyRecord);
+    } catch {
+      problem("EDGE_STAGING_APPLY_RECORD", "shopify-write-staging.json");
+    }
+  const applySwitch = (environment) =>
+    environment === "staging" && applied?.switch === "on" ? "on" : "off";
+  if (shopifyWriteVar !== edgeApplyVar || shopifyWriteOn !== edgeApplyValue)
+    problem("EDGE_APPLY_SWITCH_NAMES", "broker-protocol");
   if (
     modelProviderVar !== edgeModelProviderVar ||
     modelProviderAnthropic !== edgeModelProviderValue ||
@@ -1157,7 +1204,14 @@ export async function verifyEdgeConfig({
       // switch's one mode.
       const switched = stripeSwitch(environment);
       const modelSwitched = modelSwitch(environment);
-      const varNames = edgeVarNames(worker.key, environment, switched, modelSwitched);
+      const applySwitched = applySwitch(environment);
+      const varNames = edgeVarNames(
+        worker.key,
+        environment,
+        switched,
+        modelSwitched,
+        applySwitched,
+      );
       if (
         vars === null ||
         typeof vars !== "object" ||
@@ -1166,9 +1220,17 @@ export async function verifyEdgeConfig({
         (varNames.includes("MORROW_ENVIRONMENT") && vars.MORROW_ENVIRONMENT !== environment) ||
         (varNames.includes(edgeStripeModeVar) && vars[edgeStripeModeVar] !== edgeStripeModeTest) ||
         (varNames.includes(edgeModelProviderVar) &&
-          vars[edgeModelProviderVar] !== edgeModelProviderValue)
+          vars[edgeModelProviderVar] !== edgeModelProviderValue) ||
+        (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue)
       )
         problem("EDGE_VARS", where);
+      // v1 PR 3: no mixed apply state: while the switch is off no Worker carries its var;
+      // while it is on, exactly the staging api and broker do.
+      const applyCarried =
+        vars !== null && typeof vars === "object" && Object.hasOwn(vars, edgeApplyVar);
+      const applyRequired =
+        applySwitched === "on" ? edgeApplyVarNames(worker.key, environment) : [];
+      if (applyCarried !== applyRequired.length > 0) problem("EDGE_APPLY_SWITCH_MIXED", where);
       // M3 PR-2: no mixed model-provider state, as for Stripe.
       const modelCarried = edgeModelNames(worker.key).filter(
         (name) =>
@@ -1353,6 +1415,7 @@ export async function verifyEdgeConfig({
     reservedWorkerPaths: [...reservedWorkerPaths],
     stripeSwitch: stripeSwitch("staging"),
     modelSwitch: modelSwitch("staging"),
+    applySwitch: applySwitch("staging"),
   };
 }
 

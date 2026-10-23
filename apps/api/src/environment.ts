@@ -1,6 +1,8 @@
 import {
   modelProviderAnthropic,
   modelProviderVar,
+  shopifyWriteOn,
+  shopifyWriteVar,
   stripeModeTest,
   stripeModeVar,
   type ApiBrokerRpc,
@@ -17,7 +19,8 @@ import {
 
 // Synchronous Worker env -> ManagedWorkspaceApiDependencies inputs (P04.T02a D6),
 // plus the P05.T01ab abuse-guard bindings and the session routes' limiter (step 10), the
-// M5 Stripe switch (step 11) and the M3 PR-2 model-provider switch (step 12).
+// M5 Stripe switch (step 11), the M3 PR-2 model-provider switch (step 12) and v1 PR 3's
+// apply switch (step 13).
 // It never throws; the first failing check decides the code, and any failure
 // keeps the api on the existing deny-all instance. Production never maps here
 // (ADR-0007 item 9).
@@ -55,10 +58,14 @@ export type ApiEnvironmentMapping =
       // M3 PR-2: "anthropic" only with MORROW_MODEL_PROVIDER exactly "anthropic"; "off" when
       // it is absent. While off, run admission answers 503 before any database access.
       model: ApiModelMode;
+      // v1 PR 3: "on" only with MORROW_SHOPIFY_WRITE exactly "on"; "off" when it is absent.
+      // While off, the apply route answers 503 before any database access.
+      apply: ApiApplyMode;
     }>
   | Readonly<{ ok: false; code: ApiEnvironmentCode }>;
 export type ApiStripeMode = "off" | "test";
 export type ApiModelMode = "off" | "anthropic";
+export type ApiApplyMode = "off" | "on";
 
 // Binding name, value key and the identity byte limit it must not exceed.
 export const apiEnvironmentValueBindings = Object.freeze([
@@ -241,7 +248,27 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
   } catch {
     return fail("API_ENV_VALUE_INVALID");
   }
-  return Object.freeze({ ok: true, environment, values: mapped, broker, guard, stripe, model });
+  // 13. The apply switch (v1 PR 3): absent is off; present, exactly "on".
+  let apply: ApiApplyMode = "off";
+  try {
+    const value = dataProperty(record, shopifyWriteVar);
+    if (value.present) {
+      if (value.value !== shopifyWriteOn) return fail("API_ENV_VALUE_INVALID");
+      apply = "on";
+    }
+  } catch {
+    return fail("API_ENV_VALUE_INVALID");
+  }
+  return Object.freeze({
+    ok: true,
+    environment,
+    values: mapped,
+    broker,
+    guard,
+    stripe,
+    model,
+    apply,
+  });
 }
 
 // Step 10 as a pure function of the record and the environment, so its rule is tested

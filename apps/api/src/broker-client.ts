@@ -8,7 +8,9 @@ import {
   decodeStripeCustomerResult,
   decodeStripePortalResult,
   decodeStripeWebhookResult,
+  shopifyOperationIdValid,
   shopifyReadLimits,
+  shopifyWriteLimits,
   stripeLimits,
   stripeOperationIdValid,
   type ApiBrokerRpc,
@@ -16,6 +18,7 @@ import {
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { BillingBrokerPort } from "../../../packages/work/src/billing/port.js";
 import type { CatalogReader } from "../../../packages/work/src/catalog/http.js";
+import type { ApplyBrokerPort } from "../../../packages/work/src/review/http.js";
 import type { LoginControl } from "../../../packages/identity/src/standalone-login-protocol.js";
 import type { WorkosSessionPageReader } from "../../../packages/identity/src/workos-session-status.js";
 
@@ -300,5 +303,41 @@ export function createBrokerShopifyReader(broker: ApiBrokerRpc): CatalogReader {
         throw held();
       return text;
     },
+  });
+}
+
+// v1 PR 3: the gateway's ApiBroker.shopifyProductApply and shopifyProductReconcile, one
+// operation id and a budget each, raced against the caller's signal and the budget plus a
+// small RPC allowance, never retried here (the review route decides what follows: an apply
+// whose reply is lost is read back, never sent again). The result is returned as text for the
+// route's closed decoder.
+export function createBrokerApplyPort(broker: ApiBrokerRpc): ApplyBrokerPort {
+  const call = async (
+    method: "shopifyProductApply" | "shopifyProductReconcile",
+    operationId: string,
+    budgetMs: number,
+    signal: AbortSignal,
+  ) => {
+    if (
+      !shopifyOperationIdValid(operationId) ||
+      !Number.isSafeInteger(budgetMs) ||
+      budgetMs < 1 ||
+      budgetMs > shopifyWriteLimits.budgetMaxMs
+    )
+      throw held();
+    const text: unknown = await raceBrokerCall(
+      () => broker[method](operationId, budgetMs),
+      signal,
+      budgetMs + 500,
+    );
+    if (typeof text !== "string" || brokerUtf8Bytes(text) > shopifyWriteLimits.resultMaxBytes)
+      throw held();
+    return text;
+  };
+  return Object.freeze({
+    apply: (operationId: string, budgetMs: number, signal: AbortSignal) =>
+      call("shopifyProductApply", operationId, budgetMs, signal),
+    reconcile: (operationId: string, budgetMs: number, signal: AbortSignal) =>
+      call("shopifyProductReconcile", operationId, budgetMs, signal),
   });
 }

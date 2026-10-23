@@ -26,6 +26,11 @@ import {
   runsPathPattern,
   type RunsApiDependencies,
 } from "../../../packages/work/src/runs/http.js";
+import {
+  createReviewApiHandler,
+  reviewPathPattern,
+  type ReviewApiDependencies,
+} from "../../../packages/work/src/review/http.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 type Handler = Readonly<{
@@ -38,6 +43,9 @@ type Handler = Readonly<{
 // serves ahead of Static Assets (run_worker_first). Later PRs add one row each:
 //   /workspace/:ws/work/{tasks/:taskId/runs, runs/:runId, runs-reconcile}
 //                                                runs (M3 PR-2), ahead of the work API
+//   /workspace/:ws/work/{approvals, proposals/:id/(review|decision|apply),
+//     tasks/:taskId/operations, operations/:id(/reconcile)}
+//                                                review and apply (v1 PR 3), ahead of it too
 //   /workspace/:ws/work(/|$)                     work API (P06.T01a)
 //   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)
 //   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
@@ -50,11 +58,13 @@ type Handler = Readonly<{
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
 export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
 const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
-type RowKey = "runs" | "work" | "billing" | "stripe_webhook" | "agents" | "catalog";
+type RowKey = "runs" | "review" | "work" | "billing" | "stripe_webhook" | "agents" | "catalog";
 export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
   Object.freeze([
     // M3 PR-2: the runs routes (packages/work/src/runs/http.ts), before the work API's row.
     ["runs", (path: string) => runsPathPattern.test(path)],
+    // v1 PR 3: the review and apply routes (packages/work/src/review/http.ts), also ahead of it.
+    ["review", (path: string) => reviewPathPattern.test(path)],
     ["work", (path: string) => workPath.test(path)],
     ["billing", (path: string) => billingPath.test(path)],
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
@@ -79,10 +89,12 @@ export function createWorkspaceApiWorker(
   webhook?: StripeWebhookDependencies,
   catalog?: CatalogApiDependencies,
   runs?: RunsApiDependencies,
+  review?: ReviewApiDependencies,
 ) {
   const workspace = createWorkersManagedWorkspaceApi(dependencies);
   const handlers: Readonly<Record<RowKey, Handler>> = Object.freeze({
     runs: createRunsApiHandler(runs),
+    review: createReviewApiHandler(review),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),

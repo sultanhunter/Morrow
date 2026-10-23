@@ -423,7 +423,7 @@ test("AC29: 20 concurrent first calls share one initialisation; a failure stays 
   for (const value of [undefined, null, "env"]) assert.equal(await brokerHealth(value), false);
 });
 
-test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404 default", async (t) => {
+test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 404 default", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "morrow-broker-entry-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bundled = await build({
@@ -452,12 +452,15 @@ test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404
   writeFileSync(file, bundled.outputFiles[0].text);
   const module = await import(pathToFileURL(file).href);
   // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods; M2
-  // PR-3 shopifyRead (the catalogue routes' reads under a read lease).
+  // PR-3 shopifyRead (the catalogue routes' reads under a read lease); v1 PR 3 the gateway's
+  // apply and read-back of one operation.
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
     "challengeVerify",
     "constructor",
     "health",
     "neonLease",
+    "shopifyProductApply",
+    "shopifyProductReconcile",
     "shopifyRead",
     "stripeCheckoutCreate",
     "stripeCustomerEnsure",
@@ -515,9 +518,14 @@ test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404
   const readLease = "00000000-0000-4000-8000-000000000002";
   await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}"));
   await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}", 1000, 1));
+  // v1 PR 3: the apply and the read-back take exactly an operation id and a budget.
+  await failure(entry.shopifyProductApply(operation));
+  await failure(entry.shopifyProductApply(operation, 1000, 1));
+  await failure(entry.shopifyProductReconcile(operation));
+  await failure(entry.shopifyProductReconcile(operation, 1000, 1));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    Array(12).fill("INPUT_INVALID"),
+    Array(16).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);

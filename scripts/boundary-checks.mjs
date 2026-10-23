@@ -498,6 +498,9 @@ export const entitlementWriterAllowlist = Object.freeze({
   ]),
   // M3 PR-1: the agent kernel's facts reader sets it only from entitlementFor over billing facts.
   "packages/work/src/agents/delegation-reader.ts": Object.freeze(["createLeaseDelegationReader"]),
+  // v1 PR 3: the gateway's claimant check (execute on catalog.content.publish, paid work) sets
+  // it only from entitlementFor over the workspace's billing facts.
+  "packages/work/src/review/claimant.ts": Object.freeze(["claimantMayApply"]),
 });
 const entitlementField = "entitlementAllowed";
 export function inspectEntitlementWriters(file, code) {
