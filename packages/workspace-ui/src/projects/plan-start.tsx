@@ -154,7 +154,14 @@ function phaseNotice<T>(
 }
 
 /** What a start flow says: unknown outcomes first, then refusals, never success early. */
-export function PlanStartFeedback({ flow }: { readonly flow: StartFlowView }) {
+export function PlanStartFeedback({
+  flow,
+  changed = projectsCopy.card.changedSince,
+}: {
+  readonly flow: StartFlowView;
+  /** What a stale start says here (a card, or Finish's project). */
+  readonly changed?: string;
+}) {
   const startNotice = phaseNotice(
     flow.start.phase,
     () => void flow.start.checkAgain(),
@@ -178,7 +185,7 @@ export function PlanStartFeedback({ flow }: { readonly flow: StartFlowView }) {
             ? projectsCopy.card.expired
             : notice.reason === "ineligible"
               ? projectsCopy.card.ineligible
-              : projectsCopy.card.changedSince;
+              : changed;
     return (
       <div role="status" className="notice notice-warning">
         <p dir="auto">{text}</p>

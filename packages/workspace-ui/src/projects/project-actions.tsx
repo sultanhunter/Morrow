@@ -280,7 +280,7 @@ export function FinishDialog({
             </p>
           </div>
         ) : null}
-        <PlanStartFeedback flow={flow} />
+        <PlanStartFeedback flow={flow} changed={c.changed} />
       </Dialog>
     </>
   );

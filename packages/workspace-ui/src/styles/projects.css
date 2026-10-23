@@ -674,11 +674,25 @@ p.pj-meta span.pj-meta,
   margin: 0;
   padding-left: var(--space-5);
 }
-.pj-card-list li {
+/* List items keep their markers; their parts stack as blocks. */
+.pj-card-list > li > span:not(.pj-member) {
+  display: block;
+}
+.pj-helpers > li {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+}
+.pj-card-list > li > span.pj-member-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.pj-plan-card > .button,
+.pj-card-list .button {
+  align-self: flex-start;
 }
 ol.pj-card-list {
   list-style: decimal;

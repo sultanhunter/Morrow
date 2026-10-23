@@ -138,7 +138,14 @@ export function PlanCard({
           <ul className="pj-card-list pj-helpers">
             {card.helpers.map((helper) => (
               <li key={helper.member.kind + helper.member.name}>
-                <MemberName member={helper.member} />
+                <span className="pj-member-row">
+                  <MemberName member={helper.member} />
+                  {helper.member.kind === "person" && helper.member.role ? (
+                    <span className="pj-meta" dir="auto">
+                      {helper.member.role}
+                    </span>
+                  ) : null}
+                </span>
                 <span dir="auto">{helper.does}</span>
                 {helper.note ? (
                   <span className="pj-meta" dir="auto">
