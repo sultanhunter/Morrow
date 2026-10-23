@@ -21,7 +21,7 @@ The project's knowledge and progress as one linked, checked graph, in place of M
 - **An id's shape tells you its type.** A dropped node keeps its id with a dropped or superseded status; ids are never reused. Tracks and gates have slug ids and short labels, so renumbering a label never breaks a link.
 - **Body text links too.** Unambiguous ids in a body (ADR, task, acceptance, decision, question, risk and the other hand-written families) become `mentions`. The ambiguous ones (`S`, `D`, `M`, `PR-`, track and gate labels) count only in typed links or as `[[S149]]`.
 - **The graph is documentation, never authority.** Nothing in `apps/` or `packages/` may import it (`GRAPH_IMPORTED_BY_CODE`). Every permission, budget and data-class rule stays in code. The graph describes kinds (skills, releases, installation kinds), never a merchant's records: those are tenant data under FORCE RLS, and this repository is public (`GRAPH_TENANT_RECORD`, `GRAPH_SECRET`, `GRAPH_EMAIL`).
-- **An owner decision is recorded once, with the owner's verbatim words** as a blockquote, and is never edited: a later decision `supersedes`, `amends` or `refines` it. A decision whose whole quote appears in an ADR's Approval section is derived as that ADR's `approved_by`; in a live record's Approval bullet, as its `authorized_by`.
+- **An owner decision is recorded once, with the owner's verbatim words** as a blockquote, and is never edited: a later decision `supersedes`, `amends` or `refines` it. A decision whose whole quote appears in an ADR's Approval section is derived as that ADR's `approved_by`; in a live record's Approval bullet, as its `authorized_by`. The repository is public, and the owner approved keeping these verbatim quotes in it, with anything personal left out (OD-2026-10-23-7, item 34).
 
 ## Layout
 
@@ -89,7 +89,7 @@ All offline. `npm run graph -- <command>`:
 | `link <FROM> <edge> <TO>`, `unlink …` | Edits FROM's header after checking the edge |
 | `set <ID> <field>=<value>` | A parent task's status goes to `tasks.json`, a lettered task's to its packet header, anything else to its node file. It never changes `id`, `type`, `links` (use `link`) or `docs` |
 
-`graph.html` has type and status filters, search, a two-hop focus view and a side panel with fields, backlinks and a link to the doc on GitHub. It loads the pinned Cytoscape.js script from cdnjs and falls back to a list when offline. It is never committed and never published from CI: on request Claude can share it as a private page; GitHub Pages would be a public publication and needs the owner's approval.
+`graph.html` has type and status filters, search, a two-hop focus view and a side panel with fields, backlinks and a link to the doc on GitHub. It loads the pinned Cytoscape.js script from cdnjs and falls back to a list when offline. It is never committed and never published from CI. On request Claude shares it as a private claude.ai page, not on GitHub Pages, which would publish it (OD-2026-10-23-7, item 33).
 
 ## The check
 
@@ -101,10 +101,10 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 
 | Phase | Content |
 | --- | --- |
-| 0. The engine | This folder's seed, the schema, the derived graph and the check (this PR) |
+| 0. The engine | This folder's seed, the schema, the derived graph and the check (merged in PR #46) |
 | 1. The MVP as nodes | Vision, features, agents, skills, installation kinds, tracks, gates and data classes of the redefined MVP; its decision questions and answers; the train branches. Every plan task included or deferred by name, so `query uncovered` starts empty |
 | 2. Headers in place; strict mode | Headers on ADRs, briefs, evidence, acceptance files and the card; the ADR index generated; build-plan's M1 to M5 become GP1 to GP5; `graph:check` takes over `plan:check`; the phase-0 warnings become errors; owner decisions of 2026-10-17 to 2026-10-22 backfilled |
-| 3. Change the habit | STATUS.md's fact block generated; the CLAUDE.md session-start step (the owner sees the diff first) |
+| 3. Change the habit | STATUS.md's fact block generated; the CLAUDE.md session-start step (done 2026-10-23: the owner approved it, OD-2026-10-23-7, item 35) |
 | 4. Archive, after launch | Packets, acceptance files and references that nothing pins leave the tree for a new archive tag; the six paths pinned by applied migrations stay |
 
 ## Schema

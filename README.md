@@ -17,7 +17,7 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - A local identity engine (P05.T01a to P05.T01v), tested on workerd and real PostgreSQL 17. It has 11 forward migrations with FORCE RLS and restricted roles, WorkOS PKCE login and token verification, workspace selection, `__Host-` browser sessions, workspace bootstrap, controlled store linking and logout. One Workers API composes them, and its default export denies.
 - A human permission kernel and an agent-authority intersection kernel over synthetic readers.
 - Shells: a bare standalone workspace, a connector entry that fails closed, an API and no-dispatch workers. Environment inventories for the selected stack (Cloudflare Workers, Workflows, Queues and R2; Neon PostgreSQL; E2B; WorkOS), with no deployment.
-- Option 1 design candidates in `docs/design/`, sample data only. They are not accepted feature UI.
+- Option 1 design candidates in `docs/design/`, sample data only. They are not accepted feature UI. ADR-0032 (2026-10-23) replaced option 1 with Sunrise; the workspace UI track replaces these candidates.
 
 ## Not built yet
 

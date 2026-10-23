@@ -3,7 +3,7 @@
 Morrow is a paid AI workspace where a Shopify brand's people and AI agents run the business together. It has one standalone web workspace, a minimal embedded home in the Shopify admin, and a thin Shopify connector. The Coordinator scopes work, specialist agents draft, people approve exact proposals, and one gateway executes, reads back and audits.
 
 ## Read at the start of every session
-1. `docs/progress/STATUS.md`: active packet, last green commit, next action, blockers, pending owner actions.
+1. `docs/progress/STATUS.md`: active packet, last green commit, next action, blockers, pending owner actions. Then `npm run graph -- status`.
 2. The active brief in `docs/briefs/` or packet in `docs/packets/` (when present), and the plan sections it cites.
 3. `docs/plan/mvp.md` is the **launch plan** (ADR-0023, which replaced ADR-0021's listings beta). `docs/plan/build-plan.md` is the long-term plan of record and structure (ADR-0001). Decisions live in `docs/decisions/adr/`. `docs/references/*` is supporting detail; where it conflicts with the plan, the plan wins.
 4. `git status` and `git log -5`. Pre-R1 history (evidence, archived plans, the old Page sequences) is in tag `codex-archive-f89ad75`. Recover a file with `git show codex-archive-f89ad75:<path>`.
@@ -11,7 +11,7 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 ## Settled product constraints (owner-decided; change only by an owner-approved ADR)
 - Name: Morrow.
 - MVP (ADR-0023): launch the lean, full-featured MVP in `docs/plan/mvp.md` first: a workspace where a shop's people and AI agents run the business together, with proactive installable Morrow agents, on-demand specialists under the Coordinator, and one public Shopify app (unlisted first, then listed). The architecture stays production-grade so it scales without rewrites; the full plan is the post-launch roadmap.
-- Visual option 1.
+- Visual direction: Sunrise (ADR-0032, which replaced Visual option 1): option 1's layout in a warm, Shopify-admin-like look with friendly agent characters, in plain words for non-technical shop owners. The embedded home follows the Shopify admin's own look.
 - One complete standalone Morrow workspace, plus a minimal embedded home in the Shopify admin (setup, connection status, plan, pending approvals) and a thin Shopify read/write connector: install, link, status, reconnect, disconnect, return. No embedded domain workspace in this release.
 - Paid managed model APIs and one work-credit balance. No free merchant tier.
 - Billing at launch (ADR-0023): Shopify App Pricing, with caps Morrow enforces. The Stripe code stays switched off; switching it on needs an owner decision. ADR-0015's split by origin stays available for merchants who pay on the Morrow website before installing.

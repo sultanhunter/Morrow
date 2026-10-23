@@ -308,10 +308,17 @@ const GOVERNED = [
 // Email addresses in a text, except those under the reserved test domains (RFC 2606 and
 // RFC 6761), which tests and fixtures use.
 const RESERVED_EMAIL_DOMAIN = /\.(?:invalid|test|example|localhost)$/i;
+// Placeholder addresses that an owner decision quotes verbatim; none is a mailbox.
+// OD-2026-10-23-7 names the shape of a shop's default Morrow sending address.
+const QUOTED_PLACEHOLDER_EMAILS = new Set(["usershopname@morrow.com"]);
 const emailsIn = (text) =>
   [...text.matchAll(new RegExp(schema.EMAIL.source, "g"))]
     .map((m) => m[0])
-    .filter((address) => !RESERVED_EMAIL_DOMAIN.test(address));
+    .filter(
+      (address) =>
+        !RESERVED_EMAIL_DOMAIN.test(address) &&
+        !QUOTED_PLACEHOLDER_EMAILS.has(address.toLowerCase()),
+    );
 // The graph's script, schema and folders; `scripts/graphql…` and `scripts/graphics…` are not.
 const GRAPH_REFERENCE =
   /(?:^|[/'"`])(?:scripts\/graph(?:-schema)?(?:\.mjs)?(?![\w-])|docs\/graph\/|\.artifacts\/graph\/|graph-schema\.mjs(?![\w-]))/;

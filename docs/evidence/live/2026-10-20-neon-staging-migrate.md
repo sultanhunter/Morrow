@@ -18,7 +18,7 @@
   - Item 2. Not read. The runner sets `createrole_self_grant = ''` in every session it opens, so the server's value did not shape the roles it created, and the closed-set check above refuses any self-grant row with inherit or set.
   - Item 5, in part. The runner requires `neondb_owner` to be a LOGIN, CREATEROLE non-superuser (`STAGING_ADMINISTRATOR_SHAPE`). Its other attributes (BYPASSRLS, CREATEDB, REPLICATION) and the roles it is a member of were neither checked nor recorded.
 
-  Items 2 and 5 still need read-only catalog reads (E3, E9). The owner is asked to acknowledge the skipped precondition (STATUS, Pending owner questions).
+  Items 2 and 5 still need read-only catalog reads (E3, E9). The owner is asked to acknowledge the skipped precondition (STATUS, Pending owner questions). Update 2026-10-23: the items were read on 2026-10-21 (`2026-10-21-neon-mn1plus-catalog.md`), and the owner acknowledged the skipped precondition on 2026-10-23 (OD-2026-10-23-7, item 38).
 - **Not done yet.** `provision-roles --first` waits for the plaintext-password change (owner decision on M-N3, 2026-10-20). `seed-platform` follows it.
 - **Cap and observed cost.** Neon Free, no card: $0.
 - **Cleanup.** None. This is the persistent staging schema.
