@@ -1455,7 +1455,7 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
     // A read-back of a mismatched operation through the route stays uncertain (codes only),
     // and another tenant's read-back request reaches no broker.
     await sleep(10500);
-    const callsBefore = brokerCalls.length;
+    const foreignBefore = brokerCalls.length;
     const foreign = await call(
       reviewOn,
       P.Y,
@@ -1463,6 +1463,8 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       "/operations/" + at("edit_after").id + "/reconcile",
       {},
     );
+    const callsBefore = brokerCalls.length;
+    const retriesBefore = retries;
     const reread = await call(
       reviewOn,
       P.A,
@@ -1470,15 +1472,35 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       "/operations/" + at("edit_after").id + "/reconcile",
       {},
     );
+    // One read-back per request. On a loaded host the route's own transaction after the
+    // read-back can time out (503 unavailable); the same request again (the lab's retry with
+    // the same key) then reads back once more or finds it too soon. Only read-backs of this
+    // operation ever reach the broker, and nothing is sent.
+    const rereadCalls = brokerCalls.slice(callsBefore);
+    const rereadRetries = retries - retriesBefore;
     spa.rechecked = reread.body;
     spa.recheckedId = at("edit_after").id;
     check(
       "O9:a_read_back_on_request_keeps_a_mismatch_uncertain_and_another_tenant_reaches_nothing",
       foreign.status === 404 &&
+        callsBefore === foreignBefore &&
         reread.status === 200 &&
         reread.body.operation.status === "uncertain" &&
-        brokerCalls.length === callsBefore + 1,
-      { foreign: foreign.body, reread: reread.body },
+        rereadCalls.length >= 1 &&
+        rereadCalls.length <= 1 + rereadRetries &&
+        rereadCalls.every(
+          (c) => c.method === "reconcile" && c.operationId === at("edit_after").id,
+        ) &&
+        (rereadRetries === 0
+          ? reread.body.outcome === "recorded"
+          : ["recorded", "too_soon"].includes(reread.body.outcome)) &&
+        shop.updates(n("edit_after")) === 1,
+      {
+        foreign: foreign.body,
+        reread: reread.body,
+        rereadCalls: rereadCalls.length,
+        rereadRetries,
+      },
     );
   }
 
