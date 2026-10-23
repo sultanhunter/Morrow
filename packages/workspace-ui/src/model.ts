@@ -224,8 +224,8 @@ export interface Page<T> {
 // ADR-0032 Home: the board's sections that have no backend yet. Only the fixture adapter
 // answers `samples.home`, and only where its scenario composes it; the HTTP build keeps
 // it uncomposed (not_in_build, nothing sent). These are presentational strings for a
-// preview, never contract data: ADR-0033 and ADR-0034 (projects with goals, Morrow
-// drafting plans) are proposed, not approved.
+// preview, never contract data: the contracts and backend of ADR-0033 and ADR-0034
+// (projects with goals, Morrow drafting plans) land in their own PRs.
 export type AgentKind =
   | "morrow"
   | "listings"

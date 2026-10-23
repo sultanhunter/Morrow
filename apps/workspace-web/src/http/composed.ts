@@ -12,7 +12,8 @@
 import { portMethods, type Composed, type PortMethod } from "@morrow/workspace-ui";
 
 // ADR-0032: `samples.home` is the Home preview's default-off switch. It has no backend
-// (ADR-0033 and ADR-0034 are proposed, not approved), so this build never composes it.
+// (ADR-0033's and ADR-0034's contracts and backend land in their own PRs), so this build
+// never composes it.
 const uncomposed: readonly PortMethod[] = ["session.keepAlive", "people.list", "samples.home"];
 export const composed: Composed = Object.freeze(
   Object.fromEntries(portMethods.map((method) => [method, !uncomposed.includes(method)])) as Record<
