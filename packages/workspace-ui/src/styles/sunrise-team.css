@@ -1513,6 +1513,10 @@
   flex: 1 1 280px;
   justify-content: flex-end;
 }
+.sr-stop-outcome {
+  display: grid;
+  gap: 16px;
+}
 .sr-stop-input {
   max-width: 240px;
 }

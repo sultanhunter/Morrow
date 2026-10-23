@@ -211,6 +211,15 @@ function StopDialog({
   const [typed, setTyped] = useState("");
   const confirmed = isStopConfirmation(typed);
   const sent = rows !== null;
+  // Once the stop is sent, the confirmation (the typed word and its button) is gone, and so
+  // is a store's Check again once its reply is in: focus moves to what each store's stop
+  // became, inside the dialog, instead of dropping to the page.
+  const outcomeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const outcome = outcomeRef.current;
+    const dialog = outcome?.closest("dialog");
+    if (outcome && dialog && !dialog.contains(document.activeElement)) outcome.focus();
+  }, [rows]);
   // While a stop is out, the dialog stays: its replies decide what it says.
   const close = () => {
     if (!busy) onClose();
@@ -243,14 +252,20 @@ function StopDialog({
       <div className="sr sr-dialog-body">
         <p className="sr-reading">{s.dialogBody}</p>
         {sent ? (
-          <>
+          <div
+            ref={outcomeRef}
+            className="sr-stop-outcome"
+            role="group"
+            aria-label={s.outcomeLabel}
+            tabIndex={-1}
+          >
             <StopRows rows={rows} onSend={onSend} />
             {busy ? null : (
               <p className="sr-help" role="status">
                 {stopOutcomeText(rows, state.notAllowed)}
               </p>
             )}
-          </>
+          </div>
         ) : (
           <>
             <div>

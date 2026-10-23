@@ -482,6 +482,7 @@ export const sunriseCopy = {
       notSent: "Not stopped. Nothing was sent; try again.",
     },
     checkAgain: "Check again",
+    outcomeLabel: "What the stop did on each store",
     done: (n: number) => `Listings is stopped on ${stores(n)}.`,
     partly: "Some work isn’t confirmed as stopped yet. Check each store again before you go on.",
   },

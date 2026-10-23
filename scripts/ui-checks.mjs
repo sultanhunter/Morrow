@@ -892,6 +892,33 @@ export const keyboardWalks = [
       expect((await active(page)).text === "Listings is stopped on 1 store", "focus_on_result");
     },
   },
+  // A stop whose reply is lost: the dialog stays, and once the typed word is gone focus is on
+  // each store's outcome inside it, then on Check again; after that reply it stays inside.
+  {
+    name: "stop_all_uncertain",
+    path: `/w/${ws}/settings/governance`,
+    scenario: "stop_all_uncertain",
+    run: async (page) => {
+      const open = "Stop all AI work";
+      await page.getByRole("button", { name: open }).waitFor();
+      await tabTo(page, (a) => a.tag === "BUTTON" && a.text === open, 80);
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.waitFor();
+      await page.keyboard.type("stop");
+      await page.keyboard.press("Enter");
+      const checkAgain = dialog.getByRole("button", { name: "Check again" });
+      await checkAgain.waitFor();
+      const after = await active(page);
+      expect(after.inDialog, "focus_left_dialog");
+      expect(after.role === "group", "focus_on_outcome");
+      await tabTo(page, (a) => a.tag === "BUTTON" && a.text === "Check again", 10);
+      await page.keyboard.press("Enter");
+      await checkAgain.waitFor({ state: "detached" });
+      await dialog.getByText("Listings is stopped on 1 store.").waitFor();
+      expect((await active(page)).inDialog, "focus_left_dialog_after_check");
+    },
+  },
   {
     name: "add_agent",
     path: `/w/${ws}/agent-store/release-marketing`,
