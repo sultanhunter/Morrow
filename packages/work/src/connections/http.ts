@@ -106,7 +106,9 @@ function dependencies(value: ConnectionsApiDependencies): ConnectionsApiDependen
     connector: Object.freeze({ open: connector.open.bind(connector) }),
     now: () => Reflect.apply(now, undefined, []) as number,
     credentials:
-      credentials === null ? null : Object.freeze({ destroy: credentials.destroy.bind(credentials) }),
+      credentials === null
+        ? null
+        : Object.freeze({ destroy: credentials.destroy.bind(credentials) }),
   });
 }
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;

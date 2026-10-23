@@ -593,12 +593,10 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         const request = requests.connections(ws);
         return request ? decodeConnections(await send(request), ws) : unknownRecord;
       }),
-      disconnectStatus: gated(
-        "connections.disconnectStatus",
-        (ws: string, connectionId: string) =>
-          read(requests.disconnectStatus(ws, connectionId), (b) =>
-            decodeDisconnectStatus(b, connectionId),
-          ),
+      disconnectStatus: gated("connections.disconnectStatus", (ws: string, connectionId: string) =>
+        read(requests.disconnectStatus(ws, connectionId), (b) =>
+          decodeDisconnectStatus(b, connectionId),
+        ),
       ),
       disconnect: gated(
         "connections.disconnect",

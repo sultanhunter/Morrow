@@ -402,7 +402,11 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
             stop:
               disconnect.stoppedAt === null
                 ? null
-                : { setBy: "human", reasonCode: "human_disconnect", createdAt: disconnect.stoppedAt },
+                : {
+                    setBy: "human",
+                    reasonCode: "human_disconnect",
+                    createdAt: disconnect.stoppedAt,
+                  },
             actions: { disconnect: disconnect.stoppedAt === null && status === "linked" },
           });
         }),

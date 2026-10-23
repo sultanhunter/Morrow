@@ -16,7 +16,8 @@
 // every refusal writes nothing; D one disconnect ends the installation, commits the
 // KillSwitchRecord and the person's connection stop, revokes the connection's leases and
 // destroys the token; I a replay and a repeat are idempotent; R every read and apply path
-// refuses the disconnected store, and the other stores keep working; C a destruction that did
+// refuses the disconnected store (leases open before it are revoked and refused at the next
+// step), and the other stores keep working; C a destruction that did
 // not complete is pending and the cron finishes it; U a later uninstall changes nothing more;
 // O logs and outbound. Owner-seeded synthetic fixtures only (two tenants, five development
 // stores); no provider, credential or merchant data. Runs in the CI pg-work group. The local
@@ -58,7 +59,11 @@ const failures = [];
 const labStarted = Date.now();
 const phase = (value) =>
   console.error(
-    "DISCONNECT_STORE_LAB_PHASE:" + value + " t=" + Math.round((Date.now() - labStarted) / 1000) + "s",
+    "DISCONNECT_STORE_LAB_PHASE:" +
+      value +
+      " t=" +
+      Math.round((Date.now() - labStarted) / 1000) +
+      "s",
   );
 function check(name, passed, detail) {
   if (!/^[A-Z][0-9]+:[a-z0-9_]+$/.test(name) || checks.some((c) => c.name === name))
@@ -197,7 +202,12 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
             resources: [storeResource(p.org, p.workspace, s.store, s.connection)],
             fields: [...row.fields],
           },
-          issuedBy: { ...actorOf(p), kind: "service", principalId: "morrow.linking", membershipId: null },
+          issuedBy: {
+            ...actorOf(p),
+            kind: "service",
+            principalId: "morrow.linking",
+            membershipId: null,
+          },
           validFrom: "2026-01-01T00:00:00.000Z",
           expiresAt: null,
           revokedAt: null,
@@ -270,7 +280,9 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
     const added = after.filter((g) => !before.some((b) => b.id === g.id));
     const policyRevision = (org) =>
       Number(
-        ownerRows(`SELECT policy_revision::text AS r FROM morrow_identity.organizations WHERE id=${literal(org)}`)[0].r,
+        ownerRows(
+          `SELECT policy_revision::text AS r FROM morrow_identity.organizations WHERE id=${literal(org)}`,
+        )[0].r,
       );
     const expectedGrant = (s, g) => ({
       id: g.id,
@@ -285,7 +297,12 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
         resources: [storeResource(s.org, s.ws, s.store, s.connection)],
         fields: [...disconnectFields],
       },
-      issuedBy: { ...actorOf(s.owner), kind: "service", principalId: "morrow.linking", membershipId: null },
+      issuedBy: {
+        ...actorOf(s.owner),
+        kind: "service",
+        principalId: "morrow.linking",
+        membershipId: null,
+      },
       validFrom: g.payload.validFrom,
       expiresAt: null,
       revokedAt: null,
@@ -293,8 +310,8 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
     });
     const linked = [D, E, F, T];
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-    const canonicalOf = (value) =>
-      JSON.stringify(value, Object.keys(value).sort()) && JSON.stringify(sortKeys(value));
+    // Key order is not meaning: records and grants are compared with sorted keys.
+    const canonicalOf = (value) => JSON.stringify(sortKeys(value));
     function sortKeys(value) {
       if (Array.isArray(value)) return value.map(sortKeys);
       if (value && typeof value === "object")
@@ -326,11 +343,14 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
       before.every((b) => same(after.find((g) => g.id === b.id)?.payload, b.payload)) &&
         after.length === before.length + added.length,
     );
-    const backfill = /INSERT INTO morrow_identity\.grants[\s\S]*?;\nCOMMIT;/.exec(
+    // The backfill is the one top-level INSERT (link_workspace_store's own is indented).
+    const backfill = /^INSERT INTO morrow_identity\.grants\([\s\S]*?;\nCOMMIT;/m.exec(
       readFileSync("migrations/" + identityRow.file, "utf8"),
     )?.[0];
     const rerun = db.tryRun(
-      "BEGIN; SET LOCAL ROLE morrow_identity_owner;\n" + (backfill ?? "").replace(/\nCOMMIT;$/, "") + "\nCOMMIT;",
+      "BEGIN; SET LOCAL ROLE morrow_identity_owner;\n" +
+        (backfill ?? "").replace(/\nCOMMIT;$/, "") +
+        "\nCOMMIT;",
     );
     check(
       "B3:the_backfill_is_once_only_a_second_run_inserts_nothing",
@@ -345,7 +365,11 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
         ),
         [...storeLinkGrantTemplate]
           .sort((a, b) => (a.capabilityId < b.capabilityId ? -1 : 1))
-          .map((r) => ({ capability_id: r.capabilityId, verbs: [...r.verbs], fields: [...r.fields] })),
+          .map((r) => ({
+            capability_id: r.capabilityId,
+            verbs: [...r.verbs],
+            fields: [...r.fields],
+          })),
       ) &&
         db.rows(
           "SELECT position('store_link_grants_v2()' IN prosrc)>0 AS v2,position('store_link_grants_v1()' IN prosrc)>0 AS v1 FROM pg_proc WHERE oid='morrow_identity.link_workspace_store(text,text,text,text,text,text,text,text,text,text,text)'::regprocedure",
@@ -364,7 +388,8 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
             waitUntil() {},
           });
         },
-        query: (text, values = []) => connection.query(text, [...values], new AbortController().signal),
+        query: (text, values = []) =>
+          connection.query(text, [...values], new AbortController().signal),
         async end() {
           await connection?.close();
         },
@@ -384,7 +409,14 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
       return oracle.fetch(url, init);
     };
     const transaction = (vault, budgetMs, body) =>
-      runVaultTransactionWithDriver(bridged, vault, Math.min(10000, budgetMs * 3), body, Date.now, NoSocket);
+      runVaultTransactionWithDriver(
+        bridged,
+        vault,
+        Math.min(10000, budgetMs * 3),
+        body,
+        Date.now,
+        NoSocket,
+      );
     const broker = createShopifyBroker({ transaction, fetch: shopifyFetch, now: () => Date.now() });
     const reader = createShopifyReader({ transaction, fetch: shopifyFetch, now: () => Date.now() });
     // The ApiBroker's shopifyCredentialDestroy: one argument, the reason fixed (index.ts).
@@ -410,7 +442,16 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
       now: () => Date.now(),
       reader: {
         read: (lease, queryName, variablesJson, _signal, budgetMs) =>
-          reader.read(brokerEnv, "api", lease.leaseId, lease.generation, lease.subjectId, queryName, variablesJson, budgetMs),
+          reader.read(
+            brokerEnv,
+            "api",
+            lease.leaseId,
+            lease.generation,
+            lease.subjectId,
+            queryName,
+            variablesJson,
+            budgetMs,
+          ),
       },
     });
     const connector = createConnectorHandler({
@@ -428,7 +469,10 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
         binding,
         {
           neonLease: async () =>
-            JSON.stringify({ schemaVersion: 1, password: "lab-" + randomBytes(12).toString("hex") }),
+            JSON.stringify({
+              schemaVersion: 1,
+              password: "lab-" + randomBytes(12).toString("hex"),
+            }),
         },
         bridged,
         Date.now,
@@ -458,11 +502,14 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
           ? undefined
           : JSON.stringify(options.body ?? { control: { reason, sourceProposalRef: null } });
       const response = await connections.fetch(
-        new Request(`${workFixtureOrigin}/workspace/${ws}/connections/${options.connectionId ?? s.connection}/disconnect`, {
-          method,
-          headers: headersFor(p, method, options.key),
-          body,
-        }),
+        new Request(
+          `${workFixtureOrigin}/workspace/${ws}/connections/${options.connectionId ?? s.connection}/disconnect`,
+          {
+            method,
+            headers: headersFor(p, method, options.key),
+            body,
+          },
+        ),
         {},
         ctx,
       );
@@ -474,9 +521,12 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
     }
     async function catalogRead(p, s) {
       const response = await catalog.fetch(
-        new Request(`${workFixtureOrigin}/workspace/${p.workspace}/stores/${s.store}/catalog/collections`, {
-          headers: headersFor(p, "GET"),
-        }),
+        new Request(
+          `${workFixtureOrigin}/workspace/${p.workspace}/stores/${s.store}/catalog/collections`,
+          {
+            headers: headersFor(p, "GET"),
+          },
+        ),
         {},
         ctx,
       );
@@ -541,10 +591,12 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
       );
       return r.ok ? r.stdout.split("\n").filter(Boolean).at(-1) : "error";
     };
+    // stop_active is the one predicate every lease, run step and gateway check calls (0020);
+    // it runs as its caller, so the lab reads it as the superuser over every row (sim, the
+    // spine-foundation T3 shape).
     const stopActive = (s, kind) =>
       db.rows(
         `SELECT morrow_work.stop_active(${literal(s.org)},${literal(s.ws)},${literal(kind)},${literal(s.connection)},NULL) AS stopped`,
-        { role: "morrow_work_command" },
       )[0].stopped;
     check(
       "F1:five_stores_in_two_tenants_with_secrets_sealed_tokens_and_the_linked_ones_current",
@@ -560,8 +612,6 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
     // -------------------------------------------------------------------------
     // K: only a current holder of governance.connection.disconnect disconnects.
     phase("authority");
-    const readLeaseD = openLease(A, D);
-    const readLeaseE = openLease(A, E);
     const statusA = await disconnectCall(A, "GET", D);
     const statusX = await disconnectCall(X, "GET", D);
     check(
@@ -595,7 +645,13 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(Y.principal)},
         stateOf(D) === untouched &&
         installationOf(N).status === "unlinked" &&
         apiDestroyCalls.length === 0,
-      { member: member.status, foreign: foreign.status, cross: crossWorkspace.status, unknown: unknown.status, unlinked: unlinked.status },
+      {
+        member: member.status,
+        foreign: foreign.status,
+        cross: crossWorkspace.status,
+        unknown: unknown.status,
+        unlinked: unlinked.status,
+      },
     );
     // A revoked grant confers nothing (the owner-maintenance revocation of one grant).
     const disconnectGrantOf = (s) =>
@@ -616,7 +672,9 @@ COMMIT;`);
     setRevoked(grantE, false);
     check(
       "K3:a_revoked_grant_disconnects_nothing",
-      revoked.status === 403 && revokedStatus.body?.actions?.disconnect === false && stateOf(E) === untouchedE,
+      revoked.status === 403 &&
+        revokedStatus.body?.actions?.disconnect === false &&
+        stateOf(E) === untouchedE,
       { revoked: revoked.status },
     );
     const direct = (user, sql) => db.tryRun(sql, { user });
@@ -633,7 +691,8 @@ COMMIT;`);
         ["morrow_connector_ingress", "morrow_runtime_executor", "morrow_vault_broker"].every(
           (user) =>
             !direct(user, cmdSql).ok &&
-            !direct(user, `SELECT * FROM morrow_work.connection_target(${literal(D.connection)});`).ok,
+            !direct(user, `SELECT * FROM morrow_work.connection_target(${literal(D.connection)});`)
+              .ok,
         ) &&
         !direct(
           "morrow_api_worker",
@@ -654,12 +713,36 @@ COMMIT;`);
     // D: one disconnect by the holder.
     phase("disconnect");
     const callsBefore = Object.values(stores).map((s) => s.oracle.state.calls.length);
+    // A read lease the holder opened just before the disconnect, and a run and an operation
+    // lease committed on the same connection as their api definers open them (a Listings
+    // run in flight; the gateway's apply, v1 PR 3): the stop must revoke all three.
+    const readLeaseD = openLease(A, D);
+    const committedLease = (kind) => {
+      const r = db.tryRun(
+        asCommandRole(
+          A,
+          `SELECT concat_ws('|',outcome,lease_id,generation) FROM morrow_work.lease_open(${literal(kind)},${literal("subject_" + randomUUID())},${literal(D.store)},${literal(D.connection)},'installation_probe');`,
+          { end: "COMMIT" },
+        ),
+      );
+      const [outcome, id, generation] = (
+        r.ok ? r.stdout.split("\n").filter(Boolean).at(-1) : "error"
+      ).split("|");
+      return { outcome, id, generation };
+    };
+    const runLeaseD = committedLease("run");
+    const operationLeaseD = committedLease("operation");
     const key = randomUUID();
     const first = await disconnectCall(A, "POST", D, { key });
     const installationD = installationOf(D);
     const recordD = recordsOf(D);
     const stopD = stopsOf(D);
     const canonical = recordD[0] ? JSON.parse(recordD[0].canonical) : null;
+    // The outbox is read as the superuser (sim: no tenant context).
+    const executedEvents = (id) =>
+      db.rows(
+        `SELECT count(*)::int AS n FROM morrow_work.outbox_events WHERE event_type='kill_switch.executed' AND aggregate_type='kill_switch' AND aggregate_id=${literal(id)} AND payload->>'capabilityId'='governance.connection.disconnect'`,
+      )[0].n;
     check(
       "D1:the_reply_reports_the_disconnect_and_the_destroyed_token",
       first.status === 200 &&
@@ -695,9 +778,17 @@ COMMIT;`);
         recordD[0].actor === A.principal &&
         recordD[0].prior === "active" &&
         validateCurrentDefinition("KillSwitchRecord", canonical) &&
-        same(canonical.targets, [
-          { organizationId: A.org, workspaceId: A.workspace, storeId: D.store, connectionId: D.connection, kind: "connection", id: D.connection },
-        ]) &&
+        canonicalOf(canonical.targets) ===
+          canonicalOf([
+            {
+              organizationId: A.org,
+              workspaceId: A.workspace,
+              storeId: D.store,
+              connectionId: D.connection,
+              kind: "connection",
+              id: D.connection,
+            },
+          ]) &&
         canonical.control.reason === reason &&
         canonical.actor.principalId === A.principal &&
         stopD.length === 1 &&
@@ -709,10 +800,8 @@ COMMIT;`);
         stopD[0].active === true &&
         first.body.killSwitchRecordId === recordD[0].id &&
         first.body.stopId === stopD[0].id &&
-        workRows(
-          `SELECT count(*)::int AS n FROM morrow_work.outbox_events WHERE event_type='kill_switch.executed' AND aggregate_id=${literal(recordD[0].id)} AND payload->>'capabilityId'='governance.connection.disconnect'`,
-        )[0].n === 1,
-      { recordD, stopD },
+        executedEvents(recordD[0].id) === 1,
+      { recordD, stopD, events: recordD[0] ? executedEvents(recordD[0].id) : null },
     );
     check(
       "D4:no_shopify_call_and_nothing_else_changed",
@@ -739,6 +828,9 @@ COMMIT;`);
     // -------------------------------------------------------------------------
     // R: every read and apply path refuses the disconnected store; the others keep working.
     phase("refusals");
+    // The sibling store's read lease is opened now, after the disconnect: a 60-second lease
+    // opened earlier could expire on a loaded machine before it is resolved.
+    const readLeaseE = openLease(A, E);
     const leasesD = leasesOf(D);
     const leaseCountD = leasesD.length;
     const readD = await catalogRead(A, D);
@@ -753,7 +845,16 @@ COMMIT;`);
       { leasesD, d: resolve(readLeaseD), e: resolve(readLeaseE) },
     );
     const brokerRead = await reader
-      .read(brokerEnv, "api", readLeaseD.lease_id, Number(readLeaseD.generation), readLeaseD.subject_id, "collectionsPage", '{"after":null}', 5000)
+      .read(
+        brokerEnv,
+        "api",
+        readLeaseD.lease_id,
+        Number(readLeaseD.generation),
+        readLeaseD.subject_id,
+        "collectionsPage",
+        '{"after":null}',
+        5000,
+      )
       .then(
         () => "read",
         (error) => error?.code ?? "error",
@@ -783,15 +884,64 @@ COMMIT;`);
       ["read", "run", "operation"].every((kind) => stopActive(D, kind) === true) &&
         ["read", "run", "operation"].every((kind) => stopActive(E, kind) === false),
     );
+    // The run steps and the gateway enter their lease as the runtime login at each step: a
+    // revoked lease is refused there, so a running job stops at its next step.
+    const enterAsRuntime = (l) => {
+      const r = db.tryRun(
+        `BEGIN; SELECT outcome FROM morrow_work.enter_lease(${literal(l.id)},${literal(l.generation)}); ROLLBACK;`,
+        { user: "morrow_runtime_executor" },
+      );
+      return r.ok ? r.stdout.split("\n").filter(Boolean).at(-1) : "error";
+    };
+    const pendingStarts = () =>
+      db
+        .tryRun("SELECT string_agg(lease_id,',') FROM morrow_work.pending_starts();", {
+          user: "morrow_runtime_executor",
+        })
+        .stdout.split("\n")
+        .filter(Boolean)
+        .at(-1) ?? "";
+    check(
+      "R7:running_jobs_stop_at_their_next_step_run_and_operation_leases_are_revoked_and_refused",
+      [runLeaseD, operationLeaseD].every((l) => {
+        const row = leasesOf(D).find((x) => x.id === l.id);
+        return (
+          l.outcome === "opened" &&
+          row?.status === "revoked" &&
+          row.revoked_reason === "stop" &&
+          enterAsRuntime(l) === "ended" &&
+          !pendingStarts().includes(l.id)
+        );
+      }),
+      {
+        run: runLeaseD,
+        operation: operationLeaseD,
+        entered: [runLeaseD, operationLeaseD].map(enterAsRuntime),
+      },
+    );
     const association = (p, s) =>
-      db.tryRun(asApi(p, `SELECT count(*) FROM morrow_work.store_association(${literal(s.store)});`), {
-        user: "morrow_api_worker",
-      }).stdout.split("\n").filter(Boolean).at(-1);
+      db
+        .tryRun(
+          asApi(p, `SELECT count(*) FROM morrow_work.store_association(${literal(s.store)});`),
+          {
+            user: "morrow_api_worker",
+          },
+        )
+        .stdout.split("\n")
+        .filter(Boolean)
+        .at(-1);
     const catalogLease = (p, s) =>
-      db.tryRun(
-        asApi(p, `SELECT outcome FROM morrow_work.catalog_read_lease(${literal(s.store)},${literal(s.connection)});`),
-        { user: "morrow_api_worker" },
-      ).stdout.split("\n").filter(Boolean).at(-1);
+      db
+        .tryRun(
+          asApi(
+            p,
+            `SELECT outcome FROM morrow_work.catalog_read_lease(${literal(s.store)},${literal(s.connection)});`,
+          ),
+          { user: "morrow_api_worker" },
+        )
+        .stdout.split("\n")
+        .filter(Boolean)
+        .at(-1);
     check(
       "R6:the_store_is_no_longer_current_so_agent_enable_and_run_admission_find_nothing",
       association(A, D) === "0" &&
@@ -858,7 +1008,10 @@ COMMIT;`);
         credentialOf(F)[0].status === "active" &&
         stopsOf(F).length === 1 &&
         pendingTokens.ok &&
-        pendingTokens.stdout.split("\n").at(-1).includes(F.installation + ":disconnected"),
+        pendingTokens.stdout
+          .split("\n")
+          .at(-1)
+          .includes(F.installation + ":disconnected"),
       { pending, tokens: pendingTokens.stdout },
     );
     const redrive = await connector.redrive();
@@ -940,7 +1093,7 @@ writeArtifact("labs/disconnect-store.json", {
     "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data. Shopify is the synthetic oracle (scripts/fixtures/shopify-oracle.mjs).",
     "The connections, catalogue and connector handlers run in Node over psql bridges logged in as each login, not in workerd over the Neon transport.",
     "The store installations, v1 store-link grants, app secrets and sealed tokens are owner-seeded (lab:shopify-install proves the install and link that write them). The migrations of this PR run as the harness's superuser shape (SET ROLE to each executeAs), after the seeding.",
-    "The run and operation leases are refused by lease_open before any row is written, so no Listings installation or operation is seeded; lab:listings-runs proves the run steps' own stop checks, and the gateway's claim and dispatch (v1 PR 3) must recheck the same stop.",
+    "The run and operation leases are opened for a probe installation id (lease_open checks no installation), so no Listings installation, run or operation row is seeded; lab:listings-runs proves the run steps' own stop checks, and the gateway's claim and dispatch (v1 PR 3) must recheck the same stop.",
   ],
 });
 if (report.failures.length) {

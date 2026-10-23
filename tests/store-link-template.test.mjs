@@ -101,11 +101,15 @@ test("each template capability exists and each verb is a Grant verb", () => {
     catalogue.capabilities.filter((c) => c.kill_switch).map((c) => c.id),
   );
   assert.deepEqual(
-    storeLinkGrantTemplate.filter((r) => killSwitches.has(r.capabilityId)).map((r) => r.capabilityId),
+    storeLinkGrantTemplate
+      .filter((r) => killSwitches.has(r.capabilityId))
+      .map((r) => r.capabilityId),
     ["governance.connection.disconnect"],
   );
   // Its input fields are exactly the grant's.
-  const disconnect = catalogue.capabilities.find((c) => c.id === "governance.connection.disconnect");
+  const disconnect = catalogue.capabilities.find(
+    (c) => c.id === "governance.connection.disconnect",
+  );
   assert.deepEqual(Object.keys(disconnect.input.fields).sort(), [...disconnectFields]);
   assert.equal(disconnect.executor, "human_only");
 });

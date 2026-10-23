@@ -338,7 +338,9 @@ async function disconnectStatus(tx: WorkTx, g: Guarded): Promise<ConnectionResul
       connectionId,
       storeId: target.storeId,
       installationStatus: target.status,
-      stop: open ? { setBy: open.setBy, reasonCode: open.reasonCode, createdAt: open.createdAt } : null,
+      stop: open
+        ? { setBy: open.setBy, reasonCode: open.reasonCode, createdAt: open.createdAt }
+        : null,
       actions: { disconnect: may && open === null && target.status === "linked" },
     },
     outcome: "read",

@@ -605,8 +605,8 @@ test("only the founding principal holds agents.installation.activate: M3 never i
   // and the work migration's prerequisite check.
   const uses = (pattern) =>
     manifest.migrations.flatMap((m) =>
-      [...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(pattern)].map(
-        () => m.file.replace(/^[0-9]+\./, ""),
+      [...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(pattern)].map(() =>
+        m.file.replace(/^[0-9]+\./, ""),
       ),
     );
   assert.deepEqual(uses(/store_link_grants_v1\(\)/g), [
@@ -624,8 +624,9 @@ test("only the founding principal holds agents.installation.activate: M3 never i
   ]);
   // Version 2's only issuing use is the link.
   assert.equal(
-    code(migration("disconnect-store-identity")).split("FROM morrow_identity.store_link_grants_v2() x")
-      .length,
+    code(migration("disconnect-store-identity")).split(
+      "FROM morrow_identity.store_link_grants_v2() x",
+    ).length,
     2,
   );
   const linkOf = (sql) =>
@@ -637,10 +638,7 @@ test("only the founding principal holds agents.installation.activate: M3 never i
   assert.ok(link && linkV2, "link_workspace_store");
   assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
   // The current definition is 0026's with exactly the template version changed.
-  assert.equal(
-    linkV2,
-    link.replace("store_link_grants_v1() x", "store_link_grants_v2() x"),
-  );
+  assert.equal(linkV2, link.replace("store_link_grants_v1() x", "store_link_grants_v2() x"));
   assert.ok(
     link.includes(
       "owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s\n   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);",

@@ -171,7 +171,7 @@ export const workTables = Object.freeze({
     lease: true,
     content: "none",
   },
-  // The owner's reason for "Stop AI work" is text a person writes.
+  // The owner's reason for "Stop AI work" and "Disconnect store" is text a person writes.
   kill_switch_records: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
@@ -528,6 +528,15 @@ export const workFunctions = Object.freeze({
     kind: "api",
     grantees: ["morrow_work_api"],
     command: "model_default.revise",
+  },
+  // v1 PR 2, "Disconnect store" (disconnect-store-work): the connection commands' replay
+  // check, the session tenant's connection target (ids and status) and the disconnect.
+  "begin_connection_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "connection_target(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_store_disconnect(text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "connection.disconnect",
   },
   // The agent kernel's facts under a run lease (ids and grant payloads; the kernel decides).
   "delegation_facts(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },

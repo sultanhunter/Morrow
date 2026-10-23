@@ -158,6 +158,9 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "begin_run_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_run_command('run.admit','${uuid}','${digest}')`,
     "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','1','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
     "cmd_runs_reconcile(text,text,text)": `SELECT outcome FROM morrow_work.cmd_runs_reconcile('${uuid}','${digest}','corr')`,
+    // v1 PR 2: "Disconnect store", every scalar and the record well-formed.
+    "begin_connection_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_connection_command('connection.disconnect','${uuid}','${digest}')`,
+    "cmd_store_disconnect(text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"record_probe","createdAt":"2026-10-23T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_store_disconnect('${uuid}','${digest}','corr','connection_probe',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex')) x`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -191,6 +194,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
         // M3 PR-1.
         "store_association(text)": "morrow_work.store_association('store_probe')",
         "agent_enable_document(text)": `morrow_work.agent_enable_document('${"a".repeat(64)}')`,
+        // v1 PR 2.
+        "connection_target(text)": "morrow_work.connection_target('connection_probe')",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(
