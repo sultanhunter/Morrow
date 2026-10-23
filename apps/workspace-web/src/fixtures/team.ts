@@ -1005,7 +1005,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           day: earlier,
           time: "Oct 22",
           actor: leo,
-          what: "approved a reply to a customer about order #1038",
+          what: "approved a reply to a customer about order #10388",
           detail: "Written by Support · Sent from your shop’s Morrow address",
           category: "approvals",
           badge: "sent",
