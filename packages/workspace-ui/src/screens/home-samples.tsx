@@ -53,7 +53,18 @@ export function TodayCard({ samples }: { readonly samples: HomeSamplesView }) {
               {item.agent ? <AgentAvatar agent={item.agent} size={28} /> : null}
               <span className="row-text">
                 <span className="row-title">{item.title}</span>
-                <span className="row-sub">{`${item.who} · ${item.where}`}</span>
+                {/* ADR-0032 item 3: an agent's name carries its pill (", agent", or
+                    ", specialist, one-time"); the avatar beside it is decorative. */}
+                <span className="row-sub">
+                  {item.agent ? (
+                    <>
+                      <AgentName agent={item.agent} name={item.who} />
+                      {` · ${item.where}`}
+                    </>
+                  ) : (
+                    `${item.who} · ${item.where}`
+                  )}
+                </span>
               </span>
               <Tag tone={tone} glyph={glyph}>
                 {copy.home.status[item.status]}

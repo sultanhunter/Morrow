@@ -532,6 +532,11 @@ input[type="radio"] {
   line-height: var(--type-meta-line);
   font-weight: var(--type-meta-weight);
 }
+/* An agent's byline in a sub line keeps the line's type; its pill follows the name. */
+.row-sub .agent-name-text {
+  color: inherit;
+  font: inherit;
+}
 .row-when {
   flex: none;
   width: 84px;

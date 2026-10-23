@@ -317,6 +317,38 @@ export const fixtureCases = [
       await page.getByRole("heading", { name: "Stop AI work for this store" }).waitFor();
     },
   }),
+  // T7 review F1: every connections read fails once the enable is sent, and its reply is
+  // lost. The connection screen reads once per mount, so the review and its Check again
+  // stay through the command's re-reads; the sidebar keeps its last connection line; and
+  // Check again replays the enable under the same key.
+  fixtureCase("agents", "listings_enable_reread_failed", `/w/${ws}/connections/conn-sample-1`, {
+    scenario: "listings_enable_reread_failed",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Enable Listings agent" }).click();
+      await page.getByRole("button", { name: "Confirm and enable" }).click();
+      const checkAgain = page.getByRole("button", { name: "Check again" });
+      await checkAgain.waitFor();
+      // Time for the re-reads the command's start and settle trigger to answer.
+      await page.waitForTimeout(400);
+      expect(await checkAgain.isVisible(), "check_again_kept");
+      expect(
+        (await page.getByRole("heading", { name: "Review before enabling" }).count()) === 1,
+        "review_kept",
+      );
+      expect(
+        (await page
+          .locator(".sidebar .sidebar-status", { hasText: "Shopify connected" })
+          .count()) === 1,
+        "connection_line_kept",
+      );
+      await checkAgain.click();
+      await page.getByRole("heading", { name: "Review before enabling" }).waitFor({
+        state: "detached",
+      });
+      await page.getByText("Active", { exact: true }).first().waitFor();
+    },
+  }),
   fixtureCase("settings", "model_default", `/w/${ws}/settings/governance`),
   // ADR-0032: a section with no screen yet, inside the Settings frame, whose card lists
   // Activity under Settings (a placeholder, not a link) and never in the sidebar.
@@ -462,6 +494,24 @@ export const fixtureCases = [
     },
   }),
   fixtureCase("home", "loading", `/w/${ws}`, { scenario: "loading" }),
+  // T7 review F2: Home opens offline, so neither Home nor the shell shows a count; Retry
+  // on Needs you reads the shell's copy again too, so the Inbox count appears with Home's
+  // "Review N items".
+  fixtureCase("home", "offline_retry", `/w/${ws}`, {
+    scenario: "home_offline_retry",
+    setup: async (page) => {
+      const retry = page.locator('[data-card="needs"]').getByRole("button", { name: "Retry" });
+      await retry.waitFor();
+      expect((await page.locator(".count-pill").count()) === 0, "no_count_while_offline");
+      await retry.click();
+      await page.locator("main .title-row .button-primary", { hasText: /^Review / }).waitFor();
+      await page.locator(".topbar .count-pill").waitFor({ state: "attached" });
+      expect(
+        (await page.locator(".sidebar .count-pill").count()) === 1,
+        "sidebar_count_after_retry",
+      );
+    },
+  }),
   // ADR-0032 Home: nothing waiting (Ask Morrow is the page's one primary), and the
   // default-off preview of the board's sample sections, the agent characters among them.
   fixtureCase("home", "nothing_waiting", `/w/${ws}`, {

@@ -96,7 +96,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     if (!composed[method]) return Promise.resolve({ kind: "not_in_build" });
     const call = calls.get(method) ?? 0;
     calls.set(method, call + 1);
-    const scripted = script[method]?.(call) ?? null;
+    const scripted = script[method]?.(call, (other) => calls.get(other) ?? 0) ?? null;
     if (scripted === "pending") return new Promise(() => {});
     if (scripted === "empty_page")
       return Promise.resolve(ok({ items: [], next: null }) as Outcome<T>);
