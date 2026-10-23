@@ -115,6 +115,12 @@ export async function applyItems(
   return Object.freeze(out);
 }
 
+/** cmd_catalog_apply's bound on its items argument (migration catalog-apply), in UTF-8 bytes. */
+export const applyItemsMaxBytes = 65536;
+/** Whether the items text of a claim exceeds what cmd_catalog_apply accepts. */
+export const applyItemsTooLarge = (itemsJson: string): boolean =>
+  new TextEncoder().encode(itemsJson).byteLength > applyItemsMaxBytes;
+
 export interface ClaimRecord {
   readonly familyRootId: string;
   readonly replayed: boolean;
@@ -179,6 +185,11 @@ export async function admitApply(
     throw new WorkContextUnavailable();
   }
   const items = await applyItems(proposal, parameters);
+  // cmd_catalog_apply takes at most applyItemsMaxBytes of items; a larger claim (many long
+  // descriptions) is refused here as a published limit, before anything is recorded, so the
+  // person can approve a selection instead.
+  const itemsJson = JSON.stringify(items);
+  if (applyItemsTooLarge(itemsJson)) throw new ApplyReject("limit_reached");
   const digest = await applyRequestDigest(a.resource.workspaceId, proposalId, body);
   tx.markSubmitted();
   const rows = await tx.run("cmdCatalogApply", [
@@ -190,7 +201,7 @@ export async function admitApply(
     prepared.proposalId,
     prepared.proposalDigest,
     prepared.countedJson,
-    JSON.stringify(items),
+    itemsJson,
   ]);
   const row = rows.length === 1 ? rows[0] : undefined;
   if (!row || typeof row.outcome !== "string") throw new WorkContextUnavailable();

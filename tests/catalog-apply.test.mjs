@@ -33,7 +33,12 @@ import {
   listingSnapshotText,
 } from "../packages/work/src/runs/listing-canonical.ts";
 import { normalisedValue, readbackVerdicts } from "../packages/work/src/runs/listing-compare.ts";
-import { applyItems, parseApplyBody } from "../packages/work/src/review/apply.ts";
+import {
+  applyItems,
+  applyItemsMaxBytes,
+  applyItemsTooLarge,
+  parseApplyBody,
+} from "../packages/work/src/review/apply.ts";
 import {
   applyThroughBroker,
   createReviewApiHandler,
@@ -142,6 +147,32 @@ test("each operation binds the exact approved item: its canonical text and diges
   );
   await assert.rejects(applyItems(root, { items: items.slice(0, 2) }));
   await assert.rejects(applyItems(root, null));
+});
+
+test("a claim's items over cmd_catalog_apply's bound are a published limit, counted in bytes", async () => {
+  assert.equal(applyItemsMaxBytes, 65536);
+  // 25 products with 3,000-character descriptions: within the run's limits, over the bound.
+  const long = "<p>" + "Linen ".repeat(500) + "</p>";
+  const items = Array.from({ length: 25 }, (_, i) => ({
+    targetIndex: i,
+    productId: "product:" + (i + 1),
+    set: { descriptionHtml: long },
+  }));
+  const root = {
+    targets: items.map((x) => ({ resource: { id: x.productId }, fields: ["descriptionHtml"] })),
+    derivedFrom: null,
+  };
+  assert.equal(applyItemsTooLarge(JSON.stringify(await applyItems(root, { items }))), true);
+  // A selection of a few of them fits.
+  const derived = {
+    targets: root.targets.slice(0, 5),
+    derivedFrom: { selectedTargetIndexes: [0, 1, 2, 3, 4] },
+  };
+  assert.equal(applyItemsTooLarge(JSON.stringify(await applyItems(derived, { items }))), false);
+  // Bytes, not characters: 3-byte characters reach the bound at a third of the length.
+  assert.equal(applyItemsTooLarge("\u20ac".repeat(21846)), true);
+  assert.equal(applyItemsTooLarge("a".repeat(65536)), false);
+  assert.equal(applyItemsTooLarge("a".repeat(65537)), true);
 });
 
 test("the apply body is exactly {proposalRef, approvalRef} of the route's proposal", () => {

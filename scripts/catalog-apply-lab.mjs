@@ -1378,7 +1378,12 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
     kinds.forEach((kind, i) => shop.fault(numbers[i], kind));
     const applied = await apply(P.A, X9, refs9);
     const rows = ops(X9);
-    const at = (kind) => rows[kinds.indexOf(kind)];
+    check(
+      "O0:the_claim_records_one_operation_per_product",
+      applied.status === 200 && rows.length === kinds.length,
+      { applied: applied.body, rows },
+    );
+    const at = (kind) => rows[kinds.indexOf(kind)] ?? {};
     const n = (kind) => String(numbers[kinds.indexOf(kind)]);
     check(
       "O1:user_errors_fail_with_nothing_applied",
