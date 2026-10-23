@@ -12,7 +12,7 @@
 - **Cleanup.** Re-enable Sign-up only by an owner-approved revision (ADR-0009 items 10 and 11).
 - **Unknown outcomes.** None.
 - **Read-only inventory, same session.**
-  - Users: one, the owner's `sultanibneusman0@gmail.com` (4 sign-ins, last on 2026-10-16).
+  - Users: one, the owner's account (4 sign-ins, last on 2026-10-16).
   - No webhook endpoints.
   - One organization, WorkOS's "Test Organization" (example.com, Test Provider), created 2026-10-10.
   - The API Keys page was not opened (P04.T01i D9).

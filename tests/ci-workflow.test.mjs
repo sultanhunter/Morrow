@@ -676,6 +676,7 @@ test("a light run keeps the static checks and unit tests and runs no lab or UI c
     "typecheck",
     "verify",
     "plan:check",
+    "graph:check",
     "verify:delivery",
     "build",
     "smoke:scaffold",
@@ -802,10 +803,26 @@ test("no source file a gated CI job can load names a Markdown file", () => {
   assert.equal(resolveSource("scripts/x.mjs", "../node_modules/miniflare/index.js"), null);
 });
 
-test("npm run verify runs the plan check, and CI reaches it", () => {
-  assert.ok(rootScriptsRun(scripts.verify).includes("plan:check"), "verify must run plan:check");
+test("npm run verify runs the plan check, then the graph check, and CI reaches both", () => {
+  const verify = rootScriptsRun(scripts.verify);
+  assert.ok(verify.includes("plan:check"), "verify must run plan:check");
+  assert.equal(
+    verify[verify.indexOf("plan:check") + 1],
+    "graph:check",
+    "graph:check follows plan:check",
+  );
+  assert.equal(scripts["graph:check"], "node scripts/graph.mjs check");
   assert.ok(rootScriptsRun(scripts.ci).includes("verify"), "npm run ci must run verify");
-  assert.ok(scriptsReachedByCi().has("plan:check"), "CI must run plan:check");
+  for (const name of ["plan:check", "graph:check"])
+    assert.ok(scriptsReachedByCi().has(name), `CI must run ${name}`);
+});
+
+// The graph builds merged pull request nodes from history, so `checks` (which runs verify)
+// fetches all of it, as `scope` does for its diffs. The other jobs keep the default depth.
+test("checks fetches full history for the graph check; the lab jobs keep the default depth", () => {
+  assert.equal(steps(ci.jobs.checks)[0].with["fetch-depth"], 0);
+  for (const id of labJobIds)
+    assert.equal(steps(ci.jobs[id])[0].with["fetch-depth"], undefined, id);
 });
 
 test("the edge dry-run and dev smoke run once, inside a network-none container with a read-only checkout", () => {

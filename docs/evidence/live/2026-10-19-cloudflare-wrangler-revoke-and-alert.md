@@ -3,12 +3,12 @@
 - **Approval.**
   - Owner, in chat on 2026-10-19, answering "Revoke it?": "Revoke it (Recommended)".
   - Owner: "5- you do it cloudflare is also logged in attached browser" (P04.T01i D9 step 5(c), usage alerts).
-- **Exact actions.** All in the attached browser, user `sultanibneusman0@gmail.com`.
+- **Exact actions.** All in the attached browser, signed in as the owner's Cloudflare user (the address is not recorded in this public repository).
   - My Profile → Access Management → Connected Applications → **Wrangler** (workers.cloudflare.com; 6 permissions; 2 accounts; last accessed 2026-09-29 21:12) → Revoke → confirmed. Afterwards the list shows only "Cloudflare for Startups".
   - Account `79ff672d013b8f0956437af6eea3c213` → Workers & Pages → Billing Dashboard → Add Budget Alert:
     - name "Workers billable usage over $5 (Morrow staging guard)";
     - threshold **$5 USD**;
-    - recipient `sultanibneusman0@gmail.com`;
+    - recipient: the owner's account email address;
     - saved. Alerts → Overview now lists it next to the pre-existing "Default budget alert (auto-created)".
 - **Not done (owner-only).**
   - Creating `morrow-staging-ci` and `morrow-staging-operator` (their values are shown once).
