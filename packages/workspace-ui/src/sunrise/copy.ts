@@ -472,7 +472,7 @@ export const sunriseCopy = {
     },
     checkAgain: "Check again",
     done: "All AI work is stopped.",
-    partly: "Some work isn’t confirmed as stopped yet. Check each one below.",
+    partly: "Some work isn’t confirmed as stopped yet. Check each store again before you go on.",
   },
   plan: {
     title: "Plan and credits",
