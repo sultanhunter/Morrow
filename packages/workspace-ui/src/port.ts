@@ -21,6 +21,19 @@ import type {
   TaskView,
   WorkspaceView,
 } from "./model";
+import type {
+  AskConversationView,
+  ChoiceAnswer,
+  PlanEdits,
+  PlanStartDocumentView,
+  PlanStartResultView,
+  ProjectConversationView,
+  ProjectDetailView,
+  ProjectsOverviewView,
+  ProjectTasksView,
+  RepeatingView,
+  StopStepsResultView,
+} from "./projects/model";
 
 export type Outcome<T> =
   | { readonly kind: "ok"; readonly value: T; readonly replayed: boolean }
@@ -198,6 +211,90 @@ export interface WorkspacePort {
       }>,
     ): Promise<Outcome<{ readonly revision: number }>>;
   };
+  /**
+   * T7 PR 19 (ADR-0033): projects, Everyday work areas and Quick tasks. No route exists
+   * yet (T2 and T6 build them), so the HTTP build never composes these: each answers
+   * not_in_build and sends nothing, and the screens keep today's Work view. The fixture
+   * build composes them only in its projects preview scenarios. A default-off switch.
+   * Bodies carry ids, revisions, one person's text and closed choices; never a tenant,
+   * workspace, actor, grant, role or measured value.
+   */
+  readonly projects: {
+    overview(ws: Id): Promise<Outcome<ProjectsOverviewView>>;
+    tasks(ws: Id): Promise<Outcome<ProjectTasksView>>;
+    repeating(ws: Id): Promise<Outcome<RepeatingView>>;
+    get(ws: Id, projectId: Id): Promise<Outcome<ProjectDetailView>>;
+    messages(ws: Id, projectId: Id): Promise<Outcome<ProjectConversationView>>;
+    /** A person's message; `mentionMorrow` adds the typed @Morrow mention (request ask). */
+    post(
+      ws: Id,
+      projectId: Id,
+      c: Command<{ text: string; mentionMorrow: boolean }>,
+    ): Promise<Outcome<{ readonly messageId: Id }>>;
+    /** "Plan next steps": the person's act starts one Morrow run with the project in view. */
+    planNextSteps(
+      ws: Id,
+      projectId: Id,
+      c: Command<{ expectedRevision: number }>,
+    ): Promise<Outcome<{ readonly messageId: Id }>>;
+    /** "Stop this project's steps": person-only, under that person's grants (item 11). */
+    stopSteps(
+      ws: Id,
+      projectId: Id,
+      c: Command<{ expectedRevision: number }>,
+    ): Promise<Outcome<StopStepsResultView>>;
+    /** Extend: `workspace.goal.revise` of the end date (`YYYY-MM-DD`). */
+    extend(
+      ws: Id,
+      projectId: Id,
+      c: Command<{ endsOn: string; expectedRevision: number }>,
+    ): Promise<Outcome<{ readonly revision: number }>>;
+    /** Step 1 of Finish: the server builds the start document of its code-built card. */
+    finishDocument(
+      ws: Id,
+      projectId: Id,
+      c: Command<{ keepRepeating: boolean; expectedRevision: number }>,
+    ): Promise<Outcome<PlanStartDocumentView>>;
+    /** "Set it up yourself": the ordinary form, as the person's own commands. */
+    create(
+      ws: Id,
+      c: Command<{ title: string; endsOn: string; goal: string }>,
+    ): Promise<Outcome<{ readonly projectId: Id }>>;
+  };
+  /**
+   * T7 PR 19 (ADR-0034): Ask Morrow's plan cards and the person-bound plan start. Off like
+   * `projects`. A card creates nothing; Start is the server's start document for the
+   * draft digest it holds, consumed once by the same person's tap.
+   */
+  readonly plans: {
+    ask(
+      ws: Id,
+      c: Command<{ conversationId: Id | null; text: string }>,
+    ): Promise<Outcome<{ readonly conversationId: Id }>>;
+    conversation(ws: Id, conversationId: Id): Promise<Outcome<AskConversationView>>;
+    /** A tapped answer starts a new run as the person's act. */
+    answer(
+      ws: Id,
+      conversationId: Id,
+      c: Command<{ messageId: Id; answer: ChoiceAnswer }>,
+    ): Promise<Outcome<{ readonly messageId: Id }>>;
+    /** Edit: a new revision with a new digest, keeping the original's taint. */
+    revise(
+      ws: Id,
+      conversationId: Id,
+      c: Command<{ messageId: Id; draftDigest: string; edits: PlanEdits }>,
+    ): Promise<Outcome<{ readonly draftDigest: string; readonly revision: number }>>;
+    /** Step 1 of Start: the server builds PlanStartDocument@1 (5 minutes, single use). */
+    startDocument(
+      ws: Id,
+      c: Command<{ messageId: Id; draftDigest: string }>,
+    ): Promise<Outcome<PlanStartDocumentView>>;
+    /** Step 2: consumes exactly that document, by its digest and nonce. */
+    start(
+      ws: Id,
+      c: Command<{ documentDigest: string; nonce: string }>,
+    ): Promise<Outcome<PlanStartResultView>>;
+  };
 }
 
 export const portMethods = [
@@ -237,7 +334,29 @@ export const portMethods = [
   "runs.listOfTask",
   "runs.get",
   "runs.reconcile",
+  "projects.overview",
+  "projects.tasks",
+  "projects.repeating",
+  "projects.get",
+  "projects.messages",
+  "projects.post",
+  "projects.planNextSteps",
+  "projects.stopSteps",
+  "projects.extend",
+  "projects.finishDocument",
+  "projects.create",
+  "plans.ask",
+  "plans.conversation",
+  "plans.answer",
+  "plans.revise",
+  "plans.startDocument",
+  "plans.start",
 ] as const;
+/** T7 PR 19: the project screens' methods, uncomposed over HTTP until T2 and T6 land. */
+export const projectPortMethods = portMethods.filter(
+  (m): m is Extract<PortMethod, `projects.${string}` | `plans.${string}`> =>
+    m.startsWith("projects.") || m.startsWith("plans."),
+);
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */
 export type Composed = Readonly<Record<PortMethod, boolean>>;

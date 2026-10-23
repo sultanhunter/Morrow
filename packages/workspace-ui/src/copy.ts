@@ -270,6 +270,8 @@ export const copy = {
       agent: "a change to the Listings agent",
       model_default: "the default model",
       run: "a Listings run",
+      project: "a change to a project",
+      plan: "starting a plan",
     },
     body: (kind: string) =>
       `A change you started earlier (${kind}) may have been saved. Check Work before creating it again.`,

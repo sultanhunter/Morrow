@@ -6,6 +6,7 @@ import { routeTitle, workspaceRoutes, type RouteMatch } from "@morrow/contracts/
 import {
   AccountScreen,
   AppShell,
+  AskConversationScreen,
   AskScreen,
   Button,
   ConnectionScreen,
@@ -16,6 +17,8 @@ import {
   InboxScreen,
   ModelDefaultScreen,
   NotFoundScreen,
+  ProjectScreen,
+  ProjectsScreen,
   QuestionScreen,
   ReentryNotice,
   ServicesProvider,
@@ -564,8 +567,27 @@ function WorkspaceFrame({
     switch (match.id) {
       case "home":
         return <HomeScreen workspace={workspace} />;
+      // T7 PR 19: Projects, a project and Ask Morrow's plan cards, only where their
+      // default-off methods are composed (the fixture's preview scenarios); otherwise
+      // Work, and the destinations below, render as before.
       case "work":
-        return <WorkScreen workspace={workspace} />;
+        return services.composed["projects.overview"] ? (
+          <ProjectsScreen workspace={workspace} />
+        ) : (
+          <WorkScreen workspace={workspace} />
+        );
+      case "project":
+        return services.composed["projects.get"] ? (
+          <ProjectScreen workspace={workspace} projectId={params.projectId!} />
+        ) : (
+          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+        );
+      case "ask_conversation":
+        return services.composed["plans.conversation"] ? (
+          <AskConversationScreen workspace={workspace} conversationId={params.conversationId!} />
+        ) : (
+          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+        );
       case "task":
         return <TaskScreen workspace={workspace} taskId={params.taskId!} />;
       // M3 PR-2: Ask, a Listings run on picked products.
@@ -638,12 +660,15 @@ export function guardPort(
       return outcome;
     };
   const first = (args: readonly unknown[]) => (typeof args[0] === "string" ? args[0] : null);
-  const work = Object.fromEntries(
-    Object.entries(port.work).map(([name, fn]) => [
-      name,
-      watch((fn as (...a: unknown[]) => Promise<Outcome<unknown>>).bind(port.work), first),
-    ]),
-  ) as unknown as WorkspacePort["work"];
+  // Every method of a namespace, watched: its first argument is the workspace.
+  const watchAll = <N extends object>(namespace: N): N =>
+    Object.fromEntries(
+      Object.entries(namespace).map(([name, fn]) => [
+        name,
+        watch((fn as (...a: unknown[]) => Promise<Outcome<unknown>>).bind(namespace), first),
+      ]),
+    ) as unknown as N;
+  const work = watchAll(port.work);
   return {
     session: port.session,
     workspace: { bootstrap: port.workspace.bootstrap.bind(port.workspace) },
@@ -675,5 +700,8 @@ export function guardPort(
       list: watch(port.models.list.bind(port.models), first),
       reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
     },
+    // T7 PR 19: the project screens' methods (default off).
+    projects: watchAll(port.projects),
+    plans: watchAll(port.plans),
   };
 }
