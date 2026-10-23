@@ -2,8 +2,9 @@
 // Files. UI-internal view models, as model.ts's are: not contracts. In this build only the
 // fixture adapter serves them; the HTTP build leaves the whole group uncomposed (it sends
 // nothing and the screens show "not built yet"). T2, T4, T11 and T13 decode their routes
-// into these shapes when the routes exist. ADR-0033 and ADR-0034 (projects, goals) are not
-// approved: "Works toward" and "Works in" are display text here, never records.
+// into these shapes when the routes exist. ADR-0033 and ADR-0034 (projects, goals; accepted
+// 2026-10-24) have no routes yet, and this PR builds no contract or backend for them: "Works
+// toward" and "Works in" are display text here, never records, until their routes exist.
 import type { Command, Outcome } from "./port";
 import type { Id, ListingsAgentView, ModelCatalogueView, StoreConnectionView } from "./model";
 

@@ -1,7 +1,7 @@
 # Sunrise: Team, agent pages, Add agents and Settings (T7, v1 PR 16)
 
 - Status: brief, 2026-10-23; Notifications, Activity and Stop all AI work added 2026-10-24. Branch `claude/t7-sunrise-team-agents-settings`, one PR built on `main` beside PR 14 (the Sunrise shell and Home), which is not merged yet. Change class: routine under ADR-0002 (UI on fakes, wording, tokens): no authority, tenancy, money, provider, retention or route change. Look: ADR-0032 (Sunrise) and the drawn boards Team, Agent, AgentStore, PlanCredits and EmailAddresses. Structure: the UX recommendation's sections 2 and 3 (Team lists Morrow, agents and people; plain words).
-- ADR-0033 and ADR-0034 (projects with goals, Morrow drafting plans) are proposed, not approved. Nothing here builds a contract or backend for them: "Works toward" and "Works in" are fixture text only.
+- ADR-0033 and ADR-0034 (projects with goals, Morrow drafting plans) were accepted on 2026-10-24 (OD-2026-10-24-1). This PR still builds no contract or backend for them: "Works toward" and "Works in" stay fixture text until their routes exist.
 
 ## Goal
 
