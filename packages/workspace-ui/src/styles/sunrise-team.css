@@ -1642,6 +1642,18 @@
   border: 1px solid var(--color-sunrise-divider);
   border-radius: 10px;
 }
+/* The morning email's button, as the email draws it. Blue text is only ever something to
+   click (ADR-0032 item 2), and this is a picture of an email, so it's in the text colour. */
+.sr-mail-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-sunrise-control-border);
+  border-radius: 8px;
+  color: var(--color-sunrise-text);
+  font-weight: 600;
+}
 .sr-save-bar {
   position: sticky;
   bottom: 12px;

@@ -304,8 +304,9 @@ function NotificationsBody({
               <li>{n.previewLines.tasks(view.morning.tasks)}</li>
               <li>{n.previewLines.alerts(view.morning.alerts)}</li>
             </ul>
-            <p className="sr-link-text" aria-hidden="true">
-              {n.previewOpen}
+            {/* The email's own button, drawn: not a link here, so not in link blue. */}
+            <p aria-hidden="true">
+              <span className="sr-mail-button">{n.previewOpen}</span>
             </p>
             <p className="sr-help">{n.previewWhy}</p>
           </div>

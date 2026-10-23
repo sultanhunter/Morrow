@@ -7,8 +7,9 @@
 // Each state case checks axe (WCAG 2.0/2.1 A and AA, 2.2 AA, plus the ARIA-in-HTML
 // `aria-allowed-role` rule) with zero violations, one visible provisional note, non-text
 // contrast of control borders and focus indicators, reflow, 24 px targets (44 px, and 48 at
-// 390 and 320, on the Sunrise screens under `.sr`: ADR-0032 item 5), reduced motion, CSP
-// and console errors; an entry screen's title matches its heading. Keyboard walks run at
+// 390 and 320, on the Sunrise screens under `.sr`: ADR-0032 item 5; and there, link blue
+// only on what can be clicked: item 2), reduced motion, CSP and console errors; an entry
+// screen's title matches its heading. Keyboard walks run at
 // 1440 and 390. Tracing, HAR and video stay off; screenshots exist only for
 // failed fixture cases. Reports are verdict-only JSON under ui/ in the artifacts directory.
 import { createServer } from "node:net";
@@ -170,6 +171,24 @@ const pageChecks = () => {
           const fill = own && own[3] > 0 ? over(own, behind) : null;
           if (contrast(edge, behind) < 3 && !(fill && contrast(fill, behind) >= 3))
             failures.push(`control_border_contrast:${el.tagName.toLowerCase()}`);
+        }
+      }
+      // ADR-0032 item 2: on a Sunrise screen, text in link blue is always something to click.
+      const sunriseRoot = document.querySelector(".sr");
+      if (sunriseRoot) {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--color-sunrise-link)";
+        sunriseRoot.append(probe);
+        const linkColour = getComputedStyle(probe).color;
+        probe.remove();
+        const clickable = 'a[href], button, [role="link"], [role="button"], [role="tab"], label';
+        for (const el of document.querySelectorAll(".sr *")) {
+          const ownText = [...el.childNodes].some(
+            (node) => node.nodeType === 3 && node.textContent.trim() !== "",
+          );
+          if (!ownText || !visible(el) || el.closest(clickable)) continue;
+          if (getComputedStyle(el).color === linkColour)
+            failures.push(`link_colour_not_clickable:${el.tagName.toLowerCase()}`);
         }
       }
       for (const el of document.querySelectorAll("body *")) {
