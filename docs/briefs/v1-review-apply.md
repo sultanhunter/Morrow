@@ -29,6 +29,7 @@ Non-goals: Undo and "approve several at once" (PR 4); a product picker; the Sunr
 - **Authority in code.** The claimant's own `execute` on `catalog.content.publish` (paid work) on the store resource, with entitlement from the workspace's billing facts (`claimantMayApply`, on the entitlement-writer allowlist), at the claim and before each product. The kernel's obligations must be exactly `recheck_at_dispatch`, `exact_approval` and `provider_effect_verification`; any other denies.
 - **Stops.** `lease_open` refuses under any stop; a stop revokes the lease; dispatch and the fence recheck stops under the stop interlock; a stop or a disconnect between the claim and the send closes the operation `failed` with nothing sent. Read-backs are never blocked by a stop or the switch.
 - **Unknown outcomes.** Only replies that prove nothing ran are `failed` (no request, THROTTLED or 429, 401, ACCESS_DENIED, userErrors: ADR-0022 item 7). A lost reply, a 5xx, another status or GraphQL error, or a malformed reply is `uncertain` and is settled only by reading the product back: verified when every sent field equals the approved value (Shopify's known tag and HTML reformatting admitted), `partial_result` when it differs, and "no effect" only when Shopify never acknowledged the send and two read-backs 60 s apart show the drafted values with `updatedAt` unchanged. Nothing is ever sent twice; a fence a dead broker left open becomes `uncertain` after 90 s.
+- **Size.** `cmd_catalog_apply` takes at most 64 KiB of items (each product's exact approved text and digest). A claim over it (for example 25 products with long descriptions) is refused in the Worker as `limit_reached` before anything is recorded; the person can approve a selection (one claim per family) and ask Listings again for the rest. Raising the bound is a one-line change to 0040 while it is unapplied (open question below).
 - **Custody and records.** The store token is opened only in the broker. Operations, transitions, `operation_writes` and `operation_readbacks` hold ids, field names, codes and Shopify's `updatedAt` only (FORCE RLS; the broker's definers reach exactly the operation their own setting names). Responses and logs carry codes, never product text.
 
 ## Deviations from the M4 plan (reviewed with this PR)
@@ -48,9 +49,14 @@ Non-goals: Undo and "approve several at once" (PR 4); a product picker; the Sunr
 - [x] Tenant isolation of review records and operations (V3, A5, O9; the tenant-conformance registry, S1–S8, P1).
 - [x] The broker's fence, late closes, forged settings and other logins (F1–F4); the switch off writes nothing (A1, F4; unit).
 - [x] The SPA's requests and decoders against the server's real replies (W1; `workspace-web-review.test.mjs`).
+- [x] A claim over the items bound is `limit_reached` before anything is recorded; a selection fits (unit).
 - [ ] Hosted `foundation`, the AI review (security lens) and the owner's first apply on a draft product.
 
 ## Owner actions
 
 1. After merge and deploy, say yes in chat to switching the apply on; Claude then commits `switch: "on"` with the two vars (one reviewed commit).
 2. Approve and apply your first change on a product you don't mind (a draft product is safest) and check it in the Shopify admin.
+
+## Open question
+
+- The 64 KiB items bound in `cmd_catalog_apply` can refuse a 25-product proposal whose descriptions average over about 2,500 characters. Recommended: raise it to 8 MiB in 0040 before it is first applied (the integration renumbering recomputes its checksum anyway); until then such a proposal is applied as a selection, and the rest needs a new Listings run.
