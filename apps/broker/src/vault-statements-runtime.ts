@@ -1,4 +1,4 @@
-// Build order PR 7: the vault login's fixed runtime-ledger statements (migration 0039). One
+// Build order PR 7: the vault login's fixed runtime-ledger statements (migration 0043). One
 // frozen map per PR, spread into vault.ts's vaultStatements registry, the only statements the
 // vault transport (vault-database.ts) sends. Each selects every column of one SECURITY
 // DEFINER function that only morrow_vault_broker may execute; values travel as text

@@ -307,7 +307,21 @@
     },
     {
       "sequence": 39,
-      "file": "0039.runtime-operations.sql",
+      "file": "0039.shopify-live-store-identity.sql",
+      "sha256": "30543aa4053278c06ac54af3a54f2e4e21309ab02a8bc30b943570bdf0ecfd41",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-connect-store.md"
+    },
+    {
+      "sequence": 40,
+      "file": "0040.shopify-live-store-vault.sql",
+      "sha256": "ffdff6ff5a78320880c6c4b44e5464801165bde8204f63d0973d2ced45030e70",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-connect-store.md"
+    },
+    {
+      "sequence": 43,
+      "file": "0043.runtime-operations.sql",
       "sha256": "4e65edbcece5fb646143d5a8246d5d92ab7815b4fdc9d756e6f7304f781a9f5d",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/runtime-computer-foundation.md"

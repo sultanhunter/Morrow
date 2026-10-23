@@ -593,29 +593,43 @@ test("only the founding principal holds agents.installation.activate: M3 never i
     )
     .map((m) => m.file.replace(/^[0-9]+\./, ""));
   assert.deepEqual(named, ["approval-records.sql", "shopify-install-identity.sql"]);
-  // The template is issued only by link_workspace_store (CREATE, REVOKE and one use in all
-  // migrations), only when applied, and only to the founding principal: any other actor
-  // is actor_ineligible.
-  const uses = manifest.migrations.flatMap((m) => [
-    ...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(/store_link_grants_v1\(\)/g),
+  // The template is issued only by link_workspace_store (CREATE, REVOKE and one use in M2
+  // PR-2's migration; one use in v1 PR 1's replacement, which keeps every other check),
+  // only when applied, and only to the founding principal: any other actor is
+  // actor_ineligible.
+  const usesIn = (file) => [
+    ...code(readFileSync("migrations/" + file, "utf8")).matchAll(/store_link_grants_v1\(\)/g),
+  ];
+  const using = manifest.migrations
+    .filter((m) => usesIn(m.file).length > 0)
+    .map((m) => [m.file.replace(/^[0-9]+\./, ""), usesIn(m.file).length]);
+  assert.deepEqual(using, [
+    ["shopify-install-identity.sql", 3],
+    ["shopify-live-store-identity.sql", 1],
   ]);
-  assert.equal(uses.length, 3);
-  const link =
-    /CREATE OR REPLACE FUNCTION morrow_identity\.link_workspace_store\([\s\S]*?END \$\$;/.exec(
-      code(shopifySql),
-    )?.[0];
-  assert.ok(link, "link_workspace_store");
-  assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
-  assert.ok(
-    link.includes(
-      "owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s\n   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);",
-    ),
+  const liveSql = readFileSync(
+    "migrations/" +
+      manifest.migrations.find((m) => m.file.endsWith(".shopify-live-store-identity.sql")).file,
+    "utf8",
   );
-  assert.ok(link.includes("WHEN NOT actor_ok OR owner_ok IS NOT TRUE THEN 'actor_ineligible'"));
-  assert.ok(
-    link.indexOf("IF reason_code='applied' THEN") <
-      link.indexOf("INSERT INTO morrow_identity.grants"),
-  );
+  for (const sql of [shopifySql, liveSql]) {
+    const link =
+      /CREATE OR REPLACE FUNCTION morrow_identity\.link_workspace_store\([\s\S]*?END \$\$;/.exec(
+        code(sql),
+      )?.[0];
+    assert.ok(link, "link_workspace_store");
+    assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
+    assert.ok(
+      link.includes(
+        "owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s\n   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);",
+      ),
+    );
+    assert.ok(link.includes("WHEN NOT actor_ok OR owner_ok IS NOT TRUE THEN 'actor_ineligible'"));
+    assert.ok(
+      link.indexOf("IF reason_code='applied' THEN") <
+        link.indexOf("INSERT INTO morrow_identity.grants"),
+    );
+  }
 });
 
 test("enable needs activate on the store and every verb the installation receives", async () => {

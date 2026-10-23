@@ -969,7 +969,7 @@ test("AC07: turnstile-create, the Neon probe, the kill and the deploy never prin
   assert.equal(kill.status, 1);
   assert.equal(
     oneLine(kill, "stdout").fallback,
-    "dashboard_workers_dev_disable_and_github_workflow_disable",
+    "dashboard_workers_dev_disable_api_and_connector_and_github_workflow_disable",
   );
   noMarkers(kill);
   // A failed upload with noisy wrangler output: an unknown outcome, no relayed text.

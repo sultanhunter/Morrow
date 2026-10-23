@@ -630,6 +630,9 @@ export const bridgeFunctions = Object.freeze([
   "work_shopify_credential_end(text,text)",
   "work_shopify_credentials_pending()",
   "work_shopify_read_target(text,text,text,text)",
+  // v1 PR 1 (shopify-live-store-identity): the live-store admission, called only by the
+  // broker's vault definer of shopify-live-store-vault (ADR-0035 item 2).
+  "work_shopify_live_store(text,text)",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
@@ -1147,7 +1150,7 @@ export const vaultTables = Object.freeze({
       ["destroy_reason", "destroyed_at", "sealed_value", "status", "wrapped_key"],
     ),
   },
-  // Build order PR 7 (0039 runtime-operations): the computer's operation ledger (one row per
+  // Build order PR 7 (0043 runtime-operations): the computer's operation ledger (one row per
   // sandbox, tenant-keyed, its run a composite parent), the runtime holds and the platform's
   // caps in use. Ids, digests, codes and times only; the broker's login reaches them only
   // through its four definers (vault_broker), and only the owner's operator function lifts a
@@ -1229,6 +1232,8 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // v1 PR 1 (shopify-live-store-vault): the live-store admission of an install.
+  "shopify_live_store_admission(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
   // and counts only; the broker's login).
   "model_call_begin(text,text,text,text,text,text,text,text)": {
@@ -1239,7 +1244,7 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
-  // Build order PR 7 (0039 runtime-operations): the runtime ledger's send mark, create record,
+  // Build order PR 7 (0043 runtime-operations): the runtime ledger's send mark, create record,
   // settlement and the sweep's ids-only list (the broker's login); the caps helper (the
   // command role, inside those definers); the guard; the operator's hold lift (nobody).
   "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
@@ -1368,10 +1373,12 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_credential_destroy(text,text)",
     "morrow_vault.shopify_read_resolve(text,text,text,text,text)",
     "morrow_vault.shopify_webhook_record(text,text,text,text,text,text)",
+    // v1 PR 1 (shopify-live-store-vault).
+    "morrow_vault.shopify_live_store_admission(text,text)",
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",
-    // Build order PR 7 (0039 runtime-operations).
+    // Build order PR 7 (0043 runtime-operations).
     "morrow_vault.runtime_operation_begin(text,text,text,text,text)",
     "morrow_vault.runtime_operation_created(text,text)",
     "morrow_vault.runtime_operation_settle(text,text,text)",

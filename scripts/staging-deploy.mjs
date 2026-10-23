@@ -2,14 +2,17 @@
 // account census they share with `staging:census`.
 //   deploy   gates 1–6 of ADR-0019 item 4, a census before any upload, the order broker →
 //            orchestrator → connector → api, the deploy flag re-read just before every
-//            upload and just after the api deploy, the health check, the unattended smoke,
-//            and a census on every path that started an upload. On ready:false the run
-//            fails and keeps both api version ids. There is no rollback: card effect E11
-//            is suspended until the rollback refusal exists, so staging rolls forward.
+//            upload and just after each public Worker's deploy (the connector's and the
+//            api's), the health check, the unattended smoke, and a census on every path
+//            that started an upload. On ready:false the run fails and keeps both api
+//            version ids. There is no rollback: card effect E11 is suspended until the
+//            rollback refusal exists, so staging rolls forward.
 //   kill     anyone, any time: the flag to 0, the deploy workflow disabled, queued and
-//            running deploys cancelled, the api's workers.dev off, then the hostname
+//            running deploys cancelled, workers.dev off on both public Workers (the api
+//            and, since v1 PR 1, the connector; ADR-0035 item 2), then both hostnames
 //            checked now, after 2 minutes and after 10 minutes.
-//   unkill   only under an active card: workers.dev on, ready, the workflow on, the flag 1.
+//   unkill   only under the active approval: workers.dev on for both, each ready, the
+//            workflow on, the flag 1.
 // The flag is two facts: the STAGING_DEPLOY_ENABLED variable and the deploy workflow's
 // state. Locally both are read live. In CI the workflow's GITHUB_TOKEN cannot read
 // variables (GitHub grants no Environments or Variables scope to it), so the variable is
@@ -163,15 +166,21 @@ export function brokerBindingAllowed(script, workers) {
     entrypoints.every((entrypoint) => entrypoint === brokerBindingAllowTable[key])
   );
 }
+// The Workers allowed on workers.dev (the public Workers): the api, and since v1 PR 1 the
+// connector, so that Shopify can reach it (ADR-0035 item 2, amending ADR-0019 item 2 and
+// ADR-0022 item 6). Any other script on workers.dev is WORKERS_DEV_EXPOSED; the kill
+// switch takes both of these down.
+export const workersDevAllowTable = Object.freeze(["api", "connector"]);
+export const publicWorkerNames = (staging) =>
+  workersDevAllowTable.map((key) => staging.cloudflare.workers[key]);
 export function censusFindings(snapshot, staging) {
   const workers = staging.cloudflare.workers;
   const morrow = new Set(Object.values(workers));
+  const exposed = new Set(publicWorkerNames(staging));
   const findings = [];
   for (const script of snapshot.scripts) {
     if (!morrow.has(script.name)) findings.push({ code: "NOT_MORROW_SCRIPT", name: script.name });
-    // Only the api is on workers.dev (staging-card-1 E1); the connector's hostname waits
-    // for the card change, so its workers.dev is still a finding.
-    if (script.workersDev && script.name !== workers.api)
+    if (script.workersDev && !exposed.has(script.name))
       findings.push({ code: "WORKERS_DEV_EXPOSED", name: script.name });
     if (script.previews) findings.push({ code: "PREVIEWS_ENABLED", name: script.name });
     if (script.bindsBroker && !brokerBindingAllowed(script, workers))
@@ -544,18 +553,24 @@ async function deployBody(ctx, plan, report, run) {
       durationMs: result.durationMs,
     });
     await checkpoint();
-    if (key === "api") {
-      // The post-deploy re-read: a kill during the api deploy wins.
+    if (workersDevAllowTable.includes(key)) {
+      // The post-deploy re-read after each public Worker (the connector, then the api;
+      // v1 PR 1): its `workers_dev: true` re-enables its hostname, so a kill during either
+      // upload wins and takes both public hostnames down again.
       const after = await flagState();
-      report.gates.flagAfterApi = after;
+      report.gates["flagAfter" + key[0].toUpperCase() + key.slice(1)] = after;
       if (after !== "on") {
-        let workersDev = "disabled";
-        try {
-          await setWorkersDev(api, names.api, false);
-        } catch {
-          workersDev = "unknown";
-        }
-        return stop("failed", "STAGING_KILLED_DURING_DEPLOY", { workersDev });
+        const workersDev = {};
+        for (const publicKey of workersDevAllowTable)
+          try {
+            await setWorkersDev(api, names[publicKey], false);
+            workersDev[publicKey] = "disabled";
+          } catch {
+            workersDev[publicKey] = "unknown";
+          }
+        for (const rest of deployOrder.slice(deployOrder.indexOf(key) + 1))
+          report.versions[rest].outcome = "not_deployed";
+        return stop("failed", "STAGING_KILLED_DURING_DEPLOY", { worker: key, workersDev });
       }
     }
     if (result.outcome !== "deployed")
@@ -608,9 +623,31 @@ export const killChecks = Object.freeze([
   ["after2m", 110000],
   ["after10m", 480000],
 ]);
+// The public Workers' origins: the api's (staging.json) and the connector's, on the same
+// workers.dev subdomain (v1 PR 1; ADR-0035 item 2). Null where staging.json lacks them.
+export function publicOrigins(staging) {
+  const cloudflare = staging?.cloudflare ?? {};
+  const subdomain = cloudflare.workers_dev_subdomain;
+  const connector = cloudflare.workers?.connector;
+  return Object.freeze({
+    api: typeof cloudflare.origin === "string" ? cloudflare.origin : null,
+    connector:
+      typeof subdomain === "string" &&
+      /^[a-z0-9][a-z0-9-]{0,62}$/.test(subdomain) &&
+      typeof connector === "string" &&
+      /^[a-z0-9][a-z0-9-]{0,62}$/.test(connector)
+        ? `https://${connector}.${subdomain}.workers.dev`
+        : null,
+  });
+}
+// The kill switch takes both public hostnames down: workers.dev off on the api and on the
+// connector, then each hostname checked now, after 2 and after 10 minutes, and switched off
+// again if it serves (a deploy that landed in between re-enables it).
 export async function runKill(ctx, { github, staging }) {
   const steps = {};
-  const script = staging.cloudflare.workers.api;
+  const scripts = Object.fromEntries(
+    workersDevAllowTable.map((key) => [key, staging.cloudflare.workers[key]]),
+  );
   await step(steps, "flag", () => setVariable(ctx, github, "STAGING_DEPLOY_ENABLED", "0"));
   await step(steps, "workflow", async () => {
     await toolOk(ctx.tools, "gh", [
@@ -644,53 +681,88 @@ export async function runKill(ctx, { github, staging }) {
     return { cancelled };
   });
   let api = null;
-  await step(steps, "workersDev", async () => {
+  // Each public Worker's own step, so one failure never skips the other.
+  try {
     if (staging.cloudflare.account_id === null) throw new StagingError("STAGING_IDENTIFIERS_UNSET");
     api = await ctx.cloudflareApi(staging.cloudflare.account_id);
-    if ((await workersDevState(api, script)) === "absent") return { script: "absent" };
-    await setWorkersDev(api, script, false);
-    return { script: "disabled" };
-  });
+  } catch (error) {
+    api = null;
+    steps.cloudflare = { ok: false, ...failureRecord(error) };
+  }
+  for (const key of workersDevAllowTable)
+    await step(steps, "workersDev" + key[0].toUpperCase() + key.slice(1), async () => {
+      if (!api) throw new StagingError("STAGING_CLOUDFLARE_UNAVAILABLE");
+      if ((await workersDevState(api, scripts[key])) === "absent") return { script: "absent" };
+      await setWorkersDev(api, scripts[key], false);
+      return { script: "disabled" };
+    });
   const checks = [];
-  const origin = staging.cloudflare.origin;
-  if (typeof origin !== "string") checks.push({ at: "now", state: "origin_unset" });
+  const origins = publicOrigins(staging);
+  if (workersDevAllowTable.some((key) => origins[key] === null))
+    checks.push({ at: "now", state: "origin_unset" });
   else
     for (const [at, waitMs] of killChecks) {
       await ctx.sleep(waitMs);
-      const state = await probeHealth(ctx, origin);
-      const check = { at, serving: serving(state), redisabled: false };
-      if (check.serving && api) {
-        try {
-          await setWorkersDev(api, script, false);
-          check.redisabled = true;
-        } catch {
-          check.redisabled = false;
+      const check = { at, serving: false, redisabled: false, workers: {} };
+      for (const key of workersDevAllowTable) {
+        const state = await probeHealth(ctx, origins[key], key);
+        const worker = { serving: serving(state), redisabled: false };
+        if (worker.serving && api) {
+          try {
+            await setWorkersDev(api, scripts[key], false);
+            worker.redisabled = true;
+          } catch {
+            worker.redisabled = false;
+          }
         }
+        check.workers[key] = worker;
+        check.serving ||= worker.serving;
+        check.redisabled ||= worker.redisabled;
       }
       checks.push(check);
     }
-  const stillServing = checks.length > 0 && checks.at(-1).serving === true;
+  const stillServing = checks.length > 0 && checks.at(-1).serving !== false;
   const ok = Object.values(steps).every((s) => s.ok) && !stillServing;
   return {
     steps,
     checks,
-    fallback: ok ? null : "dashboard_workers_dev_disable_and_github_workflow_disable",
+    fallback: ok
+      ? null
+      : "dashboard_workers_dev_disable_api_and_connector_and_github_workflow_disable",
     exitCode: ok ? 0 : 1,
   };
 }
 
-// Undo (needs the active card, checked by the caller): workers.dev on, ready within 90 s
-// (otherwise off again), then the workflow and the flag.
+// Undo (needs the active approval, checked by the caller): workers.dev on for both public
+// Workers, each ready within 90 s, then the workflow and the flag. Both or neither: any
+// failure while turning a hostname on (not ready, an unexpected Cloudflare reply, a
+// transport error) turns both off again before the error is reported.
 export async function runUnkill(ctx, { github, staging }) {
-  const script = staging.cloudflare.workers.api;
-  if (staging.cloudflare.account_id === null || typeof staging.cloudflare.origin !== "string")
+  const origins = publicOrigins(staging);
+  if (
+    staging.cloudflare.account_id === null ||
+    workersDevAllowTable.some((key) => origins[key] === null)
+  )
     throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   const api = await ctx.cloudflareApi(staging.cloudflare.account_id);
-  await setWorkersDev(api, script, true);
-  const health = await waitReady(ctx, staging.cloudflare.origin);
-  if (!health.ready) {
-    await setWorkersDev(api, script, false).catch(() => {});
-    throw new StagingError("STAGING_UNKILL_NOT_READY", { polls: health.polls });
+  const allOff = async () => {
+    for (const key of workersDevAllowTable)
+      await setWorkersDev(api, staging.cloudflare.workers[key], false).catch(() => {});
+  };
+  const health = {};
+  for (const key of workersDevAllowTable) {
+    try {
+      await setWorkersDev(api, staging.cloudflare.workers[key], true);
+      health[key] = await waitReady(ctx, origins[key], { service: key });
+      if (!health[key].ready)
+        throw new StagingError("STAGING_UNKILL_NOT_READY", {
+          worker: key,
+          polls: health[key].polls,
+        });
+    } catch (error) {
+      await allOff();
+      throw error;
+    }
   }
   await toolOk(ctx.tools, "gh", [
     "api",
@@ -700,8 +772,10 @@ export async function runUnkill(ctx, { github, staging }) {
   ]);
   await setVariable(ctx, github, "STAGING_DEPLOY_ENABLED", "1");
   return {
-    workersDev: "enabled",
-    health: { ready: true, polls: health.polls },
+    workersDev: Object.fromEntries(workersDevAllowTable.map((key) => [key, "enabled"])),
+    health: Object.fromEntries(
+      workersDevAllowTable.map((key) => [key, { ready: true, polls: health[key].polls }]),
+    ),
     workflow: "active",
     flag: "1",
   };

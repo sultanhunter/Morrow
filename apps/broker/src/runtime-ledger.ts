@@ -9,7 +9,7 @@ import type {
 import { sandboxRefPattern } from "./runtime-provider.js";
 import { vaultStatements, type VaultQuery } from "./vault.js";
 
-// The runtime operation ledger on the vault login (build order PR 7; migration 0039). Each
+// The runtime operation ledger on the vault login (build order PR 7; migration 0043). Each
 // method is one transaction of its own through the vault transport, so begin's send mark is
 // committed before the gateway lets any create leave the broker. Rows are checked column by
 // column: anything unexpected is a refusal (begin) or false (the writes), never a guess.

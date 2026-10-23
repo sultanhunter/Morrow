@@ -18,7 +18,14 @@ import {
   stagingChallengeActions,
 } from "../scripts/staging.mjs";
 import { loadMigrationChain, schemaHead } from "../scripts/migration-chain.mjs";
-import { deployOrder, killChecks } from "../scripts/staging-deploy.mjs";
+import {
+  censusFindings,
+  deployOrder,
+  killChecks,
+  publicOrigins,
+  workersDevAllowTable,
+} from "../scripts/staging-deploy.mjs";
+import { edgePublicWorkers, edgeWorkersDev } from "../scripts/edge.mjs";
 import {
   assistedContextOptions,
   assistedLaunchOptions,
@@ -75,6 +82,7 @@ async function world({
   overrides = {},
   tools = {},
   stripe = "off",
+  connectorReady = true,
 } = {}) {
   const cloud = fakeCloudflare({ scripts, ...cloudflare });
   const hooks = { onDeploy: null };
@@ -102,7 +110,7 @@ async function world({
     onDeploy: (worker, state) => hooks.onDeploy?.(worker, state),
     ...tools,
   });
-  const site = fakeSite({ cloud, ready, guard, csp });
+  const site = fakeSite({ cloud, ready, guard, csp, connectorReady });
   const planted = plantedHome(files ?? {});
   const context = await fakeContext({
     home: planted.home,
@@ -175,8 +183,20 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
       flagBeforeBroker: "on",
       flagBeforeOrchestrator: "on",
       flagBeforeConnector: "on",
+      flagAfterConnector: "on",
       flagBeforeApi: "on",
       flagAfterApi: "on",
+    });
+    // v1 PR 1 (ADR-0035 item 2): both public Workers are on workers.dev after the deploy,
+    // the census admits exactly them, and the smoke finds the connector ready.
+    assert.equal(w.cloud.workersDev(scriptOf.api), true);
+    assert.equal(w.cloud.workersDev(scriptOf.connector), true);
+    assert.equal(w.cloud.workersDev(scriptOf.broker), false);
+    assert.equal(w.cloud.workersDev(scriptOf.orchestrator), false);
+    assert.deepEqual(result.smoke.checks.connector, {
+      health: "ready",
+      polls: 1,
+      unknownPath: 404,
     });
     for (const key of deployOrder) {
       assert.match(result.versions[key].previous, /^[0-9a-f-]{36}$/);
@@ -203,10 +223,11 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
       ],
     );
     // CI never reads a variable through the API (its token cannot); it re-reads the
-    // workflow's state at gate 2, before every upload and after the api deploy.
+    // workflow's state at gate 2, before every upload and after each public Worker's
+    // deploy (the connector's and the api's, v1 PR 1).
     const ghApi = w.fake.calls.filter((c) => c.tool === "gh").map((c) => c.args.join(" "));
     assert.ok(!ghApi.some((a) => /\/variables\//.test(a)), ghApi.join("\n"));
-    assert.equal(ghApi.filter((a) => /deploy-staging\.yml$/.test(a)).length, 6);
+    assert.equal(ghApi.filter((a) => /deploy-staging\.yml$/.test(a)).length, 7);
     // The report goes through the closed projection before and after every upload, then
     // once more at the end, always to the same path.
     assert.ok(w.reports.every((r) => r.name === "staging/deploy-report.json"));
@@ -1002,9 +1023,74 @@ test("AC05: ready:false within 90 s fails the run, keeps both api version ids an
   }
 });
 
+// v1 PR 1 (ADR-0035 item 2): the census admits workers.dev on the two public Workers only,
+// the api and the connector, the same pair the committed wrangler configurations put there
+// (edge:check) and the kill switch takes down.
+test("census: workers.dev on the api and the connector only; any other Worker is exposure", () => {
+  const staging = {
+    cloudflare: {
+      workers: scriptOf,
+      workers_dev_subdomain: "lab",
+      origin: "https://morrow-staging-api.lab.workers.dev",
+    },
+  };
+  assert.deepEqual([...workersDevAllowTable], ["api", "connector"]);
+  assert.deepEqual([...edgePublicWorkers], [...workersDevAllowTable]);
+  for (const key of Object.keys(scriptOf))
+    assert.equal(edgeWorkersDev(key, "staging"), workersDevAllowTable.includes(key), key);
+  for (const environment of ["development", "production"])
+    for (const key of Object.keys(scriptOf)) assert.equal(edgeWorkersDev(key, environment), false);
+  const snapshot = (exposed) => ({
+    scripts: Object.values(scriptOf).map((name) => ({
+      name,
+      workersDev: exposed.includes(name),
+      previews: false,
+      bindsBroker: false,
+      brokerEntrypoints: [],
+    })),
+    pages: [],
+    dispatchNamespaces: 0,
+    members: 1,
+  });
+  assert.deepEqual(censusFindings(snapshot([scriptOf.api, scriptOf.connector]), staging), []);
+  assert.deepEqual(censusFindings(snapshot(Object.values(scriptOf)), staging), [
+    { code: "WORKERS_DEV_EXPOSED", name: scriptOf.broker },
+    { code: "WORKERS_DEV_EXPOSED", name: scriptOf.orchestrator },
+  ]);
+  assert.deepEqual(
+    censusFindings(
+      {
+        ...snapshot([scriptOf.api]),
+        scripts: [
+          ...snapshot([scriptOf.api]).scripts,
+          {
+            name: "morrow-staging-extra",
+            workersDev: true,
+            previews: false,
+            bindsBroker: false,
+            brokerEntrypoints: [],
+          },
+        ],
+      },
+      staging,
+    ),
+    [
+      { code: "NOT_MORROW_SCRIPT", name: "morrow-staging-extra" },
+      { code: "WORKERS_DEV_EXPOSED", name: "morrow-staging-extra" },
+    ],
+  );
+  assert.deepEqual(publicOrigins(staging), {
+    api: "https://morrow-staging-api.lab.workers.dev",
+    connector: "https://morrow-staging-connector.lab.workers.dev",
+  });
+});
+
 // ---------------------------------------------------------------------------
 // AC14 (fake runner): the kill wins both races; the hosted drill is deferred past launch.
-test("AC14: a kill between gate 2 and the api deploy means no api deploy", async () => {
+// v1 PR 1: the connector is a public Worker too. A kill while its upload is in flight is
+// caught by the re-read right after it (its `workers_dev: true` has just re-enabled its
+// hostname): both public hostnames go off again and the api is never deployed.
+test("AC14: a kill during the connector deploy means no api deploy and both hostnames off", async () => {
   for (const environment of [ciEnvironment(), {}]) {
     const w = await world({ environment });
     try {
@@ -1013,13 +1099,16 @@ test("AC14: a kill between gate 2 and the api deploy means no api deploy", async
       };
       const { code, result } = await w.run(environment.ci ? ["deploy", "--ci"] : ["deploy"]);
       assert.equal(code, 1);
-      assert.equal(result.code, "STAGING_KILLED");
-      assert.equal(result.worker, "api");
+      assert.equal(result.code, "STAGING_KILLED_DURING_DEPLOY");
+      assert.equal(result.worker, "connector");
+      assert.deepEqual(result.workersDev, { api: "disabled", connector: "disabled" });
       assert.equal(result.gates.flagBeforeConnector, "on");
-      assert.equal(result.gates.flagBeforeApi, "off");
+      assert.equal(result.gates.flagAfterConnector, "off");
+      assert.equal(result.gates.flagBeforeApi, undefined);
       assert.equal(result.versions.api.outcome, "not_deployed");
       assert.ok(!deployedWorkers(w).includes("api"));
       assert.equal(w.cloud.workersDev(scriptOf.api), false);
+      assert.equal(w.cloud.workersDev(scriptOf.connector), false);
       assert.deepEqual(result.census.findings, []);
     } finally {
       w.planted.cleanup();
@@ -1078,10 +1167,12 @@ test("AC14: a kill during the api deploy means the post-check turns workers.dev 
       const { code, result } = await w.run(environment.ci ? ["deploy", "--ci"] : ["deploy"]);
       assert.equal(code, 1);
       assert.equal(result.code, "STAGING_KILLED_DURING_DEPLOY");
-      assert.equal(result.workersDev, "disabled");
+      assert.equal(result.worker, "api");
+      assert.deepEqual(result.workersDev, { api: "disabled", connector: "disabled" });
       assert.equal(result.gates.flagBeforeApi, "on");
       assert.equal(result.gates.flagAfterApi, "off");
       assert.equal(w.cloud.workersDev(scriptOf.api), false);
+      assert.equal(w.cloud.workersDev(scriptOf.connector), false);
       assert.equal(result.health, null, "no health check or smoke after a kill");
       assert.equal(result.smoke, null);
       assert.deepEqual(result.census.findings, [], "the read-only census still runs");
@@ -1103,12 +1194,18 @@ test("AC14: kill sets the flag to 0, disables the workflow, cancels queued and r
     },
   });
   try {
-    // The hostname comes back once (a cancelled upload landing late) before the 2-minute
-    // check; the kill turns it off again.
+    // Both public hostnames (v1 PR 1: the api's and the connector's) start on, then come
+    // back once (cancelled uploads landing late) before the 2-minute check; the kill turns
+    // each off again.
+    w.cloud.deploy(scriptOf.connector, fakeUuid(899), { workersDev: true });
+    assert.equal(w.cloud.workersDev(scriptOf.connector), true);
     const sleep = w.ctx.sleep;
     w.ctx.sleep = async (ms) => {
       await sleep(ms);
-      if (ms === 110000) w.cloud.deploy(scriptOf.api, fakeUuid(900), { workersDev: true });
+      if (ms === 110000) {
+        w.cloud.deploy(scriptOf.api, fakeUuid(900), { workersDev: true });
+        w.cloud.deploy(scriptOf.connector, fakeUuid(901), { workersDev: true });
+      }
     };
     const { code, result } = await w.run(["kill"]);
     assert.equal(code, 0, JSON.stringify(result));
@@ -1124,7 +1221,8 @@ test("AC14: kill sets the flag to 0, disables the workflow, cancels queued and r
       ],
     );
     assert.equal(result.steps.runs.cancelled, 3);
-    assert.equal(result.steps.workersDev.script, "disabled");
+    assert.equal(result.steps.workersDevApi.script, "disabled");
+    assert.equal(result.steps.workersDevConnector.script, "disabled");
     assert.deepEqual(
       result.checks.map((c) => [c.at, c.serving, c.redisabled]),
       [
@@ -1133,6 +1231,17 @@ test("AC14: kill sets the flag to 0, disables the workflow, cancels queued and r
         ["after10m", false, false],
       ],
     );
+    assert.deepEqual(result.checks[1].workers, {
+      api: { serving: true, redisabled: true },
+      connector: { serving: true, redisabled: true },
+    });
+    // Each check probed both hostnames' own /healthz.
+    const probed = w.site.requests.filter((r) => r.path === "/healthz").map((r) => r.host);
+    assert.deepEqual([...new Set(probed)].sort(), [
+      "morrow-staging-api.lab.workers.dev",
+      "morrow-staging-connector.lab.workers.dev",
+    ]);
+    assert.equal(w.cloud.workersDev(scriptOf.connector), false);
     assert.deepEqual(
       w.sleeps,
       killChecks.map(([, ms]) => ms),
@@ -1160,8 +1269,12 @@ test("AC14: kill needs no card, runs every step when one fails, and exits non-ze
     assert.equal(result.steps.flag.code, "STAGING_GH_FAILED");
     assert.equal(result.steps.workflow.ok, true);
     assert.equal(result.steps.runs.ok, true);
-    assert.equal(result.steps.workersDev.ok, false);
-    assert.equal(result.fallback, "dashboard_workers_dev_disable_and_github_workflow_disable");
+    assert.equal(result.steps.workersDevApi.ok, false);
+    assert.equal(result.steps.workersDevConnector.ok, false);
+    assert.equal(
+      result.fallback,
+      "dashboard_workers_dev_disable_api_and_connector_and_github_workflow_disable",
+    );
     assert.equal(w.fake.state.workflow, "disabled_manually");
     assert.equal(result.checks.length, 3);
   } finally {
@@ -1188,6 +1301,8 @@ test("AC14: unkill needs the card, and restores workers.dev, the workflow and th
     const { code, result } = await w.run(["unkill"]);
     assert.equal(code, 0, JSON.stringify(result));
     assert.equal(w.cloud.workersDev(scriptOf.api), true);
+    assert.equal(w.cloud.workersDev(scriptOf.connector), true);
+    assert.deepEqual(result.workersDev, { api: "enabled", connector: "enabled" });
     assert.equal(w.fake.state.workflow, "active");
     assert.equal(w.fake.state.values.STAGING_DEPLOY_ENABLED, "1");
     // After unkill the next CD deploy proceeds again.
@@ -1203,10 +1318,49 @@ test("AC14: unkill needs the card, and restores workers.dev, the workflow and th
     assert.equal(code, 1);
     assert.equal(result.code, "STAGING_UNKILL_NOT_READY");
     assert.equal(unready.cloud.workersDev(scriptOf.api), false);
+    assert.equal(unready.cloud.workersDev(scriptOf.connector), false);
     assert.equal(unready.fake.state.workflow, "disabled_manually");
     assert.equal(unready.fake.state.values.STAGING_DEPLOY_ENABLED, "0");
   } finally {
     unready.planted.cleanup();
+  }
+  // v1 PR 1: a connector that is not ready keeps both hostnames off.
+  const connectorUnready = await world({ connectorReady: false });
+  try {
+    assert.equal(await main(["kill"], connectorUnready.ctx), 0);
+    const { code, result } = await connectorUnready.run(["unkill"]);
+    assert.equal(code, 1);
+    assert.equal(result.code, "STAGING_UNKILL_NOT_READY");
+    assert.equal(result.worker, "connector");
+    assert.equal(connectorUnready.cloud.workersDev(scriptOf.api), false);
+    assert.equal(connectorUnready.cloud.workersDev(scriptOf.connector), false);
+    assert.equal(connectorUnready.fake.state.workflow, "disabled_manually");
+  } finally {
+    connectorUnready.planted.cleanup();
+  }
+});
+
+test("AC14: unkill keeps both or neither when turning a hostname on throws", async () => {
+  for (const [worker, outcome, expected] of [
+    ["morrow-staging-connector", "fail", "STAGING_CLOUDFLARE_UNAVAILABLE"],
+    ["morrow-staging-connector", "lost", "STAGING_CLOUDFLARE_UNAVAILABLE"],
+    ["morrow-staging-connector", "invalid", "STAGING_CLOUDFLARE_RESPONSE_INVALID"],
+    ["morrow-staging-api", "lost", "STAGING_CLOUDFLARE_UNAVAILABLE"],
+  ]) {
+    const w = await world({ cloudflare: { enableFails: { [worker]: outcome } } });
+    const label = `${worker} ${outcome}`;
+    try {
+      assert.equal(await main(["kill"], w.ctx), 0, label);
+      const { code, result } = await w.run(["unkill"]);
+      assert.equal(code, 1, label);
+      assert.equal(result.code, expected, label);
+      assert.equal(w.cloud.workersDev(scriptOf.api), false, label);
+      assert.equal(w.cloud.workersDev(scriptOf.connector), false, label);
+      assert.equal(w.fake.state.workflow, "disabled_manually", label);
+      assert.equal(w.fake.state.values.STAGING_DEPLOY_ENABLED, "0", label);
+    } finally {
+      w.planted.cleanup();
+    }
   }
 });
 
@@ -1423,10 +1577,11 @@ test("smoke: the unattended checks pass on a healthy staging and record routing"
     });
     assert.deepEqual(result.checks.guard, { configured: true, start: 403 });
     assert.equal(result.checks.databasePath, 401);
+    // v1 PR 1: the connector serves its own health and route table on its hostname.
+    assert.deepEqual(result.checks.connector, { health: "ready", polls: 1, unknownPath: 404 });
     assert.deepEqual(result.checks.others, {
       broker: { status: 404, json: false },
       orchestrator: { status: 404, json: false },
-      connector: { status: 404, json: false },
     });
     assert.equal(result.checks.limiter, undefined);
     assert.equal(w.site.flowsCreated(), 0);
@@ -1476,9 +1631,28 @@ test("smoke: no guard means no login start; failures name the check; --acceptanc
       "SMOKE_WORKERS_DEV_EXPOSED_ORCHESTRATOR",
     ]);
     assert.deepEqual(result.checks.others.broker, { status: 404, json: true });
-    assert.deepEqual(result.checks.others.connector, { status: 404, json: false });
+    assert.equal(result.checks.others.connector, undefined);
   } finally {
     exposed.planted.cleanup();
+  }
+  // v1 PR 1: a connector whose workers.dev is off, or that is not ready (deny-all), fails
+  // the smoke by name.
+  for (const [options, failures] of [
+    [{ cloudflare: {} }, ["SMOKE_CONNECTOR_NOT_READY", "SMOKE_CONNECTOR_ROUTES"]],
+    [{ connectorReady: false }, ["SMOKE_CONNECTOR_NOT_READY"]],
+  ]) {
+    const w = await world(options);
+    try {
+      if (options.cloudflare)
+        await w.cloud.api.request("POST", ["workers", "scripts", scriptOf.connector, "subdomain"], {
+          body: { enabled: false, previews_enabled: false },
+        });
+      const { code, result } = await w.run(["smoke"]);
+      assert.equal(code, 1);
+      assert.deepEqual(result.failures, failures);
+    } finally {
+      w.planted.cleanup();
+    }
   }
   const acceptance = await world();
   try {
@@ -1729,6 +1903,9 @@ test("preflight: reports pending owner steps without values and blocks on the ca
       "workersDevSubdomain",
     ]);
     assert.ok(!result.pending.some((p) => p.startsWith("identifier:")));
+    // v1 PR 1 (ADR-0035 item 4): the committed approval the tools read is the owner's
+    // standing approval, active with no end date.
+    assert.deepEqual(result.card, { active: true, reason: null, expiresOn: null });
   } finally {
     committed.planted.cleanup();
   }
@@ -2407,6 +2584,9 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     "schema-head",
     "secrets-status",
     "seed-platform",
+    // v1 PR 1 (ADR-0035 items 2 and 3): the owner's live-store app registration and its
+    // sealed client secret (tests/staging-runner.test.mjs).
+    "shopify-app-register",
     "smoke",
     "status",
     // The staging test entitlement (owner decision (b), 2026-10-21; card E13).

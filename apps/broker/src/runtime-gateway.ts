@@ -100,7 +100,7 @@ export interface RuntimeOpenOperation {
   readonly pastGrace: boolean;
 }
 /**
- * The operation ledger (migration 0039, morrow_vault): each call is its own committed
+ * The operation ledger (migration 0043, morrow_vault): each call is its own committed
  * transaction on the broker's login, so the send mark exists before any create. A false
  * answer means the write did not commit (or was refused); the gateway then treats the
  * sandbox as unknown and leaves it to the sweep.

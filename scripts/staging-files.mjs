@@ -127,6 +127,7 @@ const runtimeFileSpec = (required) => ({
   secret: "E2B_API_KEY",
   format: (v) => e2bKeyFormat.test(v),
 });
+export const shopifyAppSecretFile = "shopify-app-secret";
 export function stagingFileSpecs({ brokerSecretNames, optionalSecretNames = [] }) {
   return Object.freeze({
     "workos-api-key": {
@@ -176,6 +177,14 @@ export function stagingFileSpecs({ brokerSecretNames, optionalSecretNames = [] }
       required: false,
       transient: true,
       format: (v) => cloudflareTokenFormat.test(v),
+    },
+    // v1 PR 1: the owner's Shopify app client secret, when the owner places it with
+    // morrow_put instead of typing it at `staging:shopify-app-register`'s hidden prompt.
+    // That command reads it once, seals it and deletes it after the vault stored it.
+    [shopifyAppSecretFile]: {
+      required: false,
+      transient: true,
+      format: (v) => /^[A-Za-z0-9_-]{16,256}$/.test(v),
     },
     "tmp/broker-secrets.json": {
       required: false,

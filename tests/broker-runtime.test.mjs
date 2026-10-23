@@ -1,6 +1,6 @@
 // Build order PR 7 (ADR-0029 items 2 to 5, 8 and 9): the broker's runtime gateway, the one
 // door for every computer job, over the deterministic fake adapter and an in-memory ledger
-// with the SQL ledger's contract (migration 0039 is proved by lab:runtime-operations).
+// with the SQL ledger's contract (migration 0043 is proved by lab:runtime-operations).
 //   * The switch first: off (the committed state), a missing key, vault, adapter or pinned
 //     template, and production all hold RUNTIME_UNAVAILABLE before any input, ledger or
 //     provider access; cleanup-only admits the sweep and never a create. The deployed broker

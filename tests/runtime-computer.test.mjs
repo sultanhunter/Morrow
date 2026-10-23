@@ -1,6 +1,6 @@
 // Build order PR 7 (ADR-0029 items 1, 4, 5 and 8): the computer's profile, closed job,
 // minimised inputs, output checks and caps (packages/policy/src/runtime-computer.ts), and the
-// caps' SQL twin in migration 0039 (drift).
+// caps' SQL twin in migration 0043 (drift).
 //   * The profile: no internet, 900 s life, 120 s exec, 2 vCPU and 1 GiB, the fixed command run
 //     by the non-root user `agent`; the worst case at list rates is US$0.03.
 //   * RuntimeJob@1 is closed: any unknown key, value or bound refuses the whole job, and nothing
@@ -79,8 +79,8 @@ test("the profile: no internet, fixed lifetime, exec, size, user and command", (
   assert.equal(runtimeCaps.sandboxesPerWorkspace, 3);
 });
 
-test("migration 0039 holds the same caps, deadline, grace and staleness in SQL", () => {
-  const sql = readFileSync("migrations/0039.runtime-operations.sql", "utf8");
+test("migration 0043 holds the same caps, deadline, grace and staleness in SQL", () => {
+  const sql = readFileSync("migrations/0043.runtime-operations.sql", "utf8");
   const staleSeconds = runtimeGatewayLimits.executeBudgetMaxMs / 1000 + 60;
   const caps =
     /CREATE FUNCTION morrow_vault\.runtime_caps\(\)[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(

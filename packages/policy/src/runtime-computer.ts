@@ -2,7 +2,7 @@
 // `morrow.computer` v1, the closed job a caller may ask the broker to run, the minimised
 // inputs it may carry, the only outputs it may bring back, and the runtime caps. Pure: no
 // I/O, clock or randomness; the broker's runtime gateway (apps/broker/src/runtime-gateway.ts)
-// and its conformance suite use it, and migration 0039 holds the same caps in SQL
+// and its conformance suite use it, and migration 0043 holds the same caps in SQL
 // (drift-tested by tests/runtime-computer.test.mjs).
 //
 // Inside the sandbox there is no internet, no credential, no Morrow or provider URL and no
@@ -61,7 +61,7 @@ export function sandboxWorstCaseUsd(): string {
 
 /**
  * The runtime caps (ADR-0029 item 8), checked in SQL under one platform row lock before
- * every create (migration 0039, morrow_vault.runtime_operation_begin): a monthly budget
+ * every create (migration 0043, morrow_vault.runtime_operation_begin): a monthly budget
  * below E2B's US$20 usage limit, half of Hobby's 20 concurrent sandboxes, and three open
  * sandboxes per workspace. At a cap the caller's TypeScript fallback runs; cleanup is never
  * blocked.

@@ -1,5 +1,5 @@
 // Build order PR 7 PostgreSQL 17 laboratory: the computer's operation ledger (migration
-// runtime-operations, 0039) on an isolated network-none engine, the full manifest applied by
+// runtime-operations, 0043) on an isolated network-none engine, the full manifest applied by
 // the Neon-shaped non-superuser CREATEROLE administrator (ADR-0020 D4). It drives the broker's
 // real runtime gateway (apps/broker/src/runtime-gateway.ts) over the vault login's real
 // transport (runVaultTransactionWithDriver) and the vault ledger
