@@ -462,7 +462,7 @@ test("thinking options: the catalogue fits within the member ceiling, estimates 
     revision: 1,
     canChange: true,
     estimates,
-    jobLimit: 40,
+    dailyLimit: 40,
   });
   assert.equal(options.length, 9);
   assert.deepEqual(
@@ -470,6 +470,18 @@ test("thinking options: the catalogue fits within the member ceiling, estimates 
     ["claude_opus_5_5", "claude_opus_5_5", "claude_opus_5_5"],
   );
   assert.ok(options.every((o) => o.unit === "job" && o.limit === 40));
+});
+
+test("thinking: the limit a setting must fit is the agent's credits a day, as its page shows", async () => {
+  const port = createFixtureAdapter("ready");
+  for (const agentId of ["agent-analyst", "agent-inventory", "agent-support"]) {
+    const page = (await port.team.agent(ws, agentId)).value;
+    assert.equal(page.thinking.source, "own");
+    assert.equal(page.thinking.dailyLimit, page.creditsToday.limit, agentId);
+    assert.ok(!("jobLimit" in page.thinking));
+  }
+  // The copy reads the same way: one job's most against what it can use a day.
+  assert.match(sunriseCopy.thinking.overJob(42, 40), /up to 42 credits.*40 credits a day/);
 });
 
 test("settings: one Morrow address, the default; linked mailboxes are reserved kinds", async () => {

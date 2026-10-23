@@ -87,6 +87,9 @@ const estimates: readonly ThinkingEstimate[] = thinkingModels.flatMap((model) =>
     return { model, effort, typical, most };
   }),
 );
+// The sample agents' daily spending limit: their page's "Credits today" and the limit one
+// job's most must fit within when someone changes how they think.
+const agentDailyLimit = 40;
 const isModel = (v: string) => (thinkingModels as readonly string[]).includes(v);
 const isEffort = (v: string) => (thinkingEfforts as readonly string[]).includes(v);
 
@@ -116,7 +119,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     key: string,
     target: Target,
     usual: ThinkingChoice,
-    jobLimit: number | null,
+    dailyLimit: number | null,
   ): ThinkingView => ({
     ...own[key]!.choice,
     source: "own",
@@ -124,7 +127,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     revision: own[key]!.revision,
     canChange: mayChange(target),
     estimates,
-    jobLimit,
+    dailyLimit,
   });
   const listingsThinking = (): ThinkingView => {
     const d = deps.workspaceDefault();
@@ -137,7 +140,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       // models.list's canRevise decides on the page; the fixture's reviser is the Owner.
       canChange: viewer === "owner",
       estimates: [],
-      jobLimit: null,
+      dailyLimit: null,
     };
   };
 
@@ -342,7 +345,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Morning summary · Sat, Oct 24, 8:00 am"),
         ],
         credits: { used: 118, limit: 200 },
-        thinking: ownThinking("agent-analyst", "agent", sonnetLow, 40),
+        thinking: ownThinking("agent-analyst", "agent", sonnetLow, agentDailyLimit),
       },
       {
         agentId: "agent-inventory",
@@ -360,7 +363,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Daily stock check · Mon, Oct 26, 6:00 am"),
         ],
         credits: { used: 58, limit: 100 },
-        thinking: ownThinking("agent-inventory", "agent", sonnetLow, 40),
+        thinking: ownThinking("agent-inventory", "agent", sonnetLow, agentDailyLimit),
       },
       {
         agentId: "agent-support",
@@ -375,7 +378,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Drafts a reply when the next customer email comes in."),
         ],
         credits: { used: 196, limit: 300 },
-        thinking: ownThinking("agent-support", "agent", sonnetLow, 40),
+        thinking: ownThinking("agent-support", "agent", sonnetLow, agentDailyLimit),
       },
     ];
     const marketing = catalogue.find((e) => e.releaseId === "release-marketing")!;
@@ -390,7 +393,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         worksIn: ["Promotions"],
         lines: [line("next", "Weekly promotion plan · Tue, Oct 27, 9:00 am")],
         credits: { used: 0, limit: marketing.defaultMonthlyLimit },
-        thinking: ownThinking("agent-marketing", "agent", sonnetLow, 40),
+        thinking: ownThinking("agent-marketing", "agent", sonnetLow, agentDailyLimit),
       });
     }
     return agents;
@@ -573,7 +576,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       lastJob: listings ? "Updated the Everyday Tote page · 11:31 am" : null,
       next: summary.lines.find((l) => l.label === "next")?.text ?? null,
       creditsMonth: summary.credits,
-      creditsToday: { used: listings ? 26 : 4, limit: 40 },
+      creditsToday: { used: listings ? 26 : 4, limit: agentDailyLimit },
       creditsResetOn: "Nov 1",
       permission: {
         grantedBy: owner,

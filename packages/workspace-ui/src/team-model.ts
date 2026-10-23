@@ -41,9 +41,13 @@ export interface ThinkingView extends ThinkingChoice {
   readonly revision: number | null;
   /** The server decided whether this viewer may change it. */
   readonly canChange: boolean;
-  /** For `own`: credits per job by model and effort, and the most one job may use. */
+  /** For `own`: credits per job by model and effort. */
   readonly estimates: readonly ThinkingEstimate[];
-  readonly jobLimit: number | null;
+  /**
+   * For `own`: the credits this agent may use a day (its daily spending limit), or null
+   * where it has none. A setting fits when one job's most fits within it.
+   */
+  readonly dailyLimit: number | null;
 }
 export interface ThinkingEstimate extends ThinkingChoice {
   readonly typical: number;
@@ -55,7 +59,10 @@ export interface ThinkingOption extends ThinkingChoice {
   /** The most one job can use; null where the catalogue charges per product. */
   readonly most: number | null;
   readonly unit: "job" | "product";
-  /** The limit that applies: credits per product (the member ceiling) or per job. */
+  /**
+   * The limit that applies: credits per product (the member ceiling), or for a job the
+   * agent's credits a day (one job's most must fit within it).
+   */
   readonly limit: number | null;
   /** Within that limit; a choice that doesn't fit can't be saved. */
   readonly fits: boolean;
@@ -74,7 +81,7 @@ export function optionsFromCatalogue(view: ModelCatalogueView): readonly Thinkin
     fits: e.creditsPerProduct <= view.ceiling,
   }));
 }
-/** Every other helper: its estimates against the most one job may use. */
+/** Every other helper: each estimate's most for one job against its credits a day. */
 export function optionsFromEstimates(view: ThinkingView): readonly ThinkingOption[] {
   return view.estimates.map((e) => ({
     model: e.model,
@@ -82,8 +89,8 @@ export function optionsFromEstimates(view: ThinkingView): readonly ThinkingOptio
     typical: e.typical,
     most: e.most,
     unit: "job" as const,
-    limit: view.jobLimit,
-    fits: view.jobLimit === null || e.most <= view.jobLimit,
+    limit: view.dailyLimit,
+    fits: view.dailyLimit === null || e.most <= view.dailyLimit,
   }));
 }
 

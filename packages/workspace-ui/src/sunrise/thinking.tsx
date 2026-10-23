@@ -137,7 +137,7 @@ interface Resolved {
   readonly revision: number | null;
   /** The member ceiling, sent unchanged with the workspace default. */
   readonly ceiling: number | null;
-  readonly jobLimit: number | null;
+  readonly dailyLimit: number | null;
 }
 function resolve(thinking: ThinkingView, catalogue: ModelCatalogueView | null): Resolved | null {
   if (thinking.source === "workspace_default") {
@@ -148,7 +148,7 @@ function resolve(thinking: ThinkingView, catalogue: ModelCatalogueView | null): 
       canChange: catalogue.canRevise,
       revision: catalogue.revision,
       ceiling: catalogue.ceiling,
-      jobLimit: null,
+      dailyLimit: null,
     };
   }
   return {
@@ -157,7 +157,7 @@ function resolve(thinking: ThinkingView, catalogue: ModelCatalogueView | null): 
     canChange: thinking.canChange,
     revision: thinking.revision,
     ceiling: null,
-    jobLimit: thinking.jobLimit,
+    dailyLimit: thinking.dailyLimit,
   };
 }
 
@@ -336,7 +336,7 @@ export function ThinkingEditor({
               ? t.notOffered
               : option.unit === "product"
                 ? t.overProduct(option.typical, resolved.ceiling ?? 0)
-                : t.overJob(option.most ?? option.typical, resolved.jobLimit ?? 0)}
+                : t.overJob(option.most ?? option.typical, resolved.dailyLimit ?? 0)}
           </p>
           {bound ? (
             <RouteLink
