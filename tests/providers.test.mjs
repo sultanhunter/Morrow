@@ -118,9 +118,12 @@ test("catalogue v1 is active with the owner's confirmation, an effective date an
   assert.equal(v1.effective_from, "2026-10-19");
   assert.equal(modelPolicy.catalogue.published_digests["1"], catalogueVersionDigest(v1));
 });
-// The rule cases start from v1 as it stood before publication: proposed, nothing pinned.
+// The rule cases start from v1 as it stood before publication: proposed, nothing pinned. They
+// are the per-product shape's, so the proposed loop version (v2, PR 10) is left out here;
+// tests/loop-catalogue.test.mjs has its rule cases.
 const proposedBase = () => {
   const p = structuredClone(modelPolicy);
+  p.catalogue.versions = p.catalogue.versions.filter((entry) => entry.run_shape === undefined);
   const v1 = p.catalogue.versions[0];
   v1.status = "proposed";
   v1.owner_confirmation = null;

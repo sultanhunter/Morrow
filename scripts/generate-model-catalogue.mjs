@@ -108,7 +108,10 @@ export async function generateModelCatalogue(root = repositoryRoot) {
   const inspected = inspectModelPolicy(policy, registry);
   if (inspected.errors.length) refuse("POLICY_INVALID: " + inspected.errors.join("; "));
   const catalogue = policy.catalogue;
-  const versions = catalogue.versions.map(catalogueVersionData);
+  // Per-product versions only (listings-run@1); loop versions are loop-catalogue.ts's (PR 10).
+  const versions = catalogue.versions
+    .filter((entry) => entry.run_shape === undefined)
+    .map(catalogueVersionData);
   // Published versions carry their pinned digest; the generator never moves one.
   for (const version of versions)
     if (
@@ -126,6 +129,112 @@ export async function generateModelCatalogue(root = repositoryRoot) {
     JSON.stringify(data, null, 2) +
     " as const;\n";
   const options = (await prettier.resolveConfig(resolve(root, modelCataloguePath))) ?? {};
+  return prettier.format(text, { ...options, parser: "typescript" });
+}
+
+export const loopCataloguePath = "packages/policy/src/generated/loop-catalogue.ts";
+const usd12 = (text) => {
+  const units = scaled(text, 12);
+  if (units > BigInt(Number.MAX_SAFE_INTEGER)) refuse("CAP_TOO_LARGE");
+  return Number(units);
+};
+/**
+ * The generated data of one loop version (ADR-0027 items 6 and 12; PR 10). Money is exact
+ * 10^-12 USD: a per-million rate times 10^6 per token (Haiku 5.5's US$0.125 cache write is
+ * 0.125 of a 10^-6 USD, so the 10^-8 unit of version 1 cannot hold it).
+ */
+export function loopCatalogueVersionData(entry) {
+  if (entry.run_shape !== "agent_loop") refuse("RUN_SHAPE_INVALID");
+  if (!["active", "retired", "proposed"].includes(entry.status)) refuse("STATUS_INVALID");
+  const limits = entry.limits ?? {};
+  const perToken = (text) => {
+    const units = scaled(text, 6);
+    if (units > BigInt(Number.MAX_SAFE_INTEGER)) refuse("RATE_TOO_LARGE");
+    return Number(units);
+  };
+  const profile = (kind) => ({
+    model: entry.default_profiles[kind].model,
+    effort: entry.default_profiles[kind].effort,
+  });
+  return {
+    version: count(entry.version),
+    status: entry.status,
+    digest: catalogueVersionDigest(entry),
+    effectiveFrom: entry.effective_from ?? null,
+    defaultProfiles: {
+      coordinator: profile("coordinator"),
+      specialist: profile("specialist"),
+      installed: profile("installed"),
+    },
+    limits: {
+      maxInputTokensPerTurn: count(limits.max_input_tokens_per_turn),
+      maxTurnsPerRun: count(limits.max_turns_per_run),
+      maxTurnsPerCoordinatorRun: count(limits.max_turns_per_coordinator_run),
+      maxToolCallsPerTurn: count(limits.max_tool_calls_per_turn),
+      maxToolCallsPerRun: count(limits.max_tool_calls_per_run),
+      maxQuestionsPerRun: limits.max_questions_per_run,
+      questionWaitHours: count(limits.question_wait_hours),
+      wallTimeMinutes: count(limits.wall_time_minutes),
+      specialistDefaultRunMinutes: count(limits.specialist_default_run_minutes),
+      specialistMaxRunMinutes: count(limits.specialist_max_run_minutes),
+      toolResultMaxBytes: count(limits.tool_result_max_bytes),
+      runCostCapUsd12: usd12(limits.run_cost_cap_usd),
+      workspaceDailyCostCapUsd12: usd12(limits.workspace_daily_cost_cap_usd),
+      workspacePeriodUnrecoveredCostCapUsd12: usd12(limits.workspace_period_unrecovered_cost_cap_usd),
+    },
+    expectedTurn: {
+      inputTokens: count(entry.expected_turn.input_tokens),
+      cachedPrefixTokens: count(entry.expected_turn.cached_prefix_tokens),
+    },
+    efforts: entry.efforts.map((effort) => ({
+      key: effort.key,
+      maxOutputTokens: count(effort.max_output_tokens),
+      expectedOutputTokens: count(effort.expected_output_tokens),
+    })),
+    models: entry.models.map((model) => {
+      const rates = model.rates_usd_per_million_tokens;
+      return {
+        key: model.key,
+        provider: model.provider,
+        providerModelId: model.provider_model_id,
+        usd12PerToken: {
+          input: perToken(rates.input),
+          output: perToken(rates.output),
+          cacheWrite: perToken(rates.cache_write_5m),
+          cacheRead: perToken(rates.cache_read),
+        },
+      };
+    }),
+  };
+}
+
+/** The generated loop catalogue module text (PR 10), from the reviewed policy files. */
+export async function generateLoopCatalogue(root = repositoryRoot) {
+  const policy = JSON.parse(readFileSync(resolve(root, policyPath), "utf8"));
+  const registry = JSON.parse(readFileSync(resolve(root, registryPath), "utf8"));
+  const inspected = inspectModelPolicy(policy, registry);
+  if (inspected.errors.length) refuse("POLICY_INVALID: " + inspected.errors.join("; "));
+  const catalogue = policy.catalogue;
+  const versions = catalogue.versions
+    .filter((entry) => entry.run_shape === "agent_loop")
+    .map(loopCatalogueVersionData);
+  for (const version of versions)
+    if (
+      version.status !== "proposed" &&
+      catalogue.published_digests[String(version.version)] !== version.digest
+    )
+      refuse("DIGEST_DRIFT");
+  const data = { id: catalogue.id, activeVersion: catalogue.active_version ?? null, versions };
+  const text =
+    "// Generated by scripts/generate-model-catalogue.mjs from docs/decisions/model-policy.json\n" +
+    "// (ADR-0027 items 6 and 12; PR 10). Do not edit; run `npm run contracts:generate`.\n" +
+    "// The agent-loop versions only: opaque keys, exact 10^-12 USD integers, pinned version\n" +
+    "// digests. A proposed version is data for previews and tests; admission takes only a\n" +
+    "// published one. Provider model IDs are for the broker and never reach an api response.\n" +
+    "export const generatedLoopCatalogue = " +
+    JSON.stringify(data, null, 2) +
+    " as const;\n";
+  const options = (await prettier.resolveConfig(resolve(root, loopCataloguePath))) ?? {};
   return prettier.format(text, { ...options, parser: "typescript" });
 }
 
@@ -228,6 +337,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   const outputs = [
     [modelCataloguePath, await generateModelCatalogue()],
     [listingDraftSchemaPath, await generateListingDraftSchema()],
+    [loopCataloguePath, await generateLoopCatalogue()],
   ];
   for (const [path, text] of outputs) {
     const target = resolve(repositoryRoot, path);
@@ -241,5 +351,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
     }
   }
   if (process.argv.includes("--check"))
-    console.log("PASS: the generated model catalogue and ListingDraft_v1 reproduce exactly.");
+    console.log(
+      "PASS: the generated model catalogue, the loop catalogue and ListingDraft_v1 reproduce exactly.",
+    );
 }
