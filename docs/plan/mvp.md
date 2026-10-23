@@ -1,5 +1,15 @@
 # Morrow MVP: the launch plan (ADR-0023)
 
+**First, v1 is built live on the owner's own store ([ADR-0035](../decisions/adr/ADR-0035-build-v1-live.md)).** The one deployed environment (the `morrow-staging-*` Workers and the Neon project `morrow-staging`) is v1 production. Work runs under a standing owner approval with a one-line activity log; staging card 2 (G6) and G15 are dropped. The order:
+1. Connect the owner's store through the custom app already built.
+2. Turn on the model with the owner's Anthropic key.
+3. Agents draft on real products.
+4. The gateway applies approved changes, with read-back and undo.
+5. E2B.
+6. The workspace screens and the project flow (ADR-0033 and ADR-0034, proposed).
+
+Customer data waits for the Support agent and its deletion path. The rest of this file is the plan from v1 to the public launch.
+
 This is the launch plan. [ADR-0023](../decisions/adr/ADR-0023-mvp-redefinition.md) (its decisions approved by the owner on 2026-10-23) records the owner's decisions behind it and supersedes ADR-0021's invite-only listings beta. `build-plan.md` stays the long-term roadmap and structure; where it differs on launch scope or order, this file and ADR-0023 win until launch. When the project graph lands (ADR-0023 decision 10), its feature, agent, track and gate nodes carry this plan and this file becomes generated from them.
 
 Planning date: **public launch on Monday 2027-03-01**, in a range from mid-February (one clean App Review) to April 2027 (several rounds). Week 0 (W0) starts on Monday 2026-10-26.

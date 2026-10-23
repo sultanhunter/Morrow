@@ -4,6 +4,8 @@ Updated 2026-10-23. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active work
 
+**v1 is built live (ADR-0035, OD-2026-10-23-9 and -10):** the deployed environment is v1 production, built and tested on the owner's own store through the custom-distribution app, under one standing approval with a one-line log (`docs/evidence/activity-log.md`). Staging card 2, gate G6 and the G8 questions are dropped for v1. Milestone 1, "Listings suggests changes to my real products and applies the one I approve": PR 1 connect the live store, PR 2 Claude on with "Disconnect store", PR 3 review, approve and apply. The tools' card file must be repointed before 2026-11-18.
+
 The launch plan is ADR-0023 (#45): a lean, full-featured MVP where a shop's people and AI agents run the business together. `docs/plan/mvp.md` holds the scope, tracks T0–T18, gates G1–G18, dates and cut rules. Week 0 starts Monday 2026-10-26; public launch is planned for Monday 2027-03-01 (range mid-February to April 2027).
 - **Companion ADRs accepted** (track T0; `claude/companion-adrs`, PR #47): the owner approved ADR-0024 to ADR-0031 and decisions 32–38 as recommended on 2026-10-23 ("approve all as recommended", OD-2026-10-23-7), with two changes:
   - model and thinking effort per agent: the Coordinator Opus 5.5 at high, specialists Opus 5.5 at medium, the five installed agents Sonnet 5.5 at low (ADR-0027 item 12);
@@ -47,7 +49,7 @@ None for local work. **E2B's written answers** (G5) gate the E2B adapter code un
 
 ## Pending owner actions
 
-- **Approve or change:** staging card 2 (G6); sending the G8 questions; the installed agents' default (Sonnet 5.5 at low, as recorded, or Opus 5.5 at medium like specialists).
+- **v1 setup (owner):** the private Shopify app for the owner's store and its secret sealed by the owner; the Anthropic workspace spend limit and key placed by the owner; the E2B key placed by the owner; new Cloudflare tokens before 2026-11-18. ADR-0033 and ADR-0034 (the project flow) await approval when drafted.
 - **Confirm with catalogue version 2 and rate card v1 (by W8):** the Coordinator's 30-minute wall time and `max_tokens` 16,000 at high (ADR-0027 question 2); ADR-0026's run-hold rules written after the answer; the look-for-work 1% cap against the price (at US$99 no default pass fits); the Morrow address shape `<shop-name>@replies.<domain>`; whether a deleted shop's address may be reissued.
 - **For the tracks:** G3 (Partner account, `morrow` and `morrow-staging` app records, two or three development stores; App Pricing left off); G4 (Anthropic staging workspace with a monthly spend limit, key placed by the owner); G7 (the sending domain); G16 (entity, payout and tax, privacy policy, terms, DPAs); forward E2B's answers.
 - **Old credential rotations:** the Cloudflare Global API Key; a new WorkOS key that revokes the old ones; delete Neon project `cool-butterfly-64820147`; delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files; `tmutil addexclusion ~/.config/morrow`.
