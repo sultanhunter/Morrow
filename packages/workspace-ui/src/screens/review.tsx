@@ -32,6 +32,7 @@ const valueText = (value: string | readonly string[] | null) =>
 
 /** The shown text of one operation's result: its status, and why when it was not applied. */
 export function operationNote(o: OperationView): string | null {
+  if (o.status === "cancel_requested") return copy.review.setAsideNote;
   if (o.status === "uncertain")
     return (o.reason !== null ? copy.review.reasons[o.reason] : undefined) ?? copy.review.uncertain;
   if (o.status === "failed" || o.status === "conflict")
@@ -125,7 +126,11 @@ function ProductCard({
   );
 }
 
-/** Each product's apply result; an uncertain one can be read back again. */
+/**
+ * Each product's apply result. An uncertain one can be read back again, and the person who
+ * applied it can set it aside once they checked it in Shopify (the server decides who may);
+ * a set-aside one can still be read back.
+ */
 export function OperationList({
   ws,
   operations,
@@ -149,8 +154,11 @@ export function OperationList({
             <Time value={o.updatedAt} />
           </p>
           {operationNote(o) ? <p className="muted">{operationNote(o)}</p> : null}
-          {o.status === "uncertain" ? (
+          {o.status === "uncertain" || o.status === "cancel_requested" ? (
             <Recheck ws={ws} operationId={o.operationId} onChanged={onChanged} />
+          ) : null}
+          {o.status === "uncertain" ? (
+            <SetAside ws={ws} operationId={o.operationId} onChanged={onChanged} />
           ) : null}
         </li>
       ))}
@@ -179,6 +187,39 @@ function Recheck({
     <div className="item-actions">
       <Button disabled={command.busy} onClick={() => void command.submit({})}>
         {copy.review.checkAgain}
+      </Button>
+      <CommandFeedback
+        phase={command.phase}
+        onCheckAgain={command.checkAgain}
+        onRetry={command.retry}
+      />
+    </div>
+  );
+}
+
+function SetAside({
+  ws,
+  operationId,
+  onChanged,
+}: {
+  readonly ws: Id;
+  readonly operationId: Id;
+  readonly onChanged: () => void;
+}) {
+  const services = useServices();
+  const command = useCommand<Record<string, never>, OperationView>({
+    marker: null,
+    send: (c) => services.port.review.setAside(ws, operationId, c),
+    onOutcome: (outcome) => {
+      if (outcome.kind === "ok") onChanged();
+    },
+  });
+  if (!services.composed["review.setAside"]) return null;
+  return (
+    <div className="item-actions">
+      <p className="muted">{copy.review.setAsideHint}</p>
+      <Button disabled={command.busy} onClick={() => void command.submit({})}>
+        {copy.review.setAside}
       </Button>
       <CommandFeedback
         phase={command.phase}

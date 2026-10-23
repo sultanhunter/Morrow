@@ -804,6 +804,24 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
             .find((o) => o.operationId === operationId);
           return ws(id) && found ? ok(found) : notFound;
         }),
+      setAside: (id, operationId, c) =>
+        command<OperationView>("review.setAside", c, () => {
+          for (const r of reviews.values()) {
+            const i = r.operations.findIndex((o) => o.operationId === operationId);
+            if (i < 0 || !ws(id)) continue;
+            const o = r.operations[i]!;
+            if (o.status !== "uncertain") return ok(o);
+            const set: OperationView = {
+              ...o,
+              status: "cancel_requested",
+              reason: "owner_checked",
+              updatedAt: at(),
+            };
+            r.operations[i] = set;
+            return ok(set);
+          }
+          return notFound;
+        }),
     },
     models: {
       list: (id) =>

@@ -413,6 +413,22 @@ export function decodeRechecked(body: unknown, id: string): OperationView | null
   return o && o.operationId === id ? o : null;
 }
 
+/**
+ * POST /work/operations/:operationId/set-aside: the operation after the person set it aside
+ * (set_aside) or as it already was (unchanged).
+ */
+export function decodeSetAside(body: unknown, id: string): OperationView | null {
+  if (
+    !record(body) ||
+    !exactly(body, ["schemaVersion", "outcome", "operation"]) ||
+    body.schemaVersion !== 1 ||
+    (body.outcome !== "set_aside" && body.outcome !== "unchanged")
+  )
+    return null;
+  const o = decodeOperation(body.operation);
+  return o && o.operationId === id ? o : null;
+}
+
 /** GET /work/approvals: the pending approvals this person may see. */
 export function decodePendingApprovals(body: unknown): readonly PendingApprovalView[] | null {
   if (

@@ -17,6 +17,7 @@ import {
   decodePendingApprovals,
   decodeRechecked,
   decodeRef,
+  decodeSetAside,
   decodeReview,
 } from "../apps/workspace-web/src/http/review-decoders.ts";
 import { createFixtureAdapter } from "../apps/workspace-web/src/fixtures/adapter.ts";
@@ -112,7 +113,7 @@ const reviewBody = (over = {}) => ({
   ...over,
 });
 
-test("the port: six review methods, all composed over HTTP", () => {
+test("the port: seven review methods, all composed over HTTP", () => {
   for (const method of [
     "review.listPending",
     "review.get",
@@ -120,6 +121,7 @@ test("the port: six review methods, all composed over HTTP", () => {
     "review.apply",
     "review.operationsOfTask",
     "review.recheck",
+    "review.setAside",
   ]) {
     assert.ok(portMethods.includes(method), method);
     assert.equal(composed[method], true, method);
@@ -179,6 +181,12 @@ test("requests: fixed paths, closed bodies, the exact refs; refused before sendi
     body: "{}",
     key: k,
   });
+  assert.deepEqual(requests.setAside(ws, opId, { key: k, body: {} }), {
+    method: "POST",
+    path: "/workspace/ws-1/work/operations/" + opId + "/set-aside",
+    body: "{}",
+    key: k,
+  });
   for (const refused of [
     requests.review("bad id", "proposal_1", null),
     requests.review(ws, "proposal_1", []),
@@ -206,6 +214,9 @@ test("requests: fixed paths, closed bodies, the exact refs; refused before sendi
     requests.operationsOfTask(ws, "task/../x"),
     requests.recheck(ws, "not-an-operation", { key: k, body: {} }),
     requests.recheck(ws, opId, { key: k, body: { all: true } }),
+    requests.setAside(ws, "not-an-operation", { key: k, body: {} }),
+    requests.setAside(ws, opId, { key: k, body: { status: "failed" } }),
+    requests.setAside(ws, opId, { key: "NOT-A-KEY", body: {} }),
   ])
     assert.equal(refused, null);
 });
@@ -297,6 +308,25 @@ test("decoders: exactly the server's shapes; anything wider or foreign is null",
   );
   assert.equal(
     decodeRechecked({ schemaVersion: 1, outcome: "recorded", operation: operation() }, "other"),
+    null,
+  );
+  const setAside = operation({ status: "cancel_requested", reason: "owner_checked" });
+  assert.equal(
+    decodeSetAside({ schemaVersion: 1, outcome: "set_aside", operation: setAside }, opId)?.status,
+    "cancel_requested",
+  );
+  assert.equal(
+    decodeSetAside({ schemaVersion: 1, outcome: "unchanged", operation: operation() }, opId)
+      ?.status,
+    "verified",
+  );
+  for (const wider of [
+    { schemaVersion: 1, outcome: "recorded", operation: setAside },
+    { schemaVersion: 1, outcome: "set_aside", operation: setAside, extra: 1 },
+  ])
+    assert.equal(decodeSetAside(wider, opId), null);
+  assert.equal(
+    decodeSetAside({ schemaVersion: 1, outcome: "set_aside", operation: setAside }, "other"),
     null,
   );
   const pending = {
@@ -406,6 +436,26 @@ test("the results render as text: each status and why a product was not applied"
   assert.ok(html.includes(copy.review.reasons.source_changed));
   assert.ok(html.includes(copy.review.reasons.readback_differs));
   assert.ok(html.includes(copy.review.checkAgain));
+  // An uncertain result offers both: check again, or set it aside after checking in Shopify.
+  assert.ok(html.includes(copy.review.setAside));
+  // A set-aside result says so and can still be checked, never set aside twice.
+  const asideHtml = renderToStaticMarkup(
+    React.createElement(
+      ServicesProvider,
+      { value: services },
+      React.createElement(OperationList, {
+        ws,
+        operations: [
+          decodeOperation(operation({ status: "cancel_requested", reason: "owner_checked" })),
+        ],
+        onChanged() {},
+      }),
+    ),
+  );
+  assert.ok(asideHtml.includes(copy.status.operation.cancel_requested));
+  assert.ok(asideHtml.includes(copy.review.setAsideNote));
+  assert.ok(asideHtml.includes(copy.review.checkAgain));
+  assert.ok(!asideHtml.includes(copy.review.setAside + "<"));
   assert.equal(
     operationNote(decodeOperation(operation({ status: "uncertain", reason: null }))),
     copy.review.uncertain,

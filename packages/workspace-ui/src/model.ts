@@ -256,7 +256,10 @@ export interface OperationView {
   readonly proposalId: Id;
   readonly productId: string;
   readonly targetIndex: number;
-  /** authorized, dispatching, submitted, verifying, verified, conflict, failed, uncertain. */
+  /**
+   * authorized, dispatching, submitted, verifying, verified, conflict, failed, uncertain, or
+   * cancel_requested (the person who applied it set it aside after checking it in Shopify).
+   */
   readonly status: string;
   readonly reason: string | null;
   readonly uncertaintyReason: string | null;

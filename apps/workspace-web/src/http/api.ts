@@ -69,6 +69,7 @@ import {
   decodeOperationsOfTask,
   decodePendingApprovals,
   decodeRechecked,
+  decodeSetAside,
   decodeReview,
 } from "./review-decoders";
 
@@ -511,6 +512,17 @@ export const requests = {
     );
     return request && request.key !== null ? request : null;
   },
+  setAside(ws: string, operationId: string, c: Command<Record<string, never>>) {
+    if (!ids(ws) || !operationIdPattern.test(operationId) || Object.keys(c.body).length !== 0)
+      return null;
+    const request = post(
+      workPath(ws, "operations", operationId, "set-aside"),
+      {},
+      c.key,
+      byteLimits.work,
+    );
+    return request && request.key !== null ? request : null;
+  },
 } as const;
 
 export interface HttpPortOptions {
@@ -811,6 +823,11 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         "review.recheck",
         (ws: string, operationId: string, c: Command<Record<string, never>>) =>
           command(requests.recheck(ws, operationId, c), (b) => decodeRechecked(b, operationId)),
+      ),
+      setAside: gated(
+        "review.setAside",
+        (ws: string, operationId: string, c: Command<Record<string, never>>) =>
+          command(requests.setAside(ws, operationId, c), (b) => decodeSetAside(b, operationId)),
       ),
     },
     models: {

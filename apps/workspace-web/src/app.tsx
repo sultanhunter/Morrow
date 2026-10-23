@@ -686,6 +686,7 @@ export function guardPort(
       apply: watch(port.review.apply.bind(port.review), first),
       operationsOfTask: watch(port.review.operationsOfTask.bind(port.review), first),
       recheck: watch(port.review.recheck.bind(port.review), first),
+      setAside: watch(port.review.setAside.bind(port.review), first),
     },
     models: {
       list: watch(port.models.list.bind(port.models), first),

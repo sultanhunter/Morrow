@@ -196,7 +196,9 @@ export interface WorkspacePort {
    * v1 PR 3: review, approve and apply. The review shows before and after per product and
    * field; a decision binds the exact digest it names (a selection previews its own); apply
    * claims that exact approval and writes each product once through the gateway (the same
-   * key continues an apply that ran out of time); a recheck reads one product back.
+   * key continues an apply that ran out of time); a recheck reads one product back; the
+   * person who applied an uncertain change may set it aside once they checked it in Shopify
+   * (nothing is sent; Morrow keeps checking).
    */
   readonly review: {
     listPending(ws: Id): Promise<Outcome<readonly PendingApprovalView[]>>;
@@ -213,6 +215,11 @@ export interface WorkspacePort {
     ): Promise<Outcome<ApplyResultView>>;
     operationsOfTask(ws: Id, taskId: Id): Promise<Outcome<readonly OperationView[]>>;
     recheck(
+      ws: Id,
+      operationId: Id,
+      c: Command<Record<string, never>>,
+    ): Promise<Outcome<OperationView>>;
+    setAside(
       ws: Id,
       operationId: Id,
       c: Command<Record<string, never>>,
@@ -276,6 +283,7 @@ export const portMethods = [
   "review.apply",
   "review.operationsOfTask",
   "review.recheck",
+  "review.setAside",
 ] as const;
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */

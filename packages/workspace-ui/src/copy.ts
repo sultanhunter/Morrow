@@ -546,6 +546,11 @@ export const copy = {
     historyEmpty: "No changes have been applied from this task.",
     open: "Open the review",
     checkAgain: "Check again",
+    setAside: "I checked it in Shopify",
+    setAsideHint:
+      "If you have looked at this product in Shopify yourself, you can set this result aside. Nothing is sent again, and Morrow keeps checking.",
+    setAsideNote:
+      "You checked this in Shopify and set it aside. Nothing was sent again; Morrow still checks it.",
     reasons: {
       source_changed: "Not applied: the product changed in Shopify since the draft.",
       product_busy: "Not applied: another change to this product is still being checked.",
@@ -575,6 +580,8 @@ export const copy = {
       fence_expired: "Needs your attention: Morrow can't tell yet whether Shopify applied it.",
       credential_gone:
         "Needs your attention: the store disconnected before Morrow could check the product.",
+      superseded:
+        "Needs your attention: a later change to this product was applied before Morrow could confirm this one. Check the product in Shopify.",
     } as Readonly<Record<string, string>>,
     uncertain:
       "Needs your attention: Morrow can't tell yet whether Shopify applied it. It is never sent twice; check again to read the product back.",
@@ -631,6 +638,7 @@ export const copy = {
       conflict: "Not applied",
       failed: "Not applied",
       uncertain: "Needs attention",
+      cancel_requested: "Checked by you",
     },
     installation: {
       unlinked: "Not linked",
