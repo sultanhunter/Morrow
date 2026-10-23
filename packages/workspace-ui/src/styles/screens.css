@@ -393,6 +393,11 @@
   .store-row {
     margin: 0 calc(-1 * var(--space-4));
   }
+  .card > .row-list:last-child,
+  .panel > .row-list:last-child,
+  .card > .store-row:last-child {
+    margin-bottom: calc(-1 * var(--space-4));
+  }
   /* A badge that wraps under a row's text lines up with the text, not the lead tile. */
   .row-lead + .row-text + .tag {
     margin-left: 56px;

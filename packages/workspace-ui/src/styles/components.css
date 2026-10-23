@@ -479,6 +479,15 @@ input[type="radio"] {
 .row-list > li + li {
   border-top: 1px solid var(--color-rule);
 }
+/* A list that ends its card runs to the card's bottom edge. */
+.card > .row-list:last-child,
+.panel > .row-list:last-child,
+.card > .store-row:last-child {
+  margin-bottom: calc(-1 * var(--space-5));
+}
+.card > .row-list:last-child > li:last-child > .row-link {
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
 .row {
   display: flex;
   flex-wrap: wrap;
