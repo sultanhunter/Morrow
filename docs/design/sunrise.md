@@ -31,9 +31,11 @@ Never: violet or lavender (Built for Shopify 4.3.5 rejects AI purple in the admi
 
 ## Shell and navigation
 
-The sidebar draws the route contract's seven destinations (`docs/contracts/workspace-routes.json`) with three labels changed: Home, Inbox (with the marigold count of what waits for the person), **Projects** (route `work`), **Team** (route `agents`), Shop knowledge (`knowledge`), **Files** (`assets`), and Settings at the bottom. Routes, paths and the contract's titles are unchanged; tab titles use the Sunrise names (`copy.routeTitles`). Activity has no sidebar item: it lives under Settings once its section exists.
+The sidebar draws the route contract's seven destinations (`docs/contracts/workspace-routes.json`) with three labels changed: Home, Inbox (with the marigold count of what waits for the person), **Projects** (route `work`), **Team** (route `agents`), Shop knowledge (`knowledge`), **Files** (`assets`), and Settings at the bottom. Routes, paths and the contract's titles are unchanged; tab titles use the Sunrise names (`copy.routeTitles`; a settings section by its own name).
 
 Above the destinations: the store switcher (the shop's serif monogram tile), the **Ask Morrow** button (on every page; the contract's entry action), and Search (drawn, disabled until search exists). Under Projects, pinned projects; under Team, Morrow (always) and the added agents and people. At the bottom: the store connection line ("Shopify connected"), the credit balance (when known) and Sign out. Below 760 px the sidebar becomes a labelled modal drawer behind a 56 px top bar (menu, store, Ask Morrow, Inbox with its count).
+
+**Settings** (`components/settings-frame.tsx`, the ConnectStore board): every settings screen (`settings`, `settings_section`, `connections`, `connection`) sits beside a white sub-navigation card: Plan and credits, People and roles, Notifications, Model default and Shopify connection, each on its contract path (`/settings/<section>` or `/connections`). **Activity** is listed there, under Settings and never in the sidebar, as a placeholder that isn't a link ("Activity, not in this build yet" to a screen reader) until the activity log has a route; that needs a `settings_section` value in the route contract, its own change. Below 1120 px the card sits above the screen and its items wrap.
 
 ## Agent characters (`components/avatars.tsx`)
 
@@ -54,10 +56,10 @@ A 28 px badge: a 14 px glyph and one word from a closed list, in a tone. Dashed 
 
 The board's other sections (Today, Your projects, Yesterday at a glance, Ideas, the Ask Morrow panel, pinned projects, the Team list and credits) have no backend yet: ADR-0033 and ADR-0034 are proposed, not approved. They render only from the `samples.home` port method, which the HTTP build never composes and the fixture build composes only in its `home_preview` scenario, and each says "Sample data" on screen.
 
-## Entry screens
+## Entry screens (the SignIn board)
 
-Sign-in, workspace setup and the account screens: a 64 px top bar with Morrow's character, then one centred white card (radius 16, padding 32) on the warm page.
+Sign-in, signed out, workspace setup and the account screens: a 64 px top bar over a rule with Morrow's character and name, then one centred white card on the warm page (504 px at most, `content_width_px.entry`; radius 16; padding 20 to 32). Sign-in and signed out open with the horizon picture (`HorizonPicture`: Morrow at 72 on an ink horizon with a sand hill and a sage leaf, 160 × 120, decorative). The card's primary action runs its full width. The board's "Get help" link and terms line wait for pages to point at.
 
 ## Still to come in T7
 
-A self-hosted Inter; the Sunrise component baseline and prototype with their own browser receipt (`prototype.html` and `browser-checks.json` still show option 1); the Inbox and review (PR 15); agent pages, the catalogue and Settings (PR 16); the empty-state pictures; the embedded home in the admin's own Polaris look (ADR-0032 item 6).
+A self-hosted Inter; the Sunrise component baseline and prototype with their own browser receipt (`prototype.html` and `browser-checks.json` still show option 1); the Inbox and review (PR 15); agent pages, the catalogue and Settings (PR 16); the empty-state pictures beyond the entry screens; the embedded home in the admin's own Polaris look (ADR-0032 item 6).
