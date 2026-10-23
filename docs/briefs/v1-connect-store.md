@@ -52,7 +52,7 @@ Stop at any time: `npm run staging:kill` takes both addresses down. Rotating the
 - [x] `lab:test-entitlement` V: registration and the sealed secret (it opens with the KEK), a rerun rotates it, a second live app stores nothing, the standing entitlement goes only to the live-store app's workspace, no statement carries the secret, the KEK or the shop.
 - [x] `tests/broker-shopify.test.mjs`: the live store is admitted before prepare; a development store never asks; another app's mark refuses.
 - [x] `tests/staging-live-store.test.mjs`: the standing approval's closed record; the entitlement's references and its workspace check; self-service's e7; the registration's statements, replay, refusals and closed inputs; the CLI reads the secret only from the prompt or the 0600 file, refuses any argument that could carry it, and prints nothing secret.
-- [x] `tests/staging-deploy.test.mjs`: the census admits exactly the api and the connector; the kill takes both down (and both races); `unkill` both or neither; the smoke reads the connector.
+- [x] `tests/staging-deploy.test.mjs`: the census admits exactly the api and the connector; the kill takes both down (and both races); `unkill` both or neither, also when turning a hostname on throws; the smoke reads the connector.
 - [x] `tests/edge-config.test.mjs`: the connector's two vars, exact; workers.dev on the api and the connector only.
 - [x] `tests/shopify-app-script.test.mjs`: the committed connector origin, the CLI's `package.json`, the live registration's digest.
 - [ ] Hosted `foundation` on the PR head; Tier 2 AI review (security lens: authority, RLS, migrations, credentials).

@@ -1317,6 +1317,30 @@ test("AC14: unkill needs the card, and restores workers.dev, the workflow and th
   }
 });
 
+test("AC14: unkill keeps both or neither when turning a hostname on throws", async () => {
+  for (const [worker, outcome, expected] of [
+    ["morrow-staging-connector", "fail", "STAGING_CLOUDFLARE_UNAVAILABLE"],
+    ["morrow-staging-connector", "lost", "STAGING_CLOUDFLARE_UNAVAILABLE"],
+    ["morrow-staging-connector", "invalid", "STAGING_CLOUDFLARE_RESPONSE_INVALID"],
+    ["morrow-staging-api", "lost", "STAGING_CLOUDFLARE_UNAVAILABLE"],
+  ]) {
+    const w = await world({ cloudflare: { enableFails: { [worker]: outcome } } });
+    const label = `${worker} ${outcome}`;
+    try {
+      assert.equal(await main(["kill"], w.ctx), 0, label);
+      const { code, result } = await w.run(["unkill"]);
+      assert.equal(code, 1, label);
+      assert.equal(result.code, expected, label);
+      assert.equal(w.cloud.workersDev(scriptOf.api), false, label);
+      assert.equal(w.cloud.workersDev(scriptOf.connector), false, label);
+      assert.equal(w.fake.state.workflow, "disabled_manually", label);
+      assert.equal(w.fake.state.values.STAGING_DEPLOY_ENABLED, "0", label);
+    } finally {
+      w.planted.cleanup();
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------
 // The CI step without the token: card, gate 1 and gate 2, and the step output.
 test("ci-gates: proceed only for an active card, the main tip and an enabled flag; stops exit 0", async () => {

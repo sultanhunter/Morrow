@@ -344,7 +344,15 @@ export function fakeCloudflare(options = {}) {
         const script = scriptNamed(subdomain[1]);
         if (!script) throw notFound();
         if (options.subdomainFails) throw new StagingError("STAGING_CLOUDFLARE_UNAVAILABLE");
+        // `enableFails[name]` shapes only turning that script's workers.dev on: "fail"
+        // throws with nothing changed, "lost" lands the change and then throws (a transport
+        // error after the write), "invalid" changes nothing and answers the wrong state.
+        const enableOutcome = body.enabled ? options.enableFails?.[script.name] : undefined;
+        if (enableOutcome === "fail") throw new StagingError("STAGING_CLOUDFLARE_UNAVAILABLE");
+        if (enableOutcome === "invalid")
+          return { success: true, result: { enabled: script.enabled, previews_enabled: false } };
         script.enabled = body.enabled;
+        if (enableOutcome === "lost") throw new StagingError("STAGING_CLOUDFLARE_UNAVAILABLE");
         script.previews = body.previews_enabled;
         return { success: true, result: { enabled: script.enabled, previews_enabled: false } };
       }

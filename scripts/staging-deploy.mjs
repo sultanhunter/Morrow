@@ -729,8 +729,9 @@ export async function runKill(ctx, { github, staging }) {
 }
 
 // Undo (needs the active approval, checked by the caller): workers.dev on for both public
-// Workers, each ready within 90 s (otherwise both off again), then the workflow and the
-// flag.
+// Workers, each ready within 90 s, then the workflow and the flag. Both or neither: any
+// failure while turning a hostname on (not ready, an unexpected Cloudflare reply, a
+// transport error) turns both off again before the error is reported.
 export async function runUnkill(ctx, { github, staging }) {
   const origins = publicOrigins(staging);
   if (
@@ -745,14 +746,17 @@ export async function runUnkill(ctx, { github, staging }) {
   };
   const health = {};
   for (const key of workersDevAllowTable) {
-    await setWorkersDev(api, staging.cloudflare.workers[key], true);
-    health[key] = await waitReady(ctx, origins[key], { service: key });
-    if (!health[key].ready) {
+    try {
+      await setWorkersDev(api, staging.cloudflare.workers[key], true);
+      health[key] = await waitReady(ctx, origins[key], { service: key });
+      if (!health[key].ready)
+        throw new StagingError("STAGING_UNKILL_NOT_READY", {
+          worker: key,
+          polls: health[key].polls,
+        });
+    } catch (error) {
       await allOff();
-      throw new StagingError("STAGING_UNKILL_NOT_READY", {
-        worker: key,
-        polls: health[key].polls,
-      });
+      throw error;
     }
   }
   await toolOk(ctx.tools, "gh", [
