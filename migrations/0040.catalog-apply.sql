@@ -21,8 +21,8 @@ BEGIN;
 --     and catalog_write_end; catalog_reconcile_resolve and catalog_reconcile_record (read-back,
 --     never blocked by a stop or a lease's end). Only a read-back that matches the approved
 --     values reaches verified; an unknown outcome stays uncertain until a read-back settles it.
---   * One open write per product: a later write waits only while an earlier one may still be in
---     flight (fenced, or not yet read back after its send window). A read-back taken after a
+--   * One open write per product: a later write waits only while an earlier one may still be
+--     in flight (fenced, or not yet read back after its send window). A read-back taken after a
 --     later write to the same product was fenced never settles the earlier one. The claimant
 --     may set an uncertain operation aside once its send window has passed
 --     (cmd_catalog_set_aside: uncertain -> cancel_requested, reconciliation continues).
@@ -399,8 +399,8 @@ BEGIN
  RETURN QUERY SELECT 'dispatching'::text,'dispatching'::text,x.revision::text,NULL::text;
 END $$;
 
--- The claimant sets an uncertain operation aside (ADR-0022 item 7; the operation machine's owner
--- edge uncertain -> cancel_requested, reconciliation_continues), after checking the product in
+-- The claimant sets an uncertain operation aside (ADR-0022 item 7; the operation machine's
+-- owner edge uncertain -> cancel_requested, reconciliation_continues), after checking it in
 -- Shopify, in the claimant's own session, after the Worker reran the claimant's kernel
 -- decision on the store resource. Nothing is sent or resent, and the outcome stays unknown:
 -- read-backs continue (R1 and R2), and a later one that shows the approved values still
@@ -733,10 +733,10 @@ END $$;
 -- at most once every 10 seconds (too_soon). Without the credential the fence used (an
 -- uninstall, a disconnect, a new token) a read-back is impossible: a credential_unavailable
 -- row, and a submitted operation becomes uncertain (verification_unavailable); an uncertain
--- or set-aside one stays as it is. `resolved` returns the shop, the product, the fields, the approved item,
--- the source snapshot (null once gone), Shopify's updatedAt before the send and the token's
--- envelope. Outcomes: resolved, closed, too_soon, unavailable, settled, not_found, invalid,
--- denied.
+-- or set-aside one stays as it is. `resolved` returns the shop, the product, the fields, the
+-- approved item, the source snapshot (null once gone), Shopify's updatedAt before the send and
+-- the token's envelope. Outcomes: resolved, closed, too_soon, unavailable, settled, not_found,
+-- invalid, denied.
 CREATE FUNCTION morrow_vault.catalog_reconcile_resolve(p_operation_id text)
 RETURNS TABLE(outcome text,status text,organization_id text,workspace_id text,shop_domain text,product_id text,fields text,item text,source text,
  source_updated_at text,store_installation_id text,credential_id text,credential_version text,kek_version text,wrapped_key text,sealed_value text)
