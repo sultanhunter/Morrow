@@ -656,7 +656,9 @@ async function start(
     live,
     JSON.stringify(assignees),
   ]);
-  // After commit, each run on its own (ADR-0034 item 6); none while the loop is off.
+  // After commit, each run on its own (ADR-0034 item 6); none while the loop is off. T4's
+  // admission composes the loop switch and whether the actor is the Owner; until then every
+  // agent or specialist step is `not_started` with `agent_loop_off`.
   const runs = planStepRuns(card, {
     actorIsOwner: false,
     agentLoop: "off",

@@ -1,6 +1,6 @@
 # Morrow status
 
-Updated 2026-10-23. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`; the merge-train detail of 2026-10-22 is `git show cbccb3a:docs/progress/STATUS.md`. Then run `npm run graph -- status`.
+Updated 2026-10-24. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`; the merge-train detail of 2026-10-22 is `git show cbccb3a:docs/progress/STATUS.md`. Then run `npm run graph -- status`.
 
 ## Active work
 
@@ -11,6 +11,7 @@ The launch plan is ADR-0023 (#45): a lean, full-featured MVP where a shop's peop
   - model and thinking effort per agent: the Coordinator Opus 5.5 at high, specialists Opus 5.5 at medium, the five installed agents Sonnet 5.5 at low (ADR-0027 item 12);
   - a list of sending addresses per workspace, the shop's Morrow address selected by default, the sender picked per email job, linking the merchant's own mailboxes designed for but not built (ADR-0030 item 10).
   ADR-0032 records Sunrise as the visual direction (OD-2026-10-23-6) and replaces CLAUDE.md's "Visual option 1". The same PR records answers 33–38 and the owner decisions OD-2026-10-23-4 to -7. Open: hosted `foundation`, the AI review, merge.
+- **PR 18, projects behind the scenes** (`claude/t2-t6-projects-backend`, brief `docs/briefs/projects-backend.md`; ADR-0033 and ADR-0034, accepted 2026-10-24): the flow contracts, the project rules in `packages/policy/src/projects/`, migration 0039 (integration renumbers), the goal and plan-start routes, all default off (`plan-drafts-staging.json` off, start routes held; `edge:check` refuses it on before the agent loop). New `lab:plan-start` in the `work` leg; it and `lab:tenant-conformance` passed locally. Open: hosted `foundation`, the AI review (security lens), merge; then one reviewed commit to set the start routes `ready`. Waiting on other tracks: messages (T6), routines (T5), run admission (T4), task cancel edges (P06), Support's deletion path (customer-tagged goal values).
 - **Project graph:** phase 0 merged (#46, `cefa3fd`). CLAUDE.md step 1 now runs `npm run graph -- status` (decision 35). Next: phase 1 (the MVP as nodes).
 - **Design:** the Sunrise canvas (12 MVP screens, including model and thinking choices, the "Send from" picker and the Email addresses page) is published as a private claude.ai page. T7 replaces `docs/design/` tokens and the prototype.
 - **Drafted for the owner (not in the repository):** standing staging card 2 (G6) and the questions to Shopify Partner support (G8).
