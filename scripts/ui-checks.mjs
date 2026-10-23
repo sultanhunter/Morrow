@@ -761,6 +761,31 @@ export const keyboardWalks = [
       expect((await active(page)).text === change, "dialog_focus_restore");
     },
   },
+  // Stop all AI work by keyboard: the dialog opens on the typed confirmation, Escape
+  // closes it with nothing sent and focus back on the opener; typing "stop" and Enter stops.
+  {
+    name: "stop_all",
+    path: `/w/${ws}/settings/governance`,
+    scenario: "stop_all",
+    run: async (page) => {
+      const open = "Stop all AI work";
+      await page.getByRole("button", { name: open }).waitFor();
+      await tabTo(page, (a) => a.tag === "BUTTON" && a.text === open, 80);
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.waitFor();
+      expect((await active(page)).tag === "INPUT", "focus_on_confirmation");
+      await page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
+      expect((await active(page)).text === open, "dialog_focus_restore");
+      await page.keyboard.press("Enter");
+      await dialog.waitFor();
+      await page.keyboard.type("stop");
+      await page.keyboard.press("Enter");
+      await page.getByRole("heading", { name: "All AI work is stopped" }).waitFor();
+      await dialog.waitFor({ state: "hidden" });
+    },
+  },
   {
     name: "add_agent",
     path: `/w/${ws}/agent-store/release-marketing`,
