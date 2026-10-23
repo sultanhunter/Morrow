@@ -161,6 +161,7 @@ test("P1: with no context both roles see zero rows and every api function is ine
     // v1 PR 3: the claim (a well-formed item list) and one operation's dispatch check.
     "cmd_catalog_apply(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_apply('${uuid}','${digest}','approval_absent','1','${digest}','proposal_absent','${digest}','{"evaluatedAt":"2026-10-23T00:00:00.000Z","reviewers":[]}','[{"targetIndex":0,"canonical":"{}","digest":"${digest}"}]')`,
     "cmd_catalog_dispatch(text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_dispatch('${randomUUID()}',NULL)`,
+    "cmd_catalog_set_aside(text)": `SELECT outcome FROM morrow_work.cmd_catalog_set_aside('${randomUUID()}')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",

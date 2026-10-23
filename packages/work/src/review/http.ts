@@ -44,6 +44,7 @@ import {
   familyOperations,
   operationVisible,
   parseApplyBody,
+  setAsideOperation,
   type ApplyRefusal,
   type OperationRow,
 } from "./apply.js";
@@ -60,6 +61,7 @@ import { ReviewViewError, buildProductReviews, type ReviewSource } from "./view.
 //   GET  /work/tasks/:taskId/operations         a task's apply history
 //   GET  /work/operations/:operationId          one operation, its transitions and read-backs
 //   POST /work/operations/:operationId/reconcile read the product back (an unknown outcome)
+//   POST /work/operations/:operationId/set-aside the claimant checked it in Shopify (uncertain)
 // Every read and command is one short transaction of its own (5 s), opened per step. While
 // the apply switch is off (MORROW_SHOPIFY_WRITE absent), apply answers 503 before any
 // database access: no claim, lease or operation exists without the gateway. The broker's
@@ -84,7 +86,8 @@ type ReviewOp =
   | "review.apply"
   | "operations.of_task"
   | "operations.get"
-  | "operations.reconcile";
+  | "operations.reconcile"
+  | "operations.set_aside";
 interface ReviewRoute extends WorkspaceRouteSpec {
   readonly op: ReviewOp;
 }
@@ -98,10 +101,11 @@ export const reviewRoutes: readonly ReviewRoute[] = Object.freeze([
   route("GET", "/tasks/:taskId/operations", "operations.of_task"),
   route("GET", "/operations/:operationId", "operations.get"),
   route("POST", "/operations/:operationId/reconcile", "operations.reconcile"),
+  route("POST", "/operations/:operationId/set-aside", "operations.set_aside"),
 ]);
 /** The paths the api Worker sends to this handler (its dispatch row, ahead of the work API). */
 export const reviewPathPattern =
-  /^\/workspace\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\/work\/(?:approvals|proposals\/[^/]+\/(?:review|decision|apply)|tasks\/[^/]+\/operations|operations\/[^/]+(?:\/reconcile)?)$/;
+  /^\/workspace\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\/work\/(?:approvals|proposals\/[^/]+\/(?:review|decision|apply)|tasks\/[^/]+\/operations|operations\/[^/]+(?:\/reconcile|\/set-aside)?)$/;
 // A request's whole budget: the apply runs several transactions and broker calls, product by
 // product; it starts no product with less than applyProductMinMs left (the rest stay
 // authorized and the same request, sent again, continues them).
@@ -165,6 +169,18 @@ const applyRefusals: Readonly<Record<string, Mapped>> = Object.freeze({
     "conflict",
     "never",
     "The Listings agent is not enabled for this store.",
+  ],
+  not_claimant: [
+    403,
+    "denied",
+    "never",
+    "Only the person who applied this change can set it aside.",
+  ],
+  too_soon: [
+    409,
+    "conflict",
+    "recheck_before_retry",
+    "Morrow is still waiting for Shopify's answer. Try again in a minute.",
   ],
 });
 function envelope(
@@ -708,6 +724,28 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
           );
           log.outcome = outcome;
           return { log, response: json(200, { outcome, operation: operationView(op) }) };
+        }
+        case "operations.set_aside": {
+          // Nothing reaches the broker: the claimant records that they checked the product.
+          const body = g.body;
+          if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length)
+            throw new WorkReject("invalid");
+          const operationId = g.params.operationId!;
+          const result = await transaction(false, async (tx) => {
+            const a = await context(tx, g);
+            return refusable(tx, () =>
+              setAsideOperation(tx, a, operationId, configured.environment),
+            );
+          });
+          if (result instanceof ApplyReject) throw result;
+          const op = await transaction(true, async (tx) =>
+            visibleOperation(tx, await context(tx, g), operationId),
+          );
+          log.outcome = result.changed ? "set_aside" : "unchanged";
+          return {
+            log,
+            response: json(200, { outcome: log.outcome, operation: operationView(op) }),
+          };
         }
       }
     } catch (error) {

@@ -44,7 +44,7 @@ type Handler = Readonly<{
 //   /workspace/:ws/work/{tasks/:taskId/runs, runs/:runId, runs-reconcile}
 //                                                runs (M3 PR-2), ahead of the work API
 //   /workspace/:ws/work/{approvals, proposals/:id/(review|decision|apply),
-//     tasks/:taskId/operations, operations/:id(/reconcile)}
+//     tasks/:taskId/operations, operations/:id(/reconcile, /set-aside)}
 //                                                review and apply (v1 PR 3), ahead of it too
 //   /workspace/:ws/work(/|$)                     work API (P06.T01a)
 //   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)

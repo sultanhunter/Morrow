@@ -25,6 +25,8 @@ export const reviewStatements = Object.freeze({
     "SELECT outcome,result FROM morrow_work.cmd_catalog_apply($1,$2,$3,$4,$5,$6,$7,$8,$9)",
   cmdCatalogDispatch:
     "SELECT outcome,status,revision,reason FROM morrow_work.cmd_catalog_dispatch($1,$2)",
+  // The claimant sets an uncertain operation aside (uncertain -> cancel_requested).
+  cmdCatalogSetAside: "SELECT outcome,status,revision FROM morrow_work.cmd_catalog_set_aside($1)",
   // Catalog operations of the session tenant (tenant_read), with the reason of their current
   // status and their latest read-back verdict: codes only.
   operationById: `SELECT ${operationColumns} FROM morrow_work.operations o WHERE o.id=$1::text AND o.kind='catalog_write'`,

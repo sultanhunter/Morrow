@@ -1077,6 +1077,7 @@ test("the review routes and the api dispatch: review paths go to the review hand
       "GET /tasks/:taskId/operations",
       "GET /operations/:operationId",
       "POST /operations/:operationId/reconcile",
+      "POST /operations/:operationId/set-aside",
     ],
   );
   for (const path of [
@@ -1087,6 +1088,7 @@ test("the review routes and the api dispatch: review paths go to the review hand
     "/workspace/ws_w/work/tasks/t_1/operations",
     "/workspace/ws_w/work/operations/" + operationId,
     "/workspace/ws_w/work/operations/" + operationId + "/reconcile",
+    "/workspace/ws_w/work/operations/" + operationId + "/set-aside",
   ]) {
     assert.ok(reviewPathPattern.test(path), path);
     assert.equal(apiDispatch(path), "review", path);
@@ -1095,6 +1097,7 @@ test("the review routes and the api dispatch: review paths go to the review hand
     ["/workspace/ws_w/work/tasks/t_1", "work"],
     ["/workspace/ws_w/work/proposals/p_1", "work"],
     ["/workspace/ws_w/work/proposals/p_1/apply/x", "work"],
+    ["/workspace/ws_w/work/operations/" + operationId + "/set-aside/x", "work"],
     ["/workspace/ws_w/work/tasks/t_1/runs", "runs"],
   ])
     assert.equal(apiDispatch(path), row, path);
@@ -1158,6 +1161,43 @@ test("apply with the switch off answers 503 before any database or broker access
 
 // ---------------------------------------------------------------------------
 // The reviewed switch.
+test("set-aside: an exact empty body, never the broker, and not behind the apply switch", async (t) => {
+  t.mock.method(console, "log", () => {});
+  let opens = 0;
+  let brokerCalls = 0;
+  const handler = createReviewApiHandler({
+    origin: workGuardOrigin,
+    connector: {
+      async open() {
+        opens++;
+        throw Error("NO_DATABASE_IN_THIS_TEST");
+      },
+    },
+    now: Date.now,
+    environment: "development",
+    applyOpen: false,
+    broker: {
+      apply: async () => (brokerCalls++, ""),
+      reconcile: async () => (brokerCalls++, ""),
+    },
+  });
+  const path = "/workspace/ws_w/work/operations/" + operationId + "/set-aside";
+  const wider = await handler.fetch(
+    request("POST", path, { status: "failed" }),
+    {},
+    {
+      waitUntil() {},
+    },
+  );
+  assert.equal(wider.status, 400);
+  assert.equal(opens, 0);
+  // With the switch off, setting aside still reaches the database (it sends nothing).
+  const empty = await handler.fetch(request("POST", path, {}), {}, { waitUntil() {} });
+  assert.equal(empty.status, 503);
+  assert.equal(opens, 1);
+  assert.equal(brokerCalls, 0);
+});
+
 test("the apply switch is committed off and appears only on the staging api and broker", () => {
   const record = JSON.parse(readFileSync("docs/decisions/shopify-write-staging.json", "utf8"));
   assert.deepEqual(reviewedApplyRecord(record), { switch: "off" });

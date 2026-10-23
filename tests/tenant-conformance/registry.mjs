@@ -164,7 +164,9 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["operations"],
     commandRead: true,
-    policies: ["broker_catalog_operation"],
+    // Review F2: the broker's catalog definers also read their tenant's read-backs, for the
+    // one-open-write-per-product rule (broker_catalog_read, FOR SELECT).
+    policies: ["broker_catalog_operation", "broker_catalog_read"],
     content: "none",
   },
   // M3 PR-1 listings authority (migration 0031).
@@ -623,6 +625,12 @@ export const workFunctions = Object.freeze({
     kind: "api",
     grantees: ["morrow_work_api"],
     command: "catalog.dispatch",
+  },
+  // Review F2: the claimant sets an uncertain operation aside (uncertain -> cancel_requested).
+  "cmd_catalog_set_aside(text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.set_aside",
   },
   "catalog_target(jsonb,integer)": { kind: "helper", grantees: [] },
   "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },

@@ -33,6 +33,10 @@ import { claimantMayApply } from "./claimant.js";
 //     still eligible), then cmd_catalog_dispatch, which rechecks the lease, the stops, the link,
 //     the installation, the scope and the approval's expiry under the row lock. Only a
 //     dispatching operation reaches the broker.
+//   * setAsideOperation: the claimant, after checking the product in Shopify, sets an
+//     uncertain operation aside (review F2): their own `execute` on the store resource again,
+//     then cmd_catalog_set_aside (uncertain -> cancel_requested, reconciliation continues).
+//     Nothing is sent; a later read-back that shows the approved values still verifies it.
 
 export const applyConsumer = "catalog.apply";
 const capability = "catalog.content.publish";
@@ -47,7 +51,9 @@ export type ApplyRefusal =
   | "limit_reached"
   | "invalid"
   | "stale_authority"
-  | "command_conflict";
+  | "command_conflict"
+  | "not_claimant"
+  | "too_soon";
 export class ApplyReject extends Error {
   constructor(readonly reason: ApplyRefusal) {
     super("APPLY_REJECTED");
@@ -295,6 +301,33 @@ export async function familyOperations(
   return (await tx.run("operationsOfFamily", [familyRootId])).map(decodeOperation);
 }
 
+/** The store resource and the approved fields of one operation's product, from its proposal. */
+async function operationTarget(
+  tx: WorkTx,
+  a: WorkAuthority,
+  op: OperationRow,
+): Promise<{ readonly store: StoreResource; readonly fields: readonly string[] }> {
+  const stored = await readProposalRow(tx, a, op.proposalId);
+  if (!stored) throw new WorkContextUnavailable();
+  const selected = stored.proposal.derivedFrom?.selectedTargetIndexes ?? null;
+  const at = selected === null ? op.targetIndex : selected.indexOf(op.targetIndex);
+  const target = stored.proposal.targets[at];
+  if (!target || target.resource.id !== op.productId) throw new WorkContextUnavailable();
+  try {
+    return {
+      store: storeResource(
+        a.actor.organizationId,
+        a.resource.workspaceId,
+        op.storeId,
+        op.connectionId,
+      ),
+      fields: target.fields,
+    };
+  } catch {
+    throw new WorkContextUnavailable();
+  }
+}
+
 export type DispatchOutcome =
   | { readonly kind: "dispatching" }
   | { readonly kind: "settled"; readonly status: string; readonly reason: string | null };
@@ -317,23 +350,7 @@ export async function dispatchOperation(
     tx.rollbackOnly();
     return Object.freeze({ kind: "settled", status: op.status, reason: op.reason });
   }
-  const stored = await readProposalRow(tx, a, op.proposalId);
-  if (!stored) throw new WorkContextUnavailable();
-  const selected = stored.proposal.derivedFrom?.selectedTargetIndexes ?? null;
-  const at = selected === null ? op.targetIndex : selected.indexOf(op.targetIndex);
-  const target = stored.proposal.targets[at];
-  if (!target || target.resource.id !== op.productId) throw new WorkContextUnavailable();
-  let store: StoreResource;
-  try {
-    store = storeResource(
-      a.actor.organizationId,
-      a.resource.workspaceId,
-      op.storeId,
-      op.connectionId,
-    );
-  } catch {
-    throw new WorkContextUnavailable();
-  }
+  const { store, fields } = await operationTarget(tx, a, op);
   let conflict: "authority_lost" | "not_entitled" | "approval_invalid" | null = null;
   const approval = await claimedApprovalCurrent(tx, a, {
     proposalId: op.proposalId,
@@ -342,7 +359,7 @@ export async function dispatchOperation(
   });
   if (approval !== "ok") conflict = "approval_invalid";
   else {
-    const decided = await claimantMayApply(tx, a, store, target.fields, environment);
+    const decided = await claimantMayApply(tx, a, store, fields, environment);
     if (decided === "denied") conflict = "authority_lost";
     else if (decided === "not_entitled") conflict = "not_entitled";
   }
@@ -373,4 +390,53 @@ export async function operationVisible(
 ): Promise<boolean> {
   const stored = await readProposalRow(tx, a, op.proposalId);
   return !!stored && (await viewerRole(a, stored)) !== null;
+}
+
+export interface SetAsideOutcome {
+  /** The operation's status after the command (cancel_requested once set aside). */
+  readonly status: string;
+  readonly changed: boolean;
+}
+/**
+ * The claimant sets an uncertain operation aside after checking the product in Shopify
+ * (review F2; the operation machine's owner edge uncertain -> cancel_requested,
+ * reconciliation_continues). The actor must see the operation and still hold `execute` on
+ * catalog.content.publish on the store resource (the kernel; the plan is not needed, since
+ * nothing is sent or charged); cmd_catalog_set_aside then checks, under the row lock, that the
+ * actor is the claimant and that the send window has passed. Nothing is sent or resent; the
+ * outcome stays unknown and read-backs continue.
+ */
+export async function setAsideOperation(
+  tx: WorkTx,
+  a: WorkAuthority,
+  operationId: string,
+  environment: "development" | "staging" | "production",
+): Promise<SetAsideOutcome> {
+  const rows = await tx.run("operationById", [operationId]);
+  if (rows.length !== 1) throw new ApplyReject("not_found");
+  const op = decodeOperation(rows[0]!);
+  if (!(await operationVisible(tx, a, op))) throw new ApplyReject("not_found");
+  if (op.status !== "uncertain") {
+    tx.rollbackOnly();
+    return Object.freeze({ status: op.status, changed: false });
+  }
+  const { store, fields } = await operationTarget(tx, a, op);
+  // The kernel decides entitlement last, so not_entitled means every grant check passed.
+  if ((await claimantMayApply(tx, a, store, fields, environment)) === "denied")
+    throw new ApplyReject("denied");
+  tx.markSubmitted();
+  const out = await tx.run("cmdCatalogSetAside", [operationId]);
+  const row = out.length === 1 ? out[0] : undefined;
+  if (!row || typeof row.outcome !== "string") throw new WorkContextUnavailable();
+  if (row.outcome === "set_aside")
+    return Object.freeze({ status: "cancel_requested", changed: true });
+  if (row.outcome === "unchanged")
+    return Object.freeze({ status: text(row, "status"), changed: false });
+  tx.rollbackOnly();
+  if (row.outcome === "too_soon") throw new ApplyReject("too_soon");
+  if (row.outcome === "not_found") throw new ApplyReject("not_found");
+  if (row.outcome === "not_claimant") throw new ApplyReject("not_claimant");
+  if (row.outcome === "stale_authority" || row.outcome === "ineligible")
+    throw new ApplyReject("stale_authority");
+  throw new WorkContextUnavailable();
 }
