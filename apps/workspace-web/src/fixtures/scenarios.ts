@@ -48,6 +48,10 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "projects_preview",
+  "projects_teammate",
+  "projects_start_stale",
+  "projects_start_uncertain",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -310,7 +314,34 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // T7 PR 19: the project screens with the Linen & Form sample (Maya Chen, the Owner).
+  projects_preview: {},
+  // A member who may read projects but not act on them: the server's actions say so.
+  projects_teammate: {},
+  // The first start is refused as stale (the draft changed): nothing starts, the card is
+  // read again, and the next tap asks for a new document.
+  projects_start_stale: {
+    "plans.start": (call) =>
+      call === 0 ? { kind: "conflict", recheck: true, message: "" } : null,
+  },
+  // The first start is applied but its reply is lost; Check again replays the same key.
+  projects_start_uncertain: {
+    "plans.start": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
 };
+/**
+ * T7 PR 19: the default-off project screens' switch. `projects.*` and `plans.*` are
+ * composed only in these scenarios; every other scenario, like the HTTP build, leaves
+ * them uncomposed (Work renders as before).
+ */
+export const projectsComposedIn: readonly ScenarioName[] = [
+  "projects_preview",
+  "projects_teammate",
+  "projects_start_stale",
+  "projects_start_uncertain",
+];
+/** The preview as a member whose actions are off. */
+export const teammateIn: readonly ScenarioName[] = ["projects_teammate"];
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [
   "connections_unlinked",

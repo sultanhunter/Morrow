@@ -4,6 +4,7 @@
 // key answers `replayed`.
 import {
   portMethods,
+  projectPortMethods,
   type AnswerView,
   type ListingsAgentView,
   type ListingsDocumentView,
@@ -34,7 +35,15 @@ import {
   fixtureWorkspace,
   people,
 } from "./seed";
-import { scenarios, uncomposedIn, unlinkedStoreIn, type ScenarioName } from "./scenarios";
+import { createProjectsFixture } from "./projects";
+import {
+  projectsComposedIn,
+  scenarios,
+  teammateIn,
+  uncomposedIn,
+  unlinkedStoreIn,
+  type ScenarioName,
+} from "./scenarios";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -42,7 +51,12 @@ export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
 const unbuilt: readonly PortMethod[] = ["session.keepAlive", "people.list"];
 /** What a scenario's build composes; an uncomposed method answers `not_in_build`. */
 export function fixtureComposedFor(scenario: ScenarioName): Composed {
-  const off = [...unbuilt, ...(uncomposedIn[scenario] ?? [])];
+  const off = [
+    ...unbuilt,
+    ...(uncomposedIn[scenario] ?? []),
+    // T7 PR 19: the project screens' switch stays off outside its preview scenarios.
+    ...(projectsComposedIn.includes(scenario) ? [] : projectPortMethods),
+  ];
   return Object.freeze(
     Object.fromEntries(portMethods.map((m) => [m, !off.includes(m)])) as Record<
       PortMethod,
@@ -613,5 +627,17 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
           return ok({ revision: modelDefault.revision });
         }),
     },
+    // T7 PR 19: the project screens' sample (composed only in the preview scenarios).
+    ...createProjectsFixture(
+      {
+        reply,
+        command,
+        ws,
+        tasks: projectsComposedIn.includes(scenario) ? seed.tasks : [],
+        owner: people.owner,
+        editor: people.editor,
+      },
+      { teammate: teammateIn.includes(scenario) },
+    ),
   };
 }
