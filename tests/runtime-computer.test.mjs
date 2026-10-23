@@ -27,6 +27,8 @@ import {
   runtimeJobLimits,
   sandboxWorstCaseUsd,
 } from "../packages/policy/src/runtime-computer.ts";
+import { runtimeTiming } from "../apps/broker/src/runtime-gateway.ts";
+import { runtimeGatewayLimits } from "../packages/identity/src/broker-protocol.ts";
 import { makePng, makeXlsx, makeZip } from "./fixtures/runtime-files.mjs";
 
 const product = (over = {}) => [
@@ -78,6 +80,7 @@ test("the profile: no internet, fixed lifetime, exec, size, user and command", (
 
 test("migration 0039 holds the same caps, deadline, grace and staleness in SQL", () => {
   const sql = readFileSync("migrations/0039.runtime-operations.sql", "utf8");
+  const staleSeconds = runtimeGatewayLimits.executeBudgetMaxMs / 1000 + 60;
   const caps =
     /CREATE FUNCTION morrow_vault\.runtime_caps\(\)[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(
       sql,
@@ -85,10 +88,18 @@ test("migration 0039 holds the same caps, deadline, grace and staleness in SQL",
   assert.ok(caps);
   assert.equal(
     caps[1],
-    `${runtimeCaps.monthlyBudgetUsd}::numeric(20,8),${runtimeCaps.concurrentSandboxes},${runtimeCaps.sandboxesPerWorkspace},${runtimeCaps.worstCaseUsd}::numeric(20,8),${computerProfile.sandboxTimeoutSeconds + computerProfile.createAllowanceSeconds},${computerProfile.absentGraceSeconds},660`,
+    `${runtimeCaps.monthlyBudgetUsd}::numeric(20,8),${runtimeCaps.concurrentSandboxes},${runtimeCaps.sandboxesPerWorkspace},${runtimeCaps.worstCaseUsd}::numeric(20,8),${computerProfile.sandboxTimeoutSeconds + computerProfile.createAllowanceSeconds},${computerProfile.absentGraceSeconds},${staleSeconds}`,
   );
-  // The longest execute plus a minute is the staleness the sweep waits for.
-  assert.equal(660, 600 + 60);
+  // The staleness the sweep waits for is the longest execute the broker admits plus a minute,
+  // and that minute covers the execute's last status read and ledger write: raising the
+  // execute ceiling without the migration fails here, so the sweep never kills a live job.
+  assert.equal(staleSeconds, runtimeGatewayLimits.executeBudgetMaxMs / 1000 + 60);
+  assert.ok(
+    staleSeconds * 1000 >=
+      runtimeGatewayLimits.executeBudgetMaxMs +
+        runtimeTiming.statusMaxMs +
+        runtimeTiming.ledgerMaxMs,
+  );
   assert.match(
     sql,
     /CONSTRAINT runtime_operations_deadline CHECK \(deadline_at=send_started_at\+interval '960 seconds'\)/,
