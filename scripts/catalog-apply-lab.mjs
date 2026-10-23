@@ -1048,7 +1048,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         some.body.status === "approved" &&
         derivedId !== X3 &&
         some.body.proposalRef.digest === preview.body.proposal.digest &&
-        mixed.status === 409 &&
+        // The derived approval names no approval of the root: not found, as in D3.
+        mixed.status === 404 &&
         footprint() === before3,
       { some: some.body, mixed: mixed.body },
     );
