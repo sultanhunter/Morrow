@@ -6,8 +6,11 @@
 //     every later call's prefixDigest is the digest of all its messages but the last and must
 //     equal the digest the previous reply returned, or the result is prefix_mismatch and
 //     nothing is "sent";
-//   - a reply that calls a tool the run was not offered, or any tool on a final turn, is
-//     invalid_output (an invalid tool_use ends the run);
+//   - a reply outside the strict shapes the run was given (an unknown or unoffered tool, a
+//     wrong type, a missing or extra key, more than four tool calls) or with any tool on a
+//     final turn is invalid_output (an invalid tool_use ends the run);
+//   - a reply inside those shapes is returned even when an input breaks a limit of its full
+//     ToolInput definition: the tool-call step's checkToolInput makes that call invalid_input;
 //   - every result is a ModelResult@2, and a reply's prefixDigest covers the call's messages
 //     with the reply appended.
 // The digest is SHA-256 of the RFC 8785 text of the message array (review.ts canonicalDigest).
@@ -104,6 +107,8 @@ export function createFakeModelGateway(
     const next = turns.shift();
     if (!next) throw new FakeModelGatewayError("SCRIPT_EXHAUSTED");
     if ("outcome" in next) return empty(next.outcome, next.retryAfterMs ?? null);
+    if (!validateCurrentDefinition("AssistantModelMessage", next.reply))
+      return empty("invalid_output");
     const uses = next.reply.content.filter((block) => block.type === "tool_use");
     if (
       uses.length > 4 ||

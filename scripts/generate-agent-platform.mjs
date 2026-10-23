@@ -73,8 +73,9 @@ const neverForSpecialists = (capability, verb) =>
   ["approve", "delegate", "administer"].includes(verb);
 
 // The keywords strict tool use does not take (as for ListingDraft_v1, S156): string-length,
-// numeric and array bounds, patterns and formats. Code validates every input again with the
-// full v1.1 definition before the tool runs.
+// numeric and array bounds, patterns and formats. The tool-call step validates every input
+// again with the full v1.1 definition before the tool runs (checkToolInput in
+// packages/policy/src/tool-catalogue.ts); a breach is that call's invalid_input.
 const droppedKeywords = new Set([
   "description",
   "$comment",
@@ -91,9 +92,11 @@ const droppedKeywords = new Set([
 ]);
 /**
  * The strict model input schema of one v1.1 core definition: references inlined (core v1
- * and v1.1), every object closed with all its properties required and the optional ones
- * nullable, the keywords above dropped. Throws on anything else (a non-null union, allOf,
- * oneOf, a conditional), so a tool input stays expressible exactly.
+ * and v1.1), every object closed with all its properties required, the keywords above
+ * dropped. Throws on anything else (an optional property, a non-null union, allOf, oneOf, a
+ * conditional), so a tool input stays expressible exactly. Strict tool use sends every key,
+ * so an optional property would arrive as a null the full definition refuses: every input
+ * object names each of its properties and takes null for "none" (as ListingChange does).
  */
 export function strictModelSchema(definition, schemas) {
   const byId = new Map(schemas.map((schema) => [schema.$id, schema]));
@@ -141,13 +144,11 @@ export function strictModelSchema(definition, schemas) {
     if (node.type === "object") {
       if (node.additionalProperties !== false || !node.properties) refuse("SCHEMA_OBJECT");
       const required = new Set(node.required ?? []);
+      if (Object.keys(node.properties).some((name) => !required.has(name)))
+        refuse("SCHEMA_OPTIONAL");
       out.properties = {};
-      for (const [name, child] of Object.entries(node.properties)) {
-        const converted = convert(child, base, depth + 1);
-        out.properties[name] = required.has(name)
-          ? converted
-          : { anyOf: [converted, { type: "null" }] };
-      }
+      for (const [name, child] of Object.entries(node.properties))
+        out.properties[name] = convert(child, base, depth + 1);
       out.required = Object.keys(node.properties);
       out.additionalProperties = false;
     } else if (node.type === "array") {
@@ -161,6 +162,10 @@ export function strictModelSchema(definition, schemas) {
   };
   return convert(definition, "urn:morrow:contracts:core:v1.1", 0);
 }
+
+/** The v1.1 core definition of a tool's strict shape, the input a recorded tool_use carries. */
+export const toolModelInputName = (inputDefinition) =>
+  String(inputDefinition).replace(/^ToolInput/, "ToolModelInput");
 
 /** Every property name in a schema, through references (for the forbidden-name rule). */
 function propertyNames(
@@ -312,6 +317,43 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
       if (name.startsWith("format:") || forbiddenInputName.test(name))
         at("input takes a forbidden field " + name);
   }
+  // The recorded reply and the schema the model is given agree: ModelToolUseBlock has one
+  // branch per tool, in catalogue order, whose input is the tool's ToolModelInput definition,
+  // exactly its strict shape. A reply outside these shapes is invalid_output; one inside them
+  // that breaks a ToolInput limit is the call's invalid_input (ADR-0027 items 2 and 4).
+  const branches = core?.$defs?.ModelToolUseBlock?.oneOf;
+  if (!Array.isArray(branches) || branches.length !== tools.length)
+    fail("ModelToolUseBlock must have one branch per tool, in catalogue order");
+  tools.forEach((tool, index) => {
+    const at = (message) => fail(`${tool.name}: ${message}`);
+    const modelInput = toolModelInputName(tool.inputDefinition);
+    const expected = {
+      type: "object",
+      properties: {
+        type: { const: "tool_use" },
+        id: { $ref: "#/$defs/ToolUseId" },
+        name: { const: tool.name },
+        input: { $ref: "#/$defs/" + modelInput },
+      },
+      required: ["type", "id", "name", "input"],
+      additionalProperties: false,
+    };
+    if (!Array.isArray(branches) || jcs(branches[index] ?? null) !== jcs(expected))
+      at(`its ModelToolUseBlock branch must name it and take ${modelInput}`);
+    const definition = core?.$defs?.[tool.inputDefinition];
+    const shape = core?.$defs?.[modelInput];
+    if (!definition) return;
+    if (!shape) return at(`no ${modelInput} definition`);
+    const { description: _description, ...model } = shape;
+    let strict = null;
+    try {
+      strict = strictModelSchema(definition, schemas);
+    } catch {
+      return; // reported above
+    }
+    if (jcs(model) !== jcs(strict))
+      at(`${modelInput} must be exactly the strict shape of ${tool.inputDefinition}`);
+  });
   const coordinator = tools.filter((t) => t.contexts?.includes("coordinator")).map((t) => t.name);
   if (JSON.stringify([...coordinator].sort()) !== JSON.stringify([...coordinatorToolNames].sort()))
     fail("the Coordinator's tools must be exactly ADR-0027 item 8's fixed set");

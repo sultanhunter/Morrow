@@ -10,7 +10,9 @@
 // - A tool is one capability and verb. The agent loop (PR 11) re-checks the intersection at
 //   every call; nothing here grants anything.
 // - The model sees wire names and strict input schemas only, in catalogue order, so the
-//   cached prefix of a run stays byte-stable.
+//   cached prefix of a run stays byte-stable. A recorded tool_use carries the same strict
+//   shape (ToolModelInput*); the tool-call step validates it again with the full ToolInput
+//   definition (checkToolInput), and a limit breach is that call's invalid_input.
 // - The Specialist ceiling is fixed ids; a specialist's capabilities are its tools' pairs
 //   inside it, at most 16.
 import type {
@@ -20,7 +22,9 @@ import type {
   Current_ToolFamily,
   Current_ToolName,
   Current_ToolReplayClass,
+  CurrentDefinitionName,
 } from "@morrow/contracts";
+import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { generatedSpecialistCeiling } from "./generated/specialist-ceiling";
 import { generatedToolCatalogue } from "./generated/tool-catalogue";
 
@@ -143,6 +147,33 @@ export function modelToolDefinitions(names: readonly string[]): readonly ModelTo
         }),
       ),
   );
+}
+
+/** The tool-call step's validation of one input (ADR-0027 item 2). */
+export type ToolInputCheck =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly outcome: "invalid_input"; readonly refusal: "input_invalid" };
+const inputValid: ToolInputCheck = Object.freeze({ ok: true });
+const inputInvalid: ToolInputCheck = Object.freeze({
+  ok: false,
+  outcome: "invalid_input",
+  refusal: "input_invalid",
+});
+/**
+ * The tool-call step's validation (ADR-0027 item 2), after lease re-entry and replay and
+ * before ids in scope, authority, the hold and dispatch. A recorded tool_use input is
+ * inside the tool's strict shape, which carries no length, range or pattern limits; this
+ * validates it again with the tool's full ToolInput definition. A breach is the call's
+ * invalid_input, recorded with refusal input_invalid and returned to the model, which may
+ * call again within the run's tool-call caps. An unknown tool throws: that reply was an
+ * invalid output, which ends the run before any tool-call step.
+ */
+export function checkToolInput(name: unknown, input: unknown): ToolInputCheck {
+  const tool = toolEntry(name);
+  if (!tool) throw invalid();
+  return validateCurrentDefinition(tool.inputDefinition as CurrentDefinitionName, input)
+    ? inputValid
+    : inputInvalid;
 }
 
 /** The Specialist ceiling (ADR-0028 item 2): fixed ids, at most 16. */

@@ -7604,6 +7604,453 @@
       ],
       "additionalProperties": false
     },
+    "ToolModelInputKnowledgeSearch": {
+      "description": "knowledge.search as the model is given it: ToolInputKnowledgeSearch's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputKnowledgeSearch before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "searchText": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "searchText",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputWorkRead": {
+      "description": "work.read as the model is given it: ToolInputWorkRead's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputWorkRead before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": [
+            "task",
+            "thread",
+            "artifact"
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputProductsRead": {
+      "description": "products.read as the model is given it: ToolInputProductsRead's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputProductsRead before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "productIds": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "titleContains": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "productIds",
+        "titleContains",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputInventoryRead": {
+      "description": "inventory.read as the model is given it: ToolInputInventoryRead's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputInventoryRead before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "productIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "productIds"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputOrdersSummary": {
+      "description": "orders.summary as the model is given it: ToolInputOrdersSummary's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputOrdersSummary before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "metric": {
+          "type": "string",
+          "enum": [
+            "order_count",
+            "gross_sales",
+            "average_order_value",
+            "refunds",
+            "units_sold",
+            "unfulfilled_orders"
+          ]
+        },
+        "period": {
+          "type": "string",
+          "enum": [
+            "last_7_days",
+            "last_30_days",
+            "last_60_days"
+          ]
+        },
+        "groupBy": {
+          "type": "string",
+          "enum": [
+            "total",
+            "day",
+            "week",
+            "product"
+          ]
+        }
+      },
+      "required": [
+        "metric",
+        "period",
+        "groupBy"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputSupportThreadRead": {
+      "description": "support.thread.read as the model is given it: ToolInputSupportThreadRead's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputSupportThreadRead before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputMessagePost": {
+      "description": "message.post as the model is given it: ToolInputMessagePost's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputMessagePost before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputInboxAsk": {
+      "description": "inbox.ask as the model is given it: ToolInputInboxAsk's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputInboxAsk before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "question",
+        "choices"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputTaskCreate": {
+      "description": "task.create as the model is given it: ToolInputTaskCreate's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputTaskCreate before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputSuggestionCreate": {
+      "description": "suggestion.create as the model is given it: ToolInputSuggestionCreate's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputSuggestionCreate before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputReportWrite": {
+      "description": "report.write as the model is given it: ToolInputReportWrite's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputReportWrite before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "heading": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "heading",
+              "body"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "title",
+        "summary",
+        "sections"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputAgentRoute": {
+      "description": "agent.route as the model is given it: ToolInputAgentRoute's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentRoute before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "type": "string"
+        },
+        "brief": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "installationId",
+        "brief"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputSpecialistDraft": {
+      "description": "specialist.draft as the model is given it: ToolInputSpecialistDraft's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputSpecialistDraft before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "inputRefs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "task",
+                  "artifact",
+                  "knowledge_page",
+                  "product"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "doneCriteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skillIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputContractId": {
+          "type": "string",
+          "enum": [
+            "report@1"
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "objective",
+        "inputRefs",
+        "doneCriteria",
+        "boundaries",
+        "skillIds",
+        "outputContractId"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputProposalListing": {
+      "description": "proposal.listing as the model is given it: ToolInputProposalListing's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputProposalListing before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": {
+                "type": "string"
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "descriptionHtml": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "seo": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "description"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tags": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "productId",
+              "title",
+              "descriptionHtml",
+              "seo",
+              "tags"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "changes"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputProposalReply": {
+      "description": "proposal.reply as the model is given it: ToolInputProposalReply's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputProposalReply before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "threadId",
+        "body"
+      ],
+      "additionalProperties": false
+    },
     "ModelProfile": {
       "description": "ModelProfile@1 (ADR-0027 items 9 and 12; PR 10): a ModelSelection@1 pinned to the catalogue version it was admitted under. Never authority: it changes no tool, capability, grant, scope, rule, data class, credit cap or deadline.",
       "type": "object",
@@ -8455,7 +8902,7 @@
       "additionalProperties": false
     },
     "ModelToolUseBlock": {
-      "description": "One tool call the model made: its id, the Morrow tool name and the input of that tool. The broker maps names to wire names.",
+      "description": "One tool call the model made: its id, the Morrow tool name and an input in that tool's strict shape (ToolModelInput*, the schema the model is given: types, enums, required keys and closed objects, without limits). A reply outside these shapes is invalid_output and ends the run. The tool-call step validates the input again with the tool's ToolInput* definition before dispatch (ADR-0027 item 2): a limit breach is that call's invalid_input (refusal input_invalid), returned to the model within the run's tool-call caps. The broker maps names to wire names.",
       "oneOf": [
         {
           "type": "object",
@@ -8470,7 +8917,7 @@
               "const": "knowledge.search"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputKnowledgeSearch"
+              "$ref": "#/$defs/ToolModelInputKnowledgeSearch"
             }
           },
           "required": [
@@ -8494,7 +8941,7 @@
               "const": "work.read"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputWorkRead"
+              "$ref": "#/$defs/ToolModelInputWorkRead"
             }
           },
           "required": [
@@ -8518,7 +8965,7 @@
               "const": "products.read"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputProductsRead"
+              "$ref": "#/$defs/ToolModelInputProductsRead"
             }
           },
           "required": [
@@ -8542,7 +8989,7 @@
               "const": "inventory.read"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputInventoryRead"
+              "$ref": "#/$defs/ToolModelInputInventoryRead"
             }
           },
           "required": [
@@ -8566,7 +9013,7 @@
               "const": "orders.summary"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputOrdersSummary"
+              "$ref": "#/$defs/ToolModelInputOrdersSummary"
             }
           },
           "required": [
@@ -8590,7 +9037,7 @@
               "const": "support.thread.read"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputSupportThreadRead"
+              "$ref": "#/$defs/ToolModelInputSupportThreadRead"
             }
           },
           "required": [
@@ -8614,7 +9061,7 @@
               "const": "message.post"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputMessagePost"
+              "$ref": "#/$defs/ToolModelInputMessagePost"
             }
           },
           "required": [
@@ -8638,7 +9085,7 @@
               "const": "inbox.ask"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputInboxAsk"
+              "$ref": "#/$defs/ToolModelInputInboxAsk"
             }
           },
           "required": [
@@ -8662,7 +9109,7 @@
               "const": "task.create"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputTaskCreate"
+              "$ref": "#/$defs/ToolModelInputTaskCreate"
             }
           },
           "required": [
@@ -8686,7 +9133,7 @@
               "const": "suggestion.create"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputSuggestionCreate"
+              "$ref": "#/$defs/ToolModelInputSuggestionCreate"
             }
           },
           "required": [
@@ -8710,7 +9157,7 @@
               "const": "report.write"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputReportWrite"
+              "$ref": "#/$defs/ToolModelInputReportWrite"
             }
           },
           "required": [
@@ -8734,7 +9181,7 @@
               "const": "agent.route"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputAgentRoute"
+              "$ref": "#/$defs/ToolModelInputAgentRoute"
             }
           },
           "required": [
@@ -8758,7 +9205,7 @@
               "const": "specialist.draft"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputSpecialistDraft"
+              "$ref": "#/$defs/ToolModelInputSpecialistDraft"
             }
           },
           "required": [
@@ -8782,7 +9229,7 @@
               "const": "proposal.listing"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputProposalListing"
+              "$ref": "#/$defs/ToolModelInputProposalListing"
             }
           },
           "required": [
@@ -8806,7 +9253,7 @@
               "const": "proposal.reply"
             },
             "input": {
-              "$ref": "#/$defs/ToolInputProposalReply"
+              "$ref": "#/$defs/ToolModelInputProposalReply"
             }
           },
           "required": [
@@ -9010,7 +9457,7 @@
       "additionalProperties": false
     },
     "ModelTurnOutcome": {
-      "description": "A turn's outcome: end_turn and tool_use carry the reply; invalid_output (an invalid tool_use) ends the run; uncertain is booked at the worst case and sent again at most once; not_sent, input_over_cap and prefix_mismatch generated nothing.",
+      "description": "A turn's outcome: end_turn and tool_use carry the reply; invalid_output (a reply outside the strict shapes the run was given: an unoffered tool, a wrong type, a missing or extra key, or any tool on the final turn) ends the run, while a tool_use inside them that breaks a limit of its ToolInput definition is that call's invalid_input; uncertain is booked at the worst case and sent again at most once; not_sent, input_over_cap and prefix_mismatch generated nothing.",
       "type": "string",
       "enum": [
         "end_turn",
@@ -9210,7 +9657,7 @@
       ]
     },
     "ToolCallOutcome": {
-      "description": "A tool call's outcome as the model sees it (the refusal code stays in run_tool_calls).",
+      "description": "A tool call's outcome as the model sees it (the refusal code stays in run_tool_calls). invalid_input: the input, inside the tool's strict shape, broke a limit of its ToolInput definition (refusal input_invalid); the model may call again within the run's caps.",
       "type": "string",
       "enum": [
         "ok",
@@ -9221,7 +9668,7 @@
       ]
     },
     "ToolRefusalCode": {
-      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it.",
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused.",
       "type": "string",
       "enum": [
         "not_offered",
@@ -9381,7 +9828,7 @@
       "additionalProperties": false
     },
     "RunToolCall": {
-      "description": "RunToolCall@1 (ADR-0027 item 7; PR 10): one row of run_tool_calls: ids, codes and digests only, never content.",
+      "description": "RunToolCall@1 (ADR-0027 item 7; PR 10): one row of run_tool_calls: ids, codes and digests only, never content. A refused call names its code; an invalid_input call names input_invalid.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -9536,7 +9983,37 @@
             "type": "object",
             "properties": {
               "refusal": {
-                "$ref": "#/$defs/ToolRefusalCode"
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/ToolRefusalCode"
+                  },
+                  {
+                    "not": {
+                      "const": "input_invalid"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "const": "invalid_input"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "refusal": {
+                "const": "input_invalid"
               }
             }
           }
@@ -9548,7 +10025,6 @@
               "outcome": {
                 "enum": [
                   "ok",
-                  "invalid_input",
                   "tool_outcome_unknown",
                   "computer_unavailable"
                 ]
