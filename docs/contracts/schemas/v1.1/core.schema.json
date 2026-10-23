@@ -6286,6 +6286,3755 @@
         "retryAfterMs"
       ],
       "additionalProperties": false
+    },
+    "ReadTagCapability": {
+      "description": "ADR-0031 item 6 (PR 10): the closed list of read-tag capabilities. support.case.read is the customer tag.",
+      "type": "string",
+      "enum": [
+        "catalog.products.read",
+        "inventory.levels.read",
+        "orders.read",
+        "support.case.read",
+        "workspace.knowledge.read",
+        "workspace.artifact.read"
+      ]
+    },
+    "ReadTag": {
+      "description": "ReadTag@1 (ADR-0031 item 6; PR 10): a store plus one read-tag capability, computed in code (a model never sets one). The api returns a shared item only when the viewer holds view on every tag under live grants. storeId is null only for the two workspace capabilities, for an item made before any store is linked; the four store-bound capabilities always name a store.",
+      "type": "object",
+      "properties": {
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capability": {
+          "$ref": "#/$defs/ReadTagCapability"
+        }
+      },
+      "required": [
+        "storeId",
+        "capability"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "capability": {
+                "enum": [
+                  "catalog.products.read",
+                  "inventory.levels.read",
+                  "orders.read",
+                  "support.case.read"
+                ]
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "storeId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReadTags": {
+      "description": "The read tags of one shared item or run: distinct, at most 24 (a run's are the union of its tool results' tags).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ReadTag"
+      },
+      "minItems": 0,
+      "maxItems": 24,
+      "uniqueItems": true
+    },
+    "DataClass": {
+      "description": "ADR-0031 Terms (PR 10): a read-tag capability other than the customer tag. A specialist spec's dataClasses are a subset; the Specialist ceiling (ADR-0028 item 2) also leaves out orders.read at launch.",
+      "type": "string",
+      "enum": [
+        "catalog.products.read",
+        "inventory.levels.read",
+        "orders.read",
+        "workspace.knowledge.read",
+        "workspace.artifact.read"
+      ]
+    },
+    "DataClasses": {
+      "description": "A specialist's data classes: distinct, at most five.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DataClass"
+      },
+      "minItems": 0,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+    "CapabilityVerbs": {
+      "description": "One capability and the verbs a document names for it (a mandate, a specialist spec, the Specialist ceiling). Names only; it is never a grant.",
+      "type": "object",
+      "properties": {
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "verbs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "view",
+              "propose",
+              "approve",
+              "execute",
+              "delegate",
+              "administer"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "capabilityId",
+        "verbs"
+      ],
+      "additionalProperties": false
+    },
+    "CapabilityVerbsList": {
+      "description": "Capabilities with their verbs: at most 32, each capability once (checked in code).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CapabilityVerbs"
+      },
+      "minItems": 0,
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "MandateActorRef": {
+      "description": "MandateActorRef@1 (ADR-0024 item 7; PR 10): the requester of a mandate run, the installation itself, fixed at admission. It carries the mandate owner so the review rules and the kernel can keep that person in the requester's place.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "installation"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "mandateId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "principalId": {
+          "description": "The installation's agent principal.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "ownerPrincipalId": {
+          "description": "The mandate owner when the run was admitted; the kernel still treats this person as the requester (ADR-0024 item 7).",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "installationId",
+        "mandateId",
+        "principalId",
+        "ownerPrincipalId",
+        "organizationId",
+        "workspaceId"
+      ],
+      "additionalProperties": false
+    },
+    "RunRequester": {
+      "description": "The requester of an agent run (ADR-0024 item 7): the person who started it, or for a mandate run the installation (MandateActorRef). Never both.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        {
+          "$ref": "#/$defs/MandateActorRef"
+        }
+      ]
+    },
+    "TriggerKind": {
+      "description": "ADR-0024 item 6 (PR 10): the kinds of server-held trigger row that admit_mandate_run takes. Mentions and assignments start a person's run, not a mandate run.",
+      "type": "string",
+      "enum": [
+        "schedule",
+        "shopify_event",
+        "inbound_mail",
+        "monitor",
+        "look_for_work"
+      ]
+    },
+    "QuietHours": {
+      "description": "Quiet hours in the shop's time zone (ADR-0024 item 6): no mandate run is admitted between start and end (end may be earlier than start, crossing midnight). Code checks the zone against its list.",
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "description": "An IANA time zone name, the shop's.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$"
+        },
+        "start": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "end": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        }
+      },
+      "required": [
+        "timezone",
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "MandateCaps": {
+      "description": "A mandate's credit caps per installation (ADR-0026 item 4's rate-card configuration; merchants may only lower them).",
+      "type": "object",
+      "properties": {
+        "dailyCredits": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "monthlyCredits": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        }
+      },
+      "required": [
+        "dailyCredits",
+        "monthlyCredits"
+      ],
+      "additionalProperties": false
+    },
+    "MandateDocument": {
+      "description": "MandateDocument@1 (ADR-0024 items 1 and 2; PR 10): the server-built document a person confirms with agents.installation.activate to issue or renew one installation's 90-day mandate. Bound to the actor and a standalone-workspace session, single use, 5 minutes. Code builds every field; nothing comes from the client or a model.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "documentId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "renew"
+          ]
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "connectionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "actor": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "sessionDigest": {
+          "description": "The digest of the standalone-workspace session the document is bound to.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "host": {
+          "const": "standalone"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityVerbs"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "description": "The installation's grants minus human_only ones, as code built them."
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "triggerKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TriggerKind"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "quietHours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuietHours"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caps": {
+          "$ref": "#/$defs/MandateCaps"
+        },
+        "depth": {
+          "const": 0
+        },
+        "startsAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "description": "At most 90 days after startsAt (a CHECK and code).",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "issuedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "documentExpiresAt": {
+          "description": "Five minutes after issuedAt; the document is consumed once.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "documentId",
+        "purpose",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "connectionId",
+        "installationId",
+        "actor",
+        "sessionDigest",
+        "host",
+        "capabilities",
+        "scope",
+        "triggerKinds",
+        "quietHours",
+        "caps",
+        "depth",
+        "startsAt",
+        "expiresAt",
+        "issuedAt",
+        "documentExpiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "AgentTriggerSet": {
+      "description": "AgentTriggerSet@1 (ADR-0024 item 1; PR 10): the trigger kinds an installed agent has enabled and its quiet hours. Routines and monitors never add a kind; a mandate names a subset.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "mandateId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TriggerKind"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "quietHours": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuietHours"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "installationId",
+        "mandateId",
+        "revision",
+        "kinds",
+        "quietHours",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "MandateTriggerStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "admitted",
+        "expired"
+      ]
+    },
+    "MandateTrigger": {
+      "description": "MandateTrigger@1 (ADR-0024 item 6; PR 10): one server-held trigger row. admit_mandate_run takes only its id; an unadmitted row stays pending and is retried at the next tick until its expiry, never dropped.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/TriggerKind"
+        },
+        "triggerKey": {
+          "description": "One run per trigger key (ADR-0024 item 6): a server-built key, never text.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-z_]+:[A-Za-z0-9._:-]{1,190}$"
+        },
+        "status": {
+          "$ref": "#/$defs/MandateTriggerStatus"
+        },
+        "dueAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "installationId",
+        "kind",
+        "triggerKey",
+        "status",
+        "dueAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "BatchProposalDigest": {
+      "type": "object",
+      "properties": {
+        "proposalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "proposalDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "proposalId",
+        "proposalDigest"
+      ],
+      "additionalProperties": false
+    },
+    "BatchConfirmationDocument": {
+      "description": "BatchConfirmationDocument@1 (ADR-0024 item 9; PR 10): one typed confirmation for a solo owner's batch of 2 to 50 pending proposals of one capability and store, over their digests. It yields one approval per digest with one effectiveAt; one bad member refuses all.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "documentId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "sessionDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "proposals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BatchProposalDigest"
+          },
+          "minItems": 2,
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "totals": {
+          "type": "object",
+          "properties": {
+            "proposals": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 50
+            },
+            "credits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "amount": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NonNegativeMoney"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "proposals",
+            "credits",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        "phrase": {
+          "description": "The typed confirmation, summing the count, credits and amount.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "issuedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "description": "Five minutes after issuedAt; single use.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "documentId",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "actor",
+        "sessionDigest",
+        "capabilityId",
+        "proposals",
+        "totals",
+        "phrase",
+        "issuedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "ToolName": {
+      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1 version 1. A new tool is a new catalogue version and a deliberate schema change.",
+      "type": "string",
+      "enum": [
+        "knowledge.search",
+        "work.read",
+        "products.read",
+        "inventory.read",
+        "orders.summary",
+        "support.thread.read",
+        "message.post",
+        "inbox.ask",
+        "task.create",
+        "suggestion.create",
+        "report.write",
+        "agent.route",
+        "specialist.draft",
+        "proposal.listing",
+        "proposal.reply"
+      ]
+    },
+    "ToolFamily": {
+      "description": "read: reads Morrow or store data; internal: writes internal work records; coordination: the Coordinator's routing and specialist drafts; proposal: a digest-bound proposal for the gateway (ADR-0027's proposal.create family); computer: E2B tools under the runtime switch (none in version 1).",
+      "type": "string",
+      "enum": [
+        "read",
+        "internal",
+        "coordination",
+        "proposal",
+        "computer"
+      ]
+    },
+    "ToolReplayClass": {
+      "description": "What a tool call does after a crash (ADR-0027 item 2): a read runs again, an internal write returns its first record, a computer call answers tool_outcome_unknown.",
+      "type": "string",
+      "enum": [
+        "read",
+        "internal_write",
+        "computer"
+      ]
+    },
+    "ToolContext": {
+      "description": "Where a tool may be offered: the Coordinator, a person's routed run, a mandate run, a look-for-work pass (reads and suggestions only, ADR-0024 item 6) or a specialist run.",
+      "type": "string",
+      "enum": [
+        "coordinator",
+        "routed",
+        "mandate",
+        "look_for_work",
+        "specialist"
+      ]
+    },
+    "ToolWireName": {
+      "description": "The provider-neutral name a model sees: lower-case letters, digits and underscores.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "ToolDefinition": {
+      "description": "One tool of ToolCatalogue@1: its capability and verb, replay class, 8 KiB result bound, input definition and the contexts it may be offered in. A skill never adds a tool.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ToolName"
+        },
+        "wireName": {
+          "$ref": "#/$defs/ToolWireName"
+        },
+        "family": {
+          "$ref": "#/$defs/ToolFamily"
+        },
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "verb": {
+          "type": "string",
+          "enum": [
+            "view",
+            "propose",
+            "approve",
+            "execute",
+            "delegate",
+            "administer"
+          ]
+        },
+        "replayClass": {
+          "$ref": "#/$defs/ToolReplayClass"
+        },
+        "resultMaxBytes": {
+          "const": 8192
+        },
+        "inputDefinition": {
+          "description": "The v1.1 core definition of the tool's input.",
+          "type": "string",
+          "pattern": "^ToolInput[A-Z][A-Za-z]{1,63}$"
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolContext"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "description": {
+          "description": "What the model is told the tool does.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "name",
+        "wireName",
+        "family",
+        "capabilityId",
+        "verb",
+        "replayClass",
+        "resultMaxBytes",
+        "inputDefinition",
+        "contexts",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "ToolCatalogue": {
+      "description": "ToolCatalogue@1 (ADR-0027 item 3; PR 10): the closed, generated, digest-pinned tool data in docs/contracts/tool-catalogue.json. No tool takes SQL, a URL, a role, a store, a recipient, a sender, a credential or a model, and none has an external effect.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolDefinition"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "version",
+        "tools"
+      ],
+      "additionalProperties": false
+    },
+    "ToolUseId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "ToolInputKnowledgeSearch": {
+      "description": "knowledge.search: full-text search over the shop knowledge the run may see.",
+      "type": "object",
+      "properties": {
+        "searchText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "searchText",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputWorkRead": {
+      "description": "work.read: the run's own task or thread (id null), or a task, thread or artifact by id; code checks the id is in scope.",
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": [
+            "task",
+            "thread",
+            "artifact"
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputProductsRead": {
+      "description": "products.read: products of the run's store by id, or whose title contains a text.",
+      "type": "object",
+      "properties": {
+        "productIds": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ListingProductId"
+              },
+              "minItems": 1,
+              "maxItems": 25,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "titleContains": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        }
+      },
+      "required": [
+        "productIds",
+        "titleContains",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputInventoryRead": {
+      "description": "inventory.read: stock levels of products of the run's store.",
+      "type": "object",
+      "properties": {
+        "productIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ListingProductId"
+          },
+          "minItems": 1,
+          "maxItems": 25,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "productIds"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputOrdersSummary": {
+      "description": "orders.summary: Level 1 order aggregates of the run's store; never a customer field.",
+      "type": "object",
+      "properties": {
+        "metric": {
+          "type": "string",
+          "enum": [
+            "order_count",
+            "gross_sales",
+            "average_order_value",
+            "refunds",
+            "units_sold",
+            "unfulfilled_orders"
+          ]
+        },
+        "period": {
+          "type": "string",
+          "enum": [
+            "last_7_days",
+            "last_30_days",
+            "last_60_days"
+          ]
+        },
+        "groupBy": {
+          "type": "string",
+          "enum": [
+            "total",
+            "day",
+            "week",
+            "product"
+          ]
+        }
+      },
+      "required": [
+        "metric",
+        "period",
+        "groupBy"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputSupportThreadRead": {
+      "description": "support.thread.read: one forwarded support thread (Support only).",
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputMessagePost": {
+      "description": "message.post: a message in the run's own thread.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputInboxAsk": {
+      "description": "inbox.ask: a question to the run's requester; at most 2 per run, and 72 hours unanswered ends the run.",
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "\\S"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "\\S"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "question",
+        "choices"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputTaskCreate": {
+      "description": "task.create: a task in the run's workspace, assigned to nobody.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "title",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputSuggestionCreate": {
+      "description": "suggestion.create: a suggestion for a person to accept or dismiss.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "title",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "ReportSection": {
+      "type": "object",
+      "properties": {
+        "heading": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "heading",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputReportWrite": {
+      "description": "report.write: a report@1 artifact on the run's task.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportSection"
+          },
+          "minItems": 1,
+          "maxItems": 12
+        }
+      },
+      "required": [
+        "title",
+        "summary",
+        "sections"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputAgentRoute": {
+      "description": "agent.route: the Coordinator hands the task to one active installed agent on the task's store, once per run.",
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "brief": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "installationId",
+        "brief"
+      ],
+      "additionalProperties": false
+    },
+    "SkillId": {
+      "description": "A first-party job skill: skills/<id>/SKILL.md plus skill.json (ADR-0023 decision 11d).",
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 48,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "OutputContractId": {
+      "description": "The closed list a specialist's brief picks its output contract from (ADR-0027 item 10).",
+      "type": "string",
+      "enum": [
+        "report@1"
+      ]
+    },
+    "SpecialistInputRef": {
+      "description": "An input a specialist brief names. No upload and nothing customer-tagged (ADR-0028 item 7): code refuses those at draft and at Start.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "task",
+            "artifact",
+            "knowledge_page",
+            "product"
+          ]
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "SpecialistBrief": {
+      "description": "The part of a specialist spec the model writes (ADR-0027 item 10): the brief, 1 to 3 eligible skill ids and an output contract. These choose only which skill bodies load and the report's form; code derives tools and capabilities and writes every other field.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "inputRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SpecialistInputRef"
+          },
+          "minItems": 0,
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "doneCriteria": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "\\S"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "\\S"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "skillIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillId"
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "outputContractId": {
+          "$ref": "#/$defs/OutputContractId"
+        }
+      },
+      "required": [
+        "title",
+        "objective",
+        "inputRefs",
+        "doneCriteria",
+        "boundaries",
+        "skillIds",
+        "outputContractId"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputSpecialistDraft": {
+      "description": "specialist.draft: the Coordinator's draft of a specialist for the task. It grants nothing and never runs in a turn holding a report.",
+      "$ref": "#/$defs/SpecialistBrief"
+    },
+    "ToolInputProposalListing": {
+      "description": "proposal.listing: listing changes for products of the run's store, packed by code into digest-bound proposals for catalog.content.publish.",
+      "type": "object",
+      "properties": {
+        "drafts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ListingDraft"
+          },
+          "minItems": 1,
+          "maxItems": 25,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "drafts"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputProposalReply": {
+      "description": "proposal.reply: a reply to one support thread. Code sets every header and the sender (ADR-0030 items 3 and 10(d)); the proposal goes to support.reply.send.",
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "threadId",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "ModelProfile": {
+      "description": "ModelProfile@1 (ADR-0027 items 9 and 12; PR 10): a ModelSelection@1 pinned to the catalogue version it was admitted under. Never authority: it changes no tool, capability, grant, scope, rule, data class, credit cap or deadline.",
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/ModelOptionKey"
+        },
+        "effort": {
+          "$ref": "#/$defs/ModelOptionKey"
+        },
+        "catalogueVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "model",
+        "effort",
+        "catalogueVersion"
+      ],
+      "additionalProperties": false
+    },
+    "ModelProfileTarget": {
+      "description": "Whose profile: an installation, the workspace's Coordinator, or the workspace's specialist default.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "installation"
+            },
+            "installationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "installationId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "coordinator"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "specialist_default"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ModelProfileRevision": {
+      "description": "ModelProfileRevision@1 (ADR-0027 item 12; PR 10): the body of the per-agent profile command under governance.model_default.revise. The Owner may target any; an Admin installations only. Keys must be an entry the active catalogue version offers and the target's release lists.",
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/ModelProfileTarget"
+        },
+        "selection": {
+          "$ref": "#/$defs/ModelSelection"
+        },
+        "expectedRevision": {
+          "$ref": "#/$defs/NullableRevision"
+        }
+      },
+      "required": [
+        "target",
+        "selection",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "ModelProfileChange": {
+      "description": "ModelProfileChange@1 (ADR-0027 item 12; PR 10): the audit and activity record of one profile change: actor, target, old and new keys and the catalogue version. No content.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "actor": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "target": {
+          "$ref": "#/$defs/ModelProfileTarget"
+        },
+        "from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "to": {
+          "$ref": "#/$defs/ModelSelection"
+        },
+        "catalogueVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "at": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "actor",
+        "target",
+        "from",
+        "to",
+        "catalogueVersion",
+        "revision",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "AgentRunKind": {
+      "description": "The authority decision of every tool call depends on it (ADR-0027 item 2): routed and specialist runs use decideDelegation, mandate runs decideAutomation, the Coordinator a stated check in code.",
+      "type": "string",
+      "enum": [
+        "coordinator",
+        "routed",
+        "mandate",
+        "specialist"
+      ]
+    },
+    "AgentReleaseId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "AgentReleasePin": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/AgentReleaseId"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "UsdCost": {
+      "description": "An exact non-negative USD amount with up to 8 decimals (the numeric(20,8) of the cost tables).",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,8})?$"
+    },
+    "AgentRunCaps": {
+      "description": "The caps admission pins for a loop run (ADR-0027 items 6 and 12): per turn and per run, the wall time (installed agents and the Coordinator, waits excluded) or the deadline (specialists, waits counted), and the run's hold. Checked in code, never in a prompt.",
+      "type": "object",
+      "properties": {
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "maxToolCallsPerTurn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "maxToolCallsPerRun": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "maxQuestions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "maxInputTokensPerTurn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64000
+        },
+        "maxOutputTokensPerTurn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16000
+        },
+        "wallTimeSeconds": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 1800
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "holdUsd": {
+          "$ref": "#/$defs/UsdCost"
+        }
+      },
+      "required": [
+        "maxTurns",
+        "maxToolCallsPerTurn",
+        "maxToolCallsPerRun",
+        "maxQuestions",
+        "maxInputTokensPerTurn",
+        "maxOutputTokensPerTurn",
+        "wallTimeSeconds",
+        "deadline",
+        "holdUsd"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "wallTimeSeconds": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "wallTimeSeconds"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "deadline": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "wallTimeSeconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "wallTimeSeconds"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "deadline": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AgentRunManifest": {
+      "description": "AgentRunManifest@1 (ADR-0027 item 1; PR 10): what admission pins for one agent-run@1: release, system-text and tool-catalogue digests, the offered tools, the model profile, caps and, for a specialist, the spec digest, data classes and deadline. Code builds it from server facts; steps carry only the run id.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "workflow": {
+          "const": "agent-run@1"
+        },
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connectionId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/AgentRunKind"
+        },
+        "taskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mandateId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "triggerId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requester": {
+          "$ref": "#/$defs/RunRequester"
+        },
+        "release": {
+          "$ref": "#/$defs/AgentReleasePin"
+        },
+        "systemTextDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "toolCatalogueVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "toolCatalogueDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "modelProfile": {
+          "$ref": "#/$defs/ModelProfile"
+        },
+        "caps": {
+          "$ref": "#/$defs/AgentRunCaps"
+        },
+        "specDigest": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dataClasses": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataClasses"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "admittedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "workflow",
+        "runId",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "connectionId",
+        "kind",
+        "taskId",
+        "installationId",
+        "mandateId",
+        "triggerId",
+        "requester",
+        "release",
+        "systemTextDigest",
+        "toolCatalogueVersion",
+        "toolCatalogueDigest",
+        "tools",
+        "modelProfile",
+        "caps",
+        "specDigest",
+        "dataClasses",
+        "admittedAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "coordinator"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "installationId": {
+                "type": "null"
+              },
+              "mandateId": {
+                "type": "null"
+              },
+              "triggerId": {
+                "type": "null"
+              },
+              "specDigest": {
+                "type": "null"
+              },
+              "dataClasses": {
+                "type": "null"
+              },
+              "requester": {
+                "$ref": "#/$defs/HumanActorRef"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "routed"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "installationId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "mandateId": {
+                "type": "null"
+              },
+              "triggerId": {
+                "type": "null"
+              },
+              "specDigest": {
+                "type": "null"
+              },
+              "dataClasses": {
+                "type": "null"
+              },
+              "requester": {
+                "$ref": "#/$defs/HumanActorRef"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "mandate"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "installationId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "mandateId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "triggerId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "specDigest": {
+                "type": "null"
+              },
+              "dataClasses": {
+                "type": "null"
+              },
+              "requester": {
+                "$ref": "#/$defs/MandateActorRef"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "specialist"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "installationId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "mandateId": {
+                "type": "null"
+              },
+              "triggerId": {
+                "type": "null"
+              },
+              "specDigest": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+              },
+              "dataClasses": {
+                "$ref": "#/$defs/DataClasses"
+              },
+              "requester": {
+                "$ref": "#/$defs/HumanActorRef"
+              },
+              "caps": {
+                "type": "object",
+                "properties": {
+                  "deadline": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AgentRunParams": {
+      "description": "AgentRunParams@1 (ADR-0027 item 1; PR 10): the Workflow parameters of agent-run@1: ids only. Everything else is read from the run's manifest under its lease.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "workflow": {
+          "const": "agent-run@1"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "workflow",
+        "organizationId",
+        "workspaceId",
+        "runId"
+      ],
+      "additionalProperties": false
+    },
+    "AgentRunRefusal": {
+      "description": "Why admission refuses an agent run (ADR-0024 item 6, ADR-0026 item 4, ADR-0027 items 9 and 12). A proactive trigger that does not fit stays pending; a person's run is refused.",
+      "type": "string",
+      "enum": [
+        "switch_off",
+        "profile_missing",
+        "entry_not_offered",
+        "cap_below_turn",
+        "daily_backstop",
+        "entitlement_denied",
+        "stopped",
+        "quiet_hours",
+        "mandate_inactive",
+        "trigger_used",
+        "running_limit",
+        "actor_ineligible"
+      ]
+    },
+    "AgentRunEndReason": {
+      "description": "How an agent run ended. Code derives it, never model text (ADR-0027 item 1).",
+      "type": "string",
+      "enum": [
+        "completed",
+        "turn_limit",
+        "tool_call_limit",
+        "cost_budget",
+        "wall_time",
+        "deadline",
+        "question_unanswered",
+        "invalid_output",
+        "refusal",
+        "spend_limit",
+        "provider_error",
+        "prefix_mismatch",
+        "stopped",
+        "lease_ended",
+        "mandate_ended",
+        "task_closed",
+        "switch_off"
+      ]
+    },
+    "RunHold": {
+      "description": "RunHold@1 (ADR-0026 item 4, ADR-0027 item 12; PR 10): a loop run's hold, the lowest of its turn limit times its entry's worst-case turn, the US$7 backstop and its credit cap, and which one binds. A run whose hold cannot cover one worst-case turn, or two for a run that must call a tool, is refused cap_below_turn.",
+      "type": "object",
+      "properties": {
+        "catalogueVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "model": {
+          "$ref": "#/$defs/ModelOptionKey"
+        },
+        "effort": {
+          "$ref": "#/$defs/ModelOptionKey"
+        },
+        "turnLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "worstCaseTurnUsd": {
+          "$ref": "#/$defs/UsdCost"
+        },
+        "holdUsd": {
+          "$ref": "#/$defs/UsdCost"
+        },
+        "binding": {
+          "type": "string",
+          "enum": [
+            "turn_limit",
+            "run_backstop",
+            "credit_cap"
+          ]
+        },
+        "toolTurnsRequired": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "catalogueVersion",
+        "model",
+        "effort",
+        "turnLimit",
+        "worstCaseTurnUsd",
+        "holdUsd",
+        "binding",
+        "toolTurnsRequired"
+      ],
+      "additionalProperties": false
+    },
+    "ModelUntrustedSource": {
+      "description": "The source a wrapped piece of untrusted data names (ADR-0027 item 5).",
+      "type": "string",
+      "enum": [
+        "product",
+        "inventory",
+        "order_summary",
+        "support_mail",
+        "knowledge_page",
+        "artifact",
+        "report",
+        "upload",
+        "sandbox_output",
+        "tool_result",
+        "message"
+      ]
+    },
+    "ModelTextBlock": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "text"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32000
+        }
+      },
+      "required": [
+        "type",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "ModelDataBlock": {
+      "description": "Untrusted content wrapped as data naming its source (ADR-0027 item 5). It never sets tools, capabilities, scope, recipients, senders or caps.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "data"
+        },
+        "source": {
+          "$ref": "#/$defs/ModelUntrustedSource"
+        },
+        "sourceId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 65536
+        }
+      },
+      "required": [
+        "type",
+        "source",
+        "sourceId",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "ModelToolUseBlock": {
+      "description": "One tool call the model made: its id, the Morrow tool name and the input of that tool. The broker maps names to wire names.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "knowledge.search"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputKnowledgeSearch"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "work.read"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputWorkRead"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "products.read"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputProductsRead"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "inventory.read"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputInventoryRead"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "orders.summary"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputOrdersSummary"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "support.thread.read"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputSupportThreadRead"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "message.post"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputMessagePost"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "inbox.ask"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputInboxAsk"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "task.create"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputTaskCreate"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "suggestion.create"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputSuggestionCreate"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "report.write"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputReportWrite"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "agent.route"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputAgentRoute"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "specialist.draft"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputSpecialistDraft"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "proposal.listing"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputProposalListing"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "proposal.reply"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolInputProposalReply"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ModelToolResultBlock": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "tool_result"
+        },
+        "toolUseId": {
+          "$ref": "#/$defs/ToolUseId"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ToolCallOutcome"
+        },
+        "content": {
+          "description": "The result as wrapped data, at most 8 KiB (code checks the bytes).",
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "type",
+        "toolUseId",
+        "outcome",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "ModelReasoningBlock": {
+      "description": "The model's reasoning as the provider returns it, kept only inside the run so its thinking stays valid; never shown to a person or a log.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "reasoning"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 65536
+        },
+        "continuity": {
+          "description": "Opaque provider continuity data, passed back unchanged within the run; deleted at run close.",
+          "type": "string",
+          "maxLength": 65536,
+          "pattern": "^[A-Za-z0-9+/=_-]*$"
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "text",
+        "continuity",
+        "redacted"
+      ],
+      "additionalProperties": false
+    },
+    "UserModelMessage": {
+      "description": "The user side of one turn: the person's request, wrapped data and tool results.",
+      "type": "object",
+      "properties": {
+        "role": {
+          "const": "user"
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ModelTextBlock"
+              },
+              {
+                "$ref": "#/$defs/ModelDataBlock"
+              },
+              {
+                "$ref": "#/$defs/ModelToolResultBlock"
+              }
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "AssistantModelMessage": {
+      "description": "The model's side of one turn: text, reasoning and at most four tool calls (code checks the count).",
+      "type": "object",
+      "properties": {
+        "role": {
+          "const": "assistant"
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ModelTextBlock"
+              },
+              {
+                "$ref": "#/$defs/ModelToolUseBlock"
+              },
+              {
+                "$ref": "#/$defs/ModelReasoningBlock"
+              }
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "ModelMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UserModelMessage"
+        },
+        {
+          "$ref": "#/$defs/AssistantModelMessage"
+        }
+      ]
+    },
+    "ModelCallV2": {
+      "description": "ModelCall@2 (ADR-0027 item 4; PR 10): one turn of an agent-run@1 through the provider-neutral model gateway. Closed: it names no provider, provider model id, model, effort, catalogue version, tool list, token limit or price; the broker reads the selection and tools from the run its lease names. The conversation is append-only: prefixDigest is the digest of every message but the last as the previous turn recorded it (null on turn 1), and the broker refuses prefix_mismatch before any request. final sends tool_choice none. ModelCall@1 stays for listings-run@1.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "purpose": {
+          "const": "agent_turn"
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "final": {
+          "type": "boolean"
+        },
+        "prefixDigest": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelMessage"
+          },
+          "minItems": 1,
+          "maxItems": 33
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "purpose",
+        "turn",
+        "attempt",
+        "sequence",
+        "final",
+        "prefixDigest",
+        "messages"
+      ],
+      "additionalProperties": false
+    },
+    "ModelTurnOutcome": {
+      "description": "A turn's outcome: end_turn and tool_use carry the reply; invalid_output (an invalid tool_use) ends the run; uncertain is booked at the worst case and sent again at most once; not_sent, input_over_cap and prefix_mismatch generated nothing.",
+      "type": "string",
+      "enum": [
+        "end_turn",
+        "tool_use",
+        "incomplete",
+        "refusal",
+        "invalid_output",
+        "spend_limit",
+        "provider_error",
+        "uncertain",
+        "not_sent",
+        "input_over_cap",
+        "prefix_mismatch"
+      ]
+    },
+    "ModelUsageV2": {
+      "description": "Token usage of one turn by kind, the kinds the rate card prices (ADR-0026 item 5).",
+      "type": "object",
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "cacheWriteTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "cacheReadTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      },
+      "required": [
+        "inputTokens",
+        "cacheWriteTokens",
+        "cacheReadTokens",
+        "outputTokens"
+      ],
+      "additionalProperties": false
+    },
+    "ModelResultV2": {
+      "description": "ModelResult@2 (ADR-0027 item 4; PR 10): the gateway's provider-neutral result of one turn. message is the reply for end_turn and tool_use, and prefixDigest the digest of the conversation with it appended, which the next call names. It never names a provider, provider request or model id or raw stop reason; traceRef is an opaque reference to the run manifest's call entry.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "outcome": {
+          "$ref": "#/$defs/ModelTurnOutcome"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssistantModelMessage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelUsageV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prefixDigest": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "traceRef": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "model_call"
+                },
+                "id": {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retryAfterMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 120000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "outcome",
+        "message",
+        "usage",
+        "prefixDigest",
+        "traceRef",
+        "retryAfterMs"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "end_turn",
+                  "tool_use"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "$ref": "#/$defs/AssistantModelMessage"
+              },
+              "prefixDigest": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "incomplete",
+                  "refusal",
+                  "invalid_output",
+                  "spend_limit",
+                  "provider_error",
+                  "uncertain",
+                  "not_sent",
+                  "input_over_cap",
+                  "prefix_mismatch"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "null"
+              },
+              "prefixDigest": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ToolCallOutcome": {
+      "description": "A tool call's outcome as the model sees it (the refusal code stays in run_tool_calls).",
+      "type": "string",
+      "enum": [
+        "ok",
+        "refused",
+        "invalid_input",
+        "tool_outcome_unknown",
+        "computer_unavailable"
+      ]
+    },
+    "ToolRefusalCode": {
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it.",
+      "type": "string",
+      "enum": [
+        "not_offered",
+        "lease_ended",
+        "run_closed",
+        "deadline_passed",
+        "task_closed",
+        "release_revoked",
+        "switch_off",
+        "stopped",
+        "input_invalid",
+        "id_out_of_scope",
+        "authority_denied",
+        "budget_exhausted",
+        "tool_call_limit",
+        "question_limit",
+        "route_used",
+        "report_in_turn",
+        "result_too_large",
+        "sender_inactive",
+        "sender_not_usable"
+      ]
+    },
+    "RunToolCallRecordRef": {
+      "description": "The first record an internal write made, returned again on replay.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "message",
+            "question",
+            "task",
+            "suggestion",
+            "artifact",
+            "proposal",
+            "specialist_spec"
+          ]
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "RunTurn": {
+      "description": "RunTurn@1 (ADR-0027 item 7; PR 10): one row of run_turns (FORCE RLS), the only place loop content lives. No content reaches Workflow outputs, Queues or logs.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "input": {
+          "$ref": "#/$defs/UserModelMessage"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssistantModelMessage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelTurnOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prefixDigestBefore": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prefixDigestAfter": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelUsageV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "readTags": {
+          "$ref": "#/$defs/ReadTags"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "description": "90 days from run end (ADR-0031 item 1); reasoning blocks are deleted at run close.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "runId",
+        "turn",
+        "attempt",
+        "input",
+        "output",
+        "outcome",
+        "prefixDigestBefore",
+        "prefixDigestAfter",
+        "usage",
+        "readTags",
+        "createdAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "RunToolCall": {
+      "description": "RunToolCall@1 (ADR-0027 item 7; PR 10): one row of run_tool_calls: ids, codes and digests only, never content.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "toolUseId": {
+          "$ref": "#/$defs/ToolUseId"
+        },
+        "tool": {
+          "$ref": "#/$defs/ToolName"
+        },
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "verb": {
+          "type": "string",
+          "enum": [
+            "view",
+            "propose",
+            "approve",
+            "execute",
+            "delegate",
+            "administer"
+          ]
+        },
+        "replayClass": {
+          "$ref": "#/$defs/ToolReplayClass"
+        },
+        "inputDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "refusal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolRefusalCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resultDigest": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resultBytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "record": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunToolCallRecordRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expiresAt": {
+          "description": "365 days (ADR-0031 item 1).",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "runId",
+        "turn",
+        "toolUseId",
+        "tool",
+        "capabilityId",
+        "verb",
+        "replayClass",
+        "inputDigest",
+        "outcome",
+        "refusal",
+        "resultDigest",
+        "resultBytes",
+        "record",
+        "startedAt",
+        "finishedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "const": "refused"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "refusal": {
+                "$ref": "#/$defs/ToolRefusalCode"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "ok",
+                  "invalid_input",
+                  "tool_outcome_unknown",
+                  "computer_unavailable"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "refusal": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "const": null
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "refusal": {
+                "type": "null"
+              },
+              "resultDigest": {
+                "type": "null"
+              },
+              "finishedAt": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SpecialistSpec": {
+      "description": "SpecialistSpec@1 (ADR-0027 item 10, ADR-0028 items 2 and 3; PR 10): a closed spec, digested with RFC 8785. The model writes only the brief; code writes every other field. The model profile is a priced choice, not authority.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "connectionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "parentTaskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "parentTaskRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "release": {
+          "$ref": "#/$defs/AgentReleasePin"
+        },
+        "brief": {
+          "$ref": "#/$defs/SpecialistBrief"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityVerbs"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "description": "At most 16 ids, derived in code from the tools the eligible skills declare intersected with the Specialist ceiling, never from the chosen skill ids."
+        },
+        "dataClasses": {
+          "$ref": "#/$defs/DataClasses"
+        },
+        "modelProfile": {
+          "$ref": "#/$defs/ModelProfile"
+        },
+        "turnLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "creditCap": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "runSeconds": {
+          "description": "The run's length from Start: 1 hour by default, 8 at most; the person may only shorten it.",
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 28800
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "connectionId",
+        "parentTaskId",
+        "parentTaskRevision",
+        "release",
+        "brief",
+        "tools",
+        "capabilities",
+        "dataClasses",
+        "modelProfile",
+        "turnLimit",
+        "creditCap",
+        "runSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "SpecialistStartDocument": {
+      "description": "SpecialistStartDocument@1 (ADR-0028 item 3; PR 10): the server-built document behind the Start card, bound to the actor, a standalone-workspace session, the spec digest, the parent task revision, the release, capabilities, data classes, model profile, caps and deadline. Only the asker, at launch only the Owner, may get one; card edits only narrow, each with a new document.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "documentId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "actor": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "sessionDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "host": {
+          "const": "standalone"
+        },
+        "specDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "parentTaskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "parentTaskRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "release": {
+          "$ref": "#/$defs/AgentReleasePin"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapabilityVerbs"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "dataClasses": {
+          "$ref": "#/$defs/DataClasses"
+        },
+        "modelProfile": {
+          "$ref": "#/$defs/ModelProfile"
+        },
+        "turnLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "creditCap": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "runSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 28800
+        },
+        "issuedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "description": "Five minutes after issuedAt; consumed once.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "documentId",
+        "organizationId",
+        "workspaceId",
+        "actor",
+        "sessionDigest",
+        "host",
+        "specDigest",
+        "parentTaskId",
+        "parentTaskRevision",
+        "release",
+        "capabilities",
+        "dataClasses",
+        "modelProfile",
+        "turnLimit",
+        "creditCap",
+        "runSeconds",
+        "issuedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "SpecialistStartRefusal": {
+      "description": "Why a specialist Start is refused (ADR-0028 items 3, 4, 7 and 8). Any refusal rolls the whole Start back.",
+      "type": "string",
+      "enum": [
+        "actor_ineligible",
+        "host_ineligible",
+        "switch_off",
+        "workspace_off",
+        "stale",
+        "document_expired",
+        "document_used",
+        "running_limit_task",
+        "running_limit_workspace",
+        "cap_below_turn",
+        "daily_backstop",
+        "entitlement_denied",
+        "stopped"
+      ]
+    },
+    "ReportArtifact": {
+      "description": "report@1 (ADR-0027 item 10; PR 10): the artifact a specialist run ends with. Reports are data, never instructions; the Coordinator never reads them at launch, and code builds the parent-thread card from these typed fields.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "contract": {
+          "const": "report@1"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportSection"
+          },
+          "minItems": 1,
+          "maxItems": 12
+        },
+        "readTags": {
+          "$ref": "#/$defs/ReadTags"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "contract",
+        "title",
+        "summary",
+        "sections",
+        "readTags"
+      ],
+      "additionalProperties": false
+    },
+    "SenderIdentityKind": {
+      "description": "ADR-0030 item 10(a): one kind at launch. google_mailbox, microsoft_mailbox and merchant_domain are reserved names; each enters only by its own ADR.",
+      "type": "string",
+      "enum": [
+        "morrow_managed"
+      ]
+    },
+    "SenderIdentityStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "disabled",
+        "retired"
+      ]
+    },
+    "SenderUseScope": {
+      "description": "ADR-0030 item 10(e): workspace admits anyone who may approve the job. personal is reserved for linked mailboxes and enters with their ADR.",
+      "type": "string",
+      "enum": [
+        "workspace"
+      ]
+    },
+    "EmailAddress": {
+      "type": "string",
+      "format": "email",
+      "minLength": 3,
+      "maxLength": 254,
+      "pattern": "^[^\\s\"<>,;]+$"
+    },
+    "SenderDisplayName": {
+      "description": "A display name cleaned in code: printable, no CR, LF, quotes or angle brackets, at most 64 characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\u0000-\\u001f\\u007f\"<>]+$"
+    },
+    "SenderIdentity": {
+      "description": "SenderIdentity@1 (ADR-0030 item 10(a); PR 10): one entry on a workspace's list of sending addresses, in sender_identities (FORCE RLS), at most one default per workspace. A launch record holds no credential. The default is always active.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/SenderIdentityKind"
+        },
+        "address": {
+          "$ref": "#/$defs/EmailAddress"
+        },
+        "displayName": {
+          "$ref": "#/$defs/SenderDisplayName"
+        },
+        "status": {
+          "$ref": "#/$defs/SenderIdentityStatus"
+        },
+        "useScope": {
+          "$ref": "#/$defs/SenderUseScope"
+        },
+        "isDefault": {
+          "type": "boolean"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "address",
+        "displayName",
+        "status",
+        "useScope",
+        "isDefault",
+        "revision",
+        "createdAt",
+        "updatedAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "isDefault": {
+                "const": true
+              }
+            },
+            "required": [
+              "isDefault"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "active"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "morrow_managed"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,43}[a-z0-9])?@replies\\.[a-z0-9-]+(\\.[a-z0-9-]+)+$"
+              },
+              "storeId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SenderRefusal": {
+      "description": "ADR-0030 item 10(e): the identity is not active or has no adapter, or the approver may not use it. Nothing is sent.",
+      "type": "string",
+      "enum": [
+        "sender_inactive",
+        "sender_not_usable"
+      ]
+    },
+    "MailHeaderText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 998,
+      "pattern": "^[^\\r\\n]+$"
+    },
+    "MailMessageId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 252,
+      "pattern": "^<[^\\s<>]{1,250}>$"
+    },
+    "SupportReplyParameters": {
+      "description": "SupportReplyParameters@1 (ADR-0030 items 4 and 10(d); PR 10): the parameters of a support.reply.send proposal, whose digest an approval binds: the sender identity id, From, To, Bcc, Reply-To, Subject, In-Reply-To, References and the plain-text body. Code sets senderIdentityId to the workspace default when the proposal is made and builds every header; no tool takes a sender and model output never sets one. Picking another sender is an edit: a new proposal.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "threadId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "senderIdentityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "from": {
+          "type": "object",
+          "properties": {
+            "address": {
+              "$ref": "#/$defs/EmailAddress"
+            },
+            "displayName": {
+              "$ref": "#/$defs/SenderDisplayName"
+            }
+          },
+          "required": [
+            "address",
+            "displayName"
+          ],
+          "additionalProperties": false
+        },
+        "to": {
+          "$ref": "#/$defs/EmailAddress"
+        },
+        "bcc": {
+          "$ref": "#/$defs/EmailAddress"
+        },
+        "replyTo": {
+          "$ref": "#/$defs/EmailAddress"
+        },
+        "subject": {
+          "$ref": "#/$defs/MailHeaderText"
+        },
+        "inReplyTo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MailMessageId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MailMessageId"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "body": {
+          "description": "Plain text; no HTML, attachments or tracking.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "bodyDigest": {
+          "description": "SHA-256 of the UTF-8 body, which verification compares with the sent text.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "threadId",
+        "senderIdentityId",
+        "from",
+        "to",
+        "bcc",
+        "replyTo",
+        "subject",
+        "inReplyTo",
+        "references",
+        "body",
+        "bodyDigest"
+      ],
+      "additionalProperties": false
+    },
+    "MailIdentityAction": {
+      "type": "string",
+      "enum": [
+        "set_default",
+        "set_display_name",
+        "disable",
+        "enable",
+        "set_support_address"
+      ]
+    },
+    "NullableSenderDisplayName": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SenderDisplayName"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "NullableEmailAddress": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmailAddress"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   }
 }

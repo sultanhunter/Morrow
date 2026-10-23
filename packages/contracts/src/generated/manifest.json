@@ -5,9 +5,9 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "1e9ad00755423b8f5fb4deed150ed973b576efde0f01871be874b7865f26ba17",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "d886a42fe0707e81786ebd1c638658f22c64787e273f24405a7f651974aebdc5",
-    "docs/contracts/schemas/v1.1/billing.schema.json": "0d3fa0baed844d062be4333790ba96015ee785ab5ec8515c81841fbf20e0438c"
+    "docs/contracts/schemas/v1.1/core.schema.json": "cd2050285f0b5f642a06cf8694f7bbb446fc3718708cebb65779ea0579c5d6cd",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "145d8de594a481b1443ec28b7d1bc67433491b6ba51845b9dbeef2cb3ecb7112",
+    "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206"
   },
   "event_registry": "db4a4f3a1b8735cf1203a778ce861a22601e48125f6323356a2d23e228ed46a7",
   "replacements": [
@@ -120,19 +120,19 @@
       "adr": "ADR-0022"
     }
   ],
-  "definitions": 538,
+  "definitions": 640,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
-    "core-v1.1": 149,
-    "capabilities-v1.1": 30,
-    "billing-v1.1": 25
+    "core-v1.1": 244,
+    "capabilities-v1.1": 34,
+    "billing-v1.1": 28
   },
-  "current_definitions": 258,
-  "current_billing_definitions": 32,
-  "capabilities": 115,
-  "capability_body_overrides": 30,
+  "current_definitions": 353,
+  "current_billing_definitions": 35,
+  "capabilities": 117,
+  "capability_body_overrides": 34,
   "event_types": 22,
-  "generated_sha256": "5362b2da8ad486b4cac1d59c43c1c6b4c0dcb77597a911a79f51e25c0654eaf1"
+  "generated_sha256": "fdd68268e0ec3afb53a9c8972c2cc3f88aac58a0229d9a5d1c8ad532b8aec255"
 }
