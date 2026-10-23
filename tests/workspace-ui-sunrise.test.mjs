@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -14,8 +15,18 @@ import { json, recordingTransport } from "./fixtures/workspace-web.mjs";
 // The test runner compiles TSX with the classic runtime (no root tsconfig), so React is a
 // global before any component module loads; the apps compile it with their own tsconfig.
 globalThis.React = React;
-const { AgentAvatar, AgentPill, SpecialistPill, agentNames, monogram, personInitials } =
-  await import("../packages/workspace-ui/src/components/avatars.tsx");
+const {
+  AgentAvatar,
+  AgentPill,
+  HorizonPicture,
+  SpecialistPill,
+  agentNames,
+  monogram,
+  personInitials,
+} = await import("../packages/workspace-ui/src/components/avatars.tsx");
+const { SettingsNavigation, inSettings, settingsCurrent, settingsItems } = await import(
+  "../packages/workspace-ui/src/components/settings-frame.tsx"
+);
 const { Navigation } = await import("../packages/workspace-ui/src/components/shell.tsx");
 const { ServicesProvider } = await import("../packages/workspace-ui/src/services.tsx");
 const { copy } = await import("../packages/workspace-ui/src/copy.ts");
@@ -266,5 +277,108 @@ test("Home preview: samples.home is a default-off switch that only the fixture a
   assert.equal(
     (await createFixtureAdapter("home_preview").samples.home("ws-other")).kind,
     "not_found",
+  );
+});
+
+test("modules: nothing renders at import, so a classic-runtime loader needs no React global", () => {
+  // The unit tests load TSX with the classic runtime: an element built at module scope
+  // would throw "React is not defined" before any test runs.
+  const run = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      'await import("./packages/workspace-ui/src/index.ts"); await import("./apps/workspace-web/src/app.tsx");',
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(run.status, 0, run.stderr);
+});
+
+test("entry picture: Morrow on the horizon, decorative, colours from tokens only", () => {
+  const html = render(h(HorizonPicture));
+  assert.match(html, /^<svg class="horizon-picture"[^>]*aria-hidden="true"/);
+  assert.match(html, /data-agent="morrow"/);
+  assert.doesNotMatch(html, /role="img"|aria-label/);
+  assert.deepEqual(inspectColourLiterals("packages/workspace-ui/src/p.tsx", html), []);
+  const two = render(
+    h(
+      "div",
+      null,
+      h(HorizonPicture, { agent: "listings" }),
+      h(HorizonPicture, { agent: "listings" }),
+    ),
+  );
+  const ids = [...two.matchAll(/<clipPath id="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(ids).size, 2);
+});
+
+test("settings: Activity sits under Settings as a placeholder, never in the sidebar", () => {
+  const services = { navigate: () => {} };
+  const html = render(
+    h(
+      ServicesProvider,
+      { value: services },
+      h(SettingsNavigation, { workspaceId: "ws-1", current: "connections" }),
+    ),
+  );
+  const links = [
+    ...html.matchAll(/<a href="([^"]+)"[^>]*class="settings-link"[^>]*>(.*?)<\/a>/g),
+  ].map((m) => [m[1], m[2].replace(/<[^>]+>/g, "")]);
+  // The contract's own paths, under the board's names.
+  assert.deepEqual(links, [
+    ["/w/ws-1/settings/billing", "Plan and credits"],
+    ["/w/ws-1/settings/people", "People and roles"],
+    ["/w/ws-1/settings/notifications", "Notifications"],
+    ["/w/ws-1/settings/governance", "Model default"],
+    ["/w/ws-1/connections", "Shopify connection"],
+  ]);
+  assert.match(html, /href="\/w\/ws-1\/connections" class="settings-link" aria-current="page"/);
+  // Activity is listed, says it isn't built, and isn't a link until it has a route.
+  assert.match(
+    html,
+    /<span class="settings-link is-later">.*Activity<span class="visually-hidden">, not in this build yet<\/span>/,
+  );
+  assert.equal(
+    workspaceRoutes.routes.some((r) => /activity/.test(r.id)),
+    false,
+  );
+  // The sidebar never lists it.
+  const sidebar = render(
+    h(
+      ServicesProvider,
+      { value: services },
+      h(Navigation, { workspaceId: "ws-1", currentRoute: "connections" }),
+    ),
+  );
+  assert.doesNotMatch(sidebar, /Activity/);
+  assert.match(sidebar, /href="\/w\/ws-1\/settings" class="nav-link" aria-current="page"/);
+  // Which item is current, and which routes the frame wraps.
+  assert.equal(settingsCurrent("connection", undefined), "connections");
+  assert.equal(settingsCurrent("settings_section", "people"), "people");
+  assert.equal(settingsCurrent("settings_section", "usage"), null);
+  assert.equal(settingsCurrent("settings", undefined), null);
+  assert.deepEqual(
+    ["settings", "settings_section", "connections", "connection", "home", "inbox"].map(inSettings),
+    [true, true, true, true, false, false],
+  );
+  // Every section item names a value of the contract's closed `section` enum.
+  const sections = workspaceRoutes.routes.find((r) => r.id === "settings_section").parameter_enums
+    .section;
+  for (const item of settingsItems)
+    if (item.route === "settings_section") assert.ok(sections.includes(item.key), item.key);
+  // Section titles: the board's names; the contract's title stays.
+  assert.equal(destinationTitle("settings_section", "people"), "People and roles");
+  assert.equal(destinationTitle("settings_section", "billing"), "Plan and credits");
+  assert.equal(destinationTitle("settings_section"), "Settings section");
+  assert.equal(
+    screenTitle({
+      session: "active",
+      match: { id: "settings_section", params: { workspaceId: "w", section: "notifications" } },
+      entryFailed: false,
+    }),
+    "Notifications",
   );
 });
