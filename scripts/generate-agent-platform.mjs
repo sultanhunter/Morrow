@@ -23,8 +23,7 @@ export const specialistCeilingPath = "docs/contracts/specialist-ceiling.json";
 export const agentLoopSwitchPath = "docs/decisions/agent-loop-staging.json";
 export const specialistSwitchPath = "docs/decisions/specialists-staging.json";
 export const generatedToolCataloguePath = "packages/policy/src/generated/tool-catalogue.ts";
-export const generatedSpecialistCeilingPath =
-  "packages/policy/src/generated/specialist-ceiling.ts";
+export const generatedSpecialistCeilingPath = "packages/policy/src/generated/specialist-ceiling.ts";
 const coreV1Path = "docs/contracts/schemas/v1/core.schema.json";
 const coreV11Path = "docs/contracts/schemas/v1.1/core.schema.json";
 const capabilitiesPath = "docs/contracts/capabilities.json";
@@ -164,7 +163,12 @@ export function strictModelSchema(definition, schemas) {
 }
 
 /** Every property name in a schema, through references (for the forbidden-name rule). */
-function propertyNames(definition, schemas, seen = new Set(), base = "urn:morrow:contracts:core:v1.1") {
+function propertyNames(
+  definition,
+  schemas,
+  seen = new Set(),
+  base = "urn:morrow:contracts:core:v1.1",
+) {
   const names = [];
   const byId = new Map(schemas.map((schema) => [schema.$id, schema]));
   const walk = (node, at) => {
@@ -284,10 +288,7 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
       !(tool.family === "read" || tool.name === "suggestion.create")
     )
       at("look-for-work offers only reads and suggestions");
-    if (
-      tool.capabilityId === "support.case.read" ||
-      tool.capabilityId.startsWith("support.")
-    ) {
+    if (tool.capabilityId === "support.case.read" || tool.capabilityId.startsWith("support.")) {
       if (contexts.some((c) => !["routed", "mandate"].includes(c)))
         at("support tools only in Support's routed and mandate runs");
     }
@@ -363,7 +364,10 @@ export function inspectSpecialistCeiling(ceiling, capabilities) {
 /** The two switches stay committed off until their reviewed commits (ADR-0027 item 11, ADR-0028 item 8). */
 export function inspectAgentPlatformSwitches(loop, specialists) {
   const errors = [];
-  const keys = (value) => Object.keys(value ?? {}).sort().join(",");
+  const keys = (value) =>
+    Object.keys(value ?? {})
+      .sort()
+      .join(",");
   if (
     keys(loop) !== "environment_kind,observed_on,schema_version,scope,switch,workflow" ||
     loop.schema_version !== 1 ||
@@ -409,9 +413,7 @@ export async function generateAgentPlatform(root = repositoryRoot) {
   const ceiling = readJson(root, specialistCeilingPath);
   const capabilities = readJson(root, capabilitiesPath).capabilities;
   const schemas = [readJson(root, coreV1Path), readJson(root, coreV11Path)];
-  const { validators, currentDefinitionSelectors } = await import(
-    resolve(root, validatorsPath)
-  );
+  const { validators, currentDefinitionSelectors } = await import(resolve(root, validatorsPath));
   const validate = (value) =>
     validators[currentDefinitionSelectors.ToolCatalogue]?.(value) === true;
   const errors = [

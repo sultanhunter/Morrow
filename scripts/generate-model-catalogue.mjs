@@ -180,7 +180,9 @@ export function loopCatalogueVersionData(entry) {
       toolResultMaxBytes: count(limits.tool_result_max_bytes),
       runCostCapUsd12: usd12(limits.run_cost_cap_usd),
       workspaceDailyCostCapUsd12: usd12(limits.workspace_daily_cost_cap_usd),
-      workspacePeriodUnrecoveredCostCapUsd12: usd12(limits.workspace_period_unrecovered_cost_cap_usd),
+      workspacePeriodUnrecoveredCostCapUsd12: usd12(
+        limits.workspace_period_unrecovered_cost_cap_usd,
+      ),
     },
     expectedTurn: {
       inputTokens: count(entry.expected_turn.input_tokens),

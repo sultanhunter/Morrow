@@ -240,7 +240,10 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     else if (isCount(tier) && isCount(inputCap) && inputCap > tier)
       fail(`${model.key}: the input cap leaves its price tier`);
     for (const [key, effort] of efforts) {
-      if (!Number.isInteger(model.max_output_tokens) || effort.max_output_tokens > model.max_output_tokens)
+      if (
+        !Number.isInteger(model.max_output_tokens) ||
+        effort.max_output_tokens > model.max_output_tokens
+      )
         fail(`${model.key} at ${key} exceeds the model's output limit`);
       if (!isCount(inputCap) || !isCount(effort.max_output_tokens)) continue;
       // 10^-12 USD: a per-million rate scaled by 10^6 is the per-token price.
@@ -472,7 +475,8 @@ export function inspectModelPolicy(policy, registry) {
     loop.strict_tools !== true ||
     JSON.stringify(loop.tool_choice) !== '{"default":"auto","final_turn":"none"}' ||
     JSON.stringify(loop.thinking) !== '{"type":"adaptive"}' ||
-    JSON.stringify(loop.tool_definition_fields) !== '["name","description","input_schema","strict"]' ||
+    JSON.stringify(loop.tool_definition_fields) !==
+      '["name","description","input_schema","strict"]' ||
     ["fallbacks", "temperature", "inference_geo", "stream", "mcp_servers", "container"].some(
       (field) => !neverSent.includes(field),
     ) ||

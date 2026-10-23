@@ -7505,14 +7505,74 @@
       "description": "specialist.draft: the Coordinator's draft of a specialist for the task. It grants nothing and never runs in a turn holding a report.",
       "$ref": "#/$defs/SpecialistBrief"
     },
+    "ListingChange": {
+      "description": "One product's listing change as a tool proposes it: every field present, null when unchanged, so the strict model schema and this definition agree. Code drops the nulls into a ListingDraft@1 and checks it again (at least one field, HTML sanitised, fields within the run's).",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "$ref": "#/$defs/ListingProductId"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "descriptionHtml": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListingSeo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListingTags"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "productId",
+        "title",
+        "descriptionHtml",
+        "seo",
+        "tags"
+      ],
+      "additionalProperties": false
+    },
     "ToolInputProposalListing": {
       "description": "proposal.listing: listing changes for products of the run's store, packed by code into digest-bound proposals for catalog.content.publish.",
       "type": "object",
       "properties": {
-        "drafts": {
+        "changes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/ListingDraft"
+            "$ref": "#/$defs/ListingChange"
           },
           "minItems": 1,
           "maxItems": 25,
@@ -7520,7 +7580,7 @@
         }
       },
       "required": [
-        "drafts"
+        "changes"
       ],
       "additionalProperties": false
     },

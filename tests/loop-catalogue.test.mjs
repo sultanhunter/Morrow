@@ -1,0 +1,333 @@
+// PR 10: model catalogue version 2 (proposed; ADR-0027 items 6 and 12) and the loop's money
+// rules (ADR-0026 item 4): worst-case turns, turn limits, holds, cap_below_turn and the
+// final turn. Every number below is ADR-0027 item 12's table or ADR-0026 item 4's text.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { generateLoopCatalogue, loopCataloguePath } from "../scripts/generate-model-catalogue.mjs";
+import { inspectModelPolicy, loopCallBudgetMs } from "../scripts/provider-checks.mjs";
+import {
+  callBudgetsFit,
+  creditCapUsd12,
+  defaultLoopProfile,
+  expectedRunUsd12,
+  fitsDailyBackstop,
+  LoopCatalogueError,
+  loopEntries,
+  loopEntry,
+  loopVersions,
+  nextTurn,
+  publishedLoopEntry,
+  runHold,
+  runHoldRecord,
+  turnLimit,
+  usd12Text,
+} from "../packages/policy/src/loop-catalogue.ts";
+import { modelCallBudgetMs } from "../packages/identity/src/broker-protocol.ts";
+import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
+
+const policy = JSON.parse(readFileSync("docs/decisions/model-policy.json", "utf8"));
+const registry = JSON.parse(readFileSync("docs/decisions/providers.json", "utf8"));
+const usd = (dollars) => BigInt(Math.round(dollars * 1e6)) * 1_000_000n;
+const cents = (units) => Math.round(Number(units / 10_000_000_000n)) / 100;
+const entry = (model, effort) => loopEntry(2, `claude_${model}_5_5`, effort);
+const capAt = (price, basisPoints) =>
+  creditCapUsd12({ planPriceUsd: price, capBasisPoints: basisPoints });
+
+test("the loop catalogue reproduces and is data only", async () => {
+  const text = await generateLoopCatalogue();
+  assert.equal(readFileSync(loopCataloguePath, "utf8"), text);
+  assert.doesNotMatch(text, /\bimport\b|\bfunction\b|=>|\beval\b/);
+  assert.deepEqual(loopVersions(), [2]);
+});
+
+test("version 2 is proposed: nine entries, no xhigh or max, every call within 600 s", () => {
+  const v2 = policy.catalogue.versions[1];
+  assert.equal(v2.status, "proposed");
+  assert.equal(v2.owner_confirmation, null);
+  assert.equal(Object.hasOwn(policy.catalogue.published_digests, "2"), false);
+  assert.equal(policy.catalogue.active_version, 1, "version 1 stays active for listings-run@1");
+  const entries = loopEntries(2);
+  assert.equal(entries.length, 9);
+  assert.deepEqual([...new Set(entries.map((e) => e.effort))], ["low", "medium", "high"]);
+  assert.ok(callBudgetsFit(2));
+  // One call's budget at the 128,000 tokens-an-hour floor: about 197 s, 394 s and 506 s.
+  for (const [effort, seconds] of [
+    ["low", 197],
+    ["medium", 394],
+    ["high", 506],
+  ]) {
+    const e = entry("opus", effort);
+    assert.equal(e.callBudgetMs, modelCallBudgetMs(e.maxOutputTokens));
+    assert.equal(e.callBudgetMs, loopCallBudgetMs(e.maxOutputTokens), "the inspector agrees");
+    assert.equal(Math.round(e.callBudgetMs / 1000), seconds, effort);
+  }
+  // Admission takes only a published entry and substitutes nothing.
+  assert.equal(publishedLoopEntry(2, "claude_opus_5_5", "high"), null);
+  assert.equal(loopEntry(2, "claude_opus_5_5", "xhigh"), null);
+  assert.equal(loopEntry(2, "claude-opus-5-5", "high"), null);
+  assert.equal(loopEntry(3, "claude_opus_5_5", "high"), null);
+});
+
+test("ADR-0027 item 12: the defaults are Opus high, Opus medium and Sonnet low", () => {
+  assert.deepEqual(defaultLoopProfile(2, "coordinator"), {
+    model: "claude_opus_5_5",
+    effort: "high",
+  });
+  assert.deepEqual(defaultLoopProfile(2, "specialist"), {
+    model: "claude_opus_5_5",
+    effort: "medium",
+  });
+  assert.deepEqual(defaultLoopProfile(2, "installed"), {
+    model: "claude_sonnet_5_5",
+    effort: "low",
+  });
+  assert.throws(() => defaultLoopProfile(2, "member"), LoopCatalogueError);
+});
+
+test("ADR-0027 item 12: worst-case turns of every entry", () => {
+  for (const [model, effort, dollars] of [
+    ["opus", "low", 0.42],
+    ["opus", "medium", 0.56],
+    ["opus", "high", 0.64],
+    ["sonnet", "low", 0.21],
+    ["sonnet", "medium", 0.28],
+    ["sonnet", "high", 0.32],
+    ["haiku", "low", 0.0105],
+    ["haiku", "medium", 0.014],
+    ["haiku", "high", 0.016],
+  ])
+    assert.equal(entry(model, effort).worstCaseTurnUsd12, usd(dollars), `${model} ${effort}`);
+});
+
+test("ADR-0027 item 12: the table of defaults: turn limits, holds, expected turns and runs", () => {
+  const coordinator = entry("opus", "high");
+  assert.equal(turnLimit(coordinator, "coordinator"), 6);
+  const c = runHold({ entry: coordinator, kind: "coordinator", creditCapUsd12: null });
+  assert.equal(c.ok && c.holdUsd12, usd(3.84));
+  assert.equal(c.binding, "turn_limit");
+  // Exact values; the ADR rounds them to US$0.13 (US$0.19 first) and US$0.46 for 3 turns.
+  assert.equal(coordinator.expectedTurnUsd12, usd(0.1344));
+  assert.equal(coordinator.expectedFirstTurnUsd12, usd(0.192));
+  assert.equal(expectedRunUsd12(coordinator, 3), usd(0.4608));
+  assert.equal(cents(expectedRunUsd12(coordinator, 3)), 0.46);
+
+  const specialist = entry("opus", "medium");
+  assert.equal(turnLimit(specialist, "specialist"), 12);
+  for (const [price, hold, turns] of [
+    ["149", 3.058225, 5],
+    ["99", 2.031975, 3],
+  ]) {
+    const h = runHold({ entry: specialist, kind: "specialist", creditCapUsd12: capAt(price, 500) });
+    assert.equal(h.ok && h.holdUsd12, usd(hold), price);
+    assert.equal(h.binding, "credit_cap");
+    assert.equal(h.turnLimit, 12, "its 12-turn limit binds only when turns cost less");
+    assert.equal(h.worstCaseTurns, turns, price);
+    assert.equal(h.toolTurnsRequired, 2);
+  }
+  // US$0.084 (US$0.14 first) and US$0.73 for 8 turns.
+  assert.equal(specialist.expectedTurnUsd12, usd(0.0844));
+  assert.equal(specialist.expectedFirstTurnUsd12, usd(0.142));
+  assert.equal(expectedRunUsd12(specialist, 8), usd(0.7328));
+
+  const installed = entry("sonnet", "low");
+  assert.equal(turnLimit(installed, "routed"), 16);
+  const i = runHold({ entry: installed, kind: "routed", creditCapUsd12: null });
+  assert.equal(i.ok && i.holdUsd12, usd(3.36));
+  // US$0.030 (US$0.058 first) and US$0.21 for 6 turns.
+  assert.equal(installed.expectedTurnUsd12, usd(0.0304));
+  assert.equal(installed.expectedFirstTurnUsd12, usd(0.058));
+  assert.equal(expectedRunUsd12(installed, 6), usd(0.21));
+});
+
+test("other entries' turn limits under the US$7 backstop", () => {
+  for (const [model, effort, limit] of [
+    ["opus", "low", 16],
+    ["opus", "high", 10],
+    ["sonnet", "medium", 16],
+    ["sonnet", "high", 16],
+    ["haiku", "high", 16],
+  ])
+    assert.equal(turnLimit(entry(model, effort), "routed"), limit, `${model} ${effort}`);
+  // The dearest turn fits US$7 ten times and US$25 thirty-nine times.
+  assert.equal(usd(7) / usd(0.64), 10n);
+  assert.equal(usd(25) / usd(0.64), 39n);
+});
+
+test("ADR-0026 item 4: credit caps under the margin rule at US$149 and US$99", () => {
+  assert.equal(capAt("149", 500), usd(3.058225));
+  assert.equal(capAt("99", 500), usd(2.031975));
+  assert.equal(capAt("149", 100), usd(0.611645));
+  assert.equal(capAt("99", 100), usd(0.406395));
+  for (const bad of [
+    { planPriceUsd: "149.999", capBasisPoints: 500 },
+    { planPriceUsd: "149", capBasisPoints: 0 },
+    { planPriceUsd: "149", capBasisPoints: 500, feeBasisPoints: 10_000 },
+    { planPriceUsd: -1, capBasisPoints: 500 },
+  ])
+    assert.throws(() => creditCapUsd12(bad), LoopCatalogueError, JSON.stringify(bad));
+});
+
+test("ADR-0026 item 4: a look-for-work pass needs two worst-case turns inside its 1% cap", () => {
+  const pass = (model, effort, price) =>
+    runHold({ entry: entry(model, effort), kind: "mandate", creditCapUsd12: capAt(price, 100) });
+  // At US$149: Sonnet low holds a tool turn and a final turn, not a third.
+  const sonnet = pass("sonnet", "low", "149");
+  assert.equal(sonnet.ok, true);
+  assert.equal(sonnet.worstCaseTurns, 2);
+  for (const [model, effort] of [
+    ["haiku", "high"],
+    ["sonnet", "medium"],
+  ])
+    assert.equal(pass(model, effort, "149").ok, true, `${model} ${effort} at 149`);
+  for (const [model, effort] of [
+    ["sonnet", "high"],
+    ["opus", "low"],
+    ["opus", "medium"],
+    ["opus", "high"],
+  ])
+    assert.deepEqual(pass(model, effort, "149"), { ok: false, code: "cap_below_turn" });
+  // At US$99 only Haiku fits, so no pass at the default is admitted.
+  assert.deepEqual(pass("sonnet", "low", "99"), { ok: false, code: "cap_below_turn" });
+  for (const effort of ["low", "medium", "high"])
+    assert.equal(pass("haiku", effort, "99").ok, true);
+  // Opus 5.5 at high fits a specialist's two turns at either price.
+  for (const price of ["149", "99"])
+    assert.equal(
+      runHold({
+        entry: entry("opus", "high"),
+        kind: "specialist",
+        creditCapUsd12: capAt(price, 500),
+      }).ok,
+      true,
+    );
+});
+
+test("cap_below_turn: a person's run needs one worst-case turn, a tool-calling run two", () => {
+  const opus = entry("opus", "high");
+  assert.deepEqual(runHold({ entry: opus, kind: "routed", creditCapUsd12: usd(0.6) }), {
+    ok: false,
+    code: "cap_below_turn",
+  });
+  assert.equal(runHold({ entry: opus, kind: "routed", creditCapUsd12: usd(0.64) }).ok, true);
+  assert.deepEqual(runHold({ entry: opus, kind: "mandate", creditCapUsd12: usd(1.0) }), {
+    ok: false,
+    code: "cap_below_turn",
+  });
+  assert.equal(runHold({ entry: opus, kind: "mandate", creditCapUsd12: usd(1.28) }).ok, true);
+  assert.throws(
+    () => runHold({ entry: opus, kind: "routed", creditCapUsd12: -1n }),
+    LoopCatalogueError,
+  );
+});
+
+test("ADR-0027 item 6: a turn starts only if the hold covers it, and is final when it cannot cover another", () => {
+  const e = entry("opus", "medium");
+  const turn = (turnsTaken, holdLeftUsd12, limit = 12) =>
+    nextTurn({ entry: e, turnLimit: limit, turnsTaken, holdLeftUsd12 });
+  assert.deepEqual(turn(0, usd(3.0)), { start: true, final: false, reason: null });
+  assert.deepEqual(turn(4, usd(0.9)), { start: true, final: true, reason: "cost_budget" });
+  assert.deepEqual(turn(5, usd(0.5)), { start: false, reason: "cost_budget" });
+  assert.deepEqual(turn(11, usd(3.0)), { start: true, final: true, reason: "turn_limit" });
+  assert.deepEqual(turn(12, usd(3.0)), { start: false, reason: "turn_limit" });
+  assert.throws(() => turn(-1, usd(1)), LoopCatalogueError);
+  assert.throws(() => turn(0, usd(1), 17), LoopCatalogueError);
+});
+
+test("the daily backstop counts settled cost, open holds and the new hold", () => {
+  const fits = (settled, open, hold) =>
+    fitsDailyBackstop({
+      catalogueVersion: 2,
+      settledUsd12: usd(settled),
+      openHoldsUsd12: usd(open),
+      holdUsd12: usd(hold),
+    });
+  assert.equal(fits(10, 11.16, 3.84), true);
+  assert.equal(fits(10, 11.17, 3.84), false);
+});
+
+test("a hold record is RunHold@1 in numeric(20,8) text, rounded up", () => {
+  const e = entry("opus", "medium");
+  const hold = runHold({ entry: e, kind: "specialist", creditCapUsd12: capAt("149", 500) });
+  const record = runHoldRecord(e, hold);
+  assert.ok(validateCurrentDefinition("RunHold", record));
+  assert.equal(record.holdUsd, "3.05822500");
+  assert.equal(record.worstCaseTurnUsd, "0.56000000");
+  assert.equal(usd12Text(1n, "up"), "0.00000001");
+  assert.equal(usd12Text(1n, "down"), "0.00000000");
+});
+
+// The loop version's rule cases (the per-product cases are in tests/providers.test.mjs).
+const v2 = (p) => p.catalogue.versions[1];
+for (const [name, change, expected] of [
+  ["an xhigh effort", (p) => (v2(p).efforts[2].key = "xhigh"), /invalid loop effort xhigh/],
+  [
+    "a call budget over 600 s",
+    (p) => (v2(p).efforts[2].max_output_tokens = 20000),
+    /effort high: one call's budget exceeds 600 s/,
+  ],
+  [
+    "a missing cache-read rate",
+    (p) => delete v2(p).models[0].rates_usd_per_million_tokens.cache_read,
+    /needs a rate for each token kind/,
+  ],
+  [
+    "a cache write below the input rate",
+    (p) => (v2(p).models[2].rates_usd_per_million_tokens.cache_write_5m = "3"),
+    /cache rates out of order/,
+  ],
+  [
+    "an input cap above Haiku's price tier",
+    (p) => (v2(p).limits.max_input_tokens_per_turn = 150000),
+    /loop limit max_input_tokens_per_turn|leaves its price tier/,
+  ],
+  ["a 17-turn run", (p) => (v2(p).limits.max_turns_per_run = 17), /loop limit max_turns_per_run/],
+  [
+    "a 45-minute wall time",
+    (p) => (v2(p).limits.wall_time_minutes = 45),
+    /loop limit wall_time_minutes/,
+  ],
+  [
+    "a run backstop below two Opus high turns",
+    (p) => (v2(p).limits.run_cost_cap_usd = "1"),
+    /claude_opus_5_5 at high: two worst-case turns exceed the run backstop/,
+  ],
+  [
+    "a default profile outside the version",
+    (p) => (v2(p).default_profiles.coordinator.model = "gpt_6_1_sol"),
+    /the coordinator default profile/,
+  ],
+  ["an unknown run shape", (p) => (v2(p).run_shape = "streaming_loop"), /unknown run shape/],
+  [
+    "a fallback sent with the loop's requests",
+    (p) => p.loop_request.sent.push("fallbacks"),
+    /the loop's sent and never-sent fields drifted/,
+  ],
+  [
+    "a streamed loop request",
+    (p) => (p.loop_request.stream = true),
+    /the loop's sent and never-sent fields drifted/,
+  ],
+  [
+    "forced tool use",
+    (p) => (p.loop_request.tool_choice.default = "any"),
+    /the loop's sent and never-sent fields drifted/,
+  ],
+  [
+    "a published version 2 without the owner's confirmation",
+    (p) => {
+      v2(p).status = "retired";
+      p.catalogue.versions[0].status = "retired";
+      p.catalogue.active_version = null;
+    },
+    /version 2 is published without the owner's confirmation/,
+  ],
+])
+  test(`model catalogue v2 rejects ${name}`, () => {
+    const p = structuredClone(policy);
+    change(p);
+    assert.match(inspectModelPolicy(p, registry).errors.join("\n"), expected);
+  });
+
+test("the committed policy, with version 2 proposed, passes", () =>
+  assert.deepEqual(inspectModelPolicy(policy, registry).errors, []));

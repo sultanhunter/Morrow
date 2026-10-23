@@ -459,7 +459,7 @@ export const generatedToolCatalogue = {
         type: "object",
         additionalProperties: false,
         properties: {
-          drafts: {
+          changes: {
             type: "array",
             items: {
               type: "object",
@@ -526,7 +526,7 @@ export const generatedToolCatalogue = {
             },
           },
         },
-        required: ["drafts"],
+        required: ["changes"],
       },
     },
     {
@@ -556,5 +556,5 @@ export const generatedToolCatalogue = {
       },
     },
   ],
-  digest: "61e00a1daaa3092030ac2b078cad9610f1a54d222bb317d5155ed90065695dde",
+  digest: "bf471a0d3b852113ad60a8a24d256244d077daee9dc36d76b16de024499855bd",
 } as const;
