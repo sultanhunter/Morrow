@@ -33,7 +33,7 @@ The workspace looks like Sunrise: the Shopify admin made a little warmer, agents
 ## Test checklist
 
 - [x] `tests/workspace-ui-sunrise.test.mjs`: tokens (schema, floors, no violet, closed generator), the seven characters (unique clip ids, decorative or labelled, no literal), pills, the sidebar's labels over unchanged paths, titles, Home helpers, and the preview switch (HTTP sends nothing; only `home_preview` composes it).
-- [x] `npm run ui:check` (fixture, every state at 1440, 768, 390 and 320 px plus the keyboard walks) with the 44/48 px floors; new cases `home/nothing_waiting` and `home/preview`. Run locally in the installed Edge (Playwright's Chromium isn't installed here); CI is the authority.
+- [x] `npm run ui:check` (fixture, every state at 1440, 768, 390 and 320 px plus the keyboard walks) with the 44/48 px floors; new cases `home/nothing_waiting` and `home/preview`. Run locally in the installed Edge, because Playwright's own Chromium isn't installed on this Mac: 260 of 261 passed, and the one failure is Edge asking for `/favicon.ico` on the first page it opens (a 404 console line Playwright's headless Chromium never produces). CI is the authority.
 - [x] `npm run verify:design`, `npm run -s typecheck`, `npm run -s verify`, `npm test`.
 - [ ] `lab:workspace-ui-journey` (Linux CI `ui` job): its waits now follow the new labels and Home's scope line.
 - [ ] Owner: a quick look at the screenshots (build order PR 14).
