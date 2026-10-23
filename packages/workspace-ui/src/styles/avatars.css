@@ -150,3 +150,19 @@
 .presence[data-presence="away"] {
   background: var(--color-control-border);
 }
+/* The entry and empty-state picture: a character on the horizon, a sand hill, a sage leaf. */
+.horizon-picture {
+  display: block;
+  margin: 0 auto;
+}
+.horizon-picture .hp-hill {
+  fill: var(--color-sand);
+}
+.horizon-picture .hp-leaf {
+  fill: var(--color-sage);
+  stroke: var(--color-text);
+}
+.horizon-picture .hp-line {
+  fill: none;
+  stroke: var(--color-text);
+}

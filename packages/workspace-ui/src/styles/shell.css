@@ -39,13 +39,14 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 10px;
   font-size: var(--type-title-size);
   line-height: var(--type-title-line);
   font-weight: 700;
 }
 
-/* Entry screens: a top bar with Morrow's character, then one centred white card. */
+/* Entry screens (SignIn board): a 64 px top bar over a rule, with Morrow's character, then
+   one centred white card, 504 px at most. */
 .entry {
   min-height: 100dvh;
 }
@@ -53,12 +54,13 @@
   display: flex;
   align-items: center;
   min-height: 64px;
-  padding: 0 var(--space-7);
+  padding: 10px var(--space-7);
+  border-bottom: 1px solid var(--color-divider);
 }
 .entry-main {
   max-width: calc(var(--width-entry) + 2 * var(--space-4));
-  margin: var(--space-10) auto var(--space-12);
-  padding: 0 var(--space-4);
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-4) var(--space-12);
 }
 
 /* The workspace: sidebar | main column. */
@@ -380,9 +382,9 @@
     padding: var(--space-5) var(--space-4) var(--space-10);
   }
   .entry-top {
-    padding: 0 var(--space-4);
+    padding: 10px var(--space-4);
   }
   .entry-main {
-    margin-top: var(--space-4);
+    padding-top: var(--space-6);
   }
 }

@@ -358,6 +358,43 @@ export function AgentAvatar({
   );
 }
 
+/**
+ * The Sunrise picture for entry screens and empty states (the design brief's empty
+ * states): a character at 72 standing on an ink horizon, with a sand hill and one sage
+ * leaf, 160 × 120. Always decorative: the heading beside it says what it means.
+ */
+export function HorizonPicture({ agent = "morrow" }: { readonly agent?: AgentKind }) {
+  const clip = `hp-${agent}-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`;
+  return (
+    <svg
+      className="horizon-picture"
+      viewBox="0 0 160 120"
+      width="160"
+      height="120"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path className="hp-hill" d="M12 104 C48 86 112 86 148 104 Z" />
+      <path
+        className="hp-leaf"
+        d="M126 103 C123 94 126 86 134 83 C137 91 134 99 126 103 Z"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        className="hp-line"
+        d="M126 103 C128 96 130 89 134 83"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <g className="avatar-agent" data-agent={agent} transform="translate(44 32) scale(1.8)">
+        <Drawing agent={agent} clip={clip} prop="calendar" />
+      </g>
+      <path className="hp-line" d="M6 104 H154" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** "Agent", in the agent's own colours; screen readers hear ", agent". */
 export function AgentPill({ agent }: { readonly agent: AgentKind }) {
   if (agent === "specialist") return <SpecialistPill />;
