@@ -205,6 +205,7 @@ test("titles: renamed destinations keep the contract's routes and show the Sunri
   assert.equal(destinationTitle("assets"), "Files");
   assert.equal(destinationTitle("knowledge"), "Shop knowledge");
   assert.equal(destinationTitle("inbox"), "Inbox");
+  assert.equal(destinationTitle("connections"), "Shopify connection");
   assert.equal(
     screenTitle({
       session: "active",

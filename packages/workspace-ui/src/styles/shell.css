@@ -294,6 +294,18 @@
   font-weight: var(--type-meta-weight);
   white-space: nowrap;
 }
+/* A pinned project: its name, then "Ends Dec 4" under it (the Home board). */
+.nav-sublink-project {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+.nav-sublink-project .nav-sublabel {
+  flex: none;
+}
 .nav-sublink .avatar {
   margin-left: -22px;
 }

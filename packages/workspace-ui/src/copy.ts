@@ -93,6 +93,7 @@ export const copy = {
     knowledge: "Shop knowledge",
     ask: "Ask Morrow",
     agent_store: "Add agents",
+    connections: "Shopify connection",
   } as Readonly<Record<string, string>>,
   shell: {
     askMorrow: "Ask Morrow",
@@ -283,7 +284,7 @@ export const copy = {
   },
   // M2 PR-2: the store connections screens and the install-continuation link step.
   connections: {
-    title: "Connections",
+    title: "Shopify connection",
     storesTitle: "Stores",
     noStores: "No store is connected to this workspace yet.",
     installTitle: "Connect your Shopify store",
@@ -330,7 +331,7 @@ export const copy = {
     linkConflict: "This link request didn't match an earlier one. Nothing was changed.",
     notLinkedYet: "The store isn't linked yet. You can link it now.",
     detailTitle: "Connection",
-    back: "Back to Connections",
+    back: "Back to Shopify connection",
     shop: "Store",
     status: "Status",
     // M2 PR-3 review: an uninstall or a scope change ends the store's connection for good in

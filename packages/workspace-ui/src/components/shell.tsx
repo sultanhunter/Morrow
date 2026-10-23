@@ -149,7 +149,7 @@ function PinnedProjects({
           <RouteLink
             route="project"
             params={{ workspaceId, projectId: project.id }}
-            className="nav-sublink"
+            className="nav-sublink nav-sublink-project"
             {...(onNavigate ? { onNavigate } : {})}
           >
             <span className="nav-sublabel" dir="auto">
