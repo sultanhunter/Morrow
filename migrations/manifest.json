@@ -304,6 +304,13 @@
       "sha256": "4ca704d37e3e788ba86921be00a3e3b959858eb25a1997f5d2be5d21f42cddc0",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 39,
+      "file": "0039.runtime-operations.sql",
+      "sha256": "4e65edbcece5fb646143d5a8246d5d92ab7815b4fdc9d756e6f7304f781a9f5d",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/runtime-computer-foundation.md"
     }
   ]
 }

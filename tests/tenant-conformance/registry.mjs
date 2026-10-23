@@ -1147,6 +1147,46 @@ export const vaultTables = Object.freeze({
       ["destroy_reason", "destroyed_at", "sealed_value", "status", "wrapped_key"],
     ),
   },
+  // Build order PR 7 (0039 runtime-operations): the computer's operation ledger (one row per
+  // sandbox, tenant-keyed, its run a composite parent), the runtime holds and the platform's
+  // caps in use. Ids, digests, codes and times only; the broker's login reaches them only
+  // through its four definers (vault_broker), and only the owner's operator function lifts a
+  // hold.
+  runtime_operations: {
+    class: "vault_tenant",
+    parents: ["morrow_identity.workspaces", "morrow_work.runs"],
+    policies: [],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [
+        "reconciled_at",
+        "revision",
+        "sandbox_ref",
+        "settled_at",
+        "status",
+        "unknown_reason",
+        "updated_at",
+      ],
+    ),
+  },
+  runtime_holds: {
+    class: "vault_platform",
+    parents: [],
+    policies: [],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  runtime_capacity: {
+    class: "vault_platform",
+    parents: [],
+    policies: [],
+    content: "none",
+    ...aclSpec(
+      ["SELECT"],
+      ["budget_month", "month_committed_usd", "open_operations", "revision", "updated_at"],
+    ),
+  },
 });
 // S7 (M2 PR-2a): the roles granted USAGE on each schema S7 covers, besides its owner.
 // An executor login's USAGE must also equal the schemas of the functions it executes.
@@ -1199,6 +1239,19 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // Build order PR 7 (0039 runtime-operations): the runtime ledger's send mark, create record,
+  // settlement and the sweep's ids-only list (the broker's login); the caps helper (the
+  // command role, inside those definers); the guard; the operator's hold lift (nobody).
+  "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "runtime_guard()": { kind: "trigger", grantees: [] },
+  "runtime_hold_lift(text,text,text)": { kind: "operator", grantees: [] },
+  "runtime_operation_begin(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -1318,6 +1371,11 @@ export const executorLogins = Object.freeze({
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",
+    // Build order PR 7 (0039 runtime-operations).
+    "morrow_vault.runtime_operation_begin(text,text,text,text,text)",
+    "morrow_vault.runtime_operation_created(text,text)",
+    "morrow_vault.runtime_operation_settle(text,text,text)",
+    "morrow_vault.runtime_operations_open(text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

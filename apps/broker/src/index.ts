@@ -24,6 +24,8 @@ import {
 import { brokerWorkosSessionPage } from "./workos-session.js";
 import { createClaudeAdapter } from "./claude-adapter.js";
 import { createModelGateway } from "./model-gateway.js";
+import { createRuntimeGateway } from "./runtime-gateway.js";
+import { createVaultRuntimeLedger } from "./runtime-ledger.js";
 import { runVaultTransaction } from "./vault-database.js";
 
 // M3 PR-2: the model gateway on the vault login's real transport, the platform fetch and
@@ -32,6 +34,17 @@ const modelGateway = createModelGateway({
   transaction: runVaultTransaction,
   providers: Object.freeze({ anthropic: createClaudeAdapter((request) => fetch(request)) }),
   now: () => Date.now(),
+});
+// Build order PR 7 (ADR-0029): the computer's door on the vault login's operation ledger. No
+// runtime adapter is composed (the E2B adapter is PR 8's; the fake is tests-only), no template
+// is pinned (PR 8's owner-run build) and nothing is qualified (PR 9), so even with the switch
+// on every execute holds RUNTIME_UNAVAILABLE and no sandbox is ever counted as absent.
+const runtimeGateway = createRuntimeGateway({
+  ledger: (vault) => createVaultRuntimeLedger(vault, runVaultTransaction),
+  providers: Object.freeze({}),
+  now: () => Date.now(),
+  template: null,
+  qualified: false,
 });
 
 // Reachable only through its service-binding entrypoints (ADR-0007; trust model v1,
@@ -162,7 +175,8 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
 
 // The orchestrator's entrypoint (M2 PR-1): its health and its own role lease. M2 PR-3 adds
 // shopifyRead (productContent under a run lease) and M3 PR-2 modelRespond (the
-// provider-neutral model gateway); the write methods join in M4.
+// provider-neutral model gateway); build order PR 7 the computer's runtimeExecute and
+// runtimeSweep; the write methods join in M4.
 export class RuntimeBroker extends WorkerEntrypoint<unknown> implements RuntimeBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -204,6 +218,21 @@ export class RuntimeBroker extends WorkerEntrypoint<unknown> implements RuntimeB
     return arguments.length === 4
       ? modelGateway.modelRespond(this.env, leaseId, generation, callJson, budgetMs)
       : brokerInputInvalid("modelRespond", "RuntimeBroker");
+  }
+  runtimeExecute(
+    leaseId: string,
+    generation: number,
+    jobJson: string,
+    budgetMs: number,
+  ): Promise<string> {
+    return arguments.length === 4
+      ? runtimeGateway.runtimeExecute(this.env, leaseId, generation, jobJson, budgetMs)
+      : brokerInputInvalid("runtimeExecute", "RuntimeBroker");
+  }
+  runtimeSweep(budgetMs: number): Promise<string> {
+    return arguments.length === 1
+      ? runtimeGateway.runtimeSweep(this.env, budgetMs)
+      : brokerInputInvalid("runtimeSweep", "RuntimeBroker");
   }
 }
 
