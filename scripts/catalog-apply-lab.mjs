@@ -616,8 +616,15 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       }
       const text = await response.text();
       const reply = { status: response.status, body: JSON.parse(text), text };
-      // A loaded host may time a transaction out: retry with the same key.
-      if (reply.status === 503 && reply.body.code === "unavailable" && !options.once && n < 5) {
+      // A loaded host may time a transaction out (unavailable, or uncertain when the commit's
+      // acknowledgement was lost): retry with the same key, as the API asks; a committed
+      // command answers as replayed.
+      if (
+        reply.status === 503 &&
+        (reply.body.code === "unavailable" || reply.body.code === "uncertain") &&
+        !options.once &&
+        n < 5
+      ) {
         retries++;
         await sleep(300);
         continue;
