@@ -1,6 +1,6 @@
 # ADR-0029 Runtime and E2B: one sandbox per run, with no internet, no credentials and no browser
 
-- Status: Proposed
+- Status: Accepted 2026-10-23 (the owner, OD-2026-10-23-7: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: nothing accepted (it replaces two uncommitted drafts of 2026-10-22).
 - Amends, for development and staging: ADR-0007 item 4 and build-plan line 461 (the E2B key in the broker before P08.T02); ADR-0013's E2B bullet; ADR-0022 items 7, 9 and 11; build-plan P12.T01, P12.T02, P07.T02 and, for this profile, the P12b hard-deny line; `providers.json`. Only if owner questions 2 and 3 are accepted: ADR-0023 decision 6 (the G5 rule; Pro timing).
@@ -57,4 +57,8 @@ Risk: E2B changes often, so wire fixtures and the canary set the hold on a break
 
 ## Approval
 
-Pending. The owner's answers will be quoted here verbatim with their dates.
+The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the decision sheet (`docs/decisions/decision-sheet-2026-10-26.md`) and a plain-language list of its questions numbered 1 to 31, with the other decisions numbered 32 to 38, each with its recommendation (OD-2026-10-23-7):
+
+> approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
+
+What it approves: this record as written and each owner question above with its recommended answer.

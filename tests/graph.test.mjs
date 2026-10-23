@@ -1009,6 +1009,10 @@ test("the hand-written graph is scanned whole for tenant records; governed docs 
   assert.deepEqual(mail(`someone${"@"}mail.example.com`), ["GRAPH_EMAIL"]);
   for (const address of ["probe@example.invalid", "x@lab.test", "a@b.example", "c@localhost"])
     assert.deepEqual(mail(address), [], address);
+  // The one placeholder an owner decision quotes passes; its neighbours do not.
+  assert.deepEqual(mail(`usershopname${"@"}morrow.com`), []);
+  for (const address of [`someone${"@"}morrow.com`, `usershopname${"@"}morrow.co`])
+    assert.deepEqual(mail(address), ["GRAPH_EMAIL"], address);
   // Outside the governed folders only a header counts.
   const reference = baseFiles();
   reference["docs/references/notes.md"] = `# Notes\n\nWrite to someone${"@"}mail.example.com.\n`;

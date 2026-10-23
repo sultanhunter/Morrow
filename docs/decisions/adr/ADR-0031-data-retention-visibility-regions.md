@@ -1,6 +1,6 @@
 # ADR-0031 Data: retention of the new classes, per-viewer read tags and data regions
 
-- Status: Proposed
+- Status: Accepted 2026-10-23 (the owner, OD-2026-10-23-7: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: none.
 - Amends: ADR-0022 summary item 13 and decision items 9 (one retention-sweep definer), 13 (new retention rows) and 14 (completion, item 3); the R01 to R03 durations of `capabilities.json`; `data-lifecycle.md`. Refines ADR-0016 items 4 and 5 (read tags on every shared item).
@@ -71,4 +71,8 @@ Residual risks: innocent upload headers can hide personal data; processor copies
 
 ## Approval
 
-Pending. The owner's answers will be quoted here verbatim with their dates.
+The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the decision sheet (`docs/decisions/decision-sheet-2026-10-26.md`) and a plain-language list of its questions numbered 1 to 31, with the other decisions numbered 32 to 38, each with its recommendation (OD-2026-10-23-7):
+
+> approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
+
+What it approves: this record as written and each owner question above with its recommended answer.

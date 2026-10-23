@@ -1,6 +1,6 @@
 # ADR-0028 Specialist authority: run-scoped installations that the Owner starts
 
-- Status: Proposed
+- Status: Accepted 2026-10-23 (the owner, OD-2026-10-23-7: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: none.
 - Amends: build-plan P16.T03, for the `task_specialist` kind only (item 5); the SQL authority layer of migrations 0030 and 0031, by forward migrations only.
@@ -52,4 +52,10 @@ If this record is not approved in W1, G18 is at risk; the slip rules apply uncha
 
 ## Approval
 
-Pending. The owner's answer will be quoted here verbatim with its date.
+The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the decision sheet (`docs/decisions/decision-sheet-2026-10-26.md`) and a plain-language list of its questions numbered 1 to 31, with the other decisions numbered 32 to 38, each with its recommendation (OD-2026-10-23-7):
+
+> approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
+
+What it approves: this record as written and each owner question above with its recommended answer.
+
+Its model part sets a specialist's default profile to Opus 5.5 at medium effort (ADR-0027 item 12).

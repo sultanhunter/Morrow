@@ -1,6 +1,6 @@
 # ADR-0024 Proactive authority: mandates, the installation as requester, and review rules for proactive work
 
-- Status: Proposed
+- Status: Accepted 2026-10-23 (the owner, OD-2026-10-23-7: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: none.
 - Amends: ADR-0011 Q1 as refined by ADR-0018 item 3 (item 7); ADR-0011 Q3 (item 9); ADR-0011 Q8, extended to revoke (item 4); ADR-0022 item 9 (item 6). Only if owner question 1 is accepted: ADR-0005 §3, ADR-0011 Q1 for access_change, ADR-0023 decision 11b's last sentence and the ADR-0005 entry of ADR-0023's "Does not change" list.
@@ -62,4 +62,8 @@ Merchants confirm agents every 90 days.
 
 ## Approval
 
-Pending. The owner's answer will be quoted here verbatim with its date.
+The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the decision sheet (`docs/decisions/decision-sheet-2026-10-26.md`) and a plain-language list of its questions numbered 1 to 31, with the other decisions numbered 32 to 38, each with its recommendation (OD-2026-10-23-7):
+
+> approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
+
+What it approves: this record as written and each owner question above with its recommended answer.
