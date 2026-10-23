@@ -699,6 +699,34 @@ export function reviewedModelRecord(record) {
     throw Error("EDGE_STAGING_MODEL_RECORD");
   return Object.freeze({ switch: record.switch });
 }
+// PR 18, the plan-drafts switch (ADR-0034 item 10; committed off, start routes held): the
+// api composes it from docs/decisions/plan-drafts-staging.json (packages/policy's
+// planDraftsRecord), so it carries no var or secret. It may be on only once the agent-loop
+// switch (ADR-0027 item 11) is on and P05.T04b's Ask-bound envelope exists. Neither exists
+// yet: until each lands with its own reviewed record, both count as off here, so an "on"
+// plan-drafts record is a problem. start_routes goes `ready` only after lab:plan-start.
+export const edgePlanDraftsPrerequisites = Object.freeze({ agentLoop: "off", askEnvelope: false });
+export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsPrerequisites) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "environment_kind,schema_version,scope,start_routes,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    (record.start_routes !== "held" && record.start_routes !== "ready") ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_PLAN_DRAFTS_RECORD");
+  if (
+    record.switch === "on" &&
+    (prerequisites.agentLoop !== "on" || prerequisites.askEnvelope !== true)
+  )
+    throw Error("EDGE_PLAN_DRAFTS_BEFORE_LOOP");
+  return Object.freeze({ switch: record.switch, start_routes: record.start_routes });
+}
 // M5, the Stripe switch (owner decision (c), 2026-10-21): its runtime image is the var
 // MORROW_STRIPE_MODE ("test") on the staging api and broker, and on the broker also the
 // reviewed STRIPE_CONFIGURATION_JSON (docs/decisions/stripe-staging.json) and the two
@@ -1016,6 +1044,7 @@ export async function verifyEdgeConfig({
   workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
   stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
   modelPath = join(repositoryRoot, "docs/decisions/model-provider-staging.json"),
+  planDraftsPath = join(repositoryRoot, "docs/decisions/plan-drafts-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -1068,6 +1097,21 @@ export async function verifyEdgeConfig({
     }
   const modelSwitch = (environment) =>
     environment === "staging" && model?.switch === "on" ? "on" : "off";
+  // PR 18, the plan-drafts switch: refused on while the agent loop is off (ADR-0034 item 10).
+  const planDraftsRecord = readJson(planDraftsPath);
+  if (planDraftsRecord === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "plan-drafts-staging.json");
+  else
+    try {
+      reviewedPlanDraftsRecord(planDraftsRecord);
+    } catch (error) {
+      problem(
+        error instanceof Error && error.message === "EDGE_PLAN_DRAFTS_BEFORE_LOOP"
+          ? "EDGE_PLAN_DRAFTS_BEFORE_LOOP"
+          : "EDGE_STAGING_PLAN_DRAFTS_RECORD",
+        "plan-drafts-staging.json",
+      );
+    }
   if (
     modelProviderVar !== edgeModelProviderVar ||
     modelProviderAnthropic !== edgeModelProviderValue ||
