@@ -33,6 +33,7 @@ import {
   readCredentialFile,
   readRotationRecord,
   recordRotation,
+  shopifyAppSecretFile,
   stagingFileSpecs,
   vaultKekFile,
 } from "./staging-files.mjs";
@@ -46,6 +47,7 @@ import {
   platformStop,
   checkPlatformStopInput,
   provisionRoles,
+  registerShopifyApp,
   resolveHeldCustomerOperation,
   roleControlFacts,
   runMigrations,
@@ -166,10 +168,15 @@ export async function identityConstants({ stripe = "off", model = "off" } = {}) 
   });
 }
 
+// The approval the tools read (ADR-0035 item 4 and its Consequences, a routine change it
+// names): the owner's standing approval, which replaced staging-card-1 on 2026-10-23 and has
+// no end date. docs/decisions/approvals/staging-card.json stays as history and is no longer
+// read. `config.card` keeps its name: it is whichever approval record the tools hold.
+export const approvalRecordPath = "docs/decisions/approvals/standing-approval.json";
 export async function loadStagingConfiguration(root) {
   const read = (path) => JSON.parse(readFileSync(join(root, path), "utf8"));
   const staging = read("infra/environments/staging.json");
-  const card = read("docs/decisions/approvals/staging-card.json");
+  const card = read(approvalRecordPath);
   const { unstable_readConfig } = await loadWranglerApi();
   const varsOf = (worker) =>
     captureConsole(() =>
@@ -349,10 +356,55 @@ export async function stagingBillingTermsRows(root, environment = "staging") {
   return billingTermsSeedRows(revisions);
 }
 
-// The card is active only when the record says approved, 30 days have not passed, and no
-// production resource exists (staging.md "Valid until").
+// The owner's standing approval (ADR-0035 item 4): the closed record the tools read. It is
+// active while it says approved, for the one environment the tools act on (staging, which
+// ADR-0035 item 1 makes v1 production) and the decision that grants it. It has no end date:
+// the owner ends it by changing its status (withdrawn) or by a later decision. Its effects
+// carry what the card's did: e7, the recorded WorkOS facts self-service needs (email
+// verification on, public sign-up off), and e13, the date from which the owner's test
+// entitlement runs under it.
+export const standingApprovalId = "adr-0035";
+export const standingApprovalDecision = "docs/decisions/adr/ADR-0035-build-v1-live.md";
+const day = /^\d{4}-\d{2}-\d{2}$/;
+const standingKeys = [
+  "approvedOn",
+  "e13",
+  "e7",
+  "environment",
+  "evidence",
+  "id",
+  "kind",
+  "record",
+  "replaces",
+  "schemaVersion",
+  "status",
+];
+export function standingState(record) {
+  if (
+    record === null ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== standingKeys.join() ||
+    record.schemaVersion !== 1 ||
+    record.id !== standingApprovalId ||
+    record.kind !== "standing" ||
+    record.record !== standingApprovalDecision ||
+    record.replaces !== "staging-card-1" ||
+    record.environment !== "staging" ||
+    !day.test(record.approvedOn ?? "") ||
+    typeof record.evidence !== "string" ||
+    !liveEvidenceRef.test(record.evidence)
+  )
+    return { active: false, reason: "invalid" };
+  if (record.status === "withdrawn") return { active: false, reason: "withdrawn" };
+  if (record.status !== "approved") return { active: false, reason: "invalid" };
+  return { active: true, reason: null };
+}
+// The approval is active only when the record says approved: the standing approval
+// (standingState), or the historical card, while 30 days have not passed and no production
+// resource exists (staging.md "Valid until").
 export function cardState(card, now) {
-  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (card?.kind === "standing") return standingState(card);
   if (card?.schemaVersion !== 1 || card.id !== "staging-card-1")
     return { active: false, reason: "invalid" };
   if (card.status !== "approved")
@@ -754,15 +806,24 @@ command("seed-platform", {
     let selfService = null;
     if (options.selfService) {
       // Card E7: only after the owner's chat confirmation is recorded in a live record.
+      // Under the standing approval (ADR-0035 item 4), e7 names the live record of the
+      // observed WorkOS facts self-service needs: email verification on and public sign-up
+      // off (ADR-0009 items 10 and 11), so only the owner's own login can sign up.
       const e7 = config.card.e7;
+      const standing = config.card.kind === "standing";
+      const date = standing ? e7?.observedOn : e7?.confirmedOn;
       if (
         !e7 ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(e7.confirmedOn ?? "") ||
+        typeof e7 !== "object" ||
+        Object.keys(e7).sort().join() !== (standing ? "observedOn,record" : "confirmedOn,record") ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(date ?? "") ||
         !/^docs\/evidence\/live\/\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md$/.test(e7.record ?? "") ||
         !existsSync(join(ctx.root, e7.record))
       )
         throw new StagingError("STAGING_SELF_SERVICE_UNCONFIRMED");
-      selfService = { approvalRef: "staging-card-1.e7" };
+      selfService = {
+        approvalRef: standing ? standingApprovalId + ".e7" : "staging-card-1.e7",
+      };
     }
     const configuration = await ctx.loginConfiguration(config);
     await mainPreconditions(ctx, repositoryOf(config.staging));
@@ -844,15 +905,20 @@ command("billing-customer-resolve", {
 // card and effect dated from the amendment to today.
 // Prints the closed result: the outcome, ids, credit units, the terms revision and the
 // period, with the approval reference, the record's path and the commit it was read at.
+// Under the standing approval (ADR-0035 items 3 and 4) the use needs no per-use answer in
+// chat: the approval reference is `adr-0035.e13.<date>.<n>` (one per use; the definer
+// refuses a reused one), from e13's date to today, and the run is logged as one line of
+// docs/evidence/activity-log.md.
 export function requireTestEntitlementApproval(card, approvalRef, now) {
   const e13 = card?.e13;
   const day = /^\d{4}-\d{2}-\d{2}$/;
+  const standing = card?.kind === "standing";
   if (
     !e13 ||
     typeof e13 !== "object" ||
     Object.keys(e13).join() !== "amendedOn" ||
     !day.test(e13.amendedOn ?? "") ||
-    !(e13.amendedOn >= card.approvedOn && e13.amendedOn <= card.expiresOn)
+    !(e13.amendedOn >= card.approvedOn && (standing || e13.amendedOn <= card.expiresOn))
   )
     throw new StagingError("STAGING_CARD_EFFECT_MISSING", { effect: "E13" });
   const match = testEntitlementApproval.exec(approvalRef);
@@ -877,6 +943,9 @@ export function requireTestEntitlementApproval(card, approvalRef, now) {
 // line with the same label, refuses the run.
 const recordLabel =
   /^(?:[-*] +)?(?:\*\*(Approval reference|Workspace):\*\*|(Approval reference|Workspace):)(.*)$/;
+// A well-formed stand-in for parse's grammar check when --record is omitted (the standing
+// approval's own record replaces it in run).
+const standingEvidencePlaceholder = "docs/evidence/live/2026-10-23-standing.md";
 const recordValue = /^ +(?:`([^`\s]+)`|([^`\s]+)) *$/;
 export function requireTestEntitlementRecord(text, { approvalRef, workspaceId }) {
   const named = { "Approval reference": [], Workspace: [] };
@@ -919,9 +988,22 @@ export async function committedRecord(ctx, commit, path) {
   if (!entry || entry[2] !== path) throw new StagingError("STAGING_EVIDENCE_MISSING");
   return toolOk(ctx.tools, "git", ["cat-file", "blob", entry[1]]);
 }
+// The standing approval's own live record names it on one labelled line, exactly once:
+//   - Standing approval: `adr-0035`
+const standingLabel = /^(?:[-*] +)?(?:\*\*Standing approval:\*\*|Standing approval:)(.*)$/;
+export function requireStandingRecord(text, id) {
+  const named = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const label = standingLabel.exec(line.trim());
+    if (!label) continue;
+    const value = recordValue.exec(label[1]);
+    named.push(value ? (value[1] ?? value[2]) : null);
+  }
+  if (named.length !== 1 || named[0] !== id) throw new StagingError("STAGING_EVIDENCE_MISMATCH");
+}
 command("test-entitlement", {
   usage:
-    "test-entitlement --workspace <id> --approval <staging-card-1.e13.YYYY-MM-DD.n> --record <docs/evidence/live/....md> --operator <id>",
+    "test-entitlement --workspace <id> --approval <adr-0035.e13.YYYY-MM-DD.n> --operator <id> [--record <docs/evidence/live/....md>]",
   parse(args) {
     const flags = {};
     for (let i = 0; i < args.length; i += 2) {
@@ -938,33 +1020,156 @@ command("test-entitlement", {
       operatorId: flags["--operator"],
       workspaceId: flags["--workspace"],
       approvalRef: flags["--approval"],
-      evidenceRef: flags["--record"],
+      // Under the standing approval the record is its own (filled in by run); the card
+      // needs one per use.
+      evidenceRef: flags["--record"] ?? null,
     };
-    testEntitlementInput(input);
+    testEntitlementInput({ ...input, evidenceRef: input.evidenceRef ?? standingEvidencePlaceholder });
     return { input };
   },
-  async run(ctx, { input }) {
+  async run(ctx, { input: given }) {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
-    requireTestEntitlementApproval(config.card, input.approvalRef, ctx.now());
+    requireTestEntitlementApproval(config.card, given.approvalRef, ctx.now());
+    // ADR-0035 items 3 and 4: under the standing approval the evidence is the approval's
+    // own live record, and only the owner's workspace (the one the live-store app invites)
+    // takes the entitlement. The card's per-use record and its two labelled lines stay for
+    // the card.
+    const standing = config.card.kind === "standing";
+    if (standing && given.evidenceRef !== null && given.evidenceRef !== config.card.evidence)
+      throw new StagingError("STAGING_USAGE");
+    if (!standing && given.evidenceRef === null) throw new StagingError("STAGING_USAGE");
+    const input = { ...given, evidenceRef: standing ? config.card.evidence : given.evidenceRef };
+    testEntitlementInput(input);
     const binding = await stagingBinding(ctx, config);
     const { sourceCommit } = await mainPreconditions(ctx, repositoryOf(config.staging));
-    requireTestEntitlementRecord(
-      await committedRecord(ctx, sourceCommit, input.evidenceRef),
-      input,
-    );
+    const record = await committedRecord(ctx, sourceCommit, input.evidenceRef);
+    if (standing) requireStandingRecord(record, config.card.id);
+    else requireTestEntitlementRecord(record, input);
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const granted = await grantTestEntitlement({
       connect: ctx.database({ ownerUrl, binding }).connect,
       binding,
       administrator: ctx.administrator,
       input,
+      requireLiveStoreWorkspace: standing,
     });
     return {
       ...granted,
       approvalRef: input.approvalRef,
       record: input.evidenceRef,
       recordCommit: sourceCommit,
+    };
+  },
+});
+
+// v1 PR 1 (ADR-0035 items 2 and 3): the owner's one command for the owner's live-store app.
+// It seals the app's client secret into the broker vault and registers the app with the
+// live-store mark for the owner's workspace. The secret comes only from the hidden prompt
+// (a terminal, not echoed) or, with --secret-file, from the owner's 0600 file
+// ~/.config/morrow/staging/shopify-app-secret (written with morrow_put, deleted here once
+// the vault stored it); never from an argument, the environment or a pipe. The KEK is the
+// owner's own file (vault-kek-v1), read in-process. The shop's domain is an argument only
+// to be digested (shopifyAppLiveRegistration); it is never stored, printed or written
+// anywhere. Under the active approval, from reviewed main with a green foundation check
+// (mainPreconditions), before the prompt. Prints the app key, the two outcomes, the ids,
+// the stored secret version and the KEK fingerprint: nothing secret, no shop identity.
+const shopifyAppFlags = ["--app-key", "--client-id", "--shop", "--workspace", "--install-url"];
+command("shopify-app-register", {
+  usage:
+    "shopify-app-register --app-key <key> --client-id <32 hex> --shop <store>.myshopify.com --workspace <id> --install-url <custom distribution link> [--secret-file]",
+  parse(args) {
+    const flags = {};
+    let secretFile = false;
+    for (let i = 0; i < args.length; ) {
+      if (args[i] === "--secret-file" && !secretFile) {
+        secretFile = true;
+        i += 1;
+        continue;
+      }
+      const [flag, value] = [args[i], args[i + 1]];
+      if (!shopifyAppFlags.includes(flag) || typeof value !== "string" || Object.hasOwn(flags, flag))
+        throw new StagingError("STAGING_USAGE");
+      flags[flag] = value;
+      i += 2;
+    }
+    if (!shopifyAppFlags.every((flag) => Object.hasOwn(flags, flag)))
+      throw new StagingError("STAGING_USAGE");
+    return {
+      options: Object.fromEntries(shopifyAppFlags.map((flag) => [flag.slice(2), flags[flag]])),
+      secretFile,
+    };
+  },
+  async run(ctx, { options, secretFile }) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    const { tsImport } = await import("tsx/esm/api");
+    const app = await tsImport("./shopify-app.mjs", import.meta.url);
+    let registration;
+    try {
+      registration = app.shopifyAppLiveRegistration(options);
+    } catch {
+      throw new StagingError("STAGING_USAGE");
+    }
+    const binding = await stagingBinding(ctx, config);
+    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const specs = await ctx.specs();
+    const ownerUrl = ownerUrlFor(ctx, binding, specs);
+    const kekNames = (await ctx.constants()).vaultKekSecrets;
+    if (kekNames.length !== 1 || vaultKekFile(kekNames[0]) === null)
+      throw new StagingError("STAGING_VAULT_KEK_UNSUPPORTED");
+    const kekVersion = Number(/([1-9][0-9]{0,2})$/.exec(kekNames[0])[1]);
+    const kek = readCredentialFile(ctx.directory, vaultKekFile(kekNames[0]), specs);
+    const vault = await tsImport("./vault.mjs", import.meta.url);
+    let secret;
+    try {
+      secret = secretFile
+        ? readCredentialFile(ctx.directory, shopifyAppSecretFile, specs)
+        : await ctx.readSecret();
+    } catch (error) {
+      throw error instanceof StagingError ? error : new StagingError("STAGING_SECRET_UNREADABLE");
+    }
+    let envelope;
+    try {
+      envelope = await vault.sealAppSecretWithKek(
+        {
+          environment: "staging",
+          "app-key": registration.appKey,
+          version: "1",
+          "kek-version": String(kekVersion),
+        },
+        secret,
+        () => kek,
+      );
+      await vault.checkEnvelope(envelope, kek);
+    } catch (error) {
+      throw new StagingError(
+        error?.message === "VAULT_SCRIPT_SECRET_INVALID"
+          ? "STAGING_SECRET_INVALID"
+          : "STAGING_SEAL_FAILED",
+      );
+    } finally {
+      secret = null;
+    }
+    const result = await registerShopifyApp({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input: { ...registration, envelope },
+    });
+    let secretFileRemoved = null;
+    if (secretFile)
+      try {
+        unlinkSync(join(ctx.directory, shopifyAppSecretFile));
+        secretFileRemoved = true;
+      } catch {
+        secretFileRemoved = false;
+      }
+    return {
+      ...result,
+      secretSource: secretFile ? "file" : "prompt",
+      secretFileRemoved,
+      kekFingerprint: vault.kekFingerprint(kek),
     };
   },
 });

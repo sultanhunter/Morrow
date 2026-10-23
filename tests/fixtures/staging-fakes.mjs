@@ -218,12 +218,15 @@ export function fakeTools(options = {}) {
       if (args[0] === "deploy") {
         const versionId = fakeUuid(state.deploySerial++);
         // A hook runs while the upload is "in flight" (the kill race); a deploy then
-        // lands, which on the api re-enables workers.dev, as wrangler does.
+        // lands, which on the api and (v1 PR 1) the connector re-enables workers.dev, as
+        // wrangler does with their `workers_dev: true`.
         await options.onDeploy?.(worker, state);
         const lands = options.deployLands?.(worker) ?? true;
         if (lands) {
           state.deployed.push(worker);
-          cloudflare?.deploy(scriptOf[worker], versionId, { workersDev: worker === "api" });
+          cloudflare?.deploy(scriptOf[worker], versionId, {
+            workersDev: worker === "api" || worker === "connector",
+          });
         }
         const failed = options.deployFails?.(worker);
         if (failed) return { status: 1, stdout: emit ?? "", stderr: emit ?? "", output: [] };
@@ -271,7 +274,8 @@ export function fakeCloudflare(options = {}) {
       },
       { name: "morrow-staging-broker", enabled: false, previews: false, bindings: [] },
       { name: "morrow-staging-orchestrator", enabled: false, previews: false, bindings: [] },
-      { name: "morrow-staging-connector", enabled: false, previews: false, bindings: [] },
+      // v1 PR 1 (ADR-0035 item 2): the connector is the second public Worker.
+      { name: "morrow-staging-connector", enabled: true, previews: false, bindings: [] },
     ],
   );
   const deployments = { ...(options.deployments ?? {}) };
@@ -405,9 +409,18 @@ export function fakeCloudflare(options = {}) {
 }
 
 // A fake staging origin over a fakeCloudflare: the api answers only while its workers.dev
-// is enabled; the other hostnames never answer. `ready`, `guard` and `limit` shape the
-// api. Every request is recorded (method and path, never a header value).
-export function fakeSite({ cloud, ready = true, guard = true, limit = 10, csp, other = 404 }) {
+// is enabled, and (v1 PR 1) the connector likewise on its own hostname; the other
+// hostnames never answer. `ready`, `guard` and `limit` shape the api, `connectorReady` the
+// connector. Every request is recorded (method and path, never a header value).
+export function fakeSite({
+  cloud,
+  ready = true,
+  guard = true,
+  limit = 10,
+  csp,
+  other = 404,
+  connectorReady = true,
+}) {
   const requests = [];
   let starts = 0;
   const json = (status, body, headers = {}) =>
@@ -420,6 +433,17 @@ export function fakeSite({ cloud, ready = true, guard = true, limit = 10, csp, o
     const method = init.method ?? "GET";
     requests.push({ method, host, path: pathname });
     const isReady = typeof ready === "function" ? ready() : ready;
+    if (host === "morrow-staging-connector.lab.workers.dev") {
+      if (!cloud.workersDev("morrow-staging-connector"))
+        return new Response("There is nothing here yet", { status: 404 });
+      if (pathname === "/healthz")
+        return json(200, {
+          schemaVersion: 1,
+          service: "connector",
+          ready: typeof connectorReady === "function" ? connectorReady() : connectorReady,
+        });
+      return json(404, { code: "not_found" });
+    }
     if (host !== "morrow-staging-api.lab.workers.dev")
       return new Response("nothing here", { status: other });
     if (!cloud.workersDev("morrow-staging-api"))
