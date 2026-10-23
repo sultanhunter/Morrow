@@ -639,7 +639,8 @@ function checkCsv(bytes: Uint8Array): OutputCheck {
 }
 
 // XLSX: an OOXML zip, read from its central directory and checked against each local
-// header (no ZIP64, encryption, data descriptors' disagreement, path tricks or bombs). The
+// header (no ZIP64, encryption, data descriptors' disagreement, path tricks or bombs, and no
+// byte outside the listed entries: no prefix, gap or archive comment; zipEntries). The
 // parts that would carry macros, objects or links reject it, and so does any macro content
 // type. Every part is then read whatever its name: an image (PNG, JPEG or GIF by its magic
 // bytes) or strict UTF-8 XML (readXmlPart), and in every XML part any external or
@@ -663,14 +664,15 @@ interface ZipEntry {
   readonly size: number;
   readonly dataStart: number;
 }
+// Every byte of an accepted archive belongs to an entry the central directory lists: the
+// first local header at offset 0, each next one where the previous entry's data (and its data
+// descriptor) ends, the last ending where the directory starts, and no archive comment. A
+// streaming reader that walks local headers therefore finds exactly the entries checked here,
+// and each local header agrees with the directory on its flags, method, name and sizes.
 function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
-  let eocd = -1;
-  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 65535); at--)
-    if (u32le(bytes, at) === 0x06054b50 && at + 22 + u16le(bytes, at + 20) === bytes.length) {
-      eocd = at;
-      break;
-    }
-  if (eocd < 0) return null;
+  // No archive comment: the end record is the last 22 bytes.
+  const eocd = bytes.length - 22;
+  if (eocd < 0 || u32le(bytes, eocd) !== 0x06054b50 || u16le(bytes, eocd + 20) !== 0) return null;
   const count = u16le(bytes, eocd + 10);
   const cdSize = u32le(bytes, eocd + 12);
   const cdStart = u32le(bytes, eocd + 16);
@@ -685,6 +687,7 @@ function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
   )
     return null;
   const entries: ZipEntry[] = [];
+  const spans: { readonly start: number; readonly end: number }[] = [];
   const names = new Set<string>();
   let total = 0;
   let at = cdStart;
@@ -692,6 +695,7 @@ function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
     if (at + 46 > eocd || u32le(bytes, at) !== 0x02014b50) return null;
     const flags = u16le(bytes, at + 8);
     const method = u16le(bytes, at + 10);
+    const crc = u32le(bytes, at + 16);
     const compressedSize = u32le(bytes, at + 20);
     const size = u32le(bytes, at + 24);
     const nameLength = u16le(bytes, at + 28);
@@ -729,18 +733,50 @@ function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
     const localNameLength = u16le(bytes, local + 26);
     const localExtraLength = u16le(bytes, local + 28);
     const localName = bytes.subarray(local + 30, local + 30 + localNameLength);
+    // With a data descriptor (flag 0x08) the local CRC and sizes may be zero; otherwise, and
+    // whenever they are given, they are the directory's.
+    const described = (flags & 0x08) !== 0;
+    const localCrc = u32le(bytes, local + 14);
+    const localCompressed = u32le(bytes, local + 18);
+    const localSize = u32le(bytes, local + 22);
     if (
+      u16le(bytes, local + 6) !== flags ||
       u16le(bytes, local + 8) !== method ||
       localNameLength !== nameLength ||
-      !localName.every((b, i) => b === raw[i])
+      !localName.every((b, i) => b === raw[i]) ||
+      !(
+        (localCrc === crc && localCompressed === compressedSize && localSize === size) ||
+        (described && localCrc === 0 && localCompressed === 0 && localSize === 0)
+      )
     )
       return null;
     const dataStart = local + 30 + localNameLength + localExtraLength;
-    if (dataStart + compressedSize > cdStart) return null;
+    let end = dataStart + compressedSize;
+    if (end > cdStart) return null;
+    if (described) {
+      // The descriptor repeats the directory's CRC and sizes, with or without its signature.
+      const agrees = (from: number) =>
+        from + 12 <= cdStart &&
+        u32le(bytes, from) === crc &&
+        u32le(bytes, from + 4) === compressedSize &&
+        u32le(bytes, from + 8) === size;
+      if (u32le(bytes, end) === 0x08074b50 && agrees(end + 4)) end += 16;
+      else if (agrees(end)) end += 12;
+      else return null;
+    }
     entries.push(Object.freeze({ name, method, compressedSize, size, dataStart }));
+    spans.push(Object.freeze({ start: local, end }));
     at += 46 + nameLength + extraLength + commentLength;
   }
-  return at === eocd ? entries : null;
+  if (at !== eocd) return null;
+  // Contiguous in file order, from offset 0 to the directory: no prefix, gap or overlap.
+  spans.sort((a, b) => a.start - b.start);
+  let next = 0;
+  for (const span of spans) {
+    if (span.start !== next) return null;
+    next = span.end;
+  }
+  return next === cdStart ? entries : null;
 }
 async function inflateBytes(
   bytes: Uint8Array,

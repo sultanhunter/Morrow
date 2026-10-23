@@ -51,42 +51,98 @@ const u32le = (n) => {
   b.writeUInt32LE(n >>> 0);
   return b;
 };
-/** A zip of [name, text|bytes] entries (deflated), with switches for malformed archives. */
+/** One entry's local header and data (deflated unless `stored`), as a hidden entry. */
+export function zipLocal(name, content, { stored = false } = {}) {
+  const data = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  const packed = stored ? data : deflateRawSync(data);
+  const nameBytes = Buffer.from(name, "latin1");
+  return Buffer.concat([
+    u32le(0x04034b50),
+    u16le(20),
+    u16le(0),
+    u16le(stored ? 0 : 8),
+    u16le(0),
+    u16le(0),
+    u32le(crc32(data)),
+    u32le(packed.length),
+    u32le(data.length),
+    u16le(nameBytes.length),
+    u16le(0),
+    nameBytes,
+    packed,
+  ]);
+}
+/**
+ * A zip of [name, text|bytes] entries (deflated), with switches for malformed archives:
+ * `prefix` bytes before the first entry and `gap` [index, bytes] after entry `index` (the
+ * offsets shifted to match, so only the unlisted bytes are wrong), an archive `comment`,
+ * `descriptor` ("signed", "bare" or "wrong": flag 0x08, zero local sizes and a data
+ * descriptor after the data) and `localSizeOf` (the local header's compressed size).
+ */
 export function makeZip(
   entries,
-  { flags = 0, stored = false, trailing = null, zip64 = false, localNameOf = null } = {},
+  {
+    flags = 0,
+    stored = false,
+    trailing = null,
+    zip64 = false,
+    localNameOf = null,
+    prefix = null,
+    gap = null,
+    comment = null,
+    descriptor = null,
+    localSizeOf = null,
+  } = {},
 ) {
   const locals = [];
   const centrals = [];
-  let offset = 0;
-  for (const [name, content] of entries) {
+  const head = prefix ? Buffer.from(prefix) : Buffer.alloc(0);
+  if (head.length) locals.push(head);
+  let offset = head.length;
+  const entryFlags = flags | (descriptor ? 0x08 : 0);
+  for (const [index, [name, content]] of entries.entries()) {
     const data = Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8");
     const packed = stored ? data : deflateRawSync(data);
     const method = stored ? 0 : 8;
     const nameBytes = Buffer.from(name, "latin1");
     const localName = Buffer.from(localNameOf ? localNameOf(name) : name, "latin1");
     const crc = crc32(data);
+    const zeroed = descriptor !== null;
+    const trailer =
+      descriptor === "signed"
+        ? Buffer.concat([u32le(0x08074b50), u32le(crc), u32le(packed.length), u32le(data.length)])
+        : descriptor === "bare"
+          ? Buffer.concat([u32le(crc), u32le(packed.length), u32le(data.length)])
+          : descriptor === "wrong"
+            ? Buffer.concat([
+                u32le(0x08074b50),
+                u32le(crc ^ 1),
+                u32le(packed.length),
+                u32le(data.length),
+              ])
+            : Buffer.alloc(0);
     const local = Buffer.concat([
       u32le(0x04034b50),
       u16le(20),
-      u16le(flags),
+      u16le(entryFlags),
       u16le(method),
       u16le(0),
       u16le(0),
-      u32le(crc),
-      u32le(packed.length),
-      u32le(data.length),
+      u32le(zeroed ? 0 : crc),
+      u32le(zeroed ? 0 : localSizeOf ? localSizeOf(name, packed.length) : packed.length),
+      u32le(zeroed ? 0 : data.length),
       u16le(localName.length),
       u16le(0),
       localName,
       packed,
+      trailer,
     ]);
     centrals.push(
       Buffer.concat([
         u32le(0x02014b50),
         u16le(20),
         u16le(20),
-        u16le(flags),
+        u16le(entryFlags),
         u16le(method),
         u16le(0),
         u16le(0),
@@ -105,8 +161,14 @@ export function makeZip(
     );
     locals.push(local);
     offset += local.length;
+    if (gap && gap[0] === index) {
+      const hidden = Buffer.from(gap[1]);
+      locals.push(hidden);
+      offset += hidden.length;
+    }
   }
   const central = Buffer.concat(centrals);
+  const note = comment ? Buffer.from(comment) : Buffer.alloc(0);
   const end = Buffer.concat([
     u32le(0x06054b50),
     u16le(0),
@@ -115,7 +177,8 @@ export function makeZip(
     u16le(entries.length),
     u32le(central.length),
     u32le(offset),
-    u16le(0),
+    u16le(note.length),
+    note,
   ]);
   const zip = Buffer.concat([...locals, central, end]);
   return new Uint8Array(trailing ? Buffer.concat([zip, Buffer.from(trailing)]) : zip);

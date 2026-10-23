@@ -29,7 +29,7 @@ import {
 } from "../packages/policy/src/runtime-computer.ts";
 import { runtimeTiming } from "../apps/broker/src/runtime-gateway.ts";
 import { runtimeGatewayLimits } from "../packages/identity/src/broker-protocol.ts";
-import { makePng, makeXlsx, makeZip } from "./fixtures/runtime-files.mjs";
+import { makePng, makeXlsx, makeZip, zipLocal } from "./fixtures/runtime-files.mjs";
 
 const product = (over = {}) => [
   "7001",
@@ -502,6 +502,46 @@ test("XLSX outputs: macros, objects, links and remote formulas are refused; zip 
     outcome: "rejected",
     code: "xlsx_invalid",
   });
+});
+
+test("XLSX outputs: every byte belongs to a listed entry, so no hidden entry rides along (review R3)", async () => {
+  // A local header and data the central directory does not list: a streaming reader that
+  // walks local headers would still find it.
+  const hidden = zipLocal("xl/vbaProject.bin", Buffer.from([1, 2, 3]));
+  const workbookOnly = (n, size) => (n === "xl/workbook.xml" ? size - 1 : size);
+  const cases = [
+    ["a hidden entry before the first", makeXlsx({ options: { prefix: hidden } })],
+    ["bytes before the first entry", makeXlsx({ options: { prefix: Buffer.alloc(4) } })],
+    ["a hidden entry between entries", makeXlsx({ options: { gap: [1, hidden] } })],
+    ["a hidden entry after the last", makeXlsx({ options: { gap: [4, hidden] } })],
+    ["one stray byte between entries", makeXlsx({ options: { gap: [2, Buffer.alloc(1)] } })],
+    ["an archive comment", makeXlsx({ options: { comment: "x" } })],
+    ["a hidden entry in the archive comment", makeXlsx({ options: { comment: hidden } })],
+    [
+      "a local size the directory disagrees with",
+      makeXlsx({ options: { localSizeOf: workbookOnly } }),
+    ],
+    [
+      "a data descriptor the directory disagrees with",
+      makeXlsx({ options: { descriptor: "wrong" } }),
+    ],
+    [
+      "a hidden entry after a data descriptor",
+      makeXlsx({ options: { descriptor: "signed", gap: [0, hidden] } }),
+    ],
+  ];
+  for (const [name, bytes] of cases)
+    assert.deepEqual(
+      await checkRuntimeOutput("xlsx", bytes),
+      { outcome: "rejected", code: "xlsx_invalid" },
+      name,
+    );
+  // Data descriptors that agree with the directory, signed or bare, are an ordinary zip, and
+  // what is served is exactly what was checked.
+  for (const descriptor of ["signed", "bare"]) {
+    const bytes = makeXlsx({ options: { descriptor } });
+    assert.deepEqual(await checkRuntimeOutput("xlsx", bytes), { outcome: "accepted", bytes });
+  }
 });
 
 test("XLSX outputs: every part is read as strict XML, so hidden formulas and links are refused", async () => {
