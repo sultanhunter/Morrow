@@ -471,6 +471,22 @@ export const fixtureCases = [
     scenario: "question_expired",
   }),
   fixtureCase("inbox", "question_cancelled", `/w/${ws}/inbox/questions/q-returns`),
+  // v1 PR 3: the review screen of the seeded proposal, approving and applying it (the
+  // fixture "writes" at once), and the task's apply history.
+  fixtureCase("review", "pending", `/w/${ws}/review/proposal-sample-1`),
+  fixtureCase("review", "applied", `/w/${ws}/review/proposal-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      // The apply settles every product, then the screen shows the history.
+      await page.getByRole("heading", { name: "Changes applied" }).waitFor();
+    },
+  }),
+  fixtureCase("task", "applied_history", `/w/${ws}/work/task-titles`, {
+    widths: [1440, 390],
+    setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),
+  }),
   fixtureCase("overlay", "drawer", `/w/${ws}`, {
     widths: [390, 320],
     setup: (page) => page.getByRole("button", { name: "Open navigation" }).click(),

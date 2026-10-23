@@ -79,12 +79,27 @@ const tones: Readonly<Record<string, TagTone>> = {
   // M3 PR-2: runs and their products.
   in_progress: "accent",
   drafted: "success",
+  // v1 PR 3: each product's apply.
+  authorized: "accent",
+  dispatching: "accent",
+  submitted: "accent",
+  verifying: "accent",
+  verified: "success",
+  conflict: "warning",
+  uncertain: "warning",
 };
 export function StatusTag({
   family,
   status,
 }: {
-  readonly family: "task" | "goal" | "question" | "installation" | "run" | "runProduct";
+  readonly family:
+    | "task"
+    | "goal"
+    | "question"
+    | "installation"
+    | "run"
+    | "runProduct"
+    | "operation";
   readonly status: string;
 }) {
   return (

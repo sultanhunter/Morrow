@@ -96,20 +96,20 @@ CREATE INDEX operations_claim ON morrow_work.operations (organization_id,workspa
 
 -- ---------------------------------------------------------------------------
 -- Row security. Both tables: ENABLE + FORCE, the maintenance-only owner policy, the session
--- context (tenant_command) and the api's read of the read-backs (codes only).
+-- context's read (tenant_command FOR SELECT: no session definer writes either table) and the
+-- api's read of the read-backs (codes only).
 DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['operation_writes','operation_readbacks'] LOOP
   EXECUTE format('ALTER TABLE morrow_work.%I ENABLE ROW LEVEL SECURITY',t);
   EXECUTE format('ALTER TABLE morrow_work.%I FORCE ROW LEVEL SECURITY',t);
   EXECUTE format('CREATE POLICY work_owner ON morrow_work.%I TO morrow_work_owner USING (true) WITH CHECK (true)',t);
   EXECUTE format('REVOKE ALL ON morrow_work.%I FROM PUBLIC',t);
-  EXECUTE format('CREATE POLICY tenant_command ON morrow_work.%I TO morrow_work_command
-   USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))
-   WITH CHECK ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))',t);
+  EXECUTE format('CREATE POLICY tenant_command ON morrow_work.%I FOR SELECT TO morrow_work_command
+   USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))',t);
   -- The broker's catalog definers (below) reach exactly the operation their own
   -- transaction-local setting names (morrow.vault_catalog_operation), which only they write
   -- and clear, while the session user is the broker's login.
-  EXECUTE format('CREATE POLICY broker_catalog ON morrow_work.%I TO morrow_work_command
+  EXECUTE format('CREATE POLICY broker_catalog_operation ON morrow_work.%I TO morrow_work_command
    USING (session_user=''morrow_vault_broker'' AND operation_id::text=pg_catalog.current_setting(''morrow.vault_catalog_operation'',true))
    WITH CHECK (session_user=''morrow_vault_broker'' AND operation_id::text=pg_catalog.current_setting(''morrow.vault_catalog_operation'',true))',t);
  END LOOP;
@@ -118,7 +118,7 @@ CREATE POLICY tenant_read ON morrow_work.operation_readbacks FOR SELECT TO morro
  USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c));
 -- The broker's catalog context on the shared tables. The operation it names (read and
 -- written), its transitions, and, for reading only, its tenant's catalog operations (the
--- product lock), claims, proposals, parameters and snapshots (morrow.vault_catalog_tenant,
+-- product lock), proposals, parameters and snapshots (morrow.vault_catalog_tenant,
 -- org|ws, written by the same definers from the operation row). The lease, stop and
 -- installation reads reuse resolve_call's settings and policies (0031), which these
 -- definers also write and clear themselves.
@@ -129,10 +129,14 @@ CREATE POLICY broker_catalog_tenant ON morrow_work.operations FOR SELECT TO morr
  USING (session_user='morrow_vault_broker' AND kind='catalog_write'
   AND organization_id::text||'|'||workspace_id::text=pg_catalog.current_setting('morrow.vault_catalog_tenant',true));
 CREATE POLICY broker_catalog_transition ON morrow_work.operation_transitions TO morrow_work_command
- USING (session_user='morrow_vault_broker' AND operation_id::text=pg_catalog.current_setting('morrow.vault_catalog_operation',true))
- WITH CHECK (session_user='morrow_vault_broker' AND operation_id::text=pg_catalog.current_setting('morrow.vault_catalog_operation',true));
+ USING (session_user='morrow_vault_broker' AND operation_id::text=pg_catalog.current_setting('morrow.vault_catalog_operation',true)
+  AND EXISTS(SELECT 1 FROM morrow_work.operations o WHERE o.organization_id=operation_transitions.organization_id
+   AND o.workspace_id=operation_transitions.workspace_id AND o.id=operation_transitions.operation_id AND o.kind='catalog_write'))
+ WITH CHECK (session_user='morrow_vault_broker' AND operation_id::text=pg_catalog.current_setting('morrow.vault_catalog_operation',true)
+  AND EXISTS(SELECT 1 FROM morrow_work.operations o WHERE o.organization_id=operation_transitions.organization_id
+   AND o.workspace_id=operation_transitions.workspace_id AND o.id=operation_transitions.operation_id AND o.kind='catalog_write'));
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['approval_claims','proposals','proposal_parameters','product_snapshots'] LOOP
+ FOREACH t IN ARRAY ARRAY['proposals','proposal_parameters','product_snapshots'] LOOP
   EXECUTE format('CREATE POLICY broker_catalog_read ON morrow_work.%I FOR SELECT TO morrow_work_command
    USING (session_user=''morrow_vault_broker''
     AND organization_id::text||''|''||workspace_id::text=pg_catalog.current_setting(''morrow.vault_catalog_tenant'',true))',t);
@@ -874,15 +878,16 @@ GRANT EXECUTE ON FUNCTION morrow_work.cmd_catalog_apply(text,text,text,text,text
 GRANT EXECUTE ON FUNCTION morrow_vault.catalog_write_resolve(text),morrow_vault.catalog_write_begin(text,text,text,text,text),
  morrow_vault.catalog_write_end(text,text,text,text),morrow_vault.catalog_reconcile_resolve(text),
  morrow_vault.catalog_reconcile_record(text,text,text,text,text) TO morrow_vault_broker;
+-- The vault helpers stay the owner's (INVOKER, revisable like credential_for_connection);
+-- the command role executes them inside the definers above.
+GRANT EXECUTE ON FUNCTION morrow_vault.catalog_context(text,text,text,text,text),morrow_vault.catalog_context_clear(),
+ morrow_vault.catalog_send_refusal(text,text) TO morrow_work_command;
 GRANT CREATE ON SCHEMA morrow_work,morrow_vault TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_target(jsonb,integer) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_item(jsonb,integer) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_item_matches(jsonb,jsonb) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_catalog_apply(text,text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_catalog_dispatch(text,text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_vault.catalog_context(text,text,text,text,text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_vault.catalog_context_clear() OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_vault.catalog_send_refusal(text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_write_resolve(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_write_begin(text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_write_end(text,text,text,text) OWNER TO morrow_work_command;

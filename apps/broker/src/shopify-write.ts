@@ -209,7 +209,15 @@ export async function shopifyAdminWrite(
       const codes = list.map((e) => own(own(e, "extensions"), "code"));
       if (list.length > 0 && codes.every((c) => c === "THROTTLED")) {
         if (attempt > 0) return Object.freeze({ kind: "throttled" });
-        const status = own(own(own(reply, "extensions"), "cost"), "throttleStatus");
+        // Wait until the bucket holds the mutation's requested cost again (Shopify's
+        // extensions.cost.requestedQueryCost; a productUpdate costs 10 when it is absent).
+        const cost = own(own(reply, "extensions"), "cost");
+        const status = own(cost, "throttleStatus");
+        const requested = own(cost, "requestedQueryCost");
+        const needed =
+          typeof requested === "number" && Number.isFinite(requested) && requested > 0
+            ? Math.min(requested, 1000)
+            : 10;
         const available = own(status, "currentlyAvailable");
         const rate = own(status, "restoreRate");
         const wait =
@@ -218,7 +226,7 @@ export async function shopifyAdminWrite(
           typeof rate === "number" &&
           Number.isFinite(rate) &&
           rate > 0
-            ? Math.ceil((Math.max(0, 10 - Math.max(0, available)) / rate) * 1000)
+            ? Math.ceil((Math.max(0, needed - Math.max(0, available)) / rate) * 1000)
             : 1000;
         if (now() + wait >= deadlineMs) return Object.freeze({ kind: "throttled" });
         await sleep(wait);

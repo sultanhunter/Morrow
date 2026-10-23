@@ -1,5 +1,6 @@
 import type { Core_ErrorEnvelope, Current_Proposal } from "@morrow/contracts";
 import { validateDefinition } from "@morrow/contracts/validation";
+import { confirmationPhrase, effectiveRule } from "@morrow/policy/review";
 import { listingFieldPaths } from "@morrow/policy/store-resource";
 import {
   decodeShopifyApplyResult,
@@ -17,7 +18,7 @@ import {
   storeLinkCurrent,
   type ApprovalRefusal,
 } from "../approvals/index.js";
-import { readProposalRow } from "../approvals/family.js";
+import { readContext, readProposalRow } from "../approvals/family.js";
 import {
   WorkOutcomeUnknown,
   WorkReject,
@@ -125,7 +126,12 @@ const json = (status: number, body: unknown) =>
     status,
     headers: { ...headers },
   });
-type Mapped = readonly [number, Core_ErrorEnvelope["code"], Core_ErrorEnvelope["retryClass"], string];
+type Mapped = readonly [
+  number,
+  Core_ErrorEnvelope["code"],
+  Core_ErrorEnvelope["retryClass"],
+  string,
+];
 const applyRefusals: Readonly<Record<string, Mapped>> = Object.freeze({
   apply_unavailable: [
     503,
@@ -141,7 +147,12 @@ const applyRefusals: Readonly<Record<string, Mapped>> = Object.freeze({
     "This store was reconnected, so these changes can no longer be applied.",
   ],
   not_catalog: [404, "denied", "never", "The record was not found."],
-  already_claimed: [409, "conflict", "never", "These changes were already applied by someone else."],
+  already_claimed: [
+    409,
+    "conflict",
+    "never",
+    "These changes were already applied by someone else.",
+  ],
   stopped: [409, "conflict", "never", "AI work is stopped for this store."],
   scope_missing: [
     409,
@@ -156,7 +167,13 @@ const applyRefusals: Readonly<Record<string, Mapped>> = Object.freeze({
     "The Listings agent is not enabled for this store.",
   ],
 });
-function envelope(status: number, code: Core_ErrorEnvelope["code"], retry: Core_ErrorEnvelope["retryClass"], message: string, correlationId: string) {
+function envelope(
+  status: number,
+  code: Core_ErrorEnvelope["code"],
+  retry: Core_ErrorEnvelope["retryClass"],
+  message: string,
+  correlationId: string,
+) {
   const body: Core_ErrorEnvelope = {
     schemaVersion: 1,
     code,
@@ -176,7 +193,10 @@ const approvalMessages: Readonly<Record<string, string>> = Object.freeze({
   missing_input: "The request is not valid.",
   approval_expired: "This approval has expired. Ask Listings to draft again.",
 });
-function refusalResponse(reason: ApplyRefusal | ApprovalRefusal | "apply_unavailable", correlationId: string) {
+function refusalResponse(
+  reason: ApplyRefusal | ApprovalRefusal | "apply_unavailable",
+  correlationId: string,
+) {
   const own = applyRefusals[reason];
   if (own) return envelope(own[0], own[1], own[2], own[3], correlationId);
   if (reason === "not_entitled")
@@ -225,7 +245,10 @@ function dependencies(value: ReviewApiDependencies): ReviewApiDependencies {
     broker:
       broker === null
         ? null
-        : Object.freeze({ apply: broker.apply.bind(broker), reconcile: broker.reconcile.bind(broker) }),
+        : Object.freeze({
+            apply: broker.apply.bind(broker),
+            reconcile: broker.reconcile.bind(broker),
+          }),
   });
 }
 async function context(tx: WorkTx, g: Guarded): Promise<WorkAuthority> {
@@ -352,6 +375,20 @@ async function reviewDocument(tx: WorkTx, g: Guarded) {
     };
   }
   const status = view.approval?.status ?? null;
+  // The solo owner's typed confirmation (ADR-0011 Q3): asked only when the viewer is in the
+  // proposal's conflict set (proposer, requester, beneficiaries) and the current policy's
+  // effective rule for its risk requires it; the server checks the phrase again.
+  const ctx = await readContext(tx, a, proposal.capabilityId, stored.familyRootId);
+  const conflicted = [
+    proposal.proposedBy.principalId,
+    proposal.requestedBy.principalId,
+    ...proposal.beneficiaryPrincipalIds,
+  ].includes(a.actor.principalId);
+  const confirmationRequired =
+    ctx.policy !== null &&
+    conflicted &&
+    effectiveRule(ctx.policy.rules, proposal.risk, proposal.irreversible).selfApproval ===
+      "solo_owner_typed_confirmation";
   const blocked = redacted
     ? "redacted"
     : !linked
@@ -397,6 +434,7 @@ async function reviewDocument(tx: WorkTx, g: Guarded) {
     viewerRole: view.viewerRole,
     actionable: blocked === null,
     blocked,
+    confirmation: { required: confirmationRequired, phrase: confirmationPhrase(proposal) },
     products,
     claim,
   };
@@ -444,6 +482,18 @@ async function operationDocument(tx: WorkTx, g: Guarded) {
   return { operation: operationView(op), transitions, readbacks };
 }
 
+// An ApplyReject leaves its transaction rolled back, as a value the route maps (a thrown
+// error would end the transaction as unavailable).
+async function refusable<T>(tx: WorkTx, run: () => Promise<T>): Promise<T | ApplyReject> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof ApplyReject)) throw error;
+    tx.rollbackOnly();
+    return error;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The handler.
 export function createReviewApiHandler(d?: ReviewApiDependencies) {
@@ -488,7 +538,13 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
     try {
       let g: Guarded;
       try {
-        g = await guardWorkspaceRequest(configured.origin, "work", reviewRoutes, request, abort.signal);
+        g = await guardWorkspaceRequest(
+          configured.origin,
+          "work",
+          reviewRoutes,
+          request,
+          abort.signal,
+        );
       } catch (error) {
         if (!(error instanceof WorkGuardError)) throw error;
         log.outcome = "guard_" + error.status;
@@ -528,7 +584,12 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
           )
             throw new WorkReject("invalid");
           const proposalId = g.params.proposalId!;
-          const digest = await workRequestDigest("approval.decide", g.workspaceId, [proposalId], body);
+          const digest = await workRequestDigest(
+            "approval.decide",
+            g.workspaceId,
+            [proposalId],
+            body,
+          );
           const result = await transaction(false, async (tx) => {
             const a = await context(tx, g);
             return decideApproval(tx, a, {
@@ -572,26 +633,42 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
           timer = setTimeout(() => abort.abort(), budget - (configured.now() - start));
           const claim = await transaction(false, async (tx) => {
             const a = await context(tx, g);
-            return admitApply(tx, a, g.commandId!, proposalId, parsed, configured.environment);
+            return refusable(tx, () =>
+              admitApply(tx, a, g.commandId!, proposalId, parsed, configured.environment),
+            );
           });
+          if (claim instanceof ApplyReject) throw claim;
+          // The family's operations, read in the claimant's own context (codes only).
+          const readOperations = () =>
+            transaction(true, async (tx) => {
+              await context(tx, g);
+              return familyOperations(tx, claim.familyRootId);
+            });
           let products = 0;
           for (;;) {
             const left = start + budget - configured.now();
             if (left < reviewLimits.applyProductMinMs) break;
-            const pending = (
-              await transaction(true, (tx) => familyOperations(tx, claim.familyRootId))
-            ).find((o) => o.status === "authorized");
+            const pending = (await readOperations()).find((o) => o.status === "authorized");
             if (!pending) break;
             products += 1;
             const dispatched = await transaction(false, async (tx) => {
               const a = await context(tx, g);
-              return dispatchOperation(tx, a, pending.operationId, configured.environment);
+              return refusable(tx, () =>
+                dispatchOperation(tx, a, pending.operationId, configured.environment),
+              );
             });
+            if (dispatched instanceof ApplyReject) throw dispatched;
             if (dispatched.kind !== "dispatching") continue;
-            await applyThroughBroker(broker, pending.operationId, start + budget, abort.signal, configured.now);
+            await applyThroughBroker(
+              broker,
+              pending.operationId,
+              start + budget,
+              abort.signal,
+              configured.now,
+            );
           }
           log.products = products;
-          const operations = await transaction(true, (tx) => familyOperations(tx, claim.familyRootId));
+          const operations = await readOperations();
           log.outcome = claim.replayed ? "continued" : "applied";
           return {
             log,
@@ -611,7 +688,9 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
           if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length)
             throw new WorkReject("invalid");
           const operationId = g.params.operationId!;
-          await transaction(true, async (tx) => visibleOperation(tx, await context(tx, g), operationId));
+          await transaction(true, async (tx) =>
+            visibleOperation(tx, await context(tx, g), operationId),
+          );
           let outcome = "unavailable";
           try {
             outcome = decodeShopifyReconcileResult(
@@ -634,8 +713,10 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
     } catch (error) {
       if (error instanceof ApplyReject) {
         log.outcome = error.reason;
-        if (error.reason === "invalid") return { log, response: workErrorResponse("invalid", correlationId) };
-        if (error.reason === "not_found") return { log, response: workErrorResponse("not_found", correlationId) };
+        if (error.reason === "invalid")
+          return { log, response: workErrorResponse("invalid", correlationId) };
+        if (error.reason === "not_found")
+          return { log, response: workErrorResponse("not_found", correlationId) };
         if (error.reason === "stale_authority")
           return { log, response: workErrorResponse("stale_authority", correlationId) };
         if (error.reason === "command_conflict")
@@ -726,4 +807,3 @@ export async function applyThroughBroker(
   }
   return result;
 }
-

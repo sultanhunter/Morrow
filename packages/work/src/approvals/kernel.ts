@@ -121,9 +121,7 @@ export function kernelPort(
   const service = createHumanPolicyService(
     {
       readCurrent: async (request) =>
-        authority(
-          store !== null && sameResource(request.resource, store) ? store : a.resource,
-        ),
+        authority(store !== null && sameResource(request.resource, store) ? store : a.resource),
     },
     () => new Date(atMs),
   );

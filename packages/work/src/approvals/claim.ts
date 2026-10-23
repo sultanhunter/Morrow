@@ -104,7 +104,7 @@ export async function prepareApprovalClaim(
   if (!family) throw new WorkContextUnavailable();
   const approval = family.approvals.get(stored.proposal.id);
   if (!approval || approval.id !== ref.approvalRef.id) return { code: "not_found" };
-  const current = storedApprovalRef(approval);
+  const current = storedApprovalRef(approval, stored.proposal.storeId);
   if (
     canonicalText(current) !== canonicalText(ref.approvalRef) ||
     ref.proposalRef.digest !== stored.proposal.proposalDigest ||

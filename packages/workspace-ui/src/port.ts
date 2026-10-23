@@ -3,6 +3,7 @@
 import type {
   AccountOverviewView,
   AnswerView,
+  ApplyResultView,
   ConnectionsView,
   GoalView,
   Id,
@@ -10,9 +11,15 @@ import type {
   ListingsChangeView,
   ListingsDocumentView,
   ModelCatalogueView,
+  OperationView,
   Page,
+  PendingApprovalView,
   PersonRef,
   QuestionView,
+  RecordRefView,
+  ReviewDecidedView,
+  ReviewDecisionBody,
+  ReviewView,
   RunAdmittedView,
   RunDetailView,
   RunView,
@@ -185,6 +192,32 @@ export interface WorkspacePort {
       c: Command<Record<string, never>>,
     ): Promise<Outcome<{ readonly closed: number }>>;
   };
+  /**
+   * v1 PR 3: review, approve and apply. The review shows before and after per product and
+   * field; a decision binds the exact digest it names (a selection previews its own); apply
+   * claims that exact approval and writes each product once through the gateway (the same
+   * key continues an apply that ran out of time); a recheck reads one product back.
+   */
+  readonly review: {
+    listPending(ws: Id): Promise<Outcome<readonly PendingApprovalView[]>>;
+    get(ws: Id, proposalId: Id, selected: readonly number[] | null): Promise<Outcome<ReviewView>>;
+    decide(
+      ws: Id,
+      proposalId: Id,
+      c: Command<ReviewDecisionBody>,
+    ): Promise<Outcome<ReviewDecidedView>>;
+    apply(
+      ws: Id,
+      proposalId: Id,
+      c: Command<{ readonly proposalRef: RecordRefView; readonly approvalRef: RecordRefView }>,
+    ): Promise<Outcome<ApplyResultView>>;
+    operationsOfTask(ws: Id, taskId: Id): Promise<Outcome<readonly OperationView[]>>;
+    recheck(
+      ws: Id,
+      operationId: Id,
+      c: Command<Record<string, never>>,
+    ): Promise<Outcome<OperationView>>;
+  };
   /** M3 PR-1: the model catalogue and the workspace's default and member ceiling. */
   readonly models: {
     list(ws: Id): Promise<Outcome<ModelCatalogueView>>;
@@ -237,6 +270,12 @@ export const portMethods = [
   "runs.listOfTask",
   "runs.get",
   "runs.reconcile",
+  "review.listPending",
+  "review.get",
+  "review.decide",
+  "review.apply",
+  "review.operationsOfTask",
+  "review.recheck",
 ] as const;
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */

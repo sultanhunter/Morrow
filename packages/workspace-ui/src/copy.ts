@@ -166,6 +166,11 @@ export const copy = {
     questionsTitle: "Questions for you",
     noQuestions: "No open questions for you.",
     otherTitle: "Other updates",
+    // v1 PR 3: the pending approvals the person may review.
+    approvalsTitle: "Changes to approve",
+    noApprovals: "Nothing to approve.",
+    approvalItem: (n: number) => `${n} product ${n === 1 ? "change" : "changes"} from Listings`,
+    approvalExpires: "Approve by",
   },
   question: {
     title: "Question",
@@ -362,7 +367,7 @@ export const copy = {
   ask: {
     title: "Ask",
     intro:
-      "Ask the Listings agent to draft better listings for products you pick. It only proposes changes; you review and approve each one, and nothing is published in this build.",
+      "Ask the Listings agent to draft better listings for products you pick. It only proposes changes; you review each one, and nothing reaches your store until you approve and apply that exact change.",
     request: "What should change?",
     requestHint:
       "Up to 8,192 characters. The agent treats product text as data, never as instructions.",
@@ -418,6 +423,7 @@ export const copy = {
     product: "Product",
     attempts: (n: number) => `${n} ${n === 1 ? "attempt" : "attempts"}`,
     proposal: "In a proposal for review",
+    review: "Review the changes",
     flags: (f: {
       newUrls: number;
       newEmails: number;
@@ -476,6 +482,102 @@ export const copy = {
       interrupted: "The run was stopped while drafting it",
     } as Readonly<Record<string, string>>,
   },
+  // v1 PR 3: review, approve and apply to Shopify.
+  review: {
+    title: "Review changes",
+    intro:
+      "This is exactly what Listings drafted. Approving binds this exact set of changes; to change a value, ask Listings again, which makes a new proposal to review.",
+    store: (id: string) => `Store ${id}`,
+    productsTitle: (n: number) => `${n} ${n === 1 ? "product" : "products"}`,
+    untrusted:
+      "Listings drafted these from your Shopify product text, which Morrow treats as data, never as instructions. Check each change before approving.",
+    taskLink: "Open the task",
+    expires: "Approve by",
+    fields: {
+      title: "Title",
+      descriptionHtml: "Description (HTML, shown as text)",
+      "seo.title": "SEO title",
+      "seo.description": "SEO description",
+      tags: "Tags",
+    } as Readonly<Record<string, string>>,
+    field: "Field",
+    before: "Now",
+    after: "Proposed",
+    empty: "(empty)",
+    tagsAdded: "Tags added",
+    tagsRemoved: "Tags removed",
+    flagsNotice: "Check before approving:",
+    expired:
+      "The product as Listings read it is no longer kept (90 days), so only the proposed values are shown.",
+    blocked: {
+      redacted:
+        "This store's data was deleted at Shopify's request. These changes can't be approved or applied.",
+      link_changed:
+        "This store was reconnected, so these changes can no longer be approved or applied.",
+      not_reviewer: "You can see these changes, but you can't approve them.",
+    } as Readonly<Record<string, string>>,
+    include: (productId: string) => `Include ${productId}`,
+    approveAll: "Approve all",
+    approveSome: (n: number) => `Approve ${n} selected`,
+    reject: "Reject",
+    confirmLabel: "Type the confirmation to approve",
+    confirmHint: (phrase: string) => `Type exactly: ${phrase}`,
+    approved: "Approved. Nothing has changed in Shopify yet.",
+    rejected: "Rejected. Nothing will change in Shopify.",
+    approvalStatus: (status: string) =>
+      ({
+        pending: "Waiting for your approval",
+        approved: "Approved, not applied yet",
+        rejected: "Rejected",
+        expired: "Expired",
+        invalidated: "No longer valid",
+        withdrawn: "Withdrawn",
+      })[status] ?? status,
+    apply: "Apply to Shopify",
+    applyIntro:
+      "Morrow checks your permission, the stops and your plan, reads each product again, writes only the approved fields once and reads the product back. A product changed in Shopify since the draft is not written.",
+    applyUnavailable: "Applying changes to Shopify isn't switched on yet. Nothing was changed.",
+    pending: (n: number) =>
+      `${n} more ${n === 1 ? "product is" : "products are"} waiting. Continue to apply ${n === 1 ? "it" : "them"}.`,
+    continue: "Continue applying",
+    results: "Results",
+    history: "Changes applied",
+    historyEmpty: "No changes have been applied from this task.",
+    open: "Open the review",
+    checkAgain: "Check again",
+    reasons: {
+      source_changed: "Not applied: the product changed in Shopify since the draft.",
+      product_busy: "Not applied: another change to this product is still being checked.",
+      product_missing: "Not applied: the product no longer exists in Shopify.",
+      stopped: "Not applied: AI work was stopped for this store.",
+      member_removed: "Not applied: the person who applied it lost access.",
+      lease_ended: "Not applied: it ran out of time. Approve and apply again.",
+      window_passed: "Not applied: it ran out of time. Approve and apply again.",
+      link_lost: "Not applied: the store was disconnected.",
+      installation_inactive: "Not applied: the Listings agent isn't enabled for this store.",
+      scope_missing: "Not applied: Morrow can't edit products in this store.",
+      credential_unavailable: "Not applied: the store's connection changed.",
+      parameters_redacted: "Not applied: the store's data was deleted.",
+      approval_expired: "Not applied: the approval expired.",
+      approval_invalid: "Not applied: the approval is no longer valid.",
+      authority_lost: "Not applied: you no longer have permission to apply it.",
+      not_entitled: "Not applied: the workspace's plan isn't active.",
+      request_mismatch: "Not applied: the change didn't match what was approved.",
+      provider_rejected: "Not applied: Shopify rejected the change.",
+      throttled: "Not applied: Shopify was busy. Ask again later.",
+      connection_unauthorized: "Not applied: Shopify refused the store's connection.",
+      access_denied: "Not applied: Shopify refused the store's connection.",
+      not_sent: "Not applied: it was never sent.",
+      readback_no_effect: "Not applied: Shopify shows it never changed.",
+      readback_differs:
+        "Needs your attention: Shopify now shows different values, perhaps from an edit made at the same moment.",
+      fence_expired: "Needs your attention: Morrow can't tell yet whether Shopify applied it.",
+      credential_gone:
+        "Needs your attention: the store disconnected before Morrow could check the product.",
+    } as Readonly<Record<string, string>>,
+    uncertain:
+      "Needs your attention: Morrow can't tell yet whether Shopify applied it. It is never sent twice; check again to read the product back.",
+  },
   leave: {
     title: "Leave this page?",
     body: "Unsent text will be lost.",
@@ -518,6 +620,16 @@ export const copy = {
       drafted: "Drafted",
       failed: "Failed",
       skipped: "Skipped",
+    },
+    operation: {
+      authorized: "Queued",
+      dispatching: "Applying",
+      submitted: "Sent",
+      verifying: "Checking",
+      verified: "Applied",
+      conflict: "Not applied",
+      failed: "Not applied",
+      uncertain: "Needs attention",
     },
     installation: {
       unlinked: "Not linked",

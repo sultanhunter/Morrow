@@ -158,6 +158,9 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "begin_run_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_run_command('run.admit','${uuid}','${digest}')`,
     "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','1','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
     "cmd_runs_reconcile(text,text,text)": `SELECT outcome FROM morrow_work.cmd_runs_reconcile('${uuid}','${digest}','corr')`,
+    // v1 PR 3: the claim (a well-formed item list) and one operation's dispatch check.
+    "cmd_catalog_apply(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_apply('${uuid}','${digest}','approval_absent','1','${digest}','proposal_absent','${digest}','{"evaluatedAt":"2026-10-23T00:00:00.000Z","reviewers":[]}','[{"targetIndex":0,"canonical":"{}","digest":"${digest}"}]')`,
+    "cmd_catalog_dispatch(text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_dispatch('${randomUUID()}',NULL)`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -191,6 +194,9 @@ test("P1: with no context both roles see zero rows and every api function is ine
         // M3 PR-1.
         "store_association(text)": "morrow_work.store_association('store_probe')",
         "agent_enable_document(text)": `morrow_work.agent_enable_document('${"a".repeat(64)}')`,
+        // v1 PR 3.
+        "catalog_review_sources(text)": "morrow_work.catalog_review_sources('proposal_absent')",
+        "catalog_claim_of(text)": "morrow_work.catalog_claim_of('proposal_absent')",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(

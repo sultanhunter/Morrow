@@ -42,7 +42,7 @@ export function decodeCommandResult(
   };
   const approvalRef = {
     ...tenant,
-    storeId: null,
+    storeId,
     kind: "approval",
     id: r.approvalId,
     revision: r.approvalRevision,

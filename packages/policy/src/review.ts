@@ -519,6 +519,24 @@ export function checkProposal(
 }
 
 // --- Partial approval (§7 item 8) -----------------------------------------------
+/**
+ * The deterministic id of a derived proposal, exactly as morrow_work.derived_proposal_id
+ * (0018) computes it: the parent named by tenant, id and digest, with a null store (v1 PR 3:
+ * a store-bound parent's digest already binds its store, and its derivedFrom.parentRef keeps
+ * the store; only the name ignores it).
+ */
+export function derivedProposalIdOf(
+  parentRef: Current_ProposalRef,
+  indexes: readonly number[],
+): string {
+  return (
+    "derived_" +
+    canonicalDigest({
+      parentRef: { ...parentRef, storeId: null },
+      selectedTargetIndexes: [...indexes],
+    })
+  );
+}
 function derive(parent: Current_Proposal, selected: unknown): Current_Proposal | ReviewCode {
   // Re-derivation is invalid before the partial-approval mode is consulted.
   if (parent.derivedFrom !== null) return "SELECTION_INVALID";
@@ -555,7 +573,7 @@ function derive(parent: Current_Proposal, selected: unknown): Current_Proposal |
   };
   const content: Current_Proposal = {
     ...parent,
-    id: "derived_" + canonicalDigest(derivedFrom),
+    id: derivedProposalIdOf(parentRef, indexes),
     revision: 1,
     scope,
     targets,

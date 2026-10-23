@@ -311,6 +311,13 @@
       "sha256": "2a8bf9895ea51a7a5a5b42726ccf654b6b43aed5ad1f0b414b4378b9ad1fd5b0",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-review-apply.md"
+    },
+    {
+      "sequence": 40,
+      "file": "0040.catalog-apply.sql",
+      "sha256": "aa06298b8420d4d2ebacdaed631b6a567b4768c6f511564bac84de26f96ffc9f",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-review-apply.md"
     }
   ]
 }

@@ -73,6 +73,13 @@ const connectorRedact =
 // M3 PR-2 with M2 PR-3: the connector's redaction context on a store-content table.
 const connectorContent =
   "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_redact'::text, true)))";
+// v1 PR 3 (catalog-apply): the broker's catalog context (one operation, by its own setting).
+const brokerCatalog =
+  "((SESSION_USER = 'morrow_vault_broker'::name) AND (kind = 'catalog_write'::text) AND ((id)::text = current_setting('morrow.vault_catalog_operation'::text, true)))";
+const brokerCatalogOperation =
+  "((SESSION_USER = 'morrow_vault_broker'::name) AND ((operation_id)::text = current_setting('morrow.vault_catalog_operation'::text, true)))";
+const brokerCatalogTransition =
+  "((SESSION_USER = 'morrow_vault_broker'::name) AND ((operation_id)::text = current_setting('morrow.vault_catalog_operation'::text, true)) AND (EXISTS ( SELECT 1\n   FROM morrow_work.operations o\n  WHERE (((o.organization_id)::text = (operation_transitions.organization_id)::text) AND ((o.workspace_id)::text = (operation_transitions.workspace_id)::text) AND ((o.id)::text = (operation_transitions.operation_id)::text) AND (o.kind = 'catalog_write'::text)))))";
 // The exactly-checked extra policies (registry `policies`): [command, roles, qual, check].
 const extraPolicies = {
   lease_self: [
@@ -293,6 +300,36 @@ const extraPolicies = {
   connector_content_read: ["SELECT", "{morrow_work_command}", connectorContent, null],
   connector_content_delete: ["DELETE", "{morrow_work_command}", connectorContent, null],
   connector_content_delete_only: ["DELETE", "{morrow_work_command}", connectorContent, null],
+  // v1 PR 3 (catalog-apply): the broker's catalog definers reach, as the broker's login only,
+  // the one catalog_write operation their own transaction-local setting names (its row, its
+  // transitions, its fence and read-back rows) and, for reading only, that operation's
+  // tenant: its catalog operations (one open write per product), proposals, parameters and
+  // snapshots.
+  broker_catalog: ["ALL", "{morrow_work_command}", brokerCatalog, brokerCatalog],
+  broker_catalog_tenant: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (kind = 'catalog_write'::text) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_catalog_tenant'::text, true)))",
+    null,
+  ],
+  broker_catalog_transition: [
+    "ALL",
+    "{morrow_work_command}",
+    brokerCatalogTransition,
+    brokerCatalogTransition,
+  ],
+  broker_catalog_operation: [
+    "ALL",
+    "{morrow_work_command}",
+    brokerCatalogOperation,
+    brokerCatalogOperation,
+  ],
+  broker_catalog_read: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_catalog_tenant'::text, true)))",
+    null,
+  ],
 };
 // The only restrictive policies; every other policy is permissive.
 const restrictivePolicies = new Set(["connector_content_delete_only"]);
