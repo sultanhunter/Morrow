@@ -1,6 +1,6 @@
 # Computer foundation (build order PR 7)
 
-- Status: brief, 2026-10-23. Decisions: ADR-0029 (runtime and E2B; accepted 2026-10-23) and ADR-0035 item 6 (E2B starts now with ADR-0029 owner question 3's conservative defaults). Nothing here is a new material choice: the port, the ledger, the caps, the hold, the capability and the switch are ADR-0029 items 2, 3, 7, 8, 9 and 10 as written.
+- Status: built, 2026-10-24; local checks green (see the test checklist), hosted CI and the Tier 2 review still open. Decisions: ADR-0029 (runtime and E2B; accepted 2026-10-23) and ADR-0035 item 6 (E2B starts now with ADR-0029 owner question 3's conservative defaults). Nothing here is a new material choice: the port, the ledger, the caps, the hold, the capability and the switch are ADR-0029 items 2, 3, 7, 8, 9 and 10 as written.
 - Plan IDs: P12.T01 (RuntimeProviderPort), the P12.T02 ledger slice, P07.T01's output checks. Branch `claude/v1-computer-foundation`, one PR. Migration `0039.runtime-operations.sql` (other v1 PRs also use 0039 and 0040; the merge train renumbers).
 
 ## Goal
@@ -42,6 +42,7 @@ Non-goals: the E2B adapter, the template recipe and build command, the envd toke
 - [x] `tests/edge-config.test.mjs`: the record rule and mixed states; `tests/staging-secrets.test.mjs`: put-secret refusals, the flag, the owner file, `secrets-status`; `tests/staging-deploy.test.mjs`: gate 6 with the optional key.
 - [x] Catalogue: `verify`, `tests/billing.test.mjs` (28 paid capabilities), `tests/approval-records.test.mjs`.
 - [x] `lab:runtime-operations` (PostgreSQL 17, the real gateway over the vault transport and the fake): capability, job and booking, replay, hold and lift, sweep, not_found, caps, settle edges, grants, lease and stop. `lab:tenant-conformance` with the three tables and the definers registered.
+- [x] Local run, 2026-10-24 (Mac under heavy load, so CI is the authority): `typecheck`, `typecheck:edge`, `edge:check`, `verify`, `build` and the format check pass; the six targeted files pass 126 of 126; `npm test` passes 4063 of 4065, and the two failures are timing checks in files this PR does not touch (`controlled-neon-workspace-profiles`, `standalone-login-http`), each 23 of 23 and 40 of 40 when rerun alone; `lab:runtime-operations` passes 19 checks, and `lab:tenant-conformance` passes 17 of 17.
 - [ ] Hosted CI `foundation` on the PR head; Tier 2 AI review with the security lens (credentials, migrations, money, durable execution).
 
 ## Owner steps
