@@ -60,84 +60,88 @@ function Figure({ clip, children }: { readonly clip: string; readonly children?:
   );
 }
 
-const props: Readonly<Record<SpecialistProp, ReactNode>> = {
-  calendar: (
-    <>
-      <rect
-        className="av-white"
-        x="24.6"
-        y="26.6"
-        width="9.8"
-        height="9"
-        rx="1.6"
-        strokeWidth="1.4"
-      />
-      <path className="av-line" d="M24.6 29.6 H34.4" strokeWidth="1.2" />
-      <path
-        className="av-line"
-        d="M27.2 25.2 V27.6 M31.8 25.2 V27.6"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-      <circle className="av-ink" cx="29.5" cy="32.6" r="1.2" />
-    </>
-  ),
-  envelope: (
-    <>
-      <rect
-        className="av-white"
-        x="24.2"
-        y="27.4"
-        width="11"
-        height="8"
-        rx="1.4"
-        strokeWidth="1.4"
-      />
-      <path
-        className="av-line"
-        d="M24.8 28.2 L29.7 31.8 L34.6 28.2"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </>
-  ),
-  magnifier: (
-    <>
-      <circle className="av-white" cx="28.6" cy="30" r="3.8" strokeWidth="1.4" />
-      <path className="av-line" d="M31.4 32.8 L34.6 36" strokeWidth="2" strokeLinecap="round" />
-    </>
-  ),
-  pencil: (
-    <>
-      <path
-        className="av-white"
-        d="M25 35.6 L25.8 32.2 L32.6 25.4 L35.2 28 L28.4 34.8 Z"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <path className="av-line" d="M31.2 26.8 L33.8 29.4" strokeWidth="1.2" />
-    </>
-  ),
-  chart: (
-    <>
-      <rect
-        className="av-white"
-        x="24.4"
-        y="26.4"
-        width="10.4"
-        height="9.6"
-        rx="1.6"
-        strokeWidth="1.4"
-      />
-      <path
-        className="av-line"
-        d="M27 33.6 V31 M29.6 33.6 V29 M32.2 33.6 V30.2"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </>
-  ),
-};
+// Built on call, not at import: a module-scope element would need React at load time.
+function propShape(prop: SpecialistProp): ReactNode {
+  const props: Readonly<Record<SpecialistProp, ReactNode>> = {
+    calendar: (
+      <>
+        <rect
+          className="av-white"
+          x="24.6"
+          y="26.6"
+          width="9.8"
+          height="9"
+          rx="1.6"
+          strokeWidth="1.4"
+        />
+        <path className="av-line" d="M24.6 29.6 H34.4" strokeWidth="1.2" />
+        <path
+          className="av-line"
+          d="M27.2 25.2 V27.6 M31.8 25.2 V27.6"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+        <circle className="av-ink" cx="29.5" cy="32.6" r="1.2" />
+      </>
+    ),
+    envelope: (
+      <>
+        <rect
+          className="av-white"
+          x="24.2"
+          y="27.4"
+          width="11"
+          height="8"
+          rx="1.4"
+          strokeWidth="1.4"
+        />
+        <path
+          className="av-line"
+          d="M24.8 28.2 L29.7 31.8 L34.6 28.2"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </>
+    ),
+    magnifier: (
+      <>
+        <circle className="av-white" cx="28.6" cy="30" r="3.8" strokeWidth="1.4" />
+        <path className="av-line" d="M31.4 32.8 L34.6 36" strokeWidth="2" strokeLinecap="round" />
+      </>
+    ),
+    pencil: (
+      <>
+        <path
+          className="av-white"
+          d="M25 35.6 L25.8 32.2 L32.6 25.4 L35.2 28 L28.4 34.8 Z"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+        <path className="av-line" d="M31.2 26.8 L33.8 29.4" strokeWidth="1.2" />
+      </>
+    ),
+    chart: (
+      <>
+        <rect
+          className="av-white"
+          x="24.4"
+          y="26.4"
+          width="10.4"
+          height="9.6"
+          rx="1.6"
+          strokeWidth="1.4"
+        />
+        <path
+          className="av-line"
+          d="M27 33.6 V31 M29.6 33.6 V29 M32.2 33.6 V30.2"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </>
+    ),
+  };
+  return props[prop];
+}
 
 function Drawing({
   agent,
@@ -304,7 +308,7 @@ function Drawing({
           />
           <Eyes />
           <Smile />
-          {props[prop]}
+          {propShape(prop)}
         </Figure>
       );
   }

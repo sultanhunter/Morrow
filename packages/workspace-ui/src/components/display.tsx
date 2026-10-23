@@ -131,92 +131,101 @@ export type Glyph =
   | "pause"
   | "minus"
   | "triangle";
-const ring = <circle cx="7" cy="7" r="5.2" stroke="currentColor" strokeWidth="1.6" />;
-const glyphs: Readonly<Record<Glyph, ReactNode>> = {
-  ring: (
-    <circle
-      cx="7"
-      cy="7"
-      r="5.2"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeDasharray="2.4 1.68"
-    />
-  ),
-  half: (
-    <>
-      {ring}
-      <path d="M7 3.6 A3.4 3.4 0 0 1 7 10.4 Z" fill="currentColor" />
-    </>
-  ),
-  check: (
-    <>
-      {ring}
-      <path
-        d="M4.7 7.2 L6.3 8.8 L9.4 5.5"
+// Built on call, not at import: a module-scope element would need React at load time.
+function glyphShape(glyph: Glyph): ReactNode {
+  const ring = <circle cx="7" cy="7" r="5.2" stroke="currentColor" strokeWidth="1.6" />;
+  const glyphs: Readonly<Record<Glyph, ReactNode>> = {
+    ring: (
+      <circle
+        cx="7"
+        cy="7"
+        r="5.2"
         stroke="currentColor"
         strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeDasharray="2.4 1.68"
       />
-    </>
-  ),
-  circle: ring,
-  plus: (
-    <>
-      {ring}
-      <path d="M7 4.6 V9.4 M4.6 7 H9.4" stroke="currentColor" strokeWidth="1.6" />
-    </>
-  ),
-  clock: (
-    <>
-      {ring}
-      <path d="M7 4.4 V7 L8.8 8.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </>
-  ),
-  dots: (
-    <>
-      {ring}
-      <path
-        d="M4.6 7h.01 M7 7h.01 M9.4 7h.01"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </>
-  ),
-  alert: (
-    <>
-      {ring}
-      <path d="M7 4.3 V7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="7" cy="9.8" r="0.95" fill="currentColor" />
-    </>
-  ),
-  pause: (
-    <>
-      {ring}
-      <path d="M5.8 5 V9 M8.2 5 V9" stroke="currentColor" strokeWidth="1.6" />
-    </>
-  ),
-  minus: (
-    <>
-      {ring}
-      <path d="M4.6 7 H9.4" stroke="currentColor" strokeWidth="1.6" />
-    </>
-  ),
-  triangle: (
-    <>
-      <path
-        d="M7 1.8 L12.6 11.6 H1.4 Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path d="M7 5.4 V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="7" cy="9.9" r="0.9" fill="currentColor" />
-    </>
-  ),
-};
+    ),
+    half: (
+      <>
+        {ring}
+        <path d="M7 3.6 A3.4 3.4 0 0 1 7 10.4 Z" fill="currentColor" />
+      </>
+    ),
+    check: (
+      <>
+        {ring}
+        <path
+          d="M4.7 7.2 L6.3 8.8 L9.4 5.5"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </>
+    ),
+    circle: ring,
+    plus: (
+      <>
+        {ring}
+        <path d="M7 4.6 V9.4 M4.6 7 H9.4" stroke="currentColor" strokeWidth="1.6" />
+      </>
+    ),
+    clock: (
+      <>
+        {ring}
+        <path
+          d="M7 4.4 V7 L8.8 8.2"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </>
+    ),
+    dots: (
+      <>
+        {ring}
+        <path
+          d="M4.6 7h.01 M7 7h.01 M9.4 7h.01"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </>
+    ),
+    alert: (
+      <>
+        {ring}
+        <path d="M7 4.3 V7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="7" cy="9.8" r="0.95" fill="currentColor" />
+      </>
+    ),
+    pause: (
+      <>
+        {ring}
+        <path d="M5.8 5 V9 M8.2 5 V9" stroke="currentColor" strokeWidth="1.6" />
+      </>
+    ),
+    minus: (
+      <>
+        {ring}
+        <path d="M4.6 7 H9.4" stroke="currentColor" strokeWidth="1.6" />
+      </>
+    ),
+    triangle: (
+      <>
+        <path
+          d="M7 1.8 L12.6 11.6 H1.4 Z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path d="M7 5.4 V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="7" cy="9.9" r="0.9" fill="currentColor" />
+      </>
+    ),
+  };
+  return glyphs[glyph];
+}
 export function BadgeGlyph({ glyph }: { readonly glyph: Glyph }) {
   return (
     <svg
@@ -228,7 +237,7 @@ export function BadgeGlyph({ glyph }: { readonly glyph: Glyph }) {
       aria-hidden="true"
       focusable="false"
     >
-      {glyphs[glyph]}
+      {glyphShape(glyph)}
     </svg>
   );
 }
