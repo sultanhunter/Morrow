@@ -504,13 +504,13 @@ test("plan and credits: the period and projection dates are the server's, not th
   assert.deepEqual([plan.periodStart, plan.projectedOn], ["Oct 1", "Oct 31"]);
   // Another month's view reads as that month: nothing in the copy is a fixed date.
   assert.equal(
-    sunriseCopy.plan.whereSub("Feb 1", "Today, 9:00 am", 12),
+    sunriseCopy.plan.whereSub("Feb 1", 12, "Today, 9:00 am"),
     "Feb 1 to today, 9:00 am · 12 credits",
   );
   assert.equal(sunriseCopy.plan.projected("Feb 28"), "Left on Feb 28, at this pace");
   const months = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/;
   const lines = Object.values(sunriseCopy.plan).flatMap((v) =>
-    typeof v === "function" ? [v("", "", 0)] : typeof v === "string" ? [v] : [],
+    typeof v === "function" ? [v(...sampleArgs(v))] : typeof v === "string" ? [v] : [],
   );
   for (const line of lines) assert.ok(!months.test(line), line);
 });
@@ -786,15 +786,14 @@ test("characters: no colour literal, a unique clip per use, a label or hidden", 
 // ADR-0032 item 4: internal terms stay out of the interface.
 const banned =
   /\b(?:runs?|tokens?|digests?|mandates?|tool calls?|workflows?|triggers?|webhooks?|queues?|retry|retries|scopes?|api|prompts?|sandbox(?:es)?|artifacts?|releases?|install(?:ed|s|ing)?|coordinator|delegat\w*|threads?)\b/i;
+// Copy functions take text and counts in turn (text first), so one sampler fits them all.
+function sampleArgs(fn) {
+  return Array.from({ length: fn.length }, (_, i) => (i % 2 ? 3 : "Sample"));
+}
 function strings(value, path, out) {
   if (typeof value === "string") out.push([path, value]);
   else if (typeof value === "function") {
-    const sample = value(
-      ...Array(value.length)
-        .fill(0)
-        .map((_, i) => (i % 2 ? 3 : "Sample")),
-    );
-    strings(sample, path + "()", out);
+    strings(value(...sampleArgs(value)), path + "()", out);
   } else if (Array.isArray(value)) value.forEach((v, i) => strings(v, `${path}[${i}]`, out));
   else if (value && typeof value === "object")
     for (const [k, v] of Object.entries(value)) strings(v, `${path}.${k}`, out);

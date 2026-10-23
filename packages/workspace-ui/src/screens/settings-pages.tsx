@@ -184,7 +184,7 @@ function PlanBody({ view }: { readonly view: PlanView }) {
         flush
       >
         <p className="sr-card-intro sr-meta">
-          {p.whereSub(view.periodStart, view.asOf, view.used)}
+          {p.whereSub(view.periodStart, view.used, view.asOf)}
         </p>
         <div
           id={`spend-panel-${by}`}

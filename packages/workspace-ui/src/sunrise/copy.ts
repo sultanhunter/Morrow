@@ -506,7 +506,7 @@ export const sunriseCopy = {
     extraNote:
       "Morrow, agents and specialists can’t raise a limit or turn on extra credits. They can only suggest it to you.",
     where: "Where your credits went",
-    whereSub: (from: string, asOf: string, used: number) =>
+    whereSub: (from: string, used: number, asOf: string) =>
       `${from} to ${asOf.toLowerCase()} · ${credits(used)}`,
     byProject: "By project",
     byHelper: "By helper",
