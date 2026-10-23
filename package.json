@@ -9,11 +9,13 @@
   "scripts": {
     "verify:foundation": "node scripts/verify-foundation.mjs",
     "plan:check": "node scripts/plan-check.mjs",
+    "graph": "node scripts/graph.mjs",
+    "graph:check": "node scripts/graph.mjs check",
     "test:foundation": "node --test tests/foundation.test.mjs",
     "catalogue:render": "node scripts/render-catalogue.mjs",
     "verify:contracts": "node scripts/verify-contracts.mjs",
     "test:contracts": "node --test tests/contracts.test.mjs",
-    "verify": "npm run verify:foundation && npm run plan:check && npm run verify:contracts && npm run verify:providers && npm run verify:billing && npm run verify:design && npm run verify:boundaries && npm run verify:delivery",
+    "verify": "npm run verify:foundation && npm run plan:check && npm run graph:check && npm run verify:contracts && npm run verify:providers && npm run verify:billing && npm run verify:design && npm run verify:boundaries && npm run verify:delivery",
     "test": "node scripts/run-tests.mjs",
     "verify:providers": "node scripts/verify-providers.mjs",
     "test:providers": "node --test tests/providers.test.mjs",
@@ -176,7 +178,8 @@
     "tsx": "4.20.6",
     "typescript": "5.9.3",
     "vite": "7.3.7",
-    "wrangler": "4.116.0"
+    "wrangler": "4.116.0",
+    "yaml": "2.9.1"
   },
   "workspaces": [
     "apps/*",
