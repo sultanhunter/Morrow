@@ -480,11 +480,22 @@ export const fixtureCases = [
     setup: async (page, width) => {
       await page.getByRole("heading", { name: "Yesterday at a glance" }).waitFor();
       expect((await page.locator("main .button-primary").count()) === 1, "one_primary");
-      if (width >= 760)
+      if (width >= 760) {
         expect(
-          (await page.getByRole("link", { name: /^Business Analyst\s*, agent$/ }).count()) === 1,
-          "team_member_named_as_agent",
+          (await page
+            .getByRole("link", { name: /^Business Analyst\s*, agent\s*, sample data$/ })
+            .count()) === 1,
+          "team_member_named_as_agent_and_sample",
         );
+        // Sample rows in the sidebar say so on screen: pinned projects, Team, credits.
+        const tags = page.locator(".sidebar .nav-sample-tag", { hasText: "Sample data" });
+        expect((await tags.count()) === 3, "sidebar_samples_labelled");
+        for (let i = 0; i < 3; i++) expect(await tags.nth(i).isVisible(), "sample_tag_visible");
+        expect(
+          (await page.getByRole("link", { name: /credits left\s*,\s*Sample data$/ }).count()) === 1,
+          "credits_named_as_sample",
+        );
+      }
     },
   }),
   fixtureCase("task", "brief", `/w/${ws}/work/task-titles`),

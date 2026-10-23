@@ -176,15 +176,26 @@ test("sidebar: the contract's seven destinations under their Sunrise labels, pat
   const links = [...html.matchAll(/<a href="([^"]+)"[^>]*class="nav-link"[^>]*>(.*?)<\/a>/g)].map(
     (m) => [m[1], m[2].replace(/<[^>]+>/g, "")],
   );
+  // The contract's sidebar order (ADR-0032 item 1: a board doesn't reorder it).
   assert.deepEqual(links, [
     ["/w/ws-1", "Home"],
-    ["/w/ws-1/inbox", "Inbox6, 6 waiting"],
     ["/w/ws-1/work", "Projects"],
+    ["/w/ws-1/inbox", "Inbox6, 6 waiting"],
     ["/w/ws-1/agents", "Team"],
-    ["/w/ws-1/knowledge", "Shop knowledge"],
     ["/w/ws-1/assets", "Files"],
+    ["/w/ws-1/knowledge", "Shop knowledge"],
     ["/w/ws-1/settings", "Settings"],
   ]);
+  const sidebar = JSON.parse(readFileSync("docs/contracts/workspace-routes.json", "utf8")).sidebar;
+  const pathOf = (route) =>
+    workspaceRoutes.routes
+      .find((r) => r.id === route)
+      .pattern.replace(":workspaceId", "ws-1")
+      .replace(/\/$/, "");
+  assert.deepEqual(
+    links.map(([href]) => href),
+    sidebar.primary.map((p) => pathOf(p.route)),
+  );
   // A task's ancestry is Work, so Projects is the current page.
   assert.match(html, /href="\/w\/ws-1\/work" class="nav-link" aria-current="page"/);
   // Morrow is always on the team; nothing else is invented without data.
@@ -197,6 +208,61 @@ test("sidebar: the contract's seven destinations under their Sunrise labels, pat
       .sidebar.primary.map((p) => p.id)
       .sort(),
   );
+});
+
+test("sidebar: Team rows and pins open the contract's targets, and sample rows say so", async () => {
+  const sidebar = JSON.parse(readFileSync("docs/contracts/workspace-routes.json", "utf8")).sidebar;
+  assert.deepEqual(
+    sidebar.people_and_agents.map((t) => [t.id, t.route, t.params ?? null]),
+    [
+      ["people", "settings_section", { section: "people" }],
+      ["agents", "agent", null],
+    ],
+  );
+  assert.equal(sidebar.pinned_projects.route, "project");
+  const footer = Object.fromEntries(sidebar.footer.map((f) => [f.id, f]));
+  assert.deepEqual(footer.credit_balance.params, { section: "usage" });
+  assert.equal(footer.credit_balance.display_only, true);
+  const preview = await createFixtureAdapter("home_preview").samples.home(fixtureWorkspace.id);
+  const html = render(
+    h(
+      ServicesProvider,
+      { value: { navigate: () => {} } },
+      h(Navigation, { workspaceId: "ws-1", currentRoute: "home", samples: preview.value }),
+    ),
+  );
+  const subLinks = [
+    ...html.matchAll(/<a href="([^"]+)"[^>]*class="nav-sublink[^"]*"[^>]*>(.*?)<\/a>/g),
+  ].map((m) => [m[1], m[2].replace(/<[^>]+>/g, "")]);
+  assert.deepEqual(subLinks, [
+    ["/w/ws-1/projects/proj-tote-ai", "Everyday Tote in AI answers, Ends Dec 4, sample data"],
+    ["/w/ws-1/projects/proj-autumn", "Autumn collection, Ends Nov 16, sample data"],
+    ["/w/ws-1/projects/proj-black-friday", "Black Friday sale, Ends Nov 30, sample data"],
+    ["/w/ws-1/work", "Everyday work"],
+    // Morrow, the Coordinator, is no installation: its row opens Ask Morrow.
+    ["/w/ws-1/ask", "Morrow, agent"],
+    ["/w/ws-1/agents/inst-sample-listings", "Listings, agent, sample data"],
+    ["/w/ws-1/agents/inst-sample-analyst", "Business Analyst, agent, sample data"],
+    ["/w/ws-1/agents/inst-sample-inventory", "Inventory, agent, sample data"],
+    ["/w/ws-1/agents/inst-sample-support", "Support, agent, sample data"],
+    // (A person's initials are their avatar's, hidden from screen readers.)
+    ["/w/ws-1/settings/people", "MCMaya Chen, online, sample data"],
+    ["/w/ws-1/settings/people", "LMLeo Martin, away, sample data"],
+  ]);
+  // One visible tag over each sample group, hidden from screen readers (each link says it).
+  assert.equal(
+    [...html.matchAll(/<li class="nav-sample" aria-hidden="true">.*?Sample data.*?<\/li>/g)].length,
+    2,
+  );
+  // Without samples there's no pin, no sample tag, and Morrow alone on the Team.
+  const plain = render(
+    h(
+      ServicesProvider,
+      { value: { navigate: () => {} } },
+      h(Navigation, { workspaceId: "ws-1", currentRoute: "home" }),
+    ),
+  );
+  assert.doesNotMatch(plain, /Sample data|sample data|nav-sublink-project/);
 });
 
 test("titles: renamed destinations keep the contract's routes and show the Sunrise names", () => {
