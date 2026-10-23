@@ -35,10 +35,12 @@ People see and run their work as projects: dated projects by end date, one Every
 
 ## Test checklist
 
-- [ ] `tests/workspace-ui-projects.test.mjs`: the switch (HTTP sends nothing; only preview scenarios compose), closed bodies, date and health helpers, end-date order, the start flow's digest check, stale and ineligible starts, and the screens rendered from the fixture.
-- [ ] `npm run -s typecheck`, `npm run -s verify`, `npm test`, `npm run format:check`.
-- [ ] `npm run ui:check` with the new `projects/*` cases (local Chromium is not installed on this Mac; CI is the authority).
+- [x] `tests/workspace-ui-projects.test.mjs` (13 tests): the switch (HTTP sends nothing, even composed by mistake; only the preview scenarios compose, and they change nothing else), closed bodies, days and words, end-date order, the start document's binding (target, digest, project, expiry), the fixture's single-use start and stale-after-edit, Finish and Stop under the revision shown, a teammate's actions off, and the screens rendered from the sample.
+- [x] `npm run -s typecheck`, `npm run -s verify`, `npm run format:check`, `npm run build`, `npm run verify:workspace-web` (no sample text in the production bundle), `typecheck:edge`, `edge:check`. `npm test`: 4,030 of 4,032 on the first run; the two failures (a Markdown name in a source comment, and the composition test's uncomposed list) are fixed and pass.
+- [x] `npm run ui:check`, run locally in the installed Edge because Playwright's own Chromium isn't installed on this Mac: 306 of 307 cases and walks pass, the 17 new `projects/*` cases and the `start_project` walk among them; the one failure is Edge asking for `/favicon.ico` on the first page it opens (a console line Playwright's Chromium doesn't produce). CI is the authority.
+- [x] Labs: none touched (no Worker, route, SQL or migration change).
 - [ ] AI review (separate context, same model family); hosted `foundation` on the PR head.
+- [ ] Owner: a look at the screens in the fixture (`?scenario=projects_preview`).
 
 ## Follow-ups
 
