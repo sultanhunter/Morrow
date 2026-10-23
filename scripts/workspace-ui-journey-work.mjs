@@ -275,6 +275,9 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
     );
   }
   const heading = (page, name) => page.getByRole("heading", { name }).waitFor({ timeout: T });
+  // ADR-0032 Home: the heading greets the person; the scope line names the workspace.
+  const home = (page, name) =>
+    page.getByText(`your day at ${name}`).first().waitFor({ timeout: T });
   const text = (page, value) => page.getByText(value).first().waitFor({ timeout: T });
   const morrowKeys = (page) =>
     page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith("morrow.")));
@@ -538,7 +541,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       await page.getByRole("button", { name: /Switch workspace/ }).click();
       await page.getByRole("menuitemradio", { name: M.w2 }).click();
       await page.waitForURL(`**/w/${ids.W2}`, { timeout: T });
-      await heading(page, M.w2);
+      await home(page, M.w2);
       const html = await page.content();
       h.check(
         "AC24:no_w1_marker_after_switch",
@@ -753,7 +756,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       const opened = later(page.waitForURL(/\/w\/[^/]+$/, { timeout: T }));
       await page.getByRole("button", { name: "Check again" }).click();
       await opened;
-      await heading(page, M.workspace);
+      await home(page, M.workspace);
       const sent = posts(c.log, "/organizations");
       h.check(
         "AC25:same_key_and_body_on_check_again",
@@ -802,7 +805,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       const refusedBody = await refused.json();
       await refetched;
       await reopened;
-      await heading(stale, M.workspace);
+      await home(stale, M.workspace);
       const keys = posts(c.log, "/organizations").map((r) => r.key);
       h.check(
         "AC25:fresh_key_409_refetches_and_opens",
@@ -950,7 +953,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         ) && (await morrowKeys(page)).length === 0,
       );
       await page.goto(`${origin}/w/${ids.W2}`);
-      await heading(page, M.w2);
+      await home(page, M.w2);
       h.check("AC31:other_workspace_still_works", new URL(page.url()).pathname === `/w/${ids.W2}`);
       // B's W2 goal grant survives: the read is the same field_denied 403 as before, not
       // the denial of a revoked grant.

@@ -1,84 +1,152 @@
-/* Components: buttons, fields, tags, notices, state views, dialogs, tabs and lists. */
+/* Components (ADR-0032 Sunrise): buttons, fields, badges, banners and notices, state
+   views, the dialog, pill tabs, cards, rows and chips. */
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 40px;
-  padding: var(--space-2) 14px;
-  border: 1px solid var(--color-control-border);
+  min-height: var(--target);
+  padding: 0 var(--space-4);
+  border: 0;
   border-radius: var(--radius-control);
-  background: var(--color-surface);
+  background: var(--color-secondary);
   color: var(--color-text);
+  font-size: var(--type-button-size);
+  line-height: var(--type-button-line);
+  font-weight: var(--type-button-weight);
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
   transition: background-color var(--motion-duration);
 }
 .button:hover:not(:disabled) {
-  background: var(--color-canvas);
+  background: var(--color-secondary-hover);
+  text-decoration: none;
 }
 .button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 .button-primary {
-  background: var(--color-text);
-  border-color: var(--color-text);
+  padding: 0 var(--space-5);
+  background: var(--color-primary);
+  box-shadow: var(--shadow-primary);
   color: var(--color-surface);
-  font-weight: 600;
 }
 .button-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-text) 88%, var(--color-surface));
+  background: var(--color-primary-hover);
 }
 .button-quiet {
-  border-color: transparent;
+  padding: 0 var(--space-3);
   background: transparent;
-  color: var(--color-accent);
+  color: var(--color-link);
+  font-weight: 550;
+}
+.button-quiet:hover:not(:disabled) {
+  background: var(--color-icon-hover);
+}
+.button-critical {
+  background: var(--color-critical);
+  color: var(--color-surface);
+}
+.button-critical:hover:not(:disabled) {
+  background: var(--color-critical-hover);
 }
 .icon-button {
-  min-width: 40px;
-  padding: var(--space-2);
+  min-width: var(--target);
+  padding: 0;
   color: var(--color-text);
 }
-.icon {
+.icon,
+.morrow-mark,
+.badge-glyph {
   flex-shrink: 0;
   vertical-align: middle;
 }
+.morrow-mark-sun {
+  fill: var(--color-marigold);
+  stroke: var(--color-text);
+}
+.morrow-mark-line {
+  stroke: var(--color-text);
+}
+
+/* Fields: label above, 44 px control with the 3:1 control border, help and errors below. */
+.form {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+.form > .field,
+.form > .notice,
+.form > .status-region {
+  justify-self: stretch;
+}
 .field {
   display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
+  gap: 6px;
+  min-width: 0;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  border: 0;
 }
-.field label {
-  font-weight: 500;
+.field label,
+.field legend {
+  padding: 0;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: var(--type-small-weight);
 }
-.field input,
+.field input:not([type="checkbox"]):not([type="radio"]),
 .field select,
 .field textarea {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 40px;
-  padding: 10px;
+  min-height: var(--target);
+  padding: 0 var(--space-3);
   border: 1px solid var(--color-control-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
+  line-height: var(--type-body-line);
 }
 .field textarea {
-  min-height: 120px;
+  min-height: 96px;
+  padding: 10px var(--space-3);
   resize: vertical;
 }
 .field small {
   color: var(--color-subdued);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
 }
 .field input:disabled,
 .field select:disabled,
 .field textarea:disabled {
-  background: var(--color-canvas);
+  background: var(--color-subtle);
+}
+.field [aria-invalid="true"] {
+  border-color: var(--color-critical-text);
 }
 .field-error {
-  color: var(--color-danger);
-  font-size: var(--type-caption-size);
+  color: var(--color-critical-text);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--target);
+  padding-right: var(--space-2);
+  cursor: pointer;
 }
 .criteria {
   margin: var(--space-4) 0 0;
@@ -106,21 +174,35 @@
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
+
+/* Badges: a glyph and a word in one of the closed tones; never colour alone. */
 .tag {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
-  border-radius: 5px;
-  font-size: var(--type-caption-size);
-  white-space: nowrap;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: var(--space-1) 10px;
+  border-radius: var(--radius-control);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: var(--type-small-weight);
+}
+.tag-word {
+  min-width: 0;
 }
 .tag-neutral {
-  background: var(--color-canvas);
-  color: var(--color-subdued);
+  background: var(--color-neutral-surface);
+  color: var(--color-neutral);
 }
+.tag-caution {
+  background: var(--color-caution-surface);
+  color: var(--color-caution);
+}
+.tag-info,
 .tag-accent {
-  background: var(--color-accent-surface);
-  color: var(--color-accent);
+  background: var(--color-info-surface);
+  color: var(--color-info);
 }
 .tag-success {
   background: var(--color-success-surface);
@@ -130,13 +212,14 @@
   background: var(--color-warning-surface);
   color: var(--color-warning);
 }
+.tag-critical,
 .tag-danger {
-  background: var(--color-danger-surface);
-  color: var(--color-danger);
+  background: var(--color-critical-surface);
+  color: var(--color-critical-text);
 }
 .person-label {
   color: var(--color-subdued);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-meta-size);
 }
 .meta {
   display: flex;
@@ -144,7 +227,55 @@
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-2);
-  font-size: var(--type-caption-size);
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+/* Banners (one idea, at most one per page) and the inline notices of forms and commands. */
+.banner {
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+.banner-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+}
+.banner-head .badge-glyph {
+  width: 20px;
+  height: 20px;
+}
+.banner-title {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 650;
+}
+.banner-body {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  color: var(--color-reading);
+  font-size: 15px;
+  line-height: 22px;
+}
+.banner-info .banner-head {
+  background: var(--color-info-tint);
+  color: var(--color-info);
+}
+.banner-warning .banner-head {
+  background: var(--color-warning-tint);
+  color: var(--color-warning);
+}
+.banner-success .banner-head {
+  background: var(--color-success-tint);
+  color: var(--color-success);
+}
+.banner-critical .banner-head {
+  background: var(--color-critical-tint);
+  color: var(--color-critical-text);
 }
 .notice {
   display: flex;
@@ -153,33 +284,38 @@
   justify-content: space-between;
   gap: var(--space-3);
   margin: var(--space-4) 0;
-  padding: var(--space-3) 14px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  font-size: 15px;
+  line-height: 22px;
 }
 .notice p {
   flex: 1 1 240px;
 }
 .notice-title {
   flex-basis: 100%;
-  font-size: var(--type-reading-size);
+  font-size: var(--type-subhead-size);
 }
 .notice-info {
-  background: var(--color-accent-surface);
-  color: var(--color-accent);
+  background: var(--color-info-tint);
+  color: var(--color-info);
 }
 .notice-warning {
-  background: var(--color-warning-surface);
+  background: var(--color-warning-tint);
   color: var(--color-warning);
 }
 .notice-danger {
-  background: var(--color-danger-surface);
-  color: var(--color-danger);
+  background: var(--color-critical-tint);
+  color: var(--color-critical-text);
+}
+.notice .button {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-selected);
 }
 .status-region {
   margin: var(--space-3) 0;
   color: var(--color-success);
-  font-weight: 500;
+  font-weight: 550;
 }
 .status-region.is-empty {
   margin: 0;
@@ -196,78 +332,247 @@
 }
 .state-title {
   color: var(--color-text);
-  font-size: var(--type-reading-size);
 }
+
+/* The native modal dialog. */
 .dialog {
   width: calc(100% - 32px);
-  max-width: 640px;
+  max-width: 560px;
   max-height: calc(100dvh - 48px);
   padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border: 0;
+  border-radius: var(--radius-modal);
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: 0 20px 65px color-mix(in srgb, var(--color-text) 15%, transparent);
+  box-shadow: var(--shadow-modal);
   overflow: auto;
 }
 .dialog::backdrop {
-  background: color-mix(in srgb, var(--color-text) 38%, transparent);
+  background: var(--color-scrim);
 }
 .dialog-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  min-height: 56px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-5);
+  border-bottom: 1px solid var(--color-divider);
 }
 .dialog-body {
-  padding: var(--space-4) var(--space-5) var(--space-5);
+  padding: var(--space-5);
 }
+.dialog-footer {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-divider);
+}
+
+/* Shopify pill tabs and the segmented pane switch. */
 .tabs {
   display: flex;
-  gap: var(--space-4);
+  gap: var(--space-1);
   margin-top: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  padding: 2px;
   overflow-x: auto;
 }
 .tabs [role="tab"] {
-  min-height: 44px;
-  padding: var(--space-3) var(--space-2);
+  min-height: var(--target);
+  padding: 0 var(--space-4);
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 4px 4px 0 0;
-  background: none;
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--color-subdued);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
 }
-.tabs [role="tab"][aria-selected="true"] {
-  border-bottom-color: var(--color-accent);
-  background: var(--color-accent-surface);
+.tabs [role="tab"]:hover {
+  background: var(--color-hover);
   color: var(--color-text);
-  font-weight: 600;
+}
+.tabs [role="tab"][aria-selected="true"] {
+  background: var(--color-surface);
+  box-shadow: var(--shadow-selected);
+  color: var(--color-text);
+  font-weight: 650;
 }
 .tab-panel {
   padding-top: var(--space-4);
 }
 .pane-switch {
   display: none;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 2px;
   margin-top: var(--space-4);
+  padding: 2px;
+  border-radius: var(--radius-inner);
+  background: var(--color-secondary);
 }
 .pane-switch .button {
   flex: 1 1 0;
+  background: transparent;
+  color: var(--color-neutral);
+  font-weight: 500;
 }
 .pane-switch .button[aria-pressed="true"] {
-  background: var(--color-accent-surface);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-selected);
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+/* Cards and the option 1 panels, which render as Sunrise cards. */
+.card,
+.panel {
+  min-width: 0;
+  padding: var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+.panel + .panel {
+  margin-top: var(--space-4);
+}
+.card-head,
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: 36px;
+  margin-bottom: var(--space-2);
+}
+.card-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 550;
+}
+.card-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-meta-weight);
+}
+.group-label {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   font-weight: 600;
 }
+
+/* Rows: full-bleed lists inside a card, starting with a rule. */
+.row-list {
+  margin: 0 calc(-1 * var(--space-5));
+  border-top: 1px solid var(--color-rule);
+}
+.row-list > li + li {
+  border-top: 1px solid var(--color-rule);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-height: 76px;
+  padding: var(--space-3) var(--space-5);
+  color: var(--color-text);
+}
+.row-link {
+  text-decoration: none;
+}
+.row-link:hover {
+  background: var(--color-subtle);
+  text-decoration: none;
+}
+.row-link > .icon:last-child {
+  color: var(--color-subdued);
+}
+.row-lead {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-inner);
+  background: var(--color-subtle);
+  color: var(--color-reading);
+}
+.row-text {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 2px;
+  min-width: 0;
+}
+.row-title {
+  font-weight: 550;
+}
+.row-sub {
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-meta-weight);
+}
+.row-when {
+  flex: none;
+  width: 84px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-3);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--target);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-selected);
+  color: var(--color-text);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: var(--type-small-weight);
+  text-decoration: none;
+}
+.chip:hover {
+  background: var(--color-subtle);
+  text-decoration: none;
+}
+.chip .badge-glyph {
+  color: var(--color-caution);
+}
+.chip-alert .badge-glyph {
+  color: var(--color-warning);
+}
+
+/* The option 1 lists that screens not yet moved to rows still use. */
 .item-list {
   display: grid;
   margin-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-rule);
 }
 .item {
   display: flex;
@@ -275,9 +580,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2) var(--space-4);
-  min-height: 48px;
+  min-height: 56px;
   padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-rule);
 }
 .item-stacked {
   display: grid;
@@ -285,10 +590,10 @@
 }
 .item-link {
   display: inline-flex;
-  min-height: 24px;
   align-items: center;
-  font-weight: 500;
   min-width: 0;
+  min-height: var(--target);
+  font-weight: 550;
 }
 .item-actions {
   display: flex;
@@ -307,20 +612,11 @@
   margin-top: var(--space-4);
 }
 .breadcrumb {
-  margin-bottom: var(--space-3);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
 }
 .breadcrumb a {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  color: var(--color-subdued);
-}
-/* controlBorder meets 3:1 against the white surface only. On the canvas and on tinted
-   notices, control boundaries use the subdued token, which meets 3:1 there too. */
-.sidebar .button,
-.switcher-button,
-.notice .button,
-.fixture-controls select {
-  border-color: var(--color-subdued);
+  min-height: var(--target);
 }

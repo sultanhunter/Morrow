@@ -21,7 +21,9 @@ const luminance = (h) =>
 const opaque = (name) => /^#[0-9A-Fa-f]{6}$/.test(tokens.color[name] ?? "");
 const contrasts = tokens.contrast_pairs.map(([foreground, background, minimum]) => {
   if (!opaque(foreground) || !opaque(background) || ![3, 4.5].includes(minimum))
-    throw Error(`Contrast pair is not two opaque tokens with a floor of 3 or 4.5: ${foreground}/${background}`);
+    throw Error(
+      `Contrast pair is not two opaque tokens with a floor of 3 or 4.5: ${foreground}/${background}`,
+    );
   const a = luminance(tokens.color[foreground]),
     b = luminance(tokens.color[background]);
   const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);

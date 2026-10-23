@@ -6,9 +6,7 @@ import type { ConnectionsView, HomeSamplesView, Id, Page, QuestionView } from ".
 import { useRead, useServices, type ReadState } from "./services";
 
 /** Open questions for this person: the Inbox items that exist today. */
-export function useOpenQuestions(
-  ws: Id,
-): readonly [ReadState<Page<QuestionView>>, () => void] {
+export function useOpenQuestions(ws: Id): readonly [ReadState<Page<QuestionView>>, () => void] {
   const services = useServices();
   return useRead(`${ws}|questions.mine|first`, () =>
     services.port.work.listMyOpenQuestions(ws, null),

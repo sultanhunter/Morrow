@@ -1,6 +1,6 @@
 # Option 1 component baseline — candidate
 
-**Replaced by Sunrise (ADR-0032, 2026-10-23).** This baseline shows Visual option 1. It and `tokens.json` stay the candidate for the merged port until T7 (`docs/plan/mvp.md`) replaces them with the Sunrise baseline; the behaviour rules in the table below carry over.
+**Replaced by Sunrise (ADR-0032, 2026-10-23).** This baseline shows Visual option 1. Since T7 PR 14, `tokens.json` holds the Sunrise values (schema 2) and `docs/design/sunrise.md` is the look the port is built on. This page stays for the behaviour rules in the table below, which carry over, until T7 lands the Sunrise baseline; its widths, colours and type are option 1's.
 
 Canonical sequence 24; P02.T02. Codex self-review, 6 October 2026. Merchant/reviewer baseline approval pending P02.T04. tokens.json is the machine-readable palette, spacing, typography and width reference; the selected image is docs/references/visual-option-1.png. Supporting UI Page sequence 8 is subordinate to the canonical standalone/thin-connector scope.
 

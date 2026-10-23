@@ -156,7 +156,8 @@ export const copy = {
     storeTitle: "Your store",
     storeOpen: "See connection",
     storeConnect: "Connect your store",
-    noStore: "No store is connected yet. Connect your Shopify store so agents can suggest changes for you to approve.",
+    noStore:
+      "No store is connected yet. Connect your Shopify store so agents can suggest changes for you to approve.",
     footer: "Agents never change your store or reply to a customer without your OK.",
     prepaymentTitle: "Paid work",
     prepayment:

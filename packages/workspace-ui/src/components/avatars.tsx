@@ -63,16 +63,42 @@ function Figure({ clip, children }: { readonly clip: string; readonly children?:
 const props: Readonly<Record<SpecialistProp, ReactNode>> = {
   calendar: (
     <>
-      <rect className="av-white" x="24.6" y="26.6" width="9.8" height="9" rx="1.6" strokeWidth="1.4" />
+      <rect
+        className="av-white"
+        x="24.6"
+        y="26.6"
+        width="9.8"
+        height="9"
+        rx="1.6"
+        strokeWidth="1.4"
+      />
       <path className="av-line" d="M24.6 29.6 H34.4" strokeWidth="1.2" />
-      <path className="av-line" d="M27.2 25.2 V27.6 M31.8 25.2 V27.6" strokeWidth="1.3" strokeLinecap="round" />
+      <path
+        className="av-line"
+        d="M27.2 25.2 V27.6 M31.8 25.2 V27.6"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
       <circle className="av-ink" cx="29.5" cy="32.6" r="1.2" />
     </>
   ),
   envelope: (
     <>
-      <rect className="av-white" x="24.2" y="27.4" width="11" height="8" rx="1.4" strokeWidth="1.4" />
-      <path className="av-line" d="M24.8 28.2 L29.7 31.8 L34.6 28.2" strokeWidth="1.2" strokeLinejoin="round" />
+      <rect
+        className="av-white"
+        x="24.2"
+        y="27.4"
+        width="11"
+        height="8"
+        rx="1.4"
+        strokeWidth="1.4"
+      />
+      <path
+        className="av-line"
+        d="M24.8 28.2 L29.7 31.8 L34.6 28.2"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
     </>
   ),
   magnifier: (
@@ -83,14 +109,32 @@ const props: Readonly<Record<SpecialistProp, ReactNode>> = {
   ),
   pencil: (
     <>
-      <path className="av-white" d="M25 35.6 L25.8 32.2 L32.6 25.4 L35.2 28 L28.4 34.8 Z" strokeWidth="1.3" strokeLinejoin="round" />
+      <path
+        className="av-white"
+        d="M25 35.6 L25.8 32.2 L32.6 25.4 L35.2 28 L28.4 34.8 Z"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
       <path className="av-line" d="M31.2 26.8 L33.8 29.4" strokeWidth="1.2" />
     </>
   ),
   chart: (
     <>
-      <rect className="av-white" x="24.4" y="26.4" width="10.4" height="9.6" rx="1.6" strokeWidth="1.4" />
-      <path className="av-line" d="M27 33.6 V31 M29.6 33.6 V29 M32.2 33.6 V30.2" strokeWidth="1.5" strokeLinecap="round" />
+      <rect
+        className="av-white"
+        x="24.4"
+        y="26.4"
+        width="10.4"
+        height="9.6"
+        rx="1.6"
+        strokeWidth="1.4"
+      />
+      <path
+        className="av-line"
+        d="M27 33.6 V31 M29.6 33.6 V29 M32.2 33.6 V30.2"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </>
   ),
 };
@@ -116,10 +160,20 @@ function Drawing({
             <path d="M7.5 27.5 H32.5" />
             <path d="M14 31.5 H26" />
           </g>
-          <path className="av-sun" d="M11 27.5 A9 9 0 0 1 29 27.5 Z" strokeWidth="1.6" strokeLinejoin="round" />
+          <path
+            className="av-sun"
+            d="M11 27.5 A9 9 0 0 1 29 27.5 Z"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
           <circle className="av-ink" cx="16.9" cy="23.2" r="1.1" />
           <circle className="av-ink" cx="23.1" cy="23.2" r="1.1" />
-          <path className="av-line" d="M18 25.2 Q20 26.6 22 25.2" strokeWidth="1.3" strokeLinecap="round" />
+          <path
+            className="av-line"
+            d="M18 25.2 Q20 26.6 22 25.2"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
         </>
       );
     case "listings":
@@ -149,7 +203,15 @@ function Drawing({
           />
           <Eyes />
           <Smile d="M17.4 26.2 Q20 28.4 22.6 26.2" />
-          <rect className="av-white" x="24.6" y="25.6" width="9.6" height="11" rx="1.6" strokeWidth="1.4" />
+          <rect
+            className="av-white"
+            x="24.6"
+            y="25.6"
+            width="9.6"
+            height="11"
+            rx="1.6"
+            strokeWidth="1.4"
+          />
           <rect className="av-ink" x="27.4" y="24.4" width="4" height="2.6" rx="0.9" />
           <path
             className="av-line"
@@ -163,11 +225,23 @@ function Drawing({
     case "inventory":
       return (
         <Figure clip={clip}>
-          <path className="av-ink" d="M12.4 18 C12.4 13.2 15.8 10.8 20 10.8 C24.2 10.8 27.6 13.2 27.6 18 Z" />
+          <path
+            className="av-ink"
+            d="M12.4 18 C12.4 13.2 15.8 10.8 20 10.8 C24.2 10.8 27.6 13.2 27.6 18 Z"
+          />
           <path className="av-line" d="M25.5 18 H31.2" strokeWidth="2" strokeLinecap="round" />
           <Eyes y={22.6} />
           <Smile />
-          <rect className="av-prop" x="24.2" y="27" width="10.6" height="8.6" rx="1" strokeWidth="1.4" strokeLinejoin="round" />
+          <rect
+            className="av-prop"
+            x="24.2"
+            y="27"
+            width="10.6"
+            height="8.6"
+            rx="1"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
           <path className="av-line" d="M24.2 29.8 H34.8" strokeWidth="1.2" />
           <path className="av-tape" d="M29.5 27 V31.6" strokeWidth="1.6" />
         </Figure>
@@ -175,10 +249,20 @@ function Drawing({
     case "support":
       return (
         <Figure clip={clip}>
-          <path className="av-line" d="M11.8 22 C11.8 12.6 28.2 12.6 28.2 22" strokeWidth="1.8" strokeLinecap="round" />
+          <path
+            className="av-line"
+            d="M11.8 22 C11.8 12.6 28.2 12.6 28.2 22"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
           <rect className="av-ink" x="9.8" y="20.2" width="4" height="6" rx="1.8" />
           <rect className="av-ink" x="26.2" y="20.2" width="4" height="6" rx="1.8" />
-          <path className="av-line" d="M12.2 26 Q12.8 30.4 17.2 30.4" strokeWidth="1.4" strokeLinecap="round" />
+          <path
+            className="av-line"
+            d="M12.2 26 Q12.8 30.4 17.2 30.4"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
           <circle className="av-ink" cx="17.8" cy="30.4" r="1.2" />
           <Eyes y={22.2} />
           <Smile d="M17.4 25.6 Q20 27.8 22.6 25.6" />
@@ -189,9 +273,19 @@ function Drawing({
         <Figure clip={clip}>
           <Eyes />
           <Smile />
-          <path className="av-white" d="M24.6 30 L32.6 25.8 V36.2 L24.6 32 Z" strokeWidth="1.4" strokeLinejoin="round" />
+          <path
+            className="av-white"
+            d="M24.6 30 L32.6 25.8 V36.2 L24.6 32 Z"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
           <rect className="av-ink" x="22.4" y="29.6" width="2.6" height="2.8" rx="0.8" />
-          <path className="av-line" d="M34.8 28.4 L36.6 27.4" strokeWidth="1.3" strokeLinecap="round" />
+          <path
+            className="av-line"
+            d="M34.8 28.4 L36.6 27.4"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
           <path className="av-line" d="M35.2 31 H37.2" strokeWidth="1.3" strokeLinecap="round" />
         </Figure>
       );
@@ -280,13 +374,7 @@ export function SpecialistPill() {
 }
 
 /** An agent's name followed by its pill (the byline pattern). */
-export function AgentName({
-  agent,
-  name,
-}: {
-  readonly agent: AgentKind;
-  readonly name?: string;
-}) {
+export function AgentName({ agent, name }: { readonly agent: AgentKind; readonly name?: string }) {
   const shown = name ?? (agent === "specialist" ? "Specialist" : agentNames[agent]);
   return (
     <span className="agent-name">

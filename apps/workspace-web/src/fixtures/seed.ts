@@ -245,10 +245,22 @@ export const fixtureHomeSamples: HomeSamplesView = {
     },
   ],
   everyday: [
-    { name: "Product pages", summary: "Every product has a complete listing · 94%", health: "on_track" },
+    {
+      name: "Product pages",
+      summary: "Every product has a complete listing · 94%",
+      health: "on_track",
+    },
     { name: "Stock", summary: "Best sellers with 2+ weeks of stock · 3 at risk", health: "behind" },
-    { name: "Customer emails", summary: "Replied within a day · 9 of 10 this week", health: "on_track" },
-    { name: "Sales and numbers", summary: "Repeat customers 18% · Goal 25% by Dec 31", health: "on_track" },
+    {
+      name: "Customer emails",
+      summary: "Replied within a day · 9 of 10 this week",
+      health: "on_track",
+    },
+    {
+      name: "Sales and numbers",
+      summary: "Repeat customers 18% · Goal 25% by Dec 31",
+      health: "on_track",
+    },
     { name: "Quick tasks", summary: "2 open · One-off jobs that fit nowhere else", health: null },
   ],
   team: {

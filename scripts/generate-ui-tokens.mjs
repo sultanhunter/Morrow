@@ -27,7 +27,10 @@ const hex = /^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 const fontStack = /^[A-Za-z0-9 ,'-]+$/;
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const exactKeys = (value, keys, code) => {
-  if (!object(value) || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort()))
+  if (
+    !object(value) ||
+    JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())
+  )
     fail(code);
 };
 // Top-level keys of schema 2; anything else is refused.

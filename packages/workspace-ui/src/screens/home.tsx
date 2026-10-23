@@ -10,7 +10,13 @@ import { useMemo } from "react";
 import { copy } from "../copy";
 import type { GoalView, Id, QuestionView, WorkspaceView } from "../model";
 import { useRead, useServices } from "../services";
-import { primaryStore, useConnections, useHomeSamples, useOpenQuestions, waitingCount } from "../workspace-data";
+import {
+  primaryStore,
+  useConnections,
+  useHomeSamples,
+  useOpenQuestions,
+  waitingCount,
+} from "../workspace-data";
 import { RouteLink } from "../components/controls";
 import { BadgeGlyph, Icon, RecordText, StatusTag, Tag } from "../components/display";
 import { Banner, StateView, outcomeState } from "../components/feedback";
@@ -121,7 +127,9 @@ function NeedsYouCard({
 
 function RecentWorkCard({ ws }: { readonly ws: Id }) {
   const services = useServices();
-  const [goals, reload] = useRead(`${ws}|goals|first`, () => services.port.work.listGoals(ws, null));
+  const [goals, reload] = useRead(`${ws}|goals|first`, () =>
+    services.port.work.listGoals(ws, null),
+  );
   return (
     <section className="card panel" data-card="work" aria-labelledby="home-work-title">
       <div className="card-head">
@@ -139,7 +147,9 @@ function RecentWorkCard({ ws }: { readonly ws: Id }) {
                 <li key={g.id} className="row">
                   <span className="row-text">
                     <RecordText className="row-title">{g.objective}</RecordText>
-                    <span className="row-sub">{copy.home.updated(homeDate(g.updatedAt, "plain"))}</span>
+                    <span className="row-sub">
+                      {copy.home.updated(homeDate(g.updatedAt, "plain"))}
+                    </span>
                   </span>
                   <StatusTag family="goal" status={g.status} />
                 </li>

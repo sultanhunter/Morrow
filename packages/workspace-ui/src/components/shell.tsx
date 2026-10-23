@@ -10,7 +10,13 @@ import { copy } from "../copy";
 import type { AgentKind, HomeSamplesView, Id, WorkspaceSummary, WorkspaceView } from "../model";
 import { useServices } from "../services";
 import { breakpoints } from "../tokens";
-import { primaryStore, useConnections, useHomeSamples, useOpenQuestions, waitingCount } from "../workspace-data";
+import {
+  primaryStore,
+  useConnections,
+  useHomeSamples,
+  useOpenQuestions,
+  waitingCount,
+} from "../workspace-data";
 import { AgentAvatar, PersonAvatar, StoreTile, agentNames } from "./avatars";
 import { Button, RouteLink, trapTab } from "./controls";
 import { Icon, MorrowMark, type IconName } from "./display";

@@ -56,7 +56,11 @@ const paths = {
   forward: ["M9 6 L15 12 L9 18"],
   back: ["M15 6 L9 12 L15 18"],
   plus: ["M12 5v14 M5 12h14"],
-  external: ["M14 4h6v6", "M20 4 11 13", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"],
+  external: [
+    "M14 4h6v6",
+    "M20 4 11 13",
+    "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
+  ],
   document: ["M5 2h9l5 5v15H5z", "M14 2v6h5"],
 } as const;
 export type IconName = keyof typeof paths;
@@ -305,7 +309,9 @@ export function StatusTag({
   readonly family: "task" | "goal" | "question" | "installation" | "run" | "runProduct";
   readonly status: string;
 }) {
-  const [tone, glyph] = Object.hasOwn(tones, status) ? tones[status]! : (["neutral", "circle"] as const);
+  const [tone, glyph] = Object.hasOwn(tones, status)
+    ? tones[status]!
+    : (["neutral", "circle"] as const);
   return (
     <Tag tone={tone} glyph={glyph}>
       <span dir="auto">{statusLabel(family, status)}</span>
