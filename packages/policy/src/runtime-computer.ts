@@ -9,9 +9,10 @@
 // browser. A job is fixed Python run by the profile's own command as the non-root user
 // `agent`; nothing a caller sends chooses the command, the user, the environment, the
 // network, the template or a limit. Its inputs are closed extract kinds with fixed column
-// allowlists (never a customer field or id, an order id, the shop's domain or any URL), and
-// its outputs are only PNG, CSV (formula cells escaped) and XLSX (no macros, links or
-// objects), checked by content and size and returned as untrusted downloads.
+// allowlists (never a customer field or id, an order id, the shop's domain or any URL), its
+// script gets the same content screen as a cell, and its outputs are only PNG, CSV (formula
+// cells escaped) and XLSX (no macros, links, objects or remote formulas, with every part read
+// as strict XML), checked by content and size and returned as untrusted downloads.
 
 /** The one execution profile (ADR-0029 item 1). */
 export const computerProfile = Object.freeze({

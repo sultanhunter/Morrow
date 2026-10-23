@@ -6,11 +6,11 @@
 //   * RuntimeJob@1 is closed: any unknown key, value or bound refuses the whole job, and nothing
 //     in it names a command, template, network, environment or limit.
 //   * Inputs are closed extract kinds with fixed columns; a URL, a shop domain, a workers.dev
-//     host, a presigned-URL parameter or an email refuses the job; customer fields cannot be
-//     expressed at all.
+//     host, a presigned-URL parameter or an email in a cell or in the script refuses the job;
+//     customer fields cannot be expressed at all.
 //   * Outputs: PNG (structure and CRCs checked, metadata chunks dropped), CSV (formula cells
-//     escaped, numbers kept) and XLSX (no macros, objects, external links or remote formulas;
-//     zip tricks refused), each within its size.
+//     escaped, numbers kept) and XLSX (no macros, objects, external links or remote formulas
+//     in any part, every part read as strict XML; zip tricks refused), each within its size.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
