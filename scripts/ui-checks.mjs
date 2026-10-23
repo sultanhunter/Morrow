@@ -318,6 +318,20 @@ export const fixtureCases = [
     },
   }),
   fixtureCase("settings", "model_default", `/w/${ws}/settings/governance`),
+  // ADR-0032: a section with no screen yet, inside the Settings frame, whose card lists
+  // Activity under Settings (a placeholder, not a link) and never in the sidebar.
+  fixtureCase("settings", "section_frame", `/w/${ws}/settings/people`, {
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "People and roles" }).waitFor();
+      const settings = page.getByRole("navigation", { name: "Settings" });
+      expect((await settings.getByRole("link").count()) === 5, "five_settings_links");
+      expect((await settings.getByText("Activity").count()) === 1, "activity_listed");
+      expect(
+        (await page.locator('nav[aria-label="Main"]').getByText("Activity").count()) === 0,
+        "activity_not_in_sidebar",
+      );
+    },
+  }),
   fixtureCase("account", "form", "/", { scenario: "account_form" }),
   fixtureCase("account", "chooser", "/", { scenario: "account_chooser" }),
   fixtureCase("account", "invite", "/", { scenario: "account_invite" }),
