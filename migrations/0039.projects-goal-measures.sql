@@ -574,7 +574,8 @@ END $$;
 -- workspace.goal.revise (ADR-0033 item 5; human_only, the Worker's kernel decided the verb:
 -- own -> execute, another member's record -> administer). The objective, the date (Extend),
 -- the targets, questions and assistant, within 3 measured goals; a stored startRef stays
--- null. An area keeps no date, a dated project keeps one, and Quick tasks is never revised.
+-- null. An area keeps no date, a dated project keeps one, and Quick tasks is never revised;
+-- a record with neither a date nor an area (a v1 goal, not a project) is never revised here.
 CREATE FUNCTION morrow_work.cmd_goal_revise(p_command_id text,p_request_digest text,p_correlation_id text,p_goal_id text,
  p_expected_revision text,p_basis text,p_objective text,p_due_at text,p_success_criteria text)
 RETURNS TABLE(outcome text,result text)
@@ -607,7 +608,7 @@ BEGIN
  IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
  IF g.revision<>p_expected_revision::bigint THEN RETURN QUERY SELECT 'revision_conflict'::text,NULL::text; RETURN; END IF;
  IF g.status NOT IN ('draft','active','paused') OR g.area_template_id='quick_tasks'
-  OR (g.due_at IS NULL)<>(v_due IS NULL) THEN
+  OR (g.due_at IS NULL AND g.area_template_id IS NULL) OR (g.due_at IS NULL)<>(v_due IS NULL) THEN
   RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN;
  END IF;
  IF p_basis='own' AND (g.owner_principal_id<>p.principal_id OR g.owner_membership_id<>p.membership_id) THEN

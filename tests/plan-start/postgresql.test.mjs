@@ -784,6 +784,20 @@ test("a person's hand check, revise and the per-viewer progress", async () => {
     409,
     "an old expectedRevision",
   );
+  // A plain v1 goal record (neither a date nor an area) is not a project: never revised here.
+  const plain = insertGoal(
+    P.A,
+    "goal_plain",
+    [areaCriteria()[0]].map(({ key, measure, ...c }) => c),
+  );
+  assert.ok(plain.ok, plain.stderr);
+  const plainRevise = await send(open, P.A, "POST", "/goals/goal_plain/revise", {
+    expectedRevision: 1,
+    objective: "Grow repeat purchases",
+    dueAt: null,
+    successCriteria: areaCriteria(),
+  });
+  assert.equal(plainRevise.status, 409);
   // Quick tasks is never revised.
   const quickRevision = Number(
     db.sql(`SELECT revision FROM morrow_work.goals WHERE id=${literal(quick.goalId)};`),
