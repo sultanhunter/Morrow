@@ -501,7 +501,7 @@ export type SettingsSection =
  * The Settings menu, in the board's order. The route contract's `settings_section` has six
  * values (people, governance, usage, billing, notifications, stores) and no `email` or
  * `activity`: until it does (a route-contract change, the brief's open question 1), Email
- * addresses uses `stores` (Shopify keeps the sender email under Store details), Activity
+ * addresses uses `stores` (the shop's own addresses), Activity
  * uses `governance` (the stops and the record of who did what), and M3's model default
  * moves to `billing` (what a product may cost). One rename re-homes each.
  */
