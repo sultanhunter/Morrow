@@ -11,7 +11,7 @@ import type {
 // (its direction, unit, the read tags of its values and their data class) is fixed here in
 // code, never by a request, a card or a model. T5's metric catalogue replaces these entries
 // with its own MetricDefinition rows; until then this is the launch subset the flow needs
-// (`docs/plan/mvp.md` T5: product facts complete, replied within a day as customer data,
+// (the MVP plan's T5: product facts complete, replied within a day as customer data,
 // days of stock cover), plus one entry each for the Sales and Promotions areas.
 
 export type GoalDirection = "at_least" | "at_most";
