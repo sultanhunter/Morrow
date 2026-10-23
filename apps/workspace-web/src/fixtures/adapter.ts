@@ -34,7 +34,14 @@ import {
   fixtureWorkspace,
   people,
 } from "./seed";
-import { scenarios, uncomposedIn, unlinkedStoreIn, type ScenarioName } from "./scenarios";
+import {
+  scenarios,
+  teamViewerIn,
+  uncomposedIn,
+  unlinkedStoreIn,
+  type ScenarioName,
+} from "./scenarios";
+import { createTeamFixture } from "./team";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -168,7 +175,21 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   // product:13 is "too long" and fails, as an input over the cap would.
   const runs: RunDetailView[] = [];
   const runId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  // T7 PR 16: Team, agent pages, Add agents, Settings, Shop knowledge and Files.
+  const teamGroups = createTeamFixture({
+    viewer: teamViewerIn[scenario] ?? "owner",
+    empty: scenario === "empty",
+    isWorkspace: ws,
+    workspaceDefault: () => ({
+      model: modelDefault.model,
+      effort: modelDefault.effort,
+      revision: modelDefault.revision,
+    }),
+    reply,
+    command,
+  });
   return {
+    ...teamGroups,
     session: {
       startSignIn: () => reply("session.startSignIn", () => ok({ navigateTo: "/" })),
       signOut: () => reply("session.signOut", () => ok("ended" as const)),

@@ -574,6 +574,17 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
     },
     work,
     people: { list: unbuilt },
+    // T7 PR 16: no server routes yet (T2, T4, T11, T13). Uncomposed: nothing is sent.
+    team: {
+      overview: unbuilt,
+      agent: unbuilt,
+      reviseThinking: unbuilt,
+      catalogue: unbuilt,
+      addDocument: unbuilt,
+      addConfirm: unbuilt,
+    },
+    settings: { plan: unbuilt, emailAddresses: unbuilt },
+    library: { knowledge: unbuilt, files: unbuilt },
     connections: {
       list: gated("connections.list", async (ws: string) => {
         const request = requests.connections(ws);

@@ -3,6 +3,7 @@
 // imported once by each app entry as `@morrow/workspace-ui/styles.css`.
 export * from "./port";
 export * from "./model";
+export * from "./team-model";
 export { copy, statusLabel } from "./copy";
 export { breakpoints, referenceWidths, motionDurationMs } from "./tokens";
 export * from "./services";

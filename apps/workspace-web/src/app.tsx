@@ -675,5 +675,21 @@ export function guardPort(
       list: watch(port.models.list.bind(port.models), first),
       reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
     },
+    team: {
+      overview: watch(port.team.overview.bind(port.team), first),
+      agent: watch(port.team.agent.bind(port.team), first),
+      reviseThinking: watch(port.team.reviseThinking.bind(port.team), first),
+      catalogue: watch(port.team.catalogue.bind(port.team), first),
+      addDocument: watch(port.team.addDocument.bind(port.team), first),
+      addConfirm: watch(port.team.addConfirm.bind(port.team), first),
+    },
+    settings: {
+      plan: watch(port.settings.plan.bind(port.settings), first),
+      emailAddresses: watch(port.settings.emailAddresses.bind(port.settings), first),
+    },
+    library: {
+      knowledge: watch(port.library.knowledge.bind(port.library), first),
+      files: watch(port.library.files.bind(port.library), first),
+    },
   };
 }

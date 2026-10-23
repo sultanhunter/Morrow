@@ -1,7 +1,7 @@
 // Scripted outcomes per scenario (P14.T01a §4.11). A script maps a port method and its
 // call index to a reply; `null` keeps the seed behaviour. Scripted, not simulated: there
 // are no permissions, digests or caps here; PR-2 proves those over HTTP.
-import type { Outcome, PortMethod } from "@morrow/workspace-ui";
+import type { Outcome, PersonRole, PortMethod } from "@morrow/workspace-ui";
 
 export const scenarioNames = [
   "ready",
@@ -48,6 +48,10 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "team_member",
+  "team_admin",
+  "team_add_uncertain",
+  "team_thinking_conflict",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -68,6 +72,14 @@ const reads: readonly PortMethod[] = [
   "work.listMyOpenQuestions",
   "work.getQuestion",
   "work.getAnswer",
+  // T7 PR 16.
+  "team.overview",
+  "team.agent",
+  "team.catalogue",
+  "settings.plan",
+  "settings.emailAddresses",
+  "library.knowledge",
+  "library.files",
 ];
 const creates: readonly PortMethod[] = [
   "work.createGoal",
@@ -310,6 +322,25 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // T7 PR 16: Team as a member (no change controls) and as an Admin (added agents only),
+  // the add confirmation's lost reply (Check again replays it), and a thinking change
+  // whose record moved on (the server's 409: reread).
+  team_member: {},
+  team_admin: {},
+  team_add_uncertain: {
+    "team.addConfirm": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  team_thinking_conflict: {
+    "team.reviseThinking": (call) =>
+      call === 0
+        ? { kind: "conflict", recheck: true, message: "This changed since you opened it." }
+        : null,
+  },
+};
+/** T7 PR 16: who views Team in each scenario (the Owner unless named). */
+export const teamViewerIn: Readonly<Partial<Record<ScenarioName, PersonRole>>> = {
+  team_member: "member",
+  team_admin: "admin",
 };
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [

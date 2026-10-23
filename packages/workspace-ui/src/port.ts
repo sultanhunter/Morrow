@@ -21,6 +21,7 @@ import type {
   TaskView,
   WorkspaceView,
 } from "./model";
+import { teamPortMethods, type LibraryPort, type SettingsPort, type TeamPort } from "./team-model";
 
 export type Outcome<T> =
   | { readonly kind: "ok"; readonly value: T; readonly replayed: boolean }
@@ -198,6 +199,10 @@ export interface WorkspacePort {
       }>,
     ): Promise<Outcome<{ readonly revision: number }>>;
   };
+  /** T7 PR 16: Team, agent pages and Add agents; Settings; Shop knowledge and Files. */
+  readonly team: TeamPort;
+  readonly settings: SettingsPort;
+  readonly library: LibraryPort;
 }
 
 export const portMethods = [
@@ -237,6 +242,7 @@ export const portMethods = [
   "runs.listOfTask",
   "runs.get",
   "runs.reconcile",
+  ...teamPortMethods,
 ] as const;
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */
