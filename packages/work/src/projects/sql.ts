@@ -36,5 +36,9 @@ export const projectStatements = Object.freeze({
   projectTarget: `SELECT j.id::text AS id,g.id::text AS goal_id,g.revision::text AS revision,${utc("g.due_at")} AS due_at FROM morrow_work.projects j JOIN morrow_work.goals g ON g.organization_id=j.organization_id AND g.workspace_id=j.workspace_id AND g.id=j.goal_id WHERE j.id=$1::text`,
   // An area's or Quick tasks' existing record, if any.
   areaGoal: "SELECT g.id::text AS id FROM morrow_work.goals g WHERE g.area_template_id=$1::text",
+  // An area's agent is added (ADR-0033 item 6): an installation of its release that was not
+  // uninstalled (a disabled one keeps its area).
+  areaAgentAdded:
+    "SELECT count(*)::text AS added FROM morrow_work.agent_installations i WHERE i.release_id=$1::text AND i.status<>'uninstalled'",
 } as const);
 export type ProjectStatementName = keyof typeof projectStatements;

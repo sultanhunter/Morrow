@@ -15,6 +15,7 @@ import type {
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { createHumanPolicyService, type HumanAuthority, type PermissionVerb } from "@morrow/policy";
 import {
+  areaTemplate,
   buildPlanStartDocument,
   decideStartPieces,
   goalProgress,
@@ -73,7 +74,8 @@ export type ProjectRefusal =
   | "actor_ineligible"
   | "stale"
   | "repeating_unavailable"
-  | "stopped";
+  | "stopped"
+  | "agent_not_added";
 export class ProjectReject extends Error {
   constructor(readonly reason: ProjectRefusal) {
     super("PROJECT_REJECTED");
@@ -528,6 +530,14 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
     currentDueAt,
   };
 }
+/** An area card needs its agent added (ADR-0033 item 6); Quick tasks needs none. */
+async function areaAgentAdded(tx: WorkTx, card: StartCard): Promise<void> {
+  if (card.kind !== "area") return;
+  const template = areaTemplate(card.areaTemplateId);
+  if (!template) throw new WorkContextUnavailable();
+  const row = one(await tx.run("areaAgentAdded", [template.releaseId]));
+  if (!row || text(row, "added") === "0") throw new ProjectReject("agent_not_added");
+}
 const pieceDecider = (a: WorkAuthority) => ({
   decide: (check: { capabilityId: CapabilityId; verb: "execute"; fields: readonly string[] }) =>
     decideOn(a, a.resource, check.capabilityId, check.verb, check.fields),
@@ -554,6 +564,7 @@ async function startDocument(
   if (card.kind !== "draft") {
     const template = card.kind === "area" ? card.areaTemplateId : "quick_tasks";
     if (one(await tx.run("areaGoal", [template]))) throw new WorkReject("state_conflict");
+    await areaAgentAdded(tx, card);
   }
   const records = startRecords(card);
   if (records === null) throw new WorkContextUnavailable();
@@ -620,6 +631,7 @@ async function start(
   } else if (document.target.kind === "area")
     card = { kind: "area", areaTemplateId: document.target.areaTemplateId as never };
   else card = { kind: "quick_tasks" };
+  await areaAgentAdded(tx, card);
   // (b) Every piece under live grants, and the grant summary the document bound.
   const live = grantSummaryDigest(a.grants, startCapabilities, a.databaseNowMs);
   if (live !== document.grantSummaryDigest) throw new ProjectReject("stale");

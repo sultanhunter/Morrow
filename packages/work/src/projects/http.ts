@@ -98,6 +98,7 @@ const refusals: Readonly<Record<ProjectRefusal, readonly [number, string, string
       "Repeating tasks can't be started from a card yet.",
     ],
     stopped: [409, "conflict", "never", "A helper on this card is stopped."],
+    agent_not_added: [409, "conflict", "never", "Add this area's agent first."],
   });
 function refusalResponse(reason: ProjectRefusal, correlationId: string): Response {
   const [status, code, retryClass, safeMessage] = refusals[reason];
