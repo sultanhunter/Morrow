@@ -55,7 +55,7 @@ Non-goals: Undo and "approve several at once" (PR 4); a product picker; the Sunr
 - [x] The review screen (pending, and approved then applied) and the task's "Changes applied" tab in `ui:check` at their widths, with the keyboard walks (local run in Edge, 2026-10-24: Playwright's pinned Chromium is not installed on this Mac; CI's `ui` job is the authority).
 - [x] A claim over the items bound is `limit_reached` before anything is recorded; a selection fits (unit).
 - [x] ACCESS_DENIED or THROTTLED beside a mutation result, or mixed codes, is `uncertain`, never `failed` (unit classification table; review F1).
-- [x] One open write per product: an uncertain write holds its product until read back after its window, then a new change applies; a read-back after a later write never settles the earlier one; set aside by the claimant only, not before the window, still read back (`lab:catalog-apply` B1–B5; route and SPA units; review F2).
+- [x] One open write per product: an uncertain write holds its product until read back after its window, then a new change applies; a read-back after a later write never settles the earlier one; set aside by the claimant only, not before the window, still read back (`lab:catalog-apply` B1–B5; route and SPA units; `ui:check` review/uncertain and review/set_aside at 1440 and 390, local run in Edge 2026-10-24, where only Edge's own `/favicon.ico` request on the first page fails review/pending@1440; review F2).
 - [x] A broker call that throws is tried again in the same request and read back, never left undriven (unit; review F4).
 - [ ] Hosted `foundation`, the AI review (security lens) and the owner's first apply on a draft product.
 
