@@ -1011,8 +1011,54 @@ const xlsxMedia: readonly (readonly [RegExp, readonly number[]])[] = Object.free
   [/\.jpe?g$/i, [0xff, 0xd8, 0xff]],
   [/\.gif$/i, [0x47, 0x49, 0x46, 0x38]],
 ]);
+// A formula that reaches outside the workbook: a link or remote function by name (with or
+// without a prefix), the cloud functions that send cell contents out when the workbook
+// recalculates (COPILOT, TRANSLATE, DETECTLANGUAGE, STOCKHISTORY, Python's PY), OLAP cube
+// queries, an add-in's user-defined function (_xludf., _xldudf), an external reference ([)
+// or DDE (|).
 const remoteFormula =
-  /\b(HYPERLINK|WEBSERVICE|FILTERXML|IMPORTDATA|IMPORTXML|IMPORTRANGE|IMPORTHTML|IMPORTFEED|IMAGE|RTD|CALL|REGISTER(\.ID)?|EXEC|EVALUATE|DDE)\b|\[|\|/i;
+  /\b(HYPERLINK|WEBSERVICE|FILTERXML|IMPORTDATA|IMPORTXML|IMPORTRANGE|IMPORTHTML|IMPORTFEED|IMAGE|RTD|CALL|REGISTER(\.ID)?|EXEC|EVALUATE|DDE|COPILOT|TRANSLATE|DETECTLANGUAGE|STOCKHISTORY|PY|CUBE[A-Z]*)\b|_xludf\.|_xldudf|\[|\|/i;
+// Excel stores every function newer than Excel 2007 with an `_xlfn.` prefix (some also with
+// `_xlws.`), and the cloud functions are among them. Such a name passes only when it is a pure,
+// local calculation listed here, so a cloud function Excel adds later fails closed. Left out
+// on purpose: WEBSERVICE, FILTERXML, ENCODEURL, IMAGE, STOCKHISTORY, FIELDVALUE, COPILOT,
+// TRANSLATE, DETECTLANGUAGE and PY.
+const xlsxPrefixedFunction = /_xl(?:fn|ws)\.((?:_xl(?:fn|ws)\.)*)([A-Za-z0-9_.]*)/gi;
+const xlsxPureFunctions: ReadonlySet<string> = new Set(
+  [
+    // Excel 2010.
+    "AGGREGATE BETA.DIST BETA.INV BINOM.DIST BINOM.INV CEILING.PRECISE CHISQ.DIST",
+    "CHISQ.DIST.RT CHISQ.INV CHISQ.INV.RT CHISQ.TEST CONFIDENCE.NORM CONFIDENCE.T COVARIANCE.P",
+    "COVARIANCE.S ERF.PRECISE ERFC.PRECISE EXPON.DIST F.DIST F.DIST.RT F.INV F.INV.RT F.TEST",
+    "FLOOR.PRECISE GAMMA.DIST GAMMA.INV GAMMALN.PRECISE HYPGEOM.DIST ISO.CEILING LOGNORM.DIST",
+    "LOGNORM.INV MODE.MULT MODE.SNGL NEGBINOM.DIST NETWORKDAYS.INTL NORM.DIST NORM.INV",
+    "NORM.S.DIST NORM.S.INV PERCENTILE.EXC PERCENTILE.INC PERCENTRANK.EXC PERCENTRANK.INC",
+    "POISSON.DIST QUARTILE.EXC QUARTILE.INC RANK.AVG RANK.EQ STDEV.P STDEV.S T.DIST T.DIST.2T",
+    "T.DIST.RT T.INV T.INV.2T T.TEST VAR.P VAR.S WEIBULL.DIST WORKDAY.INTL Z.TEST",
+    // Excel 2013.
+    "ACOT ACOTH ARABIC BASE BINOM.DIST.RANGE BITAND BITLSHIFT BITOR BITRSHIFT BITXOR",
+    "CEILING.MATH COMBINA COT COTH CSC CSCH DAYS DECIMAL ECMA.CEILING FLOOR.MATH FORMULATEXT",
+    "GAMMA GAUSS IFNA IMCOSH IMCOT IMCSC IMCSCH IMSEC IMSECH IMSINH IMTAN ISFORMULA ISOWEEKNUM",
+    "MUNIT NUMBERVALUE PDURATION PERMUTATIONA PHI RRI SEC SECH SHEET SHEETS SKEW.P UNICHAR",
+    "UNICODE XOR",
+    // Excel 2016 and 2019.
+    "CONCAT FORECAST.ETS FORECAST.ETS.CONFINT FORECAST.ETS.SEASONALITY FORECAST.ETS.STAT",
+    "FORECAST.LINEAR IFS MAXIFS MINIFS SWITCH TEXTJOIN",
+    // Dynamic arrays, LET and LAMBDA, and the text, array and regular-expression functions.
+    "ANCHORARRAY SINGLE FILTER RANDARRAY SEQUENCE SORT SORTBY UNIQUE XLOOKUP XMATCH LET LAMBDA",
+    "MAP REDUCE SCAN MAKEARRAY BYROW BYCOL ISOMITTED CHOOSECOLS CHOOSEROWS DROP TAKE EXPAND",
+    "HSTACK VSTACK TOCOL TOROW WRAPCOLS WRAPROWS TEXTBEFORE TEXTAFTER TEXTSPLIT VALUETOTEXT",
+    "ARRAYTOTEXT REGEXTEST REGEXEXTRACT REGEXREPLACE GROUPBY PIVOTBY PERCENTOF TRIMRANGE",
+  ]
+    .join(" ")
+    .split(" "),
+);
+function formulaReachesOut(formula: string): boolean {
+  if (remoteFormula.test(formula)) return true;
+  for (const match of formula.matchAll(xlsxPrefixedFunction))
+    if (!xlsxPureFunctions.has(match[2]!.toUpperCase())) return true;
+  return false;
+}
 async function checkXlsx(bytes: Uint8Array): Promise<OutputCheck> {
   const entries = zipEntries(bytes);
   if (entries === null) return reject("xlsx_invalid");
@@ -1053,7 +1099,7 @@ async function checkXlsx(bytes: Uint8Array): Promise<OutputCheck> {
       )
         return reject("xlsx_link");
     }
-    if (part.formulas.some((f) => remoteFormula.test(f))) return reject("xlsx_link");
+    if (part.formulas.some(formulaReachesOut)) return reject("xlsx_link");
     if (part.hyperlinkRelationship) return reject("xlsx_link");
   }
   return accept(bytes);

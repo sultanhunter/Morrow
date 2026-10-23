@@ -10,7 +10,8 @@
 //     customer fields cannot be expressed at all.
 //   * Outputs: PNG (structure and CRCs checked, metadata chunks dropped), CSV (formula cells
 //     escaped, numbers kept) and XLSX (no macros, objects, external links or remote formulas
-//     in any part, every part read as strict XML; zip tricks refused), each within its size.
+//     or cloud functions in any part, every part read as strict XML; zip tricks and bytes
+//     outside the listed entries refused), each within its size.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -541,6 +542,64 @@ test("XLSX outputs: every byte belongs to a listed entry, so no hidden entry rid
   for (const descriptor of ["signed", "bare"]) {
     const bytes = makeXlsx({ options: { descriptor } });
     assert.deepEqual(await checkRuntimeOutput("xlsx", bytes), { outcome: "accepted", bytes });
+  }
+});
+
+test("XLSX outputs: cloud functions and prefixed functions outside the pure list are refused (review R3)", async () => {
+  const cell = (f) => `<row r="1"><c r="A1"><f>${f}</f></c></row>`;
+  const refused = [
+    // The review's five probes: each was accepted before.
+    '_xlfn.COPILOT("x",A1)',
+    '_xlfn.TRANSLATE(A1,"en","fr")',
+    '_xlfn.STOCKHISTORY("MSFT",1)',
+    "_xlfn._xlws.PY(0,1)",
+    "_xlfn.DETECTLANGUAGE(A1)",
+    // The same names without a prefix, in any case, and the other remote or linked ones.
+    'copilot("x",A1)',
+    "SUM(1,PY (0,1))",
+    '_xlfn.FIELDVALUE(A1,"Price")',
+    '_xlfn.ENCODEURL("x")',
+    '_xlfn.IMAGE("https://evil.example/x.png")',
+    'CUBEVALUE("c","m")',
+    // An add-in's user-defined functions and a prefixed name not on the list.
+    "_xludf.SEND(A1)",
+    "_xldudf_CONTOSO_SEND(A1)",
+    "_xlfn.SOMEFUTUREAI(A1)",
+    "_xlfn._xlws.SOMEFUTUREAI(A1)",
+    "_xlfn.(A1)",
+  ];
+  for (const formula of refused)
+    assert.deepEqual(
+      await checkRuntimeOutput("xlsx", makeXlsx({ cells: cell(formula) })),
+      { outcome: "rejected", code: "xlsx_link" },
+      formula,
+    );
+  // A defined name is a formula too.
+  assert.deepEqual(
+    await checkRuntimeOutput(
+      "xlsx",
+      makeXlsx({
+        names:
+          '<definedNames><definedName name="x">_xlfn.COPILOT("x",Sheet1!A1)</definedName></definedNames>',
+      }),
+    ),
+    { outcome: "rejected", code: "xlsx_link" },
+  );
+  // Pure calculations Excel writes with a prefix still pass.
+  for (const formula of [
+    "_xlfn.XLOOKUP(B1,B1:B3,C1:C3)",
+    "_xlfn._xlws.SORT(B1:B3)",
+    "_xlfn._xlws.FILTER(B1:B3,B1:B3>1)",
+    "_xlfn.STDEV.S(B1:B3)+_xlfn.T.DIST.2T(1,2)",
+    "_xlfn.LET(_xlpm.x,B1,_xlpm.x*2)",
+    '_xlfn.IFS(B1&gt;1,1,TRUE,0)&amp;_xlfn.TEXTJOIN(",",TRUE,B1:B3)',
+  ]) {
+    const bytes = makeXlsx({ cells: cell(formula) });
+    assert.deepEqual(
+      await checkRuntimeOutput("xlsx", bytes),
+      { outcome: "accepted", bytes },
+      formula,
+    );
   }
 });
 
