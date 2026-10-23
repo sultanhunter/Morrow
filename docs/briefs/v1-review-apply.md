@@ -49,6 +49,7 @@ Non-goals: Undo and "approve several at once" (PR 4); a product picker; the Sunr
 - [x] Tenant isolation of review records and operations (V3, A5, O9; the tenant-conformance registry, S1–S8, P1).
 - [x] The broker's fence, late closes, forged settings and other logins (F1–F4); the switch off writes nothing (A1, F4; unit).
 - [x] The SPA's requests and decoders against the server's real replies (W1; `workspace-web-review.test.mjs`).
+- [x] The review screen (pending, and approved then applied) and the task's "Changes applied" tab in `ui:check` at their widths, with the keyboard walks (local run in Edge, 2026-10-24: Playwright's pinned Chromium is not installed on this Mac; CI's `ui` job is the authority).
 - [x] A claim over the items bound is `limit_reached` before anything is recorded; a selection fits (unit).
 - [ ] Hosted `foundation`, the AI review (security lens) and the owner's first apply on a draft product.
 
