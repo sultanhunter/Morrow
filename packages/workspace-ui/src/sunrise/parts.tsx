@@ -2,7 +2,7 @@
 // Files (ADR-0032 item 2; the Sunrise brief §1.5). They live in their own files so PR 14's
 // shell and Home can adopt or replace them without touching the option 1 components. Every
 // colour comes from a token class in `styles/sunrise-team.css`.
-import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { RouteLink } from "../components/controls";
 import type { AgentCharacter, PermissionsView } from "../team-model";
 import { sunriseCopy } from "./copy";
@@ -353,17 +353,26 @@ export function Banner({
   title,
   children,
   onDismiss,
+  focusOnShow = false,
 }: {
   readonly tone: "info" | "success" | "warning";
   readonly title: string;
   readonly children?: ReactNode;
   readonly onDismiss?: () => void;
+  /** The result of an action whose control went away: focus moves to its title. */
+  readonly focusOnShow?: boolean;
 }) {
+  const titleRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (focusOnShow) titleRef.current?.focus();
+  }, [focusOnShow, title]);
   return (
     <div className={`sr-banner sr-banner-${tone}`} role="status">
       <div className="sr-banner-head">
         <SrIcon name={tone === "success" ? "check" : tone === "warning" ? "alert" : "info"} />
-        <p className="sr-banner-title">{title}</p>
+        <p className="sr-banner-title" ref={titleRef} tabIndex={focusOnShow ? -1 : undefined}>
+          {title}
+        </p>
         {onDismiss ? (
           <button
             type="button"

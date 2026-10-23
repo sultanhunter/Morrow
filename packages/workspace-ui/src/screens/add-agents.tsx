@@ -569,6 +569,7 @@ export function AddAgentsScreen({
       {result ? (
         <Banner
           tone="success"
+          focusOnShow
           title={
             result.status === "added"
               ? c.addedTitle(result.name)

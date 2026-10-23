@@ -34,7 +34,11 @@ import { settingsRoutes } from "../packages/workspace-ui/src/sunrise/parts.tsx";
 import { workspaceRoutes } from "../packages/contracts/src/routes.ts";
 import { sunriseCopy } from "../packages/workspace-ui/src/sunrise/copy.ts";
 import { AgentAvatar, PersonAvatar } from "../packages/workspace-ui/src/sunrise/avatars.tsx";
-import { recordingTransport } from "./fixtures/workspace-web.mjs";
+import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
+import { StopAllStatus, stopOutcomeText } from "../packages/workspace-ui/src/screens/stop-all.tsx";
+import { MemoryStorage, recordingTransport } from "./fixtures/workspace-web.mjs";
+import { createPending } from "../apps/workspace-web/src/pending.ts";
+import { copy } from "../packages/workspace-ui/src/copy.ts";
 
 // tsx compiles the components' JSX with the classic runtime here: React must be in scope.
 globalThis.React = React;
@@ -381,6 +385,52 @@ test("the add confirmation's lost reply: Check again replays the same key", asyn
   assert.deepEqual([replay.kind, replay.value.status], ["ok", "waiting_review"]);
 });
 
+test("an unknown thinking change or add leaves a marker of its own, so its dialog may close", async () => {
+  const pending = createPending({ storage: new MemoryStorage() });
+  for (const kind of ["thinking", "add_agent"]) {
+    const sent = command({ kind });
+    const outcome = await pending.run(sent, { workspaceId: ws, kind }, async () => ({
+      kind: "uncertain",
+    }));
+    assert.equal(outcome.kind, "uncertain");
+    // The dialog closes: its form releases the key, and the marker stays for the shell.
+    pending.release(sent.key);
+    assert.ok(
+      pending.markers().some((m) => m.kind === kind && m.workspaceId === ws),
+      kind,
+    );
+    assert.ok(!pending.liveMarkers().some((m) => m.kind === kind), kind);
+    assert.ok(copy.reentry.kinds[kind], kind);
+  }
+});
+
+test("the Listings agent's choice (the workspace default) is the Owner's, on Team and its page", async () => {
+  for (const [scenario, may] of [
+    ["ready", true],
+    ["team_admin", false],
+    ["team_member", false],
+  ]) {
+    const port = createFixtureAdapter(scenario);
+    const listings = (await port.team.overview(ws)).value.agents.find(
+      (a) => a.agentId === "agent-listings",
+    );
+    const models = (await port.models.list(ws)).value;
+    // Team's "Change" and the agent page's picker follow the same server decision.
+    assert.equal(listings.thinking.canChange, may, scenario);
+    assert.equal(models.canRevise, may, scenario);
+    const saved = await port.models.reviseDefault(
+      ws,
+      command({
+        model: "claude_haiku_5_5",
+        effort: "low",
+        maxCreditsPerProduct: models.ceiling,
+        expectedRevision: models.revision,
+      }),
+    );
+    assert.equal(saved.kind, may ? "ok" : "denied", scenario);
+  }
+});
+
 test("thinking options: the catalogue fits within the member ceiling, estimates per job", () => {
   const catalogue = {
     catalogueVersion: 1,
@@ -603,6 +653,52 @@ test("stop all is the Listings stop: one key per store; a lost reply replays tha
   const ready = createFixtureAdapter("ready");
   const off = (await ready.agents.listingsStatus(ws, connection.storeId)).value;
   assert.deepEqual(stopAllState([{ connection, listings: off }]).targets, []);
+});
+
+// Enough of the app's services for a screen rendered to markup (no effect runs there).
+const markupServices = {
+  navigate() {},
+  setDirty() {},
+  subscribe: () => () => {},
+  version: () => 0,
+};
+const markup = (element) =>
+  renderToStaticMarkup(h(ServicesProvider, { value: markupServices }, element));
+
+test("stop all never reads as all stopped while work this person can't stop is on", () => {
+  const status = (state) => markup(h(StopAllStatus, { workspaceId: ws, state, onOpen() {} }));
+  // One store stopped; another's Listings is on and the server says this person may not stop it.
+  const mixed = status({ targets: [], stopped: 1, notAllowed: 1 });
+  assert.ok(!/all ai work is stopped|every agent/i.test(mixed), mixed);
+  assert.ok(mixed.includes("Listings is stopped on 1 store"), mixed);
+  assert.ok(mixed.includes("AI work is still on in 1 store you can’t stop. Ask the Owner."), mixed);
+  const all = status({ targets: [], stopped: 2, notAllowed: 0 });
+  assert.ok(all.includes("Listings is stopped on 2 stores"), all);
+  assert.ok(!all.includes("still on"), all);
+  const on = status({
+    targets: [{ storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1" }],
+    stopped: 0,
+    notAllowed: 0,
+  });
+  assert.ok(on.includes("Listings can be stopped on 1 store"), on);
+  // After the dialog's stop: every target stopped, and the store it couldn't stop is named.
+  const target = { storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1" };
+  const stopped = [{ target, phase: { kind: "stopped" } }];
+  assert.equal(
+    stopOutcomeText(stopped, 1),
+    "Listings is stopped on 1 store. AI work is still on in 1 store you can’t stop. Ask the Owner.",
+  );
+  assert.equal(stopOutcomeText(stopped, 0), "Listings is stopped on 1 store.");
+  assert.equal(
+    stopOutcomeText([{ target, phase: { kind: "uncertain" } }], 0),
+    sunriseCopy.stop.partly,
+  );
+  // No line of the stop's copy claims that every agent, or all AI work, stopped.
+  const lines = Object.values(sunriseCopy.stop).flatMap((v) =>
+    typeof v === "function" ? [v(1, 1), v(3, 2)] : Array.isArray(v) ? v : [v],
+  );
+  for (const line of lines)
+    assert.ok(!/all ai work is stopped|every agent/i.test(String(line)), String(line));
 });
 
 test("every scenario's reads of the group settle without a request", async () => {

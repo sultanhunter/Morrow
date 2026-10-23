@@ -279,7 +279,8 @@ export function ThinkingEditor({
         </dl>
         <p className="sr-help sr-with-icon">
           <SrIcon name="lock" size={16} />
-          {target.kind === "agent"
+          {/* The workspace default (the Listings agent's choice) is the Owner's alone. */}
+          {target.kind === "agent" && !bound
             ? t.onlyOwnerOrAdmin(ownerName, target.name)
             : t.onlyOwner(ownerName, target.name)}
         </p>

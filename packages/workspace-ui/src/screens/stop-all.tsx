@@ -11,7 +11,9 @@
 //     key again, as one form's command does.
 //   * Turning AI work back on is each store's own Resume, which asks for the server's
 //     document as Enable does.
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+//   * The words name what stopped (Listings, on how many stores) and never claim more: a
+//     store whose work this person may not stop is said to be still on.
+import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 import { Button, Dialog, RouteLink } from "../components/controls";
 import { StatusRegion, outcomeState } from "../components/feedback";
 import type { Id, ListingsAgentView, ListingsChangeView, StoreConnectionView } from "../model";
@@ -135,6 +137,17 @@ function useStopAll(ws: Id) {
   return { rows, start, send, busy, unsettled, clear } as const;
 }
 
+/** Stopped on `stopped` stores; with work this person may not stop, that is said too. */
+export function stoppedText(stopped: number, notAllowed: number): string {
+  const done = s.done(stopped);
+  return notAllowed > 0 ? `${done} ${s.someNotAllowed(notAllowed)}` : done;
+}
+/** What a stop's replies add up to: never more stopped than did. */
+export function stopOutcomeText(rows: readonly StopRow[], notAllowed: number): string {
+  if (!rows.every((r) => r.phase.kind === "stopped")) return s.partly;
+  return stoppedText(rows.length, notAllowed);
+}
+
 /** Each store's stop and what became of it. */
 function StopRows({
   rows,
@@ -233,7 +246,7 @@ function StopDialog({
             <StopRows rows={rows} onSend={onSend} />
             {busy ? null : (
               <p className="sr-help" role="status">
-                {rows.every((r) => r.phase.kind === "stopped") ? s.done : s.partly}
+                {stopOutcomeText(rows, state.notAllowed)}
               </p>
             )}
           </>
@@ -248,6 +261,9 @@ function StopDialog({
                   </li>
                 ))}
               </ul>
+              {state.notAllowed > 0 ? (
+                <p className="sr-help">{s.someNotAllowed(state.notAllowed)}</p>
+              ) : null}
             </div>
             <div>
               <h3 className="sr-subheading">{s.whatStays}</h3>
@@ -288,6 +304,70 @@ function StopDialog({
   );
 }
 
+/**
+ * What is on and what is stopped, from one read. "Stopped" names the stores it stopped on;
+ * with work this person may not stop still on, it says so (it never reads as all stopped).
+ */
+export function StopAllStatus({
+  workspaceId,
+  state,
+  onOpen,
+  resultRef,
+}: {
+  readonly workspaceId: Id;
+  readonly state: StopAllState;
+  readonly onOpen: () => void;
+  /** The stopped banner's heading, focused after a stop (the opener is gone by then). */
+  readonly resultRef?: Ref<HTMLHeadingElement>;
+}) {
+  if (state.targets.length > 0)
+    return (
+      <div className="sr-stop-on">
+        <div className="sr-stop-text">
+          <p className="sr-reading">{s.body}</p>
+          <p className="sr-stop-status">
+            <Badge kind="active" />
+            <span className="sr-meta">{s.on(state.targets.length)}</span>
+          </p>
+          {state.notAllowed > 0 ? (
+            <p className="sr-help">{s.someNotAllowed(state.notAllowed)}</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="sr-button sr-button-stop"
+          aria-haspopup="dialog"
+          onClick={onOpen}
+        >
+          <SrIcon name="stop" />
+          {s.open}
+        </button>
+      </div>
+    );
+  if (state.stopped > 0)
+    return (
+      <div className="sr-banner sr-banner-warning sr-stop-stopped">
+        <div className="sr-banner-head">
+          <Badge kind="paused" />
+          <h3 className="sr-banner-title" ref={resultRef} tabIndex={-1}>
+            {s.stoppedTitle(state.stopped)}
+          </h3>
+        </div>
+        <div className="sr-banner-body">
+          <p className="sr-reading">{s.stoppedBody}</p>
+          {state.notAllowed > 0 ? (
+            <p className="sr-reading">{s.someNotAllowed(state.notAllowed)}</p>
+          ) : null}
+          <p className="sr-help">{s.turnOnHow}</p>
+          <RouteLink route="connections" params={{ workspaceId }} className="sr-link">
+            {s.openStore}
+          </RouteLink>
+        </div>
+      </div>
+    );
+  return <p className="sr-reading">{state.notAllowed > 0 ? s.notAllowed : s.nothing}</p>;
+}
+
 /** The card at the top of Activity: what is on, the stop, and what became of it. */
 export function StopAllCard({ workspaceId }: { readonly workspaceId: Id }) {
   const services = useServices();
@@ -295,16 +375,31 @@ export function StopAllCard({ workspaceId }: { readonly workspaceId: Id }) {
   const [read, reload] = useRead(`${ws}|stopAll`, () => readStopAll(services, ws));
   const stop = useStopAll(ws);
   const titleId = useId();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const resultRef = useRef<HTMLHeadingElement>(null);
   // What the dialog stops is fixed when it opens; a reread meanwhile changes nothing in it.
   const [dialog, setDialog] = useState<StopAllState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const confirm = async (targets: readonly StopTarget[]) => {
+  // After a confirmed stop the dialog closes and the reread removes its opener: focus moves
+  // to the result once the reread (not the reply from before the stop) is shown.
+  const focusAfterReread = useRef<{ readonly from: StopAllState | null } | null>(null);
+  useEffect(() => {
+    const pending = focusAfterReread.current;
+    if (pending === null || read.kind === "loading") return;
+    if (read.kind === "ok" && read.value === pending.from) return;
+    focusAfterReread.current = null;
+    if (resultRef.current) resultRef.current.focus();
+    else if (document.activeElement === null || document.activeElement === document.body)
+      titleRef.current?.focus();
+  }, [read]);
+  const confirm = async (state: StopAllState) => {
     setMessage(null);
-    const all = await stop.start(targets);
+    const all = await stop.start(state.targets);
+    if (all) focusAfterReread.current = { from: read.kind === "ok" ? read.value : null };
     reload();
     if (all) {
       setDialog(null);
-      setMessage(s.done);
+      setMessage(stoppedText(state.targets.length, state.notAllowed));
     }
   };
   const send = (target: StopTarget, checking: boolean) =>
@@ -320,55 +415,22 @@ export function StopAllCard({ workspaceId }: { readonly workspaceId: Id }) {
       );
     if (read.kind !== "ok") return outcomeState(read, reload, { compact: true });
     const state = read.value;
-    if (state.targets.length > 0)
-      return (
-        <div className="sr-stop-on">
-          <div className="sr-stop-text">
-            <p className="sr-reading">{s.body}</p>
-            <p className="sr-stop-status">
-              <Badge kind="active" />
-              <span className="sr-meta">{s.on(state.targets.length)}</span>
-            </p>
-            {state.notAllowed > 0 ? (
-              <p className="sr-help">{s.someNotAllowed(state.notAllowed)}</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="sr-button sr-button-stop"
-            aria-haspopup="dialog"
-            onClick={() => {
-              if (!stop.busy && !stop.unsettled) stop.clear();
-              setDialog(state);
-            }}
-          >
-            <SrIcon name="stop" />
-            {s.open}
-          </button>
-        </div>
-      );
-    if (state.stopped > 0)
-      return (
-        <div className="sr-banner sr-banner-warning sr-stop-stopped">
-          <div className="sr-banner-head">
-            <Badge kind="paused" />
-            <h3 className="sr-banner-title">{s.stoppedTitle}</h3>
-          </div>
-          <div className="sr-banner-body">
-            <p className="sr-reading">{s.stoppedBody}</p>
-            <p className="sr-help">{s.turnOnHow}</p>
-            <RouteLink route="connections" params={{ workspaceId: ws }} className="sr-link">
-              {s.openStore}
-            </RouteLink>
-          </div>
-        </div>
-      );
-    return <p className="sr-reading">{state.notAllowed > 0 ? s.notAllowed : s.nothing}</p>;
+    return (
+      <StopAllStatus
+        workspaceId={ws}
+        state={state}
+        resultRef={resultRef}
+        onOpen={() => {
+          if (!stop.busy && !stop.unsettled) stop.clear();
+          setDialog(state);
+        }}
+      />
+    );
   })();
   return (
     <section className="sr-card sr-stop-card" aria-labelledby={titleId}>
       <div className="sr-card-head">
-        <h2 id={titleId} className="sr-card-title">
+        <h2 id={titleId} className="sr-card-title" ref={titleRef} tabIndex={-1}>
           {s.title}
         </h2>
       </div>
@@ -386,7 +448,7 @@ export function StopAllCard({ workspaceId }: { readonly workspaceId: Id }) {
             state={dialog}
             rows={stop.rows}
             busy={stop.busy}
-            onConfirm={() => void confirm(dialog.targets)}
+            onConfirm={() => void confirm(dialog)}
             onSend={send}
             onClose={() => setDialog(null)}
           />

@@ -6,6 +6,7 @@ const plural = (n: number, one: string, many: string) =>
   `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 export const credits = (n: number) => plural(n, "credit", "credits");
 export const number = (n: number) => n.toLocaleString("en-US");
+const stores = (n: number) => plural(n, "store", "stores");
 
 export const sunriseCopy = {
   pills: { agent: "Agent", specialist: "Specialist · one-time" },
@@ -426,33 +427,34 @@ export const sunriseCopy = {
       "Conversations with Morrow are private, so they aren’t listed. When an Admin reads someone’s conversation, that read is listed here.",
     listLater: "The full list arrives with the activity log.",
   },
+  // What this stops today is the Listings agent on each store (the only AI work that can
+  // change a store yet); the words say so, and never claim more stopped than did.
   stop: {
     title: "Stop all AI work",
-    body: "Every agent stops at once, and nothing new starts. Nothing is sent or changed in your store until a person turns AI work back on. Only people can do this. Agents can’t.",
-    on: (n: number) =>
-      `AI work is on · ${n === 1 ? "1 agent" : `${number(n)} agents`} can be stopped now`,
+    body: "Today this stops the Listings agent on each of your stores, the AI work that can change your store. Nothing new starts, and nothing it would send or change goes ahead until a person turns it back on. Only people can do this. Agents can’t.",
+    on: (n: number) => `AI work is on · Listings can be stopped on ${stores(n)}`,
     open: "Stop all AI work",
-    stoppedTitle: "All AI work is stopped",
+    stoppedTitle: (n: number) => `Listings is stopped on ${stores(n)}`,
     stoppedBody:
-      "Nothing is sent or changed in your store. Changes waiting for approval stay in your Inbox, and nothing is applied until AI work is back on.",
+      "Nothing it would send or change goes ahead. Changes waiting for approval stay in your Inbox, and nothing is applied until a person turns it back on.",
     turnOnHow:
-      "To turn AI work back on, resume each agent from its store’s page. Work that was stopped doesn’t restart by itself.",
+      "To turn it back on, resume Listings from each store’s page. Work that was stopped doesn’t restart by itself.",
     openStore: "Open Shopify connection",
     nothing: "No AI work is on, so there’s nothing to stop.",
     notAllowed: "Only a person who may stop agents can do this. Ask your shop’s Owner.",
     someNotAllowed: (n: number) =>
-      `${n === 1 ? "1 store has" : `${number(n)} stores have`} AI work you can’t stop. Ask the Owner.`,
+      `AI work is still on in ${stores(n)} you can’t stop. Ask the Owner.`,
     loading: "Checking what’s working…",
     readFailed: "Couldn’t check what’s working. Try again.",
     tryAgain: "Try again",
     dialogTitle: "Stop all AI work?",
     dialogBody:
-      "Every agent stops now and nothing new starts. Nothing will be sent or changed in your store until AI work is back on. You don’t need anyone else to approve this.",
+      "Listings stops now on the stores below, and nothing new starts. Nothing it would send or change goes ahead until a person turns it back on. You don’t need anyone else to approve this.",
     whatStops: "What stops",
     target: (store: string) => `Listings on ${store}`,
     whatStays: "What stays",
     stays: [
-      "Changes waiting in your Inbox. None are applied while AI work is stopped.",
+      "Changes waiting in your Inbox. None are applied while Listings is stopped.",
       "Your store connection. To cut Morrow off from your store, disconnect it instead.",
     ],
     typeLabel: (word: string) => `To confirm, type: ${word}`,
@@ -471,7 +473,7 @@ export const sunriseCopy = {
       notSent: "Not stopped. Nothing was sent; try again.",
     },
     checkAgain: "Check again",
-    done: "All AI work is stopped.",
+    done: (n: number) => `Listings is stopped on ${stores(n)}.`,
     partly: "Some work isn’t confirmed as stopped yet. Check each store again before you go on.",
   },
   plan: {

@@ -583,7 +583,54 @@ fixtureCases.push(
       await page.getByRole("dialog", { name: "Change how Business Analyst thinks" }).waitFor();
     },
   }),
+  // A real 409 (a teammate's change landed first): the dialog shows the reread choice, and
+  // the next save, of the reread revision, goes through.
+  fixtureCase("team", "thinking_conflict", `/w/${ws}/agents`, {
+    widths: [1440],
+    scenario: "team_thinking_conflict",
+    setup: async (page) => {
+      const name = "Change how Business Analyst thinks";
+      await page.getByRole("button", { name }).click();
+      const dialog = page.getByRole("dialog", { name });
+      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await dialog.getByText("This changed since you opened it.").waitFor();
+      expect(await dialog.getByRole("radio", { name: /Haiku 5\.5/ }).isChecked(), "reread_model");
+      expect(await dialog.getByRole("radio", { name: /^Medium/ }).isChecked(), "reread_effort");
+      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await dialog.waitFor({ state: "hidden" });
+      await page.getByText("Saved. From its next job, Business Analyst uses").waitFor();
+    },
+  }),
+  // An unknown outcome doesn't trap the dialog: Escape closes it, and the shell says the
+  // change may have been saved.
+  fixtureCase("team", "thinking_uncertain_closed", `/w/${ws}/agents`, {
+    widths: [1440],
+    scenario: "team_thinking_uncertain",
+    setup: async (page) => {
+      const name = "Change how Business Analyst thinks";
+      await page.getByRole("button", { name }).click();
+      const dialog = page.getByRole("dialog", { name });
+      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await dialog.getByRole("button", { name: "Check again" }).waitFor();
+      await page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
+      await page.getByText("(a change to how a helper thinks) may have been saved").waitFor();
+    },
+  }),
   fixtureCase("team", "agent", `/w/${ws}/agents/agent-listings`),
+  // A member sees the Listings agent's setting (the workspace default) and who may change it.
+  fixtureCase("team", "agent_listings_member", `/w/${ws}/agents/agent-listings`, {
+    widths: [1440],
+    scenario: "team_member",
+    setup: async (page) => {
+      await page.getByText("can change this.").first().waitFor();
+      expect((await page.getByRole("radio").count()) === 0, "no_controls");
+      expect((await page.getByRole("button", { name: "Save" }).count()) === 0, "no_save");
+    },
+  }),
   // The Listings agent's choice is the workspace default: above the member ceiling it
   // can't be saved here.
   fixtureCase("team", "agent_over_limit", `/w/${ws}/agents/agent-listings`, {
@@ -625,6 +672,18 @@ fixtureCases.push(
       await page.getByRole("button", { name: "Add Marketing" }).click();
       await page.getByRole("button", { name: "Send to Leo Martin to review" }).click();
       await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+  fixtureCase("team", "add_uncertain_closed", `/w/${ws}/agent-store/release-marketing`, {
+    widths: [1440],
+    scenario: "team_add_uncertain",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("button", { name: "Send to Leo Martin to review" }).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+      await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page.getByText("(adding an agent) may have been saved").waitFor();
     },
   }),
   fixtureCase("settings", "home", `/w/${ws}/settings`, { widths: two }),
@@ -682,7 +741,7 @@ fixtureCases.push(
       const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
       await dialog.getByLabel("To confirm, type: stop").fill("stop");
       await dialog.getByRole("button", { name: "Stop all AI work" }).click();
-      await page.getByRole("heading", { name: "All AI work is stopped" }).waitFor();
+      await page.getByRole("heading", { name: "Listings is stopped on 1 store" }).waitFor();
     },
   }),
   // A lost reply is "not confirmed" with Check again (the same key), never "stopped".
@@ -782,8 +841,11 @@ export const keyboardWalks = [
       await dialog.waitFor();
       await page.keyboard.type("stop");
       await page.keyboard.press("Enter");
-      await page.getByRole("heading", { name: "All AI work is stopped" }).waitFor();
+      await page.getByRole("heading", { name: "Listings is stopped on 1 store" }).waitFor();
       await dialog.waitFor({ state: "hidden" });
+      // The opener is gone after the stop: focus is on the result, not the page body.
+      await page.waitForFunction(() => document.activeElement?.tagName === "H3");
+      expect((await active(page)).text === "Listings is stopped on 1 store", "focus_on_result");
     },
   },
   {
@@ -798,6 +860,12 @@ export const keyboardWalks = [
       await page.keyboard.press("Enter");
       await page.getByText("Marketing was sent to Leo Martin to review").waitFor();
       await page.getByRole("dialog").waitFor({ state: "hidden" });
+      // The add button is gone once the agent waits for review: focus is on the result.
+      await page.getByRole("button", { name: "Add Marketing" }).waitFor({ state: "detached" });
+      expect(
+        (await active(page)).text.startsWith("Marketing was sent to Leo Martin to review"),
+        "focus_on_result",
+      );
     },
   },
   {

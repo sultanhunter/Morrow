@@ -52,6 +52,7 @@ export const scenarioNames = [
   "team_admin",
   "team_add_uncertain",
   "team_thinking_conflict",
+  "team_thinking_uncertain",
   "team_solo",
   "stop_all",
   "stop_all_uncertain",
@@ -359,6 +360,10 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   // moves on (a new choice and revision; the team fixture does it), so the save meets a real
   // 409 and only a save of the reread revision goes through.
   team_thinking_conflict: {},
+  // A thinking change whose reply is lost: the dialog may close, and its marker stays.
+  team_thinking_uncertain: {
+    "team.reviseThinking": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
 };
 /** T7 PR 16: these scenarios start with the Listings agent on (Stop all AI work has a target). */
 export const listingsOnIn: readonly ScenarioName[] = ["stop_all", "stop_all_uncertain"];
