@@ -438,6 +438,10 @@ export const sunriseCopy = {
     title: "Stop all AI work",
     body: "Today this stops the Listings agent on each of your stores, the AI work that can change your store. Nothing new starts, and nothing it would send or change goes ahead until a person turns it back on. Only people can do this. Agents can’t.",
     on: (n: number) => `AI work is on · Listings can be stopped on ${stores(n)}`,
+    heldOn: (n: number) => `AI work is paused · Listings can be stopped on ${stores(n)}`,
+    held: (n: number) =>
+      `Paused in ${stores(n)} by a platform or connection stop. No AI work happens there until that stop is lifted.`,
+    targetHeld: (store: string) => `Listings on ${store} (paused now)`,
     open: "Stop all AI work",
     stoppedTitle: (n: number) => `Listings is stopped on ${stores(n)}`,
     stoppedBody:

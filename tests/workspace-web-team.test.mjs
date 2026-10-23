@@ -615,10 +615,13 @@ const store = (storeId, shopDomain = `${storeId}.example`) => ({
   grantedScopes: [],
   updatedAt: "2026-10-23T09:00:00.000Z",
 });
-const listings = (storeId, { on = true, stopped = false, mayStop = true } = {}) => ({
+const listings = (
+  storeId,
+  { on = true, stopped = false, mayStop = true, blocked = false } = {},
+) => ({
   storeId,
   linked: true,
-  blocked: false,
+  blocked,
   installation: on
     ? {
         installationId: `listings-${storeId}`,
@@ -640,11 +643,28 @@ test("stop all: only what the server lets this person stop, and not what is stop
     { connection: store("s5"), listings: listings("s6") },
   ]);
   assert.deepEqual(state.targets, [
-    { storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1" },
+    { storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1", held: false },
   ]);
   assert.equal(state.stopped, 1);
+  assert.equal(state.held, 0);
   assert.equal(state.notAllowed, 1);
-  assert.deepEqual(stopAllState([]), { targets: [], stopped: 0, notAllowed: 0 });
+  assert.deepEqual(stopAllState([]), { targets: [], stopped: 0, held: 0, notAllowed: 0 });
+  // A platform or connection stop holds a store: it is paused, not on. This person may still
+  // stop it where the server allows (so it stays off once the hold lifts); where the server
+  // doesn't, it isn't "work you can't stop" either. A person's own stop is still "stopped".
+  const held = stopAllState([
+    { connection: store("h1"), listings: listings("h1", { blocked: true }) },
+    { connection: store("h2"), listings: listings("h2", { blocked: true, mayStop: false }) },
+    { connection: store("h3"), listings: listings("h3", { blocked: true, stopped: true }) },
+  ]);
+  assert.deepEqual(held, {
+    targets: [
+      { storeId: "h1", shopDomain: "h1.example", installationId: "listings-h1", held: true },
+    ],
+    stopped: 1,
+    held: 2,
+    notAllowed: 0,
+  });
   // The typed confirmation: the word itself, nothing else.
   for (const typed of ["stop", "STOP", "  Stop "]) assert.ok(isStopConfirmation(typed), typed);
   for (const typed of ["", "stp", "stop now", "s t o p", "stopp"])
@@ -665,6 +685,7 @@ test("stop all is the Listings stop: one key per store; a lost reply replays tha
   assert.deepEqual(stopAllState([{ connection, listings: after }]), {
     targets: [],
     stopped: 1,
+    held: 0,
     notAllowed: 0,
   });
   // The reason is plain words within the HTTP adapter's bound.
@@ -688,11 +709,11 @@ const markup = (element) =>
 test("stop all never reads as all stopped while work this person can't stop is on", () => {
   const status = (state) => markup(h(StopAllStatus, { workspaceId: ws, state, onOpen() {} }));
   // One store stopped; another's Listings is on and the server says this person may not stop it.
-  const mixed = status({ targets: [], stopped: 1, notAllowed: 1 });
+  const mixed = status({ targets: [], stopped: 1, held: 0, notAllowed: 1 });
   assert.ok(!/all ai work is stopped|every agent/i.test(mixed), mixed);
   assert.ok(mixed.includes("Listings is stopped on 1 store"), mixed);
   assert.ok(mixed.includes("AI work is still on in 1 store you can’t stop. Ask the Owner."), mixed);
-  const all = status({ targets: [], stopped: 2, notAllowed: 0 });
+  const all = status({ targets: [], stopped: 2, held: 0, notAllowed: 0 });
   assert.ok(all.includes("Listings is stopped on 2 stores"), all);
   assert.ok(!all.includes("still on"), all);
   // A person's stop wears the Stopped badge; Paused is a platform or connection hold.
@@ -700,11 +721,28 @@ test("stop all never reads as all stopped while work this person can't stop is o
   assert.doesNotMatch(all, /Paused/);
   assert.notEqual(sunriseCopy.status.stopped, sunriseCopy.status.paused);
   const on = status({
-    targets: [{ storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1" }],
+    targets: [
+      { storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1", held: false },
+    ],
     stopped: 0,
+    held: 0,
     notAllowed: 0,
   });
   assert.ok(on.includes("Listings can be stopped on 1 store"), on);
+  // Held by a platform or connection stop: paused, never "on", never "still on".
+  const heldTarget = {
+    storeId: "h1",
+    shopDomain: "h1.example",
+    installationId: "l-h1",
+    held: true,
+  };
+  const paused = status({ targets: [heldTarget], stopped: 0, held: 1, notAllowed: 0 });
+  assert.ok(paused.includes("AI work is paused · Listings can be stopped on 1 store"), paused);
+  assert.ok(paused.includes("Paused in 1 store by a platform or connection stop"), paused);
+  assert.ok(!/AI work is on|still on/.test(paused), paused);
+  const heldOnly = status({ targets: [], stopped: 0, held: 1, notAllowed: 0 });
+  assert.ok(heldOnly.includes("Paused in 1 store"), heldOnly);
+  assert.ok(!/AI work is on ·|still on|you can’t stop/.test(heldOnly), heldOnly);
   // After the dialog's stop: every target stopped, and the store it couldn't stop is named.
   const target = { storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1" };
   const stopped = [{ target, phase: { kind: "stopped" } }];

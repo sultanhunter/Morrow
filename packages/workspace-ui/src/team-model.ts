@@ -428,19 +428,25 @@ export interface ActivityView {
  * "Stop all AI work" (ADR-0005: human_only, no second approver). It is wired to the stop
  * that exists: each store's Listings "Stop AI work" (`agents.listingsStop`), one command
  * per store. A store is a target only when the server says this person may stop it and it
- * isn't stopped already. Turning AI work back on stays on each store's own page, where
- * Resume asks for the server's document as Enable does.
+ * isn't stopped already. A store held by a platform or connection stop (`blocked`) runs no
+ * AI work, so it is never called "on"; where this person may stop it, it stays a target, so
+ * Listings stays off once that hold lifts. Turning AI work back on stays on each store's own
+ * page, where Resume asks for the server's document as Enable does.
  */
 export interface StopTarget {
   readonly storeId: Id;
   readonly shopDomain: string;
   readonly installationId: Id;
+  /** Held by a platform or connection stop: no AI work runs there now. */
+  readonly held: boolean;
 }
 export interface StopAllState {
   readonly targets: readonly StopTarget[];
   /** Stores whose Listings agent a person stopped. */
   readonly stopped: number;
-  /** Stores with work this person may not stop (the server said so). */
+  /** Stores held by a platform or connection stop and not stopped by a person. */
+  readonly held: number;
+  /** Stores with work on that this person may not stop (the server said so). */
   readonly notAllowed: number;
 }
 export function stopAllState(
@@ -451,20 +457,27 @@ export function stopAllState(
 ): StopAllState {
   const targets: StopTarget[] = [];
   let stopped = 0;
+  let held = 0;
   let notAllowed = 0;
   for (const { connection, listings } of stores) {
     const installation = listings.installation;
     if (installation === null || connection.storeId !== listings.storeId) continue;
-    if (installation.stopped) stopped += 1;
-    else if (!listings.actions.stop) notAllowed += 1;
-    else
+    if (installation.stopped) {
+      stopped += 1;
+      continue;
+    }
+    if (listings.blocked) held += 1;
+    if (listings.actions.stop)
       targets.push({
         storeId: listings.storeId,
         shopDomain: connection.shopDomain,
         installationId: installation.installationId,
+        held: listings.blocked,
       });
+    // Held work isn't on, so it isn't work this person can't stop.
+    else if (!listings.blocked) notAllowed += 1;
   }
-  return { targets, stopped, notAllowed };
+  return { targets, stopped, held, notAllowed };
 }
 /** The typed confirmation: the word "stop", in any case, with spaces around it ignored. */
 export const stopWord = "stop";

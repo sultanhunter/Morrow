@@ -12,7 +12,8 @@
 //   * Turning AI work back on is each store's own Resume, which asks for the server's
 //     document as Enable does.
 //   * The words name what stopped (Listings, on how many stores) and never claim more: a
-//     store whose work this person may not stop is said to be still on.
+//     store whose work this person may not stop is said to be still on, and one held by a
+//     platform or connection stop is said to be paused, never on.
 import { useCallback, useEffect, useId, useRef, useState, type Ref } from "react";
 import { Button, Dialog, RouteLink } from "../components/controls";
 import { StatusRegion, outcomeState } from "../components/feedback";
@@ -257,7 +258,7 @@ function StopDialog({
               <ul className="sr-bullets">
                 {state.targets.map((target) => (
                   <li key={target.storeId} dir="auto">
-                    {s.target(target.shopDomain)}
+                    {target.held ? s.targetHeld(target.shopDomain) : s.target(target.shopDomain)}
                   </li>
                 ))}
               </ul>
@@ -320,15 +321,21 @@ export function StopAllStatus({
   /** The stopped banner's heading, focused after a stop (the opener is gone by then). */
   readonly resultRef?: Ref<HTMLHeadingElement>;
 }) {
-  if (state.targets.length > 0)
+  // A store held by a platform or connection stop runs nothing: it is paused, never "on".
+  const held = state.held > 0 ? <p className="sr-help">{s.held(state.held)}</p> : null;
+  if (state.targets.length > 0) {
+    const on = state.targets.some((t) => !t.held) || state.notAllowed > 0;
     return (
       <div className="sr-stop-on">
         <div className="sr-stop-text">
           <p className="sr-reading">{s.body}</p>
           <p className="sr-stop-status">
-            <Badge kind="active" />
-            <span className="sr-meta">{s.on(state.targets.length)}</span>
+            <Badge kind={on ? "active" : "paused"} />
+            <span className="sr-meta">
+              {on ? s.on(state.targets.length) : s.heldOn(state.targets.length)}
+            </span>
           </p>
+          {held}
           {state.notAllowed > 0 ? (
             <p className="sr-help">{s.someNotAllowed(state.notAllowed)}</p>
           ) : null}
@@ -344,6 +351,7 @@ export function StopAllStatus({
         </button>
       </div>
     );
+  }
   if (state.stopped > 0)
     return (
       <div className="sr-banner sr-banner-warning sr-stop-stopped">
@@ -358,6 +366,7 @@ export function StopAllStatus({
           {state.notAllowed > 0 ? (
             <p className="sr-reading">{s.someNotAllowed(state.notAllowed)}</p>
           ) : null}
+          {held}
           <p className="sr-help">{s.turnOnHow}</p>
           <RouteLink route="connections" params={{ workspaceId }} className="sr-link">
             {s.openStore}
@@ -365,7 +374,12 @@ export function StopAllStatus({
         </div>
       </div>
     );
-  return <p className="sr-reading">{state.notAllowed > 0 ? s.notAllowed : s.nothing}</p>;
+  return (
+    <>
+      <p className="sr-reading">{state.notAllowed > 0 ? s.notAllowed : s.nothing}</p>
+      {held}
+    </>
+  );
 }
 
 /** The card at the top of Activity: what is on, the stop, and what became of it. */
