@@ -211,6 +211,11 @@ for (const [name, change, expected] of [
     (c) => (tool(c, "message.post").inputDefinition = "ToolInputUnknown"),
     /unknown input definition/,
   ],
+  [
+    "an input definition outside the ToolInput names",
+    (c) => (tool(c, "specialist.draft").inputDefinition = "SpecialistBrief"),
+    /specialist\.draft: input definition must be a ToolInput definition/,
+  ],
 ])
   test(`the tool catalogue refuses ${name}`, () => {
     const c = structuredClone(catalogue);

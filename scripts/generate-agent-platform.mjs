@@ -302,7 +302,10 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
         at("a specialist tool must be inside the Specialist ceiling");
       if (neverForSpecialists(capability, tool.verb)) at("never offered to a specialist");
     }
-    // Input: a v1.1 core definition, expressible as a strict schema, naming nothing forbidden.
+    // Input: a v1.1 core ToolInput definition, expressible as a strict schema, naming nothing
+    // forbidden; its strict shape is the ToolModelInput definition of the same name.
+    if (!/^ToolInput[A-Z][A-Za-z0-9]*$/.test(String(tool.inputDefinition)))
+      at("input definition must be a ToolInput definition");
     const definition = core?.$defs?.[tool.inputDefinition];
     if (!definition) {
       at("unknown input definition " + tool.inputDefinition);
