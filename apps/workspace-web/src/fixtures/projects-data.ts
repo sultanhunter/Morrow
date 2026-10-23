@@ -862,6 +862,51 @@ export function toteMessages(): ProjectMessageView[] {
   ];
 }
 
+/** The Stock area's conversation, as the Everyday work board draws it. */
+export function stockMessages(): ProjectMessageView[] {
+  return [
+    {
+      kind: "message",
+      id: "sm-1",
+      author: m.inventory,
+      at: "6:04 am",
+      text: "3 best sellers have less than 2 weeks of stock: Utility Overshirt (about 11 days), Linen Trousers (about 9 days, 40 arriving Wed, Oct 28) and Linen Apron (about 13 days).",
+      restricted: null,
+      written: false,
+    },
+    {
+      kind: "line",
+      id: "sm-2",
+      at: "6:05 am",
+      text: "Alert sent to Maya Chen: Linen Apron is under 2 weeks",
+    },
+    {
+      kind: "message",
+      id: "sm-3",
+      author: m.inventory,
+      at: "6:06 am",
+      text: "For Utility Overshirt I’d order 32, but Weave Co.’s minimum order is 50. I’ve asked Maya in the Inbox whether to order 50 or wait.",
+      restricted: null,
+      written: false,
+    },
+    {
+      kind: "message",
+      id: "sm-4",
+      author: m.leo,
+      at: "1:12 pm",
+      text: "I found 6 more aprons in the back room. I’ll do a proper count on Wednesday before we reorder.",
+      restricted: null,
+      written: false,
+    },
+    {
+      kind: "line",
+      id: "sm-5",
+      at: "1:13 pm",
+      text: "Leo Martin added a task: Count stock in the back room",
+    },
+  ];
+}
+
 export function planChangeCard(index: number, projectId: string): ProjectMessageView {
   return {
     kind: "plan_change",

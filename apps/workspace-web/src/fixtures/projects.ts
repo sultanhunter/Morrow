@@ -38,6 +38,7 @@ import {
   quickTasksRow,
   repeatingView,
   starters,
+  stockMessages,
   taskRows,
   toteMessages,
 } from "./projects-data";
@@ -107,7 +108,10 @@ export function createProjectsFixture(
           mentionMorrow: false,
         },
       });
-  const conversations = new Map<Id, ProjectMessageView[]>([["project-tote", toteMessages()]]);
+  const conversations = new Map<Id, ProjectMessageView[]>([
+    ["project-tote", toteMessages()],
+    ["area-stock", stockMessages()],
+  ]);
   const asks = new Map<Id, AskState>([
     [
       "conv-sample",
