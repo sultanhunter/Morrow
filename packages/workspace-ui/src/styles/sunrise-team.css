@@ -1471,6 +1471,9 @@
   box-shadow: none;
   border: 1px solid var(--color-sunrise-divider);
 }
+.sr-stop-stopped .sr-banner-title {
+  color: var(--color-sunrise-warning);
+}
 .sr-stop-stopped .sr-banner-body {
   display: grid;
   gap: 8px;

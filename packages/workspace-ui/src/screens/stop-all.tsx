@@ -352,7 +352,7 @@ export function StopAllCard({ workspaceId }: { readonly workspaceId: Id }) {
         <div className="sr-banner sr-banner-warning sr-stop-stopped">
           <div className="sr-banner-head">
             <Badge kind="paused" />
-            <p className="sr-banner-title">{s.stoppedTitle}</p>
+            <h3 className="sr-banner-title">{s.stoppedTitle}</h3>
           </div>
           <div className="sr-banner-body">
             <p className="sr-reading">{s.stoppedBody}</p>

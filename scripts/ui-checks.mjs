@@ -285,7 +285,7 @@ export const fixtureCases = [
   fixtureCase("entry", "unavailable_destination", `/w/${ws}/catalog`),
   // M3 PR-1: the Listings agent card on M2 PR-2's connection screen (the sample store's
   // connection): ready, the review of the server-built document, the stop dialog; and the
-  // model default under Settings > Governance.
+  // model default under Settings (the `billing` section since T7 PR 16).
   fixtureCase("agents", "listings_card", `/w/${ws}/connections/conn-sample-1`),
   fixtureCase("agents", "listings_review", `/w/${ws}/connections/conn-sample-1`, {
     setup: async (page) => {
@@ -302,7 +302,7 @@ export const fixtureCases = [
       await page.getByRole("heading", { name: "Stop AI work for this store" }).waitFor();
     },
   }),
-  fixtureCase("settings", "model_default", `/w/${ws}/settings/governance`),
+  fixtureCase("settings", "model_default", `/w/${ws}/settings/billing`),
   fixtureCase("account", "form", "/", { scenario: "account_form" }),
   fixtureCase("account", "chooser", "/", { scenario: "account_chooser" }),
   fixtureCase("account", "invite", "/", { scenario: "account_invite" }),
@@ -633,10 +633,69 @@ fixtureCases.push(
     widths: two,
     setup: (page) => page.getByRole("tab", { name: "By helper" }).click(),
   }),
-  fixtureCase("settings", "email", `/w/${ws}/settings/notifications`),
-  fixtureCase("settings", "email_member", `/w/${ws}/settings/notifications`, {
+  fixtureCase("settings", "email", `/w/${ws}/settings/stores`),
+  fixtureCase("settings", "email_member", `/w/${ws}/settings/stores`, {
     widths: two,
     scenario: "team_member",
+  }),
+  fixtureCase("settings", "notifications", `/w/${ws}/settings/notifications`),
+  // A change shows the save bar; the time zone is the Owner's alone.
+  fixtureCase("settings", "notifications_unsaved", `/w/${ws}/settings/notifications`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("switch", { name: "Email me each Monday project update" }).click();
+      await page.getByText("You have unsaved changes").waitFor();
+    },
+  }),
+  fixtureCase("settings", "notifications_member", `/w/${ws}/settings/notifications`, {
+    widths: two,
+    scenario: "team_member",
+    setup: async (page) => {
+      await page.getByText("Only Maya Chen (Owner) can change the time zone.").waitFor();
+      expect(await page.getByLabel("Linen & Form’s time zone").isDisabled(), "zone_held");
+    },
+  }),
+  // Activity: Stop all AI work on top, wired to the Listings agent's own stop.
+  fixtureCase("settings", "activity", `/w/${ws}/settings/governance`),
+  fixtureCase("settings", "activity_on", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all",
+  }),
+  fixtureCase("settings", "stop_dialog", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Stop all AI work" }).click();
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.waitFor();
+      const confirm = dialog.getByRole("button", { name: "Stop all AI work" });
+      expect(await confirm.isDisabled(), "confirm_held_until_typed");
+      await dialog.getByLabel("To confirm, type: stop").fill("stop");
+      expect(!(await confirm.isDisabled()), "confirm_after_typed");
+    },
+  }),
+  fixtureCase("settings", "stopped", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Stop all AI work" }).click();
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.getByLabel("To confirm, type: stop").fill("stop");
+      await dialog.getByRole("button", { name: "Stop all AI work" }).click();
+      await page.getByRole("heading", { name: "All AI work is stopped" }).waitFor();
+    },
+  }),
+  // A lost reply is "not confirmed" with Check again (the same key), never "stopped".
+  fixtureCase("settings", "stop_uncertain", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all_uncertain",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Stop all AI work" }).click();
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.getByLabel("To confirm, type: stop").fill("stop");
+      await dialog.getByRole("button", { name: "Stop all AI work" }).click();
+      await dialog.getByRole("button", { name: "Check again" }).waitFor();
+    },
   }),
   fixtureCase("settings", "people", `/w/${ws}/settings/people`, { widths: two }),
   fixtureCase("library", "knowledge", `/w/${ws}/knowledge`),

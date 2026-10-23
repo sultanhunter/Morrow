@@ -18,13 +18,19 @@ import { scenarioNames } from "../apps/workspace-web/src/fixtures/scenarios.ts";
 import { fixtureWorkspace } from "../apps/workspace-web/src/fixtures/seed.ts";
 import { portMethods } from "../packages/workspace-ui/src/port.ts";
 import {
+  activityFilters,
+  isStopConfirmation,
   monthlyLimitRange,
   optionsFromCatalogue,
   optionsFromEstimates,
+  sameNotificationChoices,
+  stopAllState,
   teamPortMethods,
   thinkingEfforts,
   thinkingModels,
 } from "../packages/workspace-ui/src/team-model.ts";
+import { settingsRoutes } from "../packages/workspace-ui/src/sunrise/parts.tsx";
+import { workspaceRoutes } from "../packages/contracts/src/routes.ts";
 import { sunriseCopy } from "../packages/workspace-ui/src/sunrise/copy.ts";
 import { AgentAvatar, PersonAvatar } from "../packages/workspace-ui/src/sunrise/avatars.tsx";
 import { recordingTransport } from "./fixtures/workspace-web.mjs";
@@ -35,8 +41,8 @@ const h = React.createElement;
 const ws = fixtureWorkspace.id;
 const command = (body) => ({ key: randomUUID(), body });
 
-test("the port: ten methods, none composed over HTTP, and none sends a request", async () => {
-  assert.equal(teamPortMethods.length, 10);
+test("the port: thirteen methods, none composed over HTTP, and none sends a request", async () => {
+  assert.equal(teamPortMethods.length, 13);
   for (const method of teamPortMethods) {
     assert.ok(portMethods.includes(method), method);
     assert.equal(composed[method], false, method);
@@ -73,10 +79,22 @@ test("the port: ten methods, none composed over HTTP, and none sends a request",
     await port.settings.emailAddresses(ws),
     await port.library.knowledge(ws),
     await port.library.files(ws),
+    await port.settings.notifications(ws),
+    await port.settings.reviseNotifications(
+      ws,
+      command({
+        email: { soon: true, summary: true, monday: false, mentions: true },
+        summaryHour: 8,
+        quiet: { on: true, from: 21, until: 7 },
+        timeZone: "toronto",
+        expectedRevision: 1,
+      }),
+    ),
+    await port.settings.activity(ws),
   ];
   assert.deepEqual(
     outcomes.map((o) => o.kind),
-    Array(10).fill("not_in_build"),
+    Array(13).fill("not_in_build"),
   );
   assert.equal(recorded.calls.length, 0);
 });
@@ -387,6 +405,162 @@ test("settings: one Morrow address, the default; linked mailboxes are reserved k
   assert.equal((await empty.team.overview(ws)).value.agents.length, 0);
 });
 
+test("settings: each board page has its own section, all within the route contract", () => {
+  const route = workspaceRoutes.routes.find((r) => r.id === "settings_section");
+  const sections = route.parameter_enums.section;
+  const used = Object.values(settingsRoutes).filter((v) => v !== null);
+  for (const section of used) assert.ok(sections.includes(section), section);
+  assert.equal(new Set(used).size, used.length);
+  // Until the contract has `email` and `activity` (the brief's open question 1).
+  assert.deepEqual(settingsRoutes, {
+    plan: "usage",
+    people: "people",
+    notifications: "notifications",
+    email: "stores",
+    shopify: null,
+    activity: "governance",
+    governance: "billing",
+  });
+});
+
+const prefsBody = (view, change = {}) => ({
+  email: view.email,
+  summaryHour: view.summaryHour,
+  quiet: view.quiet,
+  timeZone: view.timeZone,
+  expectedRevision: view.revision,
+  ...change,
+});
+test("notifications: each person's own, closed values; the time zone is the Owner's", async () => {
+  const port = createFixtureAdapter("ready");
+  const view = (await port.settings.notifications(ws)).value;
+  assert.equal(view.canChangeTimeZone, true);
+  assert.ok(sameNotificationChoices(view, prefsBody(view)));
+  const off = { ...view.email, monday: false };
+  assert.ok(!sameNotificationChoices(view, prefsBody(view, { email: off })));
+  const save = command(prefsBody(view, { email: off, summaryHour: 9 }));
+  const saved = await port.settings.reviseNotifications(ws, save);
+  assert.equal(saved.kind, "ok");
+  assert.equal(saved.value.revision, view.revision + 1);
+  // A repeat of the same key replays; it doesn't save twice.
+  const again = await port.settings.reviseNotifications(ws, save);
+  assert.deepEqual([again.kind, again.replayed, again.value.revision], ["ok", true, 2]);
+  const now = (await port.settings.notifications(ws)).value;
+  assert.deepEqual([now.email.monday, now.summaryHour, now.revision], [false, 9, 2]);
+  // The old revision is refused: reread, nothing changes.
+  const stale = await port.settings.reviseNotifications(
+    ws,
+    command(prefsBody(view, { summaryHour: 7 })),
+  );
+  assert.deepEqual([stale.kind, stale.recheck], ["conflict", true]);
+  assert.equal((await port.settings.notifications(ws)).value.summaryHour, 9);
+  // Values outside the board's lists, or extra keys, are refused.
+  for (const change of [
+    { summaryHour: 3 },
+    { quiet: { on: true, from: 23, until: 7 } },
+    { timeZone: "utc" },
+    { email: { ...now.email, marketing: true } },
+    { email: { ...now.email, soon: "yes" } },
+  ]) {
+    const refused = await port.settings.reviseNotifications(ws, command(prefsBody(now, change)));
+    assert.equal(refused.kind, "invalid", JSON.stringify(change));
+  }
+  // A member changes their own choices, never the shop's time zone.
+  const member = createFixtureAdapter("team_member");
+  const theirs = (await member.settings.notifications(ws)).value;
+  assert.equal(theirs.canChangeTimeZone, false);
+  const zone = await member.settings.reviseNotifications(
+    ws,
+    command(prefsBody(theirs, { timeZone: "vancouver" })),
+  );
+  assert.equal(zone.kind, "denied");
+  const own = await member.settings.reviseNotifications(
+    ws,
+    command(prefsBody(theirs, { quiet: { on: false, from: 21, until: 7 } })),
+  );
+  assert.equal(own.kind, "ok");
+  assert.equal((await member.settings.notifications("ws-other")).kind, "not_found");
+});
+
+test("activity: who did what, by day; filters are closed; no conversations", async () => {
+  const view = (await createFixtureAdapter("ready").settings.activity(ws)).value;
+  assert.ok(view.entries.length > 5);
+  const categories = new Set(view.entries.map((e) => e.category));
+  for (const c of categories) assert.ok([...activityFilters, "work"].includes(c), c);
+  assert.ok(!activityFilters.includes("work"));
+  for (const e of view.entries) assert.doesNotMatch(e.what + e.detail, /conversation/i);
+  assert.equal((await createFixtureAdapter("empty").settings.activity(ws)).value.entries.length, 0);
+});
+
+const store = (storeId, shopDomain = `${storeId}.example`) => ({
+  installationId: `inst-${storeId}`,
+  connectionId: `conn-${storeId}`,
+  storeId,
+  shopDomain,
+  status: "linked",
+  grantedScopes: [],
+  updatedAt: "2026-10-23T09:00:00.000Z",
+});
+const listings = (storeId, { on = true, stopped = false, mayStop = true } = {}) => ({
+  storeId,
+  linked: true,
+  blocked: false,
+  installation: on
+    ? {
+        installationId: `listings-${storeId}`,
+        status: stopped ? "disabled" : "active",
+        revision: 1,
+        stopped,
+        updatedAt: "2026-10-23T09:00:00.000Z",
+      }
+    : null,
+  actions: { enable: !on, resume: stopped, stop: on && mayStop },
+});
+test("stop all: only what the server lets this person stop, and not what is stopped", () => {
+  const state = stopAllState([
+    { connection: store("s1"), listings: listings("s1") },
+    { connection: store("s2"), listings: listings("s2", { stopped: true }) },
+    { connection: store("s3"), listings: listings("s3", { mayStop: false }) },
+    { connection: store("s4"), listings: listings("s4", { on: false }) },
+    // A reply for another store than the connection names is ignored.
+    { connection: store("s5"), listings: listings("s6") },
+  ]);
+  assert.deepEqual(state.targets, [
+    { storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1" },
+  ]);
+  assert.equal(state.stopped, 1);
+  assert.equal(state.notAllowed, 1);
+  assert.deepEqual(stopAllState([]), { targets: [], stopped: 0, notAllowed: 0 });
+  // The typed confirmation: the word itself, nothing else.
+  for (const typed of ["stop", "STOP", "  Stop "]) assert.ok(isStopConfirmation(typed), typed);
+  for (const typed of ["", "stp", "stop now", "s t o p", "stopp"])
+    assert.ok(!isStopConfirmation(typed), typed);
+});
+
+test("stop all is the Listings stop: one key per store; a lost reply replays that key", async () => {
+  const port = createFixtureAdapter("stop_all_uncertain");
+  const [connection] = (await port.connections.list(ws)).value.installations;
+  const before = (await port.agents.listingsStatus(ws, connection.storeId)).value;
+  assert.deepEqual([before.installation.stopped, before.actions.stop], [false, true]);
+  const stop = command({ reason: sunriseCopy.stop.reason });
+  assert.equal((await port.agents.listingsStop(ws, connection.storeId, stop)).kind, "uncertain");
+  const check = await port.agents.listingsStop(ws, connection.storeId, stop);
+  assert.deepEqual([check.kind, check.replayed], ["ok", true]);
+  const after = (await port.agents.listingsStatus(ws, connection.storeId)).value;
+  assert.equal(after.installation.stopped, true);
+  assert.deepEqual(stopAllState([{ connection, listings: after }]), {
+    targets: [],
+    stopped: 1,
+    notAllowed: 0,
+  });
+  // The reason is plain words within the HTTP adapter's bound.
+  assert.ok(sunriseCopy.stop.reason.length > 0 && sunriseCopy.stop.reason.length <= 1024);
+  // With nothing on (the default sample), there is nothing to stop.
+  const ready = createFixtureAdapter("ready");
+  const off = (await ready.agents.listingsStatus(ws, connection.storeId)).value;
+  assert.deepEqual(stopAllState([{ connection, listings: off }]).targets, []);
+});
+
 test("every scenario's reads of the group settle without a request", async () => {
   const original = globalThis.fetch;
   let calls = 0;
@@ -405,6 +579,8 @@ test("every scenario's reads of the group settle without a request", async () =>
         () => port.team.catalogue(ws),
         () => port.settings.plan(ws),
         () => port.settings.emailAddresses(ws),
+        () => port.settings.notifications(ws),
+        () => port.settings.activity(ws),
         () => port.library.knowledge(ws),
         () => port.library.files(ws),
       ])
