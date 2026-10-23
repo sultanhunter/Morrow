@@ -34,7 +34,17 @@ Non-goals: writing to the store (PR 3); "Disconnect store" and the model switch 
 
 ## Owner steps
 
-See the PR description (the order: merge, migrate, deploy, sign in, register, entitlement, install, link).
+The order: merge, migrate, deploy, sign in, register, entitlement, install, link. `<…>` marks a value the owner sends in chat; the shop's domain and the install link go only there, never into this repository or the activity log.
+
+1. **Claude, after the merge** (standing approval; one activity-log line each): `npm run staging:migrate` (ledger 40), rerun the deploy that gate 3 held (its smoke now reads the connector's `/healthz` and 404), re-read the two WorkOS facts e7 names, then `npm run staging:seed-platform -- --self-service`.
+2. **Owner:** sign in at `https://morrow-staging-api.sultanibneusman0.workers.dev` with your existing login and create your workspace. Send Claude its id: the part after `/w/` in the address bar.
+3. **Owner:** in the Dev Dashboard of your Partner organization, create the app `Morrow` and send Claude its Client ID. Then in Terminal: `mkdir -p ~/morrow-shopify-app && cd ~/Desktop/Morrow && git pull --ff-only && npm run shopify-app -- toml --environment staging --app-key morrow-live --client-id <client id> --name "Morrow" --out ~/morrow-shopify-app/shopify.app.morrow-live.toml`, then `cd ~/morrow-shopify-app && shopify app deploy --config morrow-live` (the Shopify CLI; log in and release).
+4. **Owner:** on the app's Distribution card choose Custom distribution (permanent), then Manage custom install link: your `<store>.myshopify.com`, multi-store installs unticked, Generate link. Send Claude the link.
+5. **Owner:** copy the app's Client secret, then in Terminal `morrow_put "Shopify app client secret" shopify-app-secret` (paste at the hidden prompt) and `pbcopy </dev/null`. Tell Claude "Shopify secret saved", never the secret.
+6. **Claude:** `npm run staging:shopify-app-register -- --app-key morrow-live --client-id <client id> --shop <store>.myshopify.com --workspace <workspace id> --install-url '<install link>' --secret-file` (prints ids, the secret version and the KEK fingerprint; deletes the file), then `npm run staging:test-entitlement -- --workspace <workspace id> --approval adr-0035.e13.<today>.1 --operator claude` (300 test credits, 30 days).
+7. **Owner:** in Morrow, Connections → Open the install link → Install in Shopify (products permission) → back in Morrow, Link store → Enable Listings agent.
+
+Stop at any time: `npm run staging:kill` takes both addresses down. Rotating the client secret later: steps 5 and 6 again with the same values.
 
 ## Test checklist
 
