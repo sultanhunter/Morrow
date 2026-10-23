@@ -639,8 +639,13 @@ function checkCsv(bytes: Uint8Array): OutputCheck {
 
 // XLSX: an OOXML zip, read from its central directory and checked against each local
 // header (no ZIP64, encryption, data descriptors' disagreement, path tricks or bombs). The
-// parts that would carry macros, objects or links reject it, and so does any external
-// relationship, macro content type, or formula naming a link or a remote function.
+// parts that would carry macros, objects or links reject it, and so does any macro content
+// type. Every part is then read whatever its name: an image (PNG, JPEG or GIF by its magic
+// bytes) or strict UTF-8 XML (readXmlPart), and in every XML part any external or
+// macro, object or link relationship, any formula (cell, defined name, conditional format,
+// validation, table, chart or pivot) naming a link or a remote function, and any hyperlink
+// relationship reject it. Text a pattern could read differently from Excel (a character
+// reference, CDATA, a comment, a DTD) rejects the part instead of being decoded.
 const zipLimits = Object.freeze({
   entries: 2000,
   uncompressedTotal: 64 * 1024 * 1024,
@@ -736,46 +741,202 @@ function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
   }
   return at === eocd ? entries : null;
 }
-async function inflatePart(
+async function inflateBytes(
+  bytes: Uint8Array,
+  entry: ZipEntry,
+  max: number,
+): Promise<Uint8Array | null> {
+  if (entry.size > max) return null;
+  const data = bytes.subarray(entry.dataStart, entry.dataStart + entry.compressedSize);
+  if (entry.method === 0) return data;
+  const stream = new Blob([new Uint8Array(data)])
+    .stream()
+    .pipeThrough(new DecompressionStream("deflate-raw"));
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.length;
+    if (length > max || length > entry.size) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  if (length !== entry.size) return null;
+  const out = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+async function inflateText(
   bytes: Uint8Array,
   entry: ZipEntry,
   max: number,
 ): Promise<string | null> {
-  if (entry.size > max) return null;
-  const data = bytes.subarray(entry.dataStart, entry.dataStart + entry.compressedSize);
-  let out: Uint8Array;
-  if (entry.method === 0) out = data;
-  else {
-    const stream = new Blob([new Uint8Array(data)])
-      .stream()
-      .pipeThrough(new DecompressionStream("deflate-raw"));
-    const reader = stream.getReader();
-    const chunks: Uint8Array[] = [];
-    let length = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.length;
-      if (length > max || length > entry.size) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-    if (length !== entry.size) return null;
-    out = new Uint8Array(length);
-    let offset = 0;
-    for (const chunk of chunks) {
-      out.set(chunk, offset);
-      offset += chunk.length;
-    }
-  }
+  const out = await inflateBytes(bytes, entry, max);
+  if (out === null) return null;
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(out);
   } catch {
     return null;
   }
 }
+
+// One XML part, read the way a strict parser reads it. Whatever such a parser could read
+// differently from these patterns is refused rather than decoded: UTF-8 only (no NUL, no
+// other declared encoding, XML 1.0), no DTD, entity declaration, comment, CDATA section or
+// processing instruction after the declaration, only the five predefined entities and the
+// tab, newline and carriage-return character references, well-formed tags with quoted and
+// unique attributes, one root element, and no element inside a formula. Names are matched
+// on their local part whatever the prefix, so a renamed namespace prefix hides nothing.
+const xmlSpace = "[ \\t\\r\\n]";
+const xmlName = "[A-Za-z_][A-Za-z0-9_.-]*(?::[A-Za-z_][A-Za-z0-9_.-]*)?";
+const xmlValue = `(?:"([^"<]*)"|'([^'<]*)')`;
+const xmlStartTag = new RegExp(
+  `<(${xmlName})((?:${xmlSpace}+${xmlName}${xmlSpace}*=${xmlSpace}*(?:"[^"<]*"|'[^'<]*'))*)${xmlSpace}*(/?)>`,
+  "y",
+);
+const xmlAttribute = new RegExp(
+  `${xmlSpace}+(${xmlName})${xmlSpace}*=${xmlSpace}*${xmlValue}`,
+  "y",
+);
+const xmlEndTag = new RegExp(`</(${xmlName})${xmlSpace}*>`, "y");
+const xmlDeclaration = new RegExp(
+  `^<\\?xml((?:${xmlSpace}+[a-z]+${xmlSpace}*=${xmlSpace}*(?:"[^"]*"|'[^']*'))*)${xmlSpace}*\\?>`,
+);
+const xmlReferences = "amp|lt|gt|quot|apos|#x0*[9aAdD]|#0*(?:9|10|13)";
+const xmlReference = new RegExp(`&(${xmlReferences});`, "g");
+const xmlStrayAmpersand = new RegExp(`&(?!(?:${xmlReferences});)`);
+const xmlEntities: Readonly<Record<string, string>> = Object.freeze({
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+});
+const xmlDecode = (s: string): string =>
+  s.replace(xmlReference, (_, ref: string) =>
+    ref.startsWith("#x")
+      ? String.fromCharCode(parseInt(ref.slice(2), 16))
+      : ref.startsWith("#")
+        ? String.fromCharCode(parseInt(ref.slice(1), 10))
+        : xmlEntities[ref]!,
+  );
+const xmlLocal = (name: string): string => name.slice(name.indexOf(":") + 1).toLowerCase();
+// The elements whose text is a formula: cells (`f`, and a chart's `c:f`), defined names,
+// conditional formats (`formula`), validations (`formula1`, `formula2`) and table columns.
+// A pivot's calculated field or item carries its formula in a `formula` attribute.
+const xmlFormulaElements = new Set([
+  "f",
+  "definedname",
+  "formula",
+  "formula1",
+  "formula2",
+  "calculatedcolumnformula",
+  "totalsrowformula",
+]);
+interface XmlRelationship {
+  readonly targets: readonly string[];
+  readonly modes: readonly string[];
+  readonly types: readonly string[];
+}
+interface XmlPart {
+  readonly formulas: readonly string[];
+  readonly relationships: readonly XmlRelationship[];
+  readonly hyperlinkRelationship: boolean;
+}
+/** The formulas, relationships and hyperlinks of one XML part, or null if unreadable. */
+function readXmlPart(text: string): XmlPart | null {
+  if (text.includes("\u0000") || xmlStrayAmpersand.test(text)) return null;
+  let at = 0;
+  const declaration = xmlDeclaration.exec(text);
+  if (declaration) {
+    const pseudo = declaration[1]!;
+    const version = /version[ \t\r\n]*=[ \t\r\n]*["']([^"']*)["']/.exec(pseudo);
+    const encoding = /encoding[ \t\r\n]*=[ \t\r\n]*["']([^"']*)["']/.exec(pseudo);
+    if (version?.[1] !== "1.0" || (encoding && encoding[1]!.toLowerCase() !== "utf-8")) return null;
+    at = declaration[0].length;
+  }
+  const formulas: string[] = [];
+  const relationships: XmlRelationship[] = [];
+  let hyperlinkRelationship = false;
+  const open: string[] = [];
+  let formula: string | null = null;
+  let roots = 0;
+  while (at < text.length) {
+    const lt = text.indexOf("<", at);
+    const next = lt < 0 ? text.length : lt;
+    if (next > at) {
+      const chunk = text.slice(at, next);
+      if (open.length === 0 && /[^ \t\r\n]/.test(chunk)) return null;
+      if (formula !== null) formula += chunk;
+      at = next;
+      continue;
+    }
+    xmlStartTag.lastIndex = at;
+    const start = xmlStartTag.exec(text);
+    if (start) {
+      if (formula !== null || (open.length === 0 && roots > 0)) return null;
+      if (open.length === 0) roots++;
+      const name = start[1]!;
+      const local = xmlLocal(name);
+      const list = start[2]!;
+      const attributes: [string, string][] = [];
+      const seen = new Set<string>();
+      xmlAttribute.lastIndex = 0;
+      while (xmlAttribute.lastIndex < list.length) {
+        const attribute = xmlAttribute.exec(list);
+        if (!attribute || seen.has(attribute[1]!)) return null;
+        seen.add(attribute[1]!);
+        attributes.push([xmlLocal(attribute[1]!), xmlDecode(attribute[2] ?? attribute[3]!)]);
+      }
+      for (const [key, value] of attributes) if (key === "formula") formulas.push(value);
+      const values = (key: string) => attributes.filter(([k]) => k === key).map(([, v]) => v);
+      if (local === "relationship")
+        relationships.push(
+          Object.freeze({
+            targets: values("target"),
+            modes: values("targetmode"),
+            types: values("type"),
+          }),
+        );
+      if (
+        local === "hyperlink" &&
+        [...seen].some((key) => key.includes(":") && xmlLocal(key) === "id")
+      )
+        hyperlinkRelationship = true;
+      if (start[3] !== "/") {
+        open.push(name);
+        if (xmlFormulaElements.has(local)) formula = "";
+      }
+      at = xmlStartTag.lastIndex;
+      continue;
+    }
+    xmlEndTag.lastIndex = at;
+    const end = xmlEndTag.exec(text);
+    if (end) {
+      if (open.pop() !== end[1]) return null;
+      if (formula !== null) {
+        formulas.push(xmlDecode(formula));
+        formula = null;
+      }
+      at = xmlEndTag.lastIndex;
+      continue;
+    }
+    // A comment, CDATA section, DTD, processing instruction or broken tag.
+    return null;
+  }
+  return open.length === 0 && roots === 1
+    ? Object.freeze({ formulas, relationships, hyperlinkRelationship })
+    : null;
+}
+
 const xlsxMacroParts = [
   /vbaproject/i,
   /^xl\/macrosheets\//i,
@@ -789,10 +950,26 @@ const xlsxObjectParts = [
   /oleobject/i,
   /^xl\/ctrlprops\//i,
   /\.vml$/i,
+  /^xl\/webextensions\//i,
 ];
 const xlsxLinkParts = [/^xl\/externallinks\//i, /^xl\/connections\.xml$/i, /^xl\/querytables\//i];
+// Relationship types, by their URI, whatever the part they point at is called.
+const xlsxMacroRelationship = /vbaproject|macrosheet|dialogsheet|ui\/extensibility|customui/i;
+const xlsxObjectRelationship =
+  /oleobject|\/package$|activexcontrol|\/control$|ctrlprop|webextension/i;
+const xlsxLinkRelationship = /externallink|connections|querytable/i;
+// An internal relationship names a part by a relative path: a scheme, a backslash (UNC) or a
+// network path is a link wherever it appears.
+const xlsxLinkTarget = (target: string) =>
+  target.includes(":") || target.includes("\\") || /^[ \t\r\n]*\/\//.test(target);
+// The only binary parts a workbook may carry: images, recognised by their magic bytes.
+const xlsxMedia: readonly (readonly [RegExp, readonly number[]])[] = Object.freeze([
+  [/\.png$/i, pngSignature],
+  [/\.jpe?g$/i, [0xff, 0xd8, 0xff]],
+  [/\.gif$/i, [0x47, 0x49, 0x46, 0x38]],
+]);
 const remoteFormula =
-  /\b(HYPERLINK|WEBSERVICE|FILTERXML|IMPORTDATA|IMPORTXML|IMPORTRANGE|IMPORTHTML|IMPORTFEED|RTD|CALL|REGISTER(\.ID)?|EXEC|DDE)\b|\[|\|/i;
+  /\b(HYPERLINK|WEBSERVICE|FILTERXML|IMPORTDATA|IMPORTXML|IMPORTRANGE|IMPORTHTML|IMPORTFEED|IMAGE|RTD|CALL|REGISTER(\.ID)?|EXEC|EVALUATE|DDE)\b|\[|\|/i;
 async function checkXlsx(bytes: Uint8Array): Promise<OutputCheck> {
   const entries = zipEntries(bytes);
   if (entries === null) return reject("xlsx_invalid");
@@ -804,28 +981,37 @@ async function checkXlsx(bytes: Uint8Array): Promise<OutputCheck> {
     if (xlsxObjectParts.some((p) => p.test(entry.name))) return reject("xlsx_object");
     if (xlsxLinkParts.some((p) => p.test(entry.name))) return reject("xlsx_link");
   }
-  const types = await inflatePart(bytes, named.get("[Content_Types].xml")!, 1024 * 1024);
-  if (types === null) return reject("xlsx_invalid");
+  const typesText = await inflateText(bytes, named.get("[Content_Types].xml")!, 1024 * 1024);
+  if (typesText === null || readXmlPart(typesText) === null) return reject("xlsx_invalid");
+  const types = xmlDecode(typesText);
   if (/macroenabled|vbaproject|ms-office\.vba|activex/i.test(types)) return reject("xlsx_macro");
   if (/oleobject|vnd\.ms-excel\.controlproperties/i.test(types)) return reject("xlsx_object");
   if (/externallink|connections\+xml/i.test(types)) return reject("xlsx_link");
   for (const entry of entries) {
-    const rels = /\.rels$/i.test(entry.name);
-    const sheet = /^xl\/(worksheets\/sheet[0-9]+|workbook)\.xml$/i.test(entry.name);
-    if (!rels && !sheet) continue;
-    const text = await inflatePart(bytes, entry, rels ? 1024 * 1024 : zipLimits.partInflate);
-    if (text === null) return reject("xlsx_invalid");
-    if (rels) {
-      if (
-        /TargetMode\s*=\s*["']External["']/i.test(text) ||
-        /Target\s*=\s*["'][a-z][a-z0-9+.-]*:/i.test(text)
-      )
-        return reject("xlsx_link");
+    if (entry.name === "[Content_Types].xml") continue;
+    const media = xlsxMedia.find(([p]) => p.test(entry.name));
+    if (media) {
+      const data = await inflateBytes(bytes, entry, zipLimits.partInflate);
+      if (data === null || !media[1].every((v, i) => data[i] === v)) return reject("xlsx_invalid");
       continue;
     }
-    for (const match of text.matchAll(/<(f|definedName)\b[^>]*>([^<]*)<\/\1>/gi))
-      if (remoteFormula.test(match[2]!.replaceAll("&amp;", "&"))) return reject("xlsx_link");
-    if (/<hyperlink\b[^>]*\br:id=/i.test(text)) return reject("xlsx_link");
+    const text = await inflateText(bytes, entry, zipLimits.partInflate);
+    const part = text === null ? null : readXmlPart(text);
+    if (part === null) return reject("xlsx_invalid");
+    for (const relationship of part.relationships) {
+      if (relationship.types.some((t) => xlsxMacroRelationship.test(t)))
+        return reject("xlsx_macro");
+      if (relationship.types.some((t) => xlsxObjectRelationship.test(t)))
+        return reject("xlsx_object");
+      if (
+        relationship.types.some((t) => xlsxLinkRelationship.test(t)) ||
+        relationship.modes.some((m) => m !== "Internal") ||
+        relationship.targets.some(xlsxLinkTarget)
+      )
+        return reject("xlsx_link");
+    }
+    if (part.formulas.some((f) => remoteFormula.test(f))) return reject("xlsx_link");
+    if (part.hyperlinkRelationship) return reject("xlsx_link");
   }
   return accept(bytes);
 }
