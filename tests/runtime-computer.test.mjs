@@ -285,6 +285,31 @@ test("inputs: each cell is checked against its column and rendered as RFC 4180 C
     "order_aggregates",
   );
   refuse([null, ...product().slice(1)], "input_value_invalid");
+  // The script goes into the guest as written, so it gets the same screen as a cell: a URL,
+  // a shop domain, a workers.dev or R2 host, a signed-URL marker or an email address in it
+  // (a comment or a string included) refuses the job, whatever the inputs hold.
+  for (const script of [
+    'print("https://acme.myshopify.com jane@example.com")\n',
+    "# see https://pandas.example/docs\nprint(1)\n",
+    'd = "acme.myshopify.com"\n',
+    'd = "api.morrow-staging.workers.dev"\n',
+    'd = "b.r2.cloudflarestorage.com"\n',
+    'q = "X-Amz-Credential=x"\n',
+    'm = "jane@example.com"\n',
+    'w = "www.example.com"\n',
+    'print("ｊａｎｅ＠ｅｘａｍｐｌｅ.ｃｏｍ")\n',
+  ])
+    assert.deepEqual(
+      renderJobInputs(parseRuntimeJob(text(job({ script })))),
+      { ok: false, code: "input_content_forbidden" },
+      script,
+    );
+  for (const script of [
+    "import pandas as pd\ndf = pd.read_csv('/home/agent/input/products.csv')\n",
+    "x = a @ b.T\n",
+    "@dataclass\nclass Row:\n    sku: str\n",
+  ])
+    assert.equal(renderJobInputs(parseRuntimeJob(text(job({ script })))).ok, true, script);
   // A product title with an @ that is not an address is data, not an email.
   assert.equal(
     renderJobInputs(

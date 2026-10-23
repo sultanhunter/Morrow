@@ -417,6 +417,32 @@ test("minimised inputs: a URL, shop domain or email refuses the job before the l
   assert.deepEqual(w.events, []);
 });
 
+test("the script: a URL, shop domain or email in it refuses the job before the ledger or a create", async () => {
+  const w = world();
+  for (const script of [
+    'print("https://acme.myshopify.com jane@example.com")\n',
+    "# source: https://morrow.example/x\nprint(1)\n",
+    'shop = "acme.myshopify.com"\n',
+    'owner = "jane@example.com"\n',
+    'host = "api.morrow-staging.workers.dev"\n',
+    'u = "bucket.r2.cloudflarestorage.com/k?X-Amz-Signature=abc"\n',
+    'site = "www.example.com"\n',
+    // Full-width look-alikes are read in their NFKC form.
+    'print("ｈｔｔｐｓ://acme.ｍｙｓｈｏｐｉｆｙ.ｃｏｍ")\n',
+  ]) {
+    const result = JSON.parse(await w.execute(job({ script })));
+    assert.equal(result.outcome, "refused", script);
+    assert.equal(result.code, "input_content_forbidden", script);
+    assert.equal(result.traceRef, null, script);
+  }
+  // Nothing reached the ledger or the provider: no send mark, no create, no file.
+  assert.deepEqual(w.events, []);
+  // The same job with a clean script runs: the screen is the only difference.
+  const clean = JSON.parse(await w.execute(job()));
+  assert.equal(clean.outcome, "completed");
+  assert.deepEqual(names(w.events).slice(0, 2), ["ledger.begin", "adapter.create"]);
+});
+
 test("a job: the send mark first, one create, the files, the command, the outputs checked, always killed", async () => {
   const w = world();
   const result = JSON.parse(await w.execute(job()));

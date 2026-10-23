@@ -303,7 +303,8 @@ export const runtimeJobCanonical = (job: RuntimeJob): string => jcs(job);
 export type InputRefusal = "input_value_invalid" | "input_content_forbidden" | "input_too_large";
 // Text that must never enter the guest (ADR-0029 item 4): any URL (Morrow's, R2's, a
 // presigned one or a provider's), a shop's myshopify domain, a workers.dev host and an email
-// address. A cell that holds one refuses the whole job; nothing is silently rewritten.
+// address. A cell or a script that holds one refuses the whole job; nothing is silently
+// rewritten. The text is also read in its NFKC form, so full-width look-alikes are caught too.
 const forbidden = [
   /[a-z][a-z0-9+.-]*:\/\//i,
   /\bwww\./i,
@@ -313,6 +314,10 @@ const forbidden = [
   /x-amz-|x-goog-|signature=/i,
   /[^\s@]+@[^\s@]+\.[a-z]{2,}/i,
 ];
+const forbiddenText = (s: string): boolean => {
+  const folded = s.normalize("NFKC");
+  return forbidden.some((p) => p.test(s) || p.test(folded));
+};
 const controls = /[\u0000-\u001f\u007f]/;
 function codePoints(s: string): number {
   let n = 0;
@@ -326,7 +331,7 @@ function cellValid(type: ColumnType, cell: Cell, nullable: boolean): InputRefusa
       return "input_value_invalid";
     if (/[\ud800-\udfff]/.test(cell.replace(/[\ud800-\udbff][\udc00-\udfff]/g, "")))
       return "input_value_invalid";
-    return forbidden.some((p) => p.test(cell)) ? "input_content_forbidden" : null;
+    return forbiddenText(cell) ? "input_content_forbidden" : null;
   };
   const integer = (min: number, max: number) =>
     typeof cell === "number" && Number.isSafeInteger(cell) && cell >= min && cell <= max
@@ -374,14 +379,19 @@ export interface RenderedInput {
   readonly bytes: Uint8Array;
 }
 /**
- * Checks every input cell against its kind's column and renders each input as an RFC 4180
- * CSV file (header first) for /home/agent/input/<name>.csv. The first refusal wins.
+ * Screens the job's script, checks every input cell against its kind's column and renders
+ * each input as an RFC 4180 CSV file (header first) for /home/agent/input/<name>.csv. The
+ * script goes into the guest as written, so it gets the same screen as a cell: a URL, a shop
+ * domain, a workers.dev or R2 host, a signed-URL marker or an email address in it (a comment
+ * or a string included) refuses the job before the ledger. The first refusal wins.
  */
 export function renderJobInputs(
   job: RuntimeJob,
 ):
   | { readonly ok: true; readonly files: readonly RenderedInput[] }
   | { readonly ok: false; readonly code: InputRefusal } {
+  if (forbiddenText(job.script))
+    return Object.freeze({ ok: false, code: "input_content_forbidden" });
   const files: RenderedInput[] = [];
   let total = 0;
   for (const input of job.inputs) {
