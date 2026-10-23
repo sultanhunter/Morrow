@@ -52,6 +52,7 @@ export const scenarioNames = [
   "team_admin",
   "team_add_uncertain",
   "team_thinking_conflict",
+  "team_solo",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -330,6 +331,8 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   team_add_uncertain: {
     "team.addConfirm": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // A one-person shop: adding an agent needs no teammate's review.
+  team_solo: {},
   team_thinking_conflict: {
     "team.reviseThinking": (call) =>
       call === 0

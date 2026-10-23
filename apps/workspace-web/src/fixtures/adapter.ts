@@ -179,6 +179,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   const teamGroups = createTeamFixture({
     viewer: teamViewerIn[scenario] ?? "owner",
     empty: scenario === "empty",
+    solo: scenario === "team_solo",
     isWorkspace: ws,
     workspaceDefault: () => ({
       model: modelDefault.model,

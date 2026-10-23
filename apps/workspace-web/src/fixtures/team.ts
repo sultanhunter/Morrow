@@ -33,6 +33,8 @@ export interface TeamFixtureDeps {
   readonly viewer: PersonRole;
   /** The scenario's empty variant: Morrow and people only, no files or knowledge. */
   readonly empty: boolean;
+  /** A one-person shop: nobody else reviews an agent's permission. */
+  readonly solo: boolean;
   readonly isWorkspace: (id: string) => boolean;
   /** The workspace model default (the Listings agent's choice; models.* revises it). */
   readonly workspaceDefault: () => ThinkingChoice & { readonly revision: number | null };
@@ -76,7 +78,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   readonly settings: SettingsPort;
   readonly library: LibraryPort;
 } {
-  const { viewer, empty, reply, command } = deps;
+  const { viewer, empty, solo, reply, command } = deps;
   // The server's rule as the fixture models it (ADR-0027 item 12): the Owner changes how
   // any helper thinks; an Admin only added agents'; a member none.
   const mayChange = (target: Target) =>
@@ -270,7 +272,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           "Email and social copy for you to paste",
         ],
       },
-      reviewer: viewer === "owner" ? teammate : owner,
+      // A teammate who also holds the store access it names reviews it (ADR-0024 item 2).
+      reviewer: solo ? null : viewer === "owner" ? teammate : owner,
     },
   ];
   const documents = new Map<string, AddDocumentView>();
@@ -429,15 +432,19 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         canApprove: "Everything at Linen & Form",
         approveGivenBy: null,
       },
-      {
-        name: teammate,
-        initials: "LM",
-        role: viewer === "admin" ? "admin" : "member",
-        presence: "away",
-        isViewer: viewer !== "owner",
-        canApprove: "Product changes, customer replies",
-        approveGivenBy: "Maya Chen, Oct 2",
-      },
+      ...(solo
+        ? []
+        : [
+            {
+              name: teammate,
+              initials: "LM",
+              role: viewer === "admin" ? ("admin" as const) : ("member" as const),
+              presence: "away" as const,
+              isViewer: viewer !== "owner",
+              canApprove: "Product changes, customer replies",
+              approveGivenBy: "Maya Chen, Oct 2",
+            },
+          ]),
     ],
     canAddAgents: mayAdd,
   });

@@ -15,8 +15,9 @@ const eyes = (y = 22.4) => (
 );
 const smile = (d = "M17.4 26.4 Q20 28.6 22.6 26.4") => <path className="sa-line sa-w14" d={d} />;
 
-const specialistProps: Readonly<Record<SpecialistProp, ReactNode>> = {
-  calendar: (
+// Built when drawn, never at import (no element exists before React does).
+const specialistProps: Readonly<Record<SpecialistProp, () => ReactNode>> = {
+  calendar: () => (
     <>
       <rect className="sa-prop sa-w14" x="24.6" y="26.6" width="9.8" height="9" rx="1.6" />
       <path className="sa-line sa-w12" d="M24.6 29.6 H34.4" />
@@ -24,25 +25,25 @@ const specialistProps: Readonly<Record<SpecialistProp, ReactNode>> = {
       <circle className="sa-ink" cx="29.5" cy="32.6" r="1.2" />
     </>
   ),
-  envelope: (
+  envelope: () => (
     <>
       <rect className="sa-prop sa-w14" x="24.2" y="27.4" width="11" height="8" rx="1.4" />
       <path className="sa-line sa-w12" d="M24.8 28.2 L29.7 31.8 L34.6 28.2" />
     </>
   ),
-  magnifier: (
+  magnifier: () => (
     <>
       <circle className="sa-prop sa-w14" cx="28.6" cy="30" r="3.8" />
       <path className="sa-line sa-w20" d="M31.4 32.8 L34.6 36" />
     </>
   ),
-  pencil: (
+  pencil: () => (
     <>
       <path className="sa-prop sa-w13" d="M25 35.6 L25.8 32.2 L32.6 25.4 L35.2 28 L28.4 34.8 Z" />
       <path className="sa-line sa-w12" d="M31.2 26.8 L33.8 29.4" />
     </>
   ),
-  chart: (
+  chart: () => (
     <>
       <rect className="sa-prop sa-w14" x="24.4" y="26.4" width="10.4" height="9.6" rx="1.6" />
       <path className="sa-line sa-w15" d="M27 33.6 V31 M29.6 33.6 V29 M32.2 33.6 V30.2" />
@@ -143,7 +144,7 @@ function features(character: AgentCharacter, prop: SpecialistProp): ReactNode {
           <rect className="sa-edge" x="0.75" y="0.75" width="38.5" height="38.5" rx="11.25" />
           {eyes()}
           {smile()}
-          {specialistProps[prop]}
+          {specialistProps[prop]()}
         </>
       );
   }
