@@ -50,6 +50,11 @@ export interface TeamFixtureDeps {
   readonly empty: boolean;
   /** A one-person shop: nobody else reviews an agent's permission. */
   readonly solo: boolean;
+  /**
+   * A teammate's change to how a helper thinks lands just before the viewer's first one:
+   * the record moves on (a new choice and revision), so that save meets a real 409.
+   */
+  readonly teammateSavesFirst: boolean;
   readonly isWorkspace: (id: string) => boolean;
   /** The workspace model default (the Listings agent's choice; models.* revises it). */
   readonly workspaceDefault: () => ThinkingChoice & { readonly revision: number | null };
@@ -69,6 +74,7 @@ const changed = (message: string): Outcome<never> => ({ kind: "conflict", rechec
 const sonnetLow = { model: "claude_sonnet_5_5", effort: "low" } as const;
 const opusHigh = { model: "claude_opus_5_5", effort: "high" } as const;
 const opusMedium = { model: "claude_opus_5_5", effort: "medium" } as const;
+const haikuMedium = { model: "claude_haiku_5_5", effort: "medium" } as const;
 // Sample credits per job: [typical, most one job can use] (the Agent board's sample).
 const perJob: Readonly<Record<string, Readonly<Record<string, readonly [number, number]>>>> = {
   claude_haiku_5_5: { low: [1, 4], medium: [1, 6], high: [2, 9] },
@@ -94,6 +100,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   readonly library: LibraryPort;
 } {
   const { viewer, empty, solo, reply, command } = deps;
+  let teammateFirst = deps.teammateSavesFirst;
   // The server's rule as the fixture models it (ADR-0027 item 12): the Owner changes how
   // any helper thinks; an Admin only added agents'; a member none.
   const mayChange = (target: Target) =>
@@ -642,6 +649,15 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         const body = c.body as { model: string; effort: string; expectedRevision: number | null };
         if (!isModel(body.model) || !isEffort(body.effort)) return { kind: "invalid", field: null };
         const record = own[target]!;
+        if (teammateFirst) {
+          teammateFirst = false;
+          const moved =
+            record.choice.model === haikuMedium.model && record.choice.effort === haikuMedium.effort
+              ? sonnetLow
+              : haikuMedium;
+          record.choice = moved;
+          record.revision += 1;
+        }
         if (body.expectedRevision !== record.revision)
           return changed("This changed since you opened it.");
         record.choice = { model: body.model, effort: body.effort };

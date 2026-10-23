@@ -4,11 +4,14 @@
 // `models.list` and saved with `models.reviseDefault` (its revision; the member ceiling is
 // sent unchanged, so a choice above it can't be saved here). Every other helper uses
 // `team.reviseThinking`. The server decides who may change it; the screen only shows that.
+// A save whose outcome is unknown keeps its re-entry marker ("model_default" or "thinking"),
+// so its dialog may close: the shell then says the change may have been saved.
 import { useEffect, useId, useState } from "react";
 import { Button, Dialog, RouteLink } from "../components/controls";
 import type { Id, ModelCatalogueView } from "../model";
 import { copy } from "../copy";
 import { useCommand, useDirty, useRead, useServices } from "../services";
+import { outcomeState } from "../components/feedback";
 import { CommandFeedback } from "../screens/entry";
 import {
   optionsFromCatalogue,
@@ -184,7 +187,10 @@ export function ThinkingEditor({
   /** The record moved on (a 409): the parent rereads and the person picks again. */
   readonly onStale: () => void;
   readonly onCancel?: () => void;
-  /** A save is out or its outcome unknown: the dialog around it stays open. */
+  /**
+   * A save (or a Check again) is in flight: the dialog around it stays open until its reply.
+   * An unknown outcome doesn't hold it: its marker outlives the dialog.
+   */
   readonly onBusy?: (busy: boolean) => void;
 }) {
   const services = useServices();
@@ -210,7 +216,7 @@ export function ThinkingEditor({
     },
     { readonly revision: number }
   >({
-    marker: bound ? { workspaceId, kind: "model_default" } : null,
+    marker: { workspaceId, kind: bound ? "model_default" : "thinking" },
     send: (c) => {
       const { model, effort, expectedRevision, maxCreditsPerProduct } = c.body;
       if (bound && maxCreditsPerProduct !== null)
@@ -233,14 +239,17 @@ export function ThinkingEditor({
       }
     },
   });
-  const busy = save.busy;
-  useEffect(() => onBusy?.(busy), [busy, onBusy]);
-  if (bound && models.kind !== "ok")
+  const inFlight =
+    save.phase.phase === "sending" || (save.phase.phase === "uncertain" && save.phase.checking);
+  useEffect(() => onBusy?.(inFlight), [inFlight, onBusy]);
+  if (bound && models.kind === "loading")
     return (
-      <p className="sr-help" role={models.kind === "loading" ? "status" : undefined}>
-        {models.kind === "loading" ? copy.states.loading : sunriseCopy.notBuilt}
+      <p className="sr-help" role="status">
+        {copy.states.loading}
       </p>
     );
+  // A failed read of the catalogue says what failed (offline, unavailable) and offers a retry.
+  if (bound && models.kind !== "ok") return outcomeState(models, reloadModels, { compact: true });
   if (!resolved || !value) return null;
   const option = find(resolved.options, value);
   const fits = option?.fits ?? false;
@@ -356,12 +365,18 @@ export function ThinkingEditor({
               save.reset();
               onCancel?.();
             }}
-            disabled={save.busy}
+            disabled={inFlight}
           >
             {t.cancel}
           </Button>
         ) : null}
-        <Button variant="primary" type="submit" disabled={!dirty || !fits || save.busy}>
+        {/* One primary button per page (ADR-0032 item 2): on the agent page the card's Save
+            sits beside the page's own action, so it is secondary there. */}
+        <Button
+          variant={variant === "dialog" ? "primary" : "secondary"}
+          type="submit"
+          disabled={!dirty || !fits || save.busy}
+        >
           {save.busy ? t.saving : t.save}
         </Button>
       </div>

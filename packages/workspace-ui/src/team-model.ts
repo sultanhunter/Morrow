@@ -145,6 +145,21 @@ export interface TeamView {
   readonly people: readonly TeamPersonView[];
   readonly canAddAgents: boolean;
 }
+/** Whose thinking a Team dialog changes. */
+export type ThinkingTargetRef =
+  | { readonly kind: "agent"; readonly id: Id }
+  | { readonly kind: "morrow" }
+  | { readonly kind: "specialists" };
+/**
+ * The target's setting in the latest Team read, so a dialog always shows (and sends the
+ * revision of) what the server last said, also after a conflict's reread. Null when the
+ * agent is no longer on the team.
+ */
+export function thinkingFor(view: TeamView, target: ThinkingTargetRef): ThinkingView | null {
+  if (target.kind === "morrow") return view.morrow.thinking;
+  if (target.kind === "specialists") return view.specialistDefault;
+  return view.agents.find((a) => a.agentId === target.id)?.thinking ?? null;
+}
 
 export interface PermissionsView {
   readonly onItsOwn: readonly string[];

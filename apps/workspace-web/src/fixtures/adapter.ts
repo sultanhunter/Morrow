@@ -182,6 +182,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     viewer: teamViewerIn[scenario] ?? "owner",
     empty: scenario === "empty",
     solo: scenario === "team_solo",
+    teammateSavesFirst: scenario === "team_thinking_conflict",
     isWorkspace: ws,
     workspaceDefault: () => ({
       model: modelDefault.model,

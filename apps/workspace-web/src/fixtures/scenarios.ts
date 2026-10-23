@@ -355,12 +355,10 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
           }
         : null,
   },
-  team_thinking_conflict: {
-    "team.reviseThinking": (call) =>
-      call === 0
-        ? { kind: "conflict", recheck: true, message: "This changed since you opened it." }
-        : null,
-  },
+  // A teammate changes how a helper thinks just before the viewer's first save: the record
+  // moves on (a new choice and revision; the team fixture does it), so the save meets a real
+  // 409 and only a save of the reread revision goes through.
+  team_thinking_conflict: {},
 };
 /** T7 PR 16: these scenarios start with the Listings agent on (Stop all AI work has a target). */
 export const listingsOnIn: readonly ScenarioName[] = ["stop_all", "stop_all_uncertain"];

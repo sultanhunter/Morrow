@@ -107,7 +107,7 @@ function ConsentDialog({
 }) {
   const services = useServices();
   const confirm = useCommand<{ documentDigest: string; nonce: string }, AddResultView>({
-    marker: { workspaceId, kind: "agent" },
+    marker: { workspaceId, kind: "add_agent" },
     send: (cmd) => services.port.team.addConfirm(workspaceId, document.releaseId, cmd),
     onOutcome: (outcome, sent) => {
       if (outcome.kind === "ok" && sent.current) onDone(outcome.value, document);
@@ -119,9 +119,14 @@ function ConsentDialog({
   const spent =
     settled !== null &&
     ["denied", "not_found", "conflict", "invalid", "not_in_build"].includes(settled.kind);
-  // While a confirmation is out (or its outcome unknown), the dialog stays: its reply decides.
+  // While a confirmation (or its Check again) is in flight, the dialog stays: its reply
+  // decides. Once the outcome is unknown the dialog may close: its "add_agent" marker stays,
+  // and the shell says the agent may have been added.
+  const inFlight =
+    confirm.phase.phase === "sending" ||
+    (confirm.phase.phase === "uncertain" && confirm.phase.checking);
   const close = () => {
-    if (!confirm.busy) onClose();
+    if (!inFlight) onClose();
   };
   return (
     <Dialog
@@ -130,7 +135,7 @@ function ConsentDialog({
       onClose={close}
       footer={
         <>
-          <Button onClick={close} disabled={confirm.busy}>
+          <Button onClick={close} disabled={inFlight}>
             {c.cancel}
           </Button>
           <Button
@@ -251,7 +256,9 @@ function Detail({
     model !== entry.startsOn.model ||
     effort !== entry.startsOn.effort ||
     limit !== String(entry.defaultMonthlyLimit);
-  useDirty(dirty && entry.addedAs === null);
+  const addable = entry.addedAs === null && !entry.waitingReview;
+  // Once the agent is added, or sent to a teammate to review, nothing here is unsent.
+  useDirty(dirty && addable);
   const prepare = useCommand<
     { model: string; effort: string; monthlyCreditLimit: number },
     AddDocumentView
@@ -262,7 +269,6 @@ function Detail({
       if (outcome.kind === "ok" && sent.current) setDocument(outcome.value);
     },
   });
-  const addable = entry.addedAs === null && !entry.waitingReview;
   const head = (
     <div className="sr-detail-head">
       <AgentAvatar character={entry.character} size={64} />

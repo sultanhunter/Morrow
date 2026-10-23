@@ -2,7 +2,7 @@
 // the people, each with what it may do. "Change" opens how a helper thinks; only someone the
 // server allows sees it. Fixture data only in this build (team.overview is uncomposed over
 // HTTP, so the page shows "not built yet").
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { RouteLink } from "../components/controls";
 import { StatusRegion, outcomeState } from "../components/feedback";
 import type { WorkspaceView } from "../model";
@@ -13,8 +13,8 @@ import type {
   TeamPersonView,
   TeamView,
   ThinkingChoice,
-  ThinkingView,
 } from "../team-model";
+import { thinkingFor } from "../team-model";
 import { AgentAvatar, PersonAvatar } from "../sunrise/avatars";
 import { number, sunriseCopy } from "../sunrise/copy";
 import { AgentPill, Badge, Card, PageHeader, Progress, SrIcon } from "../sunrise/parts";
@@ -185,11 +185,6 @@ export function PersonRow({ person }: { readonly person: TeamPersonView }) {
   );
 }
 
-interface Editing {
-  readonly target: ThinkingTarget;
-  readonly thinking: ThinkingView;
-}
-
 function TeamBody({
   workspaceId,
   view,
@@ -199,14 +194,21 @@ function TeamBody({
   readonly view: TeamView;
   readonly reload: () => void;
 }) {
-  const [editing, setEditing] = useState<Editing | null>(null);
+  // Only whose setting is open: the setting itself is read from the latest `view`, so a
+  // reread after a conflict shows (and sends the revision of) what the server holds now.
+  const [editing, setEditing] = useState<ThinkingTarget | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const open = (target: ThinkingTarget, thinking: ThinkingView) => {
+  const thinking = editing === null ? null : thinkingFor(view, editing);
+  // An agent no longer on the team has nothing to change: its dialog closes.
+  useEffect(() => {
+    if (editing !== null && thinking === null) setEditing(null);
+  }, [editing, thinking]);
+  const open = (target: ThinkingTarget) => {
     setMessage(null);
-    setEditing({ target, thinking });
+    setEditing(target);
   };
   const saved = (choice: ThinkingChoice) => {
-    const target = editing?.target;
+    const target = editing;
     setEditing(null);
     reload();
     if (target)
@@ -243,7 +245,7 @@ function TeamBody({
                 choice={morrow.thinking}
                 canChange={morrow.thinking.canChange}
                 label={sunriseCopy.thinking.changeLabel("Morrow")}
-                onChange={() => open({ kind: "morrow", name: "Morrow" }, morrow.thinking)}
+                onChange={() => open({ kind: "morrow", name: "Morrow" })}
               />
             </div>
           </li>
@@ -279,9 +281,7 @@ function TeamBody({
                 key={agent.agentId}
                 workspaceId={workspaceId}
                 agent={agent}
-                onChange={() =>
-                  open({ kind: "agent", id: agent.agentId, name: agent.name }, agent.thinking)
-                }
+                onChange={() => open({ kind: "agent", id: agent.agentId, name: agent.name })}
               />
             ))}
           </ul>
@@ -336,9 +336,7 @@ function TeamBody({
             choice={view.specialistDefault}
             canChange={view.specialistDefault.canChange}
             label={sunriseCopy.thinking.dialogTitleSpecialists}
-            onChange={() =>
-              open({ kind: "specialists", name: c.newSpecialists }, view.specialistDefault)
-            }
+            onChange={() => open({ kind: "specialists", name: c.newSpecialists })}
           />
         </div>
       </Card>
@@ -360,12 +358,12 @@ function TeamBody({
           {c.ownerOnly}
         </p>
       </Card>
-      {editing ? (
+      {editing !== null && thinking !== null ? (
         <ThinkingDialog
           open
           workspaceId={workspaceId}
-          target={editing.target}
-          thinking={editing.thinking}
+          target={editing}
+          thinking={thinking}
           ownerName={view.ownerName}
           onClose={() => setEditing(null)}
           onSaved={saved}

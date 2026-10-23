@@ -27,6 +27,7 @@ import {
   stopAllState,
   teamPortMethods,
   thinkingEfforts,
+  thinkingFor,
   thinkingModels,
 } from "../packages/workspace-ui/src/team-model.ts";
 import { settingsRoutes } from "../packages/workspace-ui/src/sunrise/parts.tsx";
@@ -197,7 +198,7 @@ test("thinking: a stale revision changes nothing, a repeat key replays, keys are
     ).kind,
     "not_found",
   );
-  // The scenario's 409 is shown as "changed": nothing is saved.
+  // The scenario's 409 is a teammate's change: the viewer's choice isn't saved.
   const conflict = createFixtureAdapter("team_thinking_conflict");
   const first = await conflict.team.reviseThinking(
     ws,
@@ -205,7 +206,50 @@ test("thinking: a stale revision changes nothing, a repeat key replays, keys are
     command({ model: "claude_sonnet_5_5", effort: "high", expectedRevision: 1 }),
   );
   assert.equal(first.kind, "conflict");
-  assert.equal((await conflict.team.overview(ws)).value.morrow.thinking.revision, 1);
+  const morrow = (await conflict.team.overview(ws)).value.morrow.thinking;
+  assert.deepEqual([morrow.model, morrow.effort], ["claude_haiku_5_5", "medium"]);
+});
+
+test("thinking: after a real 409, Team's dialog reads the reread setting and saves its revision", async () => {
+  const port = createFixtureAdapter("team_thinking_conflict");
+  const target = { kind: "agent", id: "agent-analyst", name: "Business Analyst" };
+  const opened = thinkingFor((await port.team.overview(ws)).value, target);
+  assert.deepEqual([opened.model, opened.effort, opened.revision], ["claude_sonnet_5_5", "low", 1]);
+  const pick = { model: "claude_opus_5_5", effort: "high" };
+  // A teammate's change landed first: the server's record moved on.
+  const first = await port.team.reviseThinking(
+    ws,
+    target.id,
+    command({ ...pick, expectedRevision: opened.revision }),
+  );
+  assert.deepEqual([first.kind, first.recheck], ["conflict", true]);
+  // The dialog's setting comes from the reread, not from what it opened with.
+  const reread = thinkingFor((await port.team.overview(ws)).value, target);
+  assert.deepEqual(
+    [reread.model, reread.effort, reread.revision],
+    ["claude_haiku_5_5", "medium", 2],
+  );
+  // Sending the opened revision again would conflict for ever; the reread one saves.
+  const stale = await port.team.reviseThinking(
+    ws,
+    target.id,
+    command({ ...pick, expectedRevision: opened.revision }),
+  );
+  assert.equal(stale.kind, "conflict");
+  const saved = await port.team.reviseThinking(
+    ws,
+    target.id,
+    command({ ...pick, expectedRevision: reread.revision }),
+  );
+  assert.deepEqual([saved.kind, saved.value.revision], ["ok", 3]);
+  const view = (await port.team.overview(ws)).value;
+  const now = thinkingFor(view, target);
+  assert.deepEqual([now.model, now.effort, now.revision], ["claude_opus_5_5", "high", 3]);
+  // Morrow and new specialists resolve too; an agent no longer on the team has nothing to
+  // change (its dialog closes).
+  assert.equal(thinkingFor(view, { kind: "morrow" }), view.morrow.thinking);
+  assert.equal(thinkingFor(view, { kind: "specialists" }), view.specialistDefault);
+  assert.equal(thinkingFor(view, { kind: "agent", id: "agent-gone" }), null);
 });
 
 test("adding: the server's document binds the confirmation, once; access is asked for", async () => {

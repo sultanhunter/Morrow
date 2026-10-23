@@ -270,6 +270,8 @@ export const copy = {
       agent: "a change to the Listings agent",
       model_default: "the default model",
       run: "a Listings run",
+      thinking: "a change to how a helper thinks",
+      add_agent: "adding an agent",
     },
     body: (kind: string) =>
       `A change you started earlier (${kind}) may have been saved. Check Work before creating it again.`,
