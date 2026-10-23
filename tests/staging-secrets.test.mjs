@@ -828,6 +828,18 @@ test("PR 7: the runtime switch sets the broker's required and optional E2B names
       writeFileSync(join(root, "docs/decisions/runtime-staging.json"), JSON.stringify(record));
     write({ ...committed, switch: "cleanup_only" });
     assert.equal(stagingRuntimeSwitch(root), "cleanup_only");
+    // On with its qualification: the named record must be a file under the same root.
+    const qualification = "docs/evidence/live/2026-10-30-e2b-qualification.md";
+    write({
+      ...committed,
+      switch: "on",
+      qualified_on: "2026-10-30",
+      qualification_record: qualification,
+    });
+    assert.throws(() => stagingRuntimeSwitch(root), { code: "STAGING_RUNTIME_RECORD_INVALID" });
+    mkdirSync(join(root, "docs/evidence/live"), { recursive: true });
+    writeFileSync(join(root, qualification), "# Runtime qualification\n");
+    assert.equal(stagingRuntimeSwitch(root), "on");
     for (const record of [
       { ...committed, switch: "on" },
       { ...committed, switch: true },

@@ -132,12 +132,14 @@ export function stagingModelSwitch(root) {
 }
 
 // Build order PR 7, the runtime switch: the committed docs/decisions/runtime-staging.json
-// `switch`, checked with edge:check's own rule (reviewedRuntimeRecord). "off" (the committed
-// state), "cleanup_only" or "on"; anything else stops the command before any effect.
+// `switch`, checked with edge:check's own rule (reviewedRuntimeRecord, its qualification
+// record a file under the same root). "off" (the committed state), "cleanup_only" or "on";
+// anything else stops the command before any effect.
 export function stagingRuntimeSwitch(root) {
   try {
     return reviewedRuntimeRecord(
       JSON.parse(readFileSync(join(root, "docs/decisions/runtime-staging.json"), "utf8")),
+      root,
     ).switch;
   } catch {
     throw new StagingError("STAGING_RUNTIME_RECORD_INVALID");

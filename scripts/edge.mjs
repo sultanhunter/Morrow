@@ -26,6 +26,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -726,10 +727,14 @@ const edgeRuntimeNames = Object.freeze([edgeRuntimeSwitchVar, ...edgeRuntimeSecr
 // profile morrow.computer@1, `switch` off, cleanup_only or on, `admission` synthetic_only or
 // merchant, the code's monthly runtime budget below the provider project's usage limit (both
 // decimal USD strings), and the qualification (ADR-0029 item 11): the date and its
-// docs/evidence/live/ record, both or neither. On needs qualification; merchant admission
-// needs on. Returns {switch, admission}, or throws.
+// docs/evidence/live/ record, both or neither, and the record a committed file under
+// `evidenceRoot` (the repository root unless a test names another), so "on" never stands on a
+// name alone. On needs qualification; merchant admission needs on. Returns {switch,
+// admission}, or throws.
 const usd = /^(0|[1-9][0-9]{0,5})\.[0-9]{2}$/;
-export function reviewedRuntimeRecord(record) {
+const evidenceFile = (evidenceRoot, path) =>
+  statSync(join(evidenceRoot, path), { throwIfNoEntry: false })?.isFile() === true;
+export function reviewedRuntimeRecord(record, evidenceRoot = repositoryRoot) {
   if (
     !record ||
     typeof record !== "object" ||
@@ -756,7 +761,8 @@ export function reviewedRuntimeRecord(record) {
         typeof record.qualification_record !== "string" ||
         !/^docs\/evidence\/live\/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}\.md$/.test(
           record.qualification_record,
-        ))) ||
+        ) ||
+        !evidenceFile(evidenceRoot, record.qualification_record))) ||
     // Qualification comes before on, and the owner's data only with on.
     (record.switch === "on" && record.qualified_on === null) ||
     (record.admission === "merchant" && record.switch !== "on")
@@ -1082,6 +1088,7 @@ export async function verifyEdgeConfig({
   stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
   modelPath = join(repositoryRoot, "docs/decisions/model-provider-staging.json"),
   runtimePath = join(repositoryRoot, "docs/decisions/runtime-staging.json"),
+  evidenceRoot = repositoryRoot,
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -1149,7 +1156,7 @@ export async function verifyEdgeConfig({
   if (runtimeRecord === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "runtime-staging.json");
   else
     try {
-      runtime = reviewedRuntimeRecord(runtimeRecord);
+      runtime = reviewedRuntimeRecord(runtimeRecord, evidenceRoot);
     } catch {
       problem("EDGE_STAGING_RUNTIME_RECORD", "runtime-staging.json");
     }
