@@ -1,0 +1,58 @@
+# v1 PR 1: Connect your live store
+
+- Status: brief, 2026-10-23. ADR-0035 (accepted 2026-10-23, OD-2026-10-23-9 and -10), items 2 to 4 and its Consequences ("Tooling"). No new material decision: every change below is one ADR-0035 names, or routine tooling.
+- Branch `claude/v1-connect-store`, one PR to `main`. Migrations `0039` and `0040` here; other v1 PRs also start at 0039, so integration renumbers them (the lab and the tests find them by slug).
+
+## Goal
+
+The owner's own Shopify store connects to Morrow through one custom-distribution app made for it: Shopify can reach the connector, the broker and the database admit that one store that is not a development store, the owner registers the app and seals its client secret with one command, and the first sign-in, the test credits and the store link work under the owner's standing approval. Every other store, and every other app, is refused as before.
+
+## Scope
+
+- **One live store per environment (ADR-0035 item 2).**
+  - `0039.shopify-live-store-identity.sql` (as `morrow_identity_owner`): `shopify_apps.live_store`, false for every existing and every 0026 registration; at most one active marked app per environment (a partial unique index) and every marked app of an environment, retired or not, for one intended shop (a trigger); a trigger on `store_installations` that refuses a row that is not a development store unless its app is the active marked app and the shop is that app's intended shop (on insert and on any re-authorisation); `shopify_app_register_live` (INVOKER, granted to nobody: the operator's registration with the mark); `work_shopify_live_store` (the broker's admission bridge, EXECUTE for the command role only); `issue_shopify_link_handoff` and `link_workspace_store` re-created with one change each: an installation is linkable when it is a development store, or when its app is the active marked app and the store is that app's intended shop.
+  - `0040.shopify-live-store-vault.sql` (as `morrow_work_owner`): `morrow_vault.shopify_live_store_admission`, the broker login's own definer over that bridge.
+  - Broker install (`apps/broker/src/shopify-install.ts`): when Shopify reports a store that is not a Partner development store, the install transaction first asks the admission; anything but `admitted` stores nothing (`store_not_development`). A development store never asks.
+- **The connector's address (item 2).** `apps/shopify-connector/wrangler.jsonc` `env.staging`: `workers_dev: true`, `CONNECTOR_CONFIGURATION_JSON` (its own workers.dev origin and the api's) and `MORROW_DATABASE_BINDING_JSON` byte-equal to the api's. `edge:check` holds both values exactly; the census admits workers.dev on the api and the connector only (`WORKERS_DEV_EXPOSED` on any other script); the deploy re-reads the flag after each public Worker's upload; the smoke expects the connector's own health and 404; `staging:kill` takes both hostnames down and checks both, `unkill` brings both back or neither; the dashboard fallback names both.
+- **One registration command (item 3).** `npm run staging:shopify-app-register -- --app-key <key> --client-id <id> --shop <store>.myshopify.com --workspace <id> --install-url <link> [--secret-file]`, under the standing approval, from reviewed `main`: the secret from a hidden terminal prompt or the owner's 0600 file `~/.config/morrow/staging/shopify-app-secret` (deleted after the vault stored it), never an argument, the environment or a pipe; a trial seal before any database effect; the registration as `morrow_identity_owner`; the secret sealed under the owner's KEK (`vault-kek-v1`) at the app's next version and stored as `morrow_work_owner`. A rerun with the same values replays the registration and rotates the secret. It prints the app key, the outcome, ids, the secret version and the KEK fingerprint only.
+- **The app's TOML (item 3).** `npm run shopify-app -- toml --environment staging ...` uses the committed connector origin (another is refused), and writes the minimal `package.json` the Shopify CLI looks for beside the TOML. The TOML: custom distribution, not embedded, `read_products,write_products`, the launch and callback on the connector's hostname, uninstall, scope-change and the three compliance topics.
+- **The approval the tools read (item 4, Consequences).** `docs/decisions/standing-approval.json` (id `adr-0035`, no end date) replaces `staging-card.json` for every `staging:*` command; the card stays as history. Self-service (`seed-platform -- --self-service`) rests on the recorded WorkOS facts (e7). The test entitlement needs no per-use record: its reference is `adr-0035.e13.<date>.<n>`, its evidence is the approval's own live record, and it goes only to the workspace the live-store app invites.
+
+Non-goals: writing to the store (PR 3); "Disconnect store" and the model switch (PR 2); expiring tokens or reinstall under the same app (PR 5); renaming "staging".
+
+## Interfaces touched
+
+`migrations/0039*`, `0040*`, the manifest; `apps/broker/src/{shopify-install,vault-statements-shopify}.ts`; `apps/shopify-connector/{wrangler.jsonc,worker-configuration.d.ts}`; `scripts/{edge,staging,staging-runner,staging-deploy,staging-smoke,staging-files,shopify-app,vault,shopify-install-lab,test-entitlement-lab}.mjs`; `package.json`; `docs/decisions/standing-approval.json`, `docs/decisions/approvals/staging.md`; `docs/evidence/live/2026-10-23-standing-approval.md`; `infra/rotation-runbook.md`; the tenant-conformance registry.
+
+## Security notes
+
+- **Two layers refuse a second live store.** The broker asks the registry before any prepare or seal, inside its install transaction; the database refuses the installation row itself, however it is written, and refuses the link of any installation that is not a development store unless it is the marked app's own shop. A second marked app (another shop, or a second active one) is refused by the operator function, the trigger and the unique index. Unmarked apps behave exactly as before.
+- **No new authority.** The admission bridge takes an app key and the domain the broker verified, never a workspace; only the broker's login reaches it. The two re-created definers keep their signatures, owners, ACLs and every other check (0039 asserts 0026's exact texts before replacing them). The link still needs the organization's founding owner, a current connect grant and the `morrow_direct` route.
+- **Credentials stay with the broker.** The client secret is read in-process from a terminal in raw mode or an owner-only file, sealed under the KEK (AES-256-GCM, additional data binding environment, app and version) and stored as ciphertext; the database never receives the plaintext, the KEK or the shop's domain (only its sha256). Nothing secret is printed or logged; usage errors print no argument.
+- **The kill switch covers both public hostnames.** A failed step never skips the others; a hostname that comes back is switched off again; the fallback names both.
+- **The repository stays clean.** No shop domain, install link or store data is committed; the shop is a command-line value digested in-process.
+
+## Owner steps
+
+The order: merge, migrate, deploy, sign in, register, entitlement, install, link. `<…>` marks a value the owner sends in chat; the shop's domain and the install link go only there, never into this repository or the activity log.
+
+1. **Claude, after the merge** (standing approval; one activity-log line each): `npm run staging:migrate` (ledger 40), rerun the deploy that gate 3 held (its smoke now reads the connector's `/healthz` and 404), re-read the two WorkOS facts e7 names, then `npm run staging:seed-platform -- --self-service`.
+2. **Owner:** sign in at `https://morrow-staging-api.sultanibneusman0.workers.dev` with your existing login and create your workspace. Send Claude its id: the part after `/w/` in the address bar.
+3. **Owner:** in the Dev Dashboard of your Partner organization, create the app `Morrow` and send Claude its Client ID. Then in Terminal: `mkdir -p ~/morrow-shopify-app && cd ~/Desktop/Morrow && git pull --ff-only && npm run shopify-app -- toml --environment staging --app-key morrow-live --client-id <client id> --name "Morrow" --out ~/morrow-shopify-app/shopify.app.morrow-live.toml`, then `cd ~/morrow-shopify-app && shopify app deploy --config morrow-live` (the Shopify CLI; log in and release).
+4. **Owner:** on the app's Distribution card choose Custom distribution (permanent), then Manage custom install link: your `<store>.myshopify.com`, multi-store installs unticked, Generate link. Send Claude the link.
+5. **Owner:** copy the app's Client secret, then in Terminal `morrow_put "Shopify app client secret" shopify-app-secret` (paste at the hidden prompt) and `pbcopy </dev/null`. Tell Claude "Shopify secret saved", never the secret.
+6. **Claude:** `npm run staging:shopify-app-register -- --app-key morrow-live --client-id <client id> --shop <store>.myshopify.com --workspace <workspace id> --install-url '<install link>' --secret-file` (prints ids, the secret version and the KEK fingerprint; deletes the file), then `npm run staging:test-entitlement -- --workspace <workspace id> --approval adr-0035.e13.<today>.1 --operator claude` (300 test credits, 30 days).
+7. **Owner:** in Morrow, Connections → Open the install link → Install in Shopify (products permission) → back in Morrow, Link store → Enable Listings agent.
+
+Stop at any time: `npm run staging:kill` takes both addresses down. Rotating the client secret later: steps 5 and 6 again with the same values.
+
+## Test checklist
+
+- [x] `lab:shopify-install` V1–V8: one marked app per environment for one shop; the database refuses a second mark, another shop, a changed mark and unmarked live rows; only the marked app's own shop is admitted and only the broker asks; the live store installs into the owner's workspace; another live store using the marked app's link stores nothing; an unmarked app still refuses a live store; the owner links it and receives the store-link grants; its uninstall, credential destruction and shop/redact pass the live-store guard.
+- [x] `lab:test-entitlement` V: registration and the sealed secret (it opens with the KEK), a rerun rotates it, a second live app stores nothing, the standing entitlement goes only to the live-store app's workspace, no statement carries the secret, the KEK or the shop.
+- [x] `tests/broker-shopify.test.mjs`: the live store is admitted before prepare; a development store never asks; another app's mark refuses.
+- [x] `tests/staging-live-store.test.mjs`: the standing approval's closed record; the entitlement's references and its workspace check; self-service's e7; the registration's statements, replay, refusals and closed inputs; the CLI reads the secret only from the prompt or the 0600 file, refuses any argument that could carry it, and prints nothing secret.
+- [x] `tests/staging-deploy.test.mjs`: the census admits exactly the api and the connector; the kill takes both down (and both races); `unkill` both or neither, also when turning a hostname on throws; the smoke reads the connector.
+- [x] `tests/edge-config.test.mjs`: the connector's two vars, exact; workers.dev on the api and the connector only.
+- [x] `tests/shopify-app-script.test.mjs`: the committed connector origin, the CLI's `package.json`, the live registration's digest.
+- [ ] Hosted `foundation` on the PR head; Tier 2 AI review (security lens: authority, RLS, migrations, credentials).
