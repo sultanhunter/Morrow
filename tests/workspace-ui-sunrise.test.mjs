@@ -28,12 +28,16 @@ const { SettingsNavigation, inSettings, settingsCurrent, settingsItems } = await
   "../packages/workspace-ui/src/components/settings-frame.tsx"
 );
 const { Navigation } = await import("../packages/workspace-ui/src/components/shell.tsx");
-const { ServicesProvider } = await import("../packages/workspace-ui/src/services.tsx");
+const { ServicesProvider, nextReadSlot } = await import(
+  "../packages/workspace-ui/src/services.tsx"
+);
 const { copy } = await import("../packages/workspace-ui/src/copy.ts");
 const { byUrgency, homeDate, homeHeader, homeSummary } = await import(
   "../packages/workspace-ui/src/screens/home.tsx"
 );
-const { waitingCount } = await import("../packages/workspace-ui/src/workspace-data.ts");
+const { TodayCard } = await import("../packages/workspace-ui/src/screens/home-samples.tsx");
+const { ShellRefreshProvider, useConnections, useOpenQuestions, useShellRefresh, waitingCount } =
+  await import("../packages/workspace-ui/src/workspace-data.ts");
 const { destinationTitle, screenTitle } = await import("../apps/workspace-web/src/app.tsx");
 const { createClient } = await import("../apps/workspace-web/src/http/client.ts");
 const { createHttpPort } = await import("../apps/workspace-web/src/http/api.ts");
@@ -44,7 +48,9 @@ const { createFixtureAdapter, fixtureComposedFor } = await import(
 const { samplesComposedIn, scenarioNames } = await import(
   "../apps/workspace-web/src/fixtures/scenarios.ts"
 );
-const { fixtureWorkspace } = await import("../apps/workspace-web/src/fixtures/seed.ts");
+const { fixtureStore, fixtureWorkspace } = await import(
+  "../apps/workspace-web/src/fixtures/seed.ts"
+);
 
 // T7 PR 14 (ADR-0032): the Sunrise tokens, the agent characters, the sidebar's labels over
 // the unchanged route contract, Home's helpers, and the default-off Home preview switch.
@@ -379,6 +385,142 @@ test("Home preview: samples.home is a default-off switch that only the fixture a
     (await createFixtureAdapter("home_preview").samples.home("ws-other")).kind,
     "not_found",
   );
+});
+
+test("Home preview: Today names each agent with its pill (review F4; ADR-0032 item 3)", async () => {
+  const samples = (await createFixtureAdapter("home_preview").samples.home(fixtureWorkspace.id))
+    .value;
+  const html = render(h(TodayCard, { samples }));
+  // The avatar is decorative, so the byline says what each one is: ", agent" for an agent,
+  // ", specialist, one-time" for a specialist.
+  assert.match(
+    html,
+    /Listings<\/span><span class="agent-pill" data-agent="listings"><span class="visually-hidden">, <\/span>Agent<\/span><\/span> · Product pages/,
+  );
+  assert.match(
+    html,
+    /Business Analyst<\/span><span class="agent-pill" data-agent="analyst"><span class="visually-hidden">, <\/span>Agent<\/span><\/span> · Sales and numbers/,
+  );
+  assert.match(
+    html,
+    /Sale planner<\/span><span class="agent-pill" data-agent="specialist"><span class="visually-hidden">, specialist, one-time<\/span>/,
+  );
+  const rows = html.split("<li ").slice(1);
+  assert.equal(rows.length, samples.today.length);
+  for (const [i, item] of samples.today.entries())
+    if (item.agent) assert.match(rows[i], /class="agent-pill"/, item.who);
+});
+
+test("reads: a re-read under a refresh mark keeps an ok reply through a failure (review F1)", () => {
+  const ok = { key: "k#m1#0", base: "k", value: { kind: "ok", value: 1, replayed: false } };
+  const reply = (value, base = "k") => ({ key: `${base}#m2#0`, base, value });
+  const unanswered = [
+    { kind: "unavailable", offline: false },
+    { kind: "unavailable", offline: true },
+    { kind: "rate_limited", retryAfterSeconds: 5 },
+    { kind: "uncertain" },
+  ];
+  for (const value of unanswered) {
+    assert.equal(nextReadSlot(ok, reply(value), true), ok, value.kind);
+    // Without a mark (a page's own read), the reply is shown as before.
+    assert.deepEqual(nextReadSlot(ok, reply(value), false), reply(value), value.kind);
+  }
+  // An answer always replaces the ok reply.
+  const answers = [
+    { kind: "ok", value: 2, replayed: false },
+    { kind: "denied", message: "", reference: null },
+    { kind: "not_found" },
+    { kind: "unauthenticated" },
+  ];
+  for (const value of answers)
+    assert.deepEqual(nextReadSlot(ok, reply(value), true), reply(value), value.kind);
+  // With no ok reply on screen (a Retry after a failure), any reply is shown.
+  const failed = { key: "k#m1#0", base: "k", value: unanswered[1] };
+  assert.deepEqual(nextReadSlot(failed, reply(unanswered[0]), true), reply(unanswered[0]));
+  // Another read's ok reply is never kept for this one.
+  const other = { ...ok, key: "j#m1#0", base: "j" };
+  assert.deepEqual(nextReadSlot(other, reply(unanswered[0]), true), reply(unanswered[0]));
+});
+
+test("shared reads: Home's Retry is the shell's; command pages read once per mount (F1, F2)", () => {
+  const never = () => new Promise(() => {});
+  const services = {
+    subscribe: () => () => {},
+    version: () => 7,
+    read: never,
+    composed: {},
+    port: { work: { listMyOpenQuestions: never }, connections: { list: never } },
+  };
+  const bump = () => {};
+  const seen = {};
+  function Page() {
+    seen.questions = useOpenQuestions("ws-1")[1];
+    seen.connections = useConnections("ws-1")[1];
+    seen.mount = useConnections("ws-1", "mount")[1];
+    return null;
+  }
+  const inShell = h(ShellRefreshProvider, { value: { mark: "home|7|0", bump } }, h(Page));
+  render(h(ServicesProvider, { value: services }, inShell));
+  // Inside the shell, Retry on Home reads the shell's copy too (the same mark, one request).
+  assert.equal(seen.questions, bump);
+  assert.equal(seen.connections, bump);
+  // A page that holds a command reads on its own: its Retry is its own.
+  assert.equal(typeof seen.mount, "function");
+  assert.notEqual(seen.mount, bump);
+  // Outside the shell every read has its own Retry.
+  render(h(ServicesProvider, { value: services }, h(Page)));
+  assert.notEqual(seen.questions, bump);
+  // The shell's mark: the page, the command changes and the Retries.
+  let refresh = null;
+  function Shell() {
+    refresh = useShellRefresh("home{}");
+    return null;
+  }
+  render(h(ServicesProvider, { value: services }, h(Shell)));
+  assert.equal(refresh.mark, "home{}|7|0");
+  assert.equal(typeof refresh.bump, "function");
+  // The pages that hold a command (a store link, a Listings enable, Ask's goal, task and
+  // run) never follow the shell: every connections read there is per mount.
+  for (const file of ["connections.tsx", "ask.tsx"]) {
+    const source = readFileSync(
+      new URL(`../packages/workspace-ui/src/screens/${file}`, import.meta.url),
+      "utf8",
+    );
+    const calls = source.match(/useConnections\([^)]*\)/g) ?? [];
+    assert.ok(calls.length >= 1, file);
+    for (const call of calls) assert.match(call, /, "mount"\)$/, `${file}: ${call}`);
+  }
+});
+
+test("fixture: the review scenarios fail connections after the enable, and Home's first read", async () => {
+  const ws = fixtureWorkspace.id;
+  const store = fixtureStore.storeId;
+  const key = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  // F1: connections answer until the enable is sent, then fail; the enable's reply is
+  // lost, and Check again (the same key) replays it.
+  const blip = createFixtureAdapter("listings_enable_reread_failed");
+  assert.equal((await blip.connections.list(ws)).kind, "ok");
+  const doc = await blip.agents.listingsDocument(ws, store, { key: key(1), body: {} });
+  assert.equal(doc.kind, "ok");
+  assert.equal((await blip.connections.list(ws)).kind, "ok");
+  const enable = {
+    key: key(2),
+    body: { documentDigest: doc.value.documentDigest, nonce: doc.value.nonce },
+  };
+  assert.equal((await blip.agents.listingsEnable(ws, store, enable)).kind, "uncertain");
+  assert.deepEqual(await blip.connections.list(ws), { kind: "unavailable", offline: false });
+  const replay = await blip.agents.listingsEnable(ws, store, enable);
+  assert.equal(replay.kind, "ok");
+  assert.equal(replay.replayed, true);
+  // F2: the first open-questions read is offline; the next one answers.
+  const offline = createFixtureAdapter("home_offline_retry");
+  assert.deepEqual(await offline.work.listMyOpenQuestions(ws, null), {
+    kind: "unavailable",
+    offline: true,
+  });
+  const again = await offline.work.listMyOpenQuestions(ws, null);
+  assert.equal(again.kind, "ok");
+  assert.ok(again.value.items.length > 0);
 });
 
 test("modules: nothing renders at import, so a classic-runtime loader needs no React global", () => {
