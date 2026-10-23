@@ -5,6 +5,8 @@
 // fake cannot drift from the schema. Every id is synthetic; no real shop, person or address.
 import type {
   CurrentBilling_RateCard,
+  Current_AgentPackage,
+  Current_SkillManifest,
   Current_AgentRunKind,
   Current_AgentRunManifest,
   Current_AgentTriggerSet,
@@ -502,6 +504,71 @@ export function fakeBatchConfirmationDocument(): Current_BatchConfirmationDocume
     phrase: "approve 2 changes, 0 credits",
     issuedAt: at,
     expiresAt: later(5),
+  });
+}
+
+// --- Agent packages and skills (ADR-0023 decisions 6 and 11d) ----------------------------
+/** A first-party job skill's skill.json. */
+export function fakeSkillManifest(): Current_SkillManifest {
+  return freeze({
+    schemaVersion: 1,
+    id: "seo-audit",
+    revision: 1,
+    title: "SEO audit",
+    summary: "Check product SEO titles and descriptions against the brand voice and propose fixes.",
+    tools: ["knowledge.search", "products.read", "report.write", "proposal.listing"],
+    dataClasses: ["catalog.products.read", "workspace.knowledge.read"],
+    outputContracts: ["report@1"],
+    eligibleForSpecialists: true,
+    bodyDigest: fakeDigest("seo-audit SKILL.md"),
+  });
+}
+/**
+ * Listings as an AgentPackage@1 on the loop. Its skill pin is a placeholder digest; a test
+ * re-pins it with skillDigest (agent-package.ts), which needs a hash this module avoids.
+ */
+export function fakeListingsPackage(): Current_AgentPackage {
+  return freeze({
+    schemaVersion: 1,
+    id: "morrow.listings",
+    revision: 2,
+    kind: "installed",
+    title: "Listings",
+    roleTextDigest: fakeDigest("listings role"),
+    skills: [{ id: "seo-audit", digest: fakeDigest("seo-audit skill") }],
+    tools: [
+      "knowledge.search",
+      "work.read",
+      "products.read",
+      "message.post",
+      "inbox.ask",
+      "suggestion.create",
+      "report.write",
+      "proposal.listing",
+    ],
+    capabilities: [
+      { capabilityId: "workspace.knowledge.read", verbs: ["view"] },
+      { capabilityId: "workspace.artifact.read", verbs: ["view"] },
+      { capabilityId: "catalog.products.read", verbs: ["view"] },
+      { capabilityId: "workspace.conversation.post", verbs: ["execute"] },
+      { capabilityId: "workspace.question.request", verbs: ["execute"] },
+      { capabilityId: "workspace.comment.create", verbs: ["execute"] },
+      { capabilityId: "workspace.artifact.edit", verbs: ["execute"] },
+      { capabilityId: "catalog.content.propose", verbs: ["execute"] },
+      { capabilityId: "catalog.content.publish", verbs: ["propose"] },
+    ],
+    optionalScopes: ["write_files"],
+    triggerKinds: ["schedule", "shopify_event", "look_for_work"],
+    customerData: "none",
+    computer: false,
+    offeredProfiles: [
+      { model: "claude_haiku_5_5", effort: "low" },
+      { model: "claude_sonnet_5_5", effort: "low" },
+      { model: "claude_sonnet_5_5", effort: "medium" },
+      { model: "claude_opus_5_5", effort: "medium" },
+    ],
+    defaultProfile: { model: "claude_sonnet_5_5", effort: "low" },
+    evalDigest: fakeDigest("listings evals"),
   });
 }
 

@@ -10095,6 +10095,312 @@
           "type": "null"
         }
       ]
+    },
+    "AgentPackageKind": {
+      "description": "installed: an agent a shop installs; specialist: the built-in morrow.specialist release (ADR-0028); coordinator: the built-in morrow.coordinator release (ADR-0027 item 8).",
+      "type": "string",
+      "enum": [
+        "installed",
+        "specialist",
+        "coordinator"
+      ]
+    },
+    "ShopifyOptionalScope": {
+      "description": "ADR-0025 item 6: the optional Shopify scopes an installed agent may request at install. Nothing else at launch.",
+      "type": "string",
+      "enum": [
+        "write_files",
+        "read_orders",
+        "read_customers",
+        "read_returns",
+        "write_discounts"
+      ]
+    },
+    "CustomerDataLevel": {
+      "description": "ADR-0025 item 8: none; level1 (order aggregates with no customer field, Analyst and Inventory); level2 (name and email, Support only).",
+      "type": "string",
+      "enum": [
+        "none",
+        "level1",
+        "level2"
+      ]
+    },
+    "PinnedSkill": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SkillId"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "id",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "SkillManifest": {
+      "description": "SkillManifest@1 (ADR-0023 decision 11d; PR 10): the closed skill.json beside a first-party skills/<id>/SKILL.md, pinned by its release's digest. A skill declares the tools its instructions use and the data classes it reads; it never grants a tool or a capability. A specialist's tools are those its eligible skills declare, inside the Specialist ceiling.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "#/$defs/SkillId"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "\\S"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "dataClasses": {
+          "$ref": "#/$defs/DataClasses"
+        },
+        "outputContracts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OutputContractId"
+          },
+          "minItems": 0,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "eligibleForSpecialists": {
+          "type": "boolean"
+        },
+        "bodyDigest": {
+          "description": "SHA-256 of the SKILL.md body.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "revision",
+        "title",
+        "summary",
+        "tools",
+        "dataClasses",
+        "outputContracts",
+        "eligibleForSpecialists",
+        "bodyDigest"
+      ],
+      "additionalProperties": false
+    },
+    "AgentPackage": {
+      "description": "AgentPackage@1 (ADR-0023 decisions 6 and 11d, ADR-0027 items 3 and 12; PR 10): one release of an agent as data: its role text and pinned skills, the tools it declares, the capabilities it asks for, optional Shopify scopes, trigger kinds, customer-data level, whether it uses the computer, and the model entries it offers with its default. All agents share one tool catalogue, loop and gateway; they differ only in this. Code checks what JSON Schema cannot (agent-package.ts): every tool's capability is asked for, only Support asks for support.* or level 2, and no package declares both customer reads and the computer.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "#/$defs/AgentReleaseId"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "kind": {
+          "$ref": "#/$defs/AgentPackageKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "\\S"
+        },
+        "roleTextDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PinnedSkill"
+          },
+          "minItems": 0,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "capabilities": {
+          "$ref": "#/$defs/CapabilityVerbsList"
+        },
+        "optionalScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ShopifyOptionalScope"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "triggerKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TriggerKind"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "customerData": {
+          "$ref": "#/$defs/CustomerDataLevel"
+        },
+        "computer": {
+          "type": "boolean"
+        },
+        "offeredProfiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelSelection"
+          },
+          "minItems": 1,
+          "maxItems": 9,
+          "uniqueItems": true
+        },
+        "defaultProfile": {
+          "$ref": "#/$defs/ModelSelection"
+        },
+        "evalDigest": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "revision",
+        "kind",
+        "title",
+        "roleTextDigest",
+        "skills",
+        "tools",
+        "capabilities",
+        "optionalScopes",
+        "triggerKinds",
+        "customerData",
+        "computer",
+        "offeredProfiles",
+        "defaultProfile",
+        "evalDigest"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "specialist",
+                  "coordinator"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "optionalScopes": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "triggerKinds": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "customerData": {
+                "const": "none"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "coordinator"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "computer": {
+                "const": false
+              },
+              "skills": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "customerData": {
+                "const": "level2"
+              }
+            },
+            "required": [
+              "customerData"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "computer": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
