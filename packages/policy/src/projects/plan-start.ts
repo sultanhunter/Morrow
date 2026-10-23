@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   CapabilityId,
+  Current_AreaTemplateId,
   Current_ContextTaint,
   Current_Grant,
   Current_HumanActorRef,
@@ -30,6 +31,7 @@ export type StartRefusal =
   | "unavailable"
   | "plan_drafts_off"
   | "actor_ineligible"
+  | "owner_only"
   | "input_invalid"
   | "stale"
   | "denied"
@@ -54,9 +56,20 @@ export type StartCard =
        * the revise route does; a goal record's owner never changes.
        */
       readonly targetOwner?: "own" | "other" | null;
+      /**
+       * For a card aimed at an existing project: its goal record's area template, or null
+       * for a dated project. Quick tasks is never revised, so no plan change aims at it.
+       */
+      readonly targetAreaTemplateId?: Current_AreaTemplateId | null;
     }
   | { readonly kind: "area"; readonly areaTemplateId: AreaId }
   | { readonly kind: "quick_tasks" };
+
+/** A plan change of the Quick tasks record (always open and unmeasured, ADR-0033 item 7). */
+export const changesQuickTasks = (card: StartCard): boolean =>
+  card.kind === "draft" &&
+  card.draft.kind === "plan_change" &&
+  card.targetAreaTemplateId === "quick_tasks";
 
 /**
  * The gate before any document, lock or record (ADR-0034 item 10): 503 while the start
@@ -80,29 +93,47 @@ export interface StartActor {
   readonly principalId: string;
   readonly membershipId: string | null;
 }
+/** The workspace's Owner (ADR-0024: ADR-0011 Q2's designated owner), or null if none. */
+export interface StartOwner {
+  readonly principalId: string;
+  readonly membershipId: string;
+}
 /**
  * Only the asker gets a document (owner question 2); for a code-built card, the person who
  * opened it, which is the actor. Anyone else, any agent and any embedded or email session
- * gets `actor_ineligible`.
+ * gets `actor_ineligible`. Quick tasks is created by the Owner's tap (ADR-0033 item 7): any
+ * other member, or a workspace with no Owner, gets `owner_only`. The definer checks the
+ * Owner again under lock.
  */
 export function startEligible(
   actor: StartActor,
   surface: StartSurface,
   card: StartCard,
-): "ok" | "actor_ineligible" {
+  owner: StartOwner | null = null,
+): "ok" | "actor_ineligible" | "owner_only" {
   if (actor.kind !== "human" || actor.membershipId === null) return "actor_ineligible";
   if (surface !== "standalone") return "actor_ineligible";
   if (card.kind === "draft" && card.askerPrincipalId !== actor.principalId)
     return "actor_ineligible";
+  if (
+    card.kind === "quick_tasks" &&
+    (owner === null ||
+      owner.principalId !== actor.principalId ||
+      owner.membershipId !== actor.membershipId)
+  )
+    return "owner_only";
   return "ok";
 }
 
-/** The records a card creates, computed by code from the card alone. */
+/**
+ * The records a card creates, computed by code from the card alone; null for an invalid
+ * draft or a plan change of Quick tasks.
+ */
 export function startRecords(card: StartCard): Current_PlanStartRecords | null {
   if (card.kind === "area") return areaStartRecords(card.areaTemplateId);
   if (card.kind === "quick_tasks") return quickTasksStartRecords();
   const d = card.draft;
-  if (!planDraftValid(d)) return null;
+  if (!planDraftValid(d) || changesQuickTasks(card)) return null;
   const tasks = d.steps
     .filter((s) => s.repeat === null)
     .map((s) => ({ stepKey: s.key, objective: s.title, assignee: s.assignee }));

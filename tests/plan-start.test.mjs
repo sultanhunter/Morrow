@@ -8,6 +8,7 @@ import { createHumanPolicyService } from "../packages/policy/src/index.ts";
 import {
   areaStartRecords,
   buildPlanStartDocument,
+  changesQuickTasks,
   checkStartAttempt,
   decideStartPieces,
   grantSummaryDigest,
@@ -231,13 +232,57 @@ test("only the asker, a human on a standalone session, gets a document", () => {
     ["no membership", { ...asker, membershipId: null }, "standalone"],
   ])
     assert.equal(startEligible(actor, surface, card()), "actor_ineligible", name);
-  // A code-built card: the person who opens it (any member; the kernel decides the rest).
+  // A code-built area card: the person who opens it (any member; the kernel decides the rest).
   const leoActor = { kind: "human", principalId: "principal_leo", membershipId: "membership_leo" };
-  assert.equal(startEligible(leoActor, "standalone", { kind: "quick_tasks" }), "ok");
+  assert.equal(
+    startEligible(leoActor, "standalone", { kind: "area", areaTemplateId: "stock" }),
+    "ok",
+  );
   assert.equal(
     startEligible(leoActor, "embedded", { kind: "area", areaTemplateId: "stock" }),
     "actor_ineligible",
   );
+  // Quick tasks is created by the Owner's tap (ADR-0033 item 7): another member, no Owner,
+  // or the Owner's principal under another membership gets owner_only.
+  const quick = { kind: "quick_tasks" };
+  const leoOwner = { principalId: "principal_leo", membershipId: "membership_leo" };
+  assert.equal(startEligible(leoActor, "standalone", quick, leoOwner), "ok");
+  assert.equal(startEligible(leoActor, "standalone", quick), "owner_only", "no Owner");
+  assert.equal(startEligible(leoActor, "standalone", quick, null), "owner_only");
+  assert.equal(
+    startEligible(asker, "standalone", quick, leoOwner),
+    "owner_only",
+    "a member who is not the Owner",
+  );
+  assert.equal(
+    startEligible(leoActor, "standalone", quick, { ...leoOwner, membershipId: "membership_old" }),
+    "owner_only",
+  );
+  // The surface and actor rules come first.
+  assert.equal(startEligible(leoActor, "embedded", quick, leoOwner), "actor_ineligible");
+});
+
+test("a plan change never revises Quick tasks", () => {
+  const change = {
+    ...draft,
+    kind: "plan_change",
+    target: { kind: "existing_project", projectId: "project_quick", goalRevision: 2 },
+  };
+  const changeCard = (targetAreaTemplateId) =>
+    card({ draft: change, digest: planDraftDigest(change), targetAreaTemplateId });
+  assert.equal(changesQuickTasks(changeCard("quick_tasks")), true);
+  assert.equal(startRecords(changeCard("quick_tasks")), null);
+  for (const target of [null, undefined, "product_pages"]) {
+    assert.equal(changesQuickTasks(changeCard(target)), false, String(target));
+    assert.notEqual(startRecords(changeCard(target)), null, String(target));
+  }
+  // A task card for the Quick tasks record is not a plan change.
+  const task = card({
+    draft: { ...draft, kind: "task" },
+    targetAreaTemplateId: "quick_tasks",
+  });
+  assert.equal(changesQuickTasks(task), false);
+  assert.equal(changesQuickTasks({ kind: "quick_tasks" }), false);
 });
 
 test("the records code computes, and one kernel check per piece", () => {

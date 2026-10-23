@@ -85,6 +85,7 @@ const refusals: Readonly<Record<ProjectRefusal, readonly [number, string, string
       "Morrow's plan cards are not available yet.",
     ],
     actor_ineligible: [403, "denied", "never", "Only the person who asked can start this card."],
+    owner_only: [403, "denied", "never", "Only the workspace owner can set up Quick tasks."],
     stale: [
       409,
       "conflict",

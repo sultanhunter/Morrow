@@ -7,12 +7,14 @@ import { validateCurrentDefinition } from "../packages/contracts/src/validation.
 import {
   areaStartRecords,
   areaTemplate,
+  criteriaForViewer,
   everydayAreaTemplates,
   goalAssistants,
   goalMetrics,
   goalProgress,
   handCheckCounted,
   handCheckValue,
+  holdsCustomerGoal,
   makeProjectIdea,
   measureDirection,
   planFinish,
@@ -86,6 +88,7 @@ const value = (key, v, atMs, extra = {}) => ({
   value: v,
   observedAtMs: atMs,
   counted: true,
+  assistant: null,
   readTags: [tag("catalog.products.read")],
   dataClass: "work",
   expiresAtMs: null,
@@ -246,14 +249,17 @@ test("an expired value is gone: the start is the oldest kept value", () => {
 test("a hand check is judged on check dates; an overdue check is Needs you", () => {
   const record = dated([criterion("named", named)]);
   const check = (v, atMs, extra = {}) =>
-    value("named", v, atMs, { productId: "product:1", ...extra });
+    value("named", v, atMs, { productId: "product:1", assistant: "chatgpt", ...extra });
   const run = (values, now) => goalProgress(record, values, everyTag, ctx(now)).goals[0];
   const first = run([], t0 + day);
   assert.deepEqual([first.health, first.reason], ["not_measured", "not_checked_yet"]);
   const once = run([check(0, t0 + day)], t0 + 2 * day);
   assert.deepEqual([once.health, once.reason], ["not_measured", "starting_point"]);
   // A check in another assistant is kept but never counts.
-  const other = run([check(0, t0 + day), check(5, t0 + 3 * day, { counted: false })], t0 + 4 * day);
+  const other = run(
+    [check(0, t0 + day), check(5, t0 + 3 * day, { counted: false, assistant: "gemini" })],
+    t0 + 4 * day,
+  );
   assert.deepEqual([other.health, other.reason], ["not_measured", "starting_point"]);
   // Two counted checks: words, here Done (2 of 5 named).
   assert.equal(run([check(0, t0 + day), check(2, t0 + 29 * day)], t0 + 30 * day).health, "done");
@@ -263,6 +269,97 @@ test("a hand check is judged on check dates; an overdue check is Needs you", () 
   assert.equal(overdue.since, new Date(t0 + day + 28 * day).toISOString());
   const never = run([], t0 + 29 * day);
   assert.deepEqual([never.health, never.reason], ["needs_you", "check_overdue"]);
+});
+
+test("a hand check counts only in the measure's current assistant and on its current rows", () => {
+  const two = {
+    ...named,
+    rows: [
+      { productId: "product:1", checkItems: ["q1", "q2"] },
+      { productId: "product:2", checkItems: ["q1", "q2"] },
+    ],
+  };
+  const check = (productId, v, atMs, assistant = "chatgpt") =>
+    value("named", v, atMs, { productId, assistant, counted: true });
+  const checks = [
+    check("product:1", 0, t0 + day),
+    check("product:2", 0, t0 + day),
+    check("product:1", 1, t0 + 20 * day),
+    check("product:2", 1, t0 + 20 * day),
+  ];
+  const run = (measure, values = checks) =>
+    goalProgress(dated([criterion("named", measure)]), values, everyTag, ctx(t0 + 21 * day))
+      .goals[0];
+  // Both rows in ChatGPT: 1 + 1 named, the target of 2 met.
+  assert.equal(run(two).health, "done");
+  assert.equal(run(two).value.value, 2);
+  // A revise switches the assistant: the ChatGPT checks, though stored as counted, no
+  // longer count for the Gemini goal.
+  const gemini = run({ ...two, assistant: "gemini" });
+  assert.deepEqual(
+    [gemini.health, gemini.reason, gemini.value],
+    ["not_measured", "not_checked_yet", null],
+  );
+  // A revise removes product:2's row: its checks no longer count (1 named, not Done).
+  const one = run({ ...two, rows: [two.rows[0]] });
+  assert.notEqual(one.health, "done");
+  assert.equal(one.value.value, 1);
+  // A check whose stored assistant is not the measure's never counts, even if flagged.
+  const flagged = run(two, [...checks, check("product:1", 2, t0 + 20.5 * day, "gemini")]);
+  assert.equal(flagged.value.value, 2);
+});
+
+test("goal records per viewer: a customer-class goal only for members who may read customer data", () => {
+  const record = [
+    criterion("facts", facts),
+    criterion("replied", replied),
+    criterion("cover", cover),
+  ];
+  assert.equal(holdsCustomerGoal(record), true);
+  assert.equal(holdsCustomerGoal([criterion("facts", facts)]), false);
+  // Without support.case.read on the store, the customer goal is left out; others stay,
+  // whatever else the viewer may not see (goal definitions are not order data).
+  assert.deepEqual(
+    criteriaForViewer(record, only("catalog.products.read"), [store]).map((c) => c.key),
+    ["facts", "cover"],
+  );
+  // With it, everything is shown.
+  assert.deepEqual(
+    criteriaForViewer(record, only("support.case.read"), [store]).map((c) => c.key),
+    ["facts", "replied", "cover"],
+  );
+  // No store: no viewer may see a customer-class goal.
+  assert.deepEqual(
+    criteriaForViewer(record, everyTag, []).map((c) => c.key),
+    ["facts", "cover"],
+  );
+  // The Customer emails area holds only its customer goal: nothing is left, so the record
+  // is not shown to this viewer at all.
+  const emails = areaStartRecords("customer_emails").goal.successCriteria;
+  assert.equal(criteriaForViewer(emails, only("orders.read"), [store]), null);
+  assert.deepEqual(criteriaForViewer(emails, only("support.case.read"), [store]), emails);
+  // Unmeasured criteria (Quick tasks' hidden one) are always kept.
+  const quick = quickTasksStartRecords().goal.successCriteria;
+  assert.deepEqual(criteriaForViewer(quick, only(), []), quick);
+});
+
+test("Finish's results record leaves a customer-class goal out and stores no number", () => {
+  const record = dated([criterion("facts", facts), criterion("replied", replied)]);
+  const plan = planFinish({
+    record,
+    values: [value("facts", 5, t0), value("facts", 12, t0 + 30 * day)],
+    tasks: [],
+    storeIds: [store],
+    nowMs: t0 + 30 * day,
+    keepMonthlyCheck: false,
+    productPagesArea: null,
+    cancelEdgesAvailable: false,
+  });
+  // Code's own view still judges the customer goal (no value yet: not Done), so the record
+  // is not achieved; the results record names only the other goal, by key and health.
+  assert.equal(plan.to, "cancelled");
+  assert.deepEqual(plan.results.goals, [{ key: "facts", health: "done" }]);
+  assert.doesNotMatch(JSON.stringify(plan.results), /replied|"value"/);
 });
 
 test("an area goal: the template's threshold, never Done", () => {
@@ -397,8 +494,8 @@ test("Finish: achieved only when code finds every goal Done; the monthly check m
   const doneValues = [
     value("facts", 5, t0),
     value("facts", 12, t0 + 30 * day),
-    value("named", 0, t0 + day, { productId: "product:1" }),
-    value("named", 3, t0 + 29 * day, { productId: "product:1" }),
+    value("named", 0, t0 + day, { productId: "product:1", assistant: "chatgpt" }),
+    value("named", 3, t0 + 29 * day, { productId: "product:1", assistant: "chatgpt" }),
   ];
   const base = {
     record,
@@ -413,10 +510,12 @@ test("Finish: achieved only when code finds every goal Done; the monthly check m
   const achieved = planFinish(base);
   assert.equal(achieved.to, "achieved");
   assert.match(achieved.resultsDigest, /^[a-f0-9]{64}$/);
-  assert.deepEqual(
-    achieved.results.goals.map((g) => g.health),
-    ["done", "done"],
-  );
+  // The results record keeps keys and health codes only, never a measured number.
+  assert.deepEqual(achieved.results.goals, [
+    { key: "facts", health: "done" },
+    { key: "named", health: "done" },
+  ]);
+  assert.doesNotMatch(JSON.stringify(achieved.results), /"value"|"observedAt"/);
   const partial = planFinish({ ...base, values: doneValues.slice(0, 2) });
   assert.equal(partial.to, "cancelled");
   // An open task: refused until the P06 cancel edges exist; a running one always.

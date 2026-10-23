@@ -6,6 +6,7 @@ import type {
   Current_GoalStatus,
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
+import { isCustomerMeasure } from "./measures";
 import { codeViewer, goalProgress, type GoalRecordFacts, type GoalValueFacts } from "./progress";
 
 // "Finish project" and "Stop this project's steps" (ADR-0033 items 5 and 11), built from
@@ -34,6 +35,14 @@ const unstarted: ReadonlySet<TaskStatus> = new Set(["draft", "ready", "queued"])
 export const taskEnded = (s: TaskStatus) => ended.has(s);
 export const taskUnstarted = (s: TaskStatus) => unstarted.has(s);
 
+/**
+ * Finish's results record (goal_finish_results): permanent, with no read tags and no clock,
+ * and readable by every member, so it holds only each goal's key and health code. It never
+ * holds a measured number (an order-derived number would outlive its 90-day clock and
+ * escape its read tags) and never a customer-class goal (ADR-0033 item 4: customer values
+ * never leave their content: customer table). Code decides `achieved` on its own full view;
+ * the numbers it saw are not stored.
+ */
 export interface FinishResultsRecord {
   readonly goalId: string;
   readonly goalRevision: number;
@@ -41,7 +50,6 @@ export interface FinishResultsRecord {
   readonly goals: readonly {
     readonly key: string;
     readonly health: string;
-    readonly value: number | null;
   }[];
   readonly computedAt: string;
 }
@@ -134,15 +142,16 @@ export function planFinish(input: FinishInput): FinishPlan | { readonly refusal:
     measured.length > 0 &&
     progress.goals.length === measured.length &&
     progress.goals.every((g) => g.health === "done");
+  const customerKeys = new Set(
+    measured.filter((c) => isCustomerMeasure(c.measure!)).map((c) => c.key),
+  );
   const results: FinishResultsRecord = {
     goalId: record.id,
     goalRevision: record.revision,
     outcome: allDone ? "achieved" : "cancelled",
-    goals: progress.goals.map((g) => ({
-      key: g.key,
-      health: g.health,
-      value: g.value?.value ?? null,
-    })),
+    goals: progress.goals
+      .filter((g) => !customerKeys.has(g.key))
+      .map((g) => ({ key: g.key, health: g.health })),
     computedAt: new Date(input.nowMs).toISOString(),
   };
   let areaRevision: FinishPlan["areaRevision"] = null;

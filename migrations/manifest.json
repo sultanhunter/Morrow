@@ -308,7 +308,7 @@
     {
       "sequence": 39,
       "file": "0039.projects-goal-measures.sql",
-      "sha256": "dfa1673c0a1957f570940779866603ffe5f3ec6bfe4811d2a9a48a124d6e15fd",
+      "sha256": "81fb5e78633b35683b1b0b9978f39128cd961cb8f514b80a485ea2f9caf9f742",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/projects-backend.md"
     }

@@ -8,11 +8,14 @@ BEGIN;
 --   * goals: due_at (a dated project) and area_template_id (an Everyday work area or Quick
 --     tasks), never both, at most one record per template; the criteria CHECK replaced by
 --     the v1.1 CriteriaList (key and measure, at most 3 measured, unique keys, a stored
---     startRef always null, no measure due after its record). enforce_status (0015) is
---     revised so a goal's objective, date and criteria change only with revision+1; a new
---     goal_kind_guard keeps a dated record dated, makes `achieved` need Finish's results
---     record and `cancelled` need every task ended (with no terminal task state yet, any
---     task blocks it, as cmd_goal_transition's own guard already does).
+--     startRef always null, no measure due after its record). A dated project or an area
+--     holds 1 to 3 criteria, every one measured; Quick tasks holds none measured (ADR-0033
+--     items 1 and 7). enforce_status (0015) is revised so a goal's objective, date and
+--     criteria change only with revision+1; a new goal_kind_guard keeps a dated record
+--     dated, keeps Quick tasks open (never paused or ended) and an area from ending (its
+--     template is never blocked), makes `achieved` need Finish's results record and
+--     `cancelled` need every task ended (with no terminal task state yet, any task blocks
+--     it, as cmd_goal_transition's own guard already does).
 --   * projects: one per goal record, made and pinned only by people (ADR-0016 item 1);
 --     workspace-wide pins at most 20.
 --   * goal_measure_values: append-only values written by code or, for a hand check, by a
@@ -20,11 +23,14 @@ BEGIN;
 --     class and clock are server-derived. A customer-tagged value is refused here: it lives
 --     only in a content: customer table with its customer_redact handler, which lands with
 --     Support's deletion path (ADR-0031 items 2 and 4; CLAUDE.md), so until then the
---     Customer emails goal reads Not measured.
---   * goal_finish_results: Finish's code-computed results record, one per goal record.
+--     Customer emails goal reads Not measured. A person records at most 3 checks per goal,
+--     goal key, product row and UTC day.
+--   * goal_finish_results: Finish's code-computed results record, one per goal record:
+--     keys and health codes only, never a measured number and never a customer-class goal.
 --   * plan_draft_revisions: a card's revisions (PlanDraft@1), each keeping revision 1's
 --     taint and restricted sources; written by T4's Coordinator (revision 1) and by the
---     asker's edits (later revisions).
+--     asker's edits (later revisions). A digest need not be unique: two cards, or an edit
+--     back to an earlier revision, may hold the same draft (every lookup is by message).
 --   * plan_start_documents: PlanStartDocument@1, bound to the actor and the session, five
 --     minutes, consumed once with its nonce; purged 24 hours after use or expiry.
 --   * Definers: begin_project_command, plan_start_document (the actor's own document, read
@@ -32,7 +38,9 @@ BEGIN;
 --     cmd_goal_check, cmd_plan_start_document and cmd_plan_start (one transaction that
 --     consumes the document, rechecks the actor, session, nonce, grant summary and every
 --     assignee under lock and creates every record as the actor's own; any refusal rolls
---     everything back). The commands CHECKs are widened by goal.revise, goal.check,
+--     everything back). Only the Owner (ADR-0024; work_ownership_facts) gets and confirms a
+--     Quick tasks document, checked again under lock. A plan change never revises Quick
+--     tasks. The commands CHECKs are widened by goal.revise, goal.check,
 --     plan.start_document and plan.start (each CHECK the union of every value at this head).
 -- The work API's start routes answer 503 before any of these definers while
 -- docs/decisions/plan-drafts-staging.json holds them (`start_routes` held).
@@ -51,6 +59,7 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_work.db_now()') IS NULL OR to_regprocedure('morrow_work.utc_text(timestamp with time zone)') IS NULL
  OR to_regprocedure('morrow_work.utc_parse(text)') IS NULL OR to_regprocedure('morrow_work.sha256_text(text)') IS NULL
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_store_installations(text,text)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_ownership_facts(text)','EXECUTE')
  -- The shared CHECKs and the trigger this file revises, exactly as the head defines them
  -- (shared protocol: a later revision is never overwritten blind).
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.commands'::regclass AND c.conname='commands_command_type_check')
@@ -145,6 +154,20 @@ BEGIN
  RETURN v_measured<=3;
 EXCEPTION WHEN OTHERS THEN RETURN false;
 END $$;
+-- A project's criteria (ADR-0033 items 1 and 7; flow-contracts.md): a dated project or an
+-- Everyday work area holds 1 to 3 criteria, every one measured; Quick tasks holds none
+-- measured (its one hidden criterion); a record with neither (a v1 goal) is not a project.
+CREATE FUNCTION morrow_work.valid_project_criteria(c jsonb,p_due timestamptz,p_area text) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
+DECLARE v_measured integer;
+BEGIN
+ IF p_due IS NULL AND p_area IS NULL THEN RETURN true; END IF;
+ IF c IS NULL OR jsonb_typeof(c)<>'array' THEN RETURN false; END IF;
+ SELECT count(*)::integer INTO v_measured FROM jsonb_array_elements(c) e WHERE jsonb_typeof(e->'measure')='object';
+ IF p_area='quick_tasks' THEN RETURN v_measured=0; END IF;
+ RETURN v_measured BETWEEN 1 AND 3 AND v_measured=jsonb_array_length(c);
+EXCEPTION WHEN OTHERS THEN RETURN false;
+END $$;
 -- Read tags (ADR-0031 item 6): 0..12 unique {storeId, capabilityId} from the closed list.
 CREATE FUNCTION morrow_work.valid_read_tags(t jsonb) RETURNS boolean
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
@@ -166,10 +189,12 @@ $$;
 REVOKE ALL ON FUNCTION morrow_work.goal_time(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.valid_goal_measure(jsonb,timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.valid_goal_criteria(jsonb,timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_work.valid_project_criteria(jsonb,timestamptz,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.valid_read_tags(jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.valid_check_answers(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_work.goal_time(text),morrow_work.valid_goal_measure(jsonb,timestamptz),
- morrow_work.valid_goal_criteria(jsonb,timestamptz),morrow_work.valid_read_tags(jsonb),morrow_work.valid_check_answers(jsonb)
+ morrow_work.valid_goal_criteria(jsonb,timestamptz),morrow_work.valid_project_criteria(jsonb,timestamptz,text),
+ morrow_work.valid_read_tags(jsonb),morrow_work.valid_check_answers(jsonb)
  TO morrow_work_command;
 
 -- ---------------------------------------------------------------------------
@@ -182,8 +207,10 @@ ALTER TABLE morrow_work.goals
   ('product_pages','stock','customer_emails','sales_and_numbers','promotions','quick_tasks')),
  ADD CONSTRAINT goals_due_or_area CHECK (due_at IS NULL OR area_template_id IS NULL),
  DROP CONSTRAINT goals_valid_criteria,
- ADD CONSTRAINT goals_valid_criteria CHECK (morrow_work.valid_goal_criteria(success_criteria,due_at));
--- At most one area per template, and one Quick tasks record, per workspace.
+ ADD CONSTRAINT goals_valid_criteria CHECK (morrow_work.valid_goal_criteria(success_criteria,due_at)),
+ ADD CONSTRAINT goals_project_criteria CHECK (morrow_work.valid_project_criteria(success_criteria,due_at,area_template_id));
+-- At most one area per template, and one Quick tasks record, per workspace (an area never
+-- ends, goal_kind_guard, so its template is never blocked).
 CREATE UNIQUE INDEX goals_one_area ON morrow_work.goals (organization_id,workspace_id,area_template_id)
  WHERE area_template_id IS NOT NULL;
 GRANT UPDATE (objective,due_at,success_criteria) ON morrow_work.goals TO morrow_work_command;
@@ -271,7 +298,9 @@ CREATE TABLE morrow_work.goal_finish_results (
 );
 -- A card's revisions (ADR-0034 item 3). Revision 1 is the Coordinator's (no editor);
 -- every later one names its editor and keeps revision 1's taint and restricted sources
--- (plan_draft_guard). A start document is issued only for a digest held here.
+-- (plan_draft_guard). A start document is issued only for a digest held here, at its
+-- message's latest revision. The digest covers only the draft, so it is not unique: two
+-- cards with the same draft, or an edit back to an earlier revision's draft, are kept.
 CREATE TABLE morrow_work.plan_draft_revisions (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -288,7 +317,6 @@ CREATE TABLE morrow_work.plan_draft_revisions (
  restricted_sources jsonb NOT NULL CHECK (jsonb_typeof(restricted_sources)='array' AND jsonb_array_length(restricted_sources)<=100),
  created_at timestamptz NOT NULL CHECK (created_at=date_trunc('milliseconds',created_at) AND isfinite(created_at)),
  PRIMARY KEY (organization_id,workspace_id,message_id,revision),
- UNIQUE (organization_id,workspace_id,digest),
  FOREIGN KEY (organization_id,workspace_id) REFERENCES morrow_identity.workspaces(organization_id,id),
  FOREIGN KEY (organization_id,asker_membership_id,asker_principal_id) REFERENCES morrow_identity.memberships(organization_id,id,principal_id),
  FOREIGN KEY (workspace_id,asker_membership_id) REFERENCES morrow_identity.workspace_memberships(workspace_id,membership_id),
@@ -424,13 +452,21 @@ BEGIN
  RETURN NEW;
 END $$;
 -- Goals only: a dated record stays dated and an undated one undated; the objective,
--- criteria and date change only while the record is open; `achieved` needs Finish's
+-- criteria and date change only while the record is open; Quick tasks is always open
+-- (ADR-0033 item 7: once active it is never paused or ended); an area never ends, so its
+-- template is never blocked (at most one record per template); `achieved` needs Finish's
 -- results record at that revision; `cancelled` needs every task ended.
 CREATE FUNCTION morrow_work.goal_kind_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 BEGIN
  IF TG_OP<>'UPDATE' THEN RAISE EXCEPTION 'WORK_STATE_INVALID'; END IF;
  IF (OLD.due_at IS NULL)<>(NEW.due_at IS NULL) THEN RAISE EXCEPTION 'GOAL_KIND_IMMUTABLE'; END IF;
+ IF OLD.area_template_id='quick_tasks' AND NEW.status IS DISTINCT FROM OLD.status AND NEW.status<>'active' THEN
+  RAISE EXCEPTION 'QUICK_TASKS_ALWAYS_OPEN';
+ END IF;
+ IF OLD.area_template_id IS NOT NULL AND NEW.status IS DISTINCT FROM OLD.status AND NEW.status IN ('achieved','cancelled') THEN
+  RAISE EXCEPTION 'AREA_NEVER_ENDS';
+ END IF;
  IF (NEW.objective,NEW.due_at,NEW.success_criteria) IS DISTINCT FROM (OLD.objective,OLD.due_at,OLD.success_criteria)
   AND (OLD.status NOT IN ('draft','active','paused') OR NEW.status<>OLD.status) THEN
   RAISE EXCEPTION 'WORK_STATE_INVALID';
@@ -573,9 +609,10 @@ END $$;
 
 -- workspace.goal.revise (ADR-0033 item 5; human_only, the Worker's kernel decided the verb:
 -- own -> execute, another member's record -> administer). The objective, the date (Extend),
--- the targets, questions and assistant, within 3 measured goals; a stored startRef stays
--- null. An area keeps no date, a dated project keeps one, and Quick tasks is never revised;
--- a record with neither a date nor an area (a v1 goal, not a project) is never revised here.
+-- the targets, questions and assistant, within 1 to 3 goals, every one measured; a stored
+-- startRef stays null. An area keeps no date, a dated project keeps one, and Quick tasks is
+-- never revised; a record with neither a date nor an area (a v1 goal, not a project) is
+-- never revised here.
 CREATE FUNCTION morrow_work.cmd_goal_revise(p_command_id text,p_request_digest text,p_correlation_id text,p_goal_id text,
  p_expected_revision text,p_basis text,p_objective text,p_due_at text,p_success_criteria text)
 RETURNS TABLE(outcome text,result text)
@@ -611,6 +648,9 @@ BEGIN
   OR (g.due_at IS NULL AND g.area_template_id IS NULL) OR (g.due_at IS NULL)<>(v_due IS NULL) THEN
   RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN;
  END IF;
+ IF NOT morrow_work.valid_project_criteria(v_criteria,v_due,g.area_template_id) THEN
+  RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+ END IF;
  IF p_basis='own' AND (g.owner_principal_id<>p.principal_id OR g.owner_membership_id<>p.membership_id) THEN
   RETURN QUERY SELECT 'stale_authority'::text,NULL::text; RETURN;
  END IF;
@@ -627,6 +667,8 @@ END $$;
 -- workspace.goal.measure.record (ADR-0033 items 3 and 4; human_only): one hand-check row.
 -- The value (how many questions named the product), its read tags, class and clock are
 -- computed here; a check in another assistant than the goal's is kept and never counts.
+-- At most 3 checks per goal, key, product row and UTC day (the goal's lock serialises the
+-- count), so values grow by a bounded number a day.
 CREATE FUNCTION morrow_work.cmd_goal_check(p_command_id text,p_request_digest text,p_correlation_id text,p_goal_id text,
  p_key text,p_product_id text,p_assistant text,p_answers text,p_value_id text)
 RETURNS TABLE(outcome text,result text)
@@ -634,6 +676,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp
 #variable_conflict use_column
 DECLARE
  p record; g record; v_answers jsonb; v_measure jsonb; v_row jsonb; v_value integer; v_counted boolean; v_at timestamptz; v_result jsonb;
+ v_day timestamptz;
 BEGIN
  IF p_correlation_id IS NULL OR p_correlation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_goal_id IS NULL OR p_goal_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -666,6 +709,11 @@ BEGIN
  SELECT count(*)::integer INTO v_value FROM jsonb_array_elements_text(v_answers) a WHERE a='named_this_product';
  v_counted:=(v_measure->>'assistant')=p_assistant;
  v_at:=morrow_work.db_now();
+ v_day:=date_trunc('day',v_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
+ IF (SELECT count(*) FROM morrow_work.goal_measure_values x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
+   AND x.goal_id=p_goal_id AND x.key=p_key AND x.product_id=p_product_id AND x.observed_at>=v_day AND x.observed_at<v_day+interval '1 day')>=3 THEN
+  RETURN QUERY SELECT 'limit_reached'::text,NULL::text; RETURN;
+ END IF;
  INSERT INTO morrow_work.goal_measure_values(organization_id,workspace_id,id,goal_id,key,product_id,value,observed_at,recorder_kind,
   recorder_principal_id,recorder_membership_id,assistant,answers,counted,read_tags,data_class,expires_at,created_at)
  VALUES (p.organization_id,p.workspace_id,p_value_id,p_goal_id,p_key,p_product_id,v_value,v_at,'human',p.principal_id,p.membership_id,
@@ -744,6 +792,11 @@ BEGIN
  IF d->>'organizationId'<>p.organization_id OR d->>'workspaceId'<>p.workspace_id
   OR d#>>'{actor,principalId}'<>p.principal_id OR d#>>'{actor,membershipId}'<>p.membership_id THEN
   RETURN QUERY SELECT 'actor_ineligible'::text,NULL::text; RETURN;
+ END IF;
+ -- Quick tasks is created by the Owner's tap (ADR-0033 item 7; the Owner of ADR-0024).
+ IF v_purpose='quick_tasks' AND NOT EXISTS(SELECT 1 FROM morrow_identity.work_ownership_facts(p.organization_id) o
+   WHERE o.owner_principal_id=p.principal_id AND o.owner_membership_id=p.membership_id) THEN
+  RETURN QUERY SELECT 'owner_only'::text,NULL::text; RETURN;
  END IF;
  v_now:=morrow_work.db_now();
  IF v_created>v_now OR v_created<v_now-interval '10 seconds' THEN RETURN QUERY SELECT 'stale'::text,NULL::text; RETURN; END IF;
@@ -836,6 +889,11 @@ BEGIN
  END IF;
  d:=doc.canonical::jsonb; v_records:=d->'records';
  IF doc.purpose NOT IN ('plan_card','area','quick_tasks') THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
+ -- Quick tasks: still the Owner, under the prelude's organization interlock.
+ IF doc.purpose='quick_tasks' AND NOT EXISTS(SELECT 1 FROM morrow_identity.work_ownership_facts(p.organization_id) o
+   WHERE o.owner_principal_id=p.principal_id AND o.owner_membership_id=p.membership_id) THEN
+  RETURN QUERY SELECT 'owner_only'::text,NULL::text; RETURN;
+ END IF;
  IF doc.purpose='plan_card' AND NOT EXISTS(SELECT 1 FROM morrow_work.plan_draft_revisions x WHERE x.organization_id=p.organization_id
    AND x.workspace_id=p.workspace_id AND x.message_id=doc.message_id AND x.revision=doc.draft_revision AND x.digest=doc.draft_digest
    AND NOT EXISTS(SELECT 1 FROM morrow_work.plan_draft_revisions y WHERE y.organization_id=x.organization_id
@@ -883,15 +941,18 @@ BEGIN
  END LOOP;
  -- (c) The goal record: a new one (made active), or a plan change of the target's.
  IF doc.target_kind='existing_project' THEN
-  SELECT x.id::text AS id,x.revision::bigint AS revision,x.status,x.due_at INTO g
+  SELECT x.id::text AS id,x.revision::bigint AS revision,x.status,x.due_at,x.area_template_id INTO g
    FROM morrow_work.goals x JOIN morrow_work.projects j ON j.organization_id=x.organization_id AND j.workspace_id=x.workspace_id
    AND j.goal_id=x.id WHERE j.organization_id=p.organization_id AND j.workspace_id=p.workspace_id AND j.id=doc.target_id FOR UPDATE OF x;
   IF NOT FOUND OR g.revision<>doc.target_revision THEN RETURN QUERY SELECT 'stale'::text,NULL::text; RETURN; END IF;
   IF g.status NOT IN ('draft','active','paused') THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
   v_goal_id:=g.id;
   IF jsonb_typeof(v_records->'goal')='object' THEN
+   -- Quick tasks is never revised (cmd_goal_revise's rule; ADR-0033 item 7).
+   IF g.area_template_id='quick_tasks' THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
    v_due:=morrow_work.goal_time(v_records#>>'{goal,dueAt}');
    IF (v_due IS NULL)<>(g.due_at IS NULL) OR NOT morrow_work.valid_goal_criteria(v_records#>'{goal,successCriteria}',v_due)
+    OR NOT morrow_work.valid_project_criteria(v_records#>'{goal,successCriteria}',v_due,g.area_template_id)
     OR jsonb_typeof(v_records#>'{goal,objective}')<>'string' OR char_length(v_records#>>'{goal,objective}') NOT BETWEEN 1 AND 8192 THEN
     RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
    END IF;
@@ -911,6 +972,7 @@ BEGIN
    OR (doc.target_kind='new_project' AND v_records#>'{goal,areaTemplateId}'<>'null'::jsonb)
    OR (doc.target_kind IN ('area','quick_tasks') AND v_records#>>'{goal,areaTemplateId}' IS DISTINCT FROM COALESCE(doc.target_id,'quick_tasks'))
    OR NOT morrow_work.valid_goal_criteria(v_records#>'{goal,successCriteria}',v_due)
+   OR NOT morrow_work.valid_project_criteria(v_records#>'{goal,successCriteria}',v_due,v_records#>>'{goal,areaTemplateId}')
    OR jsonb_typeof(v_records#>'{goal,objective}')<>'string' OR char_length(v_records#>>'{goal,objective}') NOT BETWEEN 1 AND 8192 THEN
    RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
   END IF;

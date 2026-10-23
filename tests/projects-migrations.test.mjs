@@ -194,7 +194,15 @@ test("definers: command-owned, api-only, tenant and actor from the session, neve
     assert.ok(start.includes(piece), piece);
   // Every refusal returns before the first write.
   const firstWrite = start.indexOf("INSERT INTO");
-  for (const refusal of ["'stale'", "'actor_ineligible'", "'stopped'", "'limit_reached'"])
+  for (const refusal of [
+    "'stale'",
+    "'actor_ineligible'",
+    "'owner_only'",
+    "'state_conflict'",
+    "'invalid'",
+    "'stopped'",
+    "'limit_reached'",
+  ])
     assert.ok(start.lastIndexOf(refusal) < firstWrite, refusal);
   // The document's issuer binds it to this session and stores only the nonce's digest.
   const issue = body("cmd_plan_start_document");
@@ -265,4 +273,62 @@ test("registry: every new table and function is registered with its class", () =
     assert.equal(workFunctions[signature].kind, "api", signature);
     assert.deepEqual(workFunctions[signature].grantees, ["morrow_work_api"], signature);
   }
+});
+
+test("review fixes: card digests, Quick tasks and areas, a project's criteria, bounded checks", () => {
+  // A card's digest covers only its draft: two cards, or an edit back to an earlier draft,
+  // share one, so it is not unique (every lookup is by message and revision).
+  const cards = sql.slice(sql.indexOf("CREATE TABLE morrow_work.plan_draft_revisions ("));
+  const table = cards.slice(0, cards.indexOf(");\n"));
+  assert.doesNotMatch(table, /UNIQUE \(organization_id,workspace_id,digest\)/);
+  assert.match(table, /PRIMARY KEY \(organization_id,workspace_id,message_id,revision\)/);
+  // A dated project or an area holds 1 to 3 criteria, all measured; Quick tasks none.
+  const project = body("valid_project_criteria");
+  assert.ok(project.includes("IF p_due IS NULL AND p_area IS NULL THEN RETURN true; END IF;"));
+  assert.ok(project.includes("IF p_area='quick_tasks' THEN RETURN v_measured=0; END IF;"));
+  assert.ok(
+    project.includes("RETURN v_measured BETWEEN 1 AND 3 AND v_measured=jsonb_array_length(c);"),
+  );
+  assert.ok(
+    sql.includes(
+      "ADD CONSTRAINT goals_project_criteria CHECK (morrow_work.valid_project_criteria(success_criteria,due_at,area_template_id))",
+    ),
+  );
+  assert.ok(
+    body("cmd_goal_revise").includes(
+      "morrow_work.valid_project_criteria(v_criteria,v_due,g.area_template_id)",
+    ),
+  );
+  const start = body("cmd_plan_start");
+  assert.equal([...start.matchAll(/morrow_work\.valid_project_criteria\(/g)].length, 2);
+  // A plan change never revises Quick tasks (cmd_goal_revise's own rule).
+  assert.ok(start.includes("x.due_at,x.area_template_id INTO g"));
+  assert.ok(
+    start.includes(
+      "IF g.area_template_id='quick_tasks' THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;",
+    ),
+  );
+  assert.ok(body("cmd_goal_revise").includes("g.area_template_id='quick_tasks'"));
+  // Quick tasks is always open; an area never ends.
+  const guard = body("goal_kind_guard");
+  assert.ok(guard.includes("RAISE EXCEPTION 'QUICK_TASKS_ALWAYS_OPEN'"));
+  assert.ok(guard.includes("RAISE EXCEPTION 'AREA_NEVER_ENDS'"));
+  // Only the Owner gets and confirms a Quick tasks document, under the interlock.
+  const owner =
+    "morrow_identity.work_ownership_facts(p.organization_id) o\n   WHERE o.owner_principal_id=p.principal_id AND o.owner_membership_id=p.membership_id";
+  assert.ok(body("cmd_plan_start_document").includes(owner));
+  assert.ok(start.includes(owner));
+  assert.ok(
+    start.indexOf("morrow_identity.work_ownership_facts") <
+      start.indexOf("morrow_work.target_recheck("),
+  );
+  assert.ok(
+    text.includes(
+      "has_function_privilege('morrow_work_command','morrow_identity.work_ownership_facts(text)','EXECUTE')",
+    ),
+  );
+  // At most 3 checks per goal, key, product row and UTC day.
+  const check = body("cmd_goal_check");
+  assert.ok(check.includes("x.observed_at>=v_day AND x.observed_at<v_day+interval '1 day')>=3"));
+  assert.ok(check.indexOf("'limit_reached'") < check.indexOf("INSERT INTO"));
 });

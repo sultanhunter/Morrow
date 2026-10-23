@@ -265,7 +265,7 @@ export const workTables = Object.freeze({
   },
   // PR 18 (0039, ADR-0033 and ADR-0034). A project names its goal record and a title people
   // write; values are numbers, codes and read tags (the work API filters them per viewer);
-  // Finish's results are keys, health codes and numbers; a card's revisions and a start
+  // Finish's results are keys and health codes (never a number); a card's revisions and a start
   // document hold text people and Morrow write (titles, steps, "Done when").
   projects: { class: "tenant_readable", parents: ["goals"], content: "workspace" },
   goal_measure_values: { class: "tenant_readable", parents: ["goals"], content: "none" },
@@ -607,6 +607,10 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_work_command"],
   },
   "valid_goal_criteria(jsonb,timestamp with time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "valid_project_criteria(jsonb,timestamp with time zone,text)": {
     kind: "check",
     grantees: ["morrow_work_command"],
   },

@@ -2,6 +2,7 @@ import type {
   CapabilityId,
   Current_AreaTemplateId,
   Current_CriteriaList,
+  Current_GoalAssistant,
   Current_GoalProgress,
   Current_GoalStatus,
   Current_GoalValueClass,
@@ -17,9 +18,12 @@ import { createHumanPolicyService, type HumanAuthority, type PermissionVerb } fr
 import {
   areaTemplate,
   buildPlanStartDocument,
+  changesQuickTasks,
+  criteriaForViewer,
   decideStartPieces,
   goalProgress,
   grantSummaryDigest,
+  holdsCustomerGoal,
   planDraftValid,
   planStepRuns,
   startChecks,
@@ -28,7 +32,10 @@ import {
   startRouteGate,
   startTarget,
   type GoalValueFacts,
+  type ProgressViewer,
+  type ReadCapability,
   type StartCard,
+  type StartOwner,
 } from "@morrow/policy/projects";
 import { storeResource } from "@morrow/policy/store-resource";
 import { WorkReject, type WorkRejection, type WorkTx } from "../connection.js";
@@ -72,6 +79,7 @@ export type ProjectRefusal =
   | "start_unavailable"
   | "plan_drafts_off"
   | "actor_ineligible"
+  | "owner_only"
   | "stale"
   | "repeating_unavailable"
   | "stopped"
@@ -213,12 +221,14 @@ const sqlOutcomes: Readonly<Record<string, WorkRejection | ProjectRefusal>> = Ob
   limit_reached: "limit_reached",
   stale: "stale",
   actor_ineligible: "actor_ineligible",
+  owner_only: "owner_only",
   repeating_unavailable: "repeating_unavailable",
   stopped: "stopped",
 });
 const projectRefusals: readonly string[] = [
   "stale",
   "actor_ineligible",
+  "owner_only",
   "repeating_unavailable",
   "stopped",
 ];
@@ -315,12 +325,89 @@ async function goalOf(tx: WorkTx, goalId: string): Promise<GoalRow | null> {
     areaTemplateId: optional(row, "area_template_id") as Current_AreaTemplateId | null,
   };
 }
-/** A goal the actor may see: absent or not viewable is the same 404. */
-async function viewableGoal(tx: WorkTx, a: WorkAuthority, goalId: string): Promise<GoalRow> {
+// ---------------------------------------------------------------------------
+// Read tags per viewer (ADR-0031 item 6): the kernel's view on each (store, read
+// capability), decided once; a store with no current association is never viewable.
+const readCapabilities: readonly ReadCapability[] = Object.freeze([
+  "catalog.products.read",
+  "inventory.levels.read",
+  "orders.read",
+  "support.case.read",
+  "workspace.knowledge.read",
+  "workspace.artifact.read",
+]);
+export interface StoreView {
+  readonly viewer: ProgressViewer;
+  /** The workspace's stores (its agents' stores) and any extra ones named, sorted. */
+  readonly storeIds: readonly string[];
+}
+export async function storeViewer(
+  tx: WorkTx,
+  a: WorkAuthority,
+  extraStoreIds: Iterable<string> = [],
+  capabilities: readonly ReadCapability[] = readCapabilities,
+): Promise<StoreView> {
+  const stores = new Set<string>();
+  for (const row of await tx.run("workspaceStores", [])) stores.add(text(row, "store_id"));
+  for (const storeId of extraStoreIds) stores.add(storeId);
+  const decisions = new Map<string, boolean>();
+  for (const storeId of [...stores].sort()) {
+    const row = one(await tx.run("storeAssociation", [storeId]));
+    const resource =
+      row === null
+        ? null
+        : storeResource(
+            a.actor.organizationId,
+            a.resource.workspaceId,
+            storeId,
+            text(row, "connection_id"),
+          );
+    for (const capabilityId of capabilities)
+      decisions.set(
+        storeId + "|" + capabilityId,
+        resource !== null && (await decideOn(a, resource, capabilityId, "view", [])).allowed,
+      );
+  }
+  return {
+    viewer: Object.freeze({
+      mayView: (tag: Current_ReadTag) =>
+        decisions.get(tag.storeId + "|" + tag.capabilityId) === true,
+    }),
+    storeIds: Object.freeze([...stores].sort()),
+  };
+}
+/**
+ * Reads a record's criteria as this viewer may read them (ADR-0033 Consequences: a
+ * customer-class goal is seen only by members who may view support.case.read on the
+ * workspace's stores); null when nothing is left. A record with no customer-class goal is
+ * returned as it is, with no store read; the stores are read at most once per reader.
+ */
+export function viewerCriteriaReader(
+  tx: WorkTx,
+  a: WorkAuthority,
+): (criteria: Current_CriteriaList) => Promise<Current_CriteriaList | null> {
+  let view: StoreView | null = null;
+  return async (criteria) => {
+    if (!holdsCustomerGoal(criteria)) return criteria;
+    view ??= await storeViewer(tx, a, [], ["support.case.read"]);
+    return criteriaForViewer(criteria, view.viewer, view.storeIds);
+  };
+}
+/**
+ * A goal the actor may see: absent, not viewable, or holding only goals this viewer may not
+ * see (a customer-class goal) is the same 404. `hidden` says some goal is left out.
+ */
+async function viewableGoal(
+  tx: WorkTx,
+  a: WorkAuthority,
+  goalId: string,
+): Promise<GoalRow & { readonly hidden: boolean }> {
   if (!(await goalView(a)).allowed) throw new WorkReject("not_found");
   const goal = await goalOf(tx, goalId);
   if (!goal) throw new WorkReject("not_found");
-  return goal;
+  const shown = await viewerCriteriaReader(tx, a)(goal.successCriteria);
+  if (shown === null) throw new WorkReject("not_found");
+  return { ...goal, hidden: shown.length !== goal.successCriteria.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -338,6 +425,9 @@ async function goalRevise(
   if (replay) return replay;
   const goalId = g.params.goalId!;
   const goal = await viewableGoal(tx, a, goalId);
+  // A revise replaces every criterion, so a person who may not see one of them (a
+  // customer-class goal) may not revise the record.
+  if (goal.hidden) throw new WorkReject("denied");
   const own =
     goal.ownerPrincipalId === a.actor.principalId &&
     goal.ownerMembershipId === a.actor.membershipId;
@@ -415,51 +505,26 @@ export async function goalProgressRead(tx: WorkTx, g: Guarded): Promise<ProjectR
     const tags = parsed(text(row, "read_tags"));
     if (!validateCurrentDefinition("ReadTags", tags)) throw new WorkContextUnavailable();
     const expires = optional(row, "expires_at");
+    const assistant = optional(row, "assistant");
+    if (assistant !== null && !validateCurrentDefinition("GoalAssistant", assistant))
+      throw new WorkContextUnavailable();
     values.push({
       key: text(row, "key"),
       productId: optional(row, "product_id"),
       value: Number(text(row, "value")),
       observedAtMs: ms(text(row, "observed_at")),
       counted: text(row, "counted") === "true",
+      assistant: assistant as Current_GoalAssistant | null,
       readTags: tags as Current_ReadTag[],
       dataClass: text(row, "data_class") as Current_GoalValueClass,
       expiresAtMs: expires === null ? null : ms(expires),
     });
   }
-  const stores = new Set<string>();
-  for (const row of await tx.run("workspaceStores", [])) stores.add(text(row, "store_id"));
-  for (const v of values) for (const tag of v.readTags) stores.add(tag.storeId);
-  // The kernel's view on each (store, capability), decided once.
-  const decisions = new Map<string, boolean>();
-  const resources = new Map<string, Current_ResourceRef | null>();
-  for (const storeId of stores) {
-    const row = one(await tx.run("storeAssociation", [storeId]));
-    resources.set(
-      storeId,
-      row === null
-        ? null
-        : storeResource(
-            a.actor.organizationId,
-            a.resource.workspaceId,
-            storeId,
-            text(row, "connection_id"),
-          ),
-    );
-  }
-  const capabilities = [
-    "catalog.products.read",
-    "inventory.levels.read",
-    "orders.read",
-    "support.case.read",
-    "workspace.knowledge.read",
-    "workspace.artifact.read",
-  ] as const;
-  for (const [storeId, resource] of resources)
-    for (const capabilityId of capabilities)
-      decisions.set(
-        storeId + "|" + capabilityId,
-        resource !== null && (await decideOn(a, resource, capabilityId, "view", [])).allowed,
-      );
+  const view = await storeViewer(
+    tx,
+    a,
+    values.flatMap((v) => v.readTags.map((tag) => tag.storeId)),
+  );
   const finishRow = one(await tx.run("goalFinish", [goalId]));
   const waiting = one(await tx.run("goalWaitingOn", [goalId, a.actor.principalId]));
   const progress: Current_GoalProgress = goalProgress(
@@ -473,10 +538,10 @@ export async function goalProgressRead(tx: WorkTx, g: Guarded): Promise<ProjectR
       successCriteria: goal.successCriteria,
     },
     values,
-    { mayView: (tag) => decisions.get(tag.storeId + "|" + tag.capabilityId) === true },
+    view.viewer,
     {
       nowMs: a.databaseNowMs,
-      storeIds: [...stores].sort(),
+      storeIds: view.storeIds,
       finished:
         finishRow === null
           ? null
@@ -513,6 +578,7 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
   if (!planDraftValid(draft)) throw new WorkContextUnavailable();
   let currentDueAt: string | null = null;
   let targetOwner: "own" | "other" | null = null;
+  let targetAreaTemplateId: Current_AreaTemplateId | null = null;
   const d = draft as Current_PlanDraft;
   if (d.target.kind === "existing_project") {
     const target = one(await tx.run("projectTarget", [d.target.projectId]));
@@ -524,8 +590,9 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
       text(target, "owner_membership_id") === a.actor.membershipId
         ? "own"
         : "other";
+    targetAreaTemplateId = optional(target, "area_template_id") as Current_AreaTemplateId | null;
   }
-  return {
+  const card: StartCard = {
     kind: "draft",
     messageId: body.messageId,
     revision: integer(text(row, "revision")),
@@ -535,8 +602,28 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
     contextTaint: text(row, "context_taint") as "none" | "untrusted_external",
     currentDueAt,
     targetOwner,
+    targetAreaTemplateId,
   };
+  // Quick tasks is never revised (ADR-0033 item 7): no plan change aims at it.
+  if (changesQuickTasks(card)) throw new WorkReject("state_conflict");
+  return card;
 }
+/**
+ * The workspace's Owner (ADR-0024: the designated owner of ADR-0011 Q2), from the solo-owner
+ * facts the review context reads; null when there is none. The definer reads it again under
+ * the organization interlock.
+ */
+async function workspaceOwner(tx: WorkTx): Promise<StartOwner | null> {
+  const row = one(await tx.run("reviewContext", ["workspace.goal.create", null]));
+  if (!row) throw new WorkReject("unauthenticated");
+  const principalId = optional(row, "owner_principal_id");
+  const membershipId = optional(row, "owner_membership_id");
+  return principalId === null || membershipId === null ? null : { principalId, membershipId };
+}
+const eligibleOrThrow = (verdict: ReturnType<typeof startEligible>) => {
+  if (verdict === "owner_only") throw new ProjectReject("owner_only");
+  if (verdict !== "ok") throw new ProjectReject("actor_ineligible");
+};
 /** An area card needs its agent added (ADR-0033 item 6); Quick tasks needs none. */
 async function areaAgentAdded(tx: WorkTx, card: StartCard): Promise<void> {
   if (card.kind !== "area") return;
@@ -568,9 +655,9 @@ async function startDocument(
     principalId: a.actor.principalId,
     membershipId: a.actor.membershipId,
   };
-  // The work API serves only the standalone workspace's session.
-  if (startEligible(actor, "standalone", card) !== "ok")
-    throw new ProjectReject("actor_ineligible");
+  // The work API serves only the standalone workspace's session. Quick tasks: the Owner only.
+  const owner = card.kind === "quick_tasks" ? await workspaceOwner(tx) : null;
+  eligibleOrThrow(startEligible(actor, "standalone", card, owner));
   if (card.kind !== "draft") {
     const template = card.kind === "area" ? card.areaTemplateId : "quick_tasks";
     if (one(await tx.run("areaGoal", [template]))) throw new WorkReject("state_conflict");
@@ -640,7 +727,18 @@ async function start(
       throw new ProjectReject("stale");
   } else if (document.target.kind === "area")
     card = { kind: "area", areaTemplateId: document.target.areaTemplateId as never };
-  else card = { kind: "quick_tasks" };
+  else {
+    card = { kind: "quick_tasks" };
+    // Still the Owner (the definer checks again under the organization interlock).
+    eligibleOrThrow(
+      startEligible(
+        { kind: "human", principalId: a.actor.principalId, membershipId: a.actor.membershipId },
+        "standalone",
+        card,
+        await workspaceOwner(tx),
+      ),
+    );
+  }
   await areaAgentAdded(tx, card);
   // (b) Every piece under live grants, and the grant summary the document bound.
   const live = grantSummaryDigest(a.grants, startCapabilities, a.databaseNowMs);

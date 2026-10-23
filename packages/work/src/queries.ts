@@ -1,3 +1,4 @@
+import type { Current_Goal } from "@morrow/contracts";
 import { validateDefinition } from "@morrow/contracts/validation";
 import { workPermissions, type WorkPermissionKey } from "@morrow/contracts/work-permissions";
 import { WorkReject, type WorkTx } from "./connection.js";
@@ -12,6 +13,7 @@ import {
 } from "./contract-mapping.js";
 import type { GuardedWorkRequest } from "./http-guard.js";
 import { decideWork } from "./permissions.js";
+import { viewerCriteriaReader } from "./projects/commands.js";
 import type { WorkStatementName } from "./sql.js";
 
 // Reads (P06.T01a §4.7): READ ONLY prologue, enter_context, view checks, fixed
@@ -87,6 +89,20 @@ async function page<T>(
 async function exists(tx: WorkTx, statement: WorkStatementName, id: string): Promise<void> {
   if ((await tx.run(statement, [id])).length !== 1) throw new WorkReject("not_found");
 }
+/**
+ * A goal record as this viewer may read it (ADR-0033 Consequences): a customer-class goal
+ * (Customer emails' "Replied within a day") is left out unless the viewer may view
+ * support.case.read on the workspace's stores; a record left with no goal is not shown
+ * (404 alone, left out of a list). A record with no such goal is unchanged.
+ */
+async function shownGoal(
+  read: ReturnType<typeof viewerCriteriaReader>,
+  goal: Current_Goal,
+): Promise<Current_Goal | null> {
+  const criteria = await read(goal.successCriteria);
+  if (criteria === null) return null;
+  return criteria === goal.successCriteria ? goal : { ...goal, successCriteria: criteria };
+}
 
 /** Validates a read's query before any connection opens. */
 export function prepareWorkRead(kind: WorkReadKind, g: GuardedWorkRequest): void {
@@ -116,13 +132,23 @@ export async function runWorkRead(
     case "goal.list": {
       await view(a, "goal.read", "list");
       const [us, id] = cursor(g);
-      return { body: await page(tx, "goalPage", [us, id], limit(g, 25), (r) => mapGoal(r, a)) };
+      const body = await page(tx, "goalPage", [us, id], limit(g, 25), (r) => mapGoal(r, a));
+      // The cursor stays the last row read, so a record left out never shifts a page.
+      const read = viewerCriteriaReader(tx, a);
+      const items: Current_Goal[] = [];
+      for (const goal of body.items as Current_Goal[]) {
+        const shown = await shownGoal(read, goal);
+        if (shown) items.push(shown);
+      }
+      return { body: { ...body, items } };
     }
     case "goal.get": {
       await view(a, "goal.read", "single");
       const rows = await tx.run("goalById", [p.goalId!]);
       if (rows.length !== 1) throw new WorkReject("not_found");
-      return { body: { goal: mapGoal(rows[0]!, a) } };
+      const goal = await shownGoal(viewerCriteriaReader(tx, a), mapGoal(rows[0]!, a));
+      if (!goal) throw new WorkReject("not_found");
+      return { body: { goal } };
     }
     case "task.list": {
       await view(a, "task.read", "list");

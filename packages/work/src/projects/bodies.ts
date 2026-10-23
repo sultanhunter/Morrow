@@ -29,8 +29,10 @@ export interface GoalReviseBody {
 }
 /**
  * POST /goals/:goalId/revise: workspace.goal.revise's v1.1 input without the path's goal id.
- * The current CriteriaList (its code rules too), at most 20 criteria, every stored measure's
- * startRef null, and a dueAt with millisecond precision.
+ * The current CriteriaList (its code rules too), every stored measure's startRef null, and a
+ * dueAt with millisecond precision. Only a dated project or an area is revised (never Quick
+ * tasks or a v1 goal), so the list is a project's: 1 to 3 criteria, every one measured
+ * (ADR-0033 item 1; the definer and the goals CHECK hold the same rule).
  */
 export function parseGoalReviseBody(goalId: string, body: unknown): GoalReviseBody | null {
   const r = record(body, ["expectedRevision", "objective", "dueAt", "successCriteria"]);
@@ -42,7 +44,8 @@ export function parseGoalReviseBody(goalId: string, body: unknown): GoalReviseBo
   )
     return null;
   const criteria = r.successCriteria as Current_CriteriaList;
-  if (criteria.length > 20) return null;
+  if (criteria.length < 1 || criteria.length > 3) return null;
+  if (criteria.some((c) => c.measure === undefined || c.measure === null)) return null;
   if (
     criteria.some(
       (c) => c.measure !== undefined && c.measure !== null && c.measure.startRef !== null,

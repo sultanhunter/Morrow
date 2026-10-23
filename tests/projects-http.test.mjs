@@ -570,10 +570,40 @@ test("refusals before the definer: no agent added, an area that exists, a Member
   const notAdded = await run({ areaGoal: [], areaAgentAdded: [{ added: "0" }] });
   const e = await envelope(notAdded, 409, "conflict", "agent not added");
   assert.equal(e.safeMessage, "Add this area's agent first.");
-  // Quick tasks needs no agent.
+  // Quick tasks needs no agent, only the Owner's tap (ADR-0033 item 7): the Owner is read
+  // from the solo-owner facts before anything else.
+  const ownerRow = (principal, membership) => [
+    { owner_principal_id: principal, owner_membership_id: membership },
+  ];
+  for (const [name, owner] of [
+    ["another member is the Owner", ownerRow("person_b", "membership_b")],
+    ["no Owner", ownerRow(null, null)],
+    ["the Owner's principal under another membership", ownerRow("person_a", "membership_old")],
+  ]) {
+    const notOwner = scripted({
+      enterContext: () => contextRow(),
+      beginProjectCommand: [{ outcome: "new" }],
+      reviewContext: owner,
+      areaGoal: [],
+    });
+    const refused = await quiet(t, () =>
+      handlerWith(readyOff, notOwner.connector).fetch(
+        request("POST", startDocument, { card: { kind: "quick_tasks" } }),
+        {},
+        ctx,
+      ),
+    );
+    const body = await envelope(refused.result, 403, "denied", name);
+    assert.equal(body.safeMessage, "Only the workspace owner can set up Quick tasks.");
+    assert.ok(
+      !notOwner.calls.some((c) => c.name === "areaGoal" || c.name === "cmdPlanStartDocument"),
+    );
+    assert.equal(notOwner.calls.at(-1).name, "rollback");
+  }
   const quick = scripted({
     enterContext: () => contextRow(),
     beginProjectCommand: [{ outcome: "new" }],
+    reviewContext: ownerRow("person_a", "membership_a"),
     areaGoal: [],
     cmdPlanStartDocument: (values) => [
       {
@@ -595,6 +625,26 @@ test("refusals before the definer: no agent added, an area that exists, a Member
   );
   assert.equal(quickResponse.result.status, 201);
   assert.ok(!quick.calls.some((c) => c.name === "areaAgentAdded"));
+  assert.deepEqual(quick.calls[3], {
+    name: "reviewContext",
+    values: ["workspace.goal.create", null],
+  });
+  // The definer's own Owner check under lock answers owner_only the same way.
+  const raced = scripted({
+    enterContext: () => contextRow(),
+    beginProjectCommand: [{ outcome: "new" }],
+    reviewContext: ownerRow("person_a", "membership_a"),
+    areaGoal: [],
+    cmdPlanStartDocument: [{ outcome: "owner_only", result: null }],
+  });
+  const racedResponse = await quiet(t, () =>
+    handlerWith(readyOff, raced.connector).fetch(
+      request("POST", startDocument, { card: { kind: "quick_tasks" } }),
+      {},
+      ctx,
+    ),
+  );
+  await envelope(racedResponse.result, 403, "denied", "the definer's Owner check");
   // At most one per template.
   await envelope(await run({ areaGoal: [{ id: "goal_area" }] }), 409, "conflict", "exists");
   // A Member without workspace.project.create: denied, nothing recorded.
@@ -666,4 +716,80 @@ test("a Morrow card: only the asker gets a document, and only for the digest the
   // Someone else's card: actor_ineligible (owner question 2), before any kernel or definer.
   const e = await envelope(await run([row()]), 403, "denied", "not the asker");
   assert.equal(e.safeMessage, "Only the person who asked can start this card.");
+});
+
+test("a plan change aimed at the Quick tasks project is refused before any kernel or definer", async (t) => {
+  const on = { planDrafts: { switch: "on", start_routes: "ready" } };
+  const change = {
+    schemaVersion: 1,
+    kind: "plan_change",
+    title: "Measure quick tasks",
+    why: "Quick tasks should have a goal.",
+    doneWhen: "Twelve facts on the tote.",
+    goals: [
+      {
+        key: "facts",
+        description: "Page complete",
+        measure: {
+          kind: "checklist",
+          checklistId: "product_facts_complete",
+          productIds: ["product:1"],
+          target: 12,
+          dueAt: null,
+          startRef: null,
+        },
+      },
+    ],
+    steps: [
+      {
+        key: "facts",
+        title: "Add the tote's facts",
+        assignee: { kind: "person", principalId: "person_a" },
+        dependsOn: [],
+        repeat: null,
+      },
+    ],
+    target: { kind: "existing_project", projectId: "project_quick", goalRevision: 2 },
+  };
+  assert.ok(validateCurrentDefinition("PlanDraft", change));
+  const run = async (area) => {
+    const s = scripted({
+      enterContext: () => contextRow(),
+      beginProjectCommand: [{ outcome: "new" }],
+      planDraftLatest: [
+        {
+          message_id: "message_1",
+          revision: "1",
+          kind: "plan_change",
+          canonical: JSON.stringify(change),
+          digest: "d".repeat(64),
+          asker_principal_id: "person_a",
+          asker_membership_id: "membership_a",
+          context_taint: "none",
+        },
+      ],
+      projectTarget: [
+        {
+          id: "project_quick",
+          goal_id: "goal_quick",
+          revision: "2",
+          due_at: null,
+          area_template_id: area,
+          owner_principal_id: "person_a",
+          owner_membership_id: "membership_a",
+        },
+      ],
+    });
+    const { result } = await quiet(t, () =>
+      handlerWith(on, s.connector).fetch(request("POST", startDocument, draftCard), {}, ctx),
+    );
+    return { result, calls: s.calls.map((c) => c.name) };
+  };
+  const quick = await run("quick_tasks");
+  await envelope(quick.result, 409, "conflict", "a plan change of Quick tasks");
+  assert.ok(!quick.calls.includes("cmdPlanStartDocument"));
+  assert.equal(quick.calls.at(-1), "rollback");
+  // The same card aimed at an area goes on to the kernel (here refused for want of grants).
+  const area = await run("product_pages");
+  assert.notEqual(area.result.status, 409);
 });

@@ -1,6 +1,7 @@
 import type {
   Current_AreaTemplateId,
   Current_CriteriaList,
+  Current_GoalAssistant,
   Current_GoalHealth,
   Current_GoalHealthReason,
   Current_GoalMeasure,
@@ -31,7 +32,9 @@ import {
 //     not counted, never a hidden count. A customer-class goal is left out of every
 //     project_update and the Coordinator's context whatever the viewer holds.
 //   * Values. Only unexpired values whose every tag the viewer may view; for a hand check
-//     only counted ones (its own assistant). The start is the oldest kept value.
+//     only counted ones in the measure's current assistant, on one of its current product
+//     rows (a check in another assistant, or on a row a revise removed, never counts). The
+//     start is the oldest kept value.
 //   * A hand-checked goal is judged only on check dates: "Not checked yet", then
 //     "Starting point", then words; a check past its cadence is Needs you ("Check overdue
 //     since [day]"), never On track.
@@ -59,6 +62,8 @@ export interface GoalValueFacts {
   readonly value: number;
   readonly observedAtMs: number;
   readonly counted: boolean;
+  /** A hand check's assistant (the value's own row); null for a value code wrote. */
+  readonly assistant: Current_GoalAssistant | null;
   readonly readTags: readonly Current_ReadTag[];
   readonly dataClass: Current_GoalValueClass;
   readonly expiresAtMs: number | null;
@@ -116,6 +121,35 @@ export function goalVisible(
   return tags.every((tag) => viewer.mayView(tag));
 }
 
+/**
+ * A goal record's criteria as one viewer may read them (ADR-0033 Consequences: a
+ * customer-class goal, such as Customer emails' "Replied within a day", is seen only by
+ * members who may read customer data). A customer-class criterion is left out unless the
+ * viewer may view every one of its read tags on the workspace's stores (goalVisible's rule);
+ * every other criterion is kept. Null when nothing is left: the record is not shown to this
+ * viewer at all, never as an empty or hidden count.
+ */
+export function criteriaForViewer(
+  criteria: Current_CriteriaList,
+  viewer: ProgressViewer,
+  storeIds: readonly string[],
+): Current_CriteriaList | null {
+  const kept = criteria.filter(
+    (c) =>
+      c.measure === undefined ||
+      c.measure === null ||
+      measureValueClass(c.measure) !== "customer" ||
+      goalVisible(c.measure, viewer, { storeIds, audience: "viewer" }),
+  );
+  return kept.length === 0 ? null : (kept as Current_CriteriaList);
+}
+/** True when a record holds a customer-class criterion (its reads need the viewer's tags). */
+export const holdsCustomerGoal = (criteria: Current_CriteriaList): boolean =>
+  criteria.some(
+    (c) =>
+      c.measure !== undefined && c.measure !== null && measureValueClass(c.measure) === "customer",
+  );
+
 /** The values one viewer may see of one goal, oldest first. */
 export function visibleValues(
   key: string,
@@ -130,7 +164,12 @@ export function visibleValues(
         v.key === key &&
         (v.expiresAtMs === null || v.expiresAtMs > nowMs) &&
         v.readTags.every((tag) => viewer.mayView(tag)) &&
-        (measure.kind !== "manual" || v.counted) &&
+        // A hand check counts only in the measure's current assistant and on one of its
+        // current product rows (ADR-0033 item 3), whatever the row's stored flag says.
+        (measure.kind !== "manual" ||
+          (v.counted &&
+            v.assistant === measure.assistant &&
+            measure.rows.some((r) => r.productId === v.productId))) &&
         // Metric and checklist goals are judged on their goal-level rows.
         (measure.kind === "manual" ? v.productId !== null : v.productId === null),
     )
