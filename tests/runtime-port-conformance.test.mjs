@@ -57,5 +57,8 @@ const names = runtimePortConformance(test, "fake", async () => fakeHarness());
 test("the suite covers every closed outcome kind the port defines", () => {
   assert.ok(names.length >= 15);
   for (const kind of ["create", "kill", "status", "files", "lifetime", "never throws"])
-    assert.ok(names.some((n) => n.startsWith(kind)), kind);
+    assert.ok(
+      names.some((n) => n.startsWith(kind)),
+      kind,
+    );
 });

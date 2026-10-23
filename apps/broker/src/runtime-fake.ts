@@ -46,9 +46,24 @@ export type FakeFault =
   | { readonly op: "write" | "exec" | "read"; readonly outcome: "unknown" };
 
 export interface FakeGuestView {
-  readonly creates: { readonly template: string; readonly timeoutSeconds: number; readonly internet: boolean; readonly metadata: Readonly<Record<string, string>> }[];
-  readonly files: { readonly sandboxRef: string; readonly path: string; readonly bytes: Uint8Array }[];
-  readonly commands: { readonly sandboxRef: string; readonly argv: readonly string[]; readonly cwd: string; readonly user: string; readonly environment: Readonly<Record<string, string>> }[];
+  readonly creates: {
+    readonly template: string;
+    readonly timeoutSeconds: number;
+    readonly internet: boolean;
+    readonly metadata: Readonly<Record<string, string>>;
+  }[];
+  readonly files: {
+    readonly sandboxRef: string;
+    readonly path: string;
+    readonly bytes: Uint8Array;
+  }[];
+  readonly commands: {
+    readonly sandboxRef: string;
+    readonly argv: readonly string[];
+    readonly cwd: string;
+    readonly user: string;
+    readonly environment: Readonly<Record<string, string>>;
+  }[];
 }
 interface FakeSandbox {
   readonly ref: string;
@@ -84,7 +99,11 @@ export function createFakeRuntime(options: Readonly<FakeRuntimeOptions>): FakeRu
   const sandboxes = new Map<string, FakeSandbox>();
   const faults: FakeFault[] = [];
   const calls: { op: string; key: string }[] = [];
-  const guest: { creates: FakeGuestView["creates"][number][]; files: FakeGuestView["files"][number][]; commands: FakeGuestView["commands"][number][] } = {
+  const guest: {
+    creates: FakeGuestView["creates"][number][];
+    files: FakeGuestView["files"][number][];
+    commands: FakeGuestView["commands"][number][];
+  } = {
     creates: [],
     files: [],
     commands: [],
@@ -166,10 +185,14 @@ export function createFakeRuntime(options: Readonly<FakeRuntimeOptions>): FakeRu
       const fault = take("status");
       if (credential !== options.credential) return { outcome: "unknown" };
       const found = [...sandboxes.values()].find(
-        (s) => s.operationId === operationId && (sandboxRef === null || s.ref === sandboxRef) && live(s.ref),
+        (s) =>
+          s.operationId === operationId &&
+          (sandboxRef === null || s.ref === sandboxRef) &&
+          live(s.ref),
       );
       if (fault && fault.op === "status") {
-        if (fault.outcome === "paused" && found) return { outcome: "paused", sandboxRef: found.ref };
+        if (fault.outcome === "paused" && found)
+          return { outcome: "paused", sandboxRef: found.ref };
         if (fault.outcome === "unknown") return { outcome: "unknown" };
       }
       return found ? { outcome: "running", sandboxRef: found.ref } : { outcome: "not_found" };
@@ -178,7 +201,8 @@ export function createFakeRuntime(options: Readonly<FakeRuntimeOptions>): FakeRu
       calls.push({ op: "write", key: sandbox.sandboxRef });
       if (take("write")) return { outcome: "unknown" };
       const s = authorised(sandbox);
-      if (!s || !pathPattern.test(path) || !(bytes instanceof Uint8Array)) return { outcome: "unknown" };
+      if (!s || !pathPattern.test(path) || !(bytes instanceof Uint8Array))
+        return { outcome: "unknown" };
       const copy = new Uint8Array(bytes);
       s.files.set(path, copy);
       guest.files.push({ sandboxRef: s.ref, path, bytes: copy });

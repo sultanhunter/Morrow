@@ -550,16 +550,17 @@ const paidWork = read("docs/contracts/paid-work.json"),
   templates = read("docs/contracts/fixtures/P01.T04a.json").templates;
 test("AC01: the paid-work table passes PW1-PW5", () =>
   assert.deepEqual(inspectPaidWork(paidWork, catalogue, templates), []));
-test("AC01: execute is paid exactly on the paid-effect capabilities that are not kill switches (27 today)", () => {
+// Build order PR 7 adds runtime.execution.use (billable_job): 28 and 29.
+test("AC01: execute is paid exactly on the paid-effect capabilities that are not kill switches (28 today)", () => {
   const expected = catalogue.capabilities
     .filter((c) => paidWork.paidEffects.includes(c.effect) && !c.kill_switch)
     .map((c) => c.id)
     .sort();
   assert.deepEqual([...paidWorkCapabilityIds], expected);
-  assert.equal(expected.length, 27);
+  assert.equal(expected.length, 28);
   assert.equal(
     catalogue.capabilities.filter((c) => paidWork.paidEffects.includes(c.effect)).length,
-    28,
+    29,
   );
   assert.ok(Object.isFrozen(paidWorkCapabilityIds));
 });

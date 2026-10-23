@@ -336,10 +336,15 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   );
   // M2 PR-2 appends its workerd install-and-link lab; M5 PR-1 its workerd api and broker
   // billing lab; M3 PR-1 its listings authority lab (its run-credits lab rides pg-linking);
-  // M2 PR-3 its webhooks, privacy and catalogue-read lab; M3 PR-2 its listings runs lab.
+  // M2 PR-3 its webhooks, privacy and catalogue-read lab; M3 PR-2 its listings runs lab; build
+  // order PR 7 its runtime operations lab.
   assert.equal(
     pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs",
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs && npm run lab:runtime-operations",
+  );
+  assert.equal(
+    pkg.scripts["lab:runtime-operations"],
+    "node --import tsx scripts/runtime-operations-lab.mjs",
   );
   assert.equal(
     pkg.scripts["lab:shopify-privacy"],

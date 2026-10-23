@@ -13,14 +13,22 @@ function chunk(type, data = Buffer.alloc(0)) {
   return Buffer.concat([u32be(data.length), head, data, u32be(crc32(Buffer.concat([head, data])))]);
 }
 /** A valid width x height 8-bit RGB PNG, plus optional extra chunks before IEND. */
-export function makePng({ width = 2, height = 2, extra = [], ihdr = null, crcBreak = false, trailing = null } = {}) {
+export function makePng({
+  width = 2,
+  height = 2,
+  extra = [],
+  ihdr = null,
+  crcBreak = false,
+  trailing = null,
+} = {}) {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
   header[8] = 8; // bit depth
   header[9] = 2; // RGB
   const rows = [];
-  for (let y = 0; y < height; y++) rows.push(Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x7f)]));
+  for (let y = 0; y < height; y++)
+    rows.push(Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x7f)]));
   const parts = [
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk("IHDR", ihdr ?? header),
@@ -44,7 +52,10 @@ const u32le = (n) => {
   return b;
 };
 /** A zip of [name, text|bytes] entries (deflated), with switches for malformed archives. */
-export function makeZip(entries, { flags = 0, stored = false, trailing = null, zip64 = false, localNameOf = null } = {}) {
+export function makeZip(
+  entries,
+  { flags = 0, stored = false, trailing = null, zip64 = false, localNameOf = null } = {},
+) {
   const locals = [];
   const centrals = [];
   let offset = 0;
@@ -56,15 +67,40 @@ export function makeZip(entries, { flags = 0, stored = false, trailing = null, z
     const localName = Buffer.from(localNameOf ? localNameOf(name) : name, "latin1");
     const crc = crc32(data);
     const local = Buffer.concat([
-      u32le(0x04034b50), u16le(20), u16le(flags), u16le(method), u16le(0), u16le(0),
-      u32le(crc), u32le(packed.length), u32le(data.length), u16le(localName.length), u16le(0),
-      localName, packed,
+      u32le(0x04034b50),
+      u16le(20),
+      u16le(flags),
+      u16le(method),
+      u16le(0),
+      u16le(0),
+      u32le(crc),
+      u32le(packed.length),
+      u32le(data.length),
+      u16le(localName.length),
+      u16le(0),
+      localName,
+      packed,
     ]);
     centrals.push(
       Buffer.concat([
-        u32le(0x02014b50), u16le(20), u16le(20), u16le(flags), u16le(method), u16le(0), u16le(0),
-        u32le(crc), u32le(zip64 ? 0xffffffff : packed.length), u32le(data.length), u16le(nameBytes.length),
-        u16le(0), u16le(0), u16le(0), u16le(0), u32le(0), u32le(offset), nameBytes,
+        u32le(0x02014b50),
+        u16le(20),
+        u16le(20),
+        u16le(flags),
+        u16le(method),
+        u16le(0),
+        u16le(0),
+        u32le(crc),
+        u32le(zip64 ? 0xffffffff : packed.length),
+        u32le(data.length),
+        u16le(nameBytes.length),
+        u16le(0),
+        u16le(0),
+        u16le(0),
+        u16le(0),
+        u32le(0),
+        u32le(offset),
+        nameBytes,
       ]),
     );
     locals.push(local);
@@ -72,8 +108,14 @@ export function makeZip(entries, { flags = 0, stored = false, trailing = null, z
   }
   const central = Buffer.concat(centrals);
   const end = Buffer.concat([
-    u32le(0x06054b50), u16le(0), u16le(0), u16le(entries.length), u16le(entries.length),
-    u32le(central.length), u32le(offset), u16le(0),
+    u32le(0x06054b50),
+    u16le(0),
+    u16le(0),
+    u16le(entries.length),
+    u16le(entries.length),
+    u32le(central.length),
+    u32le(offset),
+    u16le(0),
   ]);
   const zip = Buffer.concat([...locals, central, end]);
   return new Uint8Array(trailing ? Buffer.concat([zip, Buffer.from(trailing)]) : zip);

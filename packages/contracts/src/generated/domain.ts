@@ -513,6 +513,8 @@ export type CapabilityV1_1_governance_billing_manage_input = (unknown & { "actio
 export type CapabilityV1_1_governance_billing_manage_output = { "operationId": Core_Id; };
 export type CapabilityV1_1_governance_model_default_revise_input = { "model": CoreV1_1_ModelOptionKey; "effort": CoreV1_1_ModelOptionKey; "maxCreditsPerProduct": CoreV1_1_CreditsPerProductCeiling; "expectedRevision": CoreV1_1_NullableRevision; };
 export type CapabilityV1_1_governance_model_default_revise_output = { "revision": Core_Revision; };
+export type CapabilityV1_1_runtime_execution_use_input = { "runId": Core_Id; "inputs": Core_ArtifactList; };
+export type CapabilityV1_1_runtime_execution_use_output = { "operationId": Core_Id; "outputs": Core_ArtifactList; "costReceipt": Core_EvidenceRef; };
 export type BillingV1_1_BillingRoute = "morrow_direct" | "shopify_app_pricing";
 export type BillingV1_1_PaymentMode = "live" | "test";
 export type BillingV1_1_StripePaymentKey = string;
@@ -1240,6 +1242,7 @@ export interface CapabilityBodies {
   "agents.release.evaluate": { input: Capability_agents_release_evaluate_input; output: Capability_agents_release_evaluate_output; };
   "agents.release.publish": { input: Capability_agents_release_publish_input; output: Capability_agents_release_publish_output; };
   "agents.release.revoke": { input: CapabilityV1_1_agents_release_revoke_input; output: Capability_agents_release_revoke_output; };
+  "runtime.execution.use": { input: CapabilityV1_1_runtime_execution_use_input; output: CapabilityV1_1_runtime_execution_use_output; };
 }
 export type CapabilityId = keyof CapabilityBodies;
 export type CapabilityInput<K extends CapabilityId> = CapabilityBodies[K]["input"];

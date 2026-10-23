@@ -41,9 +41,12 @@ const body = (text, signature) => {
 test("manifest: two contiguous rows after M3 PR-1 and the test entitlement, owners and digests", () => {
   const rows = ["shopify-privacy-identity", "shopify-privacy-work"].map(rowOf);
   assert.equal(rows[1].sequence, rows[0].sequence + 1);
-  // M3 PR-2's listings-runs is the one migration after the pair (it revises 0037's helpers).
+  // M3 PR-2's listings-runs follows the pair directly (it revises 0037's helpers); later
+  // links (build order PR 7's runtime-operations onwards) append after it, never between.
   assert.deepEqual(
-    manifest.migrations.slice(rows[1].sequence).map((m) => m.file.replace(/^\d{4}\./, "")),
+    manifest.migrations
+      .slice(rows[1].sequence, rows[1].sequence + 1)
+      .map((m) => m.file.replace(/^\d{4}\./, "")),
     ["listings-runs.sql"],
   );
   // The merge train (2026-10-22) put the staging test entitlement's two rows between M3

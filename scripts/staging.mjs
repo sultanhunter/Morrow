@@ -19,6 +19,7 @@ import {
   captureConsole,
   loadWranglerApi,
   reviewedModelRecord,
+  reviewedRuntimeRecord,
   reviewedStripeRecord,
 } from "./edge.mjs";
 import { buildLoginKeyring } from "./login-keyring.mjs";
@@ -130,16 +131,33 @@ export function stagingModelSwitch(root) {
   }
 }
 
+// Build order PR 7, the runtime switch: the committed docs/decisions/runtime-staging.json
+// `switch`, checked with edge:check's own rule (reviewedRuntimeRecord). "off" (the committed
+// state), "cleanup_only" or "on"; anything else stops the command before any effect.
+export function stagingRuntimeSwitch(root) {
+  try {
+    return reviewedRuntimeRecord(
+      JSON.parse(readFileSync(join(root, "docs/decisions/runtime-staging.json"), "utf8")),
+    ).switch;
+  } catch {
+    throw new StagingError("STAGING_RUNTIME_RECORD_INVALID");
+  }
+}
+
 // `stripe` is the Stripe switch (stagingStripeSwitch): off by default, so a caller that
 // does not read the record never expects a Stripe secret. `model` is the model-provider
 // switch (stagingModelSwitch): while it is off the broker expects no model secret. The tooling
 // that places ANTHROPIC_API_KEY lands with the reviewed commit that turns it on, so "on" stops
 // every command here before any effect (STAGING_MODEL_SWITCH_UNSUPPORTED) instead of
-// deploying a broker without its key.
-export async function identityConstants({ stripe = "off", model = "off" } = {}) {
+// deploying a broker without its key. `runtime` is the runtime switch (stagingRuntimeSwitch):
+// while it is not off the broker requires E2B_API_KEY; while it is off the key is optional
+// (brokerOptionalSecretsFor: the owner may place it ahead of the switch, explicitly).
+export async function identityConstants({ stripe = "off", model = "off", runtime = "off" } = {}) {
   if (stripe !== "off" && stripe !== "on") throw new StagingError("STAGING_STRIPE_RECORD_INVALID");
   if (model === "on") throw new StagingError("STAGING_MODEL_SWITCH_UNSUPPORTED");
   if (model !== "off") throw new StagingError("STAGING_MODEL_RECORD_INVALID");
+  if (runtime !== "off" && runtime !== "cleanup_only" && runtime !== "on")
+    throw new StagingError("STAGING_RUNTIME_RECORD_INVALID");
   const { tsImport } = await import("tsx/esm/api");
   const protocol = await tsImport("../packages/identity/src/broker-protocol.ts", import.meta.url);
   return Object.freeze({
@@ -154,7 +172,10 @@ export async function identityConstants({ stripe = "off", model = "off" } = {}) 
     // (sixteen). brokerRequiredSecretsFor("staging", stripe) is the one list: the staging
     // wrangler `secrets.required`, verify-config, gate 6, secrets-status and the
     // first-deploy file all use it (production requires its vault-free subset).
-    brokerSecrets: [...protocol.brokerRequiredSecretsFor("staging", stripe)].sort(),
+    brokerSecrets: [...protocol.brokerRequiredSecretsFor("staging", stripe, "off", runtime)].sort(),
+    // Build order PR 7: names the staging broker may hold beyond those (E2B_API_KEY while the
+    // runtime switch is off); gate 6 and secrets-status accept each present or absent.
+    brokerOptionalSecrets: [...protocol.brokerOptionalSecretsFor("staging", runtime)].sort(),
     // The vault KEKs (ADR-0022 item 7) are the owner's: each is read from its owner file
     // (`vault-kek-v<n>`, written by `npm run vault -- kek`) and never generated here.
     vaultKekSecrets: [...protocol.brokerVaultKekSecrets],
@@ -162,6 +183,9 @@ export async function identityConstants({ stripe = "off", model = "off" } = {}) 
     // owner files like the WorkOS key.
     stripe,
     stripeSecrets: stripe === "on" ? [...protocol.brokerStripeSecrets] : [],
+    // Build order PR 7: the runtime switch and its secret (read from its owner file).
+    runtime,
+    runtimeSecrets: [...protocol.brokerRuntimeSecrets],
     parseBinding: protocol.parseBrokerDatabaseBinding,
   });
 }
@@ -700,10 +724,22 @@ const stripeSecretFiles = Object.freeze({
   STRIPE_RESTRICTED_KEY: "stripe-restricted-key",
   STRIPE_WEBHOOK_SECRET: "stripe-webhook-secret",
 });
+// Build order PR 7 (ADR-0029 item 3; ADR-0035 item 6): the E2B API key, from the owner's
+// chmod-600 file `e2b-api-key` (written with morrow_put, never on a command line), placed on
+// the broker through `secret bulk` stdin like every other name. While the runtime switch is
+// off put-secret refuses it (STAGING_RUNTIME_OFF) before reading the file or running any
+// tool, unless the owner passes --while-runtime-off: the owner's explicit choice to place the
+// key ahead of the switch. The broker then holds a key it never reads (its capabilities read
+// E2B_API_KEY only while MORROW_RUNTIME_SWITCH is on or cleanup_only), and gate 6 and
+// secrets-status accept it (brokerOptionalSecretsFor). The flag is refused with the switch
+// on or cleanup-only, where the key is simply required.
+const runtimeSecretFiles = Object.freeze({ E2B_API_KEY: "e2b-api-key" });
+const runtimeOffFlag = "--while-runtime-off";
 const putSecretFiles = Object.freeze({
   WORKOS_API_KEY: "workos-api-key",
   TURNSTILE_SECRET_KEY: "turnstile-secret",
   ...stripeSecretFiles,
+  ...runtimeSecretFiles,
 });
 // M2 PR-1: a vault KEK (MORROW_VAULT_KEK_V<n>) is re-placed from the owner's own file,
 // with the same value; a new KEK is a new version, never a new value under an old name.
@@ -711,18 +747,30 @@ const putSecretFile = (name) =>
   Object.hasOwn(putSecretFiles, name) ? putSecretFiles[name] : vaultKekFile(name);
 command("put-secret", {
   usage:
-    "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|STRIPE_RESTRICTED_KEY|STRIPE_WEBHOOK_SECRET|MORROW_VAULT_KEK_V1",
+    "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|STRIPE_RESTRICTED_KEY|STRIPE_WEBHOOK_SECRET|MORROW_VAULT_KEK_V1|E2B_API_KEY [--while-runtime-off]",
   parse(args) {
-    if (args.length !== 1 || putSecretFile(args[0]) === null)
+    const [name, flag] = args;
+    if (
+      args.length < 1 ||
+      args.length > 2 ||
+      putSecretFile(name) === null ||
+      (args.length === 2 && (flag !== runtimeOffFlag || !Object.hasOwn(runtimeSecretFiles, name)))
+    )
       throw new StagingError("STAGING_USAGE");
-    return { name: args[0] };
+    return { name, whileRuntimeOff: args.length === 2 };
   },
-  async run(ctx, { name }) {
+  async run(ctx, { name, whileRuntimeOff }) {
     const constants = await ctx.constants();
     if (!Object.hasOwn(putSecretFiles, name) && !constants.vaultKekSecrets.includes(name))
       throw new StagingError("STAGING_USAGE");
     if (Object.hasOwn(stripeSecretFiles, name) && !constants.stripeSecrets.includes(name))
       throw new StagingError("STAGING_STRIPE_OFF");
+    if (Object.hasOwn(runtimeSecretFiles, name)) {
+      if (!constants.runtimeSecrets.includes(name)) throw new StagingError("STAGING_USAGE");
+      if (constants.runtime === "off" && !whileRuntimeOff)
+        throw new StagingError("STAGING_RUNTIME_OFF");
+      if (constants.runtime !== "off" && whileRuntimeOff) throw new StagingError("STAGING_USAGE");
+    }
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
     await mainPreconditions(ctx, repositoryOf(config.staging));
@@ -736,7 +784,9 @@ command("put-secret", {
     } finally {
       recordRotation(ctx.directory, [name], { worker: "broker", versionId, now: ctx.now() });
     }
-    return { secret: name, versionId };
+    return whileRuntimeOff
+      ? { secret: name, versionId, runtime: "off" }
+      : { secret: name, versionId };
   },
 });
 
@@ -1058,7 +1108,9 @@ command("secrets-status", {
     for (const facts of files) {
       if (facts.required && !facts.ok) mismatches.push("file:" + facts.file);
       if (!facts.required && facts.exists) {
-        warnings.push("transient_present:" + facts.file);
+        // Build order PR 7: an optional owner file (e2b-api-key while the runtime switch is
+        // off) is not transient; it must still be well formed when present.
+        if (facts.transient) warnings.push("transient_present:" + facts.file);
         if (!facts.ok) mismatches.push("file:" + facts.file);
       }
     }
@@ -1068,6 +1120,9 @@ command("secrets-status", {
       orchestrator: [],
       connector: [],
     };
+    // Names a Worker may hold beyond its expected ones, neither missing nor extra (build
+    // order PR 7: the broker's E2B_API_KEY placed ahead of the runtime switch).
+    const optional = { broker: constants.brokerOptionalSecrets ?? [] };
     const workers = {};
     for (const key of Object.keys(workerConfigs))
       workers[key] = await section("worker:" + key, async () => {
@@ -1084,7 +1139,9 @@ command("secrets-status", {
           ]),
         );
         const missing = expected[key].filter((n) => !names.includes(n));
-        const extra = names.filter((n) => !expected[key].includes(n));
+        const extra = names.filter(
+          (n) => !expected[key].includes(n) && !(optional[key] ?? []).includes(n),
+        );
         if (missing.length || extra.length) mismatches.push("worker:" + key);
         return { names, missing, extra };
       });
@@ -1241,6 +1298,7 @@ command("deploy", {
       configs: workerConfigs,
       names: staging.cloudflare.workers,
       brokerSecrets: constants.brokerSecrets,
+      brokerOptionalSecrets: constants.brokerOptionalSecrets,
       schemaHead: schemaHead(ctx.chain()),
       csp: committedCsp(ctx.root),
       checkpoint: writeReport,
@@ -1588,9 +1646,13 @@ export function defaultContext() {
       (constants ??= await identityConstants({
         stripe: stagingStripeSwitch(root),
         model: stagingModelSwitch(root),
+        runtime: stagingRuntimeSwitch(root),
       })),
     specs: async () =>
-      (specs ??= stagingFileSpecs({ brokerSecretNames: (await ctx.constants()).brokerSecrets })),
+      (specs ??= stagingFileSpecs({
+        brokerSecretNames: (await ctx.constants()).brokerSecrets,
+        optionalSecretNames: (await ctx.constants()).brokerOptionalSecrets,
+      })),
     config: async () => (config ??= await loadStagingConfiguration(root)),
     chain: () => loadMigrationChain({ root }),
     credential: async () =>

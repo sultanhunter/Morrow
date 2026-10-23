@@ -1,0 +1,49 @@
+# Computer foundation (build order PR 7)
+
+- Status: brief, 2026-10-23. Decisions: ADR-0029 (runtime and E2B; accepted 2026-10-23) and ADR-0035 item 6 (E2B starts now with ADR-0029 owner question 3's conservative defaults). Nothing here is a new material choice: the port, the ledger, the caps, the hold, the capability and the switch are ADR-0029 items 2, 3, 7, 8, 9 and 10 as written.
+- Plan IDs: P12.T01 (RuntimeProviderPort), the P12.T02 ledger slice, P07.T01's output checks. Branch `claude/v1-computer-foundation`, one PR. Migration `0039.runtime-operations.sql` (other v1 PRs also use 0039 and 0040; the merge train renumbers).
+
+## Goal
+
+One closed door for every computer job, with every safety property proven on a deterministic fake before any E2B code exists (PR 8 adds the adapter, PR 9 qualifies it and switches it on). The switch is committed off; no real E2B call is possible from this PR.
+
+## Scope
+
+- **The port** (`apps/broker/src/runtime-provider.ts`): create one fresh sandbox (pinned template, internet off, the operation id as its only metadata, the profile's lifetime), write a file, run the profile's one command, read a file, look a sandbox up by its operation, kill. No connect, resume, pause, network, environment or template choice. Every operation answers a closed outcome and never throws; outcomes are never flattened (`not_found` is not `killed`; anything after a send is `unknown_effect` or `unknown`).
+- **The gateway** (`apps/broker/src/runtime-gateway.ts`): `RuntimeBroker.runtimeExecute(lease, generation, RuntimeJob@1, budget)` and `runtimeSweep(budget)`. Order: the switch (`RUNTIME_UNAVAILABLE` before any input, database or provider access), the closed inputs, the send mark committed in SQL, one create never retried, the job, the kill always, the content-checked outputs. The sweep reconciles stale operations by their metadata, kills leftovers, never creates, and counts a sandbox as absent only on a qualified profile past its deadline plus the grace.
+- **The profile and job** (`packages/policy/src/runtime-computer.ts`): `morrow.computer` v1 (900 s lifetime, one 120 s exec as `agent`, 2 vCPU, 1 GiB); RuntimeJob@1 checked by hand (a step key, a script, minimised extracts, declared outputs; no command, template, network, environment or limit); the extract kinds `products`, `stock` and Level 1 `order_aggregates` with fixed column allowlists (no customer field or id, order id, URL, shop domain or email; a cell holding one refuses the job); outputs only PNG (metadata chunks dropped), CSV (formula cells escaped) and XLSX (no macros, objects, links or remote formulas; zip tricks refused).
+- **The ledger** (migration 0039, `apps/broker/src/runtime-ledger.ts`): `morrow_vault.runtime_operations` (one row per sandbox, tenant-keyed, FORCE RLS, content-free), `runtime_holds`, `runtime_capacity`, the caps in SQL (`runtime_caps()`, drift-tested), and four definers for the broker's login only: `runtime_operation_begin` (the lease as for a model call, the run running under it, the release declaring `runtime.execution.use`, no active hold, the monthly budget, the platform concurrency, three per workspace, the worst case booked, the `sending` mark), `runtime_operation_created`, `runtime_operation_settle` and `runtime_operations_open` (the sweep's ids-only list). `runtime_hold_lift` is the owner's operator function, granted to nobody.
+- **Money**: `morrow_billing.run_book_cost` admits the kind `sandbox_compute` (0038's function otherwise unchanged); each sandbox's worst case (US$0.03 at list rates) is booked on the run's vendor reservation before the create. Caps: US$10 a month (E2B's limit is US$20), 10 concurrent (half of Hobby's 20), 3 per workspace.
+- **Authority**: the catalogue capability `runtime.execution.use` (`billable_job`, `agent_direct_write`, not review-required, provider dependency D17; v1.1-only bodies; its provider binding is Morrow's neutral runtime port, `morrow`, which now also names D17). The send mark admits a run only when its installation's published release declares it with `execute`.
+- **The fake and the conformance suite**: `apps/broker/src/runtime-fake.ts` (deterministic, faults that may say what really happened on the provider's side, a record of everything a sandbox could observe) and `tests/fixtures/runtime-conformance.mjs`, which every adapter must pass (PR 8 runs it against the E2B adapter and its wire fixture).
+- **The switch** (`docs/decisions/runtime-staging.json`, committed `off`, `admission: synthetic_only`): the broker var `MORROW_RUNTIME_SWITCH` (exactly `on` or `cleanup_only`) and `E2B_API_KEY` in the staging broker's `secrets.required`, both only while it is not off; `edge:check` refuses any mixed state (`EDGE_RUNTIME_SWITCH_MIXED`). `on` needs `qualified_on` and its live record; `merchant` admission needs `on`.
+- **Key placement**: `npm run staging:put-secret -- E2B_API_KEY` reads the owner's chmod-600 file `~/.config/morrow/staging/e2b-api-key` (written with `morrow_put`; format `e2b_` plus 20 to 128 letters and digits) and sends it to the broker only through `wrangler secret bulk` stdin, never argv. While the switch is off it refuses (`STAGING_RUNTIME_OFF`) before reading the file or running any tool, unless the owner passes `--while-runtime-off`. The broker then holds a key it never reads, and gate 6 and `secrets-status` accept it present or absent (`brokerOptionalSecretsFor`).
+
+Non-goals: the E2B adapter, the template recipe and build command, the envd token's vault record, stops killing their scope's sandboxes and the scheduled sweep (PR 8); qualification and switching on (PR 9); uploads and agent computer tools (PR 13).
+
+## Interfaces touched
+
+`apps/broker/src/{runtime-provider,runtime-gateway,runtime-ledger,runtime-fake,vault-statements-runtime,capabilities,index,vault}.ts`; `packages/identity/src/broker-protocol.ts` (`RuntimeBrokerRpc`, the switch names, `brokerRequiredSecretsFor`'s fourth argument, `brokerOptionalSecretsFor`, `runtimeGatewayLimits`); `packages/policy/src/runtime-computer.ts`; `migrations/0039*` and the manifest; `docs/contracts/{capabilities.json,schemas/v1.1/capabilities.schema.json,release-baseline.json}`, the rendered catalogue documents and the regenerated bundle; `docs/decisions/{runtime-staging.json,provider-bindings.json,providers.json}` (the binding, `morrow`'s D17 and the E2B row's text); `scripts/{edge,staging,staging-files,staging-deploy}.mjs`; the tenant-conformance registry; `infra/rotation-runbook.md`; `docs/development/ci.md` and `package.json` (`lab:runtime-operations` in the pg-work group).
+
+## Security notes
+
+- **No credential or internet in the sandbox.** The create has no environment, network or template parameter; the fake records everything a guest could observe and the suite asserts that no key, token, URL or shop domain reaches it. E2B's envd token stays in the broker for one job (PR 8 moves it to a vault record destroyed at kill).
+- **Minimised inputs** are checked cell by cell before the ledger; a URL, shop domain or email refuses the whole job, nothing is rewritten.
+- **Unknown outcomes**: the send mark commits in its own transaction before any create; a lost create, kill or lookup is `unknown_effect` with a runtime hold that blocks every create until a person lifts it (cleanup is never blocked); a replayed step never creates again; `not_found` alone never settles an operation.
+- **Tenant isolation**: the ledger is tenant-keyed with FORCE RLS; the broker's login holds no table privilege and reaches it only through its definers; no other login executes them. The sweep's list is cross-tenant but ids only (ADR-0029's accepted residual).
+- **Default deny**: switch off, no adapter composed in the deployed broker (`providers: {}`), no template pinned, `qualified: false`. Production has no switch.
+- **Checks in code**: the caps, the hold, the capability and the booking are SQL, not prompts.
+
+## Test checklist
+
+- [x] `tests/broker-runtime.test.mjs`: the switch first; the deployed composition; secret lists; closed and minimised inputs; the send mark before the create; refusals; replay; lost creates, quota and billing holds; the job's outcomes; outputs; kills never counted as deletion; the sweep; cleanup-only; the vault ledger's statements and strict rows.
+- [x] `tests/runtime-port-conformance.test.mjs` (the suite in `tests/fixtures/runtime-conformance.mjs`) against the fake.
+- [x] `tests/runtime-computer.test.mjs`: the profile, the caps' SQL drift, RuntimeJob@1, the extract allowlists, inputs, PNG, CSV and XLSX checks.
+- [x] `tests/edge-config.test.mjs`: the record rule and mixed states; `tests/staging-secrets.test.mjs`: put-secret refusals, the flag, the owner file, `secrets-status`; `tests/staging-deploy.test.mjs`: gate 6 with the optional key.
+- [x] Catalogue: `verify`, `tests/billing.test.mjs` (28 paid capabilities), `tests/approval-records.test.mjs`.
+- [x] `lab:runtime-operations` (PostgreSQL 17, the real gateway over the vault transport and the fake): capability, job and booking, replay, hold and lift, sweep, not_found, caps, settle edges, grants, lease and stop. `lab:tenant-conformance` with the three tables and the definers registered.
+- [ ] Hosted CI `foundation` on the PR head; Tier 2 AI review with the security lens (credentials, migrations, money, durable execution).
+
+## Owner steps
+
+None for this PR. Next (PR 8): save the E2B key with `morrow_put` as `e2b-api-key`, then `npm run staging:put-secret -- E2B_API_KEY --while-runtime-off` places it while the switch is still off.

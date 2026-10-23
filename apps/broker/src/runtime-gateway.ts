@@ -9,7 +9,12 @@ import {
   runtimeJobLimits,
   type RuntimeJob,
 } from "../../../packages/policy/src/runtime-computer.js";
-import { BrokerHold, brokerCapabilities, invokeBrokerMethod, type BrokerVault } from "./capabilities.js";
+import {
+  BrokerHold,
+  brokerCapabilities,
+  invokeBrokerMethod,
+  type BrokerVault,
+} from "./capabilities.js";
 import {
   sandboxRefPattern,
   type RuntimeCreateResult,
@@ -109,7 +114,10 @@ export interface RuntimeLedger {
     readonly provider: string;
   }): Promise<RuntimeBegin>;
   created(operationId: string, sandboxRef: string): Promise<boolean>;
-  settle(operationId: string, status: "killed" | "not_created" | "absent_verified"): Promise<boolean>;
+  settle(
+    operationId: string,
+    status: "killed" | "not_created" | "absent_verified",
+  ): Promise<boolean>;
   unknown(operationId: string, reason: RuntimeUnknownReason): Promise<boolean>;
   open(limit: number): Promise<readonly RuntimeOpenOperation[]>;
 }
@@ -215,7 +223,13 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     const vault = capabilities.vault;
     const adapter = runtime === null ? undefined : seams.providers[runtime.provider];
     const template = seams.template;
-    if (capabilities.computerMode !== "on" || runtime === null || vault === null || !adapter || template === null)
+    if (
+      capabilities.computerMode !== "on" ||
+      runtime === null ||
+      vault === null ||
+      !adapter ||
+      template === null
+    )
       throw hold("RUNTIME_UNAVAILABLE");
     // 2. The closed inputs.
     if (
@@ -234,7 +248,8 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     if (job === null) throw hold("INPUT_INVALID");
     const deadline = seams.now() + budgetMs;
     const left = () => deadline - seams.now();
-    const slice = (ceiling: number) => Math.max(1_000, Math.min(ceiling, left() - runtimeTiming.killReserveMs));
+    const slice = (ceiling: number) =>
+      Math.max(1_000, Math.min(ceiling, left() - runtimeTiming.killReserveMs));
     const inputs = renderJobInputs(job);
     if (!inputs.ok) return runtimeResult({ outcome: "refused", code: inputs.code });
     const script = new TextEncoder().encode(job.script);
@@ -251,7 +266,11 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     if (begun.outcome === "lease_refused") throw hold("STATE_INVALID");
     if (begun.outcome === "refused") return runtimeResult({ outcome: "refused", code: begun.code });
     if (begun.outcome === "replay")
-      return runtimeResult({ outcome: "unknown", code: "replayed", operationId: begun.operationId });
+      return runtimeResult({
+        outcome: "unknown",
+        code: "replayed",
+        operationId: begun.operationId,
+      });
     const operationId = begun.operationId;
     // 4. One create.
     const created: RuntimeCreateResult = await safely(
@@ -295,17 +314,30 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
       accessToken: created.accessToken,
     });
     // 5. The job; 6. the kill, whatever happened.
-    let outcome: Parameters<typeof runtimeResult>[0] = { outcome: "unknown", code: "ledger_unrecorded", operationId };
+    let outcome: Parameters<typeof runtimeResult>[0] = {
+      outcome: "unknown",
+      code: "ledger_unrecorded",
+      operationId,
+    };
     try {
       if (await ledger.created(operationId, sandbox.sandboxRef))
         outcome = await work(adapter, sandbox, job, inputs.files, script, operationId, left, slice);
     } finally {
       const killed: RuntimeKillResult = await safely(
-        () => adapter.kill(sandbox.sandboxRef, runtime.apiKey, Math.max(1_000, Math.min(runtimeTiming.statusMaxMs, left()))),
+        () =>
+          adapter.kill(
+            sandbox.sandboxRef,
+            runtime.apiKey,
+            Math.max(1_000, Math.min(runtimeTiming.statusMaxMs, left())),
+          ),
         { outcome: "unknown" },
       );
       if (killed.outcome === "killed") await ledger.settle(operationId, "killed");
-      else await ledger.unknown(operationId, killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown");
+      else
+        await ledger.unknown(
+          operationId,
+          killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
+        );
     }
     return runtimeResult(outcome);
   }
@@ -327,7 +359,8 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
         () => adapter.writeFile(sandbox, file.path, file.bytes, slice(runtimeTiming.writeMaxMs)),
         { outcome: "unknown" },
       );
-      if (written.outcome !== "written") return { outcome: "unknown", code: "write_unknown", operationId };
+      if (written.outcome !== "written")
+        return { outcome: "unknown", code: "write_unknown", operationId };
     }
     const execBudget = computerProfile.execTimeoutSeconds * 1000 + runtimeTiming.execMarginMs;
     if (left() < runtimeTiming.killReserveMs + execBudget)
@@ -357,7 +390,14 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     const stdout = cut(ran.stdout);
     const stderr = cut(ran.stderr);
     if (ran.exitCode !== 0)
-      return { outcome: "failed", code: "exit_nonzero", exitCode: ran.exitCode, stdout, stderr, operationId };
+      return {
+        outcome: "failed",
+        code: "exit_nonzero",
+        exitCode: ran.exitCode,
+        stdout,
+        stderr,
+        operationId,
+      };
     const outputs: ResultOutput[] = [];
     const rejected: { name: string; code: string }[] = [];
     let total = 0;
@@ -374,7 +414,12 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
       if (read.outcome !== "read") {
         rejected.push({
           name: output.name,
-          code: read.outcome === "missing" ? "output_missing" : read.outcome === "too_large" ? "output_too_large" : "read_unknown",
+          code:
+            read.outcome === "missing"
+              ? "output_missing"
+              : read.outcome === "too_large"
+                ? "output_too_large"
+                : "read_unknown",
         });
         continue;
       }
@@ -436,7 +481,8 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
         continue;
       }
       const found: RuntimeStatusResult = await safely(
-        () => adapter.status(op.operationId, op.sandboxRef, runtime.apiKey, runtimeTiming.statusMaxMs),
+        () =>
+          adapter.status(op.operationId, op.sandboxRef, runtime.apiKey, runtimeTiming.statusMaxMs),
         { outcome: "unknown" },
       );
       if (found.outcome === "running" || found.outcome === "paused") {
@@ -445,14 +491,22 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
           () => adapter.kill(found.sandboxRef, runtime.apiKey, runtimeTiming.statusMaxMs),
           { outcome: "unknown" },
         );
-        if (killed.outcome === "killed" && (await ledger.settle(op.operationId, "killed"))) counts.killed++;
+        if (killed.outcome === "killed" && (await ledger.settle(op.operationId, "killed")))
+          counts.killed++;
         else {
-          await ledger.unknown(op.operationId, killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown");
+          await ledger.unknown(
+            op.operationId,
+            killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
+          );
           counts.unknown++;
         }
       } else if (found.outcome === "not_found") {
         // Absence is proved only on a qualified profile, after the deadline and the grace.
-        if (seams.qualified && op.pastGrace && (await ledger.settle(op.operationId, "absent_verified")))
+        if (
+          seams.qualified &&
+          op.pastGrace &&
+          (await ledger.settle(op.operationId, "absent_verified"))
+        )
           counts.absentVerified++;
         else {
           await ledger.unknown(op.operationId, "not_found_unverified");

@@ -111,7 +111,11 @@ export interface RuntimeProvider {
     bytes: Uint8Array,
     budgetMs: number,
   ): Promise<RuntimeWriteResult>;
-  exec(sandbox: SandboxHandle, command: SandboxCommand, budgetMs: number): Promise<RuntimeExecResult>;
+  exec(
+    sandbox: SandboxHandle,
+    command: SandboxCommand,
+    budgetMs: number,
+  ): Promise<RuntimeExecResult>;
   readFile(
     sandbox: SandboxHandle,
     path: string,

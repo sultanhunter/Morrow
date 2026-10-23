@@ -30,8 +30,14 @@ const refusals: readonly RuntimeBeginRefusal[] = [
   "reservation_exhausted",
   "capability_missing",
 ];
-const one = (rows: readonly Record<string, unknown>[], names: string): Record<string, unknown> | null =>
-  Array.isArray(rows) && rows.length === 1 && rows[0] && Object.keys(rows[0]).sort().join(",") === names
+const one = (
+  rows: readonly Record<string, unknown>[],
+  names: string,
+): Record<string, unknown> | null =>
+  Array.isArray(rows) &&
+  rows.length === 1 &&
+  rows[0] &&
+  Object.keys(rows[0]).sort().join(",") === names
     ? rows[0]
     : null;
 const ledgerBudgetMs = 10_000;
@@ -47,7 +53,11 @@ export function createVaultRuntimeLedger(
       return fallback;
     }
   };
-  const write = (text: (typeof vaultStatements)[keyof typeof vaultStatements], values: readonly string[], accepted: readonly string[]) =>
+  const write = (
+    text: (typeof vaultStatements)[keyof typeof vaultStatements],
+    values: readonly string[],
+    accepted: readonly string[],
+  ) =>
     run(async (query) => {
       const r = one(await query(text, values), "outcome,status");
       return r !== null && typeof r.outcome === "string" && accepted.includes(r.outcome);
@@ -75,10 +85,15 @@ export function createVaultRuntimeLedger(
           !instant.test(r.deadline_at)
         )
           return { outcome: "lease_refused" };
-        return { outcome: "begun", operationId: r.operation_id, deadlineAtMs: Date.parse(r.deadline_at) };
+        return {
+          outcome: "begun",
+          operationId: r.operation_id,
+          deadlineAtMs: Date.parse(r.deadline_at),
+        };
       }
       if (r.outcome === "replay") {
-        if (typeof r.operation_id !== "string" || !uuid.test(r.operation_id)) return { outcome: "lease_refused" };
+        if (typeof r.operation_id !== "string" || !uuid.test(r.operation_id))
+          return { outcome: "lease_refused" };
         return { outcome: "replay", operationId: r.operation_id };
       }
       if ((refusals as readonly string[]).includes(r.outcome))
@@ -86,8 +101,13 @@ export function createVaultRuntimeLedger(
       return { outcome: "lease_refused" };
     },
     created(operationId, sandboxRef) {
-      if (!uuid.test(operationId) || !sandboxRefPattern.test(sandboxRef)) return Promise.resolve(false);
-      return write(vaultStatements.runtimeOperationCreated, [operationId, sandboxRef], ["recorded"]);
+      if (!uuid.test(operationId) || !sandboxRefPattern.test(sandboxRef))
+        return Promise.resolve(false);
+      return write(
+        vaultStatements.runtimeOperationCreated,
+        [operationId, sandboxRef],
+        ["recorded"],
+      );
     },
     settle(operationId, status) {
       if (!uuid.test(operationId)) return Promise.resolve(false);
@@ -95,46 +115,57 @@ export function createVaultRuntimeLedger(
     },
     unknown(operationId, reason: RuntimeUnknownReason) {
       if (!uuid.test(operationId)) return Promise.resolve(false);
-      return write(vaultStatements.runtimeOperationSettle, [operationId, "unknown_effect", reason], [
-        "settled",
-        "already_unknown",
-      ]);
+      return write(
+        vaultStatements.runtimeOperationSettle,
+        [operationId, "unknown_effect", reason],
+        ["settled", "already_unknown"],
+      );
     },
     async open(limit) {
-      return run(async (query) => {
-        const rows = await query(vaultStatements.runtimeOperationsOpen, [String(limit)]);
-        const names = "deadline_at,operation_id,past_grace,provider,sandbox_ref,stale,status";
-        const open: RuntimeOpenOperation[] = [];
-        for (const row of Array.isArray(rows) ? rows : []) {
-          const r = one([row], names);
-          if (
-            r === null ||
-            typeof r.operation_id !== "string" ||
-            !uuid.test(r.operation_id) ||
-            typeof r.provider !== "string" ||
-            !/^[a-z][a-z0-9_]{1,31}$/.test(r.provider) ||
-            !(r.sandbox_ref === null || (typeof r.sandbox_ref === "string" && sandboxRefPattern.test(r.sandbox_ref))) ||
-            !(r.status === "sending" || r.status === "created" || r.status === "unknown_effect") ||
-            typeof r.deadline_at !== "string" ||
-            !instant.test(r.deadline_at) ||
-            !(r.stale === "true" || r.stale === "false") ||
-            !(r.past_grace === "true" || r.past_grace === "false")
-          )
-            continue;
-          open.push(
-            Object.freeze({
-              operationId: r.operation_id,
-              provider: r.provider,
-              sandboxRef: r.sandbox_ref as string | null,
-              status: r.status,
-              deadlineAtMs: Date.parse(r.deadline_at),
-              stale: r.stale === "true",
-              pastGrace: r.past_grace === "true",
-            }),
-          );
-        }
-        return Object.freeze(open);
-      }, Object.freeze([]) as readonly RuntimeOpenOperation[]);
+      return run(
+        async (query) => {
+          const rows = await query(vaultStatements.runtimeOperationsOpen, [String(limit)]);
+          const names = "deadline_at,operation_id,past_grace,provider,sandbox_ref,stale,status";
+          const open: RuntimeOpenOperation[] = [];
+          for (const row of Array.isArray(rows) ? rows : []) {
+            const r = one([row], names);
+            if (
+              r === null ||
+              typeof r.operation_id !== "string" ||
+              !uuid.test(r.operation_id) ||
+              typeof r.provider !== "string" ||
+              !/^[a-z][a-z0-9_]{1,31}$/.test(r.provider) ||
+              !(
+                r.sandbox_ref === null ||
+                (typeof r.sandbox_ref === "string" && sandboxRefPattern.test(r.sandbox_ref))
+              ) ||
+              !(
+                r.status === "sending" ||
+                r.status === "created" ||
+                r.status === "unknown_effect"
+              ) ||
+              typeof r.deadline_at !== "string" ||
+              !instant.test(r.deadline_at) ||
+              !(r.stale === "true" || r.stale === "false") ||
+              !(r.past_grace === "true" || r.past_grace === "false")
+            )
+              continue;
+            open.push(
+              Object.freeze({
+                operationId: r.operation_id,
+                provider: r.provider,
+                sandboxRef: r.sandbox_ref as string | null,
+                status: r.status,
+                deadlineAtMs: Date.parse(r.deadline_at),
+                stale: r.stale === "true",
+                pastGrace: r.past_grace === "true",
+              }),
+            );
+          }
+          return Object.freeze(open);
+        },
+        Object.freeze([]) as readonly RuntimeOpenOperation[],
+      );
     },
   };
   return Object.freeze(ledger);

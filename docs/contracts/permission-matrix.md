@@ -133,3 +133,4 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | agents.release.evaluate | operator_with_explicit_authoring_grant | candidate dependencies, approved fixtures | Grant checks | agent_direct_write | No |
 | agents.release.publish | operator_with_explicit_authoring_grant | immutable digest, listing, publication state | Required | human_only | No |
 | agents.release.revoke | operator_with_explicit_authoring_grant | release status, affected dispatch | Grant checks | human_only | Yes |
+| runtime.execution.use | human_or_bounded_installation_with_explicit_capability_grant | minimised extracts, declared outputs | Grant checks | agent_direct_write | No |

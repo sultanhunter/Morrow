@@ -84,12 +84,20 @@ export const runtimeJobLimits = Object.freeze({
   inputBytesMax: 4 * 1024 * 1024,
   outputsMin: 1,
   outputsMax: 4,
-  outputBytesMax: Object.freeze({ png: 5 * 1024 * 1024, csv: 5 * 1024 * 1024, xlsx: 5 * 1024 * 1024 }),
+  outputBytesMax: Object.freeze({
+    png: 5 * 1024 * 1024,
+    csv: 5 * 1024 * 1024,
+    xlsx: 5 * 1024 * 1024,
+  }),
   outputsBytesMax: 10 * 1024 * 1024,
   logBytesMax: 4 * 1024,
 });
 export type RuntimeOutputType = "png" | "csv" | "xlsx";
-export const runtimeOutputTypes: readonly RuntimeOutputType[] = Object.freeze(["png", "csv", "xlsx"]);
+export const runtimeOutputTypes: readonly RuntimeOutputType[] = Object.freeze([
+  "png",
+  "csv",
+  "xlsx",
+]);
 export type ExtractKind = "products" | "stock" | "order_aggregates";
 
 type ColumnType =
@@ -324,7 +332,8 @@ function cellValid(type: ColumnType, cell: Cell, nullable: boolean): InputRefusa
     typeof cell === "number" && Number.isSafeInteger(cell) && cell >= min && cell <= max
       ? null
       : "input_value_invalid";
-  const matches = (p: RegExp) => (typeof cell === "string" && p.test(cell) ? null : "input_value_invalid");
+  const matches = (p: RegExp) =>
+    typeof cell === "string" && p.test(cell) ? null : "input_value_invalid";
   switch (type) {
     case "id":
       return matches(/^[1-9][0-9]{0,19}$/);
@@ -456,7 +465,20 @@ const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 // Ancillary chunks a still image may keep; text, time and EXIF chunks are dropped, so an
 // accepted PNG carries no metadata. Any other chunk (APNG's animation chunks, private or
 // unknown critical chunks) rejects the file.
-const pngKept = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "cHRM", "gAMA", "iCCP", "sBIT", "sRGB", "bKGD", "pHYs"]);
+const pngKept = new Set([
+  "IHDR",
+  "PLTE",
+  "IDAT",
+  "IEND",
+  "tRNS",
+  "cHRM",
+  "gAMA",
+  "iCCP",
+  "sBIT",
+  "sRGB",
+  "bKGD",
+  "pHYs",
+]);
 const pngDropped = new Set(["tEXt", "zTXt", "iTXt", "tIME", "eXIf"]);
 const pngDepths: Readonly<Record<number, readonly number[]>> = {
   0: [1, 2, 4, 8, 16],
@@ -466,7 +488,8 @@ const pngDepths: Readonly<Record<number, readonly number[]>> = {
   6: [8, 16],
 };
 function checkPng(bytes: Uint8Array): OutputCheck {
-  if (bytes.length < 8 + 25 + 12 || pngSignature.some((v, i) => bytes[i] !== v)) return reject("png_invalid");
+  if (bytes.length < 8 + 25 + 12 || pngSignature.some((v, i) => bytes[i] !== v))
+    return reject("png_invalid");
   const kept: Uint8Array[] = [bytes.subarray(0, 8)];
   let at = 8;
   let index = 0;
@@ -608,7 +631,12 @@ function checkCsv(bytes: Uint8Array): OutputCheck {
 // header (no ZIP64, encryption, data descriptors' disagreement, path tricks or bombs). The
 // parts that would carry macros, objects or links reject it, and so does any external
 // relationship, macro content type, or formula naming a link or a remote function.
-const zipLimits = Object.freeze({ entries: 2000, uncompressedTotal: 64 * 1024 * 1024, ratio: 200, partInflate: 32 * 1024 * 1024 });
+const zipLimits = Object.freeze({
+  entries: 2000,
+  uncompressedTotal: 64 * 1024 * 1024,
+  ratio: 200,
+  partInflate: 32 * 1024 * 1024,
+});
 const u16le = (b: Uint8Array, at: number) => b[at]! | (b[at + 1]! << 8);
 const u32le = (b: Uint8Array, at: number) =>
   (b[at]! | (b[at + 1]! << 8) | (b[at + 2]! << 16) | (b[at + 3]! << 24)) >>> 0;
@@ -698,7 +726,11 @@ function zipEntries(bytes: Uint8Array): ZipEntry[] | null {
   }
   return at === eocd ? entries : null;
 }
-async function inflatePart(bytes: Uint8Array, entry: ZipEntry, max: number): Promise<string | null> {
+async function inflatePart(
+  bytes: Uint8Array,
+  entry: ZipEntry,
+  max: number,
+): Promise<string | null> {
   if (entry.size > max) return null;
   const data = bytes.subarray(entry.dataStart, entry.dataStart + entry.compressedSize);
   let out: Uint8Array;
@@ -734,8 +766,20 @@ async function inflatePart(bytes: Uint8Array, entry: ZipEntry, max: number): Pro
     return null;
   }
 }
-const xlsxMacroParts = [/vbaproject/i, /^xl\/macrosheets\//i, /^xl\/dialogsheets\//i, /^customui/i, /\.bin$/i];
-const xlsxObjectParts = [/^xl\/embeddings\//i, /^xl\/activex\//i, /oleobject/i, /^xl\/ctrlprops\//i, /\.vml$/i];
+const xlsxMacroParts = [
+  /vbaproject/i,
+  /^xl\/macrosheets\//i,
+  /^xl\/dialogsheets\//i,
+  /^customui/i,
+  /\.bin$/i,
+];
+const xlsxObjectParts = [
+  /^xl\/embeddings\//i,
+  /^xl\/activex\//i,
+  /oleobject/i,
+  /^xl\/ctrlprops\//i,
+  /\.vml$/i,
+];
 const xlsxLinkParts = [/^xl\/externallinks\//i, /^xl\/connections\.xml$/i, /^xl\/querytables\//i];
 const remoteFormula =
   /\b(HYPERLINK|WEBSERVICE|FILTERXML|IMPORTDATA|IMPORTXML|IMPORTRANGE|IMPORTHTML|IMPORTFEED|RTD|CALL|REGISTER(\.ID)?|EXEC|DDE)\b|\[|\|/i;
@@ -762,7 +806,10 @@ async function checkXlsx(bytes: Uint8Array): Promise<OutputCheck> {
     const text = await inflatePart(bytes, entry, rels ? 1024 * 1024 : zipLimits.partInflate);
     if (text === null) return reject("xlsx_invalid");
     if (rels) {
-      if (/TargetMode\s*=\s*["']External["']/i.test(text) || /Target\s*=\s*["'][a-z][a-z0-9+.-]*:/i.test(text))
+      if (
+        /TargetMode\s*=\s*["']External["']/i.test(text) ||
+        /Target\s*=\s*["'][a-z][a-z0-9+.-]*:/i.test(text)
+      )
         return reject("xlsx_link");
       continue;
     }

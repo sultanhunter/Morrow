@@ -51,6 +51,8 @@ const markers = {
   // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret.
   stripeKey: "stripekey" + alnum(12),
   stripeWebhook: "stripehook" + alnum(12),
+  // Build order PR 7: the owner's E2B API key.
+  e2b: "e2bkey" + alnum(12),
 };
 const files = () => ({
   "workos-api-key": "sk_test_" + markers.workos,
@@ -61,6 +63,7 @@ const files = () => ({
   "vault-kek-v1": markers.kek,
   "stripe-restricted-key": "rk_test_" + markers.stripeKey,
   "stripe-webhook-secret": "whsec_" + markers.stripeWebhook,
+  "e2b-api-key": "e2b_" + markers.e2b,
 });
 const everyMarker = () => Object.values(markers);
 const contains = (text, values) => values.filter((value) => value && String(text).includes(value));
@@ -79,11 +82,14 @@ async function status({
   ages = {},
   // M5: the Stripe switch (owner decision (c), 2026-10-21); off is the committed state.
   stripe = "off",
+  // Build order PR 7: the runtime switch; off is the committed state.
+  runtime = "off",
 } = {}) {
   const planted = plantedHome(plant, { modes, links, directoryMode });
   try {
-    const constants = (await fakeContext({ home: planted.home, tools: fakeTools().tools, stripe }))
-      .constants;
+    const constants = (
+      await fakeContext({ home: planted.home, tools: fakeTools().tools, stripe, runtime })
+    ).constants;
     const tracked = [...constants.brokerSecrets, "LOGIN_CAPSULE_KEYRING"];
     const record = {
       schemaVersion: 1,
@@ -123,6 +129,7 @@ async function status({
       database: db.connector,
       now,
       stripe,
+      runtime,
     });
     const code = await main(["secrets-status"], ctx);
     const report = JSON.parse(out[0] ?? err[0]);
@@ -735,6 +742,140 @@ test("AC07: role passwords reach only their ALTER ROLE, then the 0600 first-depl
     assert.deepEqual(JSON.parse(stripe.dump.bulkInputs[0].input), { [name]: value });
     noMarkers(stripe);
   }
+});
+
+// Build order PR 7 (ADR-0029 item 3; ADR-0035 item 6): the E2B key comes only from the owner's
+// chmod-600 file and reaches the broker only through `secret bulk` stdin, never argv. With the
+// runtime switch off (committed) put-secret refuses it before reading the file or running any
+// tool, unless the owner passes --while-runtime-off; with the switch on the key is required
+// and the flag is refused. The flag belongs to E2B_API_KEY alone.
+test("PR 7: put-secret E2B_API_KEY refuses while the runtime switch is off unless the owner says so", () => {
+  const off = runChild("put-secret-e2b-off");
+  assert.equal(off.status, 1);
+  assert.deepEqual(oneLine(off, "stderr"), { command: "put-secret", code: "STAGING_RUNTIME_OFF" });
+  assert.deepEqual(off.dump.bulkInputs, []);
+  assert.deepEqual(off.dump.calls, []);
+  noMarkers(off);
+  const whileOff = runChild("put-secret-e2b-while-off");
+  assert.equal(whileOff.status, 0, whileOff.stderr);
+  assert.deepEqual(
+    { ...oneLine(whileOff, "stdout"), versionId: null },
+    { command: "put-secret", secret: "E2B_API_KEY", versionId: null, runtime: "off" },
+  );
+  assert.deepEqual(JSON.parse(whileOff.dump.bulkInputs[0].input), {
+    E2B_API_KEY: "e2b_" + markers.e2b,
+  });
+  noMarkers(whileOff);
+  // On: placed on a broker that does not hold it yet, without the flag.
+  const on = runChild("put-secret-e2b-on");
+  assert.equal(on.status, 0, on.stderr);
+  assert.equal(oneLine(on, "stdout").secret, "E2B_API_KEY");
+  assert.deepEqual(JSON.parse(on.dump.bulkInputs[0].input), { E2B_API_KEY: "e2b_" + markers.e2b });
+  noMarkers(on);
+  for (const scenario of ["put-secret-e2b-on-flag", "put-secret-flag-other"]) {
+    const refused = runChild(scenario);
+    assert.notEqual(refused.status, 0, scenario);
+    assert.equal(oneLine(refused, "stderr").code, "STAGING_USAGE", scenario);
+    assert.deepEqual(refused.dump?.bulkInputs ?? [], [], scenario);
+    noMarkers(refused);
+  }
+  // A malformed or missing owner file is refused by name, never echoed.
+  const malformed = runChild("put-secret-e2b-while-off", {
+    ...files(),
+    "e2b-api-key": "sk-" + markers.malformed,
+  });
+  assert.equal(malformed.status, 1);
+  assert.deepEqual(oneLine(malformed, "stderr"), {
+    command: "put-secret",
+    code: "STAGING_FILE_FORMAT",
+    file: "e2b-api-key",
+  });
+  assert.deepEqual(malformed.dump.bulkInputs, []);
+  noMarkers(malformed);
+  const missing = runChild(
+    "put-secret-e2b-while-off",
+    (({ "e2b-api-key": _, ...rest }) => rest)(files()),
+  );
+  assert.equal(missing.status, 1);
+  assert.equal(oneLine(missing, "stderr").code, "STAGING_FILE_MISSING");
+  noMarkers(missing);
+});
+
+// Build order PR 7: the runtime switch is read with edge:check's own record rule; the broker's
+// names follow it (E2B_API_KEY required while on or cleanup-only, optional while off), and
+// gate 6's and secrets-status's sets follow the constants.
+test("PR 7: the runtime switch sets the broker's required and optional E2B names", async () => {
+  const { stagingRuntimeSwitch } = await import("../scripts/staging.mjs");
+  assert.equal(stagingRuntimeSwitch(process.cwd()), "off");
+  const off = await identityConstants({ runtime: "off" });
+  assert.equal(off.brokerSecrets.length, 14);
+  assert.ok(!off.brokerSecrets.includes("E2B_API_KEY"));
+  assert.deepEqual(off.brokerOptionalSecrets, ["E2B_API_KEY"]);
+  assert.equal(off.runtime, "off");
+  for (const runtime of ["on", "cleanup_only"]) {
+    const on = await identityConstants({ runtime });
+    assert.deepEqual(on.brokerSecrets, [...off.brokerSecrets, "E2B_API_KEY"].sort());
+    assert.deepEqual(on.brokerOptionalSecrets, []);
+  }
+  await assert.rejects(identityConstants({ runtime: "yes" }), {
+    code: "STAGING_RUNTIME_RECORD_INVALID",
+  });
+  const root = mkdtempSync(join(tmpdir(), "morrow-runtime-switch-"));
+  try {
+    mkdirSync(join(root, "docs/decisions"), { recursive: true });
+    const committed = JSON.parse(readFileSync("docs/decisions/runtime-staging.json", "utf8"));
+    const write = (record) =>
+      writeFileSync(join(root, "docs/decisions/runtime-staging.json"), JSON.stringify(record));
+    write({ ...committed, switch: "cleanup_only" });
+    assert.equal(stagingRuntimeSwitch(root), "cleanup_only");
+    for (const record of [
+      { ...committed, switch: "on" },
+      { ...committed, switch: true },
+      { ...committed, admission: "merchant" },
+      { ...committed, provider: "daytona" },
+    ]) {
+      write(record);
+      assert.throws(() => stagingRuntimeSwitch(root), { code: "STAGING_RUNTIME_RECORD_INVALID" });
+    }
+    rmSync(join(root, "docs/decisions/runtime-staging.json"));
+    assert.throws(() => stagingRuntimeSwitch(root), { code: "STAGING_RUNTIME_RECORD_INVALID" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("PR 7: secrets-status accepts the E2B key present or absent while off, and requires it while on", async () => {
+  // Off, a broker holding the key placed ahead of the switch is no mismatch, nor is one
+  // without it; the optional owner file is checked when present and never a warning.
+  const { brokerRequiredSecrets } = await import("../packages/identity/src/broker-protocol.ts");
+  for (const broker of [[...brokerRequiredSecrets], [...brokerRequiredSecrets, "E2B_API_KEY"]]) {
+    const { code, report } = await status({ tools: { secrets: { broker } } });
+    assert.equal(code, 0, JSON.stringify(report.mismatches));
+    assert.deepEqual(report.workers.broker.extra, []);
+    assert.deepEqual(report.warnings, []);
+    const file = report.files.find((f) => f.file === "e2b-api-key");
+    assert.deepEqual([file.required, file.ok], [false, true]);
+  }
+  const absent = await status({ plant: (({ "e2b-api-key": _, ...rest }) => rest)(files()) });
+  assert.equal(absent.code, 0, JSON.stringify(absent.report.mismatches));
+  const bad = await status({ plant: { ...files(), "e2b-api-key": "e2b_" } });
+  assert.equal(bad.code, 1);
+  assert.ok(bad.report.mismatches.includes("file:e2b-api-key"));
+  // On, the key and its file are required.
+  const on = await status({ runtime: "on" });
+  assert.equal(on.code, 0, JSON.stringify(on.report.mismatches));
+  assert.equal(on.report.workers.broker.names.length, 15);
+  const missing = await status({
+    runtime: "on",
+    tools: { secrets: { broker: [...brokerRequiredSecrets] } },
+  });
+  assert.equal(missing.code, 1);
+  assert.deepEqual(missing.report.workers.broker.missing, ["E2B_API_KEY"]);
+  const noFile = await status({
+    runtime: "on",
+    plant: (({ "e2b-api-key": _, ...rest }) => rest)(files()),
+  });
+  assert.ok(noFile.report.mismatches.includes("file:e2b-api-key"));
 });
 
 test("AC07: connections count unknown names without printing them; keyring prints metadata only", () => {

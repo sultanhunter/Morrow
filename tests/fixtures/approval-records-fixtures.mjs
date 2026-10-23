@@ -40,6 +40,8 @@ export const capabilitiesAfter0018 = Object.freeze([
   // M5 PR-1 (ADR-0022 items 2 and 3): neither is review-required.
   "governance.billing.manage",
   "governance.model_default.revise",
+  // Build order PR 7 (ADR-0029 item 7): the computer's capability, not review-required.
+  "runtime.execution.use",
 ]);
 /** The catalogue as 0018 copies it, in catalogue order. */
 export const catalogueAt0018 = (catalogue) =>

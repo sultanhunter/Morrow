@@ -40,7 +40,8 @@ import { makePng, makeXlsx } from "./fixtures/runtime-files.mjs";
 
 const e2bKey = () => "e2b_" + randomBytes(20).toString("hex");
 const login = JSON.parse(
-  createPlatformWorkosProviderOracle({ origin: "https://workspace.example.test" }).configurationJson,
+  createPlatformWorkosProviderOracle({ origin: "https://workspace.example.test" })
+    .configurationJson,
 );
 function brokerEnv(environment = "development", extra = {}) {
   return {
@@ -93,7 +94,10 @@ async function held(pending, method = "runtimeExecute") {
 
 // An in-memory ledger with the SQL ledger's contract: the send mark, one operation per run
 // and call key, settlement edges, holds raised by unknown outcomes, the sweep's list.
-function memoryLedger(events, { refuse = null, leaseRefused = false, now = () => Date.now() } = {}) {
+function memoryLedger(
+  events,
+  { refuse = null, leaseRefused = false, now = () => Date.now() } = {},
+) {
   const ops = new Map();
   const keys = new Map();
   const holds = [];
@@ -105,7 +109,8 @@ function memoryLedger(events, { refuse = null, leaseRefused = false, now = () =>
       events.push(["ledger.begin", request.callKey]);
       if (leaseRefused) return { outcome: "lease_refused" };
       if (refuse) return { outcome: "refused", code: refuse };
-      if (keys.has(request.callKey)) return { outcome: "replay", operationId: keys.get(request.callKey) };
+      if (keys.has(request.callKey))
+        return { outcome: "replay", operationId: keys.get(request.callKey) };
       if (holds.some((h) => !h.lifted)) return { outcome: "refused", code: "runtime_held" };
       const operationId = randomUUID();
       ops.set(operationId, {
@@ -144,7 +149,8 @@ function memoryLedger(events, { refuse = null, leaseRefused = false, now = () =>
       if (!o || terminal.includes(o.status)) return false;
       o.status = "unknown_effect";
       o.reason = reason;
-      if (!holds.some((h) => h.operationId === operationId)) holds.push({ operationId, reason, lifted: false });
+      if (!holds.some((h) => h.operationId === operationId))
+        holds.push({ operationId, reason, lifted: false });
       return true;
     },
     async open(limit) {
@@ -167,10 +173,12 @@ function memoryLedger(events, { refuse = null, leaseRefused = false, now = () =>
 }
 // The fake adapter, with every port call recorded into the shared event list.
 function recorded(adapter, events) {
-  const wrap = (name) => async (...args) => {
-    events.push(["adapter." + name, name === "create" ? args[0].operationId : null]);
-    return adapter[name](...args);
-  };
+  const wrap =
+    (name) =>
+    async (...args) => {
+      events.push(["adapter." + name, name === "create" ? args[0].operationId : null]);
+      return adapter[name](...args);
+    };
   return {
     provider: adapter.provider,
     create: wrap("create"),
@@ -219,7 +227,8 @@ function world(options = {}) {
     sweep: (budgetMs = 120_000) => gateway.runtimeSweep(env, budgetMs),
   };
 }
-const directive = (path, bytes) => "#!fake write " + path + " " + Buffer.from(bytes).toString("base64");
+const directive = (path, bytes) =>
+  "#!fake write " + path + " " + Buffer.from(bytes).toString("base64");
 const job = (over = {}) => ({
   schemaVersion: 1,
   kind: "python_analysis",
@@ -236,7 +245,22 @@ const job = (over = {}) => ({
     {
       name: "products",
       kind: "products",
-      rows: [["7001", over.title ?? "Linen shirt", null, null, "active", null, 1, "10.00", "10.00", 4, "2026-10-01T00:00:00Z", "2026-10-02T00:00:00Z"]],
+      rows: [
+        [
+          "7001",
+          over.title ?? "Linen shirt",
+          null,
+          null,
+          "active",
+          null,
+          1,
+          "10.00",
+          "10.00",
+          4,
+          "2026-10-01T00:00:00Z",
+          "2026-10-02T00:00:00Z",
+        ],
+      ],
     },
   ],
   outputs: over.outputs ?? [
@@ -273,13 +297,19 @@ test("the switch: off, a missing key, vault, adapter or template, and production
   const capabilities = await brokerCapabilities(off);
   assert.equal(capabilities.computerMode, "off");
   assert.equal(capabilities.computer, null);
-  const on = await brokerCapabilities(brokerEnv("staging", { [runtimeSwitchVar]: "on", E2B_API_KEY: e2bKey() }));
+  const on = await brokerCapabilities(
+    brokerEnv("staging", { [runtimeSwitchVar]: "on", E2B_API_KEY: e2bKey() }),
+  );
   assert.equal(on.computerMode, "on");
   assert.deepEqual(Object.keys(on.computer).sort(), ["apiKey", "provider"]);
   assert.equal(on.computer.provider, "e2b");
-  const cleanup = await brokerCapabilities(brokerEnv("staging", { [runtimeSwitchVar]: "cleanup_only", E2B_API_KEY: e2bKey() }));
+  const cleanup = await brokerCapabilities(
+    brokerEnv("staging", { [runtimeSwitchVar]: "cleanup_only", E2B_API_KEY: e2bKey() }),
+  );
   assert.equal(cleanup.computerMode, "cleanup_only");
-  const production = await brokerCapabilities(brokerEnv("production", { [runtimeSwitchVar]: "on", E2B_API_KEY: e2bKey() }));
+  const production = await brokerCapabilities(
+    brokerEnv("production", { [runtimeSwitchVar]: "on", E2B_API_KEY: e2bKey() }),
+  );
   assert.equal(production.computerMode, "off");
   assert.equal(production.computer, null);
 });
@@ -291,8 +321,18 @@ test("the deployed broker composes no runtime adapter, no template and no qualif
     index,
     /createRuntimeGateway\(\{\n  ledger: \(vault\) => createVaultRuntimeLedger\(vault, runVaultTransaction\),\n  providers: Object\.freeze\(\{\}\),\n  now: \(\) => Date\.now\(\),\n  template: null,\n  qualified: false,\n\}\);/,
   );
-  for (const file of ["runtime-gateway.ts", "runtime-ledger.ts", "runtime-provider.ts", "capabilities.ts", "index.ts"])
-    assert.doesNotMatch(readFileSync("apps/broker/src/" + file, "utf8"), /from ["']e2b|@e2b\//, file);
+  for (const file of [
+    "runtime-gateway.ts",
+    "runtime-ledger.ts",
+    "runtime-provider.ts",
+    "capabilities.ts",
+    "index.ts",
+  ])
+    assert.doesNotMatch(
+      readFileSync("apps/broker/src/" + file, "utf8"),
+      /from ["']e2b|@e2b\//,
+      file,
+    );
   // The switch's names and the key's shape.
   assert.equal(runtimeSwitchVar, "MORROW_RUNTIME_SWITCH");
   assert.deepEqual([...brokerRuntimeSecrets], ["E2B_API_KEY"]);
@@ -309,14 +349,29 @@ test("broker secrets: E2B_API_KEY is required only while the switch is not off, 
     assert.deepEqual([...required].sort(), [...base, "E2B_API_KEY"].sort());
     assert.deepEqual(brokerOptionalSecretsFor("staging", mode), []);
   }
-  assert.equal(brokerRequiredSecretsFor("development", "on", "on", "on").length, base.length + 2 + 1 + 1);
+  assert.equal(
+    brokerRequiredSecretsFor("development", "on", "on", "on").length,
+    base.length + 2 + 1 + 1,
+  );
   assert.deepEqual([...brokerOptionalSecretsFor("staging", "off")], ["E2B_API_KEY"]);
   assert.deepEqual(brokerOptionalSecretsFor("development", "off"), []);
   assert.deepEqual(brokerOptionalSecretsFor("production", "off"), []);
-  assert.throws(() => brokerRequiredSecretsFor("production", "off", "off", "on"), /BROKER_RUNTIME_SWITCH_INVALID/);
-  assert.throws(() => brokerRequiredSecretsFor("production", "off", "off", "cleanup_only"), /BROKER_RUNTIME_SWITCH_INVALID/);
-  assert.throws(() => brokerRequiredSecretsFor("staging", "off", "off", "yes"), /BROKER_RUNTIME_SWITCH_INVALID/);
-  assert.throws(() => brokerOptionalSecretsFor("staging", "maybe"), /BROKER_RUNTIME_SWITCH_INVALID/);
+  assert.throws(
+    () => brokerRequiredSecretsFor("production", "off", "off", "on"),
+    /BROKER_RUNTIME_SWITCH_INVALID/,
+  );
+  assert.throws(
+    () => brokerRequiredSecretsFor("production", "off", "off", "cleanup_only"),
+    /BROKER_RUNTIME_SWITCH_INVALID/,
+  );
+  assert.throws(
+    () => brokerRequiredSecretsFor("staging", "off", "off", "yes"),
+    /BROKER_RUNTIME_SWITCH_INVALID/,
+  );
+  assert.throws(
+    () => brokerOptionalSecretsFor("staging", "maybe"),
+    /BROKER_RUNTIME_SWITCH_INVALID/,
+  );
 });
 
 test("closed inputs: lease, generation, budget and RuntimeJob@1 refuse before the ledger", async () => {
@@ -334,13 +389,18 @@ test("closed inputs: lease, generation, budget and RuntimeJob@1 refuse before th
     [job({ outputs: [{ name: "page", type: "html" }] }), {}],
     [job({ inputs: [{ name: "c", kind: "customers", rows: [] }] }), {}],
   ];
-  for (const [value, over] of bad) assert.equal(await held(w.execute(value, over)), "INPUT_INVALID", JSON.stringify(over));
+  for (const [value, over] of bad)
+    assert.equal(await held(w.execute(value, over)), "INPUT_INVALID", JSON.stringify(over));
   assert.deepEqual(w.events, []);
 });
 
 test("minimised inputs: a URL, shop domain or email refuses the job before the ledger", async () => {
   const w = world();
-  for (const title of ["https://morrow.example/x", "brand.myshopify.com", "mail owner@shop.example"]) {
+  for (const title of [
+    "https://morrow.example/x",
+    "brand.myshopify.com",
+    "mail owner@shop.example",
+  ]) {
     const result = JSON.parse(await w.execute(job({ title })));
     assert.deepEqual(result, {
       schemaVersion: 1,
@@ -380,6 +440,7 @@ test("a job: the send mark first, one create, the files, the command, the output
   assert.deepEqual(Object.keys(result).sort(), [
     "code",
     "exitCode",
+    "outcome",
     "outputs",
     "rejected",
     "schemaVersion",
@@ -398,13 +459,20 @@ test("a job: the send mark first, one create, the files, the command, the output
       ["book", "xlsx"],
     ],
   );
-  for (const o of result.outputs) assert.deepEqual(Object.keys(o).sort(), ["base64", "name", "sha256", "size", "type"]);
+  for (const o of result.outputs)
+    assert.deepEqual(Object.keys(o).sort(), ["base64", "name", "sha256", "size", "type"]);
   // The CSV is served with its formula cell escaped.
-  assert.equal(Buffer.from(result.outputs[1].base64, "base64").toString("utf8"), "sku,note\r\nA1,'=1+2\r\n");
+  assert.equal(
+    Buffer.from(result.outputs[1].base64, "base64").toString("utf8"),
+    "sku,note\r\nA1,'=1+2\r\n",
+  );
   // Nothing alive afterwards; the sandbox saw the fixed command, no environment and no secret.
   assert.deepEqual(w.fake.alive(), []);
   const text = await w.execute(job({ callKey: "step-2" }));
-  const view = JSON.stringify({ ...w.fake.guest, files: w.fake.guest.files.map((f) => [f.path, Buffer.from(f.bytes).toString("utf8")]) });
+  const view = JSON.stringify({
+    ...w.fake.guest,
+    files: w.fake.guest.files.map((f) => [f.path, Buffer.from(f.bytes).toString("utf8")]),
+  });
   assert.ok(!view.includes(w.key));
   assert.doesNotMatch(view, /fake-envd-token|https?:\/\/|myshopify/);
   assert.deepEqual(w.fake.guest.creates[0], {
@@ -417,7 +485,9 @@ test("a job: the send mark first, one create, the files, the command, the output
   assert.equal(w.fake.guest.commands[0].user, "agent");
   assert.deepEqual(w.fake.guest.commands[0].environment, {});
   assert.deepEqual(
-    w.fake.guest.files.filter((f) => f.sandboxRef === w.fake.guest.files[0].sandboxRef).map((f) => f.path),
+    w.fake.guest.files
+      .filter((f) => f.sandboxRef === w.fake.guest.files[0].sandboxRef)
+      .map((f) => f.path),
     ["/home/agent/input/products.csv", "/home/agent/work/job.py"],
   );
   // No sandbox id, envd token, key or provider name crosses back.
@@ -428,7 +498,14 @@ test("a job: the send mark first, one create, the files, the command, the output
 });
 
 test("the send mark refuses: caps, holds and a missing capability never create; a lease refusal holds", async () => {
-  for (const code of ["runtime_held", "monthly_budget", "concurrency_limit", "workspace_limit", "reservation_exhausted", "capability_missing"]) {
+  for (const code of [
+    "runtime_held",
+    "monthly_budget",
+    "concurrency_limit",
+    "workspace_limit",
+    "reservation_exhausted",
+    "capability_missing",
+  ]) {
     const w = world({ ledger: { refuse: code } });
     assert.deepEqual(JSON.parse(await w.execute(job())), {
       schemaVersion: 1,
@@ -474,9 +551,23 @@ test("a lost create is unknown_effect with a hold, never retried; the sweep find
   assert.equal(w.fake.created(), 1);
   // The sweep: only stale operations; the lost one is found by its metadata and killed.
   const [op] = [...w.ledger.ops.keys()];
-  assert.deepEqual(JSON.parse(await w.sweep()), { schemaVersion: 1, examined: 0, killed: 0, absentVerified: 0, unknown: 0, skipped: 1 });
+  assert.deepEqual(JSON.parse(await w.sweep()), {
+    schemaVersion: 1,
+    examined: 0,
+    killed: 0,
+    absentVerified: 0,
+    unknown: 0,
+    skipped: 1,
+  });
   w.ledger.ops.get(op).stale = true;
-  assert.deepEqual(JSON.parse(await w.sweep()), { schemaVersion: 1, examined: 1, killed: 1, absentVerified: 0, unknown: 0, skipped: 0 });
+  assert.deepEqual(JSON.parse(await w.sweep()), {
+    schemaVersion: 1,
+    examined: 1,
+    killed: 1,
+    absentVerified: 0,
+    unknown: 0,
+    skipped: 0,
+  });
   assert.equal(w.ledger.ops.get(op).status, "killed");
   assert.deepEqual(w.fake.alive(), []);
   assert.equal(w.ledger.holds[0].lifted, false, "the sweep never lifts a hold");
@@ -491,35 +582,66 @@ test("quota and billing blocks are unknown with their own hold; not_sent alone s
     w.fake.fault({ op: "create", outcome });
     const result = JSON.parse(await w.execute(job()));
     assert.deepEqual([result.outcome, result.code], ["unknown", code]);
-    assert.deepEqual(w.ledger.holds.map((h) => h.reason), [code]);
+    assert.deepEqual(
+      w.ledger.holds.map((h) => h.reason),
+      [code],
+    );
   }
-  const w = world({ adapter: (fake, events) => ({ ...recorded(fake, events), create: async () => ({ outcome: "not_sent" }) }) });
+  const w = world({
+    adapter: (fake, events) => ({
+      ...recorded(fake, events),
+      create: async () => ({ outcome: "not_sent" }),
+    }),
+  });
   const result = JSON.parse(await w.execute(job()));
   assert.deepEqual([result.outcome, result.code], ["refused", "create_not_sent"]);
   assert.deepEqual(w.events.at(-1), ["ledger.settle", "not_created"]);
   assert.equal(w.ledger.holds.length, 0);
   // A throwing adapter is unknown_effect, never an error that escapes or a retry.
-  const thrown = world({ adapter: (fake, events) => ({ ...recorded(fake, events), create: async () => { throw Error("socket"); } }) });
+  const thrown = world({
+    adapter: (fake, events) => ({
+      ...recorded(fake, events),
+      create: async () => {
+        throw Error("socket");
+      },
+    }),
+  });
   const t = JSON.parse(await thrown.execute(job()));
   assert.deepEqual([t.outcome, t.code], ["unknown", "create_unknown"]);
   // A created reply with a malformed id is unknown too (the sandbox exists).
-  const malformed = world({ adapter: (fake, events) => ({ ...recorded(fake, events), create: async () => ({ outcome: "created", sandboxRef: "../x", accessToken: null }) }) });
+  const malformed = world({
+    adapter: (fake, events) => ({
+      ...recorded(fake, events),
+      create: async () => ({ outcome: "created", sandboxRef: "../x", accessToken: null }),
+    }),
+  });
   const m = JSON.parse(await malformed.execute(job()));
   assert.deepEqual([m.outcome, m.code], ["unknown", "reply_invalid"]);
 });
 
 test("the job's own outcomes: non-zero exit, timeout, lost write or exec; the sandbox is killed every time", async () => {
   const failed = world();
-  const f = JSON.parse(await failed.execute(job({ script: "#!fake stderr boom\n#!fake exit 3\n" })));
-  assert.deepEqual([f.outcome, f.code, f.exitCode, f.stderr, f.outputs], ["failed", "exit_nonzero", 3, "boom\n", []]);
+  const f = JSON.parse(
+    await failed.execute(job({ script: "#!fake stderr boom\n#!fake exit 3\n" })),
+  );
+  assert.deepEqual(
+    [f.outcome, f.code, f.exitCode, f.stderr, f.outputs],
+    ["failed", "exit_nonzero", 3, "boom\n", []],
+  );
   const hung = world();
-  assert.equal(JSON.parse(await hung.execute(job({ script: "#!fake hang\n" }))).outcome, "timed_out");
+  assert.equal(
+    JSON.parse(await hung.execute(job({ script: "#!fake hang\n" }))).outcome,
+    "timed_out",
+  );
   for (const op of ["write", "exec"]) {
     const w = world();
     w.fake.fault({ op, outcome: "unknown" });
     const r = JSON.parse(await w.execute(job()));
     assert.deepEqual([r.outcome, r.code], ["unknown", op + "_unknown"]);
-    assert.deepEqual(w.events.slice(-2), [["adapter.kill", null], ["ledger.settle", "killed"]]);
+    assert.deepEqual(w.events.slice(-2), [
+      ["adapter.kill", null],
+      ["ledger.settle", "killed"],
+    ]);
   }
   for (const w of [failed, hung]) {
     assert.deepEqual(w.fake.alive(), []);
@@ -533,7 +655,10 @@ test("outputs: missing, too large, invalid or lost are rejected by name; only ch
   const result = JSON.parse(
     await w.execute(
       job({
-        script: [directive("/home/agent/output/bad.png", Buffer.from("<svg onload=x>")), directive("/home/agent/output/ok.csv", Buffer.from("a\n1\n"))].join("\n"),
+        script: [
+          directive("/home/agent/output/bad.png", Buffer.from("<svg onload=x>")),
+          directive("/home/agent/output/ok.csv", Buffer.from("a\n1\n")),
+        ].join("\n"),
         outputs: [
           { name: "lost", type: "csv" },
           { name: "bad", type: "png" },
@@ -549,7 +674,10 @@ test("outputs: missing, too large, invalid or lost are rejected by name; only ch
     { name: "bad", code: "png_invalid" },
     { name: "none", code: "output_missing" },
   ]);
-  assert.deepEqual(result.outputs.map((o) => o.name), ["ok"]);
+  assert.deepEqual(
+    result.outputs.map((o) => o.name),
+    ["ok"],
+  );
 });
 
 test("a kill that answers not_found or unknown is never counted as deleted", async () => {
@@ -557,7 +685,9 @@ test("a kill that answers not_found or unknown is never counted as deleted", asy
     [{ outcome: "not_found" }, "kill_not_found"],
     [{ outcome: "unknown" }, "kill_unknown"],
   ]) {
-    const w = world({ adapter: (fake, events) => ({ ...recorded(fake, events), kill: async () => answer }) });
+    const w = world({
+      adapter: (fake, events) => ({ ...recorded(fake, events), kill: async () => answer }),
+    });
     const result = JSON.parse(await w.execute(job()));
     assert.equal(result.outcome, "completed");
     assert.deepEqual(w.events.at(-1), ["ledger.unknown", reason]);
@@ -612,16 +742,28 @@ test("the sweep: absence is verified only on a qualified profile past the grace;
 test("cleanup-only runs the sweep and nothing else; the sweep's budget is closed", async () => {
   const w = world({ mode: "cleanup_only" });
   assert.equal(await held(w.execute(job())), "RUNTIME_UNAVAILABLE");
-  assert.deepEqual(JSON.parse(await w.sweep()), { schemaVersion: 1, examined: 0, killed: 0, absentVerified: 0, unknown: 0, skipped: 0 });
+  assert.deepEqual(JSON.parse(await w.sweep()), {
+    schemaVersion: 1,
+    examined: 0,
+    killed: 0,
+    absentVerified: 0,
+    unknown: 0,
+    skipped: 0,
+  });
   assert.equal(await held(w.sweep(1), "runtimeSweep"), "INPUT_INVALID");
-  assert.equal(await held(w.sweep(runtimeGatewayLimits.sweepBudgetMaxMs + 1), "runtimeSweep"), "INPUT_INVALID");
+  assert.equal(
+    await held(w.sweep(runtimeGatewayLimits.sweepBudgetMaxMs + 1), "runtimeSweep"),
+    "INPUT_INVALID",
+  );
   const off = world({ env: { [runtimeSwitchVar]: "off" } });
   assert.equal(await held(off.sweep(), "runtimeSweep"), "RUNTIME_UNAVAILABLE");
 });
 
 test("the vault ledger: registered statements only, rows read strictly, failures never success", async () => {
   assert.deepEqual(
-    Object.keys(runtimeVaultStatements).map((k) => vaultStatements[k] === runtimeVaultStatements[k]),
+    Object.keys(runtimeVaultStatements).map(
+      (k) => vaultStatements[k] === runtimeVaultStatements[k],
+    ),
     [true, true, true, true],
   );
   const sent = [];
@@ -638,15 +780,43 @@ test("the vault ledger: registered statements only, rows read strictly, failures
   const op = randomUUID();
   reply = [{ outcome: "begun", operation_id: op, deadline_at: "2026-10-23T10:16:00.000Z" }];
   const lease = randomUUID();
-  assert.deepEqual(await ledger.begin({ leaseId: lease, generation: 2, callKey: "k", jobDigest: "a".repeat(64), provider: "e2b" }), {
-    outcome: "begun",
-    operationId: op,
-    deadlineAtMs: Date.parse("2026-10-23T10:16:00.000Z"),
-  });
-  assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeOperationBegin, [lease, "2", "k", "a".repeat(64), "e2b"]]);
-  for (const code of ["runtime_held", "monthly_budget", "concurrency_limit", "workspace_limit", "reservation_exhausted", "capability_missing"]) {
+  assert.deepEqual(
+    await ledger.begin({
+      leaseId: lease,
+      generation: 2,
+      callKey: "k",
+      jobDigest: "a".repeat(64),
+      provider: "e2b",
+    }),
+    {
+      outcome: "begun",
+      operationId: op,
+      deadlineAtMs: Date.parse("2026-10-23T10:16:00.000Z"),
+    },
+  );
+  assert.deepEqual(sent.at(-1), [
+    runtimeVaultStatements.runtimeOperationBegin,
+    [lease, "2", "k", "a".repeat(64), "e2b"],
+  ]);
+  for (const code of [
+    "runtime_held",
+    "monthly_budget",
+    "concurrency_limit",
+    "workspace_limit",
+    "reservation_exhausted",
+    "capability_missing",
+  ]) {
     reply = [{ outcome: code, operation_id: null, deadline_at: null }];
-    assert.deepEqual(await ledger.begin({ leaseId: lease, generation: 1, callKey: "k", jobDigest: "a".repeat(64), provider: "e2b" }), { outcome: "refused", code });
+    assert.deepEqual(
+      await ledger.begin({
+        leaseId: lease,
+        generation: 1,
+        callKey: "k",
+        jobDigest: "a".repeat(64),
+        provider: "e2b",
+      }),
+      { outcome: "refused", code },
+    );
   }
   for (const r of [
     [{ outcome: "stopped", operation_id: null, deadline_at: null }],
@@ -656,15 +826,41 @@ test("the vault ledger: registered statements only, rows read strictly, failures
     [],
   ]) {
     reply = r;
-    assert.deepEqual(await ledger.begin({ leaseId: lease, generation: 1, callKey: "k", jobDigest: "a".repeat(64), provider: "e2b" }), { outcome: "lease_refused" });
+    assert.deepEqual(
+      await ledger.begin({
+        leaseId: lease,
+        generation: 1,
+        callKey: "k",
+        jobDigest: "a".repeat(64),
+        provider: "e2b",
+      }),
+      { outcome: "lease_refused" },
+    );
   }
   reply = [{ outcome: "replay", operation_id: op, deadline_at: null }];
-  assert.deepEqual(await ledger.begin({ leaseId: lease, generation: 1, callKey: "k", jobDigest: "a".repeat(64), provider: "e2b" }), { outcome: "replay", operationId: op });
+  assert.deepEqual(
+    await ledger.begin({
+      leaseId: lease,
+      generation: 1,
+      callKey: "k",
+      jobDigest: "a".repeat(64),
+      provider: "e2b",
+    }),
+    { outcome: "replay", operationId: op },
+  );
   // A begin whose transaction fails throws (the gateway holds); the writes answer false.
   const broken = createVaultRuntimeLedger(vault, async () => {
     throw Error("VAULT_OUTCOME_UNKNOWN");
   });
-  await assert.rejects(broken.begin({ leaseId: lease, generation: 1, callKey: "k", jobDigest: "a".repeat(64), provider: "e2b" }));
+  await assert.rejects(
+    broken.begin({
+      leaseId: lease,
+      generation: 1,
+      callKey: "k",
+      jobDigest: "a".repeat(64),
+      provider: "e2b",
+    }),
+  );
   assert.equal(await broken.created(op, "sbx1"), false);
   assert.equal(await broken.settle(op, "killed"), false);
   assert.equal(await broken.unknown(op, "kill_unknown"), false);
@@ -675,19 +871,57 @@ test("the vault ledger: registered statements only, rows read strictly, failures
   assert.equal(await ledger.created(op, "../bad"), false);
   reply = [{ outcome: "settled", status: "killed" }];
   assert.equal(await ledger.settle(op, "killed"), true);
-  assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeOperationSettle, [op, "killed", ""]]);
+  assert.deepEqual(sent.at(-1), [
+    runtimeVaultStatements.runtimeOperationSettle,
+    [op, "killed", ""],
+  ]);
   reply = [{ outcome: "too_early", status: "unknown_effect" }];
   assert.equal(await ledger.settle(op, "absent_verified"), false);
   reply = [{ outcome: "already_unknown", status: "unknown_effect" }];
   assert.equal(await ledger.unknown(op, "status_unknown"), true);
-  assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeOperationSettle, [op, "unknown_effect", "status_unknown"]]);
+  assert.deepEqual(sent.at(-1), [
+    runtimeVaultStatements.runtimeOperationSettle,
+    [op, "unknown_effect", "status_unknown"],
+  ]);
   reply = [
-    { operation_id: op, provider: "e2b", sandbox_ref: null, status: "sending", deadline_at: "2026-10-23T10:16:00.000Z", stale: "true", past_grace: "false" },
-    { operation_id: "bad", provider: "e2b", sandbox_ref: null, status: "sending", deadline_at: "2026-10-23T10:16:00.000Z", stale: "true", past_grace: "false" },
-    { operation_id: op, provider: "e2b", sandbox_ref: null, status: "killed", deadline_at: "2026-10-23T10:16:00.000Z", stale: "true", past_grace: "false" },
+    {
+      operation_id: op,
+      provider: "e2b",
+      sandbox_ref: null,
+      status: "sending",
+      deadline_at: "2026-10-23T10:16:00.000Z",
+      stale: "true",
+      past_grace: "false",
+    },
+    {
+      operation_id: "bad",
+      provider: "e2b",
+      sandbox_ref: null,
+      status: "sending",
+      deadline_at: "2026-10-23T10:16:00.000Z",
+      stale: "true",
+      past_grace: "false",
+    },
+    {
+      operation_id: op,
+      provider: "e2b",
+      sandbox_ref: null,
+      status: "killed",
+      deadline_at: "2026-10-23T10:16:00.000Z",
+      stale: "true",
+      past_grace: "false",
+    },
   ];
   assert.deepEqual(await ledger.open(25), [
-    { operationId: op, provider: "e2b", sandboxRef: null, status: "sending", deadlineAtMs: Date.parse("2026-10-23T10:16:00.000Z"), stale: true, pastGrace: false },
+    {
+      operationId: op,
+      provider: "e2b",
+      sandboxRef: null,
+      status: "sending",
+      deadlineAtMs: Date.parse("2026-10-23T10:16:00.000Z"),
+      stale: true,
+      pastGrace: false,
+    },
   ]);
   assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeOperationsOpen, ["25"]]);
 });

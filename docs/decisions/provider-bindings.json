@@ -3433,6 +3433,34 @@
       ],
       "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
       "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "runtime.execution.use",
+      "provider": "morrow",
+      "mode": "runtime",
+      "operations": [
+        "Morrow's provider-neutral runtime port (RuntimeBroker.runtimeExecute, broker only): one fresh sandbox of the pinned morrow.computer v1 template per job through the selected adapter (E2B from build order PR 8: create with internet off and the operation id as its only metadata, write the minimised inputs and the job script, run the profile's one command as agent, read the declared outputs, kill), and runtimeSweep's reconciliation by operation metadata"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "The runtime operation's ledger row (morrow_vault.runtime_operations: sending before any create, then killed, absent_verified, not_created or unknown_effect) and the worst-case sandbox_compute booking on the run's vendor reservation; outputs are content-checked PNG, CSV and XLSX downloads.",
+      "restriction": "Broker-only E2B_API_KEY, hand-written fetch with no SDK (build order PR 8); the runtime switch (docs/decisions/runtime-staging.json) is committed off, no adapter or template is composed and nothing is qualified, so no sandbox is created. No internet, credential, Morrow or provider URL, shop domain or customer field ever enters a sandbox.",
+      "remaining_gap": "The E2B adapter and template recipe (PR 8) and the recorded qualification (PR 9) before the switch goes on.",
+      "version": "contracts:v1",
+      "provider_dependency": "D17",
+      "effect": "billable_job",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P12.T01",
+        "P12.T02"
+      ],
+      "logical_idempotency": "run id and step call key; one runtime operation per run and key, a replay never creates again",
+      "unknown_outcome": "unknown_effect with a runtime hold only a person lifts; reconcile by the operation's metadata before anything else, booked at its worst case, never retried or promoted to success"
     }
   ]
 }
