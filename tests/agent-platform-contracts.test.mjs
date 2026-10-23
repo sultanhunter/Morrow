@@ -20,6 +20,7 @@ import {
   createFakeModelGateway,
   FakeModelGatewayError,
 } from "../packages/policy/src/fake-model-gateway.ts";
+import { checkToolInput } from "../packages/policy/src/tool-catalogue.ts";
 
 const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
 const capability = (id) => catalogue.capabilities.find((c) => c.id === id);
@@ -286,6 +287,37 @@ test("ADR-0027 item 4: ModelCall@2 is closed and provider-neutral; content block
     valid("AssistantModelMessage", reply(toolUse("sql.run", { sql: "select 1" }))),
     false,
   );
+  // Review F1: a reply carries each tool's strict shape, the schema the model is given. A
+  // limit that shape cannot carry (a range, a length, a pattern) leaves the reply valid; the
+  // tool-call step's full ToolInput validation makes that call invalid_input. A wrong type,
+  // a missing key or an extra key is outside the shape: the reply is invalid output.
+  for (const [name, input] of [
+    ["knowledge.search", { searchText: "returns policy", limit: 20 }],
+    ["work.read", { target: "task", id: "has space" }],
+  ]) {
+    assert.ok(valid("AssistantModelMessage", reply(toolUse(name, input))), name);
+    assert.equal(checkToolInput(name, input).ok, false, name);
+  }
+  assert.equal(
+    valid("ToolInputKnowledgeSearch", { searchText: "returns policy", limit: 20 }),
+    false,
+  );
+  for (const input of [
+    { searchText: "returns policy", limit: "20" },
+    { searchText: "returns policy", limit: 2.5 },
+    { searchText: "returns policy" },
+    { searchText: "returns policy", limit: 5, extra: true },
+  ])
+    assert.equal(
+      valid("AssistantModelMessage", reply(toolUse("knowledge.search", input))),
+      false,
+      JSON.stringify(input),
+    );
+  assert.equal(
+    valid("AssistantModelMessage", reply(toolUse("work.read", { target: "order", id: null }))),
+    false,
+    "enums stay in the strict shape",
+  );
   // Roles: only the model calls tools; only the user side carries data and tool results.
   assert.equal(valid("UserModelMessage", { role: "user", content: [search] }), false);
   const data = {
@@ -332,6 +364,14 @@ test("ADR-0027 item 4: ModelResult@2 carries a reply only with end_turn or tool_
   );
   for (const field of ["providerRequestId", "stopReason", "model"])
     assert.equal(valid("ModelResultV2", { ...ok, [field]: "x" }), false, field);
+  // A tool_use reply whose input breaks only a limit is still a reply (review F1).
+  assert.ok(
+    valid("ModelResultV2", {
+      ...ok,
+      outcome: "tool_use",
+      message: reply(toolUse("knowledge.search", { searchText: "returns", limit: 20 })),
+    }),
+  );
 });
 
 test("ADR-0027 item 7: run_tool_calls rows hold ids, codes and digests only; a refusal names its code", () => {
@@ -340,6 +380,17 @@ test("ADR-0027 item 7: run_tool_calls rows hold ids, codes and digests only; a r
   assert.equal(valid("RunToolCall", { ...row, outcome: "refused" }), false);
   assert.ok(valid("RunToolCall", { ...row, outcome: "refused", refusal: "authority_denied" }));
   assert.equal(valid("RunToolCall", { ...row, refusal: "authority_denied" }), false);
+  // invalid_input goes with input_invalid and only with it (review F1).
+  const invalidInput = { ...row, outcome: "invalid_input", resultDigest: null, resultBytes: null };
+  assert.ok(valid("RunToolCall", { ...invalidInput, refusal: "input_invalid" }));
+  assert.equal(valid("RunToolCall", invalidInput), false, "invalid_input names its code");
+  assert.equal(valid("RunToolCall", { ...invalidInput, refusal: "authority_denied" }), false);
+  assert.equal(
+    valid("RunToolCall", { ...row, outcome: "refused", refusal: "input_invalid" }),
+    false,
+    "input_invalid is the outcome invalid_input, never refused",
+  );
+  assert.equal(valid("RunToolCall", { ...row, refusal: "input_invalid" }), false);
   assert.ok(
     valid("RunToolCall", {
       ...row,
@@ -634,4 +685,74 @@ test("the fake gateway refuses a call naming a model and ends on an invalid tool
     call: call(1, [userTurn], null, { attempt: 2 }).call,
   });
   assert.equal(resend.outcome, "end_turn");
+});
+
+test("review F1: a limit breach is the call's invalid_input and the run goes on; a shape breach ends it", async () => {
+  const breach = toolUse("knowledge.search", { searchText: "returns policy", limit: 20 });
+  const first = reply(breach);
+  const second = reply(
+    toolUse("knowledge.search", { searchText: "returns policy", limit: 10 }, "toolu_2"),
+  );
+  const third = reply({ type: "text", text: "Found it." });
+  const gateway = createFakeModelGateway(
+    [
+      { reply: first },
+      { reply: second },
+      { reply: third },
+      // A reply outside the strict shape: the gateway reports invalid_output, never throws.
+      { reply: reply(toolUse("knowledge.search", { searchText: "x", limit: "20" })) },
+      { reply: reply(toolUse("knowledge.search", { searchText: "x", limit: 5, storeId: "s" })) },
+    ],
+    { tools: ["knowledge.search"] },
+  );
+  const one = await gateway.modelTurn(call(1, [userTurn], null));
+  assert.equal(one.outcome, "tool_use", "the reply is valid; the limit is the tool's");
+  // The tool-call step validates the input with the full definition before dispatch.
+  const check = checkToolInput(breach.name, breach.input);
+  assert.deepEqual(check, { ok: false, outcome: "invalid_input", refusal: "input_invalid" });
+  // run_tool_calls records the code; the model sees only the outcome.
+  assert.ok(
+    valid("RunToolCall", {
+      ...fakes.fakeRunToolCall(),
+      tool: "knowledge.search",
+      capabilityId: "workspace.knowledge.read",
+      toolUseId: breach.id,
+      outcome: check.outcome,
+      refusal: check.refusal,
+      resultDigest: null,
+      resultBytes: null,
+    }),
+  );
+  const results = {
+    role: "user",
+    content: [
+      {
+        type: "tool_result",
+        toolUseId: breach.id,
+        outcome: check.outcome,
+        content: "limit must be between 1 and 10",
+      },
+    ],
+  };
+  assert.ok(valid("UserModelMessage", results));
+  // The model calls again within the run's caps, and the run goes on.
+  const two = await gateway.modelTurn(call(2, [userTurn, first, results], one.prefixDigest));
+  assert.equal(two.outcome, "tool_use");
+  const fixed = second.content[0];
+  assert.deepEqual(checkToolInput(fixed.name, fixed.input), { ok: true });
+  const okResults = {
+    role: "user",
+    content: [{ type: "tool_result", toolUseId: fixed.id, outcome: "ok", content: "[]" }],
+  };
+  const three = await gateway.modelTurn(
+    call(3, [userTurn, first, results, second, okResults], two.prefixDigest),
+  );
+  assert.equal(three.outcome, "end_turn");
+  for (const runId of ["run_type", "run_extra"])
+    assert.equal(
+      (await gateway.modelTurn({ runId, call: call(1, [userTurn], null).call })).outcome,
+      "invalid_output",
+      runId,
+    );
+  assert.equal(gateway.remaining(), 0);
 });

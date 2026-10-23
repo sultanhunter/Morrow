@@ -17,8 +17,10 @@ import {
   inspectToolCatalogue,
   jcs,
   strictModelSchema,
+  toolModelInputName,
 } from "../scripts/generate-agent-platform.mjs";
 import {
+  checkToolInput,
   modelToolDefinitions,
   offeredTools,
   runContext,
@@ -286,6 +288,98 @@ test("the model sees strict, closed schemas under wire names, in a stable order"
   assert.equal(toolByWireName("drop_table"), null);
 });
 
+// Review F1: the reply the model sends and the schema it is given agree, so a limit the
+// strict schema cannot carry is the call's invalid_input, never the run's invalid_output.
+test("each tool_use branch takes exactly the strict shape the model is given", () => {
+  const core = schemas[1].$defs;
+  const branches = core.ModelToolUseBlock.oneOf;
+  assert.equal(branches.length, toolCatalogue.length);
+  for (const [index, entry] of toolCatalogue.entries()) {
+    const name = toolModelInputName(entry.inputDefinition);
+    assert.equal(name, entry.inputDefinition.replace("ToolInput", "ToolModelInput"));
+    assert.equal(branches[index].properties.name.const, entry.name);
+    assert.equal(branches[index].properties.input.$ref, "#/$defs/" + name);
+    const { description, ...shape } = core[name];
+    assert.match(description, new RegExp("^" + entry.name.replace(".", "\\.") + " as the model"));
+    assert.equal(jcs(shape), jcs(entry.inputSchema), entry.name);
+  }
+});
+
+for (const [name, change, expected] of [
+  [
+    "a tool_use branch on the full input",
+    (s) =>
+      (s[1].$defs.ModelToolUseBlock.oneOf[0].properties.input.$ref =
+        "#/$defs/ToolInputKnowledgeSearch"),
+    /knowledge\.search: its ModelToolUseBlock branch must name it and take ToolModelInputKnowledgeSearch/,
+  ],
+  [
+    "a strict shape that carries a limit",
+    (s) => (s[1].$defs.ToolModelInputKnowledgeSearch.properties.limit.maximum = 10),
+    /knowledge\.search: ToolModelInputKnowledgeSearch must be exactly the strict shape/,
+  ],
+  [
+    "a full input that gains a field its strict shape lacks",
+    (s) => {
+      s[1].$defs.ToolInputMessagePost.properties.pinned = { type: "boolean" };
+      s[1].$defs.ToolInputMessagePost.required.push("pinned");
+    },
+    /message\.post: ToolModelInputMessagePost must be exactly the strict shape/,
+  ],
+  [
+    "a missing strict shape",
+    (s) => delete s[1].$defs.ToolModelInputWorkRead,
+    /work\.read: no ToolModelInputWorkRead definition/,
+  ],
+  [
+    "tool_use branches out of catalogue order",
+    (s) => s[1].$defs.ModelToolUseBlock.oneOf.reverse(),
+    /knowledge\.search: its ModelToolUseBlock branch/,
+  ],
+  [
+    "a missing tool_use branch",
+    (s) => s[1].$defs.ModelToolUseBlock.oneOf.pop(),
+    /ModelToolUseBlock must have one branch per tool/,
+  ],
+  [
+    "an optional input property",
+    (s) => s[1].$defs.ToolInputMessagePost.required.pop(),
+    /message\.post: input is not strict-expressible: AGENT_PLATFORM_SCHEMA_OPTIONAL/,
+  ],
+])
+  test(`the tool catalogue refuses ${name}`, () => {
+    const s = structuredClone(schemas);
+    change(s);
+    assert.match(inspect(catalogue, s).join("\n"), expected);
+  });
+
+test("ADR-0027 item 2: the tool-call step validates the input with the full definition", () => {
+  // Inside the strict shape, so a valid reply; outside ToolInputKnowledgeSearch's limits.
+  for (const [tool, input] of [
+    ["knowledge.search", { searchText: "returns", limit: 20 }],
+    ["knowledge.search", { searchText: "   ", limit: 5 }],
+    ["work.read", { target: "task", id: "has space" }],
+    ["products.read", { productIds: [], titleContains: null, limit: 5 }],
+  ]) {
+    assert.ok(
+      validateCurrentDefinition(toolModelInputName(toolEntry(tool).inputDefinition), input),
+      tool,
+    );
+    assert.deepEqual(
+      checkToolInput(tool, input),
+      { ok: false, outcome: "invalid_input", refusal: "input_invalid" },
+      JSON.stringify(input),
+    );
+  }
+  assert.deepEqual(checkToolInput("knowledge.search", { searchText: "returns", limit: 5 }), {
+    ok: true,
+  });
+  assert.deepEqual(checkToolInput("work.read", { target: "thread", id: null }), { ok: true });
+  // An unknown tool never reaches the tool-call step: its reply was an invalid output.
+  for (const unknown of ["sql.run", "knowledge_search", null])
+    assert.throws(() => checkToolInput(unknown, {}), ToolCatalogueError, String(unknown));
+});
+
 test("a strict schema refuses what strict tool use cannot carry exactly", () => {
   assert.throws(
     () => strictModelSchema({ oneOf: [{ type: "string" }, { type: "integer" }] }, schemas),
@@ -298,6 +392,20 @@ test("a strict schema refuses what strict tool use cannot carry exactly", () => 
   assert.throws(
     () => strictModelSchema({ anyOf: [{ type: "string" }, { type: "integer" }] }, schemas),
     /AGENT_PLATFORM_SCHEMA_UNION/,
+  );
+  // An optional property would arrive as a null its full definition refuses.
+  assert.throws(
+    () =>
+      strictModelSchema(
+        {
+          type: "object",
+          properties: { a: { type: "string" }, b: { type: "string" } },
+          required: ["a"],
+          additionalProperties: false,
+        },
+        schemas,
+      ),
+    /AGENT_PLATFORM_SCHEMA_OPTIONAL/,
   );
 });
 
