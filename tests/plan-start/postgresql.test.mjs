@@ -9,15 +9,26 @@
 // the goal record's CHECKs and guards (a client-sent start value, more than 3 measured
 // goals, `achieved` without Finish's results record, `cancelled` with open tasks, a
 // customer-tagged value, a clockless order value), a person's hand check, revise and the
-// per-viewer progress read. Synthetic fixtures only; no provider, credential or merchant
-// data. Run by `npm run lab:plan-start` (CI's postgres `work` leg).
+// per-viewer progress read. Review fixes: two cards (or an edit back to revision 1) with
+// one draft, Quick tasks only by the Owner and never revised, paused or ended, an area
+// that never ends, a project's 1 to 3 measured goals, a bounded values read and a daily
+// check cap, hand checks judged on the current measure, and a customer-class goal hidden
+// from the goal reads. Synthetic fixtures only; no provider, credential or merchant data.
+// Run by `npm run lab:plan-start` (CI's postgres `work` leg).
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
+import { createWorkApiHandler } from "../../packages/work/src/http.ts";
 import { createProjectsApiHandler } from "../../packages/work/src/projects/http.ts";
-import { planDraftsRecord, planDraftValid } from "../../packages/policy/src/projects/index.ts";
+import { projectStatements } from "../../packages/work/src/projects/sql.ts";
+import {
+  goalProgress,
+  planDraftsRecord,
+  planDraftValid,
+} from "../../packages/policy/src/projects/index.ts";
 import { validateCurrentDefinition } from "../../packages/contracts/src/validation.ts";
 import {
+  asApi,
   asCommandRole,
   fixtureGrant,
   grantInsert,
@@ -42,7 +53,7 @@ const canonical = (v) =>
           .join(",") +
         "}";
 const now = "date_trunc('milliseconds',clock_timestamp())";
-let db, release, started, P, held, open;
+let db, release, started, P, held, open, work;
 before(async () => {
   let ready;
   const opened = new Promise((resolve) => (ready = resolve));
@@ -77,6 +88,14 @@ before(async () => {
       extra.push(grantInsert(p, fixtureGrant(p, capability, verbs, fields)));
   }
   db.admin(extra.join("\n"));
+  // A is the workspace's Owner (ADR-0024: the organization's founding signup).
+  db.admin(`INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,environment_id,application_id,client_id,issuer,token_profile_revision,token_profile_digest,record_revision,state) VALUES('profile_plan_start','workos','environment_${"A".repeat(26)}','app_${"A".repeat(26)}','client_${"A".repeat(26)}','https://api.workos.com/user_management/client_${"A".repeat(26)}',1,${literal("a".repeat(64))},1,'active');
+INSERT INTO morrow_identity.organization_signups VALUES(${literal(P.A.principal)},${literal(randomUUID())},${literal("b".repeat(64))},'profile_plan_start',${literal(P.A.org)},${literal(P.A.workspace)},${literal(P.A.membership)},'owner-bootstrap-v1',clock_timestamp());`);
+  work = createWorkApiHandler({
+    origin: workFixtureOrigin,
+    connector: db.connector(),
+    now: Date.now,
+  });
   const configured = (planDrafts, goals) =>
     createProjectsApiHandler({
       origin: workFixtureOrigin,
@@ -121,6 +140,44 @@ const counts = () =>
     ]),
   );
 const commandRole = (p, statements) => db.tryRun(asCommandRole(p, statements, { end: "COMMIT" }));
+// A definer called straight from the api role in p's own context (TypeScript bypassed), so
+// its own checks under lock are proved, not the Worker's.
+const asApiRole = (p, statement) => db.tryRun(asApi(p, statement), { user: "morrow_api_worker" });
+const lastLine = (r) => r.stdout.trim().split("\n").at(-1);
+// A start document written straight by the command role, shaped as cmd_plan_start_document
+// stores it, so cmd_plan_start's own checks are reached even where the Worker refuses first.
+function insertDocument(p, { purpose, target, records, draft = null }) {
+  const id = randomUUID();
+  const nonce = sha("nonce:" + id);
+  const summary = sha("summary:" + id);
+  const targetId =
+    target.kind === "existing_project"
+      ? literal(target.projectId)
+      : target.kind === "area"
+        ? literal(target.areaTemplateId)
+        : "NULL";
+  const targetRevision = target.kind === "existing_project" ? String(target.goalRevision) : "NULL";
+  const draftSql =
+    draft === null
+      ? "NULL::jsonb"
+      : `jsonb_build_object('messageId',${literal(draft.messageId)},'revision',${draft.revision},'digest',${literal(draft.digest)})`;
+  const r = commandRole(
+    p,
+    `INSERT INTO morrow_work.plan_start_documents(organization_id,workspace_id,id,purpose,message_id,draft_revision,draft_digest,target_kind,target_id,target_revision,actor_principal_id,actor_membership_id,session_digest,nonce_digest,grant_summary_digest,canonical,digest,command_id,created_at,expires_at,consumed_at,consumed_command_id,purge_after)
+ SELECT ${literal(p.org)},${literal(p.workspace)},${literal(id)},${literal(purpose)},${draft ? literal(draft.messageId) : "NULL"},${draft ? draft.revision : "NULL"},${draft ? literal(draft.digest) : "NULL"},${literal(target.kind)},${targetId},${targetRevision},${literal(p.principal)},${literal(p.membership)},${literal(p.digest)},${literal(sha(nonce))},${literal(summary)},c,morrow_work.sha256_text(c),${literal(randomUUID())},t,t+interval '5 minutes',NULL,NULL,t+interval '5 minutes'+interval '24 hours'
+ FROM (SELECT t,jsonb_build_object('schemaVersion',1,'id',${literal(id)},'purpose',${literal(purpose)},'organizationId',${literal(p.org)},'workspaceId',${literal(p.workspace)},'actor',jsonb_build_object('principalId',${literal(p.principal)},'membershipId',${literal(p.membership)}),'draft',${draftSql},'target',${literal(JSON.stringify(target))}::jsonb,'records',${literal(JSON.stringify(records))}::jsonb,'grantSummaryDigest',${literal(summary)},'createdAt',morrow_work.utc_text(t),'expiresAt',morrow_work.utc_text(t+interval '5 minutes'))::text AS c FROM (SELECT ${now} AS t) x) y;`,
+  );
+  assert.ok(r.ok, r.stderr);
+  const digest = db.sql(
+    `SELECT digest FROM morrow_work.plan_start_documents WHERE id=${literal(id)};`,
+  );
+  return { id, digest, nonce, summary };
+}
+const startDefiner = (p, doc) =>
+  asApiRole(
+    p,
+    `SELECT outcome FROM morrow_work.cmd_plan_start(${literal(randomUUID())},${literal(sha(randomUUID()))},'lab-plan-start',${literal(doc.digest)},${literal(sha(doc.nonce))},${literal(doc.summary)},'{}');`,
+  );
 
 test("held and off: the committed switch answers 503 with no document, lock or record", async () => {
   const before = counts();
@@ -137,8 +194,15 @@ test("held and off: the committed switch answers 503 with no document, lock or r
 });
 
 let quick;
-test("Quick tasks: the person's own tap creates the one record; single use, one session, one actor", async () => {
+test("Quick tasks: the Owner's own tap creates the one record; single use, one session, one actor", async () => {
   const before = counts();
+  // Only the Owner (A) gets a Quick tasks document (ADR-0033 item 7): R holds every grant A
+  // holds but is not the Owner.
+  const notOwner = await send(open, P.R, "POST", "/plans/start-document", {
+    card: { kind: "quick_tasks" },
+  });
+  assert.equal(notOwner.status, 403);
+  assert.equal(notOwner.body.safeMessage, "Only the workspace owner can set up Quick tasks.");
   // A Member without workspace.project.create gets no document.
   const member = await send(open, P.C, "POST", "/plans/start-document", {
     card: { kind: "quick_tasks" },
@@ -237,6 +301,51 @@ test("Quick tasks: the person's own tap creates the one record; single use, one 
     card: { kind: "quick_tasks" },
   });
   assert.equal(again.status, 409);
+  assert.equal(count("goals", "area_template_id='quick_tasks'"), 1);
+
+  // The definers check the Owner themselves, before anything else: R's own document request
+  // and R's own document (written straight, as if the Worker had issued it) are refused;
+  // the Owner's same calls pass that check and meet the existing record.
+  const issueAs = (p) => {
+    const id = randomUUID();
+    const summary = sha("summary:" + id);
+    return lastLine(
+      asApiRole(
+        p,
+        `SELECT r.outcome FROM (SELECT jsonb_build_object('schemaVersion',1,'id',${literal(id)},'purpose','quick_tasks','organizationId',${literal(p.org)},'workspaceId',${literal(p.workspace)},'actor',jsonb_build_object('principalId',${literal(p.principal)},'membershipId',${literal(p.membership)}),'draft',NULL::jsonb,'target',jsonb_build_object('kind','quick_tasks'),'records',jsonb_build_object('goal',jsonb_build_object('areaTemplateId','quick_tasks')),'grantSummaryDigest',${literal(summary)},'createdAt',to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text AS c) d,
+ LATERAL morrow_work.cmd_plan_start_document(${literal(randomUUID())},${literal(sha(id))},'lab-plan-start',${literal(id)},d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),${literal(sha("nonce:" + id))},${literal(summary)}) r;`,
+      ),
+    );
+  };
+  assert.equal(issueAs(P.R), "owner_only");
+  assert.equal(issueAs(P.A), "state_conflict");
+  const quickRecords = {
+    goal: {
+      objective: "Quick tasks",
+      dueAt: null,
+      areaTemplateId: "quick_tasks",
+      successCriteria: [
+        {
+          description: "One-off jobs that fit nowhere else",
+          verificationCapabilityId: null,
+          evidenceRequired: false,
+          key: "quick_tasks",
+          measure: null,
+        },
+      ],
+    },
+    project: { title: "Quick tasks", pin: false },
+    tasks: [],
+    repeating: [],
+  };
+  const quickDocument = (p) =>
+    insertDocument(p, {
+      purpose: "quick_tasks",
+      target: { kind: "quick_tasks" },
+      records: quickRecords,
+    });
+  assert.equal(lastLine(startDefiner(P.R, quickDocument(P.R))), "owner_only");
+  assert.equal(lastLine(startDefiner(P.A, quickDocument(P.A))), "state_conflict");
   assert.equal(count("goals", "area_template_id='quick_tasks'"), 1);
 });
 
@@ -457,6 +566,52 @@ test("a Morrow card: only the asker, only the held digest; an edit keeps its tai
   assert.deepEqual(counts(), beforeRepeat);
 });
 
+test("card digests: two cards with one draft, and an edit back to revision 1, are all kept", async () => {
+  // The digest covers only the draft (PlanDraft has no message id), so two cards Morrow
+  // drafts the same, for a repeated request or two people asking the same thing, share it.
+  const same = projectCard({ title: "Same tote card" });
+  const a = insertCard(P.A, "message_same_a", 1, same);
+  assert.ok(a.ok, a.stderr);
+  const b = insertCard(P.R, "message_same_b", 1, same);
+  assert.ok(b.ok, b.stderr);
+  assert.equal(a.digest, b.digest);
+  // Each asker gets a document for their own card, by the shared digest.
+  const forA = await send(open, P.A, "POST", "/plans/start-document", {
+    messageId: "message_same_a",
+    draftDigest: a.digest,
+  });
+  assert.equal(forA.status, 201, JSON.stringify(forA.body));
+  assert.deepEqual(forA.body.document.draft, {
+    messageId: "message_same_a",
+    revision: 1,
+    digest: a.digest,
+  });
+  // A person edits revision 1, then edits it back: revision 3 holds revision 1's draft.
+  const second = insertCard(P.A, "message_same_a", 2, projectCard({ title: "Other tote card" }), {
+    editor: P.A,
+  });
+  assert.ok(second.ok, second.stderr);
+  const back = insertCard(P.A, "message_same_a", 3, same, { editor: P.A });
+  assert.ok(back.ok, back.stderr);
+  assert.equal(back.digest, a.digest);
+  assert.equal(count("plan_draft_revisions", `digest=${literal(a.digest)}`), 3);
+  // Revision 1's document is stale though its digest is current again: it binds revision 1.
+  const before = counts();
+  const stale = await send(open, P.A, "POST", "/plans/start", {
+    documentDigest: forA.body.documentDigest,
+    nonce: forA.body.nonce,
+  });
+  assert.equal(stale.status, 409);
+  assert.deepEqual(counts(), before);
+  // A new document names revision 3.
+  const forBack = await send(open, P.A, "POST", "/plans/start-document", {
+    messageId: "message_same_a",
+    draftDigest: a.digest,
+  });
+  assert.equal(forBack.status, 201, JSON.stringify(forBack.body));
+  assert.equal(forBack.body.document.draft.revision, 3);
+});
+
 test("a plan change: revised against the project's current revision; another member's record needs administer", async () => {
   const revisionOf = () =>
     Number(
@@ -566,6 +721,54 @@ test("a plan change: revised against the project's current revision; another mem
     draftDigest: admin.digest,
   });
   assert.equal(allowed.status, 201, JSON.stringify(allowed.body));
+
+  // Quick tasks is never revised (ADR-0033 item 7): a plan change aimed at its project is
+  // refused by the Worker before any document, and by the start definer under lock.
+  const quickRevision = Number(
+    db.sql(`SELECT revision FROM morrow_work.goals WHERE id=${literal(quick.goalId)};`),
+  );
+  const toQuick = {
+    ...change(P.A, quickRevision, "Measure quick tasks"),
+    target: { kind: "existing_project", projectId: quick.projectId, goalRevision: quickRevision },
+  };
+  const quickCard = insertCard(P.A, "message_change_quick", 1, toQuick);
+  assert.ok(quickCard.ok, quickCard.stderr);
+  const before = counts();
+  const refusedQuick = await send(open, P.A, "POST", "/plans/start-document", {
+    messageId: "message_change_quick",
+    draftDigest: quickCard.digest,
+  });
+  assert.equal(refusedQuick.status, 409, JSON.stringify(refusedQuick.body));
+  assert.deepEqual(counts(), before);
+  const forced = insertDocument(P.A, {
+    purpose: "plan_card",
+    target: toQuick.target,
+    draft: { messageId: "message_change_quick", revision: 1, digest: quickCard.digest },
+    records: {
+      goal: {
+        objective: toQuick.doneWhen,
+        dueAt: null,
+        areaTemplateId: null,
+        successCriteria: toQuick.goals.map((g) => ({
+          description: g.description,
+          verificationCapabilityId: null,
+          evidenceRequired: false,
+          key: g.key,
+          measure: g.measure,
+        })),
+      },
+      project: null,
+      tasks: [],
+      repeating: [],
+    },
+  });
+  assert.equal(lastLine(startDefiner(P.A, forced)), "state_conflict");
+  const [quickGoal] = db.rows(
+    `SELECT objective,revision::int AS revision,success_criteria FROM morrow_work.goals WHERE id=${literal(quick.goalId)}`,
+  );
+  assert.equal(quickGoal.objective, "Quick tasks");
+  assert.equal(quickGoal.revision, quickRevision);
+  assert.equal(quickGoal.success_criteria[0].measure, null);
 });
 
 // A measured area record, written directly by the command role (the area card needs an
@@ -633,7 +836,22 @@ test("goal records: CHECKs and guards refuse start values, a 4th measure, both k
   // At most 3 measured goals.
   const four = [0, 1, 2, 3].map((i) => ({ ...areaCriteria()[0], key: "goal_" + i }));
   r = insertGoal(P.A, "goal_four", four, { area: "'product_pages'" });
-  assert.match(r.stderr, /goals_valid_criteria/);
+  assert.match(r.stderr, /goals_(valid|project)_criteria/);
+  assert.equal(r.ok, false);
+  // A dated project or an area holds 1 to 3 goals, every one measured (ADR-0033 item 1).
+  const note = {
+    description: "A note",
+    verificationCapabilityId: null,
+    evidenceRequired: false,
+    key: "note",
+    measure: null,
+  };
+  r = insertGoal(P.A, "goal_unmeasured", [areaCriteria()[0], note], {
+    due: `${now}+interval '30 days'`,
+  });
+  assert.match(r.stderr, /goals_project_criteria/);
+  r = insertGoal(P.A, "goal_area_unmeasured", [note], { area: "'stock'" });
+  assert.match(r.stderr, /goals_project_criteria/);
   // A dated record is never an area.
   r = insertGoal(P.A, "goal_both", areaCriteria(), {
     due: `${now}+interval '30 days'`,
@@ -660,26 +878,64 @@ test("goal records: CHECKs and guards refuse start values, a 4th measure, both k
     `UPDATE morrow_work.goals SET due_at=${now}+interval '1 day',revision=3,updated_at=${now} WHERE id='goal_area';`,
   );
   assert.match(r.stderr, /GOAL_KIND_IMMUTABLE/);
-  // `achieved` needs Finish's code-computed results record at that revision.
+  // An area never ends, so its template is never blocked (at most one per template): with
+  // no task at all, neither cancelled nor achieved (even with a results record).
+  const areaResults = canonical({ goalId: "goal_area", goalRevision: 3, outcome: "achieved" });
+  for (const statement of [
+    `UPDATE morrow_work.goals SET status='cancelled',revision=3,updated_at=${now} WHERE id='goal_area';`,
+    `INSERT INTO morrow_work.goal_finish_results VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'goal_area',3,'achieved',${literal(areaResults)},${literal(sha(areaResults))},${literal(randomUUID())},${literal(P.A.principal)},${literal(P.A.membership)},${now});
+ UPDATE morrow_work.goals SET status='achieved',revision=3,updated_at=${now} WHERE id='goal_area';`,
+  ]) {
+    r = commandRole(P.A, statement);
+    assert.equal(r.ok, false);
+    assert.match(r.stderr, /AREA_NEVER_ENDS/);
+  }
+  // Quick tasks is always open: never paused, cancelled or achieved.
+  for (const status of ["paused", "cancelled", "achieved"]) {
+    r = commandRole(
+      P.A,
+      `UPDATE morrow_work.goals SET status=${literal(status)},revision=revision+1,updated_at=${now} WHERE id=${literal(quick.goalId)};`,
+    );
+    assert.equal(r.ok, false, status);
+    assert.match(r.stderr, /QUICK_TASKS_ALWAYS_OPEN/, status);
+  }
+  assert.equal(
+    db.sql(`SELECT status FROM morrow_work.goals WHERE id=${literal(quick.goalId)};`),
+    "active",
+  );
+  // `achieved` needs Finish's code-computed results record at that revision (a dated
+  // project, made active).
+  r = insertGoal(P.A, "goal_dated", areaCriteria(), { due: `${now}+interval '30 days'` });
+  assert.ok(r.ok, r.stderr);
   r = commandRole(
     P.A,
-    `UPDATE morrow_work.goals SET status='achieved',revision=3,updated_at=${now} WHERE id='goal_area';`,
+    `UPDATE morrow_work.goals SET status='active',revision=2,updated_at=${now} WHERE id='goal_dated';`,
+  );
+  assert.ok(r.ok, r.stderr);
+  r = commandRole(
+    P.A,
+    `UPDATE morrow_work.goals SET status='achieved',revision=3,updated_at=${now} WHERE id='goal_dated';`,
   );
   assert.equal(r.ok, false);
   assert.match(r.stderr, /GOAL_FINISH_RESULTS_MISSING/);
-  const results = canonical({ goalId: "goal_area", goalRevision: 3, outcome: "achieved" });
+  const results = canonical({
+    goalId: "goal_dated",
+    goalRevision: 3,
+    outcome: "achieved",
+    goals: [{ key: "pages_complete", health: "done" }],
+  });
   const withResults = db.tryRun(
     asCommandRole(
       P.A,
-      `INSERT INTO morrow_work.goal_finish_results VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'goal_area',3,'achieved',${literal(results)},${literal(sha(results))},${literal(randomUUID())},${literal(P.A.principal)},${literal(P.A.membership)},${now});
- UPDATE morrow_work.goals SET status='achieved',revision=3,updated_at=${now} WHERE id='goal_area';
- SELECT status FROM morrow_work.goals WHERE id='goal_area';`,
+      `INSERT INTO morrow_work.goal_finish_results VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'goal_dated',3,'achieved',${literal(results)},${literal(sha(results))},${literal(randomUUID())},${literal(P.A.principal)},${literal(P.A.membership)},${now});
+ UPDATE morrow_work.goals SET status='achieved',revision=3,updated_at=${now} WHERE id='goal_dated';
+ SELECT status FROM morrow_work.goals WHERE id='goal_dated';`,
     ),
   );
   assert.ok(withResults.ok, withResults.stderr);
   assert.equal(withResults.stdout.split("\n").at(-1), "achieved");
   assert.equal(
-    db.sql("SELECT status FROM morrow_work.goals WHERE id='goal_area';"),
+    db.sql("SELECT status FROM morrow_work.goals WHERE id='goal_dated';"),
     "active",
     "rolled back",
   );
@@ -738,6 +994,15 @@ test("a person's hand check, revise and the per-viewer progress", async () => {
   assert.equal((await check(P.A, { key: "pages_complete" })).status, 400);
   // A viewer without workspace.goal.measure.record.
   assert.equal((await check(P.V)).status, 403);
+  // At most 3 checks per goal, key, product row and UTC day: the third (both questions name
+  // the product) is kept, a fourth is refused and nothing is written.
+  const third = await check(P.A, { answers: ["named_this_product", "named_this_product"] });
+  assert.equal(third.status, 201, JSON.stringify(third.body));
+  const valuesBefore = count("goal_measure_values", "goal_id='goal_area'");
+  const fourth = await check(P.A);
+  assert.equal(fourth.status, 409, JSON.stringify(fourth.body));
+  assert.equal(fourth.body.code, "conflict");
+  assert.equal(count("goal_measure_values", "goal_id='goal_area'"), valuesBefore);
 
   const progress = await send(open, P.A, "GET", "/goals/goal_area/progress");
   assert.equal(progress.status, 200, JSON.stringify(progress.body));
@@ -746,6 +1011,12 @@ test("a person's hand check, revise and the per-viewer progress", async () => {
     "ai_named",
     "pages_complete",
   ]);
+  // One check day in ChatGPT: the starting point, the day's latest counted check (2 named).
+  const named = (body) => body.progress.goals.find((g) => g.key === "ai_named");
+  assert.deepEqual(
+    [named(progress.body).reason, named(progress.body).value.value],
+    ["starting_point", 2],
+  );
   // No goal view: the same 404 as an unknown record.
   assert.equal((await send(open, P.X, "GET", "/goals/goal_area/progress")).status, 404);
   assert.equal((await send(open, P.A, "GET", "/goals/goal_none/progress")).status, 404);
@@ -784,6 +1055,56 @@ test("a person's hand check, revise and the per-viewer progress", async () => {
     409,
     "an old expectedRevision",
   );
+  // A project's goals are 1 to 3, every one measured (ADR-0033 item 1): the body parser
+  // refuses an unmeasured one, and so does the definer when the Worker is passed.
+  const note = {
+    description: "A note",
+    verificationCapabilityId: null,
+    evidenceRequired: false,
+    key: "note",
+    measure: null,
+  };
+  const withNote = [areaCriteria()[0], note];
+  assert.equal(
+    (
+      await send(
+        open,
+        P.A,
+        "POST",
+        "/goals/goal_area/revise",
+        body({ expectedRevision: revision + 1, successCriteria: withNote }),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    lastLine(
+      asApiRole(
+        P.A,
+        `SELECT outcome FROM morrow_work.cmd_goal_revise(${literal(randomUUID())},${literal(sha(randomUUID()))},'lab-plan-start','goal_area',${literal(String(revision + 1))},'own','Every product has a complete listing',NULL,${literal(JSON.stringify(withNote))});`,
+      ),
+    ),
+    "invalid",
+  );
+  // A revise to another assistant: the ChatGPT checks, stored as counted, no longer count
+  // (ADR-0033 item 3), and the earlier Gemini check was never counted.
+  const switched = await send(
+    open,
+    P.A,
+    "POST",
+    "/goals/goal_area/revise",
+    body({
+      expectedRevision: revision + 1,
+      successCriteria: areaCriteria({ assistant: "gemini" }),
+    }),
+  );
+  assert.equal(switched.status, 200, JSON.stringify(switched.body));
+  const afterSwitch = await send(open, P.A, "GET", "/goals/goal_area/progress");
+  assert.equal(afterSwitch.status, 200, JSON.stringify(afterSwitch.body));
+  assert.deepEqual(
+    [named(afterSwitch.body).reason, named(afterSwitch.body).value],
+    ["not_checked_yet", null],
+  );
   // A plain v1 goal record (neither a date nor an area) is not a project: never revised here.
   const plain = insertGoal(
     P.A,
@@ -798,23 +1119,178 @@ test("a person's hand check, revise and the per-viewer progress", async () => {
     successCriteria: areaCriteria(),
   });
   assert.equal(plainRevise.status, 409);
-  // Quick tasks is never revised.
+  // Quick tasks is never revised: its unmeasured list is not a project's (400), and a
+  // measured one meets the definer's refusal (409).
   const quickRevision = Number(
     db.sql(`SELECT revision FROM morrow_work.goals WHERE id=${literal(quick.goalId)};`),
   );
-  const quickRevise = await send(open, P.A, "POST", `/goals/${quick.goalId}/revise`, {
-    expectedRevision: quickRevision,
-    objective: "Quick tasks",
-    dueAt: null,
-    successCriteria: [
-      {
-        description: "One-off jobs that fit nowhere else",
-        verificationCapabilityId: null,
-        evidenceRequired: false,
-        key: "quick_tasks",
-        measure: null,
-      },
-    ],
+  const quickRevise = (successCriteria) =>
+    send(open, P.A, "POST", `/goals/${quick.goalId}/revise`, {
+      expectedRevision: quickRevision,
+      objective: "Quick tasks",
+      dueAt: null,
+      successCriteria,
+    });
+  assert.equal(
+    (
+      await quickRevise([
+        {
+          description: "One-off jobs that fit nowhere else",
+          verificationCapabilityId: null,
+          evidenceRequired: false,
+          key: "quick_tasks",
+          measure: null,
+        },
+      ])
+    ).status,
+    400,
+  );
+  assert.equal((await quickRevise(areaCriteria())).status, 409);
+});
+
+test("a goal's values read stays bounded: thousands of values, the same judgement", async () => {
+  // 2,400 code values for the dated project's checklist goal, 72 minutes apart over 120
+  // days. The read once refused past 2,000 values; it now reads only what the judgement
+  // uses, and the judgement equals code's over every value.
+  const r = commandRole(
+    P.A,
+    `INSERT INTO morrow_work.goal_measure_values(organization_id,workspace_id,id,goal_id,key,product_id,value,observed_at,recorder_kind,recorder_principal_id,recorder_membership_id,assistant,answers,counted,read_tags,data_class,expires_at,created_at)
+ SELECT ${literal(P.A.org)},${literal(P.A.workspace)},gen_random_uuid()::text,'goal_dated','pages_complete',NULL,(n%50)+10,t-make_interval(mins=>n*72),'code',NULL,NULL,NULL,'[]',true,'[]','work',NULL,t
+ FROM (SELECT ${now} AS t) x,generate_series(1,2400) n;`,
+  );
+  assert.ok(r.ok, r.stderr);
+  assert.equal(count("goal_measure_values", "goal_id='goal_dated'"), 2400);
+  // The statement itself returns at most three rows for this one group of values.
+  const read = asApiRole(
+    P.A,
+    `PREPARE goal_values(text) AS ${projectStatements.goalValues};
+EXECUTE goal_values('goal_dated');`,
+  );
+  assert.ok(read.ok, read.stderr);
+  const rows = read.stdout
+    .trim()
+    .split("\n")
+    .filter((line) => line.includes("|"));
+  assert.ok(rows.length >= 2 && rows.length <= 3, rows.join("\n"));
+
+  const progress = await send(open, P.A, "GET", "/goals/goal_dated/progress");
+  assert.equal(progress.status, 200, JSON.stringify(progress.body));
+  const [record] = db.rows(
+    `SELECT revision::int AS revision,status,success_criteria,(extract(epoch FROM created_at)*1000)::bigint AS created_ms,(extract(epoch FROM due_at)*1000)::bigint AS due_ms FROM morrow_work.goals WHERE id='goal_dated'`,
+  );
+  const all = db.rows(
+    `SELECT key,value::float8 AS value,(extract(epoch FROM observed_at)*1000)::bigint AS at FROM morrow_work.goal_measure_values WHERE goal_id='goal_dated'`,
+  );
+  const expected = goalProgress(
+    {
+      id: "goal_dated",
+      revision: record.revision,
+      status: record.status,
+      createdAtMs: Number(record.created_ms),
+      dueAtMs: Number(record.due_ms),
+      areaTemplateId: null,
+      successCriteria: record.success_criteria,
+    },
+    all.map((v) => ({
+      key: v.key,
+      productId: null,
+      value: v.value,
+      observedAtMs: Number(v.at),
+      counted: true,
+      assistant: null,
+      readTags: [],
+      dataClass: "work",
+      expiresAtMs: null,
+    })),
+    { mayView: () => true },
+    {
+      nowMs: Date.parse(progress.body.progress.computedAt),
+      storeIds: [],
+      finished: null,
+      waitingOnViewer: false,
+      audience: "viewer",
+    },
+  );
+  assert.deepEqual(progress.body.progress, expected);
+  const latest = all.reduce((a, b) => (Number(b.at) > Number(a.at) ? b : a));
+  const facts = progress.body.progress.goals.find((g) => g.key === "pages_complete");
+  assert.equal(facts.value.value, latest.value);
+});
+
+test("goal reads: a customer-class goal is seen only by members who may read customer data", async () => {
+  const replied = {
+    description: "Replied within a day",
+    verificationCapabilityId: null,
+    evidenceRequired: false,
+    key: "replied_in_a_day",
+    measure: {
+      kind: "metric",
+      metricId: "replied_within_a_day",
+      target: 95,
+      dueAt: null,
+      startRef: null,
+    },
+  };
+  let r = insertGoal(P.A, "goal_emails", [replied], { area: "'customer_emails'" });
+  assert.ok(r.ok, r.stderr);
+  r = insertGoal(P.A, "goal_mixed", [areaCriteria()[0], replied], {
+    due: `${now}+interval '30 days'`,
   });
-  assert.equal(quickRevise.status, 409);
+  assert.ok(r.ok, r.stderr);
+  // No member here may view support.case.read on a store (none is installed), not even the
+  // Owner: the Customer emails record holds only its customer goal, so it reads as absent;
+  // the mixed record shows its other goal only.
+  assert.equal((await send(work, P.A, "GET", "/goals/goal_emails")).status, 404);
+  const mixed = await send(work, P.A, "GET", "/goals/goal_mixed");
+  assert.equal(mixed.status, 200, JSON.stringify(mixed.body));
+  assert.ok(validateCurrentDefinition("Goal", mixed.body.goal));
+  assert.deepEqual(
+    mixed.body.goal.successCriteria.map((c) => c.key),
+    ["pages_complete"],
+  );
+  assert.doesNotMatch(JSON.stringify(mixed.body), /replied/);
+  // The list leaves the Customer emails record out and trims the mixed one.
+  const listed = [];
+  for (let after = null; ; ) {
+    const page = await send(
+      work,
+      P.A,
+      "GET",
+      "/goals?limit=3" + (after === null ? "" : "&after=" + encodeURIComponent(after)),
+    );
+    assert.equal(page.status, 200, JSON.stringify(page.body));
+    listed.push(...page.body.items);
+    if (page.body.next === null) break;
+    after = page.body.next;
+  }
+  const ids = listed.map((g) => g.id);
+  assert.ok(!ids.includes("goal_emails"));
+  assert.ok(ids.includes("goal_mixed") && ids.includes("goal_area") && ids.includes(quick.goalId));
+  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(ids.length, count("goals") - 1);
+  assert.doesNotMatch(JSON.stringify(listed), /replied/);
+  // The progress read and a revise answer the same 404 for the Customer emails record; a
+  // revise of the mixed record is refused (it would replace a goal its author cannot see).
+  assert.equal((await send(open, P.A, "GET", "/goals/goal_emails/progress")).status, 404);
+  const revise = (goalId, dueAtValue) =>
+    send(open, P.A, "POST", `/goals/${goalId}/revise`, {
+      expectedRevision: 1,
+      objective: "Every product has a complete listing",
+      dueAt: dueAtValue,
+      successCriteria: [areaCriteria()[0]],
+    });
+  assert.equal((await revise("goal_emails", null)).status, 404);
+  assert.equal((await revise("goal_mixed", dueAt)).status, 403);
+  const progress = await send(open, P.A, "GET", "/goals/goal_mixed/progress");
+  assert.equal(progress.status, 200, JSON.stringify(progress.body));
+  assert.deepEqual(
+    progress.body.progress.goals.map((g) => g.key),
+    ["pages_complete"],
+  );
+  assert.equal(
+    db.sql(
+      "SELECT jsonb_array_length(success_criteria) FROM morrow_work.goals WHERE id='goal_mixed';",
+    ),
+    "2",
+  );
 });
