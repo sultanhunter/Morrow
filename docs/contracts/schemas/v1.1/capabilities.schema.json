@@ -528,6 +528,121 @@
         "revision"
       ],
       "additionalProperties": false
+    },
+    "workspace.goal.revise.input": {
+      "description": "ADR-0033 item 5: a person revises a goal record (human_only): the objective, the date (Extend), targets, questions and assistant, within 3 measured goals. A stored measure's startRef stays null; the server derives it.",
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "objective": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/GoalObjective"
+        },
+        "dueAt": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableUtcTime"
+        },
+        "successCriteria": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/GoalCriteria"
+        }
+      },
+      "required": [
+        "goalId",
+        "expectedRevision",
+        "objective",
+        "dueAt",
+        "successCriteria"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.goal.revise.output": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.goal.measure.record.input": {
+      "description": "ADR-0033 item 4: a person records one hand-check row (human_only). Its value, read tags, class and clock are computed by the server; a check in another assistant than the goal's is kept but never counts.",
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "key": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/GoalKey"
+        },
+        "productId": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ListingProductId"
+        },
+        "assistant": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/GoalAssistant"
+        },
+        "answers": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/GoalCheckAnswers"
+        }
+      },
+      "required": [
+        "goalId",
+        "key",
+        "productId",
+        "assistant",
+        "answers"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.goal.measure.record.output": {
+      "type": "object",
+      "properties": {
+        "valueId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "counted": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/Boolean"
+        }
+      },
+      "required": [
+        "valueId",
+        "counted"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.routine.configure.input": {
+      "description": "ADR-0033 item 8: a routine or recurring task names its goal record, and an alert also the goal's key. A configure revision of an active routine leaves it disabled and never activates it (workspace.routine.activate, human_only, does).",
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "schedule": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ScheduleRef"
+        },
+        "mandate": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/MandateRef"
+        },
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "goalKey": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableGoalKey"
+        }
+      },
+      "required": [
+        "installationId",
+        "schedule",
+        "mandate",
+        "goalId",
+        "goalKey"
+      ],
+      "additionalProperties": false
     }
   }
 }

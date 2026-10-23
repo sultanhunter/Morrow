@@ -1,5 +1,5 @@
 import type { Current_ResourceList } from "@morrow/contracts";
-import { validateDefinition } from "@morrow/contracts/validation";
+import { validateCurrentDefinition, validateDefinition } from "@morrow/contracts/validation";
 
 // Closed request bodies (P06.T01a §4.9), built on the generated v1 leaf
 // validators; there is no runtime schema compilation. Each parser returns a fresh
@@ -81,8 +81,11 @@ export function parseGoalCreate(value: unknown): GoalCreateBody | null {
     !r ||
     !workText(r.objective) ||
     !validateDefinition("core", "IdList", r.storeIds) ||
-    !validateDefinition("core", "CriteriaList", r.successCriteria) ||
-    (r.successCriteria as unknown[]).length > workBodyLimits.successCriteria
+    !validateCurrentDefinition("CriteriaList", r.successCriteria) ||
+    (r.successCriteria as unknown[]).length > workBodyLimits.successCriteria ||
+    // POST /goals keeps the v1 shape: a measured goal (ADR-0033) belongs to a project's
+    // goal record and is made by the plan start or workspace.goal.revise, never here.
+    (r.successCriteria as Record<string, unknown>[]).some((c) => "key" in c || "measure" in c)
   )
     return null;
   return structuredClone(r) as unknown as GoalCreateBody;

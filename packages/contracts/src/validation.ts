@@ -123,6 +123,28 @@ const storeBound = (ref: unknown) => {
 };
 const scopeStoresBound = (scope: unknown) =>
   (scope as { resources: readonly unknown[] }).resources.every(storeBound);
+// A CriteriaList that already passed its v1.1 schema (ADR-0033 item 2): a goal's key is
+// unique in its record. JSON Schema cannot compare items, so the rule is checked here.
+type Criterion = { key?: string; measure?: { dueAt: string | null } | null };
+const keysUnique = (list: unknown) => {
+  const keys = (list as readonly Criterion[]).flatMap((c) => (c.key === undefined ? [] : [c.key]));
+  return new Set(keys).size === keys.length;
+};
+// A Goal that already passed its v1.1 schema: unique keys, and no measure due after its
+// dated record (ADR-0033 item 2; flow-contracts.md).
+const goalMeasured = (goal: unknown) => {
+  const g = goal as { dueAt?: string | null; successCriteria: readonly Criterion[] };
+  if (!keysUnique(g.successCriteria)) return false;
+  if (typeof g.dueAt !== "string") return true;
+  const due = Date.parse(g.dueAt);
+  return g.successCriteria.every(
+    (c) =>
+      c.measure === undefined ||
+      c.measure === null ||
+      c.measure.dueAt === null ||
+      Date.parse(c.measure.dueAt) <= due,
+  );
+};
 /**
  * Effective definition: the newest core layer that defines the name. For
  * EventEnvelope (@2), and a StreamFrame carrying one, this is the schema plus
@@ -130,8 +152,9 @@ const scopeStoresBound = (scope: unknown) =>
  * AskAdminReadRecord, the schema plus its reader and uniqueness rules; for
  * ResourceRef, Scope, Grant and AgentInstallation (v1.1), the schema plus the store
  * rule (a store resource's id is its storeId), applied to every resource a scope,
- * grant or installation scope names. Product code validates these seven only here,
- * never by their exact selectors.
+ * grant or installation scope names; for CriteriaList and Goal (v1.1, ADR-0033), the
+ * schema plus unique goal keys and, for a dated goal record, no measure due after it.
+ * Product code validates these nine only here, never by their exact selectors.
  */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
   if (!selected(currentDefinitionSelectors, name, value)) return false;
@@ -145,6 +168,8 @@ export function validateCurrentDefinition(name: CurrentDefinitionName, value: un
   if (name === "Scope") return scopeStoresBound(value);
   if (name === "Grant" || name === "AgentInstallation")
     return scopeStoresBound((value as { scope: unknown }).scope);
+  if (name === "CriteriaList") return keysUnique(value);
+  if (name === "Goal") return goalMeasured(value);
   return true;
 }
 /** Effective billing definition: the newest billing layer that defines the name (ADR-0015). */

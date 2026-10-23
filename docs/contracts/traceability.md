@@ -28,6 +28,8 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | workspace.project.pin | J01 | P07.T03, P14.T01 | P01.A01, P14.A01 | D01 |
 | workspace.inbox.read | J01 | P07.T03, P14.T03 | P01.A01, P07.A03 | D01 |
 | workspace.inbox.mark | J01 | P07.T03 | P01.A01, P07.A03 | D01 |
+| workspace.goal.revise | J01 | P06.T01, P07.T03, P14.T02 | P01.A01, P06.A01 | D01 |
+| workspace.goal.measure.record | J01 | P06.T01, P10.T02 | P01.A01, P06.A01 | D01 |
 | catalog.products.read | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D02 |
 | catalog.audit.create | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |
 | catalog.content.propose | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |

@@ -33,7 +33,7 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | workspace.comment.create | human_or_bounded_installation_with_explicit_capability_grant | comment body, anchor | Grant checks | agent_direct_write | No |
 | workspace.knowledge.approve | eligible_human_reviewer_with_explicit_decision_grant | claims, policies, source references | Grant checks | human_only | No |
 | workspace.knowledge.read | human_or_bounded_installation_with_explicit_capability_grant | approved knowledge fields | Grant checks | agent_direct_read | No |
-| workspace.routine.configure | human_or_bounded_installation_with_explicit_capability_grant | trigger, timezone, overlap policy, mandate | Grant checks | agent_direct_write | No |
+| workspace.routine.configure | human_or_bounded_installation_with_explicit_capability_grant | trigger, timezone, overlap policy, mandate, goal record | Grant checks | agent_direct_write | No |
 | workspace.routine.activate | human_or_bounded_installation_with_explicit_capability_grant | active schedule | Required | human_only | No |
 | workspace.conversation.create | human_or_bounded_installation_with_explicit_capability_grant | store, subject | Grant checks | human_only | No |
 | workspace.conversation.post | human_or_bounded_installation_with_explicit_capability_grant | parts, reply, sources | Grant checks | agent_direct_write | No |
@@ -42,6 +42,8 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | workspace.project.pin | human_or_bounded_installation_with_explicit_capability_grant | pin, order | Grant checks | human_only | No |
 | workspace.inbox.read | human_or_bounded_installation_with_explicit_capability_grant | kind, subject, decision state, read state | Grant checks | human_only | No |
 | workspace.inbox.mark | human_or_bounded_installation_with_explicit_capability_grant | read state | Grant checks | human_only | No |
+| workspace.goal.revise | human_or_bounded_installation_with_explicit_capability_grant | objective, end date, targets, check questions, assistant | Grant checks | human_only | No |
+| workspace.goal.measure.record | human_or_bounded_installation_with_explicit_capability_grant | goal, product row, assistant, answers | Grant checks | human_only | No |
 | catalog.products.read | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO, variants, media, tags | Grant checks | agent_direct_read | No |
 | catalog.audit.create | human_or_bounded_installation_with_explicit_capability_grant | catalog facts, approved claims | Grant checks | agent_direct_write | No |
 | catalog.content.propose | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description, tags | Grant checks | agent_direct_write | No |

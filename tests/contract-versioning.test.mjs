@@ -142,6 +142,9 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
       ["definition", "Scope", "ADR-0022"],
       ["definition", "Grant", "ADR-0022"],
       ["definition", "AgentInstallation", "ADR-0022"],
+      ["definition", "CriteriaList", "ADR-0033"],
+      ["definition", "Goal", "ADR-0033"],
+      ["capability_body", "workspace.routine.configure.input", "ADR-0033"],
     ],
   );
   const prefixes = {
@@ -350,6 +353,8 @@ test("AC11: product code cannot validate or type a replaced v1 definition", () =
     "Scope",
     "Grant",
     "AgentInstallation",
+    "CriteriaList",
+    "Goal",
   ]);
   const check = (path, code) => inspectSupersededUse(path, code, replaced);
   assert.deepEqual(
@@ -452,13 +457,14 @@ test("ADR-0022 item 2: core ResourceRef, Scope and Grant are declared supersets 
   assert.deepEqual(grant.properties.scope, { $ref: "#/$defs/Scope" });
   grant.properties.scope = { $ref: "urn:morrow:contracts:core:v1#/$defs/Scope" };
   assert.deepEqual(grant, absolute(v1Defs.Grant));
-  // The declared core supersets are exactly these three and M3 PR-1's AgentInstallation
-  // (below); every other core replacement stays incompatible in both directions.
+  // The declared core supersets are exactly these three, M3 PR-1's AgentInstallation and
+  // ADR-0033's CriteriaList and Goal (below); every other core replacement stays
+  // incompatible in both directions.
   assert.deepEqual(
     changes.changes
       .filter((c) => c.kind === "definition" && /superset of v1/i.test(c.reason))
       .map((c) => c.name),
-    ["ResourceRef", "Scope", "Grant", "AgentInstallation"],
+    ["ResourceRef", "Scope", "Grant", "AgentInstallation", "CriteriaList", "Goal"],
   );
   assert.match(changes.policy, /ResourceRef, Scope and Grant \(ADR-0022 item 2\) are supersets/);
   // Every P01.A02 case for them keeps its verdict under the current definition.
@@ -627,6 +633,105 @@ test("ADR-0022 items 2 and 16: ModelSelection keys are opaque pattern-checked st
     assert.equal(validateCurrentDefinition("CreditsPerProductCeiling", bad), false, String(bad));
   assert.equal(validateCurrentDefinition("NullableRevision", null), true);
   assert.equal(validateCurrentDefinition("NullableRevision", 0), false);
+});
+
+// --- PR 18: measured goals (ADR-0033 item 2) -----------------------------------
+test("ADR-0033 item 2: core CriteriaList and Goal are declared supersets of v1", () => {
+  const v1Defs = layered.core.$defs,
+    v11Defs = layered["core-v1.1"].$defs;
+  const absolute = (value) =>
+    JSON.parse(
+      JSON.stringify(value).replaceAll('"#/$defs/', '"urn:morrow:contracts:core:v1#/$defs/'),
+    );
+  // Structurally: CriteriaList is v1's plus the optional key and measure, the key rule and
+  // the at-most-3 measured rule; Goal is v1's plus the optional dueAt and areaTemplateId,
+  // the never-both rule and the v1.1 CriteriaList.
+  const criteria = structuredClone(v11Defs.CriteriaList);
+  assert.match(criteria.description, /superset of v1/);
+  delete criteria.description;
+  assert.deepEqual(Object.keys(criteria.items.properties).slice(-2), ["key", "measure"]);
+  delete criteria.items.properties.key;
+  delete criteria.items.properties.measure;
+  delete criteria.items.allOf;
+  assert.equal(criteria.maxContains, 3);
+  delete criteria.contains;
+  delete criteria.minContains;
+  delete criteria.maxContains;
+  assert.deepEqual(criteria, absolute(v1Defs.CriteriaList));
+  const goal = structuredClone(v11Defs.Goal);
+  assert.match(goal.description, /superset of v1/);
+  delete goal.description;
+  assert.deepEqual(Object.keys(goal.properties).slice(-2), ["dueAt", "areaTemplateId"]);
+  delete goal.properties.dueAt;
+  delete goal.properties.areaTemplateId;
+  delete goal.allOf;
+  assert.deepEqual(goal.properties.successCriteria, { $ref: "#/$defs/CriteriaList" });
+  goal.properties.successCriteria = { $ref: "urn:morrow:contracts:core:v1#/$defs/CriteriaList" };
+  assert.deepEqual(goal, absolute(v1Defs.Goal));
+  assert.match(
+    changes.policy,
+    /core Goal and CriteriaList \(ADR-0033 item 2\) are supersets of v1/,
+  );
+  // Every P01.A02 goal and criteria case keeps its verdict under the current definition.
+  const fixtures = json("docs/contracts/fixtures/P01.A02.json").filter(
+    (f) => f.kind === "schema" && ["Goal", "CriteriaList"].includes(f.definition),
+  );
+  assert.ok(fixtures.length >= 1);
+  for (const f of fixtures)
+    assert.equal(validateCurrentDefinition(f.definition, f.value), f.valid, f.id);
+  // The additions: v1 refuses them (a v1 reader fails closed); the current definition
+  // takes them, with its code rules.
+  const measure = {
+    kind: "checklist",
+    checklistId: "product_facts_complete",
+    productIds: ["product:1"],
+    target: 12,
+    dueAt: "2026-11-13T00:00:00Z",
+    startRef: null,
+  };
+  const measured = [
+    { description: "Page complete", verificationCapabilityId: null, evidenceRequired: false },
+    {
+      description: "12 of 12 facts",
+      verificationCapabilityId: null,
+      evidenceRequired: false,
+      key: "facts",
+      measure,
+    },
+  ];
+  assert.equal(validateDefinition("core", "CriteriaList", measured), false);
+  assert.equal(validateCurrentDefinition("CriteriaList", measured), true);
+  const baseGoal = json("docs/contracts/fixtures/P01.A02.json").find(
+    (f) => f.kind === "schema" && f.definition === "Goal" && f.valid,
+  ).value;
+  const dated = {
+    ...baseGoal,
+    successCriteria: measured,
+    dueAt: "2026-12-04T00:00:00Z",
+    areaTemplateId: null,
+  };
+  assert.equal(validateDefinition("core", "Goal", dated), false);
+  assert.equal(validateCurrentDefinition("Goal", dated), true);
+  const area = { ...dated, dueAt: null, areaTemplateId: "product_pages" };
+  assert.equal(validateCurrentDefinition("Goal", area), true);
+  // Never both; a measured item needs its key; at most 3 measured; unique keys (code);
+  // no measure due after a dated record (code); no unknown measure kind.
+  const item = (key, extra = {}) => ({ ...measured[1], key, measure: { ...measure, ...extra } });
+  for (const [name, value] of [
+    ["both", { ...dated, areaTemplateId: "stock" }],
+    ["keyless", { ...dated, successCriteria: [{ ...measured[1], key: undefined }] }],
+    ["four", { ...dated, successCriteria: ["a", "b", "c", "d"].map((k) => item(k)) }],
+    ["duplicate", { ...dated, successCriteria: [item("a"), item("a")] }],
+    ["late", { ...dated, successCriteria: [item("a", { dueAt: "2026-12-05T00:00:00Z" })] }],
+    ["kind", { ...dated, successCriteria: [item("a", { kind: "model_judged" })] }],
+    ["badKey", { ...dated, successCriteria: [item("Facts")] }],
+  ])
+    assert.equal(validateCurrentDefinition("Goal", JSON.parse(JSON.stringify(value))), false, name);
+  assert.equal(
+    validateCurrentDefinition("Goal", { ...dated, successCriteria: ["a", "b", "c"].map(item) }),
+    true,
+  );
+  assert.equal(validateCurrentDefinition("CriteriaList", [item("a"), item("a")]), false);
 });
 
 // --- P01.T04a PR-A: billing routes by origin (ADR-0015) --------------------------

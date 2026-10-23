@@ -205,9 +205,21 @@ const v1EnvelopeValue = {
 // @ts-expect-error a v1 envelope (schemaVersion 1, ArtifactRef payloadRef, no payload) is not EventEnvelope@2
 const v1Envelope: Current_EventEnvelope = v1EnvelopeValue;
 type PartKind = Current_Message["parts"][number]["kind"];
-type SixKinds = "text" | "artifact" | "proposal" | "question" | "evidence_summary" | "mention";
-const partKinds: [PartKind] extends [SixKinds]
-  ? [SixKinds] extends [PartKind]
+// The six P01.T02c kinds and ADR-0034 item 9's five.
+type PartKinds =
+  | "text"
+  | "artifact"
+  | "proposal"
+  | "question"
+  | "evidence_summary"
+  | "mention"
+  | "plan_card"
+  | "plan_change_card"
+  | "choice_question"
+  | "project_update"
+  | "checkup_done";
+const partKinds: [PartKind] extends [PartKinds]
+  ? [PartKinds] extends [PartKind]
     ? true
     : false
   : false = true;
