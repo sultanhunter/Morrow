@@ -172,6 +172,13 @@ export interface ApiBrokerRpc {
     variablesJson: string,
     budgetMs: number,
   ): Promise<string>;
+  // "Disconnect store" (ADR-0022 items 7 and 13; the M2 brief's PR-3 checklist): after the
+  // api's disconnect committed, destroys that installation's offline token and records the
+  // destruction on it. The reason is fixed (`disconnected`): the api can destroy only a token
+  // whose installation records a person's disconnect, and the vault refuses any other
+  // (ineligible). The closed result is encodeShopifyCredentialResult's; a held broker throws
+  // BROKER_HELD. Idempotent: the connector's cron re-drives one that did not complete.
+  shopifyCredentialDestroy(installationId: string): Promise<string>;
 }
 // M2 PR-1 (ADR-0022 item 7, spine §4): the connector's and the orchestrator's own
 // entrypoints. PR-1 gives each its health and its own role lease; the Shopify and model

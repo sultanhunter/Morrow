@@ -585,27 +585,62 @@ test("only the founding principal holds agents.installation.activate: M3 never i
     id: "g4",
   });
   assert.equal(disable.capabilityId, "agents.installation.disable");
-  // No migration's code names agents.installation.activate except M2's template row and
-  // the review-capability row (0018); M3's migrations name it in comments only.
+  // No migration's code names agents.installation.activate except M2's template rows (its
+  // version 1, and version 2 with the disconnect backfill's match on version 1's activate
+  // row) and the review-capability row (0018); M3's migrations name it in comments only.
   const named = manifest.migrations
     .filter((m) =>
       code(readFileSync("migrations/" + m.file, "utf8")).includes("agents.installation.activate"),
     )
     .map((m) => m.file.replace(/^[0-9]+\./, ""));
-  assert.deepEqual(named, ["approval-records.sql", "shopify-install-identity.sql"]);
-  // The template is issued only by link_workspace_store (CREATE, REVOKE and one use in all
-  // migrations), only when applied, and only to the founding principal: any other actor
-  // is actor_ineligible.
-  const uses = manifest.migrations.flatMap((m) => [
-    ...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(/store_link_grants_v1\(\)/g),
+  assert.deepEqual(named, [
+    "approval-records.sql",
+    "shopify-install-identity.sql",
+    "disconnect-store-identity.sql",
   ]);
-  assert.equal(uses.length, 3);
-  const link =
+  // The template is issued only by link_workspace_store, only when applied, and only to the
+  // founding principal: any other actor is actor_ineligible. Version 1: CREATE, REVOKE and
+  // 0026's link (and the disconnect migration's prerequisite check); version 2: the identity
+  // migration's prerequisite check, CREATE, REVOKE and the one link that replaces 0026's,
+  // and the work migration's prerequisite check.
+  const uses = (pattern) =>
+    manifest.migrations.flatMap((m) =>
+      [...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(pattern)].map(
+        () => m.file.replace(/^[0-9]+\./, ""),
+      ),
+    );
+  assert.deepEqual(uses(/store_link_grants_v1\(\)/g), [
+    "shopify-install-identity.sql",
+    "shopify-install-identity.sql",
+    "shopify-install-identity.sql",
+    "disconnect-store-identity.sql",
+  ]);
+  assert.deepEqual(uses(/store_link_grants_v2\(\)/g), [
+    "disconnect-store-identity.sql",
+    "disconnect-store-identity.sql",
+    "disconnect-store-identity.sql",
+    "disconnect-store-identity.sql",
+    "disconnect-store-work.sql",
+  ]);
+  // Version 2's only issuing use is the link.
+  assert.equal(
+    code(migration("disconnect-store-identity")).split("FROM morrow_identity.store_link_grants_v2() x")
+      .length,
+    2,
+  );
+  const linkOf = (sql) =>
     /CREATE OR REPLACE FUNCTION morrow_identity\.link_workspace_store\([\s\S]*?END \$\$;/.exec(
-      code(shopifySql),
+      code(sql),
     )?.[0];
-  assert.ok(link, "link_workspace_store");
+  const link = linkOf(shopifySql);
+  const linkV2 = linkOf(migration("disconnect-store-identity"));
+  assert.ok(link && linkV2, "link_workspace_store");
   assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
+  // The current definition is 0026's with exactly the template version changed.
+  assert.equal(
+    linkV2,
+    link.replace("store_link_grants_v1() x", "store_link_grants_v2() x"),
+  );
   assert.ok(
     link.includes(
       "owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s\n   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);",

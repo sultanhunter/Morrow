@@ -2,6 +2,7 @@ import { agentStatements } from "./agents/sql.js";
 import { approvalStatements } from "./approvals/sql.js";
 import { billingStatements } from "./billing/sql.js";
 import { catalogStatements } from "./catalog/sql.js";
+import { connectionStatements } from "./connections/sql.js";
 import { runStatements } from "./runs/sql.js";
 import { spineStatements } from "./spine-sql.js";
 
@@ -77,5 +78,7 @@ export const workStatements = Object.freeze({
   ...catalogStatements,
   // M3 PR-2: run admission, the stale-run close and the run reads.
   ...runStatements,
+  // "Disconnect store": the connection's target and stop, and the disconnect command.
+  ...connectionStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

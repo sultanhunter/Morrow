@@ -304,6 +304,20 @@
       "sha256": "4ca704d37e3e788ba86921be00a3e3b959858eb25a1997f5d2be5d21f42cddc0",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 39,
+      "file": "0039.disconnect-store-identity.sql",
+      "sha256": "8d84e3ecbe55b278161243dae6985ffa3a57fd208e7aa062bf4d1b590563aac0",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
+    },
+    {
+      "sequence": 40,
+      "file": "0040.disconnect-store-work.sql",
+      "sha256": "ae346a7bd5d2b6062f6ee718f98dd70a7fa47d46a917ea9eb41e31fd5f556e13",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
     }
   ]
 }

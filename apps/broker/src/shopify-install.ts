@@ -721,6 +721,8 @@ const live = createShopifyBroker({
 });
 const connector = <T>(method: BrokerMethod, run: () => Promise<T>) =>
   invokeBrokerMethod(method, run, "ConnectorBroker");
+const api = <T>(method: BrokerMethod, run: () => Promise<T>) =>
+  invokeBrokerMethod(method, run, "ApiBroker");
 
 export function brokerShopifyLaunchVerify(env: unknown, appKey: unknown, rawQuery: unknown) {
   return connector("shopifyLaunchVerify", () => live.launchVerify(env, appKey, rawQuery));
@@ -753,5 +755,12 @@ export function brokerShopifyCredentialDestroy(
 ) {
   return connector("shopifyCredentialDestroy", () =>
     live.credentialDestroy(env, installationId, reason),
+  );
+}
+// "Disconnect store": the api's half of the same destruction, with the reason fixed to a
+// person's disconnect (the vault refuses an installation that records any other end).
+export function brokerShopifyDisconnectDestroy(env: unknown, installationId: unknown) {
+  return api("shopifyCredentialDestroy", () =>
+    live.credentialDestroy(env, installationId, "disconnected"),
   );
 }
