@@ -6,7 +6,7 @@
 // and the values that viewer may see; a screen never computes a value, word or estimate.
 import type { Id } from "../model";
 
-/** The health words code computes (ADR-0033 item 4; `docs/briefs/flow-contracts.md`). */
+/** The health words code computes (ADR-0033 item 4; the flow-contracts brief). */
 export const healthWords = [
   "on_track",
   "behind",
