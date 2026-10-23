@@ -1,6 +1,6 @@
 # ADR-0034 Morrow drafts plans: plan cards, a person-bound plan start, Morrow in Asks and @Morrow in projects
 
-- Status: Proposed
+- Status: Accepted 2026-10-24 (the owner, OD-2026-10-24-1: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: none.
 - Amends: ADR-0023 decision 1's Coordinator line (item 1); ADR-0027 items 3 and 8 (`plan.draft`, item 2; `agent.route` in an Ask, item 7) and item 10's `report@1` (item 9); `collaboration.md` v1.1's message parts, author, origin and mention targets (items 8 and 9); ADR-0031 item 1's "Start documents" row (item 5).
@@ -79,4 +79,8 @@ None is weakened.
 
 ## Approval
 
-Pending. The owner's answers will be quoted here verbatim with their dates.
+The owner's statement in chat, verbatim, on 2026-10-24 (IST), after reading the decision sheet (`docs/decisions/decision-sheet-2026-10-26-flow.md`) and a plain-language summary of both records with their questions and recommendations (OD-2026-10-24-1):
+
+> approve ADR-0033 and ADR-0034 as recommended
+
+What it approves: this record as written and each owner question above with its recommended answer. It follows the owner's approval of the UX flow recommendation (OD-2026-10-23-8), which asked for this record.

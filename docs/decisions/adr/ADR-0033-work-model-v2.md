@@ -1,6 +1,6 @@
 # ADR-0033 Work model v2: projects hold measured goals; Everyday work and Quick tasks
 
-- Status: Proposed
+- Status: Accepted 2026-10-24 (the owner, OD-2026-10-24-1: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: none.
 - Amends: `collaboration.md` v1.1's "Projects" bullet (item 1); the v1 `Goal` and `CriteriaList`, and `work-api.md` (item 2); migration 0015's criteria CHECK, goal guards and task cap, by forward migrations, and `work-state.md`'s notes on them (items 2, 5 and 7); `capabilities.json` (items 4, 5, 8 and 11); ADR-0022 item 2's listing contracts and `creative.media.attach` (item 10); ADR-0031 item 1 (item 4).
@@ -74,4 +74,8 @@ None is weakened.
 
 ## Approval
 
-Pending. The owner's answers will be quoted here verbatim with their dates.
+The owner's statement in chat, verbatim, on 2026-10-24 (IST), after reading the decision sheet (`docs/decisions/decision-sheet-2026-10-26-flow.md`) and a plain-language summary of both records with their questions and recommendations (OD-2026-10-24-1):
+
+> approve ADR-0033 and ADR-0034 as recommended
+
+What it approves: this record as written and each owner question above with its recommended answer. It follows the owner's approval of the UX flow recommendation (OD-2026-10-23-8), which asked for this record.

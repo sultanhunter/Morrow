@@ -1,5 +1,7 @@
 # Decision sheet, week 0 (2026-10-26): the core flow, ADR-0033 and ADR-0034
 
+**Answered 2026-10-24:** "approve ADR-0033 and ADR-0034 as recommended" (OD-2026-10-24-1). Both records are accepted, every question with its recommended answer.
+
 The weekly decision sheet (ADR-0023 decision 10), second sheet for W0. On 2026-10-23 you approved the UX flow recommendation's eight answers ("approve all as recommended", OD-2026-10-23-8). Answer 2 asked for two records before code: [ADR-0033](adr/ADR-0033-work-model-v2.md) and [ADR-0034](adr/ADR-0034-morrow-drafts-plans.md). Both are proposed and material under ADR-0002: they change public contracts and the Coordinator's authority, and ADR-0033 also changes data retention. No code that depends on one merges before your approval. They are needed by T2's contract week, W1 (2026-11-02 to 2026-11-06). Neither weakens a security invariant: Morrow still creates nothing shared without a person's tap, and every store change, discount and customer email still needs a person's approval of the exact change. "The Owner" below is the workspace's designated owner.
 
 Not at launch, as you approved: a finished step starting the next agent by itself (it needs its own ADR on how runs start) and "Orders from AI assistants" as a goal measure (it needs new order fields, unless T8 finds the existing ones suffice).
