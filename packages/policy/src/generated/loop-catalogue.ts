@@ -2,10 +2,12 @@
 // (ADR-0027 items 6 and 12; PR 10). Do not edit; run `npm run contracts:generate`.
 // The agent-loop versions only: opaque keys, exact 10^-12 USD integers, pinned version
 // digests. A proposed version is data for previews and tests; admission takes only a
-// published one. Provider model IDs are for the broker and never reach an api response.
+// published one. activeVersion is the loop shape's own pointer (null until a loop version
+// publishes); the per-product pointer is model-catalogue.ts's. Provider model IDs are for
+// the broker and never reach an api response.
 export const generatedLoopCatalogue = {
   id: "morrow-model-catalogue",
-  activeVersion: 1,
+  activeVersion: null,
   versions: [
     {
       version: 2,

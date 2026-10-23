@@ -131,6 +131,13 @@ export function catalogueVersionDigest(entry) {
   return sha(canonicalJson(content));
 }
 
+// The two run shapes of the catalogue (PR 10): a version without `run_shape` is a
+// per-product version (listings-run@1, ADR-0022); `agent_loop` is a loop version
+// (agent-run@1, ADR-0027). Each shape has its own active pointer in `active_versions`.
+export const RUN_SHAPES = ["per_product", "agent_loop"];
+export const runShapeOf = (entry) =>
+  entry.run_shape === undefined ? "per_product" : entry.run_shape;
+
 // A loop version (ADR-0027 items 6 and 12; PR 10): per-turn prices of four token kinds, no
 // per-product credits (the rate card prices runs, ADR-0026 item 5). Every entry's worst-case
 // turn is the input cap at the 5-minute cache-write rate (the dearest input rate) plus the
@@ -502,13 +509,35 @@ export function inspectModelPolicy(policy, registry) {
   const versions = Array.isArray(catalogue.versions) ? catalogue.versions : [];
   const pinned = catalogue.published_digests ?? {};
   if (versions.length === 0) fail("model catalogue: no versions");
-  // Statuses run retired*, active?, proposed*, and versions count up from 1.
-  const order = versions.map((entry) => entry.status?.[0] ?? "?").join("");
-  if (!/^r*a?p*$/.test(order) || versions.some((entry) => !VERSION_STATUSES.includes(entry.status)))
-    fail("model catalogue: statuses must run retired, then at most one active, then proposed");
-  const active = versions.filter((entry) => entry.status === "active");
-  if ((catalogue.active_version ?? null) !== (active[0]?.version ?? null))
-    fail("model catalogue: active_version does not name the active version");
+  if (versions.some((entry) => !VERSION_STATUSES.includes(entry.status)))
+    fail("model catalogue: a version has an unknown status");
+  // Each run shape has its own active pointer (ADR-0027 item 4; PR 10): version 1 stays active
+  // for listings-run@1 while a loop version publishes. Within one shape, statuses run
+  // retired*, active?, proposed*; versions count up from 1 across both shapes.
+  if (Object.hasOwn(catalogue, "active_version"))
+    fail("model catalogue: active_version is replaced by active_versions, one per run shape");
+  const pointers = catalogue.active_versions;
+  if (
+    pointers === null ||
+    typeof pointers !== "object" ||
+    Array.isArray(pointers) ||
+    JSON.stringify(Object.keys(pointers).sort()) !== JSON.stringify([...RUN_SHAPES].sort())
+  )
+    fail(`model catalogue: active_versions must name exactly ${RUN_SHAPES.join(" and ")}`);
+  for (const shape of RUN_SHAPES) {
+    const own = versions.filter((entry) => runShapeOf(entry) === shape);
+    const order = own.map((entry) => entry.status?.[0] ?? "?").join("");
+    if (!/^r*a?p*$/.test(order))
+      fail(
+        `model catalogue: ${shape} statuses must run retired, then at most one active, then proposed`,
+      );
+    const active = own.filter((entry) => entry.status === "active");
+    const pointer = pointers?.[shape];
+    if (pointer !== null && !Number.isInteger(pointer))
+      fail(`model catalogue: active_versions.${shape} must be a version number or null`);
+    else if ((pointer ?? null) !== (active[0]?.version ?? null))
+      fail(`model catalogue: active_versions.${shape} does not name its active version`);
+  }
   const report = [];
   versions.forEach((entry, index) => {
     if (entry.version !== index + 1)

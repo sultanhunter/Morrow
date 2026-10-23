@@ -4,9 +4,19 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { generateLoopCatalogue, loopCataloguePath } from "../scripts/generate-model-catalogue.mjs";
-import { inspectModelPolicy, loopCallBudgetMs } from "../scripts/provider-checks.mjs";
 import {
+  generateLoopCatalogue,
+  loopCatalogueData,
+  loopCataloguePath,
+  modelCatalogueData,
+} from "../scripts/generate-model-catalogue.mjs";
+import {
+  catalogueVersionDigest,
+  inspectModelPolicy,
+  loopCallBudgetMs,
+} from "../scripts/provider-checks.mjs";
+import {
+  activeLoopVersion,
   callBudgetsFit,
   creditCapUsd12,
   defaultLoopProfile,
@@ -46,7 +56,12 @@ test("version 2 is proposed: nine entries, no xhigh or max, every call within 60
   assert.equal(v2.status, "proposed");
   assert.equal(v2.owner_confirmation, null);
   assert.equal(Object.hasOwn(policy.catalogue.published_digests, "2"), false);
-  assert.equal(policy.catalogue.active_version, 1, "version 1 stays active for listings-run@1");
+  assert.deepEqual(
+    policy.catalogue.active_versions,
+    { per_product: 1, agent_loop: null },
+    "version 1 stays active for listings-run@1; no loop version is active",
+  );
+  assert.equal(activeLoopVersion(), null);
   const entries = loopEntries(2);
   assert.equal(entries.length, 9);
   assert.deepEqual([...new Set(entries.map((e) => e.effort))], ["low", "medium", "high"]);
@@ -259,6 +274,15 @@ test("a hold record is RunHold@1 in numeric(20,8) text, rounded up", () => {
 
 // The loop version's rule cases (the per-product cases are in tests/providers.test.mjs).
 const v2 = (p) => p.catalogue.versions[1];
+// Publishing version 2 as the owner's confirmation would: v1 untouched and still active.
+const publishV2 = (p, { pointer = 2 } = {}) => {
+  const entry = v2(p);
+  entry.status = "active";
+  entry.owner_confirmation = "synthetic owner confirmation";
+  entry.effective_from = "2026-11-01";
+  p.catalogue.active_versions.agent_loop = pointer;
+  p.catalogue.published_digests["2"] = catalogueVersionDigest(entry);
+};
 for (const [name, change, expected] of [
   ["an xhigh effort", (p) => (v2(p).efforts[2].key = "xhigh"), /invalid loop effort xhigh/],
   [
@@ -316,11 +340,49 @@ for (const [name, change, expected] of [
   [
     "a published version 2 without the owner's confirmation",
     (p) => {
-      v2(p).status = "retired";
-      p.catalogue.versions[0].status = "retired";
-      p.catalogue.active_version = null;
+      v2(p).status = "active";
+      p.catalogue.active_versions.agent_loop = 2;
     },
     /version 2 is published without the owner's confirmation/,
+  ],
+  [
+    "an active loop version without its shape's pointer",
+    (p) => publishV2(p, { pointer: null }),
+    /active_versions\.agent_loop does not name its active version/,
+  ],
+  [
+    "the per-product pointer naming the loop version",
+    (p) => {
+      publishV2(p);
+      p.catalogue.active_versions.per_product = 2;
+    },
+    /active_versions\.per_product does not name its active version/,
+  ],
+  [
+    "a second active loop version",
+    (p) => {
+      publishV2(p);
+      const v3 = structuredClone(v2(p));
+      v3.version = 3;
+      p.catalogue.versions.push(v3);
+      p.catalogue.published_digests["3"] = catalogueVersionDigest(v3);
+    },
+    /agent_loop statuses must run retired, then at most one active, then proposed/,
+  ],
+  [
+    "the old single active_version",
+    (p) => (p.catalogue.active_version = 1),
+    /active_version is replaced by active_versions/,
+  ],
+  [
+    "active_versions without the loop shape",
+    (p) => delete p.catalogue.active_versions.agent_loop,
+    /active_versions must name exactly per_product and agent_loop/,
+  ],
+  [
+    "a pointer that is not a version number",
+    (p) => (p.catalogue.active_versions.agent_loop = "2"),
+    /active_versions\.agent_loop must be a version number or null/,
   ],
 ])
   test(`model catalogue v2 rejects ${name}`, () => {
@@ -331,3 +393,40 @@ for (const [name, change, expected] of [
 
 test("the committed policy, with version 2 proposed, passes", () =>
   assert.deepEqual(inspectModelPolicy(policy, registry).errors, []));
+
+// ADR-0027 item 4 and the brief: version 2 publishes while version 1 stays active for
+// listings-run@1. Each shape's generated module takes its own pointer.
+test("publishing loop version 2 keeps version 1 active for listings-run@1", () => {
+  const p = structuredClone(policy);
+  publishV2(p);
+  assert.equal(p.catalogue.versions[0].status, "active");
+  assert.deepEqual(inspectModelPolicy(p, registry).errors, []);
+  const perProduct = modelCatalogueData(p, registry);
+  assert.equal(perProduct.activeVersion, 1);
+  assert.deepEqual(
+    perProduct.versions.map((v) => [v.version, v.status]),
+    [[1, "active"]],
+  );
+  const loop = loopCatalogueData(p, registry);
+  assert.equal(loop.activeVersion, 2);
+  assert.deepEqual(
+    loop.versions.map((v) => [v.version, v.status]),
+    [[2, "active"]],
+  );
+  // Retiring version 1 later leaves the loop's pointer alone.
+  p.catalogue.versions[0].status = "retired";
+  p.catalogue.active_versions.per_product = null;
+  assert.deepEqual(inspectModelPolicy(p, registry).errors, []);
+  assert.equal(modelCatalogueData(p, registry).activeVersion, null);
+  assert.equal(loopCatalogueData(p, registry).activeVersion, 2);
+});
+
+test("the committed modules take each shape's own pointer: the loop's is null", () => {
+  assert.equal(modelCatalogueData(policy, registry).activeVersion, 1);
+  const loop = loopCatalogueData(policy, registry);
+  assert.equal(loop.activeVersion, null);
+  assert.ok(
+    loop.versions.every((v) => v.version !== 1),
+    "version 1 is not a loop version",
+  );
+});

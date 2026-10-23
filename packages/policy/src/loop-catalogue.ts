@@ -107,6 +107,16 @@ function entryOf(v: VersionData, model: string, effort: string): LoopEntry | nul
 export function loopVersions(): readonly number[] {
   return versions.map((v) => v.version);
 }
+/**
+ * The loop shape's own active version, or null until one publishes. The per-product pointer
+ * (listings-run@1) is the model catalogue's and never names a loop version.
+ */
+export function activeLoopVersion(): number | null {
+  const active: number | null = generatedLoopCatalogue.activeVersion;
+  // Widened: the committed data has no active loop version yet.
+  const status = versionData(active)?.status as LoopCatalogueStatus | undefined;
+  return active !== null && status === "active" ? active : null;
+}
 /** Every entry of a version, models then efforts in catalogue order. */
 export function loopEntries(version: number): readonly LoopEntry[] {
   const v = versionData(version);
