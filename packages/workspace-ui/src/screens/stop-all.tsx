@@ -164,7 +164,7 @@ function StopRows({
             {s.target(target.shopDomain)}
           </p>
           {phase.kind === "stopped" ? (
-            <Badge kind="paused" />
+            <Badge kind="stopped" />
           ) : phase.kind === "sending" || phase.kind === "checking" ? (
             <p className="sr-meta" role="status">
               {phase.kind === "sending" ? s.rows.sending : s.rows.checking}
@@ -348,7 +348,7 @@ export function StopAllStatus({
     return (
       <div className="sr-banner sr-banner-warning sr-stop-stopped">
         <div className="sr-banner-head">
-          <Badge kind="paused" />
+          <Badge kind="stopped" />
           <h3 className="sr-banner-title" ref={resultRef} tabIndex={-1}>
             {s.stoppedTitle(state.stopped)}
           </h3>

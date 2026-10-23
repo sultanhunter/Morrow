@@ -106,6 +106,7 @@ const badgeTone: Readonly<Record<BadgeKind, string>> = {
   working: "info",
   needs_you: "caution",
   paused: "neutral",
+  stopped: "neutral",
   done: "success",
   needs_review: "caution",
   on_track: "success",
@@ -156,6 +157,13 @@ function BadgeGlyph({ kind }: { readonly kind: BadgeKind }) {
       <>
         <circle cx="7" cy="7" r="5.2" />
         <path d="M5.8 5 V9 M8.2 5 V9" />
+      </>
+    ),
+    // A person's stop: the stop square, so it never reads as Paused.
+    stopped: (
+      <>
+        <circle cx="7" cy="7" r="5.2" />
+        <rect className="sr-glyph-fill" x="5" y="5" width="4" height="4" rx="0.6" />
       </>
     ),
     behind: (

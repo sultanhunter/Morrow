@@ -599,6 +599,10 @@ test("activity: who did what, by day; filters are closed; no conversations", asy
   for (const c of categories) assert.ok([...activityFilters, "work"].includes(c), c);
   assert.ok(!activityFilters.includes("work"));
   for (const e of view.entries) assert.doesNotMatch(e.what + e.detail, /conversation/i);
+  // A person's stop reads as Stopped, the word the stop itself uses, never as Paused.
+  const stops = view.entries.filter((e) => /^stopped\b/.test(e.what));
+  assert.ok(stops.length > 0);
+  for (const e of stops) assert.deepEqual([e.badge, e.category], ["stopped", "access"]);
   assert.equal((await createFixtureAdapter("empty").settings.activity(ws)).value.entries.length, 0);
 });
 
@@ -691,6 +695,10 @@ test("stop all never reads as all stopped while work this person can't stop is o
   const all = status({ targets: [], stopped: 2, notAllowed: 0 });
   assert.ok(all.includes("Listings is stopped on 2 stores"), all);
   assert.ok(!all.includes("still on"), all);
+  // A person's stop wears the Stopped badge; Paused is a platform or connection hold.
+  assert.match(all, /<\/svg>Stopped<\/span>/);
+  assert.doesNotMatch(all, /Paused/);
+  assert.notEqual(sunriseCopy.status.stopped, sunriseCopy.status.paused);
   const on = status({
     targets: [{ storeId: "s1", shopDomain: "s1.example", installationId: "listings-s1" }],
     stopped: 0,

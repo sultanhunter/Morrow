@@ -394,7 +394,7 @@ export function sameNotificationChoices(a: NotificationChoices, b: NotificationC
 export const activityFilters = ["all", "store", "approvals", "access"] as const;
 export type ActivityFilter = (typeof activityFilters)[number];
 export type ActivityBadge =
-  | "paused"
+  | "stopped"
   | "working"
   | "suggested"
   | "updated_in_shopify"

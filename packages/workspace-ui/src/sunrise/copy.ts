@@ -20,7 +20,10 @@ export const sunriseCopy = {
     active: "Active",
     working: "Working",
     needs_you: "Needs you",
+    /** Held by the platform or the connection, not by a person. */
     paused: "Paused",
+    /** A person stopped it (Stop AI work, Stop all AI work); only a person turns it back on. */
+    stopped: "Stopped",
     done: "Done",
     needs_review: "Needs review",
     on_track: "On track",
