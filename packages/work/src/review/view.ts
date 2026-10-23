@@ -177,7 +177,8 @@ export function buildProductReviews(
       const source = sources.find((s) => s.targetIndex === root);
       if (!item || item.productId !== productId || !source || source.productId !== productId)
         return fail();
-      const snapshot = source.state === "available" ? parseSnapshot(source.snapshot, productId) : null;
+      const snapshot =
+        source.state === "available" ? parseSnapshot(source.snapshot, productId) : null;
       const fields = fieldOrder.filter((f) => (target.fields as readonly string[]).includes(f));
       if (fields.length !== target.fields.length) return fail();
       const changes = fields.map((field) =>

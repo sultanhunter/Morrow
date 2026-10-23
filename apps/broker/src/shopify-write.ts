@@ -265,7 +265,10 @@ export type WriteClassification = Readonly<{
  * else (a lost reply, a 5xx, another status, another GraphQL error, a malformed reply or
  * another product) is uncertain: settled only by reading the product back.
  */
-export function classifyProductUpdate(reply: ShopifyWriteReply, productGid: string): WriteClassification {
+export function classifyProductUpdate(
+  reply: ShopifyWriteReply,
+  productGid: string,
+): WriteClassification {
   const r = (outcome: WriteClassification["outcome"], reason: WriteClassification["reason"]) =>
     Object.freeze({ outcome, reason });
   switch (reply.kind) {
@@ -292,7 +295,8 @@ export function classifyProductUpdate(reply: ShopifyWriteReply, productGid: stri
       const userErrors = own(update, "userErrors");
       if (!Array.isArray(userErrors)) return r("uncertain", "reply_malformed");
       if (userErrors.length > 0) return r("failed", "provider_rejected");
-      if (own(own(update, "product"), "id") !== productGid) return r("uncertain", "reply_malformed");
+      if (own(own(update, "product"), "id") !== productGid)
+        return r("uncertain", "reply_malformed");
       return r("submitted", "provider_accepted");
     }
   }
@@ -467,8 +471,16 @@ async function withToken<T>(
     },
     {
       kekVersion: Number(r.kek_version),
-      wrappedKey: vaultHexBytes(r.wrapped_key, vaultLimits.wrappedKeyBytes, vaultLimits.wrappedKeyBytes),
-      sealedValue: vaultHexBytes(r.sealed_value, vaultLimits.sealedMinBytes, vaultLimits.sealedMaxBytes),
+      wrappedKey: vaultHexBytes(
+        r.wrapped_key,
+        vaultLimits.wrappedKeyBytes,
+        vaultLimits.wrappedKeyBytes,
+      ),
+      sealedValue: vaultHexBytes(
+        r.sealed_value,
+        vaultLimits.sealedMinBytes,
+        vaultLimits.sealedMaxBytes,
+      ),
     },
   );
   let token: string;
@@ -584,8 +596,7 @@ export function createShopifyWriter(deps: Readonly<ShopifyWriteDependencies>) {
       const productGid = "gid://shopify/Product/" + productPattern.exec(productId)![1];
       // 2. The exact approved item.
       const item = parseItem(r.item, productId, fields);
-      const matches =
-        item !== null && (await sha256Hex(changeItemText(item))) === r.request_digest;
+      const matches = item !== null && (await sha256Hex(changeItemText(item))) === r.request_digest;
       return withToken(vault, r, async (token, shop) => {
         // 3. The pre-send read (skipped for a mismatched item: nothing is sent either way).
         let presend: "read" | "not_found" | "unauthorized" | "mismatch" = "mismatch";
@@ -654,16 +665,19 @@ export function createShopifyWriter(deps: Readonly<ShopifyWriteDependencies>) {
         const classified = classifyProductUpdate(reply, productGid);
         // 6. T3.
         try {
-          const ended = await vaultCall(vault, Math.max(deadline, deps.now() + vaultBudgetMs), async (query) =>
-            one(
-              await query(vaultStatements.catalogWriteEnd, [
-                operationId,
-                classified.outcome,
-                classified.reason,
-                reply.kind === "data" ? (reply.requestId ?? "") : "",
-              ]),
-              ["outcome"],
-            ),
+          const ended = await vaultCall(
+            vault,
+            Math.max(deadline, deps.now() + vaultBudgetMs),
+            async (query) =>
+              one(
+                await query(vaultStatements.catalogWriteEnd, [
+                  operationId,
+                  classified.outcome,
+                  classified.reason,
+                  reply.kind === "data" ? (reply.requestId ?? "") : "",
+                ]),
+                ["outcome"],
+              ),
           );
           if (ended.outcome !== "recorded") return result("uncertain", null, "close_unknown");
         } catch {
@@ -704,11 +718,13 @@ export function createShopifyWriter(deps: Readonly<ShopifyWriteDependencies>) {
       if (r.outcome !== "resolved") throw new BrokerHold("STATE_INVALID");
       const fields = parseFields(r.fields);
       const productId = r.product_id;
-      if (!fields || !exact(productPattern, productId)) throw new VaultError("VAULT_RECORD_INVALID");
+      if (!fields || !exact(productPattern, productId))
+        throw new VaultError("VAULT_RECORD_INVALID");
       const item = parseItem(r.item, productId, fields);
       if (!item) throw new VaultError("VAULT_RECORD_INVALID");
       const source = r.source === null ? null : parseSnapshot(r.source, productId);
-      if (!exact(updatedAtPattern, r.source_updated_at)) throw new VaultError("VAULT_RECORD_INVALID");
+      if (!exact(updatedAtPattern, r.source_updated_at))
+        throw new VaultError("VAULT_RECORD_INVALID");
       const productGid = "gid://shopify/Product/" + productPattern.exec(productId)![1];
       return withToken(vault, r, async (token, shop) => {
         const read = await shopifyAdminGraphql(
@@ -748,7 +764,8 @@ export function createShopifyWriter(deps: Readonly<ShopifyWriteDependencies>) {
           async (query) =>
             one(await query(vaultStatements.catalogReconcileRecord, values), ["outcome", "status"]),
         );
-        if (recorded.outcome === "recorded") return reconciled("recorded", recorded.status, verdict);
+        if (recorded.outcome === "recorded")
+          return reconciled("recorded", recorded.status, verdict);
         if (recorded.outcome === "too_soon" || recorded.outcome === "settled")
           return reconciled(recorded.outcome, recorded.status, null);
         throw new BrokerHold("STATE_INVALID");

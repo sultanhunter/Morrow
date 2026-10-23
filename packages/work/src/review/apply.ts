@@ -105,7 +105,8 @@ export async function applyItems(
   for (const [i, target] of proposal.targets.entries()) {
     const root = selected === null ? i : selected[i]!;
     const item = items.find(
-      (x: unknown) => !!x && typeof x === "object" && (x as { targetIndex?: unknown }).targetIndex === root,
+      (x: unknown) =>
+        !!x && typeof x === "object" && (x as { targetIndex?: unknown }).targetIndex === root,
     ) as { targetIndex: number; productId: string; set: unknown } | undefined;
     if (!item || item.productId !== target.resource.id) throw new WorkContextUnavailable();
     const canonical = changeItemText(item);
@@ -313,7 +314,12 @@ export async function dispatchOperation(
   if (!target || target.resource.id !== op.productId) throw new WorkContextUnavailable();
   let store: StoreResource;
   try {
-    store = storeResource(a.actor.organizationId, a.resource.workspaceId, op.storeId, op.connectionId);
+    store = storeResource(
+      a.actor.organizationId,
+      a.resource.workspaceId,
+      op.storeId,
+      op.connectionId,
+    );
   } catch {
     throw new WorkContextUnavailable();
   }

@@ -16,7 +16,12 @@ import type { ListingFieldsRead } from "./listing-canonical.js";
 // prove equal is not approved, so an unknown reformatting leaves the operation uncertain,
 // never verified.
 
-export type ListingFieldPath = "descriptionHtml" | "seo.description" | "seo.title" | "tags" | "title";
+export type ListingFieldPath =
+  | "descriptionHtml"
+  | "seo.description"
+  | "seo.title"
+  | "tags"
+  | "title";
 export type FieldVerdict = "approved" | "source" | "other";
 export type ReadbackVerdict = "approved" | "source" | "mixed";
 export interface ApprovedSet {
