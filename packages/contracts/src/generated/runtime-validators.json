@@ -18,7 +18,7 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "33b6773c8b32cb8f05d4740c183dda62f80783d6cfea2ab897cdc38dad5106c8",
+    "docs/contracts/schemas/v1.1/core.schema.json": "28127203a9e751ad166358802475f88ca116a05be1ca70dd4f62e59ba3495cec",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "145d8de594a481b1443ec28b7d1bc67433491b6ba51845b9dbeef2cb3ecb7112",
     "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206",
     "docs/contracts/event-registry.json": "db4a4f3a1b8735cf1203a778ce861a22601e48125f6323356a2d23e228ed46a7"
@@ -30,7 +30,7 @@
   },
   "output": {
     "path": "packages/contracts/src/generated/runtime-validators.mjs",
-    "sha256": "fb48265e322e95d916d1e8ebe582ee1fd85bfba5ec8d2165fbd47068313818cd"
+    "sha256": "cb6fcdf8497d68063231ee537d8195a8c6228f1a73bbcb2f45dd208bc71a71de"
   },
   "browser_validators": {
     "SessionRotationResult": {

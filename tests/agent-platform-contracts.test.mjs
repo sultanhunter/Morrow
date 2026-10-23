@@ -211,7 +211,17 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
         m.caps.deadline = "2026-10-26T10:00:00.000Z";
       }),
     ]),
-    // A mandate run's trigger and a specialist's spec always name a store and its connection.
+    // A routed run runs an installed agent, one per store (ADR-0028 item 1), and its tools act
+    // on "this job's store"; a mandate run's trigger and a specialist's spec name one too.
+    ["a routed run without a store", edit(routed, (m) => (m.storeId = null))],
+    ["a routed run without a connection", edit(routed, (m) => (m.connectionId = null))],
+    [
+      "a routed run without a store or connection",
+      edit(routed, (m) => {
+        m.storeId = null;
+        m.connectionId = null;
+      }),
+    ],
     ["a mandate run without a store", edit(mandate, (m) => (m.storeId = null))],
     ["a mandate run without a connection", edit(mandate, (m) => (m.connectionId = null))],
     ["a specialist without a store", edit(specialist, (m) => (m.storeId = null))],
