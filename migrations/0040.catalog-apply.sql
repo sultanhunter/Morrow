@@ -21,6 +21,11 @@ BEGIN;
 --     and catalog_write_end; catalog_reconcile_resolve and catalog_reconcile_record (read-back,
 --     never blocked by a stop or a lease's end). Only a read-back that matches the approved
 --     values reaches verified; an unknown outcome stays uncertain until a read-back settles it.
+--   * One open write per product: a later write waits only while an earlier one may still be in
+--     flight (fenced, or not yet read back after its send window). A read-back taken after a
+--     later write to the same product was fenced never settles the earlier one. The claimant
+--     may set an uncertain operation aside once its send window has passed
+--     (cmd_catalog_set_aside: uncertain -> cancel_requested, reconciliation continues).
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR to_regprocedure('morrow_work.catalog_review_sources(text)') IS NULL
@@ -39,6 +44,10 @@ DO $$ BEGIN
  OR to_regclass('morrow_work.operation_writes') IS NOT NULL OR to_regclass('morrow_work.operation_readbacks') IS NOT NULL
  OR NOT EXISTS(SELECT 1 FROM morrow_work.transition_rules t WHERE t.machine='operation' AND t.from_status='authorized'
    AND t.to_status='dispatching' AND t.actor='action_service' AND t.guard='non_billable_current_grants_and_lease')
+ OR NOT EXISTS(SELECT 1 FROM morrow_work.transition_rules t WHERE t.machine='operation' AND t.from_status='uncertain'
+   AND t.to_status='cancel_requested' AND t.actor='owner' AND t.guard='reconciliation_continues')
+ OR NOT EXISTS(SELECT 1 FROM morrow_work.transition_rules t WHERE t.machine='operation' AND t.from_status='cancel_requested'
+   AND t.to_status='verifying' AND t.actor='connector' AND t.guard='submitted_effect_completed_before_cancel')
  THEN RAISE EXCEPTION 'CATALOG_APPLY_PREREQUISITES_INVALID'; END IF;
 END $$;
 
@@ -74,7 +83,7 @@ CREATE TABLE morrow_work.operation_readbacks (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
  operation_id morrow_work.record_id NOT NULL,
- sequence integer NOT NULL CHECK (sequence BETWEEN 1 AND 1000),
+ sequence integer NOT NULL CHECK (sequence>=1),
  observed_at timestamptz NOT NULL CHECK (observed_at=date_trunc('milliseconds',observed_at) AND isfinite(observed_at)),
  outcome text NOT NULL CHECK (outcome IN ('read','not_found','credential_unavailable')),
  observed_updated_at text CHECK (observed_updated_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$'),
@@ -117,8 +126,8 @@ END $$;
 CREATE POLICY tenant_read ON morrow_work.operation_readbacks FOR SELECT TO morrow_work_api
  USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c));
 -- The broker's catalog context on the shared tables. The operation it names (read and
--- written), its transitions, and, for reading only, its tenant's catalog operations (the
--- product lock), proposals, parameters and snapshots (morrow.vault_catalog_tenant,
+-- written), its transitions, and, for reading only, its tenant's catalog operations and their
+-- read-backs (the product rule), proposals, parameters and snapshots (morrow.vault_catalog_tenant,
 -- org|ws, written by the same definers from the operation row). The lease, stop and
 -- installation reads reuse resolve_call's settings and policies (0031), which these
 -- definers also write and clear themselves.
@@ -136,7 +145,7 @@ CREATE POLICY broker_catalog_transition ON morrow_work.operation_transitions TO 
   AND EXISTS(SELECT 1 FROM morrow_work.operations o WHERE o.organization_id=operation_transitions.organization_id
    AND o.workspace_id=operation_transitions.workspace_id AND o.id=operation_transitions.operation_id AND o.kind='catalog_write'));
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['proposals','proposal_parameters','product_snapshots'] LOOP
+ FOREACH t IN ARRAY ARRAY['proposals','proposal_parameters','product_snapshots','operation_readbacks'] LOOP
   EXECUTE format('CREATE POLICY broker_catalog_read ON morrow_work.%I FOR SELECT TO morrow_work_command
    USING (session_user=''morrow_vault_broker''
     AND organization_id::text||''|''||workspace_id::text=pg_catalog.current_setting(''morrow.vault_catalog_tenant'',true))',t);
@@ -390,6 +399,48 @@ BEGIN
  RETURN QUERY SELECT 'dispatching'::text,'dispatching'::text,x.revision::text,NULL::text;
 END $$;
 
+-- The claimant sets an uncertain operation aside (ADR-0022 item 7; the operation machine's owner
+-- edge uncertain -> cancel_requested, reconciliation_continues), after checking the product in
+-- Shopify, in the claimant's own session, after the Worker reran the claimant's kernel
+-- decision on the store resource. Nothing is sent or resent, and the outcome stays unknown:
+-- read-backs continue (R1 and R2), and a later one that shows the approved values still
+-- verifies it. A set-aside operation no longer holds its product for a new approved change.
+-- Under the prelude and the operation's row lock: the claimant is this actor; the operation is
+-- uncertain and its send window (the fence plus 90 seconds, as in R1) has passed, else
+-- too_soon. An operation already set aside, or in any other status, is answered as it is.
+-- Outcomes: set_aside, unchanged (with the current status), too_soon, not_found,
+-- not_claimant, invalid and the prelude's.
+CREATE FUNCTION morrow_work.cmd_catalog_set_aside(p_operation_id text)
+RETURNS TABLE(outcome text,status text,revision text)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+#variable_conflict use_column
+DECLARE pre record; o record; cl record; x record;
+BEGIN
+ IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' THEN
+  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ SELECT * INTO pre FROM morrow_work.command_prelude(gen_random_uuid()::text,morrow_work.sha256_text('morrow.catalog.set_aside|'||p_operation_id));
+ IF pre.outcome IS DISTINCT FROM 'ok' THEN RETURN QUERY SELECT COALESCE(pre.outcome,'invalid'),NULL::text,NULL::text; RETURN; END IF;
+ SELECT x2.status,x2.revision::bigint AS revision,x2.send_started_at,x2.lease_id::text AS lease_id,
+  x2.claim_family_root_id::text AS family_root_id INTO o FROM morrow_work.operations x2
+  WHERE x2.organization_id=pre.organization_id AND x2.workspace_id=pre.workspace_id AND x2.id=p_operation_id AND x2.kind='catalog_write'
+  FOR UPDATE;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text; RETURN; END IF;
+ SELECT c.claimant_principal_id::text AS principal_id,c.claimant_membership_id::text AS membership_id INTO cl FROM morrow_work.approval_claims c
+  WHERE c.organization_id=pre.organization_id AND c.workspace_id=pre.workspace_id AND c.family_root_id=o.family_root_id;
+ IF NOT FOUND OR cl.principal_id<>pre.principal_id OR cl.membership_id<>pre.membership_id THEN
+  RETURN QUERY SELECT 'not_claimant'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ IF o.status<>'uncertain' THEN RETURN QUERY SELECT 'unchanged'::text,o.status,o.revision::text; RETURN; END IF;
+ IF o.send_started_at IS NULL OR o.send_started_at>pg_catalog.clock_timestamp()-interval '90 seconds' THEN
+  RETURN QUERY SELECT 'too_soon'::text,o.status,o.revision::text; RETURN;
+ END IF;
+ SELECT * INTO x FROM morrow_work.operation_transition(pre.organization_id,pre.workspace_id,p_operation_id,o.revision,'cancel_requested','owner',
+  'reconciliation_continues','owner_checked',NULL,o.lease_id);
+ IF x.outcome IS DISTINCT FROM 'applied' THEN RAISE EXCEPTION 'CATALOG_OPERATION_INVALID'; END IF;
+ RETURN QUERY SELECT 'set_aside'::text,'cancel_requested'::text,x.revision::text;
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- The broker's catalog definers: SECURITY DEFINER, owned by the command role after the
 -- transfer, EXECUTE for morrow_vault_broker only, guarded by work_executor_safe. Each takes the
@@ -550,8 +601,12 @@ END $$;
 -- (product_missing), a 401 (connection_unauthorized), or a product whose current listing
 -- fields' digest is not the draft's expectedSourceRevision (source_changed: it changed since
 -- the draft, so nothing is written and the person is told). Another catalog operation on the
--- same product still open (fenced dispatching, submitted, verifying or uncertain) is
--- product_busy. Each refusal: dispatching -> failed (verified_no_effect), nothing sent.
+-- same product that may still be in flight is product_busy: fenced and still dispatching, or
+-- submitted, verifying or uncertain and not yet read back at or after its fence plus 90
+-- seconds (the send's budget and a grace, as in R1). Once such a read-back exists the earlier
+-- write can no longer land, so a new approved change is a new write, never a resend; the
+-- earlier operation keeps its own status, and R2 never settles it from a read-back taken
+-- after this fence. Each refusal: dispatching -> failed (verified_no_effect), nothing sent.
 -- Otherwise the fence (attempt+1, send_started_at, once) and its operation_writes row.
 -- Outcomes: send, refused (with the reason), in_flight, settled, not_found, invalid, denied.
 CREATE FUNCTION morrow_vault.catalog_write_begin(p_operation_id text,p_presend text,p_presend_digest text,p_presend_updated_at text,
@@ -594,7 +649,10 @@ BEGIN
   ELSIF p_presend='unauthorized' THEN v_refusal:='connection_unauthorized';
   ELSIF EXISTS(SELECT 1 FROM morrow_work.operations y WHERE y.organization_id=o.organization_id AND y.workspace_id=o.workspace_id
     AND y.kind='catalog_write' AND y.store_id=o.store_id AND y.target_resource_id=o.product_id AND y.id<>p_operation_id
-    AND (y.status IN ('submitted','verifying','uncertain') OR (y.status='dispatching' AND y.send_started_at IS NOT NULL))) THEN
+    AND ((y.status='dispatching' AND y.send_started_at IS NOT NULL)
+     OR (y.status IN ('submitted','verifying','uncertain') AND (y.send_started_at IS NULL
+      OR NOT EXISTS(SELECT 1 FROM morrow_work.operation_readbacks b WHERE b.organization_id=y.organization_id
+       AND b.workspace_id=y.workspace_id AND b.operation_id=y.id AND b.observed_at>=y.send_started_at+interval '90 seconds'))))) THEN
    v_refusal:='product_busy';
   ELSIF p_presend_digest IS DISTINCT FROM r.expected_source_revision THEN v_refusal:='source_changed';
   END IF;
@@ -670,11 +728,12 @@ END $$;
 -- never blocked by a stop or by the apply switch). Before any read it settles what time alone
 -- proves: an unfenced dispatching operation 3 minutes after entering dispatching was never
 -- sent (failed, not_sent); a fence left open 90 seconds after it was set (the send's budget
--- and a grace) is uncertain (unknown_submission). submitted and uncertain operations are read
--- back, at most once every 10 seconds (too_soon). Without the credential the fence used (an
+-- and a grace) is uncertain (unknown_submission). submitted and uncertain operations, and
+-- those the claimant set aside (cancel_requested: reconciliation continues), are read back,
+-- at most once every 10 seconds (too_soon). Without the credential the fence used (an
 -- uninstall, a disconnect, a new token) a read-back is impossible: a credential_unavailable
 -- row, and a submitted operation becomes uncertain (verification_unavailable); an uncertain
--- one stays as it is. `resolved` returns the shop, the product, the fields, the approved item,
+-- or set-aside one stays as it is. `resolved` returns the shop, the product, the fields, the approved item,
 -- the source snapshot (null once gone), Shopify's updatedAt before the send and the token's
 -- envelope. Outcomes: resolved, closed, too_soon, unavailable, settled, not_found, invalid,
 -- denied.
@@ -720,7 +779,7 @@ BEGIN
    v_status:='uncertain';
    v_rev:=x.revision;
   END IF;
-  IF v_status NOT IN ('submitted','uncertain') THEN v_outcome:='settled'; EXIT settle; END IF;
+  IF v_status NOT IN ('submitted','uncertain','cancel_requested') THEN v_outcome:='settled'; EXIT settle; END IF;
   SELECT max(x2.observed_at) INTO v_last FROM morrow_work.operation_readbacks x2
    WHERE x2.organization_id=o.organization_id AND x2.workspace_id=o.workspace_id AND x2.operation_id=p_operation_id;
   IF v_last IS NOT NULL AND v_last>v_now-interval '10 seconds' THEN v_outcome:='too_soon'; EXIT settle; END IF;
@@ -781,6 +840,12 @@ END $$;
 --     when Shopify never acknowledged the send, and this read-back and an earlier one at least
 --     60 seconds before it, both taken 30 seconds or more after the fence, both show every
 --     field as drafted with updatedAt unchanged since before the send; otherwise no change.
+--   cancel_requested (set aside by the claimant; reconciliation continues): approved ->
+--     verifying (submitted_effect_completed_before_cancel) -> verified; otherwise no change.
+--   Superseded: once a later catalog write to the same product has been fenced, Shopify's
+--     product may hold that write's values, so a read-back proves nothing about this one. It
+--     is recorded and never settles: an uncertain or set-aside operation stays as it is, and a
+--     submitted one becomes uncertain (verification_unavailable, superseded).
 -- Outcomes: recorded (with the status), too_soon, settled, not_found, invalid, denied.
 CREATE FUNCTION morrow_vault.catalog_reconcile_record(p_operation_id text,p_outcome text,p_observed_updated_at text,p_field_verdicts text,
  p_verdict text)
@@ -788,7 +853,7 @@ RETURNS TABLE(outcome text,status text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
 #variable_conflict use_column
 DECLARE o record; w record; x record; v_now timestamptz; v_last timestamptz; v_verdicts jsonb; v_fields text[]; v_rev bigint; v_status text;
- v_n integer; v_approved integer; v_source integer;
+ v_n integer; v_approved integer; v_source integer; v_superseded boolean;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
  IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' OR p_outcome IS NULL OR p_outcome NOT IN ('read','not_found')
@@ -801,10 +866,13 @@ BEGIN
  END IF;
  PERFORM morrow_vault.catalog_context(p_operation_id,NULL,NULL,NULL,NULL);
  SELECT x2.organization_id::text AS organization_id,x2.workspace_id::text AS workspace_id,x2.status,x2.revision::bigint AS revision,
-  x2.send_started_at,x2.submitted_at INTO o
+  x2.send_started_at,x2.submitted_at,x2.store_id::text AS store_id,x2.target_resource_id::text AS product_id INTO o
   FROM morrow_work.operations x2 WHERE x2.id=p_operation_id AND x2.kind='catalog_write' FOR UPDATE;
  IF NOT FOUND THEN PERFORM morrow_vault.catalog_context_clear(); RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
- IF o.status NOT IN ('submitted','uncertain') THEN PERFORM morrow_vault.catalog_context_clear(); RETURN QUERY SELECT 'settled'::text,o.status; RETURN; END IF;
+ IF o.status NOT IN ('submitted','uncertain','cancel_requested') THEN
+  PERFORM morrow_vault.catalog_context_clear(); RETURN QUERY SELECT 'settled'::text,o.status; RETURN;
+ END IF;
+ PERFORM morrow_vault.catalog_context(p_operation_id,o.organization_id,o.workspace_id,NULL,NULL);
  SELECT x2.fields,x2.source_updated_at INTO w FROM morrow_work.operation_writes x2
   WHERE x2.organization_id=o.organization_id AND x2.workspace_id=o.workspace_id AND x2.operation_id=p_operation_id;
  IF NOT FOUND THEN PERFORM morrow_vault.catalog_context_clear(); RETURN QUERY SELECT 'settled'::text,o.status; RETURN; END IF;
@@ -835,9 +903,21 @@ BEGIN
   WHERE x2.organization_id=o.organization_id AND x2.workspace_id=o.workspace_id AND x2.operation_id=p_operation_id;
  v_rev:=o.revision;
  v_status:=o.status;
- IF p_verdict='approved' THEN
+ -- A later write to the same product, fenced after this one, may be what Shopify now shows.
+ v_superseded:=EXISTS(SELECT 1 FROM morrow_work.operations y WHERE y.organization_id=o.organization_id AND y.workspace_id=o.workspace_id
+  AND y.kind='catalog_write' AND y.store_id=o.store_id AND y.target_resource_id=o.product_id AND y.id<>p_operation_id
+  AND y.send_started_at IS NOT NULL AND y.send_started_at>o.send_started_at);
+ IF v_superseded THEN
+  IF o.status='submitted' THEN
+   SELECT * INTO x FROM morrow_work.operation_transition(o.organization_id,o.workspace_id,p_operation_id,v_rev,'uncertain','connector',
+    'unknown_external_outcome','superseded','verification_unavailable',NULL);
+   IF x.outcome IS DISTINCT FROM 'applied' THEN RAISE EXCEPTION 'CATALOG_OPERATION_INVALID'; END IF;
+   v_status:='uncertain';
+  END IF;
+ ELSIF p_verdict='approved' THEN
   SELECT * INTO x FROM morrow_work.operation_transition(o.organization_id,o.workspace_id,p_operation_id,v_rev,'verifying','connector',
-   CASE WHEN o.status='submitted' THEN 'provider_terminal_result' ELSE 'reconciled_provider_result' END,'readback',NULL,NULL);
+   CASE o.status WHEN 'submitted' THEN 'provider_terminal_result' WHEN 'cancel_requested' THEN 'submitted_effect_completed_before_cancel'
+    ELSE 'reconciled_provider_result' END,'readback',NULL,NULL);
   IF x.outcome IS DISTINCT FROM 'applied' THEN RAISE EXCEPTION 'CATALOG_OPERATION_INVALID'; END IF;
   SELECT * INTO x FROM morrow_work.operation_transition(o.organization_id,o.workspace_id,p_operation_id,x.revision,'verified','action_service',
    'declared_postconditions_verified','readback_matched',NULL,NULL);
@@ -869,12 +949,12 @@ END $$;
 -- Explicit ACLs per function (S5 and S7 read proacl), then the ownership transfer.
 REVOKE ALL ON FUNCTION morrow_work.catalog_target(jsonb,integer),morrow_work.catalog_item(jsonb,integer),
  morrow_work.catalog_item_matches(jsonb,jsonb),morrow_work.cmd_catalog_apply(text,text,text,text,text,text,text,text,text),
- morrow_work.cmd_catalog_dispatch(text,text),morrow_vault.catalog_context(text,text,text,text,text),morrow_vault.catalog_context_clear(),
+ morrow_work.cmd_catalog_dispatch(text,text),morrow_work.cmd_catalog_set_aside(text),morrow_vault.catalog_context(text,text,text,text,text),morrow_vault.catalog_context_clear(),
  morrow_vault.catalog_send_refusal(text,text),morrow_vault.catalog_write_resolve(text),morrow_vault.catalog_write_begin(text,text,text,text,text),
  morrow_vault.catalog_write_end(text,text,text,text),morrow_vault.catalog_reconcile_resolve(text),
  morrow_vault.catalog_reconcile_record(text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_work.cmd_catalog_apply(text,text,text,text,text,text,text,text,text),
- morrow_work.cmd_catalog_dispatch(text,text) TO morrow_work_api;
+ morrow_work.cmd_catalog_dispatch(text,text),morrow_work.cmd_catalog_set_aside(text) TO morrow_work_api;
 GRANT EXECUTE ON FUNCTION morrow_vault.catalog_write_resolve(text),morrow_vault.catalog_write_begin(text,text,text,text,text),
  morrow_vault.catalog_write_end(text,text,text,text),morrow_vault.catalog_reconcile_resolve(text),
  morrow_vault.catalog_reconcile_record(text,text,text,text,text) TO morrow_vault_broker;
@@ -888,6 +968,7 @@ ALTER FUNCTION morrow_work.catalog_item(jsonb,integer) OWNER TO morrow_work_comm
 ALTER FUNCTION morrow_work.catalog_item_matches(jsonb,jsonb) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_catalog_apply(text,text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_catalog_dispatch(text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.cmd_catalog_set_aside(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_write_resolve(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_write_begin(text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_write_end(text,text,text,text) OWNER TO morrow_work_command;

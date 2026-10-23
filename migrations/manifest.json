@@ -315,7 +315,7 @@
     {
       "sequence": 40,
       "file": "0040.catalog-apply.sql",
-      "sha256": "aa06298b8420d4d2ebacdaed631b6a567b4768c6f511564bac84de26f96ffc9f",
+      "sha256": "563b124e548300c71cc44c5ddfddad52c204ec12eaca1b691b4b6ae398938f53",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-review-apply.md"
     }
