@@ -931,7 +931,7 @@ function readXmlPart(text: string): XmlPart | null {
     const end = xmlEndTag.exec(text);
     if (end) {
       const closed = open.pop();
-      if (closed?.name !== end[1]) return null;
+      if (closed === undefined || closed.name !== end[1]) return null;
       if (closed.text !== null) formulas.push(xmlDecode(closed.text));
       at = xmlEndTag.lastIndex;
       continue;
