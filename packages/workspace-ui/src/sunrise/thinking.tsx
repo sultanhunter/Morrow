@@ -172,6 +172,7 @@ export function ThinkingEditor({
   onSaved,
   onStale,
   onCancel,
+  onBusy,
 }: {
   readonly workspaceId: Id;
   readonly target: ThinkingTarget;
@@ -183,6 +184,8 @@ export function ThinkingEditor({
   /** The record moved on (a 409): the parent rereads and the person picks again. */
   readonly onStale: () => void;
   readonly onCancel?: () => void;
+  /** A save is out or its outcome unknown: the dialog around it stays open. */
+  readonly onBusy?: (busy: boolean) => void;
 }) {
   const services = useServices();
   const bound = thinking.source === "workspace_default";
@@ -230,6 +233,8 @@ export function ThinkingEditor({
       }
     },
   });
+  const busy = save.busy;
+  useEffect(() => onBusy?.(busy), [busy, onBusy]);
   if (bound && models.kind !== "ok")
     return (
       <p className="sr-help" role={models.kind === "loading" ? "status" : undefined}>
@@ -397,11 +402,15 @@ export function ThinkingDialog({
   readonly onSaved: (choice: ThinkingChoice) => void;
   readonly onStale: () => void;
 }) {
+  const [busy, setBusy] = useState(false);
+  const close = () => {
+    if (!busy) onClose();
+  };
   return (
     <Dialog
       open={open}
       title={target.kind === "specialists" ? t.dialogTitleSpecialists : t.dialogTitle(target.name)}
-      onClose={onClose}
+      onClose={close}
     >
       {open ? (
         <ThinkingEditor
@@ -410,9 +419,10 @@ export function ThinkingDialog({
           thinking={thinking}
           ownerName={ownerName}
           variant="dialog"
-          onCancel={onClose}
+          onCancel={close}
           onSaved={onSaved}
           onStale={onStale}
+          onBusy={setBusy}
         />
       ) : null}
     </Dialog>

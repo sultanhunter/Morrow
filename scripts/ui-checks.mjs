@@ -281,7 +281,8 @@ export const fixtureCases = [
         .waitFor();
     },
   }),
-  fixtureCase("entry", "unavailable_destination", `/w/${ws}/agents`),
+  // T7 PR 16 built Team; the catalog stays a destination this build doesn't have yet.
+  fixtureCase("entry", "unavailable_destination", `/w/${ws}/catalog`),
   // M3 PR-1: the Listings agent card on M2 PR-2's connection screen (the sample store's
   // connection): ready, the review of the server-built document, the stop dialog; and the
   // model default under Settings > Governance.
@@ -564,6 +565,88 @@ fixtureCases.push(
     },
   }),
 );
+// T7 PR 16 (Sunrise): Team, an agent's page, Add agents and its consent, Settings, Shop
+// knowledge and Files, on fixtures (the HTTP build leaves their reads uncomposed).
+const two = [1440, 390];
+fixtureCases.push(
+  fixtureCase("team", "team", `/w/${ws}/agents`),
+  fixtureCase("team", "member", `/w/${ws}/agents`, { widths: two, scenario: "team_member" }),
+  fixtureCase("team", "empty", `/w/${ws}/agents`, { widths: two, scenario: "empty" }),
+  fixtureCase("team", "not_in_build", `/w/${ws}/agents`, {
+    widths: two,
+    scenario: "not_in_build",
+  }),
+  fixtureCase("team", "thinking_dialog", `/w/${ws}/agents`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Change how Business Analyst thinks" }).click();
+      await page.getByRole("dialog", { name: "Change how Business Analyst thinks" }).waitFor();
+    },
+  }),
+  fixtureCase("team", "agent", `/w/${ws}/agents/agent-listings`),
+  // The Listings agent's choice is the workspace default: above the member ceiling it
+  // can't be saved here.
+  fixtureCase("team", "agent_over_limit", `/w/${ws}/agents/agent-listings`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await page.getByText("doesn’t fit the spending limit").waitFor();
+      expect(await page.getByRole("button", { name: "Save" }).isDisabled(), "save_held");
+    },
+  }),
+  fixtureCase("team", "agent_member", `/w/${ws}/agents/agent-analyst`, {
+    widths: two,
+    scenario: "team_member",
+    setup: async (page) => {
+      await page.getByText("Only Maya Chen, the Owner, or an Admin can change this.").waitFor();
+      expect((await page.getByRole("radio").count()) === 0, "no_controls");
+    },
+  }),
+  fixtureCase("team", "add_agents", `/w/${ws}/agent-store`),
+  fixtureCase("team", "add_consent", `/w/${ws}/agent-store/release-marketing`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("dialog", { name: "Add Marketing to Linen & Form?" }).waitFor();
+    },
+  }),
+  fixtureCase("team", "add_sent", `/w/${ws}/agent-store/release-marketing`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("button", { name: "Send to Leo Martin to review" }).click();
+      await page.getByText("Marketing was sent to Leo Martin to review").waitFor();
+    },
+  }),
+  fixtureCase("team", "add_uncertain", `/w/${ws}/agent-store/release-marketing`, {
+    widths: two,
+    scenario: "team_add_uncertain",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("button", { name: "Send to Leo Martin to review" }).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+  fixtureCase("settings", "home", `/w/${ws}/settings`, { widths: two }),
+  fixtureCase("settings", "plan", `/w/${ws}/settings/usage`),
+  fixtureCase("settings", "plan_by_helper", `/w/${ws}/settings/usage`, {
+    widths: two,
+    setup: (page) => page.getByRole("tab", { name: "By helper" }).click(),
+  }),
+  fixtureCase("settings", "email", `/w/${ws}/settings/notifications`),
+  fixtureCase("settings", "email_member", `/w/${ws}/settings/notifications`, {
+    widths: two,
+    scenario: "team_member",
+  }),
+  fixtureCase("settings", "people", `/w/${ws}/settings/people`, { widths: two }),
+  fixtureCase("library", "knowledge", `/w/${ws}/knowledge`),
+  fixtureCase("library", "knowledge_lessons", `/w/${ws}/knowledge`, {
+    widths: two,
+    setup: (page) => page.getByRole("tab", { name: /Lessons/ }).click(),
+  }),
+  fixtureCase("library", "files", `/w/${ws}/assets`),
+  fixtureCase("library", "files_empty", `/w/${ws}/assets`, { widths: two, scenario: "empty" }),
+);
 export const edgeCases = [
   fixtureCase("edge", "landing", "/"),
   fixtureCase("edge", "sign_in", "/w/ws-edge-lab"),
@@ -599,6 +682,40 @@ const expect = (condition, code) => {
   if (!condition) throw Error(code);
 };
 export const keyboardWalks = [
+  // T7 PR 16: "Change" on Team keeps focus in its dialog and returns it on Escape; adding
+  // an agent by keyboard reaches the server-built document and confirms it.
+  {
+    name: "thinking_dialog",
+    path: `/w/${ws}/agents`,
+    run: async (page) => {
+      const change = "Change how Business Analyst thinks";
+      await page.getByRole("button", { name: change }).waitFor();
+      await tabTo(page, (a) => a.text === change, 80);
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog", { name: change }).waitFor();
+      for (let i = 0; i < 12; i++) {
+        await page.keyboard.press("Tab");
+        expect((await active(page)).inDialog, "focus_left_dialog");
+      }
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      expect((await active(page)).text === change, "dialog_focus_restore");
+    },
+  },
+  {
+    name: "add_agent",
+    path: `/w/${ws}/agent-store/release-marketing`,
+    run: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).waitFor();
+      await tabTo(page, (a) => a.text === "Add Marketing");
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog", { name: "Add Marketing to Linen & Form?" }).waitFor();
+      await tabTo(page, (a) => a.text === "Send to Leo Martin to review");
+      await page.keyboard.press("Enter");
+      await page.getByText("Marketing was sent to Leo Martin to review").waitFor();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+    },
+  },
   {
     name: "skip_link_first",
     path: `/w/${ws}`,

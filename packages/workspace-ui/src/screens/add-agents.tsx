@@ -114,16 +114,23 @@ function ConsentDialog({
     },
   });
   const settled = confirm.phase.phase === "settled" ? confirm.phase.outcome : null;
-  // A refused or stale document can't be confirmed again: the person starts over.
-  const spent = settled !== null && settled.kind !== "ok" && settled.kind !== "unavailable";
+  // A refused or stale document can't be confirmed again: the person starts over. (Nothing
+  // ran on unavailable or rate_limited, so the same document may be sent again.)
+  const spent =
+    settled !== null &&
+    ["denied", "not_found", "conflict", "invalid", "not_in_build"].includes(settled.kind);
+  // While a confirmation is out (or its outcome unknown), the dialog stays: its reply decides.
+  const close = () => {
+    if (!confirm.busy) onClose();
+  };
   return (
     <Dialog
       open
       title={c.dialogTitle(document.name, shopName)}
-      onClose={onClose}
+      onClose={close}
       footer={
         <>
-          <Button onClick={onClose} disabled={confirm.busy}>
+          <Button onClick={close} disabled={confirm.busy}>
             {c.cancel}
           </Button>
           <Button
@@ -518,6 +525,25 @@ export function AddAgentsScreen({
   const shown = view.entries.filter((e) => filter === "all" || e.category === filter);
   const yours = shown.filter((e) => e.addedAs !== null);
   const more = shown.filter((e) => e.addedAs === null);
+  // An address that names an agent puts its details first (above the gallery once the
+  // card wraps on a narrow screen, so they are what a phone shows first).
+  const detailFirst = releaseId !== null;
+  const detail = selected ? (
+    <Detail
+      key={selected.releaseId}
+      workspaceId={ws}
+      view={view}
+      entry={selected}
+      onAdded={(added, doc) => {
+        setResult({ status: added.status, name: doc.name, reviewer: doc.reviewer });
+        reload();
+      }}
+    />
+  ) : (
+    <div className="sr-detail-pane">
+      <StateView kind="not_found" />
+    </div>
+  );
   return (
     <div className="sr">
       {header}
@@ -547,7 +573,8 @@ export function AddAgentsScreen({
           <p>{result.status === "added" ? c.addedBody : c.reviewBody(result.reviewer ?? "")}</p>
         </Banner>
       ) : null}
-      <div className="sr-card sr-split">
+      <div className={`sr-card sr-split${detailFirst ? " is-detail-first" : ""}`}>
+        {detailFirst ? detail : null}
         <div className="sr-gallery">
           {shown.length === 0 ? <p className="sr-help">{c.noMatch}</p> : null}
           {yours.length ? (
@@ -607,22 +634,7 @@ export function AddAgentsScreen({
             </ol>
           </section>
         </div>
-        {selected ? (
-          <Detail
-            key={selected.releaseId}
-            workspaceId={ws}
-            view={view}
-            entry={selected}
-            onAdded={(added, doc) => {
-              setResult({ status: added.status, name: doc.name, reviewer: doc.reviewer });
-              reload();
-            }}
-          />
-        ) : (
-          <div className="sr-detail-pane">
-            <StateView kind="not_found" />
-          </div>
-        )}
+        {detailFirst ? null : detail}
       </div>
       <p className="sr-footnote sr-centered">{c.footnote}</p>
     </div>

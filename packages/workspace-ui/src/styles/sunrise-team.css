@@ -992,6 +992,14 @@
   padding: 0;
   overflow: hidden;
 }
+/* The details come first in the page when the address names an agent: on the right
+   beside the gallery, and above it once the card wraps. */
+.sr-split.is-detail-first {
+  flex-direction: row-reverse;
+}
+.sr-split.is-detail-first .sr-gallery {
+  box-shadow: 0 -1px 0 var(--color-sunrise-divider);
+}
 .sr-gallery {
   display: grid;
   flex: 999 1 400px;
