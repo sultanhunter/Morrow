@@ -6,7 +6,7 @@ import type { Id } from "../model";
 import { StateView } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import type { RepeatingView } from "./model";
-import { CellLabel, MemberName, Section, StatusWord, InlineLink } from "./parts";
+import { CellLabel, MemberName, Section, StatusWord, ActionLink } from "./parts";
 
 const c = projectsCopy.repeating;
 
@@ -75,12 +75,12 @@ export function RepeatingTab({ ws, view }: { readonly ws: Id; readonly view: Rep
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.goesIn}</CellLabel>
-                    <InlineLink
+                    <ActionLink
                       route="project"
                       params={{ workspaceId: ws, projectId: row.projectId }}
                     >
                       <span dir="auto">{row.projectTitle}</span>
-                    </InlineLink>
+                    </ActionLink>
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.when}</CellLabel>
@@ -137,12 +137,12 @@ export function RepeatingTab({ ws, view }: { readonly ws: Id; readonly view: Rep
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.goesIn}</CellLabel>
-                    <InlineLink
+                    <ActionLink
                       route="project"
                       params={{ workspaceId: ws, projectId: row.projectId }}
                     >
                       <span dir="auto">{row.projectTitle}</span>
-                    </InlineLink>
+                    </ActionLink>
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.watches}</CellLabel>

@@ -52,6 +52,9 @@ export const scenarioNames = [
   "projects_teammate",
   "projects_start_stale",
   "projects_start_uncertain",
+  "projects_start_denied",
+  "projects_changed_meanwhile",
+  "projects_revise_stale",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -327,6 +330,18 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   projects_start_uncertain: {
     "plans.start": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // The first start is refused without the server's words (ADR-0034 item 5(b)).
+  projects_start_denied: {
+    "plans.start": (call) => (call === 0 ? { kind: "denied", message: "", reference: null } : null),
+  },
+  // A teammate changed each project after this page first read it (`changedMeanwhileIn`):
+  // the first act on it is a 409, and the page reads it again.
+  projects_changed_meanwhile: {},
+  // The first Edit of the plan card is refused as stale.
+  projects_revise_stale: {
+    "plans.revise": (call) =>
+      call === 0 ? { kind: "conflict", recheck: true, message: "" } : null,
+  },
 };
 /**
  * T7 PR 19: the default-off project screens' switch. `projects.*` and `plans.*` are
@@ -338,9 +353,14 @@ export const projectsComposedIn: readonly ScenarioName[] = [
   "projects_teammate",
   "projects_start_stale",
   "projects_start_uncertain",
+  "projects_start_denied",
+  "projects_changed_meanwhile",
+  "projects_revise_stale",
 ];
 /** The preview as a member whose actions are off. */
 export const teammateIn: readonly ScenarioName[] = ["projects_teammate"];
+/** The first read of each project shows the revision before a teammate's change. */
+export const changedMeanwhileIn: readonly ScenarioName[] = ["projects_changed_meanwhile"];
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [
   "connections_unlinked",

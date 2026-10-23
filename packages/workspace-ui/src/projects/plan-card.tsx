@@ -4,40 +4,51 @@
 // person-bound plan start of exactly the revision shown. Edit makes a new revision with
 // a new digest (the server keeps the original's taint), so a card is never changed in
 // place. Every value, estimate and permission line on a card is code's, per viewer.
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { buildWorkspacePath, workspaceRoutes } from "@morrow/contracts/routes";
 import type { Id } from "../model";
 import { useCommand, useDirty, useServices } from "../services";
 import { Button, Dialog, TextField } from "../components/controls";
+import { StatusRegion } from "../components/feedback";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
 import { formatDay } from "./format";
 import type { PlanCardView, PlanChangeCardView, PlanEdits } from "./model";
 import { validTitle, titleLimit } from "./new-project";
-import { MemberName, WordBadge, InlineLink } from "./parts";
+import { ActionLink, MemberName, WordBadge } from "./parts";
 import { PlanStartButton, PlanStartFeedback, usePlanStart } from "./plan-start";
 
 const c = projectsCopy.card;
 
+/**
+ * What a started card says. `focus` moves focus here when it appears after this person's
+ * own tap, since the button they pressed is gone (WCAG 2.4.3).
+ */
 function StartedNote({
   ws,
   projectId,
   note,
   word,
+  focus = false,
 }: {
   readonly ws: Id;
   readonly projectId: Id | null;
   readonly note: string;
   readonly word: string;
+  readonly focus?: boolean;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focus) ref.current?.focus();
+  }, [focus]);
   return (
-    <div className="pj-started">
+    <div className="pj-started" ref={ref} tabIndex={-1}>
       <WordBadge style={{ label: word, tone: "success", glyph: "check" }} />
       <span dir="auto">{note}</span>
       {projectId ? (
-        <InlineLink route="project" params={{ workspaceId: ws, projectId }}>
+        <ActionLink route="project" params={{ workspaceId: ws, projectId }}>
           {c.openProject}
-        </InlineLink>
+        </ActionLink>
       ) : null}
     </div>
   );
@@ -62,6 +73,9 @@ export function PlanCard({
   const [checksOf, setChecksOf] = useState<string | null>(null);
   const [notNow, setNotNow] = useState(false);
   const [editing, setEditing] = useState(false);
+  // Each opening of Edit is a fresh form, seeded from the revision shown then.
+  const [editRound, setEditRound] = useState(0);
+  const [saved, setSaved] = useState<string | null>(null);
   const flow = usePlanStart<{ messageId: Id; draftDigest: string }>({
     ws,
     request: (cmd) => services.port.plans.startDocument(ws, cmd),
@@ -278,7 +292,14 @@ export function PlanCard({
               {c.notNow}
             </Button>
             {card.canEdit && services.composed["plans.revise"] ? (
-              <Button onClick={() => setEditing(true)} disabled={flow.busy}>
+              <Button
+                onClick={() => {
+                  setSaved(null);
+                  setEditRound((n) => n + 1);
+                  setEditing(true);
+                }}
+                disabled={flow.busy}
+              >
                 {c.edit}
               </Button>
             ) : null}
@@ -295,8 +316,10 @@ export function PlanCard({
           <PlanStartFeedback flow={flow} />
         </>
       )}
-      {card.canEdit && services.composed["plans.revise"] ? (
+      <StatusRegion message={saved} />
+      {(card.canEdit || editing) && services.composed["plans.revise"] ? (
         <EditPlanDialog
+          key={editRound}
           ws={ws}
           conversationId={conversationId}
           card={card}
@@ -304,8 +327,10 @@ export function PlanCard({
           onClose={() => setEditing(false)}
           onSaved={() => {
             setEditing(false);
+            setSaved(projectsCopy.editCard.saved);
             onChanged();
           }}
+          onStale={onChanged}
         />
       ) : null}
     </article>
@@ -330,6 +355,12 @@ export function planEdits(
   };
 }
 
+/**
+ * Edit makes a new revision. The form is seeded from the revision shown when it opened
+ * (PlanCard remounts it on each opening). A 409 keeps it open with its notice and
+ * re-reads the card; its edits were made against the old revision, so Save stays off
+ * until the person closes it, looks the new card over and opens Edit again.
+ */
 function EditPlanDialog({
   ws,
   conversationId,
@@ -337,6 +368,7 @@ function EditPlanDialog({
   open,
   onClose,
   onSaved,
+  onStale,
 }: {
   readonly ws: Id;
   readonly conversationId: Id;
@@ -344,6 +376,8 @@ function EditPlanDialog({
   readonly open: boolean;
   readonly onClose: () => void;
   readonly onSaved: () => void;
+  /** The card changed since this form opened: re-read it, and keep the form open. */
+  readonly onStale: () => void;
 }) {
   const services = useServices();
   const e = projectsCopy.editCard;
@@ -352,6 +386,8 @@ function EditPlanDialog({
   const [keepGoals, setKeepGoals] = useState<readonly string[]>(card.goals.map((g) => g.key));
   const [keepSteps, setKeepSteps] = useState<readonly number[]>(card.steps.map((s) => s.index));
   const [checked, setChecked] = useState(false);
+  const [seeded] = useState(card.draftDigest);
+  const outdated = card.draftDigest !== seeded;
   const formId = useId();
   const command = useCommand<
     { messageId: Id; draftDigest: string; edits: PlanEdits },
@@ -361,7 +397,7 @@ function EditPlanDialog({
     send: (cmd) => services.port.plans.revise(ws, conversationId, cmd),
     onOutcome: (outcome) => {
       if (outcome.kind === "ok") onSaved();
-      else if (outcome.kind === "conflict" && outcome.recheck) onSaved();
+      else if (outcome.kind === "conflict" && outcome.recheck) onStale();
     },
   });
   const edited =
@@ -378,21 +414,15 @@ function EditPlanDialog({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setChecked(true);
-    if (!valid.title || !valid.goals || !valid.steps || command.busy) return;
+    if (!valid.title || !valid.goals || !valid.steps || command.busy || outdated) return;
     void command.submit({
       messageId: card.messageId,
-      draftDigest: card.draftDigest,
+      draftDigest: seeded,
       edits: planEdits(card, { title, endsOn, keepGoals, keepSteps }),
     });
   };
   const close = () => {
     if (command.busy) return;
-    command.reset();
-    setTitle(card.title);
-    setEndsOn(card.endsOn);
-    setKeepGoals(card.goals.map((g) => g.key));
-    setKeepSteps(card.steps.map((s) => s.index));
-    setChecked(false);
     onClose();
   };
   const toggle = <T,>(list: readonly T[], value: T, on: boolean): readonly T[] =>
@@ -407,7 +437,7 @@ function EditPlanDialog({
           <Button onClick={close} disabled={command.busy}>
             {e.cancel}
           </Button>
-          <Button type="submit" variant="primary" form={formId} disabled={command.busy}>
+          <Button type="submit" variant="primary" form={formId} disabled={command.busy || outdated}>
             {command.busy ? e.saving : e.save}
           </Button>
         </>
@@ -515,11 +545,16 @@ export function PlanChangeCard({
   const services = useServices();
   const headingId = useId();
   const [notNow, setNotNow] = useState(false);
+  // This person's tap applied it: once the card reads as applied, focus moves to its note.
+  const [applied, setApplied] = useState(false);
   const flow = usePlanStart<{ messageId: Id; draftDigest: string }>({
     ws,
     request: (cmd) => services.port.plans.startDocument(ws, cmd),
     expected: { target: "plan_change", draftDigest: card.draftDigest, projectId },
-    onStarted: onChanged,
+    onStarted: () => {
+      setApplied(true);
+      onChanged();
+    },
     onStale: onChanged,
   });
   const startable =
@@ -568,7 +603,13 @@ export function PlanChangeCard({
         </div>
       ) : null}
       {card.started ? (
-        <StartedNote ws={ws} projectId={null} note={card.started.note} word={c.applied} />
+        <StartedNote
+          ws={ws}
+          projectId={null}
+          note={card.started.note}
+          word={c.applied}
+          focus={applied}
+        />
       ) : notNow ? (
         <p className="pj-meta">{c.notNowDone}</p>
       ) : (

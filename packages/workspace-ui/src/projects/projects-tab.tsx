@@ -6,7 +6,15 @@ import { StateView } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import { byEndDate, formatDay, formatShortDay } from "./format";
 import type { ProjectsOverviewView } from "./model";
-import { CellLabel, HealthWord, MemberName, Section, memberList, InlineLink } from "./parts";
+import {
+  CellLabel,
+  HealthWord,
+  InlineLink,
+  MemberName,
+  RowLink,
+  Section,
+  memberList,
+} from "./parts";
 
 const c = projectsCopy.page;
 
@@ -54,24 +62,20 @@ export function ProjectsTab({
                 <li key={row.projectId} className="pj-row">
                   <div className="pj-cell pj-cell-main">
                     <CellLabel>{c.columns.project}</CellLabel>
-                    <InlineLink
-                      strong
-                      route="project"
-                      params={{ workspaceId: ws, projectId: row.projectId }}
-                    >
+                    <RowLink route="project" params={{ workspaceId: ws, projectId: row.projectId }}>
                       <span dir="auto" className="pj-row-title">
                         {row.title}
                       </span>
-                    </InlineLink>
-                    <span className="pj-meta">
-                      {c.ends(formatDay(row.endsOn))}
-                      {row.note ? (
-                        <>
-                          {" · "}
-                          <span dir="auto">{row.note}</span>
-                        </>
-                      ) : null}
-                    </span>
+                      <span className="pj-meta">
+                        {c.ends(formatDay(row.endsOn))}
+                        {row.note ? (
+                          <>
+                            {" · "}
+                            <span dir="auto">{row.note}</span>
+                          </>
+                        ) : null}
+                      </span>
+                    </RowLink>
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.mainGoal}</CellLabel>
@@ -87,11 +91,11 @@ export function ProjectsTab({
                     ) : (
                       <span className="pj-meta">{c.noGoal}</span>
                     )}
-                    {row.moreGoals.map((line) => (
-                      <span key={line} dir="auto" className="pj-meta">
-                        {c.moreGoal(line)}
+                    {row.moreGoals.length ? (
+                      <span dir="auto" className="pj-meta">
+                        {c.moreGoals(row.moreGoals)}
                       </span>
-                    ))}
+                    ) : null}
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.health}</CellLabel>
@@ -137,24 +141,23 @@ export function ProjectsTab({
                 <li key={area.projectId} className="pj-row">
                   <div className="pj-cell pj-cell-main">
                     <CellLabel>{c.columns.area}</CellLabel>
-                    <InlineLink
-                      strong
+                    <RowLink
                       route="project"
                       params={{ workspaceId: ws, projectId: area.projectId }}
                     >
                       <span dir="auto" className="pj-row-title">
                         {area.label}
                       </span>
-                    </InlineLink>
-                    <span className="pj-meta">
-                      {c.withAgent} <MemberName member={area.agent} />
-                      {area.note ? (
-                        <>
-                          {" · "}
-                          <span dir="auto">{area.note}</span>
-                        </>
-                      ) : null}
-                    </span>
+                      <span className="pj-meta">
+                        {c.withAgent} <MemberName member={area.agent} />
+                        {area.note ? (
+                          <>
+                            {" · "}
+                            <span dir="auto">{area.note}</span>
+                          </>
+                        ) : null}
+                      </span>
+                    </RowLink>
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.goal}</CellLabel>
@@ -189,14 +192,13 @@ export function ProjectsTab({
                 <li className="pj-row">
                   <div className="pj-cell pj-cell-main">
                     <CellLabel>{c.columns.area}</CellLabel>
-                    <InlineLink
-                      strong
+                    <RowLink
                       route="project"
                       params={{ workspaceId: ws, projectId: overview.quickTasks.projectId }}
                     >
                       <span className="pj-row-title">{c.quickTasks}</span>
-                    </InlineLink>
-                    <span className="pj-meta">{c.quickTasksNote}</span>
+                      <span className="pj-meta">{c.quickTasksNote}</span>
+                    </RowLink>
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.goal}</CellLabel>
@@ -228,20 +230,18 @@ export function ProjectsTab({
           <ul className="pj-simple-list">
             {overview.finished.map((row) => (
               <li key={row.projectId} className="pj-simple-row">
-                <span className="pj-simple-main">
-                  <InlineLink
-                    strong
-                    route="project"
-                    params={{ workspaceId: ws, projectId: row.projectId }}
-                  >
-                    <span dir="auto" className="pj-row-title">
-                      {row.title}
-                    </span>
-                  </InlineLink>
+                <RowLink
+                  className="pj-simple-main"
+                  route="project"
+                  params={{ workspaceId: ws, projectId: row.projectId }}
+                >
+                  <span dir="auto" className="pj-row-title">
+                    {row.title}
+                  </span>
                   <span className="pj-meta">
                     {c.finishedLine(formatShortDay(row.finishedOn), row.goalsMet, row.goalsTotal)}
                   </span>
-                </span>
+                </RowLink>
                 <HealthWord health={row.health} />
               </li>
             ))}

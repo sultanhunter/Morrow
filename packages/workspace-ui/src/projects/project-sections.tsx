@@ -14,7 +14,7 @@ import { usePaged } from "../screens/work";
 import { projectsCopy } from "./copy";
 import { GoalList } from "./goals";
 import type { ProjectDetailView } from "./model";
-import { HealthWord, MemberName, Section, StatusWord, InlineLink } from "./parts";
+import { ActionLink, HealthWord, MemberName, Section, StatusWord } from "./parts";
 import { UpdateCard } from "./project-conversation";
 
 const p = projectsCopy.project;
@@ -58,9 +58,9 @@ function PlanSection({ ws, project }: { readonly ws: Id; readonly project: Proje
             <div className="pj-step-body">
               <h3 className="pj-step-title">
                 {step.taskId ? (
-                  <InlineLink strong route="task" params={{ workspaceId: ws, taskId: step.taskId }}>
+                  <ActionLink strong route="task" params={{ workspaceId: ws, taskId: step.taskId }}>
                     <span dir="auto">{step.title}</span>
-                  </InlineLink>
+                  </ActionLink>
                 ) : (
                   <span dir="auto">{step.title}</span>
                 )}
@@ -93,9 +93,9 @@ function CreditsSection({ ws, project }: { readonly ws: Id; readonly project: Pr
       id="pj-credits-section-title"
       title={project.kind === "area" ? p.spendTitle : p.creditsTitle}
       action={
-        <InlineLink route="settings_section" params={{ workspaceId: ws, section: "billing" }}>
+        <ActionLink route="settings_section" params={{ workspaceId: ws, section: "billing" }}>
           {p.seePlan}
-        </InlineLink>
+        </ActionLink>
       }
     >
       <p>{p.creditsUsed(credits.used, credits.planned)}</p>

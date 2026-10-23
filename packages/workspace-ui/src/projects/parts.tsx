@@ -149,11 +149,34 @@ export function Section({
 }
 
 /**
- * A link inside text or a row: it stays an inline link (WCAG 2.5.8's inline exception, so
- * Sunrise's 44 px floor is for controls, not words), even where its container lays out
- * its children as blocks. Routes come only from the route contract.
+ * A link inside a sentence: it stays an inline link (WCAG 2.5.8's inline exception: its
+ * size is set by the line of text around it), even where its container lays out its
+ * children as blocks. A link that stands alone is an `ActionLink` or a `RowLink`, never
+ * this. Routes come only from the route contract.
  */
 export function InlineLink({
+  route,
+  params,
+  children,
+}: {
+  readonly route: string;
+  readonly params: Readonly<Record<string, string>>;
+  readonly children: ReactNode;
+}) {
+  return (
+    <span className="pj-link-wrap">
+      <RouteLink route={route} params={params} className="pj-link">
+        {children}
+      </RouteLink>
+    </span>
+  );
+}
+
+/**
+ * A link that stands alone (a section's action, a plan step, "Goes in", "Open the
+ * project"): a target of Sunrise's 44 px floor, 48 px below 760 px.
+ */
+export function ActionLink({
   route,
   params,
   children,
@@ -165,11 +188,40 @@ export function InlineLink({
   readonly strong?: boolean;
 }) {
   return (
-    <span className="pj-link-wrap">
-      <RouteLink route={route} params={params} className={strong ? "pj-link is-strong" : "pj-link"}>
-        {children}
-      </RouteLink>
-    </span>
+    <RouteLink
+      route={route}
+      params={params}
+      className={strong ? "pj-action-link is-strong" : "pj-action-link"}
+    >
+      {children}
+    </RouteLink>
+  );
+}
+
+/**
+ * A row's or a card's main link, as the boards draw them: the title and the line under
+ * it are one target (56 px for a project or area row, 44 px elsewhere; 48 px below
+ * 760 px), so the whole cell or card opens the record.
+ */
+export function RowLink({
+  route,
+  params,
+  children,
+  className,
+}: {
+  readonly route: string;
+  readonly params: Readonly<Record<string, string>>;
+  readonly children: ReactNode;
+  readonly className?: string;
+}) {
+  return (
+    <RouteLink
+      route={route}
+      params={params}
+      className={className ? `pj-row-link ${className}` : "pj-row-link"}
+    >
+      {children}
+    </RouteLink>
   );
 }
 

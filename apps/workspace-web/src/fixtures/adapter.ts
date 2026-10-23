@@ -37,6 +37,7 @@ import {
 } from "./seed";
 import { createProjectsFixture } from "./projects";
 import {
+  changedMeanwhileIn,
   projectsComposedIn,
   scenarios,
   teammateIn,
@@ -637,7 +638,10 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         owner: people.owner,
         editor: people.editor,
       },
-      { teammate: teammateIn.includes(scenario) },
+      {
+        teammate: teammateIn.includes(scenario),
+        changedMeanwhile: changedMeanwhileIn.includes(scenario),
+      },
     ),
   };
 }

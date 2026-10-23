@@ -2,15 +2,18 @@
 // §3.2): "How is this going, and what's next?" The header carries the health word, the
 // scope line and the person-only actions (Plan next steps, Stop steps; at the end date
 // Finish or Extend); tabs Overview, Tasks, Brief, Files and Activity; the conversation sits
-// beside them. The server's `actions` decide which buttons show; it checks again.
-import { useState } from "react";
+// beside them. The server's `actions` decide which buttons show; it checks again. What an
+// action did is said in the page's own status region, and focus moves to the title, since
+// the button that opened the action is often gone once the page reads the project again.
+import { useEffect, useRef, useState } from "react";
 import type { Id, WorkspaceView } from "../model";
 import { useRead, useServices } from "../services";
 import { Button, RouteLink } from "../components/controls";
 import { Tabs } from "../components/shell";
-import { outcomeState } from "../components/feedback";
+import { StatusRegion, outcomeState } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import type { ProjectDetailView } from "./model";
+import { TellMorrowDialog } from "./new-project";
 import { HealthWord } from "./parts";
 import {
   ExtendDialog,
@@ -133,11 +136,25 @@ export function ProjectScreen({
   const services = useServices();
   const ws = workspace.id;
   const [tab, setTab] = useState<Tab>("overview");
-  const [dialog, setDialog] = useState<"none" | "stop" | "finish" | "extend">("none");
+  const [dialog, setDialog] = useState<"none" | "stop" | "finish" | "extend" | "ask">("none");
   const [conversationVersion, setConversationVersion] = useState(0);
+  const [done, setDone] = useState<string | null>(null);
+  const [focusTitle, setFocusTitle] = useState(0);
+  const title = useRef<HTMLHeadingElement>(null);
+  // After the dialog has closed (its own effect runs first and returns focus to its
+  // opener), focus moves to the title, which stays while the page reads again.
+  useEffect(() => {
+    if (focusTitle > 0) title.current?.focus();
+  }, [focusTitle]);
   const [project, reload] = useRead(`${ws}|projects.get|${projectId}`, () =>
     services.port.projects.get(ws, projectId),
   );
+  // Ask Morrow privately: a new private Ask (plans.ask), where the overview allows it.
+  const askComposed = services.composed["plans.ask"];
+  const [overview] = useRead(askComposed ? `${ws}|projects.overview` : null, () =>
+    services.port.projects.overview(ws),
+  );
+  const canAsk = askComposed && overview.kind === "ok" && overview.value.actions.ask;
   if (project.kind !== "ok")
     return (
       <div className="page pj-page">
@@ -163,6 +180,16 @@ export function ProjectScreen({
   const changed = () => {
     reload();
     setConversationVersion((n) => n + 1);
+  };
+  const open = (which: "stop" | "finish" | "extend" | "ask") => {
+    setDone(null);
+    setDialog(which);
+  };
+  const close = () => setDialog("none");
+  const acted = (message: string) => {
+    setDone(message);
+    setFocusTitle((n) => n + 1);
+    changed();
   };
   return (
     <div className="page pj-page">
@@ -193,7 +220,7 @@ export function ProjectScreen({
       ) : null}
       <header className="page-header pj-header">
         <div className="pj-title-block">
-          <h1 className="pj-title">
+          <h1 className="pj-title" ref={title} tabIndex={-1}>
             <span dir="auto">{view.title}</span> <HealthWord health={view.health} />
           </h1>
           {view.scope.length ? (
@@ -203,16 +230,18 @@ export function ProjectScreen({
           ) : null}
         </div>
         <div className="pj-header-actions">
-          {can.stop ? <Button onClick={() => setDialog("stop")}>{p.stopSteps}</Button> : null}
+          {can.stop ? <Button onClick={() => open("stop")}>{p.stopSteps}</Button> : null}
           {can.plan && !ended ? (
             <PlanNextStepsButton
               ws={ws}
               project={view}
               onAsked={() => setConversationVersion((n) => n + 1)}
+              onStale={changed}
             />
           ) : null}
         </div>
       </header>
+      <StatusRegion message={done} />
       {view.stopped ? (
         <div role="status" className="notice notice-warning">
           <p dir="auto">{view.stopped}</p>
@@ -221,8 +250,8 @@ export function ProjectScreen({
       {ended ? (
         <EndedBanner
           project={view}
-          onFinish={can.finish ? () => setDialog("finish") : null}
-          onExtend={can.extend ? () => setDialog("extend") : null}
+          onFinish={can.finish ? () => open("finish") : null}
+          onExtend={can.extend ? () => open("extend") : null}
         />
       ) : null}
       <div className="pj-layout">
@@ -264,36 +293,56 @@ export function ProjectScreen({
               ws={ws}
               project={view}
               version={conversationVersion}
-              onChanged={changed}
+              onChanged={reload}
+              onAskPrivately={canAsk ? () => open("ask") : null}
             />
           ) : null}
         </div>
       </div>
-      {can.stop ? (
+      {/* Mounted whatever the actions say now, so a re-read never unmounts an open dialog
+          (its notice stays readable); only the buttons that open them follow `can`. */}
+      {composed["projects.stopSteps"] ? (
         <StopStepsDialog
           ws={ws}
           project={view}
           open={dialog === "stop"}
-          onClose={() => setDialog("none")}
-          onStopped={changed}
+          allowed={can.stop}
+          onClose={close}
+          onDone={acted}
+          onStale={changed}
         />
       ) : null}
-      {can.finish ? (
+      {composed["projects.finishDocument"] && composed["plans.start"] ? (
         <FinishDialog
           ws={ws}
           project={view}
           open={dialog === "finish"}
-          onClose={() => setDialog("none")}
-          onFinished={changed}
+          allowed={can.finish}
+          onClose={close}
+          onDone={acted}
+          onStale={changed}
         />
       ) : null}
-      {can.extend ? (
+      {composed["projects.extend"] ? (
         <ExtendDialog
           ws={ws}
           project={view}
           open={dialog === "extend"}
-          onClose={() => setDialog("none")}
-          onExtended={changed}
+          allowed={can.extend}
+          onClose={close}
+          onDone={acted}
+          onStale={changed}
+        />
+      ) : null}
+      {askComposed ? (
+        <TellMorrowDialog
+          ws={ws}
+          open={dialog === "ask"}
+          onClose={close}
+          starters={[]}
+          canAsk={canAsk}
+          canCreate={false}
+          onSetUpYourself={close}
         />
       ) : null}
     </div>

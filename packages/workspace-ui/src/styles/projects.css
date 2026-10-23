@@ -262,15 +262,45 @@ p.pj-meta span.pj-meta,
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-/* Links in text and rows stay inline (the wrapper takes any block layout). */
+/* A link inside a sentence stays inline (the wrapper takes any block layout). */
 .pj-link {
   color: var(--color-link, var(--color-accent));
 }
-.pj-link.is-strong {
+/* A link that stands alone is a target: 44 px, 48 px below 760 px (Sunrise's floors). */
+.pj-action-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-link, var(--color-accent));
+  font-weight: 550;
+}
+.pj-action-link.is-strong {
   font-weight: 600;
   text-decoration: none;
 }
-.pj-link.is-strong:hover {
+.pj-action-link.is-strong:hover {
+  text-decoration: underline;
+}
+/* A row's main cell, or a whole card, is one link: the title and the line under it. */
+.pj-row-link {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 44px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+.pj-rows-dated .pj-row-link,
+.pj-rows-areas .pj-row-link {
+  min-height: 56px;
+}
+.pj-row-link .pj-row-title {
+  color: var(--color-link, var(--color-accent));
+}
+.pj-row-link:hover .pj-row-title {
   text-decoration: underline;
 }
 .pj-row-title {
@@ -336,15 +366,17 @@ p.pj-meta span.pj-meta,
   flex-direction: column;
   gap: var(--space-2);
 }
-.pj-task-card {
-  display: flex;
-  flex-direction: column;
+.pj-row-link.pj-task-card {
+  justify-content: flex-start;
   align-items: flex-start;
   gap: var(--space-1);
   padding: var(--space-3);
   border: 1px solid var(--color-divider, var(--color-border));
   border-radius: var(--radius-inner, var(--radius-control));
   background: var(--color-surface);
+}
+.pj-row-link.pj-task-card:hover {
+  border-color: var(--color-control-border);
 }
 
 /* A project: main column and conversation beside it from 1120 px. */
@@ -622,8 +654,8 @@ p.pj-meta span.pj-meta,
   justify-content: space-between;
   gap: var(--space-2);
 }
-.pj-composer-actions .text-link {
-  margin-top: 0;
+.pj-composer-actions > .button:last-child {
+  margin-left: auto;
 }
 .pj-ask .pj-ask-thread,
 .pj-ask .pj-composer {
@@ -866,6 +898,8 @@ ul.pj-helpers {
 }
 @media (max-width: 759px) {
   .pj-area-link,
+  .pj-action-link,
+  .pj-row-link,
   .pj-check,
   .pj-link-button {
     min-height: 48px;

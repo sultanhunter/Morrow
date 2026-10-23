@@ -88,7 +88,11 @@ interface DocumentState {
 
 export function createProjectsFixture(
   hooks: ProjectsFixtureHooks,
-  options: { readonly teammate: boolean },
+  options: {
+    readonly teammate: boolean;
+    /** A teammate changed each project after this page first read it. */
+    readonly changedMeanwhile: boolean;
+  },
 ): Pick<WorkspacePort, "projects" | "plans"> {
   const { reply, command, ws } = hooks;
   const teammate = options.teammate;
@@ -133,6 +137,7 @@ export function createProjectsFixture(
     ],
   ]);
   const documents = new Map<string, DocumentState>();
+  const readBefore = new Set<Id>();
   let counter = 0;
 
   // The projects' tasks, readable through the work API by their goal records.
@@ -426,7 +431,14 @@ export function createProjectsFixture(
     get: (id, projectId) =>
       reply("projects.get", () => {
         const detail = details.get(projectId);
-        return ws(id) && detail ? ok(detail) : notFound;
+        if (!ws(id) || !detail) return notFound;
+        // The first read predates a teammate's change: it shows the revision before, so
+        // an act sent with it is a 409 until the page reads the project again.
+        if (options.changedMeanwhile && !readBefore.has(projectId)) {
+          readBefore.add(projectId);
+          return ok({ ...detail, revision: detail.revision - 1 });
+        }
+        return ok(detail);
       }),
     messages: (id, projectId) =>
       reply("projects.messages", () =>

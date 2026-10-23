@@ -31,7 +31,7 @@ import {
   parseDay,
   statusStyle,
 } from "../packages/workspace-ui/src/projects/format.ts";
-import { documentBinds } from "../packages/workspace-ui/src/projects/plan-start.tsx";
+import { deniedNotice, documentBinds } from "../packages/workspace-ui/src/projects/plan-start.tsx";
 import {
   PlanCard,
   PlanChangeCard,
@@ -49,6 +49,7 @@ import { ProjectsTab } from "../packages/workspace-ui/src/projects/projects-tab.
 import { RepeatingTab } from "../packages/workspace-ui/src/projects/repeating-tab.tsx";
 import { TasksTab } from "../packages/workspace-ui/src/projects/tasks-tab.tsx";
 import { ProjectOverview } from "../packages/workspace-ui/src/projects/project-sections.tsx";
+import { ProjectConversation } from "../packages/workspace-ui/src/projects/project-conversation.tsx";
 import { HealthWord } from "../packages/workspace-ui/src/projects/parts.tsx";
 import { json, recordingTransport } from "./fixtures/workspace-web.mjs";
 
@@ -121,6 +122,9 @@ test("the switch: the fixture composes them only in the projects preview scenari
     "projects_teammate",
     "projects_start_stale",
     "projects_start_uncertain",
+    "projects_start_denied",
+    "projects_changed_meanwhile",
+    "projects_revise_stale",
   ]);
   const ready = fixtureComposedFor("ready");
   for (const scenario of scenarioNames) {
@@ -395,6 +399,72 @@ test("Finish: a code-built document under the person's revision, then its single
   assert.ok((await port.projects.get(ws, "project-tote")).value.stopped);
 });
 
+test("a start refused without the server's words says who may start it, in both steps", () => {
+  // Review F9: an empty `denied` is ineligibility, never "the plan changed".
+  assert.deepEqual(deniedNotice(""), { kind: "refused", reason: "ineligible", message: null });
+  assert.deepEqual(deniedNotice("Steps are stopped in this project."), {
+    kind: "refused",
+    reason: "message",
+    message: "Steps are stopped in this project.",
+  });
+  // Both steps of the start use it; neither builds its own denied notice.
+  const source = readFileSync("packages/workspace-ui/src/projects/plan-start.tsx", "utf8");
+  assert.equal(source.match(/setNotice\(deniedNotice\(outcome\.message\)\)/g)?.length, 2);
+  assert.doesNotMatch(source, /reason: "message", message: outcome\.message/);
+});
+
+test("a project a teammate changed: the first act is a 409, and the re-read revision is accepted", async () => {
+  // Review F1: the page re-reads the project on a 409, so the next tap carries the new
+  // revision. The scenario's first read predates the change.
+  const port = createFixtureAdapter("projects_changed_meanwhile");
+  const first = (await port.projects.get(ws, "project-tote")).value;
+  const refused = await port.projects.planNextSteps(
+    ws,
+    "project-tote",
+    cmd({ expectedRevision: first.revision }),
+  );
+  assert.equal(refused.kind, "conflict");
+  assert.equal(refused.recheck, true);
+  // The same revision again is refused again: only a re-read recovers.
+  const again = await port.projects.planNextSteps(
+    ws,
+    "project-tote",
+    cmd({ expectedRevision: first.revision }),
+  );
+  assert.equal(again.kind, "conflict");
+  const reread = (await port.projects.get(ws, "project-tote")).value;
+  assert.equal(reread.revision, first.revision + 1);
+  const asked = await port.projects.planNextSteps(
+    ws,
+    "project-tote",
+    cmd({ expectedRevision: reread.revision }),
+  );
+  assert.equal(asked.kind, "ok");
+  // The page wires the 409 to a re-read of the project, and an ok to the conversation.
+  const screen = readFileSync("packages/workspace-ui/src/projects/project-screen.tsx", "utf8");
+  const button = screen.slice(screen.indexOf("<PlanNextStepsButton"));
+  assert.ok(button.slice(0, button.indexOf("/>")).includes("onStale={changed}"));
+  const actions = readFileSync("packages/workspace-ui/src/projects/project-actions.tsx", "utf8");
+  assert.match(actions, /outcome\.kind === "conflict" && outcome\.recheck\) onStale\(\)/);
+});
+
+test("the page says what a dialog did and keeps its dialogs mounted through a re-read", () => {
+  // Review F2: the confirmation lives in the page's status region (the dialog and its
+  // opener unmount once the actions flip), and focus moves to the page title.
+  const screen = readFileSync("packages/workspace-ui/src/projects/project-screen.tsx", "utf8");
+  assert.match(screen, /<StatusRegion message=\{done\} \/>/);
+  assert.match(screen, /<h1 className="pj-title" ref=\{title\} tabIndex=\{-1\}>/);
+  for (const dialog of ["StopStepsDialog", "FinishDialog", "ExtendDialog"]) {
+    const at = screen.indexOf(`<${dialog}`);
+    assert.ok(at > 0, dialog);
+    // Gated on the switch only, never on `can.*`.
+    assert.doesNotMatch(screen.slice(at - 80, at), /can\.\w+ \?/, dialog);
+    assert.match(screen.slice(at, at + 400), /onDone=\{acted\}/, dialog);
+  }
+  const actions = readFileSync("packages/workspace-ui/src/projects/project-actions.tsx", "utf8");
+  assert.doesNotMatch(actions, /StatusRegion/, "no dialog keeps its own confirmation");
+});
+
 test("a teammate's actions are off as the server says, and creating is refused", async () => {
   const port = createFixtureAdapter("projects_teammate");
   const tote = (await port.projects.get(ws, "project-tote")).value;
@@ -481,6 +551,84 @@ test("screens: the Projects tab, Tasks and Repeating render from the sample, by 
   );
   assert.ok(repeating.includes("Waiting for you to turn on"));
   assert.ok(!/>Turn on</.test(repeating), "turning on waits for its review gate");
+});
+
+test("screens: standalone links are targets; only a link inside a sentence stays inline", async () => {
+  // Review F3: a row's main cell and a task card are one link (the boards' 56 px and
+  // whole-card targets); the one inline link is the credits sentence's.
+  const port = createFixtureAdapter("projects_preview");
+  const overview = (await port.projects.overview(ws)).value;
+  const html = render(h(ProjectsTab, { ws, overview }));
+  const rowLinks = html.match(/<a [^>]*class="pj-row-link[^"]*"/g) ?? [];
+  assert.equal(
+    rowLinks.length,
+    overview.dated.length + overview.areas.length + 1 + overview.finished.length,
+  );
+  const inline = html.match(/class="pj-link"/g) ?? [];
+  assert.equal(inline.length, 1, "only the credits sentence");
+  assert.match(
+    html,
+    /<p>[^<]* left until [^<]+ <span class="pj-link-wrap"><a [^>]*class="pj-link">See Plan and credits<\/a><\/span><\/p>/,
+  );
+  const tasks = (await port.projects.tasks(ws)).value;
+  const board = render(h(TasksTab, { ws, tasks, canCreate: false, onNewTask() {} }));
+  assert.doesNotMatch(board, /class="pj-link"/);
+  assert.match(board, /<li><a href="\/w\/ws-linen\/work\/[^"]+" class="pj-row-link pj-task-card">/);
+  const repeating = render(
+    h(RepeatingTab, { ws, view: (await port.projects.repeating(ws)).value }),
+  );
+  assert.doesNotMatch(repeating, /class="pj-link"/);
+  assert.match(repeating, /class="pj-action-link"/);
+  const tote = (await port.projects.get(ws, "project-tote")).value;
+  const dated = render(h(ProjectOverview, { ws, project: tote }));
+  assert.doesNotMatch(dated, /class="pj-link"/);
+  assert.match(dated, /class="pj-action-link"[^>]*>Plan and credits</);
+  // No component outside the credits sentence uses InlineLink.
+  const dir = "packages/workspace-ui/src/projects";
+  const users = readdirSync(dir).filter(
+    (file) =>
+      file !== "parts.tsx" && readFileSync(`${dir}/${file}`, "utf8").includes("<InlineLink"),
+  );
+  assert.deepEqual(users, ["projects-tab.tsx"]);
+});
+
+test("screens: a project row with more goals counts them once", async () => {
+  // Review F10: up to 3 goals (ADR-0033), so up to 2 more.
+  const port = createFixtureAdapter("projects_preview");
+  const overview = (await port.projects.overview(ws)).value;
+  const row = {
+    ...overview.dated[0],
+    moreGoals: ["AI assistants name it", "12 reviews by Dec 4"],
+  };
+  const html = render(h(ProjectsTab, { ws, overview: { ...overview, dated: [row] } }));
+  assert.match(html, />2 more goals: AI assistants name it · 12 reviews by Dec 4</);
+  assert.doesNotMatch(html, /1 more goal/);
+  const one = render(
+    h(ProjectsTab, { ws, overview: { ...overview, dated: [{ ...row, moreGoals: ["A"] }] } }),
+  );
+  assert.match(one, />1 more goal: A</);
+});
+
+test("screens: Ask Morrow privately opens a private Ask, never the Listings run form", async () => {
+  // Review F4: the `ask` route is M3's Listings run; the private Ask is plans.ask.
+  const port = createFixtureAdapter("projects_preview");
+  const tote = (await port.projects.get(ws, "project-tote")).value;
+  const props = { ws, project: tote, version: 0, onChanged() {} };
+  const off = render(h(ProjectConversation, { ...props, onAskPrivately: null }));
+  assert.doesNotMatch(off, /Ask Morrow privately instead/);
+  const on = render(h(ProjectConversation, { ...props, onAskPrivately() {} }));
+  assert.match(
+    on,
+    /<button type="button" class="pj-link-button">Ask Morrow privately instead<\/button>/,
+  );
+  for (const html of [off, on]) assert.doesNotMatch(html, /href="\/w\/ws-linen\/ask"/);
+  // The composer is the shared labelled field, so an error is shown and linked (review F5).
+  assert.match(
+    on,
+    /<div class="field"><label for="([^"]+)">Message<\/label><textarea id="\1"[^>]*required=""/,
+  );
+  const screen = readFileSync("packages/workspace-ui/src/projects/project-screen.tsx", "utf8");
+  assert.match(screen, /askComposed && overview\.kind === "ok" && overview\.value\.actions\.ask/);
 });
 
 test("screens: health words are a glyph and a word, plain words have no badge", () => {

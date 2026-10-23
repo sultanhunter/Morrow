@@ -46,6 +46,17 @@ export function documentBinds(
   return Number.isFinite(expires) && expires > now ? "binds" : "expired";
 }
 
+/**
+ * A start or its document refused as `denied`: the server's own words when it gave any,
+ * otherwise that this person may not start it (ADR-0034 item 5(b): `actor_ineligible`,
+ * a missing permission, or stopped). Both steps say the same; never "it changed".
+ */
+export function deniedNotice(message: string): StartNotice {
+  return message
+    ? { kind: "refused", reason: "message", message }
+    : { kind: "refused", reason: "ineligible", message: null };
+}
+
 /** What the feedback reads of a start flow (any body type). */
 export interface StartFlowView {
   readonly busy: boolean;
@@ -91,7 +102,7 @@ export function usePlanStart<B>(options: {
         setNotice({ kind: "refused", reason: "changed", message: null });
         latest.current.onStale();
       } else if (outcome.kind === "denied") {
-        setNotice({ kind: "refused", reason: "message", message: outcome.message || null });
+        setNotice(deniedNotice(outcome.message));
       } else if (outcome.kind !== "unavailable" && outcome.kind !== "rate_limited")
         setNotice({ kind: "failed", outcome });
     },
@@ -116,11 +127,7 @@ export function usePlanStart<B>(options: {
         setNotice({ kind: "refused", reason: "changed", message: null });
         latest.current.onStale();
       } else if (outcome.kind === "denied") {
-        setNotice({
-          kind: "refused",
-          reason: outcome.message ? "message" : "ineligible",
-          message: outcome.message || null,
-        });
+        setNotice(deniedNotice(outcome.message));
       } else if (outcome.kind !== "unavailable" && outcome.kind !== "rate_limited")
         setNotice({ kind: "failed", outcome });
     },

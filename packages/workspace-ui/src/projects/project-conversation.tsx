@@ -2,16 +2,17 @@
 // one-line notes, Morrow's plan-change cards and the automatic Monday update. "Ask @Morrow"
 // adds the typed coordinator mention to the person's own message: a request that starts
 // one Morrow run with the project in view, never authority. Messages a viewer may not see
-// are already left out by the server.
-import { useId, useState, type FormEvent } from "react";
+// are already left out by the server. "Ask Morrow privately instead" opens a new private
+// Ask (`plans.ask`), never this conversation.
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { Id } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
-import { Button } from "../components/controls";
+import { Button, TextArea } from "../components/controls";
 import { StateView, outcomeState } from "../components/feedback";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
 import type { ProjectDetailView, ProjectUpdateView } from "./model";
-import { HealthWord, MemberName, InlineLink } from "./parts";
+import { HealthWord, MemberName } from "./parts";
 import { PlanChangeCard } from "./plan-card";
 
 const c = projectsCopy.conversation;
@@ -75,21 +76,32 @@ export function ProjectConversation({
   project,
   version,
   onChanged,
+  onAskPrivately,
 }: {
   readonly ws: Id;
   readonly project: ProjectDetailView;
-  /** Bumped when the page knows something new was posted (Plan next steps). */
+  /**
+   * Bumped when the page knows something new was posted (Plan next steps) or the project
+   * changed: the conversation reads again in place, keeping its messages (and focus) on
+   * screen until the new reply arrives.
+   */
   readonly version: number;
-  /** Something in the project changed (a plan change applied): re-read the page. */
+  /** Something in the project changed (a plan change applied): re-read the project. */
   readonly onChanged: () => void;
+  /** Opens a new private Ask; null where the server or the switch doesn't allow one. */
+  readonly onAskPrivately: (() => void) | null;
 }) {
   const services = useServices();
   const headingId = useId();
-  const textId = useId();
-  const [messages, reload] = useRead(
-    `${ws}|projects.messages|${project.projectId}|${version}`,
-    () => services.port.projects.messages(ws, project.projectId),
+  const [messages, reload] = useRead(`${ws}|projects.messages|${project.projectId}`, () =>
+    services.port.projects.messages(ws, project.projectId),
   );
+  const seen = useRef(version);
+  useEffect(() => {
+    if (seen.current === version) return;
+    seen.current = version;
+    reload();
+  }, [version, reload]);
   const [text, setText] = useState("");
   const [mention, setMention] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -184,18 +196,15 @@ export function ProjectConversation({
       )}
       {canPost ? (
         <form className="pj-composer" onSubmit={submit} noValidate>
-          <div className="field">
-            <label htmlFor={textId}>{c.messageLabel}</label>
-            <textarea
-              id={textId}
-              dir="auto"
-              value={text}
-              maxLength={messageLimit}
-              disabled={command.busy}
-              aria-invalid={checked && !valid ? true : undefined}
-              onChange={(event) => setText(event.target.value)}
-            />
-          </div>
+          <TextArea
+            label={c.messageLabel}
+            value={text}
+            onChange={setText}
+            error={checked && !valid ? c.invalid : null}
+            disabled={command.busy}
+            maxLength={messageLimit}
+            required
+          />
           {canMention ? (
             <div className="pj-composer-mention">
               <Button aria-pressed={mention} onClick={() => setMention((m) => !m)}>
@@ -210,9 +219,11 @@ export function ProjectConversation({
             onRetry={command.retry}
           />
           <div className="pj-composer-actions">
-            <InlineLink route="ask" params={{ workspaceId: ws }}>
-              {c.privately}
-            </InlineLink>
+            {onAskPrivately ? (
+              <button type="button" className="pj-link-button" onClick={onAskPrivately}>
+                {c.privately}
+              </button>
+            ) : null}
             <Button type="submit" variant="primary" disabled={command.busy}>
               {command.busy ? c.sending : c.send}
             </Button>

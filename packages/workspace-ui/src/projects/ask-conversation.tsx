@@ -6,7 +6,7 @@
 import { useId, useState, type FormEvent } from "react";
 import type { Id, WorkspaceView } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
-import { Button } from "../components/controls";
+import { Button, TextArea, TextField } from "../components/controls";
 import { StateView, outcomeState } from "../components/feedback";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
@@ -31,14 +31,16 @@ function ChoiceQuestion({
 }) {
   const services = useServices();
   const headingId = useId();
-  const otherId = useId();
   const [other, setOther] = useState<string | null>(null);
+  // Set when the person tries to send "Something else…": an empty answer says why.
+  const [otherChecked, setOtherChecked] = useState(false);
   const command = useCommand<{ messageId: Id; answer: ChoiceAnswer }, { readonly messageId: Id }>({
     marker: { workspaceId: ws, kind: "plan" },
     send: (cmd) => services.port.plans.answer(ws, conversationId, cmd),
     onOutcome: (outcome) => {
       if (outcome.kind === "ok" || (outcome.kind === "conflict" && outcome.recheck)) {
         setOther(null);
+        setOtherChecked(false);
         onAnswered();
       }
     },
@@ -49,6 +51,7 @@ function ChoiceQuestion({
   const otherValid = other !== null && validAsk(other) && other.length <= 2048;
   const submitOther = (event: FormEvent) => {
     event.preventDefault();
+    setOtherChecked(true);
     if (!otherValid || command.busy || other === null) return;
     answer({ kind: "other", text: other });
   };
@@ -96,7 +99,10 @@ function ChoiceQuestion({
                 className="pj-option"
                 aria-expanded={other !== null}
                 disabled={command.busy}
-                onClick={() => setOther(other === null ? "" : null)}
+                onClick={() => {
+                  setOtherChecked(false);
+                  setOther(other === null ? "" : null);
+                }}
               >
                 <span className="pj-option-label">{a.somethingElse}</span>
               </button>
@@ -114,17 +120,15 @@ function ChoiceQuestion({
           </ul>
           {other !== null ? (
             <form className="pj-other" onSubmit={submitOther} noValidate>
-              <div className="field">
-                <label htmlFor={otherId}>{a.otherLabel}</label>
-                <input
-                  id={otherId}
-                  dir="auto"
-                  value={other}
-                  maxLength={2048}
-                  disabled={command.busy}
-                  onChange={(event) => setOther(event.target.value)}
-                />
-              </div>
+              <TextField
+                label={a.otherLabel}
+                value={other}
+                onChange={setOther}
+                error={otherChecked && !otherValid ? a.otherInvalid : null}
+                disabled={command.busy}
+                maxLength={2048}
+                required
+              />
               <Button type="submit" disabled={command.busy}>
                 {a.send}
               </Button>
@@ -150,7 +154,6 @@ export function AskConversationScreen({
 }) {
   const services = useServices();
   const ws = workspace.id;
-  const textId = useId();
   const [conversation, reload] = useRead(`${ws}|plans.conversation|${conversationId}`, () =>
     services.port.plans.conversation(ws, conversationId),
   );
@@ -282,18 +285,15 @@ export function AskConversationScreen({
           </section>
           {canPost ? (
             <form className="pj-composer" onSubmit={submit} noValidate>
-              <div className="field">
-                <label htmlFor={textId}>{a.messageLabel}</label>
-                <textarea
-                  id={textId}
-                  dir="auto"
-                  value={text}
-                  maxLength={askTextLimit}
-                  disabled={command.busy}
-                  aria-invalid={checked && !valid ? true : undefined}
-                  onChange={(event) => setText(event.target.value)}
-                />
-              </div>
+              <TextArea
+                label={a.messageLabel}
+                value={text}
+                onChange={setText}
+                error={checked && !valid ? a.invalid : null}
+                disabled={command.busy}
+                maxLength={askTextLimit}
+                required
+              />
               <CommandFeedback
                 phase={command.phase}
                 onCheckAgain={command.checkAgain}

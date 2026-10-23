@@ -1,6 +1,7 @@
 // The Tasks tab of the Projects page: every task the person can see, as a board (Needs
 // you, To do, Working, Done today) or a list, with Mine. A task opens on its task page
-// (the work API). New task files a task in one project, area or Quick tasks.
+// (the work API): the whole card, or the row's task cell, is the link. New task files a
+// task in one project, area or Quick tasks.
 import { useState } from "react";
 import type { Id } from "../model";
 import { Button } from "../components/controls";
@@ -8,7 +9,7 @@ import { StateView } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import { bucketRows, statusStyle } from "./format";
 import type { ProjectTaskRowView, ProjectTasksView } from "./model";
-import { CellLabel, MemberName, WordBadge, InlineLink } from "./parts";
+import { CellLabel, MemberName, RowLink, WordBadge } from "./parts";
 
 const c = projectsCopy.tasks;
 const bucketLabel = (bucket: string) =>
@@ -16,21 +17,25 @@ const bucketLabel = (bucket: string) =>
 
 function TaskCard({ ws, row }: { readonly ws: Id; readonly row: ProjectTaskRowView }) {
   return (
-    <li className="pj-task-card">
-      <InlineLink strong route="task" params={{ workspaceId: ws, taskId: row.taskId }}>
+    <li>
+      <RowLink
+        className="pj-task-card"
+        route="task"
+        params={{ workspaceId: ws, taskId: row.taskId }}
+      >
         <span dir="auto" className="pj-row-title">
           {row.title}
         </span>
-      </InlineLink>
-      <MemberName member={row.owner} />
-      <span dir="auto" className="pj-meta">
-        {c.inProject(row.projectTitle)}
-      </span>
-      {row.when || row.note ? (
+        <MemberName member={row.owner} />
         <span dir="auto" className="pj-meta">
-          {[row.when, row.note].filter(Boolean).join(" · ")}
+          {c.inProject(row.projectTitle)}
         </span>
-      ) : null}
+        {row.when || row.note ? (
+          <span dir="auto" className="pj-meta">
+            {[row.when, row.note].filter(Boolean).join(" · ")}
+          </span>
+        ) : null}
+      </RowLink>
     </li>
   );
 }
@@ -108,11 +113,11 @@ export function TasksTab({
               <li key={row.taskId} className="pj-row">
                 <div className="pj-cell pj-cell-main">
                   <CellLabel>{c.columns.task}</CellLabel>
-                  <InlineLink strong route="task" params={{ workspaceId: ws, taskId: row.taskId }}>
+                  <RowLink route="task" params={{ workspaceId: ws, taskId: row.taskId }}>
                     <span dir="auto" className="pj-row-title">
                       {row.title}
                     </span>
-                  </InlineLink>
+                  </RowLink>
                 </div>
                 <div className="pj-cell">
                   <CellLabel>{c.columns.who}</CellLabel>
