@@ -35,6 +35,10 @@
 //   F  the fence as the broker's login: in flight and settled operations are never sent, a
 //      late close is never promoted, forged settings reach nothing and no other login
 //      executes the catalog definers;
+//   B  one open write per product (review F2): an uncertain write holds its product only until
+//      it is read back after its send window; then a new approved change applies; a read-back
+//      taken after that later write never settles the earlier one; the person who applied it
+//      sets it aside (not before its window, never someone else), and it is still read back;
 //   L  no product text, Shopify text or token reaches a response, a log line or a record.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
 // marked sim stand in for states no API path reaches yet. CI pg-work group.
@@ -75,6 +79,7 @@ import {
   decodePendingApprovals,
   decodeRechecked,
   decodeReview,
+  decodeSetAside,
 } from "../apps/workspace-web/src/http/review-decoders.ts";
 
 const checks = [];
@@ -1366,6 +1371,8 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
     );
   }
 
+  // The O6 operation (uncertain: an edit at the same moment), for the product rule (B).
+  const held = { op: null, n: null };
   // ---------------------------------------------------------------------------
   phase("shopify_outcomes");
   {
@@ -1392,6 +1399,8 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
     );
     const at = (kind) => rows[kinds.indexOf(kind)] ?? {};
     const n = (kind) => String(numbers[kinds.indexOf(kind)]);
+    held.op = at("edit_after").id;
+    held.n = n("edit_after");
     check(
       "O1:user_errors_fail_with_nothing_applied",
       at("user_errors").status === "failed" &&
@@ -1675,6 +1684,127 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
         shop.updates(String(p10[0])) === 1 &&
         shop.view(p10[0]).title === "Linen shirt " + p10[0],
       { first, op, r1: r1.body, r2: r2.body, row },
+    );
+  }
+  // ---------------------------------------------------------------------------
+  phase("product_rule");
+  {
+    // B1: the O6 write is uncertain and was read back only within its send window (at once,
+    // and by O9): a new approved change to its product is refused (product_busy), unsent.
+    const asBroker = (statement) => db.tryRun(statement, { user: "morrow_vault_broker" });
+    const window = one(
+      `SELECT (now()>=send_started_at+interval '90 seconds') AS past,(SELECT count(*) FROM morrow_work.operation_readbacks b WHERE b.operation_id=o.id AND b.observed_at>=o.send_started_at+interval '90 seconds')::int AS late FROM morrow_work.operations o WHERE id=${literal(held.op)}`,
+    );
+    const updates0 = shop.updates(held.n);
+    const XB1 = await draft([Number(held.n)], ["title"]);
+    const busy = await apply(P.A, XB1, await approveAll(XB1));
+    const b1 = ops(XB1)[0];
+    check(
+      "B1:an_uncertain_write_not_read_back_after_its_window_holds_its_product",
+      window?.past === true &&
+        window?.late === 0 &&
+        busy.status === 200 &&
+        b1.status === "failed" &&
+        b1.reason === "product_busy" &&
+        b1.attempt === 0 &&
+        shop.updates(held.n) === updates0,
+      { window, busy: busy.body, b1 },
+    );
+    // B2: a read-back after the window (it stays uncertain: the merchant's edit) frees the
+    // product; the next approved change applies and verifies; the earlier one is unchanged.
+    await sleep(10500);
+    const late = await call(reviewOn, P.A, "POST", "/operations/" + held.op + "/reconcile", {});
+    const XB2 = await draft([Number(held.n)], ["title"]);
+    const freed = await apply(P.A, XB2, await approveAll(XB2));
+    const b2 = ops(XB2)[0];
+    check(
+      "B2:after_a_read_back_past_its_window_a_new_approved_change_applies",
+      late.status === 200 &&
+        late.body.operation.status === "uncertain" &&
+        freed.status === 200 &&
+        b2.status === "verified" &&
+        shop.updates(held.n) === updates0 + 1 &&
+        one(`SELECT status FROM morrow_work.operations WHERE id=${literal(held.op)}`)?.status ===
+          "uncertain",
+      { late: late.body, freed: freed.body, b2 },
+    );
+    // B3 (sim: the broker's own login records a read-back whose every field matches the earlier
+    // write's approved values): once a later write to the product was fenced, Shopify's
+    // product may hold that write's values, so the earlier one is never verified by it.
+    await sleep(10500);
+    const sent =
+      one(
+        `SELECT to_json(fields) AS fields FROM morrow_work.operation_writes WHERE operation_id=${literal(held.op)}`,
+      )?.fields ?? [];
+    const allApproved = JSON.stringify(Object.fromEntries(sent.map((f) => [f, "approved"])));
+    const superseded = asBroker(
+      `SELECT outcome||'|'||status FROM morrow_vault.catalog_reconcile_record(${literal(held.op)},'read','2026-10-24T00:00:00Z',${literal(allApproved)},'approved');`,
+    );
+    check(
+      "B3:a_read_back_after_a_later_write_never_settles_the_earlier_one",
+      sent.length > 0 &&
+        superseded.ok &&
+        last(superseded.stdout) === "recorded|uncertain" &&
+        one(`SELECT status FROM morrow_work.operations WHERE id=${literal(held.op)}`)?.status ===
+          "uncertain",
+      { sent, superseded: superseded.stdout, stderr: superseded.stderr.slice(0, 200) },
+    );
+    // B4: only the person who applied it sets it aside, and only after its send window: a
+    // write lost moments ago is too soon; another tenant gets not_found and another member
+    // with the same grants is refused; the claimant's request sets it aside once (the same
+    // request again answers unchanged). Nothing is sent.
+    const pS = [newProduct()];
+    const XS = await draft(pS, ["title"]);
+    shop.fault(pS[0], "lost_unapplied");
+    await apply(P.A, XS, await approveAll(XS));
+    const fresh = ops(XS)[0];
+    const setAside = (p, id, options) =>
+      call(reviewOn, p, "POST", "/operations/" + id + "/set-aside", {}, options);
+    const tooSoon = await setAside(P.A, fresh.id);
+    const foreign = await setAside(P.Y, held.op);
+    const other = await setAside(P.A1, held.op);
+    const updatesBefore = shop.updates();
+    const callsBefore = brokerCalls.length;
+    const aside = await setAside(P.A, held.op);
+    const again = await setAside(P.A, held.op);
+    check(
+      "B4:the_claimant_sets_an_uncertain_write_aside_after_its_window_and_no_one_else",
+      fresh.status === "uncertain" &&
+        tooSoon.status === 409 &&
+        ops(XS)[0].status === "uncertain" &&
+        foreign.status === 404 &&
+        other.status === 403 &&
+        other.body.code === "denied" &&
+        aside.status === 200 &&
+        aside.body.outcome === "set_aside" &&
+        aside.body.operation.status === "cancel_requested" &&
+        decodeSetAside(aside.body, held.op)?.status === "cancel_requested" &&
+        again.status === 200 &&
+        again.body.outcome === "unchanged" &&
+        path(held.op).endsWith(">uncertain>cancel_requested") &&
+        brokerCalls.length === callsBefore &&
+        shop.updates() === updatesBefore,
+      {
+        fresh,
+        tooSoon: tooSoon.body,
+        foreign: foreign.status,
+        other: other.body,
+        aside: aside.body,
+        again: again.body,
+        path: path(held.op),
+      },
+    );
+    // B5: a set-aside write is still read back (reconciliation continues); the later write
+    // still means the read-back settles nothing, and nothing is sent.
+    await sleep(10500);
+    const reread = await call(reviewOn, P.A, "POST", "/operations/" + held.op + "/reconcile", {});
+    check(
+      "B5:a_set_aside_write_is_still_read_back_and_never_resent",
+      reread.status === 200 &&
+        ["recorded", "too_soon"].includes(reread.body.outcome) &&
+        reread.body.operation.status === "cancel_requested" &&
+        shop.updates(held.n) === updates0 + 1,
+      reread.body,
     );
   }
   return { checks, failures, retries };
