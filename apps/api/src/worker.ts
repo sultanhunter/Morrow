@@ -30,6 +30,7 @@ import {
   createProjectsApiHandler,
   projectsPathPattern,
 } from "../../../packages/work/src/projects/http.js";
+import { planDraftsRecord } from "../../../packages/policy/src/projects/plan-draft.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 type Handler = Readonly<{
@@ -94,7 +95,9 @@ export function createWorkspaceApiWorker(
     runs: createRunsApiHandler(runs),
     // The goal routes stay off until T7 uses them; the start routes follow
     // docs/decisions/plan-drafts-staging.json (held).
-    projects: createProjectsApiHandler(work === undefined ? undefined : { ...work, goals: false }),
+    projects: createProjectsApiHandler(
+      work === undefined ? undefined : { ...work, goals: false, planDrafts: planDraftsRecord },
+    ),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),

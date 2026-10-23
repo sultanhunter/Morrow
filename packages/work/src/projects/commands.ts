@@ -20,7 +20,6 @@ import {
   goalProgress,
   grantSummaryDigest,
   planDraftValid,
-  planDraftsRecord,
   planStepRuns,
   startChecks,
   startEligible,
@@ -594,6 +593,7 @@ async function start(
   g: Guarded,
   prepared: PreparedProjectCommand,
   correlationId: string,
+  planDrafts: PlanDraftsState,
 ): Promise<ProjectResult> {
   const body = prepared.parsed as StartBody;
   const a = await context(tx, g);
@@ -605,7 +605,7 @@ async function start(
     throw new ProjectReject("stale");
   const document = parsed(text(row, "canonical")) as Current_PlanStartDocument;
   if (!validateCurrentDefinition("PlanStartDocument", document)) throw new WorkContextUnavailable();
-  if (document.draft !== null && startRouteGate({ kind: "draft" }) !== "ok")
+  if (document.draft !== null && startRouteGate({ kind: "draft" }, planDrafts) !== "ok")
     throw new ProjectReject("plan_drafts_off");
   // The card as it stands now: a later edit or a moved target makes the document stale.
   let card: StartCard;
@@ -660,11 +660,17 @@ async function start(
   return { status: 201, body: answer as unknown as Record<string, unknown>, outcome: "applied" };
 }
 
+/** docs/decisions/plan-drafts-staging.json as the api composes it. */
+export interface PlanDraftsState {
+  readonly switch: "on" | "off";
+  readonly start_routes: "held" | "ready";
+}
 export async function runProjectCommand(
   tx: WorkTx,
   g: Guarded,
   prepared: PreparedProjectCommand,
   correlationId: string,
+  planDrafts: PlanDraftsState,
 ): Promise<ProjectResult> {
   switch (prepared.type) {
     case "goal.revise":
@@ -674,14 +680,14 @@ export async function runProjectCommand(
     case "plan.start_document":
       return startDocument(tx, g, prepared, correlationId);
     case "plan.start":
-      return start(tx, g, prepared, correlationId);
+      return start(tx, g, prepared, correlationId, planDrafts);
   }
 }
 /** The gate of a start route before any connection: held, or a Morrow card while off. */
 export function startGate(
   type: ProjectCommandType,
   parsedBody: unknown,
-  record = planDraftsRecord,
+  record: PlanDraftsState,
 ): "ok" | "start_unavailable" | "plan_drafts_off" {
   if (type !== "plan.start_document" && type !== "plan.start") return "ok";
   const kind =

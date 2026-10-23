@@ -38,6 +38,11 @@ import {
 export interface ProjectsApiDependencies extends WorkApiDependencies {
   /** The goal routes are open (default off until T7 uses them). */
   readonly goals: boolean;
+  /**
+   * docs/decisions/plan-drafts-staging.json as the api composes it (planDraftsRecord): the
+   * start routes are `held` until lab:plan-start passes, and Morrow's cards need `on`.
+   */
+  readonly planDrafts: { readonly switch: "on" | "off"; readonly start_routes: "held" | "ready" };
 }
 export interface ProjectRoute extends WorkspaceRouteSpec {
   readonly op: ProjectCommandType | ProjectRead;
@@ -121,7 +126,10 @@ function dependencies(value: ProjectsApiDependencies): ProjectsApiDependencies {
     typeof value.now !== "function" ||
     !value.connector ||
     typeof value.connector.open !== "function" ||
-    typeof value.goals !== "boolean"
+    typeof value.goals !== "boolean" ||
+    !value.planDrafts ||
+    !["on", "off"].includes(value.planDrafts.switch) ||
+    !["held", "ready"].includes(value.planDrafts.start_routes)
   )
     throw Error("PROJECTS_API_CONFIGURATION_INVALID");
   const connector = value.connector;
@@ -131,6 +139,10 @@ function dependencies(value: ProjectsApiDependencies): ProjectsApiDependencies {
     connector: Object.freeze({ open: connector.open.bind(connector) }),
     now: () => Reflect.apply(now, undefined, []) as number,
     goals: value.goals,
+    planDrafts: Object.freeze({
+      switch: value.planDrafts.switch,
+      start_routes: value.planDrafts.start_routes,
+    }),
   });
 }
 
@@ -173,7 +185,7 @@ export function createProjectsApiHandler(d?: ProjectsApiDependencies) {
         ? undefined
         : await prepareProjectCommand(g.route.op as ProjectCommandType, g);
       if (prepared) {
-        const gate = startGate(prepared.type, prepared.parsed);
+        const gate = startGate(prepared.type, prepared.parsed, configured.planDrafts);
         if (gate !== "ok") {
           log.outcome = gate;
           return { log, response: refusalResponse(gate, correlationId) };
@@ -200,7 +212,7 @@ export function createProjectsApiHandler(d?: ProjectsApiDependencies) {
         const result = await withWorkTransaction(connection, options, async (tx) => {
           try {
             return prepared
-              ? await runProjectCommand(tx, g, prepared, correlationId)
+              ? await runProjectCommand(tx, g, prepared, correlationId, configured.planDrafts)
               : await goalProgressRead(tx, g);
           } catch (error) {
             if (!(error instanceof ProjectReject)) throw error;
