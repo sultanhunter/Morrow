@@ -26,6 +26,10 @@ import {
   runsPathPattern,
   type RunsApiDependencies,
 } from "../../../packages/work/src/runs/http.js";
+import {
+  createProjectsApiHandler,
+  projectsPathPattern,
+} from "../../../packages/work/src/projects/http.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 type Handler = Readonly<{
@@ -38,6 +42,8 @@ type Handler = Readonly<{
 // serves ahead of Static Assets (run_worker_first). Later PRs add one row each:
 //   /workspace/:ws/work/{tasks/:taskId/runs, runs/:runId, runs-reconcile}
 //                                                runs (M3 PR-2), ahead of the work API
+//   /workspace/:ws/work/{goals/:goalId/(revise|checks|progress), plans/(start-document|start)}
+//                                                goals and the plan start (PR 18), ahead of it
 //   /workspace/:ws/work(/|$)                     work API (P06.T01a)
 //   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)
 //   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
@@ -50,11 +56,14 @@ type Handler = Readonly<{
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
 export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
 const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
-type RowKey = "runs" | "work" | "billing" | "stripe_webhook" | "agents" | "catalog";
+type RowKey = "runs" | "projects" | "work" | "billing" | "stripe_webhook" | "agents" | "catalog";
 export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
   Object.freeze([
     // M3 PR-2: the runs routes (packages/work/src/runs/http.ts), before the work API's row.
     ["runs", (path: string) => runsPathPattern.test(path)],
+    // PR 18: the goal and plan-start routes (packages/work/src/projects/http.ts), on the work
+    // dependencies, also before the work API's row. Both switches default off.
+    ["projects", (path: string) => projectsPathPattern.test(path)],
     ["work", (path: string) => workPath.test(path)],
     ["billing", (path: string) => billingPath.test(path)],
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
@@ -83,6 +92,9 @@ export function createWorkspaceApiWorker(
   const workspace = createWorkersManagedWorkspaceApi(dependencies);
   const handlers: Readonly<Record<RowKey, Handler>> = Object.freeze({
     runs: createRunsApiHandler(runs),
+    // The goal routes stay off until T7 uses them; the start routes follow
+    // docs/decisions/plan-drafts-staging.json (held).
+    projects: createProjectsApiHandler(work === undefined ? undefined : { ...work, goals: false }),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),

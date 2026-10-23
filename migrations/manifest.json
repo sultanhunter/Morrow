@@ -304,6 +304,13 @@
       "sha256": "4ca704d37e3e788ba86921be00a3e3b959858eb25a1997f5d2be5d21f42cddc0",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 39,
+      "file": "0039.projects-goal-measures.sql",
+      "sha256": "8d1d6b383efa42d6de57d4cd6ee0867eb9d8398d334d7eca2a94881cb8727365",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/projects-backend.md"
     }
   ]
 }
