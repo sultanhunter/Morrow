@@ -793,8 +793,9 @@ async function inflateText(
 // other declared encoding, XML 1.0), no DTD, entity declaration, comment, CDATA section or
 // processing instruction after the declaration, only the five predefined entities and the
 // tab, newline and carriage-return character references, well-formed tags with quoted and
-// unique attributes, one root element, and no element inside a formula. Names are matched
-// on their local part whatever the prefix, so a renamed namespace prefix hides nothing.
+// unique attributes, one root element, and no element inside a formula but another formula
+// (x14's `formula1` wraps an `xm:f`; the outer text still counts). Names are matched on their
+// local part whatever the prefix, so a renamed namespace prefix hides nothing.
 const xmlSpace = "[ \\t\\r\\n]";
 const xmlName = "[A-Za-z_][A-Za-z0-9_.-]*(?::[A-Za-z_][A-Za-z0-9_.-]*)?";
 const xmlValue = `(?:"([^"<]*)"|'([^'<]*)')`;
@@ -866,26 +867,28 @@ function readXmlPart(text: string): XmlPart | null {
   const formulas: string[] = [];
   const relationships: XmlRelationship[] = [];
   let hyperlinkRelationship = false;
-  const open: string[] = [];
-  let formula: string | null = null;
+  // Each open element, with its text so far when it is a formula element.
+  const open: { readonly name: string; text: string | null }[] = [];
   let roots = 0;
   while (at < text.length) {
     const lt = text.indexOf("<", at);
     const next = lt < 0 ? text.length : lt;
     if (next > at) {
       const chunk = text.slice(at, next);
-      if (open.length === 0 && /[^ \t\r\n]/.test(chunk)) return null;
-      if (formula !== null) formula += chunk;
+      const top = open.at(-1);
+      if (top === undefined && /[^ \t\r\n]/.test(chunk)) return null;
+      if (top !== undefined && top.text !== null) top.text += chunk;
       at = next;
       continue;
     }
     xmlStartTag.lastIndex = at;
     const start = xmlStartTag.exec(text);
     if (start) {
-      if (formula !== null || (open.length === 0 && roots > 0)) return null;
-      if (open.length === 0) roots++;
       const name = start[1]!;
       const local = xmlLocal(name);
+      const formula = xmlFormulaElements.has(local);
+      if ((open.at(-1)?.text != null && !formula) || (open.length === 0 && roots > 0)) return null;
+      if (open.length === 0) roots++;
       const list = start[2]!;
       const attributes: [string, string][] = [];
       const seen = new Set<string>();
@@ -911,21 +914,16 @@ function readXmlPart(text: string): XmlPart | null {
         [...seen].some((key) => key.includes(":") && xmlLocal(key) === "id")
       )
         hyperlinkRelationship = true;
-      if (start[3] !== "/") {
-        open.push(name);
-        if (xmlFormulaElements.has(local)) formula = "";
-      }
+      if (start[3] !== "/") open.push({ name, text: formula ? "" : null });
       at = xmlStartTag.lastIndex;
       continue;
     }
     xmlEndTag.lastIndex = at;
     const end = xmlEndTag.exec(text);
     if (end) {
-      if (open.pop() !== end[1]) return null;
-      if (formula !== null) {
-        formulas.push(xmlDecode(formula));
-        formula = null;
-      }
+      const closed = open.pop();
+      if (closed?.name !== end[1]) return null;
+      if (closed.text !== null) formulas.push(xmlDecode(closed.text));
       at = xmlEndTag.lastIndex;
       continue;
     }

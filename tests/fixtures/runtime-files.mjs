@@ -148,6 +148,7 @@ const sheet = (cells) =>
 /**
  * A minimal workbook. Options add what the checks refuse: a macro part or content type, an
  * external link part or relationship, a remote formula, an embedded object, a hyperlink.
+ * `sheetXml` replaces the whole first worksheet part (text or bytes).
  */
 export function makeXlsx({
   cells = '<row r="1"><c r="A1" t="inlineStr"><is><t>sku</t></is></c><c r="B1"><v>3</v></c><c r="C1"><f>SUM(B1:B1)</f><v>3</v></c></row>',
@@ -157,13 +158,14 @@ export function makeXlsx({
   parts = [],
   drop = [],
   options = {},
+  sheetXml = null,
 } = {}) {
   const entries = [
     ["[Content_Types].xml", contentTypes(types)],
     ["_rels/.rels", rootRels],
     ["xl/workbook.xml", workbook(names)],
     ["xl/_rels/workbook.xml.rels", workbookRels(rels)],
-    ["xl/worksheets/sheet1.xml", sheet(cells)],
+    ["xl/worksheets/sheet1.xml", sheetXml ?? sheet(cells)],
     ...parts,
   ].filter(([name]) => !drop.includes(name));
   return makeZip(entries, options);

