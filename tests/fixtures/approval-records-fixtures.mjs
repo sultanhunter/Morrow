@@ -40,6 +40,9 @@ export const capabilitiesAfter0018 = Object.freeze([
   // M5 PR-1 (ADR-0022 items 2 and 3): neither is review-required.
   "governance.billing.manage",
   "governance.model_default.revise",
+  // PR 18 (ADR-0033 items 4 and 5): both human_only, neither review-required.
+  "workspace.goal.revise",
+  "workspace.goal.measure.record",
 ]);
 /** The catalogue as 0018 copies it, in catalogue order. */
 export const catalogueAt0018 = (catalogue) =>
