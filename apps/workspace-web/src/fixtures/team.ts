@@ -346,7 +346,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         worksIn: ["Customer emails"],
         lines: [
           line("now", "Drafting a reply to a new customer email · since 1:52 pm"),
-          line("waiting", "Reply to Hannah K. about order #1042 · expires in 14 hours"),
+          line("waiting", "Reply to Hannah K. about order #10421 · expires in 14 hours"),
           line("next", "Drafts a reply when the next customer email comes in."),
         ],
         credits: { used: 196, limit: 300 },
@@ -631,6 +631,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         deps.isWorkspace(ws)
           ? ok({
               shopName: "Linen & Form",
+              ownerName: owner,
               entries: catalogue.map((e) => ({ ...e })),
               canAdd: mayAdd,
               creditsLeft: 1202,
@@ -868,7 +869,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
                 ? []
                 : [
                     {
-                      title: "Reply to Hannah K. about order #1042",
+                      title: "Reply to Hannah K. about order #10421",
                       agentName: "Support",
                       character: "support" as const,
                       where: "Customer emails",

@@ -34,3 +34,17 @@ export { ModelDefaultScreen } from "./screens/settings-models";
 export { AskScreen, parseProducts } from "./screens/ask";
 export { RunsPanel } from "./screens/runs";
 export { ConnectionScreen, ConnectionsScreen } from "./screens/connections";
+// T7 PR 16: Team, agent pages, Add agents, Settings, Shop knowledge and Files (Sunrise).
+export { TeamScreen } from "./screens/team";
+export { AgentScreen } from "./screens/agent-page";
+export { AddAgentsScreen } from "./screens/add-agents";
+export {
+  EmailAddressesScreen,
+  PeopleRolesScreen,
+  PlanCreditsScreen,
+  SettingsFrame,
+  SettingsHomeScreen,
+} from "./screens/settings-pages";
+export { FilesScreen, ShopKnowledgeScreen } from "./screens/library";
+export { AgentAvatar, PersonAvatar } from "./sunrise/avatars";
+export { sunriseCopy } from "./sunrise/copy";

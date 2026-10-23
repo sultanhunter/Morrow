@@ -55,7 +55,9 @@ export interface ThinkingOption extends ThinkingChoice {
   /** The most one job can use; null where the catalogue charges per product. */
   readonly most: number | null;
   readonly unit: "job" | "product";
-  /** Within the limit that applies; a choice that doesn't fit can't be saved. */
+  /** The limit that applies: credits per product (the member ceiling) or per job. */
+  readonly limit: number | null;
+  /** Within that limit; a choice that doesn't fit can't be saved. */
   readonly fits: boolean;
 }
 
@@ -67,6 +69,7 @@ export function optionsFromCatalogue(view: ModelCatalogueView): readonly Thinkin
     typical: e.creditsPerProduct,
     most: null,
     unit: "product" as const,
+    limit: view.ceiling,
     // checkWorkspaceDefault: the ceiling must admit the default.
     fits: e.creditsPerProduct <= view.ceiling,
   }));
@@ -79,6 +82,7 @@ export function optionsFromEstimates(view: ThinkingView): readonly ThinkingOptio
     typical: e.typical,
     most: e.most,
     unit: "job" as const,
+    limit: view.jobLimit,
     fits: view.jobLimit === null || e.most <= view.jobLimit,
   }));
 }
@@ -227,6 +231,7 @@ export interface CatalogueEntryView {
 }
 export interface CatalogueView {
   readonly shopName: string;
+  readonly ownerName: string;
   readonly entries: readonly CatalogueEntryView[];
   readonly canAdd: boolean;
   readonly creditsLeft: number;

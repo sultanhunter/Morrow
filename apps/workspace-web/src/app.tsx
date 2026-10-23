@@ -5,25 +5,35 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { routeTitle, workspaceRoutes, type RouteMatch } from "@morrow/contracts/routes";
 import {
   AccountScreen,
+  AddAgentsScreen,
+  AgentScreen,
   AppShell,
   AskScreen,
   Button,
   ConnectionScreen,
   ConnectionsScreen,
   Dialog,
+  EmailAddressesScreen,
   EntryLayout,
+  FilesScreen,
   HomeScreen,
   InboxScreen,
   ModelDefaultScreen,
   NotFoundScreen,
+  PeopleRolesScreen,
+  PlanCreditsScreen,
   QuestionScreen,
   ReentryNotice,
   ServicesProvider,
+  SettingsFrame,
+  SettingsHomeScreen,
+  ShopKnowledgeScreen,
   SignedOutScreen,
   SignInScreen,
   SignOutUnconfirmedScreen,
   StateView,
   TaskScreen,
+  TeamScreen,
   UnavailableDestination,
   WorkScreen,
   WorkspaceLoadFailedScreen,
@@ -590,14 +600,45 @@ function WorkspaceFrame({
         );
       case "connection":
         return <ConnectionScreen workspace={workspace} connectionId={params.connectionId!} />;
-      // M3 PR-1: the model default under Settings > Governance (the Listings agent card is
-      // on the connection screen above).
+      // T7 PR 16 (Sunrise): Team, an agent's page and Add agents.
+      case "agents":
+        return <TeamScreen workspace={workspace} />;
+      case "agent":
+        return <AgentScreen workspace={workspace} agentId={params.installationId!} />;
+      case "agent_store":
+        return <AddAgentsScreen workspace={workspace} releaseId={null} />;
+      case "agent_listing":
+        return <AddAgentsScreen workspace={workspace} releaseId={params.releaseId!} />;
+      case "knowledge":
+        return <ShopKnowledgeScreen workspace={workspace} />;
+      case "assets":
+        return <FilesScreen workspace={workspace} />;
+      case "settings":
+        return <SettingsHomeScreen workspace={workspace} />;
+      // Settings sections. `usage` and `billing` are Plan and credits; `notifications`
+      // holds Email addresses until the route contract has a section of its own (T7 PR 16
+      // brief, open question 1); `governance` is M3 PR-1's model default (the Listings agent
+      // card is on the connection screen above).
       case "settings_section":
-        return params.section === "governance" ? (
-          <ModelDefaultScreen workspace={workspace} />
-        ) : (
-          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
-        );
+        switch (params.section) {
+          case "usage":
+          case "billing":
+            return <PlanCreditsScreen workspace={workspace} />;
+          case "notifications":
+            return <EmailAddressesScreen workspace={workspace} />;
+          case "people":
+            return <PeopleRolesScreen workspace={workspace} />;
+          case "governance":
+            return (
+              <SettingsFrame workspaceId={workspace.id} current="governance">
+                <ModelDefaultScreen workspace={workspace} />
+              </SettingsFrame>
+            );
+          default:
+            return (
+              <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+            );
+        }
       default:
         return <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />;
     }
