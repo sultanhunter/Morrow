@@ -159,18 +159,18 @@ Morrow launches as a paid, lean but full-featured AI workspace where a Shopify s
 
 ### Companion records before dependent code
 
-Each companion is material under ADR-0002 and gets its own short ADR, at most two pages, put to the owner on the weekly decision sheet. This record authorises none of the code that depends on them.
+Each companion is material under ADR-0002 and gets its own short ADR, at most two pages, put to the owner on the weekly decision sheet. This record authorises none of the code that depends on them. ADR-0024 to ADR-0031 were accepted on 2026-10-23 (OD-2026-10-23-7), from the first sheet (`docs/decisions/decision-sheet-2026-10-26.md`); the production custody and live-store records come on later sheets.
 
 | Companion | Decides | Material because |
 | --- | --- | --- |
-| [Proactive authority](ADR-0024-proactive-authority.md) (ADR-0024, proposed) | Mandates (tables, 90-day expiry, renew, revoke, notices, hand-over); the installation as the requester of a proactive run; the editor as a proposal's author; one typed confirmation per solo batch; the 4-hour "approval waiting" email; expired drafts drafted again (amends ADR-0011 Q1) | Authority |
-| [Shopify public app](ADR-0025-shopify-public-app.md) (ADR-0025, proposed) | Distribution; the embedded home and session-token identity with its CSP; expiring-token custody; required and optional scopes; Level 1 and Level 2 requests (amends ADR-0022 decision items 4, 5 and 14) | Security, credential custody, public contracts, merchant data |
-| [Billing and price](ADR-0026-billing-and-price.md) (ADR-0026, proposed) | Shopify App Pricing with Morrow-enforced caps (the Billing API only if Shopify agrees); credits only after a confirmed usage record; the rate card; the plan price; the Stripe route kept off (amends ADR-0022 decision items 11 and 12, refines ADR-0015) | Money |
-| [Agent loop and model](ADR-0027-agent-loop-and-model.md) (ADR-0027, proposed) | The multi-turn loop with tool use (changes `ModelCall@1`); per-agent model profiles; the model-based Coordinator with one level of specialists; SpecialistSpec@1, child runs and the workspace's specialist model profile (amends the Coordinator bullet of ADR-0022 decision item 3, deterministic code and one hop, and decision items 10 and 16) | Public contracts |
-| [Specialist authority](ADR-0028-specialist-authority.md) (ADR-0028, proposed) | The run-scoped installation kind; the Start document and transaction; Start replacing stage-and-activate for run-scoped installations; the SQL grant issuer for the Specialist ceiling; the one 24-hour clock; workspace-level rules binding specialists; the read filters | Authority, spend, public contracts |
-| [Runtime and E2B](ADR-0029-runtime-and-e2b.md) (ADR-0029, proposed) | Per-run sandboxes; rules in code; uploads; the lasting workspace as the next step; E2B's written answers | Provider, security, retention |
-| [Email](ADR-0030-email.md) (ADR-0030, proposed) | Inbound by forwarding; the outbound vendor (Resend), idempotency and status; support replies only | Provider, external messages |
-| [Data](ADR-0031-data-retention-visibility-regions.md) (ADR-0031, proposed) | Retention of the new classes (90 days), per-viewer visibility, data regions (amends ADR-0022 decision item 13) | Retention, merchant data |
+| [Proactive authority](ADR-0024-proactive-authority.md) (ADR-0024, accepted 2026-10-23) | Mandates (tables, 90-day expiry, renew, revoke, notices, hand-over); the installation as the requester of a proactive run; the editor as a proposal's author; one typed confirmation per solo batch; the 4-hour "approval waiting" email; expired drafts drafted again (amends ADR-0011 Q1) | Authority |
+| [Shopify public app](ADR-0025-shopify-public-app.md) (ADR-0025, accepted 2026-10-23) | Distribution; the embedded home and session-token identity with its CSP; expiring-token custody; required and optional scopes; Level 1 and Level 2 requests (amends ADR-0022 decision items 4, 5 and 14) | Security, credential custody, public contracts, merchant data |
+| [Billing and price](ADR-0026-billing-and-price.md) (ADR-0026, accepted 2026-10-23) | Shopify App Pricing with Morrow-enforced caps (the Billing API only if Shopify agrees); credits only after a confirmed usage record; the rate card; the plan price; the Stripe route kept off (amends ADR-0022 decision items 11 and 12, refines ADR-0015) | Money |
+| [Agent loop and model](ADR-0027-agent-loop-and-model.md) (ADR-0027, accepted 2026-10-23) | The multi-turn loop with tool use (changes `ModelCall@1`); per-agent model profiles; the model-based Coordinator with one level of specialists; SpecialistSpec@1, child runs and the workspace's specialist model profile (amends the Coordinator bullet of ADR-0022 decision item 3, deterministic code and one hop, and decision items 10 and 16) | Public contracts |
+| [Specialist authority](ADR-0028-specialist-authority.md) (ADR-0028, accepted 2026-10-23) | The run-scoped installation kind; the Start document and transaction; Start replacing stage-and-activate for run-scoped installations; the SQL grant issuer for the Specialist ceiling; the one 24-hour clock; workspace-level rules binding specialists; the read filters | Authority, spend, public contracts |
+| [Runtime and E2B](ADR-0029-runtime-and-e2b.md) (ADR-0029, accepted 2026-10-23) | Per-run sandboxes; rules in code; uploads; the lasting workspace as the next step; E2B's written answers | Provider, security, retention |
+| [Email](ADR-0030-email.md) (ADR-0030, accepted 2026-10-23) | Inbound by forwarding; the outbound vendor (Resend), idempotency and status; support replies only | Provider, external messages |
+| [Data](ADR-0031-data-retention-visibility-regions.md) (ADR-0031, accepted 2026-10-23) | Retention of the new classes (90 days), per-viewer visibility, data regions (amends ADR-0022 decision item 13) | Retention, merchant data |
 | Production custody | ADR-0007 item 9 | Deployment and credential custody |
 | Live store after approval | The owner's store as the first real install | Real merchant data |
 
@@ -192,7 +192,7 @@ Each keeps its owning tests.
 
 ## Consequences
 
-- **CLAUDE.md** changes three settled-constraint lines with this record: the MVP constraint, the standalone-and-embedded line, and a billing line. Session step 1 changes when the graph command merges. Its security invariants do not change.
+- **CLAUDE.md** changes three settled-constraint lines with this record: the MVP constraint, the standalone-and-embedded line, and a billing line. Session step 1 changes when the graph command merges; it merged in PR #46, and the owner approved the step on 2026-10-23 (OD-2026-10-23-7, item 35). Its security invariants do not change.
 - **CLAUDE.md lines known to be stale.** Decision 10 (Q12) and option A (Q14) approved only the CLAUDE.md edits above, so three more lines needed new wording; the owner approved it with this record ("approve ADR-0023 and the CLAUDE.md lines", 2026-10-23):
   - the intro's "one standalone web workspace and a thin Shopify connector" leaves out the minimal embedded home (decision 2);
   - session step 3's "(ADR-0021, MVP fast track)": the launch plan is this record with `docs/plan/mvp.md`. Proposed: "(ADR-0023, which replaced ADR-0021's listings beta)";
@@ -267,3 +267,16 @@ Scope of the approval:
 - **Accepted as written, 2026-10-23, in chat.** Asked "Approve ADR-0023 as written?" together with the proposed wording of the three stale CLAUDE.md lines named under Consequences, the owner answered, verbatim: "approve ADR-0023 and the CLAUDE.md lines". The three lines are updated with this record: the intro names the minimal embedded home, session step 3 points to this record, and the Delivery flow states the small-PR rule.
 
 What this record does not approve: the code that depends on a companion record, which waits for that record; the first use of any provider or production effect, which keeps its per-action approval or card; and the owner's store as an install, which waits for App Review approval and the live-store ADR.
+
+## Amendments
+
+### 2026-10-23: the companion records' answers (OD-2026-10-23-7)
+
+The owner's answer to the 2026-10-26 decision sheet (OD-2026-10-23-7, quoted in the Approval sections of ADR-0024 to ADR-0031) changes these lines of this record through three companion records; the text above is kept as approved.
+
+- **Decision 6, runtime** (ADR-0029 owner questions 2 and 3): "Pro at launch" becomes Pro in a separate production project, bought at production bring-up, W7 to W9. E2B's written answers block adapter code only until 2026-11-20; if they have not come by then, T10 starts the adapter with conservative defaults, every failure after the send mark unknown, and proves the testable answers in qualification.
+- **Decision 7** (ADR-0027 item 12): each agent's profile is set at install and may be changed after it, by the Owner, or by an Admin for an installed agent. By default the Coordinator runs Opus 5.5 at high effort, specialists Opus 5.5 at medium and the five installed agents Sonnet 5.5 at low.
+- **Decision 11, "Rules and model"** (ADR-0027 item 12): the Owner may pick any offered model and effort on a specialist's Start card; a starter without `governance.model_default.revise` (Members, after launch) may still only lower it.
+- **Decision 11b's last sentence and the ADR-0005 entry under "Does not change"** (ADR-0024 owner question 1, answered (b)): installed agents keep stage-and-activate, but in a team the Owner installs an agent and issues or renews its mandate with no second reviewer while no other member holds the mandate's store grants. This amends ADR-0005 item 3; kill switches stay `human_only`.
+
+Members choosing a model per run stays dropped.

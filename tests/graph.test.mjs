@@ -1332,15 +1332,15 @@ test("this repository: P04.T01i shows its PRs, acceptance ids and the M-O1 evide
   if (graph.history.available) assert.match(shown, /implements +PR-35 /);
 });
 
-test("this repository: query open lists the MVP ADR question and ADR-0021's superseded basis", () => {
+test("this repository: query open lists ADR-0021's superseded basis, not the answered MVP ADR question", () => {
   const graph = repo();
   const open = query(graph, "open", [], new Map());
-  assert.match(open, /Q-mvp-scope-adr/);
+  assert.equal(graph.nodes.get("Q-mvp-scope-adr")?.status, "answered");
+  assert.doesNotMatch(open, /^ {2}Q-mvp-scope-adr /m);
   assert.match(open, /ADR-0021 approved_by OD-2026-10-19-1, superseded by OD-2026-10-22-2/);
-  assert.match(
-    open,
-    /still cited by .*CLAUDE\.md.*docs\/plan\/mvp\.md.*docs\/progress\/STATUS\.md/,
-  );
+  // STATUS.md stopped citing ADR-0021 when it was rewritten for ADR-0023.
+  assert.match(open, /still cited by .*CLAUDE\.md.*docs\/plan\/mvp\.md/);
+  assert.doesNotMatch(open, /still cited by .*docs\/progress\/STATUS\.md/);
 });
 
 test("this repository: the ADR index renders in the form the README rows take", () => {

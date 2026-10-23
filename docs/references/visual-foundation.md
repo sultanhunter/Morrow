@@ -6,6 +6,8 @@ The product scope remains broad. A focused interface should make the full system
 
 Decision on 6 October 2026: visual option 1 guides one complete Dock-inspired workspace, available both inside Shopify Admin and standalone. Both modes render the same feature screens and workflows, share work records, agents, connections, and permissions, and adapt their layout to available width. Small host adapters handle authentication, navigation, and native controls. Work resumes at package 1 contracts and dependencies in the existing 18-package plan; package 2 develops option 1 into the reviewed interaction baseline for both modes.
 
+Decision on 23 October 2026 ([ADR-0032](../decisions/adr/ADR-0032-sunrise-visual-direction.md)): Sunrise replaces visual option 1 as the look of the workspace. Sunrise keeps option 1's layout (sidebar, project tabs, contextual conversation, Inbox) in a warm, Shopify-admin-like style with friendly agent characters, written in plain words for non-technical shop owners; the embedded home in the Shopify admin follows the admin's own look. Where this document calls option 1 the visual direction or baseline, read Sunrise. Its information architecture, screen contracts, interaction rules, states and accessibility targets stay. The option 1 images below are kept as history.
+
 ## Product direction
 
 The experience should let a merchant give the workspace an objective, understand who is doing the work, contribute when needed, and verify what happened. Conversation is an entry point into this system. Tasks, decisions, artifacts, and business changes must remain understandable outside the conversation that created them.
@@ -144,7 +146,7 @@ For this product, explicitly test image approval without a pointer, reading a ch
 
 ## Standalone visual options
 
-The owner selected option 1 on 6 October 2026. Its spacious standalone composition is the visual reference for the shared workspace in both modes. The numbers match the order displayed in the conversation; options 2 and 3 remain unselected references. Work follows the existing 18-package build plan beginning with package 1; package 2 develops the selected direction into a tested interaction baseline. These are visual studies with synthetic merchant data, not implemented software.
+The owner selected option 1 on 6 October 2026; ADR-0032 replaced it with Sunrise on 23 October 2026, and these studies are kept as history. Its spacious standalone composition is the visual reference for the shared workspace in both modes. The numbers match the order displayed in the conversation; options 2 and 3 remain unselected references. Work follows the existing 18-package build plan beginning with package 1; package 2 develops the selected direction into a tested interaction baseline. These are visual studies with synthetic merchant data, not implemented software.
 
 ### Option 1 selected
 

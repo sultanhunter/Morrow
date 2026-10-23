@@ -19,5 +19,5 @@
 - **Cleanup.** None needed.
 - **Unknown outcomes.** None.
 - **Open.**
-  - E2B question: does a reached usage limit also block kill and delete requests? If it does, cleanup at the limit depends on each sandbox's own timeout. The runtime companion record of ADR-0023 must account for E2B's answer (sent at about 18:41Z on 2026-10-22, `2026-10-22-e2b-support-questions.md`).
+  - E2B question: does a reached usage limit also block kill and delete requests? If it does, cleanup at the limit depends on each sandbox's own timeout. ADR-0029, the runtime companion record (accepted 2026-10-23), accounts for it: Morrow's own runtime budget stays below E2B's limit and cleanup is never blocked (items 8 and 9), and E2B's answer is recorded with the others (item 11; the questions went at about 18:41Z on 2026-10-22, `2026-10-22-e2b-support-questions.md`).
   - The owner decides whether to keep the retained template. Template storage is unbilled, per E2B support on 2026-10-15.

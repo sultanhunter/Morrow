@@ -20,7 +20,7 @@ Must = in the MVP (ADR-0023 decision 1). Plan IDs are the `build-plan.md` tasks 
 | --- | --- | --- |
 | Workspace and people | Sign-up and sign-in (built); invitations; Owner, Admin and Member roles whose approval and customer-read rights follow explicit grants; agents as members; Home with the pulse, goal progress and "needs you"; per-viewer visibility; a hand-over step when a member leaves | P05.T01z, P05.T02, P14.T01, P14.T02 |
 | Work and collaboration | Goals with metrics computed in code; the task board; recurring tasks; threads, Ask Morrow and @mentions; one Inbox; artifacts; CSV and XLSX uploads opened only in a sandbox; notifications as fixed templates and a daily digest | P06.T01, P07.T01–T03, P14.T02 |
-| Agents and catalogue | AgentPackage@1 built from first-party skill files and a role prompt; install (with optional Shopify scopes), pause, update to a pinned release, uninstall; an agent page with its notebook; recorded evals in CI and a live-eval digest to publish | P16.T01, P16.T03, P16.T04, P15.T03 |
+| Agents and catalogue | AgentPackage@1 built from first-party skill files and a role prompt; install (with optional Shopify scopes), pause, update to a pinned release, uninstall; an agent page with its notebook and its model and thinking effort; recorded evals in CI and a live-eval digest to publish | P16.T01, P16.T03, P16.T04, P15.T03 |
 | Specialists | Person-started, one level under the Coordinator (decision 11; below) | P13.T02, P15.T04 |
 | Proactivity | Schedules in the shop's timezone; Shopify event triggers gathered into batch runs; metric monitors in code; mentions and assignments; inbound support email; a daily read-only look-for-work pass; notebooks; admission control in code | P06.T03, P12.T04, P13.T03 |
 | Safety and governance | Allow, Ask and Never rules that merchants can only tighten, per agent and workspace-wide; mandates (90 days, renew, revoke, notices, hand-over); budgets and caps; stops (`human_only`); the activity log | P05.T04, P11.T04, P11.T05 |
@@ -28,7 +28,7 @@ Must = in the MVP (ADR-0023 decision 1). Plan IDs are the `build-plan.md` tasks 
 | Knowledge | Typed pages (brand voice, policy, product fact, supplier, decision, lesson) with links, versions and sources; supplier records; full-text retrieval; agents propose and people accept | P10.T02–T04 |
 | Shopify | One public app (unlisted, then listed); expiring offline tokens; minimal required and per-agent optional scopes; reads, bulk operations and webhooks; approved writes (product content and SEO, tags, alt text, collections, capped discounts); compliance webhooks with `data_request` export; the embedded home | P08.T02, P09.T01–T05 |
 | Runtime | One fresh E2B sandbox per run that needs it: no internet, no credentials, no browser; minimised inputs; PNG, CSV or XLSX outputs only; TypeScript fallbacks | P12.T01, P12.T02 |
-| Email | Inbound by forwarding (Cloudflare Email Routing); approved outbound support replies through Resend with idempotency and status; no supplier email | — |
+| Email | Inbound by forwarding (Cloudflare Email Routing); approved outbound support replies through Resend with idempotency and status, sent from the address the person picks on the workspace's list of sending addresses (the shop's Morrow address, on the list and selected by default until the shop links its own address; linking the merchant's own mailboxes comes later, ADR-0030 item 10); no supplier email | — |
 | Billing | Shopify App Pricing: a plan with a monthly credit grant plus usage charges with caps Morrow enforces; credits only after a confirmed usage record; a rate card. Stripe code stays switched off | P01.T04a, P18.T01 |
 | Privacy and operations | A deletion path for every new data class before its real data; 90-day retention; data regions in the privacy policy; production; legal pages; alerts; the listing | P09.T05, P18.T02, P18.T05 |
 
@@ -48,29 +48,31 @@ All agents share one tool catalogue, one loop (`AgentRunWorkflow`) and one gatew
 
 **Specialists** (ADR-0023 decision 11): only the Owner starts one at launch, from a card whose top lines code writes; 1 running per task and 2 per workspace; one 24-hour authority clock from Start, with the run itself 1 hour by default and 8 at most; read, internal, propose and compute tools only; no customer data and no support tools; reports are data and never reach the Coordinator. A run-scoped installation of the `morrow.specialist` release carries its authority. The switch stays off until the deletion paths and the gateway, reservations and stops exist. **Skills:** 12 first-party job skills (`skills/<id>/SKILL.md` plus `skill.json`), pinned by release digest; no skill registry at launch.
 
+**Models** (ADR-0027 item 12): the Owner chooses each agent's model and thinking effort, Haiku, Sonnet or Opus 5.5 at low, medium or high (an Admin may too, for installed agents). By default the Coordinator runs Opus 5.5 at high effort, specialists Opus 5.5 at medium and the five installed agents Sonnet 5.5 at low. A change applies from the agent's next run and never changes what the agent may do; credits follow the model's token prices.
+
 ## Tracks and dependencies
 
 Interfaces first: each track's first PR is its contract with a fake, merged in W1. Small PRs on `main` behind default-off switches; stacks at most two deep.
 
 | Track | Scope | Depends on | Weeks (agents) |
 | --- | --- | --- | --- |
-| T0 Decisions | The companion ADRs (ADR-0023, "Companion records"); the weekly decision sheet | Owner | W0 onward (1) |
+| T0 Decisions | The companion ADRs (ADR-0023, "Companion records"): ADR-0024 to ADR-0031 accepted 2026-10-23 (OD-2026-10-23-7), so T4, T10, T11 and T13 have their companions; the production custody and live-store ADRs; the weekly decision sheet | Owner | W0 onward (1) |
 | T1 Land the train | Done: #37 and #39 to #44 merged, staging migrated to 0038. Left: the owner's first staging sign-in; the cleanup PR (dead code and checks; the Stripe code stays, switched off) | Hosted CI, AI review | W0 to W2 (1) |
 | T2 Interfaces | Tool catalogue, admission, job and event shape, mutation registry, AgentPackage@1 with `skills`, `skill.json`, RuntimeProviderPort, knowledge and notebook API, inbox kinds, schedules, agent-loop and mandates contracts, SpecialistSpec@1 and the Start document, adapter size budgets; all with fakes | T0 | W1 (3 to 4) |
 | T3 Gateway | Review API, batch approval, revert, `discount.deactivate`, exceptions Inbox. Security packet | T1, T2 | W1 to W4 (1 to 2) |
 | T4 Agent platform and loop | `AgentRunWorkflow` with tools, durable waits, manifests, installations, catalogue backend, rules, Coordinator v2, model profiles; the mandates packet; the specialist authority packet (merged by W5); the stale-run sweep and the removed-model alert. **Critical path** | T1, T2; the loop, authority and specialist companions | W1 to W6 (2; 3 from W2 to W5) |
 | T5 Proactivity | Schedules, recurring tasks, the router on the cron, monitors and the metric catalogue, look-for-work | T2; T8 | W2 to W5 (1 to 2) |
 | T6 Collaboration backend | Invitations and roles, threads and mentions, inbox kinds, notifications, artifacts and uploads, read tags | T2; T11 | W1 to W4 (1 to 2) |
-| T7 Workspace UI | Home, Inbox and diffs, board, threads, catalogue and install, agent page, knowledge, activity, settings, onboarding; the embedded home (setup, connection status, plan, pending approvals); the specialist Start card and report card | T2 fakes | W1 to W8 (2 to 3) |
-| T8 Shopify public app | App record; expiring-token custody packet; session-token identity packet; scopes; reads, bulk operations, webhooks; "Disconnect store"; the maintenance sweep; the 48-hour fallback; `data_request` export; the protected-data request | G3 | W1 to W6 (2) |
+| T7 Workspace UI | Home, Inbox and diffs, board, threads, catalogue and install, agent page, knowledge, activity, settings (each agent's model and thinking effort), onboarding; the embedded home (setup, connection status, plan, pending approvals); the specialist Start card and report card; the Sunrise look (ADR-0032): tokens, agent characters, component baseline and prototype | T2 fakes | W1 to W8 (2 to 3) |
+| T8 Shopify public app | App record; expiring-token custody packet; session-token identity packet; scopes, with a scope change stopping only the agents that lost one and raising a "Reconnect" Inbox item (ADR-0025 item 10); reads, bulk operations, webhooks; "Disconnect store"; the maintenance sweep; the 48-hour fallback; `data_request` export; the protected-data request | G3 | W1 to W6 (2) |
 | T9 Shop knowledge | Typed nodes, supplier records, notebooks, full-text retrieval, deletion path | T2; T4 | W2 to W4 (1) |
-| T10 E2B runtime | Port, fake and conformance (W1 to W2); adapter after E2B's answers and the runtime ADR (W3 to W6); staging qualification on synthetic data (W6 to W7); uploads | G5, the runtime companion, staging card 2 | W1 to W7 (1 to 2) |
-| T11 Email | Inbound Email Worker, forwarding, the Resend adapter with idempotency and status, BCC, domain verification, the mail data class | The email companion, G7 | W2 to W5 (1) |
+| T10 E2B runtime | Port, fake and conformance (W1 to W2); adapter after E2B's answers, or with conservative defaults from 2026-11-20 if they are late (W3 to W6; ADR-0029 owner question 3); staging qualification on synthetic data (W6 to W7); uploads | G5, the runtime companion, staging card 2 | W1 to W7 (1 to 2) |
+| T11 Email | Inbound Email Worker, forwarding, sending addresses (the list, the Morrow address and its allocator, the per-kind adapter map), the Resend adapter with idempotency and status, BCC, domain verification, the mail data class | The email companion, G7 | W2 to W5 (1) |
 | T12 Launch agents and evals | Six packages from 12 skill files, with golden and injection evals recorded in CI and run live on staging; the `morrow.specialist` release with routing and composition evals | T4, T5, T8, T10, T11 | W4 to W9 (3 to 5) |
 | T13 Shopify billing | App Pricing plan and capped usage, credits after confirmed usage records, plan change, reinstall | The billing companion; T8 | W4 to W7 (1) |
 | T14 Privacy | Deletion paths per class (specialist specs, Start documents and retired run-scoped principals included), retention sweeps, workspace erasure, export, privacy policy with regions | T8, T10, T11 | W2 to W9 (1 to 2) |
 | T15 Production | Production custody ADR (W3 to W5), bring-up under per-action approval (W7 to W9), submission inputs | Owner approvals | W3 to W9 (1) |
-| T16 Project graph | Phases 0 to 3 (phase 0 on `claude/graph-engine`) | T0 | W0 to W3 (1) |
+| T16 Project graph | Phases 0 to 3 (phase 0 merged in #46; phase 3's CLAUDE.md session step approved 2026-10-23) | T0 | W0 to W3 (1) |
 | T17 End to end and review | A simulated week on development stores (W8 to W9), submission (W10), review and fixes (W11 to W16), the owner's store after approval, launch | All | W8 to W18 |
 | T18 Specialists | Owns the brief and the specialist authority packet; its PRs land in T2, T4, T7 and T12 | T1, T2, T4 | W1 to W7 (1) |
 
@@ -80,11 +82,11 @@ The beta's former milestones, still cited in its briefs and code comments (`git 
 
 ## Serial gates
 
-1. **G1, W0:** the owner's decisions. Done 2026-10-23 for decisions 1 to 11 and billing option A; companion records follow on the weekly sheet.
+1. **G1, W0:** the owner's decisions. Done 2026-10-23 for decisions 1 to 11, billing option A and the companion records ADR-0024 to ADR-0031 (OD-2026-10-23-7); the production custody and live-store ADRs follow on later sheets.
 2. **G2, W0 to W2:** the merge train lands, with `staging:migrate` after each merge that carries migrations. Done 2026-10-23 (ledger 38, deployed); the owner's first staging sign-in remains.
 3. **G3, W0:** the owner creates the Shopify Partner account, the public app record and two or three development stores with generated orders, customers and stock. Every Shopify test waits on it.
 4. **G4, W0:** an Anthropic staging key with a monthly spend limit; live evals need it by W3.
-5. **G5, W0 to W3:** E2B's written answers to the questions sent just after midnight IST on 2026-10-23 (`docs/evidence/live/2026-10-22-e2b-support-questions.md`). They block adapter code only.
+5. **G5, W0 to W3:** E2B's written answers to the questions sent just after midnight IST on 2026-10-23 (`docs/evidence/live/2026-10-22-e2b-support-questions.md`). They block adapter code only, and only until 2026-11-20: if they are late, T10 starts the adapter with conservative defaults (ADR-0029 owner question 3).
 6. **G6, W1:** standing staging card 2, before `staging-card-1` ends on 2026-11-18.
 7. **G7, W1:** the email vendor and the sending domain's DNS.
 8. **G8, W1 to W2:** written questions to Shopify Partner support: the embedded home for a standalone workspace, and usage charges for credits.
@@ -103,7 +105,7 @@ The beta's former milestones, still cited in its briefs and code comments (`git 
 
 | Milestone | Week | Dates |
 | --- | --- | --- |
-| Decisions 1 to 11 and billing option A approved | before W0 | 2026-10-23 (done) |
+| Decisions 1 to 11, billing option A and the companion records ADR-0024 to ADR-0031 approved | before W0 | 2026-10-23 (done) |
 | Train landed; staging at migration 0038 | before W0 | 2026-10-23 (done) |
 | Partner account; contracts merged | W0 to W1 | 2026-10-26 to 2026-11-06 |
 | Checkpoint demo (G11) | W4 | by 2026-11-25 |

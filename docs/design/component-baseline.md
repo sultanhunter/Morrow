@@ -1,4 +1,7 @@
 # Option 1 component baseline — candidate
+
+**Replaced by Sunrise (ADR-0032, 2026-10-23).** This baseline shows Visual option 1. It and `tokens.json` stay the candidate for the merged port until T7 (`docs/plan/mvp.md`) replaces them with the Sunrise baseline; the behaviour rules in the table below carry over.
+
 Canonical sequence 24; P02.T02. Codex self-review, 6 October 2026. Merchant/reviewer baseline approval pending P02.T04. tokens.json is the machine-readable palette, spacing, typography and width reference; the selected image is docs/references/visual-option-1.png. Supporting UI Page sequence 8 is subordinate to the canonical standalone/thin-connector scope.
 
 One calm, light workspace: pale navigation, white work surface, charcoal primary actions, restrained purple selection, system typography, modest borders and compact project tabs. Project artifacts occupy the central space; conversation is contextual and decisions remain accessible from Inbox. Text labels communicate status in addition to color. No decorative gradients or marketing typography in operational screens.

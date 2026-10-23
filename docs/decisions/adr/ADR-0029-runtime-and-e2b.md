@@ -3,7 +3,7 @@
 - Status: Accepted 2026-10-23 (the owner, OD-2026-10-23-7: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: nothing accepted (it replaces two uncommitted drafts of 2026-10-22).
-- Amends, for development and staging: ADR-0007 item 4 and build-plan line 461 (the E2B key in the broker before P08.T02); ADR-0013's E2B bullet; ADR-0022 items 7, 9 and 11; build-plan P12.T01, P12.T02, P07.T02 and, for this profile, the P12b hard-deny line; `providers.json`. Only if owner questions 2 and 3 are accepted: ADR-0023 decision 6 (the G5 rule; Pro timing).
+- Amends, for development and staging: ADR-0007 item 4 and build-plan line 461 (the E2B key in the broker before P08.T02); ADR-0013's E2B bullet; ADR-0022 items 7, 9 and 11; build-plan P12.T01, P12.T02, P07.T02 and, for this profile, the P12b hard-deny line; `providers.json`. Through owner questions 2 and 3: ADR-0023 decision 6 (the G5 rule; Pro timing).
 - Implements: ADR-0023 decision 6.
 - Does not change: ADR-0005, ADR-0011, ADR-0015; ADR-0022 items 10, 14 and 15 (privacy completion is ADR-0031 item 3's).
 - Terms: the Owner, as in ADR-0024.
@@ -25,8 +25,8 @@ The owner chose a runtime and E2B ("lets make sure we do have agent runtime in o
 8. **Money and the runtime cap.** The run reserves the worst case at list rates (about US$0.03) before the create, in a new `sandbox_compute` reservation kind; ADR-0026 prices computer seconds. Before every create, code checks a monthly runtime budget below E2B's limit (staging US$10 of US$20), half the tier's concurrency and 3 sandboxes per workspace. At the cap the fallback runs; cleanup is never blocked.
 9. **Holds and stops.** A quota, billing block or unreconciled `unknown_effect` sets a runtime hold that only a person lifts; it blocks creates, never cleanup. Cleanup runs under every stop; stops kill their scope's sandboxes. A store's privacy request completes only as ADR-0031 item 3 says, which includes every runtime operation being terminal.
 10. **The switch.** `docs/decisions/runtime-staging.json` replaces `e2b-activation.json`, committed `off` (states `on`, `cleanup_only`, `off`), with `admission: synthetic_only | merchant`. It stays `synthetic_only` until G9, E2B's DPA (G16) and acceptable deletion answers; `merchant` needs the owner's per-action approval.
-11. **E2B's answers and qualification.** The answers are recorded with date and sender in `docs/evidence/live/2026-10-22-e2b-support-questions.md`. Answers on guest networking, the token and timeouts gate adapter code (G5); others gate qualification or `merchant` admission. An adverse answer stops T10's adapter until the owner decides. Qualification before `on`, under staging card 2 within US$5, shows egress denied by a root canary, the token unreadable by `agent`, and timeouts that kill without pausing; any adapter, template or region change voids it.
-12. **Tiers and fallback.** Hobby for staging; Pro in a separate production project (owner question 2). If the computer is not qualified at launch, the owner chooses between the TypeScript fallbacks and holding launch. Lasting workspaces, web access and browsers each need their own ADR.
+11. **E2B's answers and qualification.** The answers are recorded with date and sender in `docs/evidence/live/2026-10-22-e2b-support-questions.md`. Answers on guest networking, the token and timeouts gate adapter code (G5) until 2026-11-20; if they have not come by then, T10 starts the adapter with conservative defaults, every failure after the send mark unknown, and proves the testable answers in qualification (owner question 3). Others gate qualification or `merchant` admission. An adverse answer stops T10's adapter until the owner decides. Qualification before `on`, under staging card 2 within US$5, shows egress denied by a root canary, the token unreadable by `agent`, and timeouts that kill without pausing; any adapter, template or region change voids it.
+12. **Tiers and fallback.** Hobby for staging; Pro in a separate production project, bought at production bring-up, W7 to W9 (owner question 2). If the computer is not qualified at launch, the owner chooses between the TypeScript fallbacks and holding launch. Lasting workspaces, web access and browsers each need their own ADR.
 
 ## Security invariants touched
 
@@ -35,9 +35,9 @@ The owner chose a runtime and E2B ("lets make sure we do have agent runtime in o
 - **Broker-only credentials:** `broker-runtime.test.mjs` (new), `verify:boundaries`, `edge:check`.
 - **Default deny; no real data before its deletion path; immutable migrations:** `edge-config.test.mjs`, `lab:shopify-privacy`, `migration-history.test.mjs`.
 
-**Interpretations that need the owner's approval:** if owner question 1 needs a build-only key, the owner holds it and Claude, Workers, CI and the VM never read it; under owner question 4, the envd token is held by E2B, unreadable by Morrow's guest code, and the profile is denied if qualification cannot show that. No invariant is weakened only if the owner accepts question 4's reading.
+**Interpretations the owner approved** (owner questions 1 and 4, 2026-10-23): if template builds need a build-only key, the owner holds it and Claude, Workers, CI and the VM never read it; the envd token is held by E2B, unreadable by Morrow's guest code, and the profile is denied if qualification cannot show that. With question 4's reading accepted, no invariant is weakened.
 
-**Looser on purpose:** a compromised orchestrator learns which runtime operations are unsettled across tenants and can trigger their cleanup early, but no content. This widens ADR-0022 item 9's residual, and the owner accepts it only by approving this record.
+**Looser on purpose:** a compromised orchestrator learns which runtime operations are unsettled across tenants and can trigger their cleanup early, but no content. This widens ADR-0022 item 9's residual; the owner accepted it with this record (OD-2026-10-23-7).
 
 ## Consequences
 

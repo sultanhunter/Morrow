@@ -3,7 +3,7 @@
 - Status: Accepted 2026-10-23 (the owner, OD-2026-10-23-7: every owner question as recommended)
 - Date: 2026-10-23
 - Supersedes: none.
-- Amends: ADR-0011 Q1 as refined by ADR-0018 item 3 (item 7); ADR-0011 Q3 (item 9); ADR-0011 Q8, extended to revoke (item 4); ADR-0022 item 9 (item 6). Only if owner question 1 is accepted: ADR-0005 §3, ADR-0011 Q1 for access_change, ADR-0023 decision 11b's last sentence and the ADR-0005 entry of ADR-0023's "Does not change" list.
+- Amends: ADR-0011 Q1 as refined by ADR-0018 item 3 (item 7); ADR-0011 Q3 (item 9); ADR-0011 Q8, extended to revoke (item 4); ADR-0022 item 9 (item 6). With owner question 1 answered (b): ADR-0005 §3, ADR-0011 Q1 for access_change, ADR-0023 decision 11b's last sentence and the ADR-0005 entry of ADR-0023's "Does not change" list.
 - Implements: ADR-0023 decisions 3 and 1 (mandates).
 - Does not change: `agent-authority.ts`; AutomationMandate@1; the kill switches; ADR-0011 Q2, Q4 to Q7.
 - Terms: **the Owner** is ADR-0011 Q2's designated owner, at launch ADR-0022 item 3's founding principal. ADR-0025 to ADR-0031 use the term this way.
@@ -16,7 +16,7 @@ The owner asked for agents "that work proactively with the specified goal(like g
 ## Decision
 
 1. **Mandates.** Forward migrations add `automation_mandates` (append-only revisions), `mandate_documents`, `agent_trigger_sets` and `agent_installations.mandate_ref`; a run has a human requester or a `mandate_id`, never both. Each installed agent has one current mandate; the Coordinator and specialists never do. Code builds it: the installation owner, the installation's grants minus `human_only` ones, its scope and caps, the enabled trigger kinds and quiet hours, depth 0, and expiry 90 days after start (CHECK). A mandate removes no approval; routines and monitors never add a trigger kind, capability or scope.
-2. **Issue and renew.** Install confirms one server-built document with `agents.installation.activate`, bound to the actor and a standalone-workspace session, 5 minutes, single use. The issuer must own the installation and hold everything the mandate names (`amplification_denied`); the Owner gets optional-scope capabilities from ADR-0025 item 7. Renewal is a new 90-day revision, never automatic. A solo Owner confirms alone; a team follows owner question 1.
+2. **Issue and renew.** Install confirms one server-built document with `agents.installation.activate`, bound to the actor and a standalone-workspace session, 5 minutes, single use. The issuer must own the installation and hold everything the mandate names (`amplification_denied`); the Owner gets optional-scope capabilities from ADR-0025 item 7. Renewal is a new 90-day revision, never automatic. A solo Owner confirms alone; in a team, the Owner confirms alone only while no other member holds the mandate's store grants (owner question 1, answered (b)).
 3. **Expiry.** Notices go out 14 and 3 days before and at expiry. Then admission refuses mandate runs, and a running one ends at its next tool call.
 4. **Revoke.** New `workspace.routine.revoke`: control, `human_only`, not review-required, held by the installation owner and the Owner; agents may only propose it. ADR-0011 Q8 extends to it: no reservation, never blocked by entitlement (ADR-0026 item 5). One audited transaction sets `revokedAt`, voids unclaimed approvals of the mandate's proposals and ends its running run; a claimed operation still finishes and reconciles.
 5. **Hand-over.** When the installation owner leaves (P05.T01z) or loses a named grant, their mandates end and the Owner gets a "Take over" item: one item-2 transaction that moves ownership, re-issues grants and issues a new mandate.
@@ -24,7 +24,7 @@ The owner asked for agents "that work proactively with the specified goal(like g
    - **Look-for-work** is read-only: one pass per installation per day under ADR-0026 item 4's look-for-work cap, with read tools and suggestions only, never `proposal.create` or `computer.*` (new `lab:mandates` cases for each and for a second pass).
 7. **The requester** (amends ADR-0011 Q1). A proposal's `requestedBy` is its run's requester, fixed at admission: the person who started it, or, for a mandate run, the installation as a new `MandateActorRef`. While the workspace has one active human member, the mandate owner is also conflicted on mandate-run proposals (checked at decision and dispatch), so a solo owner keeps the phrase and cool-down; in a team, an installer who holds the approve grants and did not edit may approve. The kernel still treats the mandate owner as requester.
 8. **The editor is the author.** An edit is a new proposal by the editor, keeping `requestedBy` and `contextTaint`, with `editedFrom` in its digest and no later expiry. It voids the original's approvals and is refused once any family member is approved or claimed. It only changes present fields or drops targets.
-9. **One typed confirmation per solo batch** (amends ADR-0011 Q3). A batch is 2 to 50 pending proposals of one capability and store, in a server-built document over their digests, bound to actor and session, 5 minutes, single use. Standalone sessions qualify, embedded member sessions only if ADR-0025 owner question 1 is accepted. The phrase sums N, C and A; it yields N approvals with one `effectiveAt`, one bad member refuses all, and teams batch without it.
+9. **One typed confirmation per solo batch** (amends ADR-0011 Q3). A batch is 2 to 50 pending proposals of one capability and store, in a server-built document over their digests, bound to actor and session, 5 minutes, single use. Standalone sessions and embedded member sessions qualify (ADR-0025 owner question 1). The phrase sums N, C and A; it yields N approvals with one `effectiveAt`, one bad member refuses all, and teams batch without it.
 10. **"Approval waiting" email.** A proposal with a pending life of 72 hours or less, still pending after 4 hours, sends each eligible viewer a fixed template (counts, earliest expiry, a token-free link), at most hourly. Each send is an ADR-0030 item 8 delivery, reconciled by ADR-0030 item 5(a) and (b) with the same key, never sent with a new key. In-app only until G7.
 11. **Expired drafts are drafted again, never revived.** An expired mandate-run proposal gets one re-draft from fresh reads (owner question 3); "Draft again" starts a person's run. Mandate-run proposals expire no later than the mandate.
 12. **Delivery.** T2's contracts come first. Items 1 to 6 are T4's mandates packet; 7 to 9 and 11 the review-rule packet; 10 lands in T6. Admission ships default-off and waits for G10 and its classes' G9. ADR-0031 sets retention.
@@ -40,10 +40,10 @@ The owner asked for agents "that work proactively with the specified goal(like g
 - **No effect before the gateway:** admission off until G10 (`edge:check`, T3's gateway lab).
 - **Immutable migrations:** forward only (`migration-history.test.mjs`).
 
-**Looser on purpose,** accepted only by approving this record:
+**Looser on purpose,** accepted with this record (OD-2026-10-23-7):
 - In a team, an installer may approve their own agent's proactive work (decision 3).
 - A compromised orchestrator could admit runs under any current mandate with a due trigger, within caps and producing only internal work and proposals. This widens ADR-0022 item 9's residual.
-- Owner question 1, if accepted.
+- Owner question 1, answered (b): in a team, the Owner installs an agent and issues or renews its mandate with no second reviewer while no other member holds the mandate's store grants.
 
 ## Consequences
 
