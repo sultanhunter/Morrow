@@ -11,7 +11,9 @@
 // starts at v2 (§4.14). A unit test feeds this body to the server's `loginStartInput`.
 import { portMethods, type Composed, type PortMethod } from "@morrow/workspace-ui";
 
-const uncomposed: readonly PortMethod[] = ["session.keepAlive", "people.list"];
+// ADR-0032: `samples.home` is the Home preview's default-off switch. It has no backend
+// (ADR-0033 and ADR-0034 are proposed, not approved), so this build never composes it.
+const uncomposed: readonly PortMethod[] = ["session.keepAlive", "people.list", "samples.home"];
 export const composed: Composed = Object.freeze(
   Object.fromEntries(portMethods.map((method) => [method, !uncomposed.includes(method)])) as Record<
     PortMethod,

@@ -1,7 +1,9 @@
-// P14.T01a §4.4: the option 1 design tokens (docs/design/tokens.json) become the one
-// stylesheet that may hold colour literals (packages/workspace-ui/src/styles/tokens.css)
-// and the TypeScript breakpoints (packages/workspace-ui/src/tokens.ts). `--check` fails on
-// drift; `npm run verify:design` runs the check and the colour-literal scan.
+// P14.T01a §4.4, ADR-0032 item 7: the Sunrise design tokens (docs/design/tokens.json,
+// schema 2) become the one stylesheet that may hold colour literals
+// (packages/workspace-ui/src/styles/tokens.css) and the TypeScript breakpoints and target
+// floors (packages/workspace-ui/src/tokens.ts). Every section is a closed shape: an unknown
+// key or an out-of-range value fails. `--check` fails on drift; `npm run verify:design`
+// runs the check and the colour-literal scan.
 // Usage: node scripts/generate-ui-tokens.mjs [--check]
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -18,63 +20,164 @@ const fail = (code) => {
   throw Error("UI_TOKENS_" + code);
 };
 const integer = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
+const number = (value, min, max) =>
+  typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+const tokenName = /^[a-z][A-Za-z0-9]*$/;
+const hex = /^#(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
+const fontStack = /^[A-Za-z0-9 ,'-]+$/;
+const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const exactKeys = (value, keys, code) => {
+  if (!object(value) || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort()))
+    fail(code);
+};
+// Top-level keys of schema 2; anything else is refused.
+const topLevel = [
+  "schema_version",
+  "plan_sequence",
+  "status",
+  "direction",
+  "source",
+  "color",
+  "legacy_color_aliases",
+  "type",
+  "spacing_px",
+  "radius_px",
+  "legacy_radius_aliases",
+  "shadow",
+  "target_px",
+  "content_width_px",
+  "motion",
+  "contrast_pairs",
+];
+const scaleKeys = ["size", "line", "weight", "tracking_em"];
+const shadowKeys = ["x", "y", "blur", "spread", "color"];
+const widthKeys = [
+  "wide",
+  "narrow",
+  "mobile",
+  "sidebar",
+  "conversation",
+  "panel",
+  "entry",
+  "setup",
+  "pane_collapse_below",
+  "panel_drawer_below",
+  "navigation_collapse_below",
+];
+const breakpointKeys = ["pane_collapse_below", "panel_drawer_below", "navigation_collapse_below"];
 
 export function generateUiTokens(tokens) {
-  if (tokens?.schema_version !== 1) fail("SCHEMA_VERSION");
+  if (tokens?.schema_version !== 2) fail("SCHEMA_VERSION");
+  exactKeys(tokens, topLevel, "KEYS");
   const css = [`/* ${header} */`, ":root {"];
-  for (const [name, value] of Object.entries(tokens.color ?? {})) {
-    if (!/^[a-z][A-Za-z]*$/.test(name) || !/^#[0-9A-Fa-f]{6}$/.test(value)) fail("COLOR");
+  // Colours: six-digit hex, or eight-digit hex where a token carries its own alpha.
+  if (!object(tokens.color) || Object.keys(tokens.color).length === 0) fail("COLOR");
+  for (const [name, value] of Object.entries(tokens.color)) {
+    if (!tokenName.test(name) || typeof value !== "string" || !hex.test(value)) fail("COLOR");
     css.push(`  --color-${kebab(name)}: ${value.toLowerCase()};`);
   }
+  // Former option 1 names, kept as references so a stylesheet written against them still
+  // renders in Sunrise until it is moved to the Sunrise names.
+  for (const [alias, target] of Object.entries(tokens.legacy_color_aliases ?? fail("ALIAS"))) {
+    if (!tokenName.test(alias) || Object.hasOwn(tokens.color, alias)) fail("ALIAS");
+    if (!Object.hasOwn(tokens.color, target)) fail("ALIAS");
+    css.push(`  --color-${kebab(alias)}: var(--color-${kebab(target)});`);
+  }
+  // Spacing: the 4 px scale, named by its multiple of 4 (--space-5 is 20 px).
   const spacing = tokens.spacing_px;
-  if (!Array.isArray(spacing) || spacing.length !== 6 || !spacing.every((v) => integer(v, 1, 64)))
-    fail("SPACING");
-  spacing.forEach((value, i) => css.push(`  --space-${i + 1}: ${value}px;`));
-  for (const name of ["control", "surface", "selection"]) {
-    const value = tokens.radius_px?.[name];
-    if (!integer(value, 0, 32)) fail("RADIUS");
-    css.push(`  --radius-${name}: ${value}px;`);
+  if (!Array.isArray(spacing) || spacing.length < 6 || spacing.length > 16) fail("SPACING");
+  let previous = 0;
+  for (const value of spacing) {
+    if (!integer(value, 4, 96) || value % 4 !== 0 || value <= previous) fail("SPACING");
+    previous = value;
+    css.push(`  --space-${value / 4}: ${value}px;`);
   }
-  for (const name of ["sidebar", "conversation"]) {
-    const value = tokens.content_width_px?.[name];
-    if (!integer(value, 120, 640)) fail("WIDTH");
-    css.push(`  --width-${name}: ${value}px;`);
+  if (!object(tokens.radius_px)) fail("RADIUS");
+  for (const [name, value] of Object.entries(tokens.radius_px)) {
+    if (!tokenName.test(name) || !integer(value, 0, 999)) fail("RADIUS");
+    css.push(`  --radius-${kebab(name)}: ${value}px;`);
   }
-  const type = tokens.type ?? {};
-  for (const name of ["display", "body", "utility"]) {
-    if (typeof type[name] !== "string" || !/^[A-Za-z0-9 ,'-]+$/.test(type[name])) fail("FONT");
+  for (const [alias, target] of Object.entries(tokens.legacy_radius_aliases ?? fail("ALIAS"))) {
+    if (!tokenName.test(alias) || Object.hasOwn(tokens.radius_px, alias)) fail("ALIAS");
+    if (!Object.hasOwn(tokens.radius_px, target)) fail("ALIAS");
+    css.push(`  --radius-${kebab(alias)}: var(--radius-${kebab(target)});`);
+  }
+  // Shadows: layers of fixed numbers and one hex colour each; nothing else is accepted.
+  if (!object(tokens.shadow)) fail("SHADOW");
+  for (const [name, layers] of Object.entries(tokens.shadow)) {
+    if (!tokenName.test(name) || !Array.isArray(layers) || layers.length < 1 || layers.length > 4)
+      fail("SHADOW");
+    const parts = layers.map((layer) => {
+      const inset = object(layer) && Object.hasOwn(layer, "inset");
+      exactKeys(layer, inset ? [...shadowKeys, "inset"] : shadowKeys, "SHADOW");
+      if (inset && layer.inset !== true) fail("SHADOW");
+      if (!["x", "y", "spread"].every((k) => integer(layer[k], -64, 64))) fail("SHADOW");
+      if (!integer(layer.blur, 0, 96) || !hex.test(layer.color)) fail("SHADOW");
+      const px = (n) => (n === 0 ? "0" : `${n}px`);
+      return `${inset ? "inset " : ""}${px(layer.x)} ${px(layer.y)} ${px(layer.blur)} ${px(layer.spread)} ${layer.color.toLowerCase()}`;
+    });
+    css.push(`  --shadow-${kebab(name)}: ${parts.join(", ")};`);
+  }
+  const widths = tokens.content_width_px;
+  exactKeys(widths, widthKeys, "WIDTH");
+  for (const name of ["sidebar", "conversation", "panel", "entry", "setup"]) {
+    if (!integer(widths[name], 120, 960)) fail("WIDTH");
+    css.push(`  --width-${name}: ${widths[name]}px;`);
+  }
+  const type = tokens.type;
+  exactKeys(type, ["display", "body", "utility", "store", "scale"], "TYPE");
+  for (const name of ["display", "body", "utility", "store"]) {
+    if (typeof type[name] !== "string" || !fontStack.test(type[name])) fail("FONT");
     css.push(`  --type-${name}: ${type[name].replaceAll("'", '"')};`);
   }
-  for (const name of ["body", "reading", "caption", "title", "section"]) {
-    const value = type[name + "_px"];
-    if (!integer(value, 10, 48)) fail("TYPE_SIZE");
-    css.push(`  --type-${name}-size: ${value}px;`);
+  if (!object(type.scale)) fail("TYPE_SCALE");
+  for (const [name, step] of Object.entries(type.scale)) {
+    exactKeys(step, scaleKeys, "TYPE_SCALE");
+    if (!tokenName.test(name) || !integer(step.size, 13, 48) || !integer(step.line, step.size, 64))
+      fail("TYPE_SCALE");
+    if (!integer(step.weight, 100, 900) || !number(step.tracking_em, -0.05, 0.05))
+      fail("TYPE_SCALE");
+    const key = kebab(name);
+    css.push(
+      `  --type-${key}-size: ${step.size}px;`,
+      `  --type-${key}-line: ${step.line}px;`,
+      `  --type-${key}-weight: ${step.weight};`,
+      `  --type-${key}-tracking: ${step.tracking_em === 0 ? "0" : `${step.tracking_em}em`};`,
+    );
   }
-  if (typeof type.line_height !== "number" || type.line_height < 1 || type.line_height > 2)
-    fail("LINE_HEIGHT");
-  css.push(`  --type-line-height: ${type.line_height};`);
-  if (!integer(tokens.motion?.duration_ms, 0, 1000)) fail("MOTION");
+  exactKeys(tokens.target_px, ["minimum", "phone"], "TARGET");
+  const { minimum, phone } = tokens.target_px;
+  if (!integer(minimum, 24, 64) || !integer(phone, minimum, 64)) fail("TARGET");
+  css.push(`  --target-minimum: ${minimum}px;`, `  --target-phone: ${phone}px;`);
+  exactKeys(tokens.motion, ["duration_ms", "reduced_motion"], "MOTION");
+  if (!integer(tokens.motion.duration_ms, 0, 1000)) fail("MOTION");
   css.push(`  --motion-duration: ${tokens.motion.duration_ms}ms;`, "}", "");
-  const widths = tokens.content_width_px ?? {};
-  for (const name of [
-    "pane_collapse_below",
-    "navigation_collapse_below",
-    "wide",
-    "narrow",
-    "mobile",
-  ])
+  for (const name of [...breakpointKeys, "wide", "narrow", "mobile"])
     if (!integer(widths[name], 240, 4096)) fail("BREAKPOINT");
   const ts = [
     `// ${header}`,
     "export const breakpoints = {",
     `  paneCollapseBelow: ${widths.pane_collapse_below},`,
+    `  panelDrawerBelow: ${widths.panel_drawer_below},`,
     `  navigationCollapseBelow: ${widths.navigation_collapse_below},`,
     "} as const;",
     `export const referenceWidths = [${widths.wide}, ${widths.narrow}, ${widths.mobile}] as const;`,
     `export const motionDurationMs = ${tokens.motion.duration_ms};`,
+    `export const targetPx = { minimum: ${minimum}, phone: ${phone} } as const;`,
     "",
   ];
   return { [tokensCssPath]: css.join("\n"), [tokensTsPath]: ts.join("\n") };
+}
+
+/** The pointer-target floors ui:check holds every control to (ADR-0032 item 5). */
+export function targetFloors(root = repositoryRoot) {
+  const tokens = JSON.parse(readFileSync(resolve(root, tokensJsonPath), "utf8"));
+  const widths = tokens.content_width_px;
+  return {
+    minimum: tokens.target_px.minimum,
+    phone: tokens.target_px.phone,
+    phoneBelow: widths.navigation_collapse_below,
+  };
 }
 
 // Any hex, rgb() or hsl() literal outside tokens.css fails (AC01). The lookbehind
@@ -108,7 +211,7 @@ export function uiSourceFiles(root = repositoryRoot) {
 // query must be a token breakpoint: `max-width` one pixel below it, `min-width` at it.
 export function inspectBreakpoints(root = repositoryRoot) {
   const widths = JSON.parse(readFileSync(resolve(root, tokensJsonPath), "utf8")).content_width_px;
-  const below = [widths.navigation_collapse_below, widths.pane_collapse_below];
+  const below = breakpointKeys.map((key) => widths[key]);
   const problems = [];
   for (const path of uiSourceFiles(root).filter((p) => p.endsWith(".css"))) {
     const text = readFileSync(resolve(root, path), "utf8");

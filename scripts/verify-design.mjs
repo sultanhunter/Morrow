@@ -16,7 +16,12 @@ const luminance = (h) =>
     .match(/../g)
     .map(linear)
     .reduce((n, x, i) => n + x * [0.2126, 0.7152, 0.0722][i], 0);
+// ADR-0032 item 5: text pairs need 4.5:1, control edges and focus rings 3:1. A pair names
+// two opaque (six-digit) colours; a token with its own alpha is never a contrast pair.
+const opaque = (name) => /^#[0-9A-Fa-f]{6}$/.test(tokens.color[name] ?? "");
 const contrasts = tokens.contrast_pairs.map(([foreground, background, minimum]) => {
+  if (!opaque(foreground) || !opaque(background) || ![3, 4.5].includes(minimum))
+    throw Error(`Contrast pair is not two opaque tokens with a floor of 3 or 4.5: ${foreground}/${background}`);
   const a = luminance(tokens.color[foreground]),
     b = luminance(tokens.color[background]);
   const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);

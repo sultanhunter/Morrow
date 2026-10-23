@@ -48,6 +48,7 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "home_preview",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -310,7 +311,15 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // ADR-0032: the Home board's sample sections, shown only where `samples.home` is
+  // composed (here alone; see `samplesComposedIn`).
+  home_preview: {},
 };
+/**
+ * The default-off Home preview switch: `samples.home` is composed only in these
+ * scenarios. Every other scenario, like the HTTP build, leaves it uncomposed.
+ */
+export const samplesComposedIn: readonly ScenarioName[] = ["home_preview"];
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [
   "connections_unlinked",

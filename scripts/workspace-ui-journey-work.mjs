@@ -406,7 +406,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       // The fixture workspace W is named "Synthetic"; W2 carries a planted name.
       await page.locator("a.chooser-link").nth(state.rows.indexOf("Synthetic")).click();
       await page.waitForURL(`**/w/${W}`, { timeout: T });
-      await page.getByRole("link", { name: "Work", exact: true }).click();
+      await page.getByRole("link", { name: "Projects", exact: true }).click();
       await text(page, "No work yet");
       h.check("AC27:empty_state_named", await page.getByText("No work yet").isVisible());
       await page.getByRole("button", { name: "Create goal" }).first().click();
@@ -544,7 +544,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         "AC24:no_w1_marker_after_switch",
         !html.includes(M.goal) && !html.includes(M.task) && !html.includes(state.taskId),
       );
-      await page.getByRole("link", { name: "Work", exact: true }).click();
+      await page.getByRole("link", { name: "Projects", exact: true }).click();
       await text(page, "No work yet");
       const tab = await a.context.newPage();
       state.aTab = tab;
@@ -782,7 +782,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         "AC26:home_panels_each_denied",
         (await page.locator(".panel .state-denied").count()) === 2,
       );
-      await page.getByRole("link", { name: "Work", exact: true }).click();
+      await page.getByRole("link", { name: "Projects", exact: true }).click();
       await text(page, "You don't have access to view work");
       // The second tab's fresh key: one organization per principal (409 already_onboarded),
       // and the form reads the account again, which now opens the one workspace.

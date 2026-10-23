@@ -185,7 +185,16 @@ export function screenTitle(view: {
   if (view.session !== "active") return sessionTitles[view.session];
   if (!view.match) return copy.notFound.title;
   if (view.entryFailed) return copy.workspace.loadFailedTitle;
-  return routeTitle(workspaceRoutes, view.match.id) ?? copy.notFound.title;
+  return destinationTitle(view.match.id);
+}
+/**
+ * A route's name as the interface shows it: the Sunrise label where it differs from the
+ * contract's title (ADR-0032: "Work" is Projects, "Agents" is Team), else the contract's.
+ */
+export function destinationTitle(id: string): string {
+  return Object.hasOwn(copy.routeTitles, id)
+    ? copy.routeTitles[id]!
+    : (routeTitle(workspaceRoutes, id) ?? copy.notFound.title);
 }
 
 const workspaceScoped = (match: RouteMatch | null): Id | null =>
@@ -573,7 +582,7 @@ function WorkspaceFrame({
         return services.composed["runs.admit"] ? (
           <AskScreen workspace={workspace} />
         ) : (
-          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+          <UnavailableDestination title={destinationTitle(match.id)} />
         );
       case "inbox":
         return <InboxScreen workspace={workspace} />;
@@ -596,10 +605,10 @@ function WorkspaceFrame({
         return params.section === "governance" ? (
           <ModelDefaultScreen workspace={workspace} />
         ) : (
-          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+          <UnavailableDestination title={destinationTitle(match.id)} />
         );
       default:
-        return <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />;
+        return <UnavailableDestination title={destinationTitle(match.id)} />;
     }
   })();
   return (
@@ -675,5 +684,6 @@ export function guardPort(
       list: watch(port.models.list.bind(port.models), first),
       reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
     },
+    samples: { home: watch(port.samples.home.bind(port.samples), first) },
   };
 }

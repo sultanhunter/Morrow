@@ -1,14 +1,19 @@
-// The option 1 shell: skip link, the provisional label (every screen, every width),
-// seven destinations, the workspace switcher, and the labelled modal drawer below
-// 760 px (focus trapped, background `inert`, Escape restores focus).
+// The Sunrise shell (ADR-0032): skip link, the provisional label (every screen, every
+// width), the store switcher, the Ask Morrow button on every page, the seven destinations
+// of the route contract under their Sunrise labels (Home, Inbox, Projects, Team, Shop
+// knowledge, Files, then Settings at the bottom), the store connection, and below 760 px
+// a top bar with the labelled modal drawer (focus trapped, background `inert`, Escape
+// restores focus). Route ids and paths are the contract's; only labels change.
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { buildWorkspacePath, routeAncestry, workspaceRoutes } from "@morrow/contracts/routes";
 import { copy } from "../copy";
-import type { WorkspaceSummary, WorkspaceView } from "../model";
+import type { AgentKind, HomeSamplesView, Id, WorkspaceSummary, WorkspaceView } from "../model";
 import { useServices } from "../services";
 import { breakpoints } from "../tokens";
+import { primaryStore, useConnections, useHomeSamples, useOpenQuestions, waitingCount } from "../workspace-data";
+import { AgentAvatar, PersonAvatar, StoreTile, agentNames } from "./avatars";
 import { Button, RouteLink, trapTab } from "./controls";
-import { Icon, type IconName } from "./display";
+import { Icon, MorrowMark, type IconName } from "./display";
 
 export function ProvisionalBar({ fixture }: { readonly fixture?: ReactNode }) {
   return (
@@ -36,6 +41,16 @@ export function SkipLink() {
   );
 }
 
+/** Morrow's name with its character: the entry screens' top bar. */
+function Brand() {
+  return (
+    <p className="brand">
+      <AgentAvatar agent="morrow" size={32} />
+      {copy.brand}
+    </p>
+  );
+}
+
 /** Screens outside a workspace: sign-in, signed out, not found, unavailable, account. */
 export function EntryLayout({
   fixture,
@@ -49,12 +64,9 @@ export function EntryLayout({
       <SkipLink />
       <ProvisionalBar fixture={fixture} />
       <div className="entry">
-        <p className="brand entry-brand">
-          <span className="brand-mark" aria-hidden="true">
-            m
-          </span>
-          {copy.brand}
-        </p>
+        <div className="entry-top">
+          <Brand />
+        </div>
         <main id="main" tabIndex={-1} className="entry-main">
           {children}
         </main>
@@ -63,44 +75,192 @@ export function EntryLayout({
   );
 }
 
+const labels = copy.destinations as Readonly<Record<string, string>>;
+/** The order of the board's sidebar; Settings sits apart at the bottom. */
 const destinations: readonly { readonly route: string; readonly icon: IconName }[] = [
   { route: "home", icon: "home" },
-  { route: "work", icon: "work" },
   { route: "inbox", icon: "inbox" },
+  { route: "work", icon: "work" },
   { route: "agents", icon: "agents" },
-  { route: "assets", icon: "assets" },
   { route: "knowledge", icon: "knowledge" },
+  { route: "assets", icon: "assets" },
+];
+const bottom: readonly { readonly route: string; readonly icon: IconName }[] = [
   { route: "settings", icon: "settings" },
 ];
-const labels = copy.destinations as Readonly<Record<string, string>>;
+
+function NavLink({
+  workspaceId,
+  route,
+  icon,
+  current,
+  waiting,
+  onNavigate,
+}: {
+  readonly workspaceId: Id;
+  readonly route: string;
+  readonly icon: IconName;
+  readonly current: boolean;
+  readonly waiting?: string | null;
+  readonly onNavigate?: (() => void) | undefined;
+}) {
+  return (
+    <RouteLink
+      route={route}
+      params={{ workspaceId }}
+      current={current}
+      className="nav-link"
+      {...(onNavigate ? { onNavigate } : {})}
+    >
+      <Icon name={icon} />
+      <span className="nav-label">{labels[route]}</span>
+      {waiting ? (
+        <>
+          <span className="count-pill" aria-hidden="true">
+            {waiting}
+          </span>
+          <span className="visually-hidden">{`, ${waiting} waiting`}</span>
+        </>
+      ) : null}
+    </RouteLink>
+  );
+}
+
+/** Pinned projects under Projects: only the Home preview's samples have any today. */
+function PinnedProjects({
+  workspaceId,
+  samples,
+  onNavigate,
+}: {
+  readonly workspaceId: Id;
+  readonly samples: HomeSamplesView;
+  readonly onNavigate?: (() => void) | undefined;
+}) {
+  return (
+    <ul className="nav-sub" aria-label={copy.shell.pinnedProjects}>
+      {samples.projects.map((project) => (
+        <li key={project.id}>
+          <RouteLink
+            route="project"
+            params={{ workspaceId, projectId: project.id }}
+            className="nav-sublink"
+            {...(onNavigate ? { onNavigate } : {})}
+          >
+            <span className="nav-sublabel" dir="auto">
+              {project.name}
+            </span>
+            <span className="nav-subnote">
+              <span className="visually-hidden">, </span>
+              {copy.shell.ends(project.ends)}
+            </span>
+          </RouteLink>
+        </li>
+      ))}
+      <li>
+        <RouteLink
+          route="work"
+          params={{ workspaceId }}
+          className="nav-sublink"
+          {...(onNavigate ? { onNavigate } : {})}
+        >
+          <span className="nav-sublabel">{copy.shell.everydayWork}</span>
+          <Icon name="forward" size={16} />
+        </RouteLink>
+      </li>
+    </ul>
+  );
+}
+
+/** Team: Morrow is always on it; agents and people come with their reads (samples today). */
+function TeamMembers({
+  workspaceId,
+  samples,
+  onNavigate,
+}: {
+  readonly workspaceId: Id;
+  readonly samples: HomeSamplesView | null;
+  readonly onNavigate?: (() => void) | undefined;
+}) {
+  const agents =
+    samples?.team.agents.filter(
+      (a): a is Exclude<AgentKind, "morrow" | "specialist"> => a !== "morrow" && a !== "specialist",
+    ) ?? [];
+  const link = { route: "agents", params: { workspaceId }, className: "nav-sublink" } as const;
+  const navigate = onNavigate ? { onNavigate } : {};
+  return (
+    <ul className="nav-sub" aria-label={copy.shell.teamMembers}>
+      {(["morrow", ...agents] as const).map((agent) => (
+        <li key={agent}>
+          <RouteLink {...link} {...navigate}>
+            <AgentAvatar agent={agent} size={28} />
+            <span className="nav-sublabel">
+              {agentNames[agent]}
+              <span className="visually-hidden">{copy.shell.agentSuffix}</span>
+            </span>
+          </RouteLink>
+        </li>
+      ))}
+      {(samples?.team.people ?? []).map((person) => (
+        <li key={person.name}>
+          <RouteLink {...link} {...navigate}>
+            <PersonAvatar name={person.name} size={28} presence={person.presence} />
+            <span className="nav-sublabel">
+              <span dir="auto">{person.name}</span>
+              <span className="visually-hidden">
+                {person.presence === "online" ? copy.shell.online : copy.shell.away}
+              </span>
+            </span>
+          </RouteLink>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function Navigation({
   workspaceId,
   currentRoute,
   onNavigate,
+  waiting = null,
+  samples = null,
 }: {
   readonly workspaceId: string;
   readonly currentRoute: string;
   readonly onNavigate?: () => void;
+  readonly waiting?: string | null;
+  readonly samples?: HomeSamplesView | null;
 }) {
   const ancestry = routeAncestry(workspaceRoutes, currentRoute);
-  const current = destinations.find((d) => ancestry.includes(d.route))?.route ?? null;
+  const all = [...destinations, ...bottom];
+  const current = all.find((d) => ancestry.includes(d.route))?.route ?? null;
+  const row = (d: { readonly route: string; readonly icon: IconName }) => (
+    <NavLink
+      workspaceId={workspaceId}
+      route={d.route}
+      icon={d.icon}
+      current={d.route === current}
+      waiting={d.route === "inbox" ? waiting : null}
+      onNavigate={onNavigate}
+    />
+  );
   return (
     <nav aria-label="Main" className="nav">
-      <ul>
+      <ul className="nav-list">
         {destinations.map((d) => (
           <li key={d.route}>
-            <RouteLink
-              route={d.route}
-              params={{ workspaceId }}
-              current={d.route === current}
-              className="nav-link"
-              {...(onNavigate ? { onNavigate } : {})}
-            >
-              <Icon name={d.icon} />
-              {labels[d.route]}
-            </RouteLink>
+            {row(d)}
+            {d.route === "work" && samples ? (
+              <PinnedProjects workspaceId={workspaceId} samples={samples} onNavigate={onNavigate} />
+            ) : null}
+            {d.route === "agents" ? (
+              <TeamMembers workspaceId={workspaceId} samples={samples} onNavigate={onNavigate} />
+            ) : null}
           </li>
+        ))}
+      </ul>
+      <ul className="nav-list nav-bottom">
+        {bottom.map((d) => (
+          <li key={d.route}>{row(d)}</li>
         ))}
       </ul>
     </nav>
@@ -194,13 +354,11 @@ export function WorkspaceSwitcher({
         onClick={() => (open ? close(false) : openAt(0))}
         onKeyDown={onButtonKey}
       >
-        <span className="switcher-mark" aria-hidden="true">
-          {current.displayName.slice(0, 1).toUpperCase()}
-        </span>
+        <StoreTile name={current.displayName} />
         <span className="switcher-name" dir="auto">
           {current.displayName}
         </span>
-        <Icon name="chevron" size={16} />
+        <Icon name="chevron" size={18} />
       </button>
       <div className="switcher-popover" hidden={!open}>
         <ul
@@ -225,6 +383,7 @@ export function WorkspaceSwitcher({
                 }
               }}
             >
+              <StoreTile name={item.displayName} size={28} />
               <span className="switcher-item-text">
                 <span dir="auto">{item.displayName}</span>
                 {item.organizationName !== null ? (
@@ -233,7 +392,7 @@ export function WorkspaceSwitcher({
                   </span>
                 ) : null}
               </span>
-              {item.workspaceId === current.id ? <Icon name="check" size={16} /> : null}
+              {item.workspaceId === current.id ? <Icon name="check" size={18} /> : null}
             </li>
           ))}
         </ul>
@@ -242,6 +401,81 @@ export function WorkspaceSwitcher({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** The Ask Morrow button on every page (ADR-0032; the contract's entry action). */
+export function AskMorrowButton({
+  workspaceId,
+  variant = "secondary",
+  onNavigate,
+}: {
+  readonly workspaceId: Id;
+  readonly variant?: "primary" | "secondary";
+  readonly onNavigate?: (() => void) | undefined;
+}) {
+  return (
+    <RouteLink
+      route="ask"
+      params={{ workspaceId }}
+      className={`button button-${variant} ask-morrow`}
+      {...(onNavigate ? { onNavigate } : {})}
+    >
+      <MorrowMark />
+      <span>{copy.shell.askMorrow}</span>
+    </RouteLink>
+  );
+}
+
+/** Drawn where the board draws it; search itself arrives with its own read. */
+function SidebarSearch({ store }: { readonly store: string }) {
+  const id = useId();
+  return (
+    <div className="sidebar-search">
+      <label htmlFor={id} className="visually-hidden">
+        {copy.shell.searchLabel(store)}
+      </label>
+      <Icon name="search" />
+      <input
+        id={id}
+        type="search"
+        placeholder={copy.shell.searchPlaceholder}
+        disabled
+        aria-describedby={`${id}-later`}
+      />
+      <span id={`${id}-later`} className="visually-hidden">
+        {copy.shell.searchLater}
+      </span>
+    </div>
+  );
+}
+
+/** The store connection line: real data from the connections read; silent until it settles. */
+function ConnectionLine({
+  workspaceId,
+  onNavigate,
+}: {
+  readonly workspaceId: Id;
+  readonly onNavigate?: (() => void) | undefined;
+}) {
+  const [connections] = useConnections(workspaceId);
+  if (connections.kind !== "ok") return null;
+  const store = primaryStore(connections.value);
+  const status = store?.status ?? "none";
+  const label = Object.hasOwn(copy.shell.connection, status)
+    ? copy.shell.connection[status]!
+    : status;
+  return (
+    <RouteLink
+      route="connections"
+      params={{ workspaceId }}
+      className="sidebar-status"
+      {...(onNavigate ? { onNavigate } : {})}
+    >
+      <Icon name="store" />
+      {status === "linked" ? <span className="status-dot" aria-hidden="true" /> : null}
+      <span>{label}</span>
+    </RouteLink>
   );
 }
 
@@ -283,6 +517,13 @@ export function AppShell({
   const drawer = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const modal = narrow && drawerOpen;
+  const ws = workspace.id;
+  const [questions] = useOpenQuestions(ws);
+  const samples = useHomeSamples(ws);
+  const waiting =
+    questions.kind === "ok" && questions.value.items.length > 0
+      ? waitingCount(questions.value)
+      : null;
   useEffect(() => {
     if (!narrow) setDrawerOpen(false);
   }, [narrow]);
@@ -329,14 +570,8 @@ export function AppShell({
             } else trapTab(event, drawer.current);
           }}
         >
-          <div className="sidebar-head">
-            <p className="brand">
-              <span className="brand-mark" aria-hidden="true">
-                m
-              </span>
-              {copy.brand}
-            </p>
-            {modal ? (
+          {modal ? (
+            <div className="sidebar-head">
               <button
                 type="button"
                 className="button button-quiet icon-button drawer-close"
@@ -345,20 +580,36 @@ export function AppShell({
               >
                 <Icon name="close" />
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           <WorkspaceSwitcher
             current={workspace}
             workspaces={switcherWorkspaces}
             onNavigate={navigated}
           />
+          <AskMorrowButton workspaceId={ws} onNavigate={navigated} />
+          <SidebarSearch store={workspace.displayName} />
           <Navigation
-            workspaceId={workspace.id}
+            workspaceId={ws}
             currentRoute={currentRoute}
             onNavigate={navigated}
+            waiting={waiting}
+            samples={samples}
           />
           <div className="sidebar-foot">
-            <Button onClick={onSignOut} disabled={signOutBusy}>
+            <ConnectionLine workspaceId={ws} onNavigate={navigated} />
+            {samples ? (
+              <RouteLink
+                route="settings_section"
+                params={{ workspaceId: ws, section: "usage" }}
+                className="sidebar-status"
+                onNavigate={navigated}
+              >
+                <Icon name="credits" />
+                <span>{copy.shell.credits(samples.creditsLeft)}</span>
+              </RouteLink>
+            ) : null}
+            <Button variant="quiet" onClick={onSignOut} disabled={signOutBusy}>
               {signOutBusy ? copy.signOut.working : copy.signOut.button}
             </Button>
           </div>
@@ -376,9 +627,34 @@ export function AppShell({
             >
               <Icon name="menu" />
             </button>
+            <StoreTile name={workspace.displayName} size={28} />
             <span className="topbar-name" dir="auto">
               {workspace.displayName}
             </span>
+            <RouteLink
+              route="ask"
+              params={{ workspaceId: ws }}
+              className="button button-quiet icon-button topbar-action"
+            >
+              <MorrowMark />
+              <span className="visually-hidden">{copy.shell.askMorrow}</span>
+            </RouteLink>
+            <RouteLink
+              route="inbox"
+              params={{ workspaceId: ws }}
+              className="button button-quiet icon-button topbar-action"
+            >
+              <Icon name="inbox" />
+              <span className="visually-hidden">{labels.inbox}</span>
+              {waiting ? (
+                <>
+                  <span className="count-pill" aria-hidden="true">
+                    {waiting}
+                  </span>
+                  <span className="visually-hidden">{`, ${waiting} waiting`}</span>
+                </>
+              ) : null}
+            </RouteLink>
           </header>
           <main id="main" tabIndex={-1} className="workspace-main">
             {notices}
