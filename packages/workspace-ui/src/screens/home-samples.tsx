@@ -3,8 +3,9 @@
 // the Ask Morrow panel. They render only from `samples.home`, which only the fixture
 // adapter answers and only its `home_preview` scenario composes: a default-off switch.
 // Each card says it is sample data. Nothing here sends anything; Dismiss only hides an
-// idea on this page.
-import { useState } from "react";
+// idea on this page, and moves focus to the next idea's Dismiss (or to the Ideas heading
+// once none are left, where the card stays with a line saying so).
+import { useEffect, useRef, useState } from "react";
 import { copy } from "../copy";
 import type { HomeSamplesView, Id, SampleHealth } from "../model";
 import { RouteLink } from "../components/controls";
@@ -160,39 +161,64 @@ export function GlanceCard({ samples }: { readonly samples: HomeSamplesView }) {
 
 export function IdeasCard({ samples }: { readonly samples: HomeSamplesView }) {
   const [dismissed, setDismissed] = useState<readonly Id[]>([]);
+  // Where focus goes after a dismissal: an idea's Dismiss button, or the card's heading.
+  const [focusTo, setFocusTo] = useState<Id | "heading" | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const list = useRef<HTMLUListElement>(null);
   const ideas = samples.ideas.filter((idea) => !dismissed.includes(idea.id));
-  if (!ideas.length) return null;
+  useEffect(() => {
+    if (focusTo === null) return;
+    if (focusTo === "heading") heading.current?.focus();
+    else
+      [...(list.current?.querySelectorAll<HTMLElement>("[data-idea]") ?? [])]
+        .find((item) => item.dataset.idea === focusTo)
+        ?.querySelector<HTMLElement>("button")
+        ?.focus();
+    setFocusTo(null);
+  }, [focusTo]);
+  const dismiss = (index: number) => {
+    const rest = ideas.filter((_, i) => i !== index);
+    const next = rest[index] ?? rest[index - 1] ?? null;
+    setDismissed((ids) => [...ids, ideas[index]!.id]);
+    setFocusTo(next ? next.id : "heading");
+  };
   return (
     <section className="card" data-card="ideas" aria-labelledby="home-ideas-title">
       <div className="card-head">
-        <h2 id="home-ideas-title">{copy.home.samples.ideasTitle}</h2>
+        <h2 id="home-ideas-title" ref={heading} tabIndex={-1}>
+          {copy.home.samples.ideasTitle}
+        </h2>
         <p className="card-caption">{copy.home.samples.ideasNote}</p>
       </div>
       <SampleNote />
-      <ul className="idea-list">
-        {ideas.map((idea) => {
-          const name = idea.agent === "specialist" ? "Specialist" : agentNames[idea.agent];
-          return (
-            <li key={idea.id} className="idea">
-              <p className="idea-head">
-                <AgentAvatar agent={idea.agent} size={28} />
-                <AgentName agent={idea.agent} />
-              </p>
-              <p className="idea-text">{idea.text}</p>
-              <p className="row-sub">{idea.helps}</p>
-              <div className="idea-actions">
-                <Button
-                  variant="quiet"
-                  aria-label={copy.home.samples.dismissIdea(name)}
-                  onClick={() => setDismissed((ids) => [...ids, idea.id])}
-                >
-                  {copy.home.samples.dismiss}
-                </Button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      {ideas.length ? (
+        <ul className="idea-list" ref={list}>
+          {ideas.map((idea, index) => {
+            const name = idea.agent === "specialist" ? "Specialist" : agentNames[idea.agent];
+            return (
+              <li key={idea.id} className="idea" data-idea={idea.id}>
+                <p className="idea-head">
+                  <AgentAvatar agent={idea.agent} size={28} />
+                  <AgentName agent={idea.agent} />
+                </p>
+                <p className="idea-text">{idea.text}</p>
+                <p className="row-sub">{idea.helps}</p>
+                <div className="idea-actions">
+                  <Button
+                    variant="quiet"
+                    aria-label={copy.home.samples.dismissIdea(name)}
+                    onClick={() => dismiss(index)}
+                  >
+                    {copy.home.samples.dismiss}
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="muted">{copy.home.samples.noIdeas}</p>
+      )}
     </section>
   );
 }

@@ -264,7 +264,12 @@ export const fixtureHomeSamples: HomeSamplesView = {
     { name: "Quick tasks", summary: "2 open · One-off jobs that fit nowhere else", health: null },
   ],
   team: {
-    agents: ["morrow", "listings", "analyst", "inventory", "support"],
+    agents: [
+      { agent: "listings", installationId: "inst-sample-listings" },
+      { agent: "analyst", installationId: "inst-sample-analyst" },
+      { agent: "inventory", installationId: "inst-sample-inventory" },
+      { agent: "support", installationId: "inst-sample-support" },
+    ],
     people: [
       { name: "Maya Chen", presence: "online" },
       { name: "Leo Martin", presence: "away" },

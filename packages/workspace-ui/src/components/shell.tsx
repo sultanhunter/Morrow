@@ -1,20 +1,24 @@
 // The Sunrise shell (ADR-0032): skip link, the provisional label (every screen, every
 // width), the store switcher, the Ask Morrow button on every page, the seven destinations
-// of the route contract under their Sunrise labels (Home, Inbox, Projects, Team, Shop
-// knowledge, Files, then Settings at the bottom), the store connection, and below 760 px
-// a top bar with the labelled modal drawer (focus trapped, background `inert`, Escape
-// restores focus). Route ids and paths are the contract's; only labels change.
+// of the route contract's sidebar model in its order, under their Sunrise labels (Home,
+// Projects, Inbox, Team, Files, Shop knowledge, then Settings at the bottom), the store
+// connection, and below 760 px a top bar with the labelled modal drawer (focus trapped,
+// background `inert`, Escape restores focus). Route ids, paths, order and the sidebar's
+// link targets are the contract's (`docs/contracts/workspace-routes.json` `sidebar`);
+// only labels change (ADR-0032 item 1).
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { buildWorkspacePath, routeAncestry, workspaceRoutes } from "@morrow/contracts/routes";
 import { copy } from "../copy";
-import type { AgentKind, HomeSamplesView, Id, WorkspaceSummary, WorkspaceView } from "../model";
+import type { HomeSamplesView, Id, WorkspaceSummary, WorkspaceView } from "../model";
 import { useServices } from "../services";
 import { breakpoints } from "../tokens";
 import {
+  ShellRefreshProvider,
   primaryStore,
   useConnections,
   useHomeSamples,
   useOpenQuestions,
+  useShellRefreshMark,
   waitingCount,
 } from "../workspace-data";
 import { AgentAvatar, PersonAvatar, StoreTile, agentNames } from "./avatars";
@@ -82,14 +86,14 @@ export function EntryLayout({
 }
 
 const labels = copy.destinations as Readonly<Record<string, string>>;
-/** The order of the board's sidebar; Settings sits apart at the bottom. */
+/** The contract's `sidebar.primary` order; Settings, its last entry, sits at the bottom. */
 const destinations: readonly { readonly route: string; readonly icon: IconName }[] = [
   { route: "home", icon: "home" },
-  { route: "inbox", icon: "inbox" },
   { route: "work", icon: "work" },
+  { route: "inbox", icon: "inbox" },
   { route: "agents", icon: "agents" },
-  { route: "knowledge", icon: "knowledge" },
   { route: "assets", icon: "assets" },
+  { route: "knowledge", icon: "knowledge" },
 ];
 const bottom: readonly { readonly route: string; readonly icon: IconName }[] = [
   { route: "settings", icon: "settings" },
@@ -132,6 +136,21 @@ function NavLink({
   );
 }
 
+/**
+ * Sample rows in the sidebar say so: a visible "Sample data" tag over the group (hidden
+ * from screen readers, which hear ", sample data" on each sample link instead).
+ */
+function SampleGroupNote() {
+  return (
+    <li className="nav-sample" aria-hidden="true">
+      <span className="nav-sample-tag">{copy.shell.sampleData}</span>
+    </li>
+  );
+}
+function SampleSuffix() {
+  return <span className="visually-hidden">{copy.shell.sampleSuffix}</span>;
+}
+
 /** Pinned projects under Projects: only the Home preview's samples have any today. */
 function PinnedProjects({
   workspaceId,
@@ -144,6 +163,7 @@ function PinnedProjects({
 }) {
   return (
     <ul className="nav-sub" aria-label={copy.shell.pinnedProjects}>
+      {samples.projects.length ? <SampleGroupNote /> : null}
       {samples.projects.map((project) => (
         <li key={project.id}>
           <RouteLink
@@ -158,6 +178,7 @@ function PinnedProjects({
             <span className="nav-subnote">
               <span className="visually-hidden">, </span>
               {copy.shell.ends(project.ends)}
+              <SampleSuffix />
             </span>
           </RouteLink>
         </li>
@@ -177,7 +198,12 @@ function PinnedProjects({
   );
 }
 
-/** Team: Morrow is always on it; agents and people come with their reads (samples today). */
+/**
+ * Team: Morrow is always on it, and opens Ask Morrow (the contract's entry action; the
+ * Coordinator is no installation). Installed agents open their `agent` page and people
+ * Settings > People and roles, the route contract's `people_and_agents` targets. Agents
+ * and people come with their reads; only the Home preview's samples have any today.
+ */
 function TeamMembers({
   workspaceId,
   samples,
@@ -187,34 +213,53 @@ function TeamMembers({
   readonly samples: HomeSamplesView | null;
   readonly onNavigate?: (() => void) | undefined;
 }) {
-  const agents =
-    samples?.team.agents.filter(
-      (a): a is Exclude<AgentKind, "morrow" | "specialist"> => a !== "morrow" && a !== "specialist",
-    ) ?? [];
-  const link = { route: "agents", params: { workspaceId }, className: "nav-sublink" } as const;
   const navigate = onNavigate ? { onNavigate } : {};
+  const agents = samples?.team.agents ?? [];
+  const people = samples?.team.people ?? [];
   return (
     <ul className="nav-sub" aria-label={copy.shell.teamMembers}>
-      {(["morrow", ...agents] as const).map((agent) => (
-        <li key={agent}>
-          <RouteLink {...link} {...navigate}>
+      <li>
+        <RouteLink route="ask" params={{ workspaceId }} className="nav-sublink" {...navigate}>
+          <AgentAvatar agent="morrow" size={28} />
+          <span className="nav-sublabel">
+            {agentNames.morrow}
+            <span className="visually-hidden">{copy.shell.agentSuffix}</span>
+          </span>
+        </RouteLink>
+      </li>
+      {agents.length || people.length ? <SampleGroupNote /> : null}
+      {agents.map(({ agent, installationId }) => (
+        <li key={installationId}>
+          <RouteLink
+            route="agent"
+            params={{ workspaceId, installationId }}
+            className="nav-sublink"
+            {...navigate}
+          >
             <AgentAvatar agent={agent} size={28} />
             <span className="nav-sublabel">
               {agentNames[agent]}
               <span className="visually-hidden">{copy.shell.agentSuffix}</span>
+              <SampleSuffix />
             </span>
           </RouteLink>
         </li>
       ))}
-      {(samples?.team.people ?? []).map((person) => (
+      {people.map((person) => (
         <li key={person.name}>
-          <RouteLink {...link} {...navigate}>
+          <RouteLink
+            route="settings_section"
+            params={{ workspaceId, section: "people" }}
+            className="nav-sublink"
+            {...navigate}
+          >
             <PersonAvatar name={person.name} size={28} presence={person.presence} />
             <span className="nav-sublabel">
               <span dir="auto">{person.name}</span>
               <span className="visually-hidden">
                 {person.presence === "online" ? copy.shell.online : copy.shell.away}
               </span>
+              <SampleSuffix />
             </span>
           </RouteLink>
         </li>
@@ -456,15 +501,20 @@ function SidebarSearch({ store }: { readonly store: string }) {
   );
 }
 
-/** The store connection line: real data from the connections read; silent until it settles. */
+/**
+ * The store connection line: real data from the connections read, read again under the
+ * shell's refresh mark (a new page, a settled link); silent until the first reply.
+ */
 function ConnectionLine({
   workspaceId,
+  mark,
   onNavigate,
 }: {
   readonly workspaceId: Id;
+  readonly mark: string;
   readonly onNavigate?: (() => void) | undefined;
 }) {
-  const [connections] = useConnections(workspaceId);
+  const [connections] = useConnections(workspaceId, mark);
   if (connections.kind !== "ok") return null;
   const store = primaryStore(connections.value);
   const status = store?.status ?? "none";
@@ -502,6 +552,7 @@ const inertWhen = (on: boolean): Readonly<Record<string, string>> => (on ? { ine
 export function AppShell({
   workspace,
   currentRoute,
+  page,
   switcherWorkspaces,
   onSignOut,
   signOutBusy,
@@ -511,6 +562,8 @@ export function AppShell({
 }: {
   readonly workspace: WorkspaceView;
   readonly currentRoute: string;
+  /** The page on screen (route and parameters); a new one reads the shell's data again. */
+  readonly page?: string;
   readonly switcherWorkspaces: readonly WorkspaceSummary[] | null;
   readonly onSignOut: () => void;
   readonly signOutBusy: boolean;
@@ -524,7 +577,10 @@ export function AppShell({
   const menuButton = useRef<HTMLButtonElement>(null);
   const modal = narrow && drawerOpen;
   const ws = workspace.id;
-  const [questions] = useOpenQuestions(ws);
+  // The Inbox count and the connection line follow the person: read again on each page
+  // and command change, under the mark the page's own reads of them share.
+  const mark = useShellRefreshMark(page ?? currentRoute);
+  const [questions] = useOpenQuestions(ws, mark);
   const samples = useHomeSamples(ws);
   const waiting =
     questions.kind === "ok" && questions.value.items.length > 0
@@ -603,16 +659,23 @@ export function AppShell({
             samples={samples}
           />
           <div className="sidebar-foot">
-            <ConnectionLine workspaceId={ws} onNavigate={navigated} />
+            <ConnectionLine workspaceId={ws} mark={mark} onNavigate={navigated} />
             {samples ? (
+              // The contract's credit balance: display only, opening Settings > Usage.
               <RouteLink
                 route="settings_section"
-                params={{ workspaceId: ws, section: "billing" }}
+                params={{ workspaceId: ws, section: "usage" }}
                 className="sidebar-status"
                 onNavigate={navigated}
               >
                 <Icon name="credits" />
-                <span>{copy.shell.credits(samples.creditsLeft)}</span>
+                <span className="sidebar-status-stack">
+                  <span>{copy.shell.credits(samples.creditsLeft)}</span>
+                  <span className="nav-sample-tag">
+                    <span className="visually-hidden">, </span>
+                    {copy.shell.sampleData}
+                  </span>
+                </span>
               </RouteLink>
             ) : null}
             <Button variant="quiet" onClick={onSignOut} disabled={signOutBusy}>
@@ -663,8 +726,10 @@ export function AppShell({
             </RouteLink>
           </header>
           <main id="main" tabIndex={-1} className="workspace-main">
-            {notices}
-            {children}
+            <ShellRefreshProvider value={mark}>
+              {notices}
+              {children}
+            </ShellRefreshProvider>
           </main>
         </div>
       </div>

@@ -616,17 +616,19 @@ function WorkspaceFrame({
         return <UnavailableDestination title={destinationTitle(match.id)} />;
     }
   })();
+  const page = match.id + JSON.stringify(params);
   return (
     <AppShell
       workspace={workspace}
       currentRoute={match.id}
+      page={page}
       switcherWorkspaces={overview.kind === "ok" ? overview.value.workspaces : null}
       onSignOut={onSignOut}
       signOutBusy={signOutState === "busy"}
       notices={notices}
       fixture={fixture}
     >
-      <div key={match.id + JSON.stringify(params)}>
+      <div key={page}>
         {inSettings(match.id) ? (
           <SettingsFrame workspaceId={workspace.id} route={match.id} sectionParam={params.section}>
             {screen}

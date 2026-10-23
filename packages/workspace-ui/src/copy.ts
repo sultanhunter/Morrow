@@ -109,6 +109,8 @@ export const copy = {
     inboxWaiting: (count: string) => `Inbox, ${count} waiting`,
     ends: (date: string) => `Ends ${date}`,
     credits: (count: string) => `${count} credits left`,
+    sampleData: "Sample data",
+    sampleSuffix: ", sample data",
     connection: {
       linked: "Shopify connected",
       unlinked: "Finish connecting your store",
@@ -193,6 +195,7 @@ export const copy = {
       ideasNote: "From your agents. Nothing is added unless you choose.",
       dismiss: "Dismiss",
       dismissIdea: (agent: string) => `Dismiss the idea from ${agent}`,
+      noIdeas: "No more ideas for now. New ones show up here.",
       askIntro:
         "Tell Morrow what you want to get done. It answers, or drafts a task or project for you to start.",
       recent: "Recent",

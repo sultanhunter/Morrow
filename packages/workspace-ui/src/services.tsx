@@ -89,10 +89,15 @@ export function useServicesVersion(): number {
 }
 
 export type ReadState<T> = { readonly kind: "loading" } | Outcome<T>;
-/** One shared read per key: a StrictMode double effect sends one request. */
+/**
+ * One shared read per key: a StrictMode double effect sends one request. A new `refresh`
+ * mark reads the same key again, like `reload`, keeping the last reply on screen until
+ * the new one arrives; reads given the same key and mark share one request.
+ */
 export function useRead<T>(
   key: string | null,
   load: () => Promise<Outcome<T>>,
+  refresh = "",
 ): readonly [ReadState<T>, () => void] {
   const services = useServices();
   const [nonce, setNonce] = useState(0);
@@ -103,7 +108,7 @@ export function useRead<T>(
   }>({ key: null, base: null, value: { kind: "loading" } });
   const loader = useRef(load);
   loader.current = load;
-  const scoped = key === null ? null : `${key}#${nonce}`;
+  const scoped = key === null ? null : refresh ? `${key}#${refresh}#${nonce}` : `${key}#${nonce}`;
   useEffect(() => {
     if (scoped === null) return;
     let live = true;

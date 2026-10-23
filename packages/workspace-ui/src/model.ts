@@ -234,6 +234,8 @@ export type AgentKind =
   | "support"
   | "marketing"
   | "specialist";
+/** An agent a workspace installs (Morrow, the Coordinator, and one-time specialists aren't). */
+export type InstalledAgentKind = Exclude<AgentKind, "morrow" | "specialist">;
 export type SampleHealth = "on_track" | "behind" | "working" | "needs_you";
 export interface HomeSamplesView {
   readonly viewerName: string;
@@ -256,7 +258,11 @@ export interface HomeSamplesView {
     readonly health: SampleHealth | null;
   }[];
   readonly team: {
-    readonly agents: readonly AgentKind[];
+    /** Installed agents, each on the route contract's `agent` route; Morrow is implicit. */
+    readonly agents: readonly {
+      readonly agent: InstalledAgentKind;
+      readonly installationId: Id;
+    }[];
     readonly people: readonly { readonly name: string; readonly presence: "online" | "away" }[];
   };
   readonly today: readonly {

@@ -809,15 +809,47 @@ export const keyboardWalks = [
     },
   },
   {
+    // ADR-0032 Home preview: Dismiss moves focus to the next idea's Dismiss, then to the
+    // Ideas heading once none are left; focus never drops to the page body.
+    name: "dismiss_ideas",
+    path: `/w/${ws}`,
+    scenario: "home_preview",
+    run: async (page) => {
+      await page.getByRole("button", { name: "Dismiss the idea from Listings" }).focus();
+      await page.keyboard.press("Enter");
+      expect((await active(page)).text === "Dismiss the idea from Business Analyst", "next_idea");
+      await page.keyboard.press("Enter");
+      expect((await active(page)).text === "Dismiss the idea from Inventory", "last_idea");
+      await page.keyboard.press("Enter");
+      expect((await active(page)).id === "home-ideas-title", "heading_when_none_left");
+      const indicator = await page.evaluate(() => window.__morrowUi.focusIndicator());
+      expect(indicator.ok, "focus_indicator:" + indicator.reason);
+      await page.getByText("No more ideas for now.").waitFor();
+    },
+  },
+  {
     name: "answer_question",
     path: `/w/${ws}/inbox/questions/q-source`,
     run: async (page) => {
+      // The shell's Inbox counts (sidebar and top bar) follow the answer without a reload.
+      const counts = (n) =>
+        Promise.all(
+          ['nav[aria-label="Main"]', "header.topbar"].map((at) =>
+            page
+              .locator(`${at} a[href="/w/${ws}/inbox"] .count-pill`, {
+                hasText: new RegExp(`^${n}$`),
+              })
+              .waitFor({ state: "attached" }),
+          ),
+        );
+      await counts(2);
       await tabTo(page, (a) => a.tag === "TEXTAREA");
       await page.keyboard.type("Cite the supplier certificate.");
       await tabTo(page, (a) => a.text === "Send answer");
       await page.keyboard.press("Enter");
       await page.getByText("Answer sent.").waitFor();
       await page.getByText("Cite the supplier certificate.").waitFor();
+      await counts(1);
     },
   },
   {

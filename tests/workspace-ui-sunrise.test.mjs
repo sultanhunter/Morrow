@@ -305,13 +305,10 @@ test("Home preview: samples.home is a default-off switch that only the fixture a
   );
   const preview = await createFixtureAdapter("home_preview").samples.home(fixtureWorkspace.id);
   assert.equal(preview.kind, "ok");
-  assert.deepEqual(preview.value.team.agents, [
-    "morrow",
-    "listings",
-    "analyst",
-    "inventory",
-    "support",
-  ]);
+  assert.deepEqual(
+    preview.value.team.agents.map((a) => a.agent),
+    ["listings", "analyst", "inventory", "support"],
+  );
   assert.equal(
     (await createFixtureAdapter("home_preview").samples.home("ws-other")).kind,
     "not_found",

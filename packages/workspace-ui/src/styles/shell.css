@@ -479,3 +479,29 @@ a.settings-link:hover {
     padding-top: var(--space-6);
   }
 }
+/* Sample rows in the sidebar (the default-off Home preview) carry a "Sample data" tag. */
+.nav-sample {
+  padding: 2px 0 2px 42px;
+}
+.nav-sample-tag {
+  flex: none;
+  width: fit-content;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-round);
+  background: var(--color-morrow-surface);
+  color: var(--color-text);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: 550;
+  white-space: nowrap;
+}
+.nav-sample .nav-sample-tag {
+  display: inline-block;
+}
+.sidebar-status-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-1) 0;
+}
