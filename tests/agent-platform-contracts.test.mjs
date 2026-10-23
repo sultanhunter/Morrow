@@ -198,6 +198,24 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
         m.caps.deadline = null;
       }),
     ],
+    // ADR-0027 item 6: the Coordinator, routed and mandate runs keep the 30-minute wall time;
+    // only a specialist runs on a deadline (ADR-0028 item 6).
+    ...[
+      ["a coordinator", coordinator],
+      ["a routed run", routed],
+      ["a mandate run", mandate],
+    ].map(([label, manifest]) => [
+      `${label} on a deadline`,
+      edit(manifest, (m) => {
+        m.caps.wallTimeSeconds = null;
+        m.caps.deadline = "2026-10-26T10:00:00.000Z";
+      }),
+    ]),
+    // A mandate run's trigger and a specialist's spec always name a store and its connection.
+    ["a mandate run without a store", edit(mandate, (m) => (m.storeId = null))],
+    ["a mandate run without a connection", edit(mandate, (m) => (m.connectionId = null))],
+    ["a specialist without a store", edit(specialist, (m) => (m.storeId = null))],
+    ["a specialist without a connection", edit(specialist, (m) => (m.connectionId = null))],
     ["caps with neither clock", edit(routed, (m) => (m.caps.wallTimeSeconds = null))],
     ["caps with both clocks", edit(routed, (m) => (m.caps.deadline = "2026-10-26T10:00:00.000Z"))],
     ["more than 16 turns", edit(routed, (m) => (m.caps.maxTurns = 17))],

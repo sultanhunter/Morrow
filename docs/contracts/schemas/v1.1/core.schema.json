@@ -7910,7 +7910,7 @@
       ]
     },
     "AgentRunManifest": {
-      "description": "AgentRunManifest@1 (ADR-0027 item 1; PR 10): what admission pins for one agent-run@1: release, system-text and tool-catalogue digests, the offered tools, the model profile, caps and, for a specialist, the spec digest, data classes and deadline. Code builds it from server facts; steps carry only the run id.",
+      "description": "AgentRunManifest@1 (ADR-0027 item 1; PR 10): what admission pins for one agent-run@1: release, system-text and tool-catalogue digests, the offered tools, the model profile, caps and, for a specialist, the spec digest, data classes and deadline. The Coordinator, routed and mandate runs run on the wall time (ADR-0027 item 6), a specialist on its deadline (ADR-0028 item 6); a mandate or specialist run names its store and connection. Code builds it from server facts; steps carry only the run id.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -8099,6 +8099,14 @@
               },
               "requester": {
                 "$ref": "#/$defs/HumanActorRef"
+              },
+              "caps": {
+                "type": "object",
+                "properties": {
+                  "wallTimeSeconds": {
+                    "type": "integer"
+                  }
+                }
               }
             }
           }
@@ -8135,6 +8143,14 @@
               },
               "requester": {
                 "$ref": "#/$defs/HumanActorRef"
+              },
+              "caps": {
+                "type": "object",
+                "properties": {
+                  "wallTimeSeconds": {
+                    "type": "integer"
+                  }
+                }
               }
             }
           }
@@ -8154,6 +8170,12 @@
           "then": {
             "type": "object",
             "properties": {
+              "storeId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "connectionId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
               "installationId": {
                 "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
               },
@@ -8171,6 +8193,14 @@
               },
               "requester": {
                 "$ref": "#/$defs/MandateActorRef"
+              },
+              "caps": {
+                "type": "object",
+                "properties": {
+                  "wallTimeSeconds": {
+                    "type": "integer"
+                  }
+                }
               }
             }
           }
@@ -8190,6 +8220,12 @@
           "then": {
             "type": "object",
             "properties": {
+              "storeId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "connectionId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
               "installationId": {
                 "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
               },
