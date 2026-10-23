@@ -415,7 +415,13 @@ export function ReviewScreen({
         {r.proposal.untrustedSource ? <p className="muted">{copy.review.untrusted}</p> : null}
         <p className="meta">
           <span>{copy.review.store(r.proposal.storeId)}</span>
-          {r.approval ? <span>{copy.review.approvalStatus(r.approval.status)}</span> : null}
+          {r.approval ? (
+            <span>
+              {r.claim !== null && r.approval.status === "approved"
+                ? copy.review.approvalClaimed
+                : copy.review.approvalStatus(r.approval.status)}
+            </span>
+          ) : null}
           {pending ? (
             <span>
               {copy.review.expires} <Time value={r.approval!.expiresAt} />

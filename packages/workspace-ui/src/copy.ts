@@ -533,6 +533,7 @@ export const copy = {
         invalidated: "No longer valid",
         withdrawn: "Withdrawn",
       })[status] ?? status,
+    approvalClaimed: "Approved. Each product's result is below.",
     apply: "Apply to Shopify",
     applyIntro:
       "Morrow checks your permission, the stops and your plan, reads each product again, writes only the approved fields once and reads the product back. A product changed in Shopify since the draft is not written.",
