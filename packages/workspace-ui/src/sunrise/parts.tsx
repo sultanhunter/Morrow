@@ -69,6 +69,10 @@ const icons = {
   upload: ["M12 16V4", "M7 9l5-5 5 5", "M4 20h16"],
   book: ["M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z", "M20 4h-6a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h7z"],
   gear: ["M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z", "M12 2v3 M12 19v3 M2 12h3 M19 12h3"],
+  bell: ["M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z", "M10 20.5a2 2 0 0 0 4 0"],
+  activity: ["M4 6h10", "M4 11h7", "M4 16h5", "M16.5 11.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"],
+  stop: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z", "M9 9h6v6H9z"],
+  download: ["M12 4v12", "M7 11l5 5 5-5", "M4 20h16"],
   close: ["m6 6 12 12", "M6 18 18 6"],
 } as const;
 export type SrIconName = keyof typeof icons;
@@ -112,6 +116,9 @@ const badgeTone: Readonly<Record<BadgeKind, string>> = {
   coming_soon: "neutral",
   waiting_review: "caution",
   owner_only: "neutral",
+  suggested: "neutral",
+  updated_in_shopify: "success",
+  sent: "success",
 };
 function BadgeGlyph({ kind }: { readonly kind: BadgeKind }) {
   const tick = (
@@ -128,6 +135,14 @@ function BadgeGlyph({ kind }: { readonly kind: BadgeKind }) {
     added: tick,
     ready: tick,
     default: tick,
+    updated_in_shopify: tick,
+    sent: tick,
+    suggested: (
+      <>
+        <circle cx="7" cy="7" r="5.2" />
+        <path d="M7 4.6 V9.4 M4.6 7 H9.4" />
+      </>
+    ),
     working: (
       <>
         <circle cx="7" cy="7" r="5.2" />
@@ -474,19 +489,52 @@ export function SrTabs({
   );
 }
 
-export type SettingsSection = "plan" | "people" | "email" | "shopify" | "governance";
+export type SettingsSection =
+  | "plan"
+  | "people"
+  | "notifications"
+  | "email"
+  | "shopify"
+  | "activity"
+  | "governance";
+/**
+ * The Settings menu, in the board's order. The route contract's `settings_section` has six
+ * values (people, governance, usage, billing, notifications, stores) and no `email` or
+ * `activity`: until it does (a route-contract change, the brief's open question 1), Email
+ * addresses uses `stores` (Shopify keeps the sender email under Store details), Activity
+ * uses `governance` (the stops and the record of who did what), and M3's model default
+ * moves to `billing` (what a product may cost). One rename re-homes each.
+ */
+export const settingsRoutes: Readonly<Record<SettingsSection, string | null>> = {
+  plan: "usage",
+  people: "people",
+  notifications: "notifications",
+  email: "stores",
+  shopify: null,
+  activity: "governance",
+  governance: "billing",
+};
 const settingsLinks: readonly {
   readonly id: SettingsSection;
   readonly route: string;
   readonly section: string | null;
   readonly icon: SrIconName;
-}[] = [
-  { id: "plan", route: "settings_section", section: "usage", icon: "coins" },
-  { id: "people", route: "settings_section", section: "people", icon: "people" },
-  { id: "email", route: "settings_section", section: "notifications", icon: "mail" },
-  { id: "shopify", route: "connections", section: null, icon: "store" },
-  { id: "governance", route: "settings_section", section: "governance", icon: "gear" },
-];
+}[] = (
+  [
+    ["plan", "coins"],
+    ["people", "people"],
+    ["notifications", "bell"],
+    ["email", "mail"],
+    ["shopify", "store"],
+    ["activity", "activity"],
+    ["governance", "gear"],
+  ] as const
+).map(([id, icon]) => ({
+  id,
+  route: settingsRoutes[id] === null ? "connections" : "settings_section",
+  section: settingsRoutes[id],
+  icon,
+}));
 /** The Settings menu beside each settings page. */
 export function SettingsMenu({
   workspaceId,
@@ -517,6 +565,17 @@ export function SettingsMenu({
           </li>
         ))}
       </ul>
+      {/* The stop itself is on Activity, with what it stops and the typed confirmation. */}
+      <div className="sr-settings-menu-stop">
+        <RouteLink
+          route="settings_section"
+          params={{ workspaceId, section: settingsRoutes.activity! }}
+          className="sr-settings-link sr-settings-link-stop"
+        >
+          <SrIcon name="stop" />
+          {sunriseCopy.settings.stopAll}
+        </RouteLink>
+      </div>
     </nav>
   );
 }

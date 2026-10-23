@@ -4,9 +4,12 @@
 // change how a helper thinks, a revision conflict, an add document bound to its fingerprint
 // and used once) so the screens can be checked; the server proves the real ones.
 import type {
+  ActivityEntryView,
   ActivityLineView,
+  ActivityView,
   AddDocumentView,
   AddResultView,
+  AgentCharacter,
   AgentDetailView,
   AgentSummaryView,
   CatalogueEntryView,
@@ -16,18 +19,30 @@ import type {
   FilesView,
   KnowledgeView,
   LibraryPort,
+  NotificationChoices,
+  NotificationsView,
   Outcome,
   PersonRole,
   PlanView,
   PortMethod,
   SettingsPort,
+  SpecialistProp,
   TeamPort,
   TeamView,
   ThinkingChoice,
   ThinkingEstimate,
   ThinkingView,
 } from "@morrow/workspace-ui";
-import { monthlyLimitRange, thinkingEfforts, thinkingModels } from "@morrow/workspace-ui";
+import {
+  emailTopics,
+  monthlyLimitRange,
+  quietFromHours,
+  quietUntilHours,
+  shopTimeZones,
+  summaryHours,
+  thinkingEfforts,
+  thinkingModels,
+} from "@morrow/workspace-ui";
 
 export interface TeamFixtureDeps {
   readonly viewer: PersonRole;
@@ -853,7 +868,218 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     ownerName: owner,
     viewerIsOwner: viewer === "owner",
   });
+  // ---- Notifications: the viewer's own choices, and the shop's time zone (the Owner's).
+  const prefs: { choices: NotificationChoices; revision: number } = {
+    choices: {
+      email: { soon: true, summary: true, monday: true, mentions: true },
+      summaryHour: 8,
+      quiet: { on: true, from: 21, until: 7 },
+      timeZone: "toronto",
+    },
+    revision: 1,
+  };
+  const viewerName = viewer === "owner" ? owner : teammate;
+  const notifications = (): NotificationsView => ({
+    ...prefs.choices,
+    viewerName: viewerName.split(" ")[0]!,
+    signInEmail: viewer === "owner" ? "maya@linenandform.example" : "leo@linenandform.example",
+    ownerName: owner,
+    canChangeTimeZone: viewer === "owner",
+    revision: prefs.revision,
+    morning: empty
+      ? { toReview: 0, questions: 0, tasks: 0, alerts: 0 }
+      : { toReview: 3, questions: 2, tasks: 1, alerts: 1 },
+  });
+  // Closed values only: a choice outside the board's lists is refused, as the server would.
+  const validChoices = (c: NotificationChoices & { expectedRevision: number }) =>
+    typeof c === "object" &&
+    c !== null &&
+    typeof c.email === "object" &&
+    c.email !== null &&
+    Object.keys(c.email).length === emailTopics.length &&
+    emailTopics.every((t) => typeof c.email[t] === "boolean") &&
+    (summaryHours as readonly number[]).includes(c.summaryHour) &&
+    typeof c.quiet === "object" &&
+    c.quiet !== null &&
+    typeof c.quiet.on === "boolean" &&
+    (quietFromHours as readonly number[]).includes(c.quiet.from) &&
+    (quietUntilHours as readonly number[]).includes(c.quiet.until) &&
+    (shopTimeZones as readonly string[]).includes(c.timeZone) &&
+    Number.isSafeInteger(c.expectedRevision);
+  // ---- Activity (the board's sample day). Conversations with Morrow are not listed.
+  const today = "Today, Friday, October 23";
+  const earlier = "Earlier this month";
+  const maya = { kind: "person" as const, name: owner, initials: "MC" };
+  const leo = { kind: "person" as const, name: teammate, initials: "LM" };
+  const helper = (name: string, character: AgentCharacter, prop: SpecialistProp | null = null) => ({
+    kind: "helper" as const,
+    name,
+    character,
+    prop,
+  });
+  const entries: readonly ActivityEntryView[] = empty
+    ? []
+    : [
+        {
+          id: "a-support-reply",
+          day: today,
+          time: "1:52 pm",
+          actor: helper("Support", "support"),
+          what: "started a reply to a new customer email",
+          detail: "Customer emails · Nothing is sent until a person approves it",
+          category: "work",
+          badge: "working",
+        },
+        {
+          id: "a-morrow-repeat",
+          day: today,
+          time: "1:40 pm",
+          actor: helper("Morrow", "morrow"),
+          what: "drafted a repeating task for Maya: products that stopped selling",
+          detail: "Stock · Not turned on",
+          category: "work",
+          badge: "suggested",
+        },
+        {
+          id: "a-approve-tote",
+          day: today,
+          time: "11:52 am",
+          actor: maya,
+          what: "approved 4 changes to the Everyday Tote",
+          detail: "Written by Listings · Saved in Shopify and checked",
+          category: "approvals",
+          badge: "updated_in_shopify",
+        },
+        {
+          id: "a-checkup-done",
+          day: today,
+          time: "11:12 am",
+          actor: helper("AI answers check-up", "specialist", "magnifier"),
+          what: "finished checking the Everyday Tote page",
+          detail: "One-time specialist · 16 credits used, 24 came back",
+          category: "work",
+          badge: "done",
+        },
+        {
+          id: "a-checkup-start",
+          day: today,
+          time: "10:33 am",
+          actor: maya,
+          what: "started the AI answers check-up, a one-time specialist",
+          detail: "Limit 40 credits · Its access ends Sat, Oct 24, 10:33 am",
+          category: "access",
+          badge: null,
+        },
+        {
+          id: "a-sale-question",
+          day: today,
+          time: "9:52 am",
+          actor: helper("Sale planner", "specialist", "calendar"),
+          what: "asked Maya: Should the sale leave out the Autumn collection?",
+          detail: "One-time specialist · Black Friday sale",
+          category: "work",
+          badge: "needs_you",
+        },
+        {
+          id: "a-summary",
+          day: today,
+          time: "8:00 am",
+          actor: helper("Business Analyst", "business_analyst"),
+          what: "sent the morning summary",
+          detail: "Sales and numbers · 4 credits",
+          category: "work",
+          badge: null,
+        },
+        {
+          id: "a-stock",
+          day: today,
+          time: "6:04 am",
+          actor: helper("Inventory", "inventory"),
+          what: "checked stock: 3 best sellers have less than 2 weeks left",
+          detail: "Stock · Daily stock check",
+          category: "work",
+          badge: null,
+        },
+        {
+          id: "a-reply-sent",
+          day: earlier,
+          time: "Oct 22",
+          actor: leo,
+          what: "approved a reply to a customer about order #1038",
+          detail: "Written by Support · Sent from your shop’s Morrow address",
+          category: "approvals",
+          badge: "sent",
+        },
+        {
+          id: "a-undo-tags",
+          day: earlier,
+          time: "Oct 21",
+          actor: maya,
+          what: "undid a tag change on the Utility Overshirt",
+          detail: "Morrow put back the tags it read before the change, then checked them",
+          category: "store",
+          badge: "updated_in_shopify",
+        },
+        {
+          id: "a-renew",
+          day: earlier,
+          time: "Oct 20",
+          actor: maya,
+          what: "renewed Listings’ permission for 90 days",
+          detail: "Ends Mon, Jan 18",
+          category: "access",
+          badge: null,
+        },
+        {
+          id: "a-leo-approve",
+          day: earlier,
+          time: "Oct 2",
+          actor: maya,
+          what: "let Leo Martin approve product changes and customer replies",
+          detail: "Typed to confirm",
+          category: "access",
+          badge: null,
+        },
+        {
+          id: "a-linked",
+          day: earlier,
+          time: "Oct 2",
+          actor: maya,
+          what: "linked Linen & Form to Morrow",
+          detail: "Morrow can see products and change them after a person approves",
+          category: "store",
+          badge: null,
+        },
+      ];
+  const activity: ActivityView = { shopName: "Linen & Form", entries };
+
   const settings: SettingsPort = {
+    notifications: (ws) =>
+      reply<NotificationsView>("settings.notifications", () =>
+        deps.isWorkspace(ws) ? ok(notifications()) : notFound,
+      ),
+    reviseNotifications: (ws, c) =>
+      command<{ revision: number }>("settings.reviseNotifications", c, () => {
+        if (!deps.isWorkspace(ws)) return notFound;
+        const body = c.body;
+        if (!validChoices(body)) return { kind: "invalid", field: null };
+        if (body.expectedRevision !== prefs.revision)
+          return changed("These settings changed since you opened them.");
+        if (body.timeZone !== prefs.choices.timeZone && viewer !== "owner")
+          return denied("Only the Owner can change the time zone.");
+        prefs.choices = {
+          email: { ...body.email },
+          summaryHour: body.summaryHour,
+          quiet: { ...body.quiet },
+          timeZone: body.timeZone,
+        };
+        prefs.revision += 1;
+        return ok({ revision: prefs.revision });
+      }),
+    activity: (ws) =>
+      reply<ActivityView>("settings.activity", () =>
+        deps.isWorkspace(ws) ? ok(activity) : notFound,
+      ),
     plan: (ws) =>
       reply<PlanView>("settings.plan", () => (deps.isWorkspace(ws) ? ok(plan()) : notFound)),
     emailAddresses: (ws) =>

@@ -5,7 +5,7 @@
 // into these shapes when the routes exist. ADR-0033 and ADR-0034 (projects, goals) are not
 // approved: "Works toward" and "Works in" are display text here, never records.
 import type { Command, Outcome } from "./port";
-import type { Id, ModelCatalogueView } from "./model";
+import type { Id, ListingsAgentView, ModelCatalogueView, StoreConnectionView } from "./model";
 
 /** The drawn characters (ADR-0032 item 3). A face confers nothing. */
 export type AgentCharacter =
@@ -321,6 +321,138 @@ export interface EmailAddressesView {
   readonly ownerName: string;
   readonly viewerIsOwner: boolean;
 }
+/**
+ * Notifications (the SettingsNotifications board): the viewer's own choices; everyone
+ * chooses their own. Emails hold counts and links only. The shop's time zone is the
+ * workspace's, and only the Owner changes it.
+ */
+export const emailTopics = ["soon", "summary", "monday", "mentions"] as const;
+export type EmailTopic = (typeof emailTopics)[number];
+/** The closed choices the board offers (hours, 24-hour clock, in the shop's time zone). */
+export const summaryHours = [7, 8, 9] as const;
+export const quietFromHours = [20, 21, 22] as const;
+export const quietUntilHours = [6, 7, 8] as const;
+export const shopTimeZones = ["toronto", "winnipeg", "edmonton", "vancouver"] as const;
+export type ShopTimeZone = (typeof shopTimeZones)[number];
+export interface NotificationChoices {
+  readonly email: Readonly<Record<EmailTopic, boolean>>;
+  readonly summaryHour: number;
+  readonly quiet: { readonly on: boolean; readonly from: number; readonly until: number };
+  readonly timeZone: ShopTimeZone;
+}
+export interface NotificationsView extends NotificationChoices {
+  readonly viewerName: string;
+  /** The email the viewer signs in with: where Morrow's emails go. */
+  readonly signInEmail: string;
+  readonly ownerName: string;
+  readonly canChangeTimeZone: boolean;
+  readonly revision: number;
+  /** What the next morning email would count (the preview). */
+  readonly morning: {
+    readonly toReview: number;
+    readonly questions: number;
+    readonly tasks: number;
+    readonly alerts: number;
+  };
+}
+/** Whether two sets of choices are the same (the save bar shows while they differ). */
+export function sameNotificationChoices(a: NotificationChoices, b: NotificationChoices): boolean {
+  return (
+    emailTopics.every((topic) => a.email[topic] === b.email[topic]) &&
+    a.summaryHour === b.summaryHour &&
+    a.quiet.on === b.quiet.on &&
+    a.quiet.from === b.quiet.from &&
+    a.quiet.until === b.quiet.until &&
+    a.timeZone === b.timeZone
+  );
+}
+
+/**
+ * Activity (the SettingsActivity board): what people, agents and Morrow did, newest
+ * first. Nobody can change or delete it. Conversations with Morrow are private and not
+ * listed. Fixture data only in this build (PR 15 brings the activity log).
+ */
+export const activityFilters = ["all", "store", "approvals", "access"] as const;
+export type ActivityFilter = (typeof activityFilters)[number];
+export type ActivityBadge =
+  | "paused"
+  | "working"
+  | "suggested"
+  | "updated_in_shopify"
+  | "done"
+  | "needs_you"
+  | "sent";
+export interface ActivityEntryView {
+  readonly id: Id;
+  /** The day heading it sits under ("Today, Friday, October 23"). */
+  readonly day: string;
+  readonly time: string;
+  readonly actor:
+    | { readonly kind: "person"; readonly name: string; readonly initials: string }
+    | {
+        readonly kind: "helper";
+        readonly name: string;
+        readonly character: AgentCharacter;
+        readonly prop: SpecialistProp | null;
+      };
+  readonly what: string;
+  readonly detail: string;
+  readonly category: Exclude<ActivityFilter, "all"> | "work";
+  readonly badge: ActivityBadge | null;
+}
+export interface ActivityView {
+  readonly shopName: string;
+  readonly entries: readonly ActivityEntryView[];
+}
+
+/**
+ * "Stop all AI work" (ADR-0005: human_only, no second approver). It is wired to the stop
+ * that exists: each store's Listings "Stop AI work" (`agents.listingsStop`), one command
+ * per store. A store is a target only when the server says this person may stop it and it
+ * isn't stopped already. Turning AI work back on stays on each store's own page, where
+ * Resume asks for the server's document as Enable does.
+ */
+export interface StopTarget {
+  readonly storeId: Id;
+  readonly shopDomain: string;
+  readonly installationId: Id;
+}
+export interface StopAllState {
+  readonly targets: readonly StopTarget[];
+  /** Stores whose Listings agent a person stopped. */
+  readonly stopped: number;
+  /** Stores with work this person may not stop (the server said so). */
+  readonly notAllowed: number;
+}
+export function stopAllState(
+  stores: readonly {
+    readonly connection: StoreConnectionView;
+    readonly listings: ListingsAgentView;
+  }[],
+): StopAllState {
+  const targets: StopTarget[] = [];
+  let stopped = 0;
+  let notAllowed = 0;
+  for (const { connection, listings } of stores) {
+    const installation = listings.installation;
+    if (installation === null || connection.storeId !== listings.storeId) continue;
+    if (installation.stopped) stopped += 1;
+    else if (!listings.actions.stop) notAllowed += 1;
+    else
+      targets.push({
+        storeId: listings.storeId,
+        shopDomain: connection.shopDomain,
+        installationId: installation.installationId,
+      });
+  }
+  return { targets, stopped, notAllowed };
+}
+/** The typed confirmation: the word "stop", in any case, with spaces around it ignored. */
+export const stopWord = "stop";
+export function isStopConfirmation(typed: string): boolean {
+  return typed.trim().toLowerCase() === stopWord;
+}
+
 export interface KnowledgeView {
   readonly items: readonly {
     readonly id: Id;
@@ -369,6 +501,13 @@ export interface TeamPort {
 export interface SettingsPort {
   plan(ws: Id): Promise<Outcome<PlanView>>;
   emailAddresses(ws: Id): Promise<Outcome<EmailAddressesView>>;
+  notifications(ws: Id): Promise<Outcome<NotificationsView>>;
+  /** Saves the viewer's own choices (and the shop's time zone, the Owner only). */
+  reviseNotifications(
+    ws: Id,
+    c: Command<NotificationChoices & { expectedRevision: number }>,
+  ): Promise<Outcome<{ readonly revision: number }>>;
+  activity(ws: Id): Promise<Outcome<ActivityView>>;
 }
 export interface LibraryPort {
   knowledge(ws: Id): Promise<Outcome<KnowledgeView>>;
@@ -383,6 +522,9 @@ export const teamPortMethods = [
   "team.addConfirm",
   "settings.plan",
   "settings.emailAddresses",
+  "settings.notifications",
+  "settings.reviseNotifications",
+  "settings.activity",
   "library.knowledge",
   "library.files",
 ] as const;

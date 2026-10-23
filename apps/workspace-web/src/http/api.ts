@@ -583,7 +583,13 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       addDocument: unbuilt,
       addConfirm: unbuilt,
     },
-    settings: { plan: unbuilt, emailAddresses: unbuilt },
+    settings: {
+      plan: unbuilt,
+      emailAddresses: unbuilt,
+      notifications: unbuilt,
+      reviseNotifications: unbuilt,
+      activity: unbuilt,
+    },
     library: { knowledge: unbuilt, files: unbuilt },
     connections: {
       list: gated("connections.list", async (ws: string) => {

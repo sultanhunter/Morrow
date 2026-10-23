@@ -30,6 +30,9 @@ export const sunriseCopy = {
     coming_soon: "Coming soon",
     waiting_review: "Waiting for review",
     owner_only: "Owner only",
+    suggested: "Suggested",
+    updated_in_shopify: "Updated in Shopify",
+    sent: "Sent",
   },
   roles: { owner: "Owner", admin: "Admin", member: "Member" },
   presence: { online: "Online", away: "Away" },
@@ -285,13 +288,191 @@ export const sunriseCopy = {
         title: "People and roles",
         about: "Who works here and what each person can approve.",
       },
+      notifications: {
+        title: "Notifications",
+        about: "What Morrow tells you about, and when. Everyone chooses their own.",
+      },
       email: { title: "Email addresses", about: "Where replies to your customers are sent from." },
       shopify: { title: "Shopify connection", about: "Your store and the access Morrow has." },
+      activity: {
+        title: "Activity",
+        about: "Everything people, agents and Morrow did. Stop all AI work from here.",
+      },
       governance: {
         title: "Model default",
         about: "The model your shop starts on, and the most a product may use.",
       },
     },
+    stopAll: "Stop all AI work",
+  },
+  notifications: {
+    title: "Notifications",
+    intro: (name: string, shop: string) =>
+      `What Morrow tells you about, and when. These are your own settings, ${name}. Everyone at ${shop} chooses their own.`,
+    where: "Where Morrow reaches you",
+    inMorrow: "In Morrow",
+    inMorrowValue: "Your Inbox and Home. Always on.",
+    email: "Email",
+    emailHint:
+      "The email you sign in with. Emails hold counts and links only, never customer details or product text.",
+    phone: "On your phone",
+    phoneValue: "Open the link in any email. Morrow works in your phone’s browser.",
+    what: "What to tell you, and where",
+    columns: { what: "What", inMorrow: "In Morrow", byEmail: "By email" },
+    topics: {
+      soon: {
+        title: "Something needs you soon",
+        about:
+          "A change about to expire, a customer waiting, the store disconnected or a limit reached",
+        inMorrow: "Right away",
+        switchLabel: "Email me when something needs me soon",
+        note: "If it’s still waiting after 4 hours",
+      },
+      summary: {
+        title: "Morning summary",
+        about: "Yesterday’s numbers, today’s plan and what’s waiting for you",
+        inMorrow: "On Home",
+        switchLabel: "Email me the morning summary",
+        note: "",
+      },
+      monday: {
+        title: "Monday project updates",
+        about: "One update for each active project, every Monday at 8:00 am",
+        inMorrow: "In each project",
+        switchLabel: "Email me each Monday project update",
+        note: "",
+      },
+      mentions: {
+        title: "Mentions",
+        about: "When someone mentions you by name in a project",
+        inMorrow: "Right away",
+        switchLabel: "Email me when someone mentions me",
+        note: "",
+      },
+    } as Readonly<
+      Record<
+        string,
+        {
+          readonly title: string;
+          readonly about: string;
+          readonly inMorrow: string;
+          readonly switchLabel: string;
+          readonly note: string;
+        }
+      >
+    >,
+    mondayOff: "You still see each update in its project.",
+    everythingElse: "Everything else",
+    everythingElseAbout: "Finished jobs and small changes",
+    inActivity: "In Activity",
+    neverByEmail: "Never by email",
+    on: "On",
+    off: "Off",
+    sendAt: "Send at",
+    quiet: "Quiet hours",
+    quietAbout:
+      "During quiet hours Morrow holds notifications, except things that need you soon. Agents also wait until quiet hours end to start work on a schedule.",
+    from: "From",
+    until: "Until",
+    everyDay: (zone: string) => `Every day · ${zone}`,
+    timeZone: "Time zone",
+    timeZoneLabel: (shop: string) => `${shop}’s time zone`,
+    timeZoneHint: (shop: string) =>
+      `Schedules, summaries and quiet hours use it. It’s the same for everyone at ${shop}, and only the Owner can change it.`,
+    timeZoneOwner: (owner: string) => `Only ${owner} (Owner) can change the time zone.`,
+    zones: {
+      toronto: "Eastern Time (Toronto)",
+      winnipeg: "Central Time (Winnipeg)",
+      edmonton: "Mountain Time (Edmonton)",
+      vancouver: "Pacific Time (Vancouver)",
+    } as Readonly<Record<string, string>>,
+    hour: (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "am" : "pm"}`,
+    preview: "Your morning email",
+    previewFrom: (time: string) => `From Morrow · ${time}`,
+    previewSubject: (shop: string, n: number) =>
+      `Your morning at ${shop}: ${n === 1 ? "1 thing is" : `${number(n)} things are`} waiting`,
+    previewLines: {
+      toReview: (n: number) => plural(n, "change to review", "changes to review"),
+      questions: (n: number) => plural(n, "question", "questions"),
+      tasks: (n: number) => plural(n, "task for you", "tasks for you"),
+      alerts: (n: number) => plural(n, "alert", "alerts"),
+    },
+    previewOpen: "Open Morrow",
+    previewWhy: "You get this because the morning summary is on. Change it in Notifications.",
+    previewOff: "The morning summary email is off. You still see the summary on Home.",
+    unsaved: "You have unsaved changes",
+    discard: "Discard",
+    save: "Save",
+    saving: "Saving…",
+    saved: "Notifications saved.",
+    changed: "These settings changed since you opened them. Here they are now; choose again.",
+  },
+  activity: {
+    title: "Activity",
+    intro: (shop: string) =>
+      `Everything people, agents and Morrow did at ${shop}. Nobody can change or delete it.`,
+    download: "Download",
+    list: "What happened",
+    filtersLabel: "Show in Activity",
+    filters: {
+      all: "Everything",
+      store: "Store changes",
+      approvals: "Approvals",
+      access: "Access and stops",
+    },
+    empty: "Nothing here yet.",
+    emptyFiltered: "Nothing of this kind yet.",
+    private:
+      "Conversations with Morrow are private, so they aren’t listed. When an Admin reads someone’s conversation, that read is listed here.",
+    listLater: "The full list arrives with the activity log.",
+  },
+  stop: {
+    title: "Stop all AI work",
+    body: "Every agent stops at once, and nothing new starts. Nothing is sent or changed in your store until a person turns AI work back on. Only people can do this. Agents can’t.",
+    on: (n: number) =>
+      `AI work is on · ${n === 1 ? "1 agent" : `${number(n)} agents`} can be stopped now`,
+    open: "Stop all AI work",
+    stoppedTitle: "All AI work is stopped",
+    stoppedBody:
+      "Nothing is sent or changed in your store. Changes waiting for approval stay in your Inbox, and nothing is applied until AI work is back on.",
+    turnOnHow:
+      "To turn AI work back on, resume each agent from its store’s page. Work that was stopped doesn’t restart by itself.",
+    openStore: "Open Shopify connection",
+    nothing: "No AI work is on, so there’s nothing to stop.",
+    notAllowed: "Only a person who may stop agents can do this. Ask your shop’s Owner.",
+    someNotAllowed: (n: number) =>
+      `${n === 1 ? "1 store has" : `${number(n)} stores have`} AI work you can’t stop. Ask the Owner.`,
+    loading: "Checking what’s working…",
+    readFailed: "Couldn’t check what’s working. Try again.",
+    tryAgain: "Try again",
+    dialogTitle: "Stop all AI work?",
+    dialogBody:
+      "Every agent stops now and nothing new starts. Nothing will be sent or changed in your store until AI work is back on. You don’t need anyone else to approve this.",
+    whatStops: "What stops",
+    target: (store: string) => `Listings on ${store}`,
+    whatStays: "What stays",
+    stays: [
+      "Changes waiting in your Inbox. None are applied while AI work is stopped.",
+      "Your store connection. To cut Morrow off from your store, disconnect it instead.",
+    ],
+    typeLabel: (word: string) => `To confirm, type: ${word}`,
+    typeHint: "Type the word, then press Stop all AI work.",
+    cancel: "Cancel",
+    close: "Close",
+    confirm: "Stop all AI work",
+    stopping: "Stopping…",
+    reason: "Stop all AI work, from Settings",
+    rows: {
+      sending: "Stopping…",
+      stopped: "Stopped",
+      uncertain: "We couldn’t confirm this stopped. Check again before you do anything else.",
+      checking: "Checking whether it stopped…",
+      refused: "Not stopped.",
+      notSent: "Not stopped. Nothing was sent; try again.",
+    },
+    checkAgain: "Check again",
+    done: "All AI work is stopped.",
+    partly: "Some work isn’t confirmed as stopped yet. Check each one below.",
   },
   plan: {
     title: "Plan and credits",

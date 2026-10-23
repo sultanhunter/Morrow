@@ -20,7 +20,7 @@ import {
   type ThinkingView,
 } from "../team-model";
 import { sunriseCopy } from "./copy";
-import { SrIcon } from "./parts";
+import { SrIcon, settingsRoutes } from "./parts";
 
 const t = sunriseCopy.thinking;
 export const modelName = (key: string) => sunriseCopy.models[key]?.name ?? key;
@@ -331,7 +331,7 @@ export function ThinkingEditor({
           {bound ? (
             <RouteLink
               route="settings_section"
-              params={{ workspaceId, section: "governance" }}
+              params={{ workspaceId, section: settingsRoutes.governance! }}
               className="sr-link"
             >
               {t.editLimits}

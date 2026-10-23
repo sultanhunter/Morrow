@@ -35,6 +35,7 @@ import {
   people,
 } from "./seed";
 import {
+  listingsOnIn,
   scenarios,
   teamViewerIn,
   uncomposedIn,
@@ -132,8 +133,9 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   const goal = (id: string) => seed.goals.find((g) => g.id === id);
   const at = () => new Date(Date.UTC(2026, 9, 16, 9, created)).toISOString();
   // M3 PR-1 fixture state: the Listings agent of the fixture store, and the model default.
+  // T7 PR 16: `stop_all` scenarios start with it on (enabled earlier, not stopped).
   const listings = {
-    installationId: null as string | null,
+    installationId: (listingsOnIn.includes(scenario) ? "inst-listings-0" : null) as string | null,
     status: "active" as "active" | "disabled",
     stopped: false,
     revision: 0,

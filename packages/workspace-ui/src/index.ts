@@ -46,5 +46,8 @@ export {
   SettingsHomeScreen,
 } from "./screens/settings-pages";
 export { FilesScreen, ShopKnowledgeScreen } from "./screens/library";
+export { NotificationsScreen } from "./screens/notifications";
+export { ActivityScreen } from "./screens/activity";
+export { StopAllCard } from "./screens/stop-all";
 export { AgentAvatar, PersonAvatar } from "./sunrise/avatars";
 export { sunriseCopy } from "./sunrise/copy";

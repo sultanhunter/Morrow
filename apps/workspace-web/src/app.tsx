@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { routeTitle, workspaceRoutes, type RouteMatch } from "@morrow/contracts/routes";
 import {
   AccountScreen,
+  ActivityScreen,
   AddAgentsScreen,
   AgentScreen,
   AppShell,
@@ -20,6 +21,7 @@ import {
   InboxScreen,
   ModelDefaultScreen,
   NotFoundScreen,
+  NotificationsScreen,
   PeopleRolesScreen,
   PlanCreditsScreen,
   QuestionScreen,
@@ -615,20 +617,23 @@ function WorkspaceFrame({
         return <FilesScreen workspace={workspace} />;
       case "settings":
         return <SettingsHomeScreen workspace={workspace} />;
-      // Settings sections. `usage` and `billing` are Plan and credits; `notifications`
-      // holds Email addresses until the route contract has a section of its own (T7 PR 16
-      // brief, open question 1); `governance` is M3 PR-1's model default (the Listings agent
-      // card is on the connection screen above).
+      // Settings sections (`settingsRoutes` in the Sunrise parts). The route contract has no
+      // `email` or `activity` section yet (T7 PR 16 brief, open question 1): Email addresses
+      // uses `stores`, Activity with Stop all AI work uses `governance`, and M3 PR-1's model
+      // default moves to `billing` (the Listings agent card stays on the connection screen).
       case "settings_section":
         switch (params.section) {
           case "usage":
-          case "billing":
             return <PlanCreditsScreen workspace={workspace} />;
           case "notifications":
+            return <NotificationsScreen workspace={workspace} />;
+          case "stores":
             return <EmailAddressesScreen workspace={workspace} />;
           case "people":
             return <PeopleRolesScreen workspace={workspace} />;
           case "governance":
+            return <ActivityScreen workspace={workspace} />;
+          case "billing":
             return (
               <SettingsFrame workspaceId={workspace.id} current="governance">
                 <ModelDefaultScreen workspace={workspace} />
@@ -727,6 +732,9 @@ export function guardPort(
     settings: {
       plan: watch(port.settings.plan.bind(port.settings), first),
       emailAddresses: watch(port.settings.emailAddresses.bind(port.settings), first),
+      notifications: watch(port.settings.notifications.bind(port.settings), first),
+      reviseNotifications: watch(port.settings.reviseNotifications.bind(port.settings), first),
+      activity: watch(port.settings.activity.bind(port.settings), first),
     },
     library: {
       knowledge: watch(port.library.knowledge.bind(port.library), first),

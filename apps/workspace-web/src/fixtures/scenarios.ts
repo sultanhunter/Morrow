@@ -53,6 +53,9 @@ export const scenarioNames = [
   "team_add_uncertain",
   "team_thinking_conflict",
   "team_solo",
+  "stop_all",
+  "stop_all_uncertain",
+  "notifications_conflict",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -79,6 +82,8 @@ const reads: readonly PortMethod[] = [
   "team.catalogue",
   "settings.plan",
   "settings.emailAddresses",
+  "settings.notifications",
+  "settings.activity",
   "library.knowledge",
   "library.files",
 ];
@@ -333,6 +338,23 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   },
   // A one-person shop: adding an agent needs no teammate's review.
   team_solo: {},
+  // Stop all AI work: the Listings agent is on; in the second, the first stop's reply is
+  // lost and Check again replays the same key.
+  stop_all: {},
+  stop_all_uncertain: {
+    "agents.listingsStop": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // A notifications save whose record moved on (the server's 409: reread).
+  notifications_conflict: {
+    "settings.reviseNotifications": (call) =>
+      call === 0
+        ? {
+            kind: "conflict",
+            recheck: true,
+            message: "These settings changed since you opened them.",
+          }
+        : null,
+  },
   team_thinking_conflict: {
     "team.reviseThinking": (call) =>
       call === 0
@@ -340,6 +362,8 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
         : null,
   },
 };
+/** T7 PR 16: these scenarios start with the Listings agent on (Stop all AI work has a target). */
+export const listingsOnIn: readonly ScenarioName[] = ["stop_all", "stop_all_uncertain"];
 /** T7 PR 16: who views Team in each scenario (the Owner unless named). */
 export const teamViewerIn: Readonly<Partial<Record<ScenarioName, PersonRole>>> = {
   team_member: "member",
