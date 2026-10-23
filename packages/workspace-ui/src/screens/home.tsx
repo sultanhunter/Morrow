@@ -8,14 +8,7 @@
 // opens a screen whose actions the server checks.
 import { useMemo } from "react";
 import { copy } from "../copy";
-import type {
-  GoalView,
-  HomeSamplesView,
-  Id,
-  Page,
-  QuestionView,
-  WorkspaceView,
-} from "../model";
+import type { GoalView, HomeSamplesView, Id, Page, QuestionView, WorkspaceView } from "../model";
 import { useRead, useServices, type ReadState } from "../services";
 import {
   primaryStore,
