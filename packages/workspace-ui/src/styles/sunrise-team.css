@@ -3,6 +3,8 @@
    names, which re-home onto PR 14's tokens in one rename). Widths in container queries are
    the token breakpoints; most layouts wrap with flex and grid instead. No motion. */
 .sr {
+  /* ADR-0032 item 5: every target is at least 44 by 44 px, and 48 on a phone (below). */
+  --sr-target: 44px;
   --sr-ring:
     0 0 0 1px color-mix(in srgb, var(--color-sunrise-text) 7%, transparent),
     0 1px 0 color-mix(in srgb, var(--color-sunrise-text) 10%, transparent);
@@ -86,7 +88,8 @@
 .sr-link {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-width: var(--sr-target);
+  min-height: var(--sr-target);
   color: var(--color-sunrise-link);
   font-size: 15px;
   font-weight: 550;
@@ -175,7 +178,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: var(--sr-target);
   padding: 0 16px;
   border: 0;
   border-radius: 8px;
@@ -216,7 +219,8 @@
 .sr-text-button {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-width: var(--sr-target);
+  min-height: var(--sr-target);
   padding: 0 2px;
   border: 0;
   background: none;
@@ -231,8 +235,8 @@
 .sr-icon-button {
   display: inline-grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: var(--sr-target);
+  height: var(--sr-target);
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -572,7 +576,8 @@
 .sr-name-link {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-width: var(--sr-target);
+  min-height: var(--sr-target);
   color: var(--color-sunrise-link);
   font-weight: 650;
   text-decoration: none;
@@ -896,7 +901,7 @@
 .sr-input {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--sr-target);
   padding: 0 12px;
   border: 1px solid var(--color-sunrise-control-border);
   border-radius: 8px;
@@ -937,7 +942,7 @@
   flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: var(--sr-target);
   border-radius: 8px;
   color: var(--color-sunrise-neutral);
   font-weight: 550;
@@ -970,7 +975,7 @@
   gap: 8px;
 }
 .sr-chip {
-  min-height: 40px;
+  min-height: var(--sr-target);
   padding: 0 14px;
   border: 0;
   border-radius: 8px;
@@ -1238,7 +1243,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: var(--sr-target);
   padding: 0 16px;
   border: 0;
   border-radius: 8px;
@@ -1288,7 +1293,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
+  min-height: var(--sr-target);
   padding: 0 12px;
   border-radius: 8px;
   color: var(--color-sunrise-text);
@@ -1403,8 +1408,8 @@
   border-top: 1px solid var(--color-sunrise-divider);
 }
 .sr .dialog .icon-button {
-  width: 44px;
-  height: 44px;
+  width: var(--sr-target);
+  height: var(--sr-target);
   border: 0;
   background: transparent;
 }
@@ -1546,7 +1551,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
+  min-height: var(--sr-target);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1647,8 +1652,11 @@
   min-width: 0;
 }
 
-/* ---- narrow: pairs stack */
+/* ---- narrow: targets grow to 48 px and pairs stack */
 @container workspace (max-width: 759px) {
+  .sr {
+    --sr-target: 48px;
+  }
   .sr-pairs > div {
     grid-template-columns: minmax(0, 1fr);
   }

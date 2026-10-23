@@ -6,9 +6,10 @@
 // Optional: --only=<a>,<b> runs the cases whose group/name contains any of them.
 // Each state case checks axe (WCAG 2.0/2.1 A and AA, 2.2 AA, plus the ARIA-in-HTML
 // `aria-allowed-role` rule) with zero violations, one visible provisional note, non-text
-// contrast of control borders and focus indicators, reflow, 24 px targets, reduced
-// motion, CSP and console errors; an entry screen's title matches its heading. Keyboard
-// walks run at 1440 and 390. Tracing, HAR and video stay off; screenshots exist only for
+// contrast of control borders and focus indicators, reflow, 24 px targets (44 px, and 48 at
+// 390 and 320, on the Sunrise screens under `.sr`: ADR-0032 item 5), reduced motion, CSP
+// and console errors; an entry screen's title matches its heading. Keyboard walks run at
+// 1440 and 390. Tracing, HAR and video stay off; screenshots exist only for
 // failed fixture cases. Reports are verdict-only JSON under ui/ in the artifacts directory.
 import { createServer } from "node:net";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
@@ -136,11 +137,20 @@ const pageChecks = () => {
           'a[href], button, input, select, textarea, [role="tab"], [role="menuitemradio"], [tabindex]:not([tabindex="-1"])',
         ),
       ].filter(visible);
+      const phone = window.innerWidth < 480;
       for (const el of targets) {
         const rect = el.getBoundingClientRect();
         const inline = el.tagName === "A" && getComputedStyle(el).display === "inline";
-        if (!inline && (rect.width < 24 || rect.height < 24))
-          failures.push(`target_size:${el.tagName.toLowerCase()}`);
+        // ADR-0032 item 5: a Sunrise target is at least 44 by 44 px, and 48 on a phone. A
+        // control inside its label is hit through the whole label.
+        const sunrise = el.closest(".sr") !== null;
+        const floor = sunrise ? (phone ? 48 : 44) : 24;
+        const label = sunrise ? el.closest("label") : null;
+        const hit = label ? label.getBoundingClientRect() : rect;
+        if (!inline && (hit.width < floor || hit.height < floor))
+          failures.push(
+            `target_size:${el.tagName.toLowerCase()}${sunrise ? "." + (el.classList[0] ?? "sr") : ""}`,
+          );
         const style = getComputedStyle(el);
         const border = parse(style.borderTopColor);
         const bordered =
