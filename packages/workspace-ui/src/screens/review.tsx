@@ -427,12 +427,18 @@ export function ReviewScreen({
               {copy.review.expires} <Time value={r.approval!.expiresAt} />
             </span>
           ) : null}
-          {r.proposal.taskId ? (
-            <RouteLink route="task" params={{ workspaceId: ws, taskId: r.proposal.taskId }}>
+        </p>
+        {r.proposal.taskId ? (
+          <div className="item-actions">
+            <RouteLink
+              route="task"
+              params={{ workspaceId: ws, taskId: r.proposal.taskId }}
+              className="text-link"
+            >
               {copy.review.taskLink}
             </RouteLink>
-          ) : null}
-        </p>
+          </div>
+        ) : null}
       </header>
       {blocked ? (
         <div role="status" className="notice notice-warning">
