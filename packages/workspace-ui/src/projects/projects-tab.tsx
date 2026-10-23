@@ -2,12 +2,11 @@
 // (by end date), Everyday work (one area per added agent, then Quick tasks) and Finished.
 // Rows stack below 760 px; their cell labels are always read by screen readers.
 import type { Id } from "../model";
-import { RouteLink } from "../components/controls";
 import { StateView } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import { byEndDate, formatDay, formatShortDay } from "./format";
 import type { ProjectsOverviewView } from "./model";
-import { CellLabel, HealthWord, MemberName, Section, memberList } from "./parts";
+import { CellLabel, HealthWord, MemberName, Section, memberList, InlineLink } from "./parts";
 
 const c = projectsCopy.page;
 
@@ -25,14 +24,15 @@ export function ProjectsTab({
         <section className="pj-card pj-credits" aria-labelledby="pj-credits-title">
           <h2 id="pj-credits-title">{c.creditsTitle}</h2>
           <p>
-            {c.credits(credits.used, credits.allowance, credits.left, formatShortDay(credits.renewsOn))}{" "}
-            <RouteLink
-              route="settings_section"
-              params={{ workspaceId: ws, section: "billing" }}
-              className="text-link"
-            >
+            {c.credits(
+              credits.used,
+              credits.allowance,
+              credits.left,
+              formatShortDay(credits.renewsOn),
+            )}{" "}
+            <InlineLink route="settings_section" params={{ workspaceId: ws, section: "billing" }}>
               {c.seePlan}
-            </RouteLink>
+            </InlineLink>
           </p>
           <p className="muted">{c.creditsNote(credits.askUsed)}</p>
         </section>
@@ -54,15 +54,15 @@ export function ProjectsTab({
                 <li key={row.projectId} className="pj-row">
                   <div className="pj-cell pj-cell-main">
                     <CellLabel>{c.columns.project}</CellLabel>
-                    <RouteLink
+                    <InlineLink
+                      strong
                       route="project"
                       params={{ workspaceId: ws, projectId: row.projectId }}
-                      className="pj-row-link"
                     >
                       <span dir="auto" className="pj-row-title">
                         {row.title}
                       </span>
-                    </RouteLink>
+                    </InlineLink>
                     <span className="pj-meta">
                       {c.ends(formatDay(row.endsOn))}
                       {row.note ? (
@@ -137,15 +137,15 @@ export function ProjectsTab({
                 <li key={area.projectId} className="pj-row">
                   <div className="pj-cell pj-cell-main">
                     <CellLabel>{c.columns.area}</CellLabel>
-                    <RouteLink
+                    <InlineLink
+                      strong
                       route="project"
                       params={{ workspaceId: ws, projectId: area.projectId }}
-                      className="pj-row-link"
                     >
                       <span dir="auto" className="pj-row-title">
                         {area.label}
                       </span>
-                    </RouteLink>
+                    </InlineLink>
                     <span className="pj-meta">
                       {c.withAgent} <MemberName member={area.agent} />
                       {area.note ? (
@@ -189,13 +189,13 @@ export function ProjectsTab({
                 <li className="pj-row">
                   <div className="pj-cell pj-cell-main">
                     <CellLabel>{c.columns.area}</CellLabel>
-                    <RouteLink
+                    <InlineLink
+                      strong
                       route="project"
                       params={{ workspaceId: ws, projectId: overview.quickTasks.projectId }}
-                      className="pj-row-link"
                     >
                       <span className="pj-row-title">{c.quickTasks}</span>
-                    </RouteLink>
+                    </InlineLink>
                     <span className="pj-meta">{c.quickTasksNote}</span>
                   </div>
                   <div className="pj-cell">
@@ -229,15 +229,15 @@ export function ProjectsTab({
             {overview.finished.map((row) => (
               <li key={row.projectId} className="pj-simple-row">
                 <span className="pj-simple-main">
-                  <RouteLink
+                  <InlineLink
+                    strong
                     route="project"
                     params={{ workspaceId: ws, projectId: row.projectId }}
-                    className="pj-row-link"
                   >
                     <span dir="auto" className="pj-row-title">
                       {row.title}
                     </span>
-                  </RouteLink>
+                  </InlineLink>
                   <span className="pj-meta">
                     {c.finishedLine(formatShortDay(row.finishedOn), row.goalsMet, row.goalsTotal)}
                   </span>

@@ -12,7 +12,12 @@ import { outcomeState } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import type { ProjectDetailView } from "./model";
 import { HealthWord } from "./parts";
-import { ExtendDialog, FinishDialog, PlanNextStepsButton, StopStepsDialog } from "./project-actions";
+import {
+  ExtendDialog,
+  FinishDialog,
+  PlanNextStepsButton,
+  StopStepsDialog,
+} from "./project-actions";
 import { ProjectConversation } from "./project-conversation";
 import {
   ProjectActivity,
@@ -25,7 +30,9 @@ import {
 type Tab = "overview" | "tasks" | "brief" | "files" | "activity";
 const p = projectsCopy.project;
 
-function tabsOf(project: ProjectDetailView): readonly { readonly id: Tab; readonly label: string }[] {
+function tabsOf(
+  project: ProjectDetailView,
+): readonly { readonly id: Tab; readonly label: string }[] {
   return [
     { id: "overview", label: p.tabOverview },
     { id: "tasks", label: p.tabTasks },
@@ -224,9 +231,7 @@ export function ProjectScreen({
             label={p.tabsLabel}
             tabs={tabs}
             selected={selected}
-            onSelect={(id) =>
-              setTab(tabs.find((t) => t.id === id)?.id ?? "overview")
-            }
+            onSelect={(id) => setTab(tabs.find((t) => t.id === id)?.id ?? "overview")}
             idPrefix="project"
           />
           {tabs.map((t) => (

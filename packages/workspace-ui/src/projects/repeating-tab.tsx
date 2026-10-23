@@ -3,11 +3,10 @@
 // Turning one on needs `workspace.routine.activate` and its review gate (ADR-0034 owner
 // question 4), which a later PR builds: until then this tab only reads.
 import type { Id } from "../model";
-import { RouteLink } from "../components/controls";
 import { StateView } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import type { RepeatingView } from "./model";
-import { CellLabel, MemberName, Section, StatusWord } from "./parts";
+import { CellLabel, MemberName, Section, StatusWord, InlineLink } from "./parts";
 
 const c = projectsCopy.repeating;
 
@@ -76,13 +75,12 @@ export function RepeatingTab({ ws, view }: { readonly ws: Id; readonly view: Rep
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.goesIn}</CellLabel>
-                    <RouteLink
+                    <InlineLink
                       route="project"
                       params={{ workspaceId: ws, projectId: row.projectId }}
-                      className="text-link"
                     >
                       <span dir="auto">{row.projectTitle}</span>
-                    </RouteLink>
+                    </InlineLink>
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.when}</CellLabel>
@@ -139,13 +137,12 @@ export function RepeatingTab({ ws, view }: { readonly ws: Id; readonly view: Rep
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.goesIn}</CellLabel>
-                    <RouteLink
+                    <InlineLink
                       route="project"
                       params={{ workspaceId: ws, projectId: row.projectId }}
-                      className="text-link"
                     >
                       <span dir="auto">{row.projectTitle}</span>
-                    </RouteLink>
+                    </InlineLink>
                   </div>
                   <div className="pj-cell">
                     <CellLabel>{c.columns.watches}</CellLabel>

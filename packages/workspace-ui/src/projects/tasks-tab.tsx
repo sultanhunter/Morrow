@@ -3,12 +3,12 @@
 // (the work API). New task files a task in one project, area or Quick tasks.
 import { useState } from "react";
 import type { Id } from "../model";
-import { Button, RouteLink } from "../components/controls";
+import { Button } from "../components/controls";
 import { StateView } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import { bucketRows, statusStyle } from "./format";
 import type { ProjectTaskRowView, ProjectTasksView } from "./model";
-import { CellLabel, MemberName, WordBadge } from "./parts";
+import { CellLabel, MemberName, WordBadge, InlineLink } from "./parts";
 
 const c = projectsCopy.tasks;
 const bucketLabel = (bucket: string) =>
@@ -17,11 +17,11 @@ const bucketLabel = (bucket: string) =>
 function TaskCard({ ws, row }: { readonly ws: Id; readonly row: ProjectTaskRowView }) {
   return (
     <li className="pj-task-card">
-      <RouteLink route="task" params={{ workspaceId: ws, taskId: row.taskId }} className="pj-row-link">
+      <InlineLink strong route="task" params={{ workspaceId: ws, taskId: row.taskId }}>
         <span dir="auto" className="pj-row-title">
           {row.title}
         </span>
-      </RouteLink>
+      </InlineLink>
       <MemberName member={row.owner} />
       <span dir="auto" className="pj-meta">
         {c.inProject(row.projectTitle)}
@@ -108,15 +108,11 @@ export function TasksTab({
               <li key={row.taskId} className="pj-row">
                 <div className="pj-cell pj-cell-main">
                   <CellLabel>{c.columns.task}</CellLabel>
-                  <RouteLink
-                    route="task"
-                    params={{ workspaceId: ws, taskId: row.taskId }}
-                    className="pj-row-link"
-                  >
+                  <InlineLink strong route="task" params={{ workspaceId: ws, taskId: row.taskId }}>
                     <span dir="auto" className="pj-row-title">
                       {row.title}
                     </span>
-                  </RouteLink>
+                  </InlineLink>
                 </div>
                 <div className="pj-cell">
                   <CellLabel>{c.columns.who}</CellLabel>
@@ -128,7 +124,9 @@ export function TasksTab({
                 </div>
                 <div className="pj-cell">
                   <CellLabel>{c.columns.status}</CellLabel>
-                  <WordBadge style={{ ...statusStyle(row.bucket), label: bucketLabel(row.bucket) }} />
+                  <WordBadge
+                    style={{ ...statusStyle(row.bucket), label: bucketLabel(row.bucket) }}
+                  />
                 </div>
                 <div className="pj-cell">
                   <CellLabel>{c.columns.when}</CellLabel>

@@ -6,12 +6,12 @@
 import { useId, useState, type FormEvent } from "react";
 import type { Id } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
-import { Button, RouteLink } from "../components/controls";
+import { Button } from "../components/controls";
 import { StateView, outcomeState } from "../components/feedback";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
 import type { ProjectDetailView, ProjectUpdateView } from "./model";
-import { HealthWord, MemberName } from "./parts";
+import { HealthWord, MemberName, InlineLink } from "./parts";
 import { PlanChangeCard } from "./plan-card";
 
 const c = projectsCopy.conversation;
@@ -93,21 +93,19 @@ export function ProjectConversation({
   const [text, setText] = useState("");
   const [mention, setMention] = useState(false);
   const [checked, setChecked] = useState(false);
-  const command = useCommand<{ text: string; mentionMorrow: boolean }, { readonly messageId: Id }>(
-    {
-      marker: { workspaceId: ws, kind: "project" },
-      send: (cmd) => services.port.projects.post(ws, project.projectId, cmd),
-      onOutcome: (outcome, sent) => {
-        if (outcome.kind !== "ok") return;
-        if (sent.current) {
-          setText("");
-          setMention(false);
-          setChecked(false);
-        }
-        reload();
-      },
+  const command = useCommand<{ text: string; mentionMorrow: boolean }, { readonly messageId: Id }>({
+    marker: { workspaceId: ws, kind: "project" },
+    send: (cmd) => services.port.projects.post(ws, project.projectId, cmd),
+    onOutcome: (outcome, sent) => {
+      if (outcome.kind !== "ok") return;
+      if (sent.current) {
+        setText("");
+        setMention(false);
+        setChecked(false);
+      }
+      reload();
     },
-  );
+  });
   useDirty(text !== "" || command.busy);
   const canPost = project.actions.post && services.composed["projects.post"];
   const canMention = canPost && project.actions.mentionMorrow;
@@ -212,9 +210,9 @@ export function ProjectConversation({
             onRetry={command.retry}
           />
           <div className="pj-composer-actions">
-            <RouteLink route="ask" params={{ workspaceId: ws }} className="text-link">
+            <InlineLink route="ask" params={{ workspaceId: ws }}>
               {c.privately}
-            </RouteLink>
+            </InlineLink>
             <Button type="submit" variant="primary" disabled={command.busy}>
               {command.busy ? c.sending : c.send}
             </Button>

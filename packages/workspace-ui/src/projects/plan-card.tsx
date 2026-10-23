@@ -8,13 +8,13 @@ import { useId, useState, type FormEvent } from "react";
 import { buildWorkspacePath, workspaceRoutes } from "@morrow/contracts/routes";
 import type { Id } from "../model";
 import { useCommand, useDirty, useServices } from "../services";
-import { Button, Dialog, RouteLink, TextField } from "../components/controls";
+import { Button, Dialog, TextField } from "../components/controls";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
 import { formatDay } from "./format";
 import type { PlanCardView, PlanChangeCardView, PlanEdits } from "./model";
 import { validTitle, titleLimit } from "./new-project";
-import { MemberName, WordBadge } from "./parts";
+import { MemberName, WordBadge, InlineLink } from "./parts";
 import { PlanStartButton, PlanStartFeedback, usePlanStart } from "./plan-start";
 
 const c = projectsCopy.card;
@@ -35,9 +35,9 @@ function StartedNote({
       <WordBadge style={{ label: word, tone: "success", glyph: "check" }} />
       <span dir="auto">{note}</span>
       {projectId ? (
-        <RouteLink route="project" params={{ workspaceId: ws, projectId }} className="text-link">
+        <InlineLink route="project" params={{ workspaceId: ws, projectId }}>
           {c.openProject}
-        </RouteLink>
+        </InlineLink>
       ) : null}
     </div>
   );
@@ -179,7 +179,12 @@ export function PlanCard({
 
       {card.steps.length || card.questions.length || card.cannotDo.length || card.related ? (
         <>
-          <Button variant="quiet" aria-expanded={showPlan} aria-controls={planId} onClick={() => setShowPlan((s) => !s)}>
+          <Button
+            variant="quiet"
+            aria-expanded={showPlan}
+            aria-controls={planId}
+            onClick={() => setShowPlan((s) => !s)}
+          >
             {showPlan ? c.hidePlan : c.seePlan}
           </Button>
           <div id={planId} hidden={!showPlan} className="pj-full-plan">
@@ -416,22 +421,20 @@ function EditPlanDialog({
           <fieldset className="pj-fieldset">
             <legend>{e.ends}</legend>
             {card.endChoices.map((choice) => {
-              const id = `${formId}-end-${choice.on}`;
               return (
-                <div key={choice.on} className="pj-check">
+                <label key={choice.on} className="pj-check">
                   <input
-                    id={id}
                     type="radio"
                     name={`${formId}-end`}
                     checked={endsOn === choice.on}
                     disabled={command.busy}
                     onChange={() => setEndsOn(choice.on)}
                   />
-                  <label htmlFor={id}>
+                  <span>
                     {formatDay(choice.on)}
                     {choice.recommended ? ` · ${e.recommended}` : ""}
-                  </label>
-                </div>
+                  </span>
+                </label>
               );
             })}
             <p className="pj-meta">{e.endsHint}</p>
@@ -441,11 +444,9 @@ function EditPlanDialog({
           <fieldset className="pj-fieldset">
             <legend>{e.keepGoals}</legend>
             {card.goals.map((goal) => {
-              const id = `${formId}-goal-${goal.key}`;
               return (
-                <div key={goal.key} className="pj-check">
+                <label key={goal.key} className="pj-check">
                   <input
-                    id={id}
                     type="checkbox"
                     checked={keepGoals.includes(goal.key)}
                     disabled={command.busy}
@@ -453,10 +454,8 @@ function EditPlanDialog({
                       setKeepGoals(toggle(keepGoals, goal.key, event.target.checked))
                     }
                   />
-                  <label htmlFor={id} dir="auto">
-                    {goal.title}
-                  </label>
-                </div>
+                  <span dir="auto">{goal.title}</span>
+                </label>
               );
             })}
             {checked && !valid.goals ? <p className="field-error">{e.needsGoal}</p> : null}
@@ -466,11 +465,9 @@ function EditPlanDialog({
           <fieldset className="pj-fieldset">
             <legend>{e.keepSteps}</legend>
             {card.steps.map((step) => {
-              const id = `${formId}-step-${step.index}`;
               return (
-                <div key={step.index} className="pj-check">
+                <label key={step.index} className="pj-check">
                   <input
-                    id={id}
                     type="checkbox"
                     checked={keepSteps.includes(step.index)}
                     disabled={command.busy}
@@ -478,10 +475,8 @@ function EditPlanDialog({
                       setKeepSteps(toggle(keepSteps, step.index, event.target.checked))
                     }
                   />
-                  <label htmlFor={id} dir="auto">
-                    {step.title}
-                  </label>
-                </div>
+                  <span dir="auto">{step.title}</span>
+                </label>
               );
             })}
             {checked && !valid.steps ? <p className="field-error">{e.needsStep}</p> : null}

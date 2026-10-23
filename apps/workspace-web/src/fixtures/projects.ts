@@ -155,7 +155,12 @@ export function createProjectsFixture(
           ? row.owner.name === "Leo Martin"
             ? hooks.editor
             : hooks.owner
-          : { principalId: `prn-agent-${row.owner.name.length}a0c`, kind: "agent", label: null, isSelf: null },
+          : {
+              principalId: `prn-agent-${row.owner.name.length}a0c`,
+              kind: "agent",
+              label: null,
+              isSelf: null,
+            },
       revision: 1,
       updatedAt: "2026-10-23T10:30:00.000Z",
     });
@@ -195,7 +200,13 @@ export function createProjectsFixture(
   };
   const messagesOf = (ask: AskState): AskMessageView[] => {
     const list: AskMessageView[] = [
-      { kind: "request", id: `${ask.id}-request`, author: asker, at: "10:30 am", text: ask.request },
+      {
+        kind: "request",
+        id: `${ask.id}-request`,
+        author: asker,
+        at: "10:30 am",
+        text: ask.request,
+      },
       {
         kind: "reply",
         id: `${ask.id}-hello`,
@@ -354,7 +365,12 @@ export function createProjectsFixture(
     };
     details.set(projectId, detail);
     conversations.set(projectId, [
-      { kind: "line", id: `${projectId}-1`, at: "Just now", text: `${asker.name} started this project from Ask Morrow` },
+      {
+        kind: "line",
+        id: `${projectId}-1`,
+        at: "Just now",
+        text: `${asker.name} started this project from Ask Morrow`,
+      },
       {
         kind: "message",
         id: `${projectId}-2`,
@@ -461,12 +477,19 @@ export function createProjectsFixture(
                 ? { ...s, status: "cancelled" }
                 : s,
           ),
-          repeating: detail.repeating.map((r) => (r.status === "active" ? { ...r, status: "off" } : r)),
+          repeating: detail.repeating.map((r) =>
+            r.status === "active" ? { ...r, status: "off" } : r,
+          ),
           alerts: detail.alerts.map((r) => (r.status === "active" ? { ...r, status: "off" } : r)),
           actions: { ...detail.actions, stopSteps: false },
         });
         const list = conversations.get(projectId) ?? [];
-        list.push({ kind: "line", id: `${projectId}-stop`, at: "Just now", text: `Steps stopped by ${asker.name}` });
+        list.push({
+          kind: "line",
+          id: `${projectId}-stop`,
+          at: "Just now",
+          text: `Steps stopped by ${asker.name}`,
+        });
         conversations.set(projectId, list);
         return ok({ turnedOff, cancelled });
       }),
@@ -483,12 +506,21 @@ export function createProjectsFixture(
           endsOn: c.body.endsOn,
           extendTo: null,
           health: health("on_track"),
-          scope: ["Started Sep 1", `Ends ${dayLabel(c.body.endsOn)}`, "Credits: 88 used, about 80 to 120 planned"],
+          scope: [
+            "Started Sep 1",
+            `Ends ${dayLabel(c.body.endsOn)}`,
+            "Credits: 88 used, about 80 to 120 planned",
+          ],
           actions: { ...detail.actions, finish: false, extend: false },
         });
         const index = dated.findIndex((r) => r.projectId === projectId);
         if (index >= 0)
-          dated[index] = { ...dated[index]!, endsOn: c.body.endsOn, note: null, health: health("on_track") };
+          dated[index] = {
+            ...dated[index]!,
+            endsOn: c.body.endsOn,
+            note: null,
+            health: health("on_track"),
+          };
         return ok({ revision: detail.revision + 1 });
       }),
     finishDocument: (id, projectId, c) =>
@@ -550,7 +582,10 @@ export function createProjectsFixture(
           credits: null,
           brief: null,
           activity: [{ at: "Just now", text: `${asker.name} created this project.` }],
-          members: [{ member: members.morrow, note: null }, { member: asker, note: null }],
+          members: [
+            { member: members.morrow, note: null },
+            { member: asker, note: null },
+          ],
         });
         return ok({ projectId });
       }),
@@ -600,7 +635,8 @@ export function createProjectsFixture(
         if (c.body.messageId === `${ask.id}-product` && ask.product === null)
           ask.product = {
             id: answer.kind === "option" ? answer.optionId : "other",
-            label: answer.kind === "option" ? label : answer.kind === "other" ? label : "Linen Shirt",
+            label:
+              answer.kind === "option" ? label : answer.kind === "other" ? label : "Linen Shirt",
           };
         else if (c.body.messageId === `${ask.id}-end` && ask.product !== null && ask.end === null)
           ask.end = {
@@ -634,9 +670,14 @@ export function createProjectsFixture(
         }
         const change = changeOwner(c.body.messageId);
         if (change && change.message.kind === "plan_change") {
-          if (change.message.card.started !== null || change.message.card.draftDigest !== c.body.draftDigest)
+          if (
+            change.message.card.started !== null ||
+            change.message.card.draftDigest !== c.body.draftDigest
+          )
             return stale;
-          return ok(issue("change", c.body.messageId, "plan_change", c.body.draftDigest, change.projectId));
+          return ok(
+            issue("change", c.body.messageId, "plan_change", c.body.draftDigest, change.projectId),
+          );
         }
         return notFound;
       }),
@@ -659,7 +700,10 @@ export function createProjectsFixture(
           const index = list.indexOf(change.message);
           list[index] = {
             ...change.message,
-            card: { ...change.message.card, started: { note: `Applied by ${asker.name} · just now` } },
+            card: {
+              ...change.message.card,
+              started: { note: `Applied by ${asker.name} · just now` },
+            },
           };
           list.push({
             kind: "line",
@@ -672,7 +716,9 @@ export function createProjectsFixture(
             ...detail,
             revision: detail.revision + 1,
             plan: detail.plan.map((s) =>
-              s.index === 6 ? { ...s, detail: "Due Fri, Nov 6 · the last page fact · from the check-up" } : s,
+              s.index === 6
+                ? { ...s, detail: "Due Fri, Nov 6 · the last page fact · from the check-up" }
+                : s,
             ),
           });
           return ok({ projectId: change.projectId, runs: [] });
@@ -685,7 +731,13 @@ export function createProjectsFixture(
           state: "finished",
           health: health("done"),
           scope: ["Started Sep 1", "Finished today", "Credits: 88 used, about 80 to 120 planned"],
-          actions: { ...detail.actions, finish: false, extend: false, stopSteps: false, planNextSteps: false },
+          actions: {
+            ...detail.actions,
+            finish: false,
+            extend: false,
+            stopSteps: false,
+            planNextSteps: false,
+          },
         });
         finished.push({
           projectId: detail.projectId,

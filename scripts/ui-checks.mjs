@@ -564,6 +564,95 @@ fixtureCases.push(
     },
   }),
 );
+// T7 PR 19: the project screens, composed only in the projects preview scenarios.
+const preview = "projects_preview";
+fixtureCases.push(
+  fixtureCase("projects", "overview", `/w/${ws}/work`, { scenario: preview }),
+  fixtureCase("projects", "tasks_board", `/w/${ws}/work`, {
+    scenario: preview,
+    setup: (page) => page.getByRole("tab", { name: /^Tasks/ }).click(),
+  }),
+  fixtureCase("projects", "tasks_list", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("tab", { name: /^Tasks/ }).click();
+      await page.getByRole("button", { name: "List" }).click();
+    },
+  }),
+  fixtureCase("projects", "repeating", `/w/${ws}/work`, {
+    scenario: preview,
+    setup: (page) => page.getByRole("tab", { name: /^Repeating/ }).click(),
+  }),
+  fixtureCase("projects", "tell_morrow_dialog", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: (page) => page.getByRole("button", { name: "New project" }).click(),
+  }),
+  fixtureCase("projects", "set_up_yourself_dialog", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "New project" }).click();
+      await page.getByRole("button", { name: "Set it up yourself" }).click();
+    },
+  }),
+  fixtureCase("projects", "project", `/w/${ws}/projects/project-tote`, { scenario: preview }),
+  fixtureCase("projects", "project_ended", `/w/${ws}/projects/project-summer`, {
+    scenario: preview,
+  }),
+  fixtureCase("projects", "area", `/w/${ws}/projects/area-stock`, { scenario: preview }),
+  fixtureCase("projects", "project_teammate", `/w/${ws}/projects/project-tote`, {
+    scenario: "projects_teammate",
+  }),
+  fixtureCase("projects", "goal_drawer", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: (page) =>
+      page.getByRole("button", { name: /Everyday Tote’s page is complete: open details/ }).click(),
+  }),
+  fixtureCase("projects", "stop_dialog", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: (page) => page.getByRole("button", { name: "Stop steps" }).click(),
+  }),
+  fixtureCase("projects", "plan_change", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Plan next steps" }).click();
+      await page.getByRole("button", { name: "Apply changes" }).waitFor();
+    },
+  }),
+  fixtureCase("projects", "ask_choice", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "New project" }).click();
+      await page
+        .getByLabel("What do you want to get done, and by when?")
+        .fill("Rank in AI answers");
+      await page.getByRole("button", { name: "Send to Morrow" }).click();
+      await page.getByRole("heading", { name: "Which product?" }).waitFor();
+    },
+  }),
+  fixtureCase("projects", "ask_card", `/w/${ws}/ask/conv-sample`, { scenario: preview }),
+  fixtureCase("projects", "start_stale", `/w/${ws}/ask/conv-sample`, {
+    scenario: "projects_start_stale",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Start project" }).click();
+      await page.getByText("This plan changed since you opened it").waitFor();
+    },
+  }),
+  fixtureCase("projects", "start_uncertain", `/w/${ws}/ask/conv-sample`, {
+    scenario: "projects_start_uncertain",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Start project" }).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+);
 export const edgeCases = [
   fixtureCase("edge", "landing", "/"),
   fixtureCase("edge", "sign_in", "/w/ws-edge-lab"),
@@ -718,6 +807,19 @@ export const keyboardWalks = [
       await page.keyboard.press("Escape");
       await page.getByRole("dialog").waitFor({ state: "hidden" });
       expect((await active(page)).text === "Create goal", "dialog_focus_restore");
+    },
+  },
+  {
+    // T7 PR 19: a person starts a plan card by keyboard; the card's one tap opens the
+    // project it created.
+    name: "start_project",
+    path: `/w/${ws}/ask/conv-sample`,
+    scenario: "projects_preview",
+    run: async (page) => {
+      await tabTo(page, (a) => a.text === "Start project", 120);
+      await page.keyboard.press("Enter");
+      await page.waitForURL(`**/w/${ws}/projects/project-new-*`);
+      await page.getByRole("heading", { name: /Linen Shirt in AI answers/ }).waitFor();
     },
   },
   {

@@ -145,7 +145,10 @@ export const areaRows = [
     label: "Stock",
     agent: m.inventory,
     note: "1 question needs you",
-    goal: { title: "Best sellers with 2+ weeks of stock", value: "3 best sellers at risk, down from 7" },
+    goal: {
+      title: "Best sellers with 2+ weeks of stock",
+      value: "3 best sellers at risk, down from 7",
+    },
     health: health("behind", "At this pace, 3 best sellers could sell out within 2 weeks."),
     repeating: 1,
     alerts: 1,
@@ -176,7 +179,12 @@ export const areaRows = [
     creditsThisMonth: 104,
   },
 ];
-export const quickTasksRow = { projectId: "area-quick", goalId: "goal-area-quick", open: 2, creditsThisMonth: 42 };
+export const quickTasksRow = {
+  projectId: "area-quick",
+  goalId: "goal-area-quick",
+  open: 2,
+  creditsThisMonth: 42,
+};
 export const starters = [
   "Get the Linen Shirt into AI answers",
   "Launch our winter scarves on Mon, Dec 7",
@@ -320,15 +328,114 @@ export const taskRows: readonly ProjectTaskRowView[] = [
 ];
 
 const repeatingRows: readonly RepeatingRowView[] = [
-  ["rep-launch", "Launch-week stock check", m.inventory, "project-autumn", "Autumn collection", "Every day, Nov 2 to Nov 8, at 7:00 am", "Mon, Nov 2, 7:00 am", "About 10", "active", null],
-  ["rep-ai-check", "Check AI answers in ChatGPT", m.maya, "project-tote", "Everyday Tote in AI answers", "Every 4 weeks on Monday", "Mon, Nov 2", "None: you do it", "active", "About 8 minutes"],
-  ["rep-catalog", "Catalog check", m.listings, "area-pages", "Product pages", "Every Monday at 9:00 am", "Mon, Oct 26, 9:00 am", "About 12", "active", null],
-  ["rep-size", "Size chart check for this week’s new products", m.listings, "area-pages", "Product pages", "Every Friday at 11:00 am", "Fri, Oct 30, 11:00 am", "About 10", "active", null],
-  ["rep-stock", "Daily stock check", m.inventory, "area-stock", "Stock", "Every weekday at 6:00 am", "Mon, Oct 26, 6:00 am", "About 20", "active", "Turned on by Maya Chen, Oct 6"],
-  ["rep-emails", "Summary of open customer emails", m.support, "area-emails", "Customer emails", "Every day at 5:00 pm", "Today, 5:00 pm", "About 45", "active", null],
-  ["rep-morning", "Morning summary", m.analyst, "area-sales", "Sales and numbers", "Every day at 8:00 am", "Tomorrow, 8:00 am", "About 30", "active", null],
-  ["rep-week", "This week’s numbers so far", m.analyst, "area-sales", "Sales and numbers", "Every Friday at 2:00 pm", "Now", "About 8", "working", null],
-  ["rep-review", "Weekly review", m.analyst, "area-sales", "Sales and numbers", "Every Monday at 8:00 am", "Mon, Oct 26, 8:00 am", "About 12", "active", null],
+  [
+    "rep-launch",
+    "Launch-week stock check",
+    m.inventory,
+    "project-autumn",
+    "Autumn collection",
+    "Every day, Nov 2 to Nov 8, at 7:00 am",
+    "Mon, Nov 2, 7:00 am",
+    "About 10",
+    "active",
+    null,
+  ],
+  [
+    "rep-ai-check",
+    "Check AI answers in ChatGPT",
+    m.maya,
+    "project-tote",
+    "Everyday Tote in AI answers",
+    "Every 4 weeks on Monday",
+    "Mon, Nov 2",
+    "None: you do it",
+    "active",
+    "About 8 minutes",
+  ],
+  [
+    "rep-catalog",
+    "Catalog check",
+    m.listings,
+    "area-pages",
+    "Product pages",
+    "Every Monday at 9:00 am",
+    "Mon, Oct 26, 9:00 am",
+    "About 12",
+    "active",
+    null,
+  ],
+  [
+    "rep-size",
+    "Size chart check for this week’s new products",
+    m.listings,
+    "area-pages",
+    "Product pages",
+    "Every Friday at 11:00 am",
+    "Fri, Oct 30, 11:00 am",
+    "About 10",
+    "active",
+    null,
+  ],
+  [
+    "rep-stock",
+    "Daily stock check",
+    m.inventory,
+    "area-stock",
+    "Stock",
+    "Every weekday at 6:00 am",
+    "Mon, Oct 26, 6:00 am",
+    "About 20",
+    "active",
+    "Turned on by Maya Chen, Oct 6",
+  ],
+  [
+    "rep-emails",
+    "Summary of open customer emails",
+    m.support,
+    "area-emails",
+    "Customer emails",
+    "Every day at 5:00 pm",
+    "Today, 5:00 pm",
+    "About 45",
+    "active",
+    null,
+  ],
+  [
+    "rep-morning",
+    "Morning summary",
+    m.analyst,
+    "area-sales",
+    "Sales and numbers",
+    "Every day at 8:00 am",
+    "Tomorrow, 8:00 am",
+    "About 30",
+    "active",
+    null,
+  ],
+  [
+    "rep-week",
+    "This week’s numbers so far",
+    m.analyst,
+    "area-sales",
+    "Sales and numbers",
+    "Every Friday at 2:00 pm",
+    "Now",
+    "About 8",
+    "working",
+    null,
+  ],
+  [
+    "rep-review",
+    "Weekly review",
+    m.analyst,
+    "area-sales",
+    "Sales and numbers",
+    "Every Monday at 8:00 am",
+    "Mon, Oct 26, 8:00 am",
+    "About 12",
+    "active",
+    null,
+  ],
 ].map(([id, title, owner, projectId, projectTitle, schedule, next, credits, status, note]) => ({
   id: id as string,
   title: title as string,
@@ -387,7 +494,8 @@ export const repeatingView: RepeatingView = {
       youGet:
         "A list in Stock, with what Inventory suggests for each product. Nothing changes in your store without your OK.",
       credits: "About 6 a month",
-      drafted: "Drafted by Morrow from your request at 1:40 pm. Nothing repeats until you turn it on.",
+      drafted:
+        "Drafted by Morrow from your request at 1:40 pm. Nothing repeats until you turn it on.",
     },
   ],
   repeating: repeatingRows,
@@ -454,10 +562,7 @@ const toteGoals: readonly GoalDetailView[] = [
   },
 ];
 
-function dated(
-  row: ProjectRowView,
-  detail: Partial<ProjectDetailView>,
-): ProjectDetailView {
+function dated(row: ProjectRowView, detail: Partial<ProjectDetailView>): ProjectDetailView {
   return {
     projectId: row.projectId,
     goalId: row.goalId,
@@ -501,13 +606,15 @@ export function projectDetails(): Map<string, ProjectDetailView> {
       "First update Mon, Oct 26, 8:00 am",
       "Credits: 36 used, about 60 to 100 planned",
     ],
-    stopPreview: "the monthly AI answers check turns off and step 6 is cancelled. Nothing is waiting for approval.",
+    stopPreview:
+      "the monthly AI answers check turns off and step 6 is cancelled. Nothing is waiting for approval.",
     sinceLastVisit: {
       lastVisit: "today at 11:31 am",
       items: [
         {
           title: "Everyday Tote’s page updated in Shopify",
-          detail: "Description, search listing, tags and 2 photo descriptions · Written by Listings · Approved by Maya Chen",
+          detail:
+            "Description, search listing, tags and 2 photo descriptions · Written by Listings · Approved by Maya Chen",
           at: "11:52 am",
           health: null,
         },
@@ -521,12 +628,61 @@ export function projectDetails(): Map<string, ProjectDetailView> {
     },
     goals: toteGoals,
     plan: [
-      { index: 1, title: "Check the Everyday Tote is offered in Shopify’s AI channels", owner: m.maya, status: "done", detail: "Marked done 10:36 am", repeats: false, taskId: null },
-      { index: 2, title: "Check the page against the 5 buying questions", owner: m.checkup, status: "done", detail: "Found 7 gaps · 16 credits used, 24 came back · Its access ends tomorrow at 10:33 am", repeats: false, taskId: "task-pj-checkup" },
-      { index: 3, title: "Update description, search listing, tags and photo descriptions", owner: m.listings, status: "done", detail: "4 changes · 20 credits", repeats: false, taskId: "task-pj-listings" },
-      { index: 4, title: "Review the changes", owner: m.maya, status: "done", detail: "Approved 4 changes at 11:52 am", repeats: false, taskId: "task-pj-review" },
-      { index: 5, title: "Check AI answers in ChatGPT", owner: m.maya, status: "to_do", detail: "First Mon, Nov 2, then every 4 weeks · about 8 minutes", repeats: true, taskId: "task-pj-check" },
-      { index: 6, title: "Add a photo of the Everyday Tote in use", owner: m.maya, status: "to_do", detail: "When you’re ready · the last page fact · from the check-up", repeats: false, taskId: "task-pj-photo" },
+      {
+        index: 1,
+        title: "Check the Everyday Tote is offered in Shopify’s AI channels",
+        owner: m.maya,
+        status: "done",
+        detail: "Marked done 10:36 am",
+        repeats: false,
+        taskId: null,
+      },
+      {
+        index: 2,
+        title: "Check the page against the 5 buying questions",
+        owner: m.checkup,
+        status: "done",
+        detail:
+          "Found 7 gaps · 16 credits used, 24 came back · Its access ends tomorrow at 10:33 am",
+        repeats: false,
+        taskId: "task-pj-checkup",
+      },
+      {
+        index: 3,
+        title: "Update description, search listing, tags and photo descriptions",
+        owner: m.listings,
+        status: "done",
+        detail: "4 changes · 20 credits",
+        repeats: false,
+        taskId: "task-pj-listings",
+      },
+      {
+        index: 4,
+        title: "Review the changes",
+        owner: m.maya,
+        status: "done",
+        detail: "Approved 4 changes at 11:52 am",
+        repeats: false,
+        taskId: "task-pj-review",
+      },
+      {
+        index: 5,
+        title: "Check AI answers in ChatGPT",
+        owner: m.maya,
+        status: "to_do",
+        detail: "First Mon, Nov 2, then every 4 weeks · about 8 minutes",
+        repeats: true,
+        taskId: "task-pj-check",
+      },
+      {
+        index: 6,
+        title: "Add a photo of the Everyday Tote in use",
+        owner: m.maya,
+        status: "to_do",
+        detail: "When you’re ready · the last page fact · from the check-up",
+        repeats: false,
+        taskId: "task-pj-photo",
+      },
     ],
     credits: {
       used: 36,
@@ -559,19 +715,40 @@ export function projectDetails(): Map<string, ProjectDetailView> {
       },
     ],
     activity: [
-      { at: "11:54 am", text: "Plan changed by Maya Chen: added step 6, Add a photo of the Everyday Tote in use." },
-      { at: "11:52 am", text: "Maya Chen approved 4 changes. All 4 updated in Shopify, checked after saving." },
+      {
+        at: "11:54 am",
+        text: "Plan changed by Maya Chen: added step 6, Add a photo of the Everyday Tote in use.",
+      },
+      {
+        at: "11:52 am",
+        text: "Maya Chen approved 4 changes. All 4 updated in Shopify, checked after saving.",
+      },
       { at: "11:31 am", text: "Listings suggested 4 changes for the Everyday Tote." },
       { at: "11:13 am", text: "Maya Chen let Listings start step 3." },
-      { at: "11:12 am", text: "AI answers check-up finished. Found 7 gaps. 16 credits used, 24 came back." },
+      {
+        at: "11:12 am",
+        text: "AI answers check-up finished. Found 7 gaps. 16 credits used, 24 came back.",
+      },
       { at: "10:36 am", text: "Maya Chen marked step 1 done." },
-      { at: "10:33 am", text: "Maya Chen started the AI answers check-up on Opus 5.5 with Medium thinking effort. Up to 40 credits set aside." },
-      { at: "10:32 am", text: "Maya Chen started this project from Ask Morrow, with 2 goals and 5 steps." },
+      {
+        at: "10:33 am",
+        text: "Maya Chen started the AI answers check-up on Opus 5.5 with Medium thinking effort. Up to 40 credits set aside.",
+      },
+      {
+        at: "10:32 am",
+        text: "Maya Chen started this project from Ask Morrow, with 2 goals and 5 steps.",
+      },
     ],
   });
   const autumn = dated(rows.get("project-autumn")!, {
-    scope: ["Started Oct 12", "Launch Mon, Nov 2", "Ends Mon, Nov 16", "Credits: 152 used, about 200 to 300 planned"],
-    stopPreview: "the launch-week stock check turns off. 2 changes waiting for your approval stay in your Inbox.",
+    scope: [
+      "Started Oct 12",
+      "Launch Mon, Nov 2",
+      "Ends Mon, Nov 16",
+      "Credits: 152 used, about 200 to 300 planned",
+    ],
+    stopPreview:
+      "the launch-week stock check turns off. 2 changes waiting for your approval stay in your Inbox.",
     goals: [
       {
         key: "launch_ready",
@@ -587,16 +764,45 @@ export function projectDetails(): Map<string, ProjectDetailView> {
         questions: [],
         rows: [
           { label: "Linen Shirt", value: "12 of 12 facts", note: null, health: health("done") },
-          { label: "Utility Overshirt", value: "9 of 12 facts", note: "Waiting for a photo of it being worn", health: health("needs_you") },
+          {
+            label: "Utility Overshirt",
+            value: "9 of 12 facts",
+            note: "Waiting for a photo of it being worn",
+            health: health("needs_you"),
+          },
           { label: "Linen Trousers", value: "12 of 12 facts", note: null, health: health("done") },
         ],
         steps: [],
       },
     ],
     plan: [
-      { index: 1, title: "Write pages for 3 Autumn products", owner: m.listings, status: "needs_you", detail: "2 changes to review · expire Mon, Oct 26", repeats: false, taskId: "task-pj-autumn-pages" },
-      { index: 2, title: "Photograph the Utility Overshirt being worn", owner: m.leo, status: "to_do", detail: "Due Tue, Oct 27", repeats: false, taskId: "task-pj-overshirt-photo" },
-      { index: 3, title: "Launch-week stock check", owner: m.inventory, status: "not_started", detail: "Every day, Nov 2 to Nov 8, at 7:00 am", repeats: true, taskId: null },
+      {
+        index: 1,
+        title: "Write pages for 3 Autumn products",
+        owner: m.listings,
+        status: "needs_you",
+        detail: "2 changes to review · expire Mon, Oct 26",
+        repeats: false,
+        taskId: "task-pj-autumn-pages",
+      },
+      {
+        index: 2,
+        title: "Photograph the Utility Overshirt being worn",
+        owner: m.leo,
+        status: "to_do",
+        detail: "Due Tue, Oct 27",
+        repeats: false,
+        taskId: "task-pj-overshirt-photo",
+      },
+      {
+        index: 3,
+        title: "Launch-week stock check",
+        owner: m.inventory,
+        status: "not_started",
+        detail: "Every day, Nov 2 to Nov 8, at 7:00 am",
+        repeats: true,
+        taskId: null,
+      },
     ],
     latestUpdate: {
       title: "Week 2 · On track",
@@ -604,18 +810,42 @@ export function projectDetails(): Map<string, ProjectDetailView> {
       health: health("on_track"),
       summary: "2 of 3 products are ready. The Utility Overshirt needs one more photo.",
       rows: [
-        { label: "Products ready", value: "2 of 3", health: health("on_track"), note: "Was 0 on Oct 12 · From your Shopify products" },
+        {
+          label: "Products ready",
+          value: "2 of 3",
+          health: health("on_track"),
+          note: "Was 0 on Oct 12 · From your Shopify products",
+        },
       ],
       doneSince: "Listings wrote 2 product pages · 2 changes approved",
       needsYou: "2 changes to review",
       credits: "120 used · about 200 to 300 planned",
     },
     updateNote: null,
-    credits: { used: 152, planned: "about 200 to 300", byHelper: [{ name: "Listings", line: "118 used" }, { name: "Inventory", line: "34 used" }], balance: "You have 1,202 credits left until Nov 1.", note: null },
-    activity: [{ at: "Oct 12", text: "Maya Chen started this project from Ask Morrow, with 1 goal and 3 steps." }],
+    credits: {
+      used: 152,
+      planned: "about 200 to 300",
+      byHelper: [
+        { name: "Listings", line: "118 used" },
+        { name: "Inventory", line: "34 used" },
+      ],
+      balance: "You have 1,202 credits left until Nov 1.",
+      note: null,
+    },
+    activity: [
+      {
+        at: "Oct 12",
+        text: "Maya Chen started this project from Ask Morrow, with 1 goal and 3 steps.",
+      },
+    ],
   });
   const bfcm = dated(rows.get("project-bfcm")!, {
-    scope: ["Started Oct 20", "Sale starts Fri, Nov 27", "Ends Mon, Nov 30", "Credits: 56 used, about 150 to 250 planned"],
+    scope: [
+      "Started Oct 20",
+      "Sale starts Fri, Nov 27",
+      "Ends Mon, Nov 30",
+      "Credits: 56 used, about 150 to 250 planned",
+    ],
     goals: [
       {
         key: "sale_plan",
@@ -634,10 +864,32 @@ export function projectDetails(): Map<string, ProjectDetailView> {
       },
     ],
     plan: [
-      { index: 1, title: "Plan the Black Friday sale", owner: m.salePlanner, status: "working", detail: "Finishes by 3:00 pm · 1 question needs you", repeats: false, taskId: "task-pj-sale-plan" },
-      { index: 2, title: "Approve the discount codes", owner: m.maya, status: "not_started", detail: "After step 1", repeats: false, taskId: null },
+      {
+        index: 1,
+        title: "Plan the Black Friday sale",
+        owner: m.salePlanner,
+        status: "working",
+        detail: "Finishes by 3:00 pm · 1 question needs you",
+        repeats: false,
+        taskId: "task-pj-sale-plan",
+      },
+      {
+        index: 2,
+        title: "Approve the discount codes",
+        owner: m.maya,
+        status: "not_started",
+        detail: "After step 1",
+        repeats: false,
+        taskId: null,
+      },
     ],
-    credits: { used: 56, planned: "about 150 to 250", byHelper: [{ name: "Sale planner", line: "56 used" }], balance: null, note: null },
+    credits: {
+      used: 56,
+      planned: "about 150 to 250",
+      byHelper: [{ name: "Sale planner", line: "56 used" }],
+      balance: null,
+      note: null,
+    },
   });
   const summer = dated(rows.get("project-summer")!, {
     revision: 5,
@@ -663,8 +915,24 @@ export function projectDetails(): Map<string, ProjectDetailView> {
       },
     ],
     plan: [
-      { index: 1, title: "Mark down summer linen by 15%", owner: m.maya, status: "done", detail: "Sep 1", repeats: false, taskId: null },
-      { index: 2, title: "Weekly sell-through check", owner: m.inventory, status: "active", detail: "Every Monday at 7:00 am", repeats: true, taskId: null },
+      {
+        index: 1,
+        title: "Mark down summer linen by 15%",
+        owner: m.maya,
+        status: "done",
+        detail: "Sep 1",
+        repeats: false,
+        taskId: null,
+      },
+      {
+        index: 2,
+        title: "Weekly sell-through check",
+        owner: m.inventory,
+        status: "active",
+        detail: "Every Monday at 7:00 am",
+        repeats: true,
+        taskId: null,
+      },
     ],
     results: {
       rows: [
@@ -689,10 +957,7 @@ export function projectDetails(): Map<string, ProjectDetailView> {
     },
     actions: { ...allActions, finish: true, extend: true },
   });
-  const area = (
-    index: number,
-    detail: Partial<ProjectDetailView>,
-  ): ProjectDetailView => {
+  const area = (index: number, detail: Partial<ProjectDetailView>): ProjectDetailView => {
     const row = areaRows[index]!;
     return {
       ...dated(
@@ -720,7 +985,8 @@ export function projectDetails(): Map<string, ProjectDetailView> {
   };
   const stock = area(1, {
     scope: ["Inventory’s everyday work", "No end date", "Nothing is ordered without you"],
-    stopPreview: "the daily stock check and the low-stock alert turn off, and Leo’s back-room count is cancelled.",
+    stopPreview:
+      "the daily stock check and the low-stock alert turn off, and Leo’s back-room count is cancelled.",
     goals: [
       {
         key: "stock_cover",
@@ -735,9 +1001,24 @@ export function projectDetails(): Map<string, ProjectDetailView> {
         checks: [],
         questions: [],
         rows: [
-          { label: "Utility Overshirt", value: "About 11 days left · 12 in stock", note: "Inventory asked you: order 50, or wait?", health: health("needs_you") },
-          { label: "Linen Trousers", value: "About 9 days left · 15 in stock", note: "40 on order from Weave Co. · Arriving Wed, Oct 28", health: null },
-          { label: "Linen Apron", value: "About 13 days left · 26 in stock", note: "Waiting for Leo’s back-room count · Due Wed, Oct 28", health: null },
+          {
+            label: "Utility Overshirt",
+            value: "About 11 days left · 12 in stock",
+            note: "Inventory asked you: order 50, or wait?",
+            health: health("needs_you"),
+          },
+          {
+            label: "Linen Trousers",
+            value: "About 9 days left · 15 in stock",
+            note: "40 on order from Weave Co. · Arriving Wed, Oct 28",
+            health: null,
+          },
+          {
+            label: "Linen Apron",
+            value: "About 13 days left · 26 in stock",
+            note: "Waiting for Leo’s back-room count · Due Wed, Oct 28",
+            health: null,
+          },
         ],
         steps: [],
       },
@@ -745,7 +1026,10 @@ export function projectDetails(): Map<string, ProjectDetailView> {
     repeating: repeatingRows.filter((r) => r.projectId === "area-stock"),
     alerts: alertRows.filter((r) => r.projectId === "area-stock"),
     members: [
-      { member: m.inventory, note: "Does the work here. Asks you before anything is ordered. Sonnet 5.5 · Thinking effort: Low" },
+      {
+        member: m.inventory,
+        note: "Does the work here. Asks you before anything is ordered. Sonnet 5.5 · Thinking effort: Low",
+      },
       { member: m.morrow, note: "Answers when someone writes @Morrow here." },
       { member: m.maya, note: null },
       { member: m.leo, note: null },
@@ -763,8 +1047,14 @@ export function projectDetails(): Map<string, ProjectDetailView> {
     },
     activity: [
       { at: "Today, 6:05 am", text: "Alert sent to Maya Chen: Linen Apron is under 2 weeks." },
-      { at: "Today, 6:04 am", text: "Stock check: 3 best sellers are under 2 weeks of stock. 1 credit." },
-      { at: "Tue, Oct 20", text: "Reorder for Linen Trousers: 40 from Weave Co. Purchase order downloaded by Maya Chen. 4 credits." },
+      {
+        at: "Today, 6:04 am",
+        text: "Stock check: 3 best sellers are under 2 weeks of stock. 1 credit.",
+      },
+      {
+        at: "Tue, Oct 20",
+        text: "Reorder for Linen Trousers: 40 from Weave Co. Purchase order downloaded by Maya Chen. 4 credits.",
+      },
     ],
   });
   const simpleArea = (index: number) => {
@@ -792,7 +1082,13 @@ export function projectDetails(): Map<string, ProjectDetailView> {
         : [],
       repeating: repeatingRows.filter((r) => r.projectId === row.projectId),
       alerts: alertRows.filter((r) => r.projectId === row.projectId),
-      credits: { used: row.creditsThisMonth, planned: null, byHelper: [], balance: null, note: null },
+      credits: {
+        used: row.creditsThisMonth,
+        planned: null,
+        byHelper: [],
+        balance: null,
+        note: null,
+      },
     });
   };
   const quick: ProjectDetailView = {
@@ -807,7 +1103,10 @@ export function projectDetails(): Map<string, ProjectDetailView> {
     goals: [],
     repeating: [],
     alerts: [],
-    members: [{ member: m.maya, note: null }, { member: m.leo, note: null }],
+    members: [
+      { member: m.maya, note: null },
+      { member: m.leo, note: null },
+    ],
     credits: { used: 42, planned: null, byHelper: [], balance: null, note: null },
     actions: { ...allActions, planNextSteps: false, stopSteps: false },
   };
@@ -827,8 +1126,18 @@ export function projectDetails(): Map<string, ProjectDetailView> {
 /** The Everyday Tote conversation, as the Project board draws it. */
 export function toteMessages(): ProjectMessageView[] {
   return [
-    { kind: "line", id: "pm-1", at: "10:32 am", text: "Maya Chen started this project from Ask Morrow" },
-    { kind: "line", id: "pm-2", at: "11:12 am", text: "AI answers check-up finished · Found 7 gaps" },
+    {
+      kind: "line",
+      id: "pm-1",
+      at: "10:32 am",
+      text: "Maya Chen started this project from Ask Morrow",
+    },
+    {
+      kind: "line",
+      id: "pm-2",
+      at: "11:12 am",
+      text: "AI answers check-up finished · Found 7 gaps",
+    },
     { kind: "line", id: "pm-3", at: "11:13 am", text: "Maya Chen let Listings start step 3" },
     {
       kind: "message",
@@ -848,8 +1157,18 @@ export function toteMessages(): ProjectMessageView[] {
       restricted: null,
       written: false,
     },
-    { kind: "line", id: "pm-6", at: "11:52 am", text: "Maya Chen approved 4 changes · Updated in Shopify" },
-    { kind: "line", id: "pm-7", at: "11:52 am", text: "Page facts: 11 of 12 · 1 left: at least 3 photos (step 6)" },
+    {
+      kind: "line",
+      id: "pm-6",
+      at: "11:52 am",
+      text: "Maya Chen approved 4 changes · Updated in Shopify",
+    },
+    {
+      kind: "line",
+      id: "pm-7",
+      at: "11:52 am",
+      text: "Page facts: 11 of 12 · 1 left: at least 3 photos (step 6)",
+    },
     {
       kind: "message",
       id: "pm-8",
@@ -949,9 +1268,19 @@ export function digestOf(seed: string): string {
 
 // ---- Ask Morrow
 export const productOptions = [
-  { id: "linen-shirt", label: "Linen Shirt", detail: "Natural linen, off white", recommended: false },
+  {
+    id: "linen-shirt",
+    label: "Linen Shirt",
+    detail: "Natural linen, off white",
+    recommended: false,
+  },
   { id: "everyday-tote", label: "Everyday Tote", detail: "Tan linen canvas", recommended: false },
-  { id: "utility-overshirt", label: "Utility Overshirt", detail: "Olive linen blend", recommended: false },
+  {
+    id: "utility-overshirt",
+    label: "Utility Overshirt",
+    detail: "Olive linen blend",
+    recommended: false,
+  },
 ];
 export const endOptions = [
   { id: "six-weeks", label: "In about 6 weeks (Fri, Dec 4)", detail: null, recommended: true },
@@ -1001,11 +1330,35 @@ export function projectCard(options: {
     },
   ].filter((g) => !options.dropGoals.includes(g.key));
   const steps = [
-    { index: 1, title: `Check the ${product} is offered in Shopify’s AI channels`, owner: m.maya, when: "Today, about 2 minutes", repeats: false },
-    { index: 2, title: "Check the page against the 5 buying questions", owner: m.checkup, when: "Today, about 1 hour", repeats: false },
-    { index: 3, title: "Update description, search listing, tags and photo descriptions", owner: m.listings, when: "After step 2, when you say so", repeats: false },
+    {
+      index: 1,
+      title: `Check the ${product} is offered in Shopify’s AI channels`,
+      owner: m.maya,
+      when: "Today, about 2 minutes",
+      repeats: false,
+    },
+    {
+      index: 2,
+      title: "Check the page against the 5 buying questions",
+      owner: m.checkup,
+      when: "Today, about 1 hour",
+      repeats: false,
+    },
+    {
+      index: 3,
+      title: "Update description, search listing, tags and photo descriptions",
+      owner: m.listings,
+      when: "After step 2, when you say so",
+      repeats: false,
+    },
     { index: 4, title: "Review the changes", owner: m.maya, when: "This week", repeats: false },
-    { index: 5, title: "Check AI answers in ChatGPT", owner: m.maya, when: "Mon, Nov 2, then every 4 weeks", repeats: true },
+    {
+      index: 5,
+      title: "Check AI answers in ChatGPT",
+      owner: m.maya,
+      when: "Mon, Nov 2, then every 4 weeks",
+      repeats: true,
+    },
   ].filter((s) => !options.dropSteps.includes(s.index));
   const asker = options.teammate ? m.leo : m.maya;
   return {
@@ -1019,8 +1372,16 @@ export function projectCard(options: {
     why: "Shoppers ask AI assistants what to buy. A page that answers their questions gives the assistants something to name.",
     goals,
     helpers: [
-      { member: m.morrow, does: "Main agent. Planned this project. Re-plans when you tap Plan next steps, or when you ask it with @Morrow in the project.", note: null },
-      { member: { ...asker, role: options.teammate ? "Member" : "Owner" }, does: "You own this project. You check one Shopify setting, review changes and do the monthly check.", note: null },
+      {
+        member: m.morrow,
+        does: "Main agent. Planned this project. Re-plans when you tap Plan next steps, or when you ask it with @Morrow in the project.",
+        note: null,
+      },
+      {
+        member: { ...asker, role: options.teammate ? "Member" : "Owner" },
+        does: "You own this project. You check one Shopify setting, review changes and do the monthly check.",
+        note: null,
+      },
       {
         member: m.checkup,
         does: "Checks the page against the 5 questions and what AI assistants look for. Only you can start it, after you start the project.",
@@ -1028,15 +1389,24 @@ export function projectCard(options: {
           ? "Only Maya (Owner) can set up and start the check-up. You can still start the project; Maya then gets an Inbox item to set it up."
           : null,
       },
-      { member: m.listings, does: "Updates the description, search listing, tags and photo descriptions after the check-up, when you say so. Asks you before changing anything.", note: null },
-      { member: m.analyst, does: "Posts a short sales note each Monday. Only people who can see orders see it.", note: null },
+      {
+        member: m.listings,
+        does: "Updates the description, search listing, tags and photo descriptions after the check-up, when you say so. Asks you before changing anything.",
+        note: null,
+      },
+      {
+        member: m.analyst,
+        does: "Posts a short sales note each Monday. Only people who can see orders see it.",
+        note: null,
+      },
     ],
     needsYou:
       "Check one setting in Shopify (about 2 minutes). Start the check-up (only you can). Say when Listings may start. Approve about 4 changes. Nothing changes in your store until you approve.",
     credits:
       "About 60 to 100 credits over 6 weeks. You have 1,202 left until Nov 1. The check-up sets aside up to 40 when it starts; unused credits come back.",
     shortfall: null,
-    youllHear: "Every Monday at 8:00 am, starting Mon, Oct 26, and in your Inbox when something needs you.",
+    youllHear:
+      "Every Monday at 8:00 am, starting Mon, Oct 26, and in your Inbox when something needs you.",
     steps,
     questions: buyingQuestions(product),
     cannotDo,

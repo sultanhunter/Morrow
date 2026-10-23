@@ -224,16 +224,27 @@ p.pj-meta span.pj-meta,
 }
 .pj-rows-dated .pj-row,
 .pj-rows-areas .pj-row {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr) minmax(
+      0,
+      1fr
+    );
 }
 .pj-rows-tasks .pj-row {
-  grid-template-columns: minmax(0, 2.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.5fr);
+  grid-template-columns: minmax(0, 2.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(
+      0,
+      1.5fr
+    );
 }
 .pj-rows-repeating .pj-row {
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr)
+    minmax(0, 1fr);
 }
 .pj-rows-alerts .pj-row {
-  grid-template-columns: minmax(0, 2.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 2.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(0, 1.5fr) minmax(
+      0,
+      1fr
+    );
 }
 .pj-cell {
   display: flex;
@@ -251,12 +262,15 @@ p.pj-meta span.pj-meta,
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-.pj-row-link {
+/* Links in text and rows stay inline (the wrapper takes any block layout). */
+.pj-link {
   color: var(--color-link, var(--color-accent));
+}
+.pj-link.is-strong {
   font-weight: 600;
   text-decoration: none;
 }
-.pj-row-link:hover {
+.pj-link.is-strong:hover {
   text-decoration: underline;
 }
 .pj-row-title {
@@ -429,7 +443,7 @@ p.pj-meta span.pj-meta,
   min-width: 0;
 }
 .pj-link-button {
-  min-height: 24px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   background: none;
@@ -749,20 +763,31 @@ ul.pj-helpers {
   margin-bottom: var(--space-1);
   font-weight: 600;
 }
+.pj-check-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
 .pj-check {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-1) var(--space-2);
   min-height: 44px;
+  cursor: pointer;
 }
 .pj-check input {
   width: 24px;
   height: 24px;
   margin: 0;
 }
-.pj-check p {
-  grid-column: 2;
+.pj-check-group > p {
+  padding-left: calc(24px + var(--space-2));
+}
+/* Chromium gives a focused date field's segments no :focus-visible on the field. */
+.pj-page input[type="date"]:focus {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
 }
 .pj-drawer {
   display: flex;
@@ -821,6 +846,11 @@ ul.pj-helpers {
   }
 }
 @media (max-width: 759px) {
+  .pj-area-link,
+  .pj-check,
+  .pj-link-button {
+    min-height: 48px;
+  }
   .pj-facts {
     grid-template-columns: minmax(0, 1fr);
   }

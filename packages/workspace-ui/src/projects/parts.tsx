@@ -3,6 +3,7 @@
 // When the Sunrise shell (T7 PR 14) lands, the badge and pill move onto its `Tag` and
 // `AgentName`; the class names here are this folder's own (`pj-`).
 import type { ReactNode } from "react";
+import { RouteLink } from "../components/controls";
 import { projectsCopy } from "./copy";
 import { healthStyle, statusStyle, type WordGlyph, type WordStyle } from "./format";
 import type { HealthView, MemberView } from "./model";
@@ -144,6 +145,31 @@ export function Section({
       </div>
       {children}
     </section>
+  );
+}
+
+/**
+ * A link inside text or a row: it stays an inline link (WCAG 2.5.8's inline exception, so
+ * Sunrise's 44 px floor is for controls, not words), even where its container lays out
+ * its children as blocks. Routes come only from the route contract.
+ */
+export function InlineLink({
+  route,
+  params,
+  children,
+  strong = false,
+}: {
+  readonly route: string;
+  readonly params: Readonly<Record<string, string>>;
+  readonly children: ReactNode;
+  readonly strong?: boolean;
+}) {
+  return (
+    <span className="pj-link-wrap">
+      <RouteLink route={route} params={params} className={strong ? "pj-link is-strong" : "pj-link"}>
+        {children}
+      </RouteLink>
+    </span>
   );
 }
 

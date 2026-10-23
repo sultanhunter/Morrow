@@ -32,7 +32,11 @@ import {
   statusStyle,
 } from "../packages/workspace-ui/src/projects/format.ts";
 import { documentBinds } from "../packages/workspace-ui/src/projects/plan-start.tsx";
-import { PlanCard, PlanChangeCard, planEdits } from "../packages/workspace-ui/src/projects/plan-card.tsx";
+import {
+  PlanCard,
+  PlanChangeCard,
+  planEdits,
+} from "../packages/workspace-ui/src/projects/plan-card.tsx";
 import {
   localToday,
   validAsk,
@@ -183,7 +187,10 @@ test("days, words and orders: formatted, never computed", () => {
   );
   // The board keeps every row: an unknown bucket gets its own column, Mine filters.
   const t = (taskId, bucket, mine) => ({ taskId, bucket, mine });
-  const groups = bucketRows([t("1", "to_do", true), t("2", "later", false), t("3", "working", false)], false);
+  const groups = bucketRows(
+    [t("1", "to_do", true), t("2", "later", false), t("3", "working", false)],
+    false,
+  );
   assert.deepEqual(
     groups.map((g) => [g.bucket, g.rows.map((r) => r.taskId)]),
     [
@@ -261,7 +268,10 @@ test("the fixture's plan start: one document per digest, consumed once, stale af
   assert.equal(card.started, null);
   assert.equal(card.kind, "project");
   // A digest the server doesn't hold is stale: no document.
-  const wrong = await port.plans.startDocument(ws, cmd({ messageId: card.messageId, draftDigest: "d".repeat(64) }));
+  const wrong = await port.plans.startDocument(
+    ws,
+    cmd({ messageId: card.messageId, draftDigest: "d".repeat(64) }),
+  );
   assert.equal(wrong.kind, "conflict");
   // Edit makes a new revision with a new digest; the old one is now stale.
   const revised = await port.plans.revise(
@@ -280,7 +290,10 @@ test("the fixture's plan start: one document per digest, consumed once, stale af
   );
   assert.equal(revised.kind, "ok");
   assert.notEqual(revised.value.draftDigest, card.draftDigest);
-  const old = await port.plans.startDocument(ws, cmd({ messageId: card.messageId, draftDigest: card.draftDigest }));
+  const old = await port.plans.startDocument(
+    ws,
+    cmd({ messageId: card.messageId, draftDigest: card.draftDigest }),
+  );
   assert.equal(old.kind, "conflict");
   const edited = await read();
   assert.equal(edited.title, "Linen Shirt on AI answers");
@@ -293,10 +306,17 @@ test("the fixture's plan start: one document per digest, consumed once, stale af
   );
   assert.equal(document.kind, "ok");
   assert.equal(
-    documentBinds(document.value, { target: "project", draftDigest: edited.draftDigest, projectId: null }),
+    documentBinds(document.value, {
+      target: "project",
+      draftDigest: edited.draftDigest,
+      projectId: null,
+    }),
     "binds",
   );
-  const wrongNonce = await port.plans.start(ws, cmd({ documentDigest: document.value.documentDigest, nonce: "x".repeat(32) }));
+  const wrongNonce = await port.plans.start(
+    ws,
+    cmd({ documentDigest: document.value.documentDigest, nonce: "x".repeat(32) }),
+  );
   assert.equal(wrongNonce.kind, "conflict");
   const started = await port.plans.start(
     ws,
@@ -311,7 +331,10 @@ test("the fixture's plan start: one document per digest, consumed once, stale af
   // The card now says it started (derived), and can't start again.
   const after = await read();
   assert.equal(after.started.projectId, started.value.projectId);
-  const again = await port.plans.startDocument(ws, cmd({ messageId: after.messageId, draftDigest: after.draftDigest }));
+  const again = await port.plans.startDocument(
+    ws,
+    cmd({ messageId: after.messageId, draftDigest: after.draftDigest }),
+  );
   assert.equal(again.kind, "conflict");
   const project = await port.projects.get(ws, started.value.projectId);
   assert.equal(project.kind, "ok");
@@ -336,7 +359,11 @@ test("Finish: a code-built document under the person's revision, then its single
   );
   assert.equal(document.kind, "ok");
   assert.equal(
-    documentBinds(document.value, { target: "finish", draftDigest: null, projectId: "project-summer" }),
+    documentBinds(document.value, {
+      target: "finish",
+      draftDigest: null,
+      projectId: "project-summer",
+    }),
     "binds",
   );
   const done = await port.plans.start(
@@ -350,10 +377,20 @@ test("Finish: a code-built document under the person's revision, then its single
   // Stop steps and Extend also carry the revision they were shown.
   const tote = (await port.projects.get(ws, "project-tote")).value;
   assert.equal(
-    (await port.projects.stopSteps(ws, "project-tote", cmd({ expectedRevision: tote.revision + 1 }))).kind,
+    (
+      await port.projects.stopSteps(
+        ws,
+        "project-tote",
+        cmd({ expectedRevision: tote.revision + 1 }),
+      )
+    ).kind,
     "conflict",
   );
-  const stopped = await port.projects.stopSteps(ws, "project-tote", cmd({ expectedRevision: tote.revision }));
+  const stopped = await port.projects.stopSteps(
+    ws,
+    "project-tote",
+    cmd({ expectedRevision: tote.revision }),
+  );
   assert.equal(stopped.kind, "ok");
   assert.ok((await port.projects.get(ws, "project-tote")).value.stopped);
 });
@@ -408,7 +445,10 @@ test("request bodies carry ids, digests, revisions, text and closed choices only
       // Each property is `key: value` or a shorthand `key`; a nested call's arguments (the
       // closed `planEdits(card, form)`) are its own, so the scan stops at the first call.
       const body = match[1].split("(")[0];
-      for (const part of body.split(",").map((p) => p.trim()).filter(Boolean)) {
+      for (const part of body
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean)) {
         const name = /^([A-Za-z_]\w*)\s*(?::|$)/.exec(part)?.[1];
         assert.ok(name !== undefined && allowed.has(name), `${file}: ${part}`);
       }
@@ -436,7 +476,9 @@ test("screens: the Projects tab, Tasks and Repeating render from the sample, by 
   assert.ok(board.includes("Needs you") && board.includes("Done today"));
   assert.ok(!board.includes("New task"), "hidden without the server's createTask action");
   assert.ok(board.includes("/w/ws-linen/work/task-pj-reorder"), "a task opens on its task page");
-  const repeating = render(h(RepeatingTab, { ws, view: (await port.projects.repeating(ws)).value }));
+  const repeating = render(
+    h(RepeatingTab, { ws, view: (await port.projects.repeating(ws)).value }),
+  );
   assert.ok(repeating.includes("Waiting for you to turn on"));
   assert.ok(!/>Turn on</.test(repeating), "turning on waits for its review gate");
 });
@@ -463,19 +505,29 @@ test("screens: a plan card says who wrote it, shows taint above Start, and start
   assert.match(open, />Not now</);
   assert.ok(open.includes(card.visibility));
   const tainted = render(
-    h(PlanCard, { ...props, card: { ...card, tainted: "Parts of this plan came from a check-up report." } }),
+    h(PlanCard, {
+      ...props,
+      card: { ...card, tainted: "Parts of this plan came from a check-up report." },
+    }),
   );
   assert.ok(tainted.indexOf("came from a check-up report") < tainted.indexOf(">Start project<"));
   const notAsker = render(
     h(PlanCard, {
       ...props,
-      card: { ...card, canStart: false, startNote: "Only Maya Chen, who asked, can start this plan." },
+      card: {
+        ...card,
+        canStart: false,
+        startNote: "Only Maya Chen, who asked, can start this plan.",
+      },
     }),
   );
   assert.doesNotMatch(notAsker, />Start project</);
   assert.match(notAsker, /Only Maya Chen, who asked/);
   const started = render(
-    h(PlanCard, { ...props, card: { ...card, started: { projectId: "project-1", note: "Started by Maya Chen" } } }),
+    h(PlanCard, {
+      ...props,
+      card: { ...card, started: { projectId: "project-1", note: "Started by Maya Chen" } },
+    }),
   );
   assert.doesNotMatch(started, />Start project</);
   assert.match(started, /\/w\/ws-linen\/projects\/project-1/);
@@ -510,7 +562,12 @@ test("screens: an Everyday work area shows its goal, alerts and repeating tasks"
   const stock = (await port.projects.get(ws, "area-stock")).value;
   assert.equal(stock.kind, "area");
   const html = render(h(ProjectOverview, { ws, project: stock }));
-  for (const text of ["Alerts on this goal", "Repeating tasks", "Who works here", "Spend this month"])
+  for (const text of [
+    "Alerts on this goal",
+    "Repeating tasks",
+    "Who works here",
+    "Spend this month",
+  ])
     assert.ok(html.includes(text), text);
   assert.ok(html.includes("No best seller under 2 weeks of stock"));
   const tote = (await port.projects.get(ws, "project-tote")).value;

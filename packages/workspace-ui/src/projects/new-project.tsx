@@ -54,23 +54,21 @@ export function TellMorrowDialog({
   const [text, setText] = useState("");
   const [checked, setChecked] = useState(false);
   const askComposed = services.composed["plans.ask"] && canAsk;
-  const command = useCommand<{ conversationId: Id | null; text: string }, { conversationId: Id }>(
-    {
-      marker: { workspaceId: ws, kind: "plan" },
-      send: (cmd) => services.port.plans.ask(ws, cmd),
-      onOutcome: (outcome, sent) => {
-        if (outcome.kind !== "ok" || !sent.current) return;
-        setText("");
-        setChecked(false);
-        navigate(
-          buildWorkspacePath(workspaceRoutes, "ask_conversation", {
-            workspaceId: ws,
-            conversationId: outcome.value.conversationId,
-          }),
-        );
-      },
+  const command = useCommand<{ conversationId: Id | null; text: string }, { conversationId: Id }>({
+    marker: { workspaceId: ws, kind: "plan" },
+    send: (cmd) => services.port.plans.ask(ws, cmd),
+    onOutcome: (outcome, sent) => {
+      if (outcome.kind !== "ok" || !sent.current) return;
+      setText("");
+      setChecked(false);
+      navigate(
+        buildWorkspacePath(workspaceRoutes, "ask_conversation", {
+          workspaceId: ws,
+          conversationId: outcome.value.conversationId,
+        }),
+      );
     },
-  );
+  });
   useDirty(open && (text !== "" || command.busy));
   const navigate = useNavigateWhenClean();
   const valid = validAsk(text);
@@ -232,7 +230,11 @@ export function SetUpProjectDialog({
   });
   useDirty(open && (title !== "" || endsOn !== "" || goal !== "" || command.busy));
   const navigate = useNavigateWhenClean();
-  const valid = { title: validTitle(title), endsOn: validEnd(endsOn, today), goal: validGoal(goal) };
+  const valid = {
+    title: validTitle(title),
+    endsOn: validEnd(endsOn, today),
+    goal: validGoal(goal),
+  };
   const formId = useId();
   const submit = (event: FormEvent) => {
     event.preventDefault();

@@ -33,20 +33,19 @@ function ChoiceQuestion({
   const headingId = useId();
   const otherId = useId();
   const [other, setOther] = useState<string | null>(null);
-  const command = useCommand<{ messageId: Id; answer: ChoiceAnswer }, { readonly messageId: Id }>(
-    {
-      marker: { workspaceId: ws, kind: "plan" },
-      send: (cmd) => services.port.plans.answer(ws, conversationId, cmd),
-      onOutcome: (outcome) => {
-        if (outcome.kind === "ok" || (outcome.kind === "conflict" && outcome.recheck)) {
-          setOther(null);
-          onAnswered();
-        }
-      },
+  const command = useCommand<{ messageId: Id; answer: ChoiceAnswer }, { readonly messageId: Id }>({
+    marker: { workspaceId: ws, kind: "plan" },
+    send: (cmd) => services.port.plans.answer(ws, conversationId, cmd),
+    onOutcome: (outcome) => {
+      if (outcome.kind === "ok" || (outcome.kind === "conflict" && outcome.recheck)) {
+        setOther(null);
+        onAnswered();
+      }
     },
-  );
+  });
   useDirty(other !== null && other !== "");
-  const answer = (value: ChoiceAnswer) => void command.submit({ messageId: message.id, answer: value });
+  const answer = (value: ChoiceAnswer) =>
+    void command.submit({ messageId: message.id, answer: value });
   const otherValid = other !== null && validAsk(other) && other.length <= 2048;
   const submitOther = (event: FormEvent) => {
     event.preventDefault();
@@ -157,20 +156,18 @@ export function AskConversationScreen({
   );
   const [text, setText] = useState("");
   const [checked, setChecked] = useState(false);
-  const command = useCommand<{ conversationId: Id | null; text: string }, { conversationId: Id }>(
-    {
-      marker: { workspaceId: ws, kind: "plan" },
-      send: (cmd) => services.port.plans.ask(ws, cmd),
-      onOutcome: (outcome, sent) => {
-        if (outcome.kind !== "ok") return;
-        if (sent.current) {
-          setText("");
-          setChecked(false);
-        }
-        reload();
-      },
+  const command = useCommand<{ conversationId: Id | null; text: string }, { conversationId: Id }>({
+    marker: { workspaceId: ws, kind: "plan" },
+    send: (cmd) => services.port.plans.ask(ws, cmd),
+    onOutcome: (outcome, sent) => {
+      if (outcome.kind !== "ok") return;
+      if (sent.current) {
+        setText("");
+        setChecked(false);
+      }
+      reload();
     },
-  );
+  });
   useDirty(text !== "" || command.busy);
   const valid = validAsk(text);
   const view = conversation.kind === "ok" ? conversation.value : null;

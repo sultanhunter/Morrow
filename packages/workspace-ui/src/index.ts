@@ -37,7 +37,14 @@ export { ConnectionScreen, ConnectionsScreen } from "./screens/connections";
 // and `plans.*` port methods.
 export * from "./projects/model";
 export { projectsCopy } from "./projects/copy";
-export { byEndDate, bucketRows, formatDay, healthStyle, parseDay, statusStyle } from "./projects/format";
+export {
+  byEndDate,
+  bucketRows,
+  formatDay,
+  healthStyle,
+  parseDay,
+  statusStyle,
+} from "./projects/format";
 export { documentBinds } from "./projects/plan-start";
 export { planEdits } from "./projects/plan-card";
 export { taskHomes } from "./projects/new-task";

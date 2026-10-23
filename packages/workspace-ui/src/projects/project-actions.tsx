@@ -264,17 +264,16 @@ export function FinishDialog({
       >
         <p>{c.body}</p>
         {choice ? (
-          <div className="pj-check">
-            <input
-              id={keepId}
-              type="checkbox"
-              checked={keep}
-              disabled={flow.busy}
-              aria-describedby={keepId + "-note"}
-              onChange={(event) => setKeep(event.target.checked)}
-            />
-            <label htmlFor={keepId} dir="auto">
-              {choice.keepLabel}
+          <div className="pj-check-group">
+            <label className="pj-check">
+              <input
+                type="checkbox"
+                checked={keep}
+                disabled={flow.busy}
+                aria-describedby={keepId + "-note"}
+                onChange={(event) => setKeep(event.target.checked)}
+              />
+              <span dir="auto">{choice.keepLabel}</span>
             </label>
             <p id={keepId + "-note"} className="pj-meta" dir="auto">
               {choice.keepNote}

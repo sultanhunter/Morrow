@@ -14,7 +14,7 @@ import { usePaged } from "../screens/work";
 import { projectsCopy } from "./copy";
 import { GoalList } from "./goals";
 import type { ProjectDetailView } from "./model";
-import { HealthWord, MemberName, Section, StatusWord } from "./parts";
+import { HealthWord, MemberName, Section, StatusWord, InlineLink } from "./parts";
 import { UpdateCard } from "./project-conversation";
 
 const p = projectsCopy.project;
@@ -58,13 +58,9 @@ function PlanSection({ ws, project }: { readonly ws: Id; readonly project: Proje
             <div className="pj-step-body">
               <h3 className="pj-step-title">
                 {step.taskId ? (
-                  <RouteLink
-                    route="task"
-                    params={{ workspaceId: ws, taskId: step.taskId }}
-                    className="pj-row-link"
-                  >
+                  <InlineLink strong route="task" params={{ workspaceId: ws, taskId: step.taskId }}>
                     <span dir="auto">{step.title}</span>
-                  </RouteLink>
+                  </InlineLink>
                 ) : (
                   <span dir="auto">{step.title}</span>
                 )}
@@ -97,13 +93,9 @@ function CreditsSection({ ws, project }: { readonly ws: Id; readonly project: Pr
       id="pj-credits-section-title"
       title={project.kind === "area" ? p.spendTitle : p.creditsTitle}
       action={
-        <RouteLink
-          route="settings_section"
-          params={{ workspaceId: ws, section: "billing" }}
-          className="text-link"
-        >
+        <InlineLink route="settings_section" params={{ workspaceId: ws, section: "billing" }}>
           {p.seePlan}
-        </RouteLink>
+        </InlineLink>
       }
     >
       <p>{p.creditsUsed(credits.used, credits.planned)}</p>

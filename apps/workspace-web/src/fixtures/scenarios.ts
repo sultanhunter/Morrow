@@ -321,8 +321,7 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   // The first start is refused as stale (the draft changed): nothing starts, the card is
   // read again, and the next tap asks for a new document.
   projects_start_stale: {
-    "plans.start": (call) =>
-      call === 0 ? { kind: "conflict", recheck: true, message: "" } : null,
+    "plans.start": (call) => (call === 0 ? { kind: "conflict", recheck: true, message: "" } : null),
   },
   // The first start is applied but its reply is lost; Check again replays the same key.
   projects_start_uncertain: {
