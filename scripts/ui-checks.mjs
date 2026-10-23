@@ -921,7 +921,9 @@ export const keyboardWalks = [
       await tabTo(page, (a) => a.inDialog && a.text === "Stop steps", 8);
       await page.keyboard.press("Enter");
       await page.getByRole("dialog").waitFor({ state: "hidden" });
-      await page.getByRole("button", { name: "Stop steps" }).waitFor({ state: "detached" });
+      await page
+        .getByRole("button", { name: "Stop steps", exact: true })
+        .waitFor({ state: "detached" });
       const said = await page
         .getByRole("status")
         .filter({ hasText: /^Steps stopped\. \d+ repeating tasks? turned off/ })
