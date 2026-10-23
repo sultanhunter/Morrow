@@ -910,6 +910,11 @@
   font: inherit;
   font-size: 16px;
 }
+/* The model default's form (M3's fields) inside the Sunrise Settings frame. */
+.sr .field input,
+.sr .field select {
+  min-height: var(--sr-target);
+}
 .sr-input[aria-invalid="true"] {
   border-color: var(--color-sunrise-critical-text);
 }
@@ -975,6 +980,7 @@
   gap: 8px;
 }
 .sr-chip {
+  min-width: var(--sr-target);
   min-height: var(--sr-target);
   padding: 0 14px;
   border: 0;
@@ -1408,6 +1414,7 @@
   border-top: 1px solid var(--color-sunrise-divider);
 }
 .sr .dialog .icon-button {
+  flex: none;
   width: var(--sr-target);
   height: var(--sr-target);
   border: 0;
