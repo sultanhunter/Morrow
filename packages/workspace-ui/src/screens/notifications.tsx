@@ -314,7 +314,7 @@ function NotificationsBody({
         )}
       </Card>
       {dirty || busy || save.phase.phase !== "idle" ? (
-        <div className="sr-save-bar" role="region" aria-label={n.unsaved}>
+        <div className="sr-save-bar" role="region" aria-label={n.saveBar}>
           {dirty ? <p className="sr-row-title">{n.unsaved}</p> : null}
           <div className="sr-save-feedback">
             <CommandFeedback

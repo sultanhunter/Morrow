@@ -706,6 +706,23 @@ fixtureCases.push(
       await page.getByText("You have unsaved changes").waitFor();
     },
   }),
+  // After a save nothing is unsaved: the bar's landmark name doesn't say otherwise.
+  fixtureCase("settings", "notifications_saved", `/w/${ws}/settings/notifications`, {
+    widths: [1440],
+    setup: async (page) => {
+      await page.getByRole("switch", { name: "Email me each Monday project update" }).click();
+      await page.getByRole("button", { name: "Save" }).click();
+      await page.getByText("Notifications saved.").waitFor();
+      expect(
+        (await page.getByRole("region", { name: "You have unsaved changes" }).count()) === 0,
+        "no_unsaved_landmark",
+      );
+      expect(
+        (await page.getByRole("region", { name: "Save notifications" }).count()) === 1,
+        "save_bar_named",
+      );
+    },
+  }),
   fixtureCase("settings", "notifications_member", `/w/${ws}/settings/notifications`, {
     widths: two,
     scenario: "team_member",

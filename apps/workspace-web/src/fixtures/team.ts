@@ -751,6 +751,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   // ---- Settings
   const plan = (): PlanView => ({
     asOf: "Today, 2:00 pm",
+    periodStart: "Oct 1",
+    projectedOn: "Oct 31",
     creditsLeft: 1202,
     used: 798,
     monthly: 2000,

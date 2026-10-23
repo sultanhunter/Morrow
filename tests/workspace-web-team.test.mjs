@@ -499,6 +499,22 @@ test("settings: one Morrow address, the default; linked mailboxes are reserved k
   assert.equal((await empty.team.overview(ws)).value.agents.length, 0);
 });
 
+test("plan and credits: the period and projection dates are the server's, not the screen's", async () => {
+  const plan = (await createFixtureAdapter("ready").settings.plan(ws)).value;
+  assert.deepEqual([plan.periodStart, plan.projectedOn], ["Oct 1", "Oct 31"]);
+  // Another month's view reads as that month: nothing in the copy is a fixed date.
+  assert.equal(
+    sunriseCopy.plan.whereSub("Feb 1", "Today, 9:00 am", 12),
+    "Feb 1 to today, 9:00 am · 12 credits",
+  );
+  assert.equal(sunriseCopy.plan.projected("Feb 28"), "Left on Feb 28, at this pace");
+  const months = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/;
+  const lines = Object.values(sunriseCopy.plan).flatMap((v) =>
+    typeof v === "function" ? [v("", "", 0)] : typeof v === "string" ? [v] : [],
+  );
+  for (const line of lines) assert.ok(!months.test(line), line);
+});
+
 test("settings: each board page has its own section, all within the route contract", () => {
   const route = workspaceRoutes.routes.find((r) => r.id === "settings_section");
   const sections = route.parameter_enums.section;

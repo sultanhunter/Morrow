@@ -402,6 +402,8 @@ export const sunriseCopy = {
     previewWhy: "You get this because the morning summary is on. Change it in Notifications.",
     previewOff: "The morning summary email is off. You still see the summary on Home.",
     unsaved: "You have unsaved changes",
+    // The save bar's landmark name: true whether changes are unsaved, saving or saved.
+    saveBar: "Save notifications",
     discard: "Discard",
     save: "Save",
     saving: "Saving…",
@@ -504,7 +506,8 @@ export const sunriseCopy = {
     extraNote:
       "Morrow, agents and specialists can’t raise a limit or turn on extra credits. They can only suggest it to you.",
     where: "Where your credits went",
-    whereSub: (asOf: string, used: number) => `Oct 1 to ${asOf.toLowerCase()} · ${credits(used)}`,
+    whereSub: (from: string, asOf: string, used: number) =>
+      `${from} to ${asOf.toLowerCase()} · ${credits(used)}`,
     byProject: "By project",
     byHelper: "By helper",
     viewLabel: "Show spending",

@@ -123,7 +123,7 @@ function PlanBody({ view }: { readonly view: PlanView }) {
             <p className="sr-meta">{view.dailyAverage}</p>
           </div>
           <div className="sr-tile">
-            <p className="sr-figure-label">{p.projected("Oct 31")}</p>
+            <p className="sr-figure-label">{p.projected(view.projectedOn)}</p>
             <p className="sr-metric">{view.projectedLeft}</p>
             <p className="sr-meta">{view.carryOver}</p>
           </div>
@@ -183,7 +183,9 @@ function PlanBody({ view }: { readonly view: PlanView }) {
         }
         flush
       >
-        <p className="sr-card-intro sr-meta">{p.whereSub(view.asOf, view.used)}</p>
+        <p className="sr-card-intro sr-meta">
+          {p.whereSub(view.periodStart, view.asOf, view.used)}
+        </p>
         <div
           id={`spend-panel-${by}`}
           role="tabpanel"

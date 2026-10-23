@@ -277,7 +277,11 @@ export interface AddResultView {
 export const monthlyLimitRange = { min: 10, max: 4000 } as const;
 
 export interface PlanView {
+  /** When these numbers were measured (a display string from the server). */
   readonly asOf: string;
+  /** The first day of this credit period, and the day the projection is for (display). */
+  readonly periodStart: string;
+  readonly projectedOn: string;
   readonly creditsLeft: number;
   readonly used: number;
   readonly monthly: number;
