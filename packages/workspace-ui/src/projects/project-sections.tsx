@@ -255,13 +255,15 @@ export function ProjectOverview({
         </Section>
       ) : null}
       <PlanSection ws={ws} project={project} />
-      <Section id="pj-update-title" title={p.updateTitle}>
-        {project.latestUpdate ? (
-          <UpdateCard update={project.latestUpdate} />
-        ) : (
-          <p dir="auto">{project.updateNote ?? p.automaticUpdate}</p>
-        )}
-      </Section>
+      {project.latestUpdate || project.updateNote ? (
+        <Section id="pj-update-title" title={p.updateTitle}>
+          {project.latestUpdate ? (
+            <UpdateCard update={project.latestUpdate} />
+          ) : (
+            <p dir="auto">{project.updateNote}</p>
+          )}
+        </Section>
+      ) : null}
       <CreditsSection ws={ws} project={project} />
     </div>
   );

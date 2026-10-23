@@ -319,6 +319,7 @@ export const projectsCopy = {
     startGeneric: "Start",
     starting: "Starting…",
     started: "Started",
+    applied: "Applied",
     openProject: "Open the project",
     changedSince:
       "This plan changed since you opened it, so nothing was started. Look it over, then start it again.",

@@ -183,7 +183,7 @@ export function AskConversationScreen({
   };
   return (
     <div className="page pj-page pj-ask">
-      <header className="page-header">
+      <header className="page-header pj-header">
         <div>
           <h1>{a.title}</h1>
           <p className="muted">{a.privacy}</p>

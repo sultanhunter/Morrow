@@ -4,7 +4,6 @@
 import { useState } from "react";
 import type { Id } from "../model";
 import { Button, RouteLink } from "../components/controls";
-import { PaneSwitch } from "../components/shell";
 import { StateView } from "../components/feedback";
 import { projectsCopy } from "./copy";
 import { bucketRows, statusStyle } from "./format";
@@ -54,15 +53,14 @@ export function TasksTab({
   return (
     <div className="pj-stack">
       <div className="pj-toolbar">
-        <PaneSwitch
-          label={c.viewLabel}
-          panes={[
-            { id: "board", label: c.board },
-            { id: "list", label: c.list },
-          ]}
-          selected={view}
-          onSelect={(id) => setView(id === "list" ? "list" : "board")}
-        />
+        <div className="pj-segmented" role="group" aria-label={c.viewLabel}>
+          <Button aria-pressed={view === "board"} onClick={() => setView("board")}>
+            {c.board}
+          </Button>
+          <Button aria-pressed={view === "list"} onClick={() => setView("list")}>
+            {c.list}
+          </Button>
+        </div>
         <Button aria-pressed={mine} onClick={() => setMine((m) => !m)}>
           {c.mine}
         </Button>

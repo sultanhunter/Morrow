@@ -641,6 +641,7 @@ export function projectDetails(): Map<string, ProjectDetailView> {
   });
   const summer = dated(rows.get("project-summer")!, {
     revision: 5,
+    updateNote: null,
     state: "ended",
     extendTo: "2026-11-18",
     scope: ["Started Sep 1", "Ended Wed, Oct 21", "Credits: 88 used, about 80 to 120 planned"],

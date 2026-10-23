@@ -23,14 +23,16 @@ function StartedNote({
   ws,
   projectId,
   note,
+  word,
 }: {
   readonly ws: Id;
   readonly projectId: Id | null;
   readonly note: string;
+  readonly word: string;
 }) {
   return (
     <div className="pj-started">
-      <WordBadge style={{ label: c.started, tone: "success", glyph: "check" }} />
+      <WordBadge style={{ label: word, tone: "success", glyph: "check" }} />
       <span dir="auto">{note}</span>
       {projectId ? (
         <RouteLink route="project" params={{ workspaceId: ws, projectId }} className="text-link">
@@ -241,7 +243,12 @@ export function PlanCard({
       ) : null}
 
       {card.started ? (
-        <StartedNote ws={ws} projectId={card.started.projectId} note={card.started.note} />
+        <StartedNote
+          ws={ws}
+          projectId={card.started.projectId}
+          note={card.started.note}
+          word={c.started}
+        />
       ) : notNow ? (
         <div className="pj-card-actions">
           <p className="pj-meta">{c.notNowDone}</p>
@@ -559,7 +566,7 @@ export function PlanChangeCard({
         </div>
       ) : null}
       {card.started ? (
-        <StartedNote ws={ws} projectId={null} note={card.started.note} />
+        <StartedNote ws={ws} projectId={null} note={card.started.note} word={c.applied} />
       ) : notNow ? (
         <p className="pj-meta">{c.notNowDone}</p>
       ) : (
