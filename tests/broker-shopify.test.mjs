@@ -163,6 +163,19 @@ async function fakeVault(options = {}) {
       state.claimed = true;
       return [{ outcome: "claimed", shop_digest: state.shopDigest, client_id: clientId }];
     },
+    // v1 PR 1 (ADR-0035 item 2): the live-store admission, admitted only for the marked
+    // app's own shop (options.liveStore names the marked app key).
+    [vaultStatements.shopifyLiveStoreAdmission]: ([key, domain]) => {
+      db.events.push("admission");
+      return [
+        {
+          outcome:
+            options.liveStore !== undefined && key === options.liveStore && domain === shop
+              ? "admitted"
+              : "refused",
+        },
+      ];
+    },
     [vaultStatements.shopifyInstallPrepare]: ([key, digest, shopId, domain]) => {
       db.events.push("prepare");
       const state = db.states.get(digest);
@@ -637,6 +650,30 @@ test("install: claim, verify, exchange once, exact scopes, identity, then one se
   assert.deepEqual(h.db.events, ["claim"]);
 });
 
+// v1 PR 1 (ADR-0035 item 2): the owner's live store installs through the app that carries
+// the live-store mark, asked before anything is prepared; a development store never asks.
+test("install: the marked app's own live store is admitted before prepare and stored as not development", async () => {
+  const h = await harness({ development: false, liveStore: appKey });
+  const state = newState();
+  openState(h.db, state);
+  const text = await h.broker.installComplete(h.env, appKey, callback(state), sha(state), 9000);
+  const result = decodeShopifyInstallResult(text);
+  assert.equal(result.outcome, "installed");
+  assert.equal(result.workspaceId, workspaceId);
+  assert.deepEqual(h.db.events, ["claim", "exchange", "identity", "admission", "prepare", "store"]);
+  assert.equal(h.db.installations.get(appKey + ":987").development, "false");
+  assert.ok(!text.includes(token) && !logs.join("\n").includes(token));
+  // A development store never asks the registry for the mark.
+  const dev = await harness({ liveStore: appKey });
+  const devState = newState();
+  openState(dev.db, devState);
+  decodeShopifyInstallResult(
+    await dev.broker.installComplete(dev.env, appKey, callback(devState), sha(devState), 9000),
+  );
+  assert.deepEqual(dev.db.events, ["claim", "exchange", "identity", "prepare", "store"]);
+  assert.equal(dev.db.installations.get(appKey + ":987").development, "true");
+});
+
 test("install: a relaunch re-authorises the same installation with the next credential version", async () => {
   const h = await harness();
   for (const _ of [1, 2]) {
@@ -709,10 +746,18 @@ test("install refusals stop before the exchange, or store nothing after it", asy
       events: ["claim", "exchange"],
       outcome: "scopes_mismatch",
     },
+    // ADR-0035 item 2: a store that is not a development store asks the registry first,
+    // and an app without the live-store mark (or another app's mark) stores nothing.
     {
       name: "not development",
       options: { development: false },
-      events: ["claim", "exchange", "identity"],
+      events: ["claim", "exchange", "identity", "admission"],
+      outcome: "store_not_development",
+    },
+    {
+      name: "not development, another app marked",
+      options: { development: false, liveStore: "other-app-1" },
+      events: ["claim", "exchange", "identity", "admission"],
       outcome: "store_not_development",
     },
     {
