@@ -483,6 +483,27 @@ export const fixtureCases = [
       await page.getByRole("heading", { name: "Changes applied" }).waitFor();
     },
   }),
+  // Review F2: an uncertain product offers Check again and "I checked it in Shopify"; setting
+  // it aside shows "Checked by you".
+  fixtureCase("review", "uncertain", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_uncertain",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("button", { name: "I checked it in Shopify" }).waitFor();
+    },
+  }),
+  fixtureCase("review", "set_aside", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_uncertain",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("button", { name: "I checked it in Shopify" }).click();
+      await page.getByText("Checked by you").first().waitFor();
+    },
+  }),
   fixtureCase("task", "applied_history", `/w/${ws}/work/task-titles`, {
     widths: [1440, 390],
     setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),

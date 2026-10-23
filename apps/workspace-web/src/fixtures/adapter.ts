@@ -772,16 +772,19 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
             r.productIds.forEach((productId, targetIndex) => {
               if (r.approved!.selected !== null && !r.approved!.selected.includes(targetIndex))
                 return;
+              // review_uncertain: Shopify's reply to the first product was lost and its
+              // read-back could not tell (the "Check again" and "I checked it in Shopify" state).
+              const lost = scenario === "review_uncertain" && r.operations.length === 0;
               r.operations.push({
                 operationId: `00000000-0000-4000-9000-${String(r.operations.length + 1 + created * 100).padStart(12, "0")}`,
                 taskId: r.taskId,
                 proposalId,
                 productId,
                 targetIndex,
-                status: "verified",
-                reason: "readback_matched",
-                uncertaintyReason: null,
-                verdict: "approved",
+                status: lost ? "uncertain" : "verified",
+                reason: lost ? "fence_expired" : "readback_matched",
+                uncertaintyReason: lost ? "unknown_submission" : null,
+                verdict: lost ? null : "approved",
                 updatedAt: at(),
               });
             });

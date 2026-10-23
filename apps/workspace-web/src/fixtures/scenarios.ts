@@ -48,6 +48,7 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "review_uncertain",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -310,6 +311,8 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // v1 PR 3 (review F2): the first applied product's outcome is unknown (the adapter's apply).
+  review_uncertain: {},
 };
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [
