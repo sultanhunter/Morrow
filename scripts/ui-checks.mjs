@@ -450,7 +450,17 @@ export const fixtureCases = [
     },
   }),
   fixtureCase("home", "ready", `/w/${ws}`),
-  fixtureCase("home", "partial_denied", `/w/${ws}`, { scenario: "home_partial_denied" }),
+  // A denied open-questions read is never an all-clear: the scope line stays neutral, no
+  // primary is offered, and the Needs you card carries the denial (the AC26 first-run Home).
+  fixtureCase("home", "partial_denied", `/w/${ws}`, {
+    scenario: "home_partial_denied",
+    setup: async (page) => {
+      await page.locator('[data-card="needs"] .state-denied').waitFor();
+      await homeShown(page).waitFor();
+      expect((await page.getByText("Nothing needs you").count()) === 0, "no_false_all_clear");
+      expect((await page.locator("main .title-row .button-primary").count()) === 0, "no_primary");
+    },
+  }),
   fixtureCase("home", "loading", `/w/${ws}`, { scenario: "loading" }),
   // ADR-0032 Home: nothing waiting (Ask Morrow is the page's one primary), and the
   // default-off preview of the board's sample sections, the agent characters among them.

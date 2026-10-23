@@ -8,8 +8,15 @@
 // opens a screen whose actions the server checks.
 import { useMemo } from "react";
 import { copy } from "../copy";
-import type { GoalView, Id, QuestionView, WorkspaceView } from "../model";
-import { useRead, useServices } from "../services";
+import type {
+  GoalView,
+  HomeSamplesView,
+  Id,
+  Page,
+  QuestionView,
+  WorkspaceView,
+} from "../model";
+import { useRead, useServices, type ReadState } from "../services";
 import {
   primaryStore,
   useConnections,
@@ -62,6 +69,31 @@ export function byRecent(goals: readonly GoalView[]): GoalView[] {
     return Number.isNaN(t) ? 0 : t;
   };
   return [...goals].sort((a, b) => at(b) - at(a));
+}
+
+/**
+ * What Home's header says. Nothing is "clear" unless the open-questions read answered:
+ * when it was denied, failed, rate limited or offline, the scope line stays neutral, no
+ * primary is offered, and the Needs you card carries that state. A false all-clear
+ * would hide work that waits (the AC26 first-run Home is governance-only, so its read
+ * is a 403). Sample counts exist only in the default-off preview.
+ */
+export function homeSummary(
+  questions: ReadState<Page<QuestionView>>,
+  samples: HomeSamplesView | null,
+): {
+  readonly action: "review" | "ask" | null;
+  readonly total: string;
+  readonly open: number;
+  readonly clear: boolean;
+} {
+  if (questions.kind === "loading") return { action: null, total: "0", open: 0, clear: false };
+  const known = questions.kind === "ok";
+  const open = known ? questions.value.items.length : 0;
+  const extra = samples ? samples.waiting.review + samples.waiting.tasks : 0;
+  const total = known && questions.value.next !== null ? "50+" : String(open + extra);
+  const clear = known && total === "0";
+  return { action: total !== "0" ? "review" : clear ? "ask" : null, total, open, clear };
 }
 
 function NeedsYouCard({
@@ -217,12 +249,8 @@ export function HomeScreen({ workspace }: { readonly workspace: WorkspaceView })
   const samples = useHomeSamples(ws);
   const now = useMemo(() => new Date(), []);
   const header = homeHeader(now);
-  const open = questions.kind === "ok" ? questions.value.items.length : 0;
-  const extra = samples ? samples.waiting.review + samples.waiting.tasks : 0;
-  const total =
-    questions.kind === "ok" && questions.value.next !== null ? "50+" : String(open + extra);
-  const waiting = total !== "0";
-  const settled = questions.kind !== "loading";
+  const { action, total, open, clear } = homeSummary(questions, samples);
+  const waiting = action === "review";
   return (
     <div className={samples ? "page home has-panel" : "page home"}>
       <div className="home-main">
@@ -232,7 +260,7 @@ export function HomeScreen({ workspace }: { readonly workspace: WorkspaceView })
           </p>
           <div className="title-row">
             <h1>{header.greeting}</h1>
-            {!settled ? null : waiting ? (
+            {action === "review" ? (
               <RouteLink
                 route="inbox"
                 params={{ workspaceId: ws }}
@@ -240,12 +268,12 @@ export function HomeScreen({ workspace }: { readonly workspace: WorkspaceView })
               >
                 {copy.home.review(total)}
               </RouteLink>
-            ) : (
+            ) : action === "ask" ? (
               <AskMorrowButton workspaceId={ws} variant="primary" />
-            )}
+            ) : null}
           </div>
           <p className="scope-line" dir="auto">
-            {settled && !waiting
+            {clear
               ? copy.home.scopeClear(workspace.displayName)
               : copy.home.scope(workspace.displayName)}
           </p>

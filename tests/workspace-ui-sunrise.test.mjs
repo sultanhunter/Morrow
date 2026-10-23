@@ -30,7 +30,7 @@ const { SettingsNavigation, inSettings, settingsCurrent, settingsItems } = await
 const { Navigation } = await import("../packages/workspace-ui/src/components/shell.tsx");
 const { ServicesProvider } = await import("../packages/workspace-ui/src/services.tsx");
 const { copy } = await import("../packages/workspace-ui/src/copy.ts");
-const { byUrgency, homeDate, homeHeader } = await import(
+const { byUrgency, homeDate, homeHeader, homeSummary } = await import(
   "../packages/workspace-ui/src/screens/home.tsx"
 );
 const { waitingCount } = await import("../packages/workspace-ui/src/workspace-data.ts");
@@ -240,6 +240,43 @@ test("Home: date line, greeting, urgency order and counts", () => {
   assert.equal(waitingCount({ items: [1], next: "cursor" }), "50+");
   assert.equal(copy.home.review("1"), "Review 1 item");
   assert.equal(copy.home.review("6"), "Review 6 items");
+});
+
+test("Home: only an answered open-questions read is an all-clear (F1, AC26's first-run Home)", () => {
+  const ok = (items, next = null) => ({ kind: "ok", value: { items, next }, replayed: false });
+  // Nothing waits, and the server said so: Ask Morrow is the primary and the line is clear.
+  assert.deepEqual(homeSummary(ok([]), null), { action: "ask", total: "0", open: 0, clear: true });
+  assert.deepEqual(homeSummary(ok([{ id: "q" }]), null), {
+    action: "review",
+    total: "1",
+    open: 1,
+    clear: false,
+  });
+  assert.equal(homeSummary(ok([{ id: "q" }], "cursor"), null).total, "50+");
+  // A read that didn't answer says nothing about what waits: no primary, no all-clear.
+  for (const failed of [
+    { kind: "loading" },
+    { kind: "denied", message: "", reference: null },
+    { kind: "unavailable", offline: true },
+    { kind: "unavailable", offline: false },
+    { kind: "rate_limited", retryAfterSeconds: 5 },
+    { kind: "not_found" },
+    { kind: "not_in_build" },
+  ])
+    assert.deepEqual(
+      homeSummary(failed, null),
+      { action: null, total: "0", open: 0, clear: false },
+      failed.kind,
+    );
+  // The preview's sample counts never make a failed read look clear either.
+  const samples = { waiting: { review: 3, tasks: 1, alerts: 1 } };
+  assert.deepEqual(homeSummary({ kind: "not_found" }, samples), {
+    action: "review",
+    total: "4",
+    open: 0,
+    clear: false,
+  });
+  assert.equal(copy.home.scopeClear("Shop").startsWith("Nothing needs you"), true);
 });
 
 test("Home preview: samples.home is a default-off switch that only the fixture answers", async () => {
