@@ -349,6 +349,85 @@
   top: 2px;
   right: 0;
 }
+/* Settings (the ConnectStore board): a white sub-navigation card beside the screen; below
+   1120 px it sits above the screen and its items wrap. Activity is listed here, not in the
+   sidebar, as a placeholder until the activity log has a route. */
+.settings-frame {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.settings-nav {
+  position: sticky;
+  top: var(--space-6);
+  padding: var(--space-2);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+.settings-nav-label {
+  padding: var(--space-2) 10px 6px;
+  color: var(--color-subdued);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: 600;
+}
+.settings-nav-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--target);
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  font-size: var(--type-nav-size);
+  line-height: var(--type-nav-line);
+  font-weight: var(--type-nav-weight);
+  text-decoration: none;
+  transition: background-color var(--motion-duration);
+}
+a.settings-link:hover {
+  background: var(--color-icon-hover);
+  text-decoration: none;
+}
+.settings-link .icon {
+  color: var(--color-reading);
+}
+.settings-link[aria-current="page"] {
+  background: var(--color-sidebar);
+  font-weight: 650;
+}
+.settings-link[aria-current="page"] .icon {
+  color: var(--color-text);
+}
+.settings-link.is-later,
+.settings-link.is-later .icon {
+  color: var(--color-subdued);
+}
+.settings-content {
+  min-width: 0;
+}
+@media (max-width: 1119px) {
+  .settings-frame {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-nav {
+    position: static;
+  }
+  .settings-nav-list {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
 .workspace-main {
   max-width: calc(1168px + 2 * var(--space-7));
   padding: var(--space-6) var(--space-7) var(--space-12);

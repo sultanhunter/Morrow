@@ -62,6 +62,14 @@ const paths = {
     "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
   ],
   document: ["M5 2h9l5 5v15H5z", "M14 2v6h5"],
+  // The Settings sub-navigation (the ConnectStore and SettingsActivity boards).
+  bell: ["M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z", "M10 20.5a2 2 0 0 0 4 0"],
+  sliders: ["M4 7h9", "M17 7h3", "M15 5v4", "M4 17h3", "M11 17h9", "M9 15v4"],
+  activity: [
+    "M4 6h10M4 11h7M4 16h5",
+    "M12.5 15.5a4 4 0 1 0 8 0 4 4 0 1 0-8 0",
+    "M16.5 13.6v2l1.3 1",
+  ],
 } as const;
 export type IconName = keyof typeof paths;
 /** Icons whose shape is filled in ink when their navigation row is the current page. */

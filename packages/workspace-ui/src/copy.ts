@@ -116,6 +116,22 @@ export const copy = {
       none: "Connect your store",
     } as Readonly<Record<string, string>>,
   },
+  // ADR-0032: the Settings sub-navigation the ConnectStore board draws. Activity sits
+  // under Settings, not in the sidebar; its log arrives with its own route.
+  settings: {
+    navLabel: "Settings",
+    sections: {
+      billing: "Plan and credits",
+      people: "People and roles",
+      notifications: "Notifications",
+      governance: "Model default",
+      usage: "Usage",
+      stores: "Stores",
+    } as Readonly<Record<string, string>>,
+    connection: "Shopify connection",
+    activity: "Activity",
+    activityLater: ", not in this build yet",
+  },
   unavailableDestination: (title: string) =>
     `${title} isn't available in this provisional build. Nothing here is hidden from you; it hasn't been built yet.`,
   states: {

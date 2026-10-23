@@ -607,7 +607,7 @@ export function AppShell({
             {samples ? (
               <RouteLink
                 route="settings_section"
-                params={{ workspaceId: ws, section: "usage" }}
+                params={{ workspaceId: ws, section: "billing" }}
                 className="sidebar-status"
                 onNavigate={navigated}
               >

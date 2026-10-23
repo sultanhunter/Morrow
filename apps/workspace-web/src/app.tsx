@@ -19,6 +19,7 @@ import {
   QuestionScreen,
   ReentryNotice,
   ServicesProvider,
+  SettingsFrame,
   SignedOutScreen,
   SignInScreen,
   SignOutUnconfirmedScreen,
@@ -29,6 +30,7 @@ import {
   WorkspaceLoadFailedScreen,
   WorkspaceUnavailableScreen,
   copy,
+  inSettings,
   useRead,
   useServices,
   useServicesVersion,
@@ -185,13 +187,16 @@ export function screenTitle(view: {
   if (view.session !== "active") return sessionTitles[view.session];
   if (!view.match) return copy.notFound.title;
   if (view.entryFailed) return copy.workspace.loadFailedTitle;
-  return destinationTitle(view.match.id);
+  return destinationTitle(view.match.id, view.match.params.section);
 }
 /**
  * A route's name as the interface shows it: the Sunrise label where it differs from the
- * contract's title (ADR-0032: "Work" is Projects, "Agents" is Team), else the contract's.
+ * contract's title (ADR-0032: "Work" is Projects, "Agents" is Team; a settings section by
+ * its own name), else the contract's.
  */
-export function destinationTitle(id: string): string {
+export function destinationTitle(id: string, section?: string): string {
+  if (id === "settings_section" && section !== undefined)
+    if (Object.hasOwn(copy.settings.sections, section)) return copy.settings.sections[section]!;
   return Object.hasOwn(copy.routeTitles, id)
     ? copy.routeTitles[id]!
     : (routeTitle(workspaceRoutes, id) ?? copy.notFound.title);
@@ -605,7 +610,7 @@ function WorkspaceFrame({
         return params.section === "governance" ? (
           <ModelDefaultScreen workspace={workspace} />
         ) : (
-          <UnavailableDestination title={destinationTitle(match.id)} />
+          <UnavailableDestination title={destinationTitle(match.id, params.section)} />
         );
       default:
         return <UnavailableDestination title={destinationTitle(match.id)} />;
@@ -621,7 +626,15 @@ function WorkspaceFrame({
       notices={notices}
       fixture={fixture}
     >
-      <div key={match.id + JSON.stringify(params)}>{screen}</div>
+      <div key={match.id + JSON.stringify(params)}>
+        {inSettings(match.id) ? (
+          <SettingsFrame workspaceId={workspace.id} route={match.id} sectionParam={params.section}>
+            {screen}
+          </SettingsFrame>
+        ) : (
+          screen
+        )}
+      </div>
     </AppShell>
   );
 }

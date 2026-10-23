@@ -11,6 +11,7 @@ export * from "./components/display";
 export * from "./components/feedback";
 export * from "./components/shell";
 export * from "./components/avatars";
+export * from "./components/settings-frame";
 export {
   primaryStore,
   useConnections,
