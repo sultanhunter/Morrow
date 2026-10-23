@@ -18,8 +18,9 @@ import {
   useConnections,
   useHomeSamples,
   useOpenQuestions,
-  useShellRefreshMark,
+  useShellRefresh,
   waitingCount,
+  type ShellRefresh,
 } from "../workspace-data";
 import { AgentAvatar, PersonAvatar, StoreTile, agentNames } from "./avatars";
 import { Button, RouteLink, trapTab } from "./controls";
@@ -503,18 +504,19 @@ function SidebarSearch({ store }: { readonly store: string }) {
 
 /**
  * The store connection line: real data from the connections read, read again under the
- * shell's refresh mark (a new page, a settled link); silent until the first reply.
+ * shell's refresh (a new page, a settled link, a Retry); silent until the first reply,
+ * and a re-read that gets no answer keeps the last line.
  */
 function ConnectionLine({
   workspaceId,
-  mark,
+  refresh,
   onNavigate,
 }: {
   readonly workspaceId: Id;
-  readonly mark: string;
+  readonly refresh: ShellRefresh;
   readonly onNavigate?: (() => void) | undefined;
 }) {
-  const [connections] = useConnections(workspaceId, mark);
+  const [connections] = useConnections(workspaceId, refresh);
   if (connections.kind !== "ok") return null;
   const store = primaryStore(connections.value);
   const status = store?.status ?? "none";
@@ -577,10 +579,10 @@ export function AppShell({
   const menuButton = useRef<HTMLButtonElement>(null);
   const modal = narrow && drawerOpen;
   const ws = workspace.id;
-  // The Inbox count and the connection line follow the person: read again on each page
-  // and command change, under the mark the page's own reads of them share.
-  const mark = useShellRefreshMark(page ?? currentRoute);
-  const [questions] = useOpenQuestions(ws, mark);
+  // The Inbox count and the connection line follow the person: read again on each page,
+  // command change and Retry, under the refresh Home's reads of them share.
+  const refresh = useShellRefresh(page ?? currentRoute);
+  const [questions] = useOpenQuestions(ws, refresh);
   const samples = useHomeSamples(ws);
   const waiting =
     questions.kind === "ok" && questions.value.items.length > 0
@@ -659,7 +661,7 @@ export function AppShell({
             samples={samples}
           />
           <div className="sidebar-foot">
-            <ConnectionLine workspaceId={ws} mark={mark} onNavigate={navigated} />
+            <ConnectionLine workspaceId={ws} refresh={refresh} onNavigate={navigated} />
             {samples ? (
               // The contract's credit balance: display only, opening Settings > Usage.
               <RouteLink
@@ -726,7 +728,7 @@ export function AppShell({
             </RouteLink>
           </header>
           <main id="main" tabIndex={-1} className="workspace-main">
-            <ShellRefreshProvider value={mark}>
+            <ShellRefreshProvider value={refresh}>
               {notices}
               {children}
             </ShellRefreshProvider>

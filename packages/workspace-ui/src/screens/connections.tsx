@@ -332,7 +332,9 @@ export function ConnectionsScreen({
 }) {
   const ws = workspace.id;
   const titleId = useId();
-  const [list, reload] = useConnections(ws);
+  // Read once per mount and on Retry or a link: a background re-read that failed would
+  // drop the shop name from the link step's confirm line while its outcome is unknown.
+  const [list, reload] = useConnections(ws, "mount");
   // Held for this screen's life, so the link step's result stays shown after the app
   // forgets the continuation.
   const [linking] = useState(handoff);
@@ -402,7 +404,9 @@ export function ConnectionScreen({
   readonly connectionId: Id;
 }) {
   const ws = workspace.id;
-  const [list, reload] = useConnections(ws);
+  // Read once per mount and on Retry: a background re-read that failed would unmount the
+  // Listings card, and an enable's in-flight or unknown outcome (and Check again) with it.
+  const [list, reload] = useConnections(ws, "mount");
   const installation =
     list.kind === "ok"
       ? (list.value.installations.find((i) => i.connectionId === connectionId) ?? null)

@@ -98,8 +98,9 @@ export function AskScreen({ workspace }: { readonly workspace: WorkspaceView }) 
   const services = useServices();
   const ws = workspace.id;
   const ids = { request: useId(), store: useId(), model: useId(), fields: useId() };
-  // The shell's connections read: the sidebar's connection line and this list agree.
-  const [connections, reloadConnections] = useConnections(ws);
+  // Read once per mount: a background re-read that failed would swap the form, and the
+  // goal, task or run's Check again with it, for a Retry view.
+  const [connections, reloadConnections] = useConnections(ws, "mount");
   const [models, reloadModels] = useRead(`${ws}|models`, () => services.port.models.list(ws));
   const [request, setRequest] = useState("");
   const [storeId, setStoreId] = useState("");
