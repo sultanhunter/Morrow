@@ -154,12 +154,24 @@ async function boundedJson(response: Response, limit: number): Promise<unknown> 
     return undefined;
   }
 }
+// A reply with errors shows no mutation result when `data` is absent or null, or is an object
+// whose fields are all null (`{productUpdate: null}`). An empty object, an array or any
+// non-null field does not prove that nothing ran.
+function noMutationResult(reply: unknown): boolean {
+  const data = own(reply, "data");
+  if (data === undefined || data === null) return true;
+  if (typeof data !== "object" || Array.isArray(data)) return false;
+  const values = Object.values(data);
+  return values.length > 0 && values.every((v) => v === null);
+}
 /**
  * One fixed mutation. A THROTTLED reply (every error THROTTLED) proves nothing ran: one wait
  * for the bucket and one resend, within the deadline; a second THROTTLED, a 429 or no time
  * left after a THROTTLED is `throttled`. No time before the first request is `not_sent`. A
  * fetch exception or timeout is `transport` (fetch cannot tell a refused connection from a
- * lost reply).
+ * lost reply). THROTTLED and ACCESS_DENIED count only when every error carries that code and
+ * the reply has no mutation result (noMutationResult); any other errors reply is
+ * `graphql_error`, which is uncertain and settled by a read-back.
  */
 export async function shopifyAdminWrite(
   fetcher: ShopifyFetch,
@@ -207,7 +219,11 @@ export async function shopifyAdminWrite(
     if (errors !== undefined) {
       const list = Array.isArray(errors) ? errors : [];
       const codes = list.map((e) => own(own(e, "extensions"), "code"));
-      if (list.length > 0 && codes.every((c) => c === "THROTTLED")) {
+      // A code proves nothing ran only when it is every error's code and the reply carries no
+      // mutation result: a partial `data` (a non-null field) shows the mutation executed.
+      const only = (code: string) =>
+        list.length > 0 && codes.every((c) => c === code) && noMutationResult(reply);
+      if (only("THROTTLED")) {
         if (attempt > 0) return Object.freeze({ kind: "throttled" });
         // Wait until the bucket holds the mutation's requested cost again (Shopify's
         // extensions.cost.requestedQueryCost; a productUpdate costs 10 when it is absent).
@@ -232,7 +248,7 @@ export async function shopifyAdminWrite(
         await sleep(wait);
         continue;
       }
-      if (codes.includes("ACCESS_DENIED")) return Object.freeze({ kind: "access_denied" });
+      if (only("ACCESS_DENIED")) return Object.freeze({ kind: "access_denied" });
       return Object.freeze({ kind: "graphql_error" });
     }
     const data = own(reply, "data");

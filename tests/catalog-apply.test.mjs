@@ -338,6 +338,97 @@ test("every productUpdate reply is classified; only proof of no execution is fai
     [
       [
         json(200, {
+          data: { productUpdate: null },
+          errors: [{ message: "denied", extensions: { code: "ACCESS_DENIED" } }],
+        }),
+      ],
+      "failed",
+      "access_denied",
+      1,
+    ],
+    // ACCESS_DENIED on a field of a result Shopify returned: the mutation ran.
+    [
+      [
+        json(200, {
+          data: {
+            productUpdate: { product: { id: gid, updatedAt: null }, userErrors: [] },
+          },
+          errors: [
+            {
+              path: ["productUpdate", "product", "updatedAt"],
+              extensions: { code: "ACCESS_DENIED" },
+            },
+          ],
+        }),
+      ],
+      "uncertain",
+      "graphql_error",
+      1,
+    ],
+    // The same partial result with mixed codes.
+    [
+      [
+        json(200, {
+          data: {
+            productUpdate: { product: { id: gid, updatedAt: null }, userErrors: [] },
+          },
+          errors: [
+            {
+              path: ["productUpdate", "product", "updatedAt"],
+              extensions: { code: "ACCESS_DENIED" },
+            },
+            { extensions: { code: "INTERNAL_SERVER_ERROR" } },
+          ],
+        }),
+      ],
+      "uncertain",
+      "graphql_error",
+      1,
+    ],
+    // Mixed codes with no result: not every error proves nothing ran.
+    [
+      [
+        json(200, {
+          errors: [
+            { message: "denied", extensions: { code: "ACCESS_DENIED" } },
+            { message: "boom", extensions: { code: "INTERNAL_SERVER_ERROR" } },
+          ],
+        }),
+      ],
+      "uncertain",
+      "graphql_error",
+      1,
+    ],
+    // An empty data object does not prove nothing ran.
+    [
+      [
+        json(200, {
+          data: {},
+          errors: [{ message: "denied", extensions: { code: "ACCESS_DENIED" } }],
+        }),
+      ],
+      "uncertain",
+      "graphql_error",
+      1,
+    ],
+    // THROTTLED beside a result is never resent: the mutation ran.
+    [
+      [
+        json(200, {
+          data: {
+            productUpdate: { product: { id: gid, updatedAt: null }, userErrors: [] },
+          },
+          errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
+        }),
+        accepted(),
+      ],
+      "uncertain",
+      "graphql_error",
+      1,
+    ],
+    [
+      [
+        json(200, {
           data: {
             productUpdate: { product: null, userErrors: [{ field: ["title"], message: "x" }] },
           },
