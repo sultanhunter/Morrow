@@ -75,6 +75,8 @@ interface AskState {
   dropGoals: readonly string[];
   dropSteps: readonly number[];
   started: Id | null;
+  /** The person's later messages in the same Ask. */
+  followUps: string[];
 }
 interface DocumentState {
   readonly view: PlanStartDocumentView;
@@ -126,6 +128,7 @@ export function createProjectsFixture(
         dropGoals: [],
         dropSteps: [],
         started: null,
+        followUps: [],
       },
     ],
   ]);
@@ -245,6 +248,20 @@ export function createProjectsFixture(
         intro: `Here’s a plan. I can’t promise that AI assistants will name the ${ask.product.label}. No one can. What helps most is a page with complete, specific facts and clear answers to what shoppers ask, then checking every month. Nothing starts until you press Start project.`,
         card: card(ask),
       });
+    ask.followUps.forEach((text, index) => {
+      list.push({
+        kind: "request",
+        id: `${ask.id}-follow-${index}`,
+        author: asker,
+        at: "Just now",
+        text,
+      });
+      list.push({
+        kind: "working",
+        id: `${ask.id}-working-${index}`,
+        text: "Looking at your shop knowledge and your work…",
+      });
+    });
     return list;
   };
   const askView = (ask: AskState): AskConversationView => ({
@@ -597,7 +614,9 @@ export function createProjectsFixture(
         if (!ws(id)) return notFound;
         if (c.body.conversationId !== null) {
           const ask = asks.get(c.body.conversationId);
-          return ask ? ok({ conversationId: ask.id }) : notFound;
+          if (!ask) return notFound;
+          ask.followUps.push(c.body.text);
+          return ok({ conversationId: ask.id });
         }
         counter++;
         const conversationId = `conv-new-${counter}`;
@@ -612,6 +631,7 @@ export function createProjectsFixture(
           dropGoals: [],
           dropSteps: [],
           started: null,
+          followUps: [],
         });
         return ok({ conversationId });
       }),
