@@ -1222,7 +1222,7 @@
     "valid": true,
     "value": {
       "schemaVersion": 2,
-      "id": "derived_29a33ef2152eb5051ae9b7d9128227ff3edf3baa723a8bd6380ad8822185063f",
+      "id": "derived_68e1c6f2223f1e84acfc7f4058e1552da0feec161ec555b0cee1e994836fb7b1",
       "organizationId": "org_a",
       "workspaceId": "workspace_a",
       "storeId": "store_a",
@@ -1353,7 +1353,7 @@
           1
         ]
       },
-      "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "proposalDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
       "expiresAt": "2026-10-25T09:00:00Z"
     }
   },
@@ -1364,7 +1364,7 @@
     "valid": false,
     "value": {
       "schemaVersion": 2,
-      "id": "derived_29a33ef2152eb5051ae9b7d9128227ff3edf3baa723a8bd6380ad8822185063f",
+      "id": "derived_68e1c6f2223f1e84acfc7f4058e1552da0feec161ec555b0cee1e994836fb7b1",
       "organizationId": "org_a",
       "workspaceId": "workspace_a",
       "storeId": "store_a",
@@ -1495,7 +1495,7 @@
           1
         ]
       },
-      "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "proposalDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
       "expiresAt": "2026-10-25T09:00:00Z"
     }
   },
@@ -3825,7 +3825,7 @@
         0,
         1
       ],
-      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "expectedDecisionDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
       "soloOwnerConfirmation": null,
       "comment": null
     }
@@ -3838,7 +3838,7 @@
     "value": {
       "decision": "cancel_before_effective",
       "selectedTargetIndexes": null,
-      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "expectedDecisionDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
       "soloOwnerConfirmation": null,
       "comment": null
     }
@@ -3854,7 +3854,7 @@
         0,
         1
       ],
-      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "expectedDecisionDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
       "soloOwnerConfirmation": null,
       "comment": null
     }
@@ -3867,7 +3867,7 @@
     "value": {
       "decision": "cancel_before_effective",
       "selectedTargetIndexes": null,
-      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "expectedDecisionDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
       "soloOwnerConfirmation": "approve 2 changes for 20 credits",
       "comment": null
     }
@@ -3893,7 +3893,7 @@
           0,
           1
         ],
-        "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+        "expectedDecisionDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
         "soloOwnerConfirmation": null,
         "comment": null
       },
@@ -4001,7 +4001,7 @@
     "value": {
       "proposal": {
         "schemaVersion": 2,
-        "id": "derived_29a33ef2152eb5051ae9b7d9128227ff3edf3baa723a8bd6380ad8822185063f",
+        "id": "derived_68e1c6f2223f1e84acfc7f4058e1552da0feec161ec555b0cee1e994836fb7b1",
         "organizationId": "org_a",
         "workspaceId": "workspace_a",
         "storeId": "store_a",
@@ -4132,7 +4132,7 @@
             1
           ]
         },
-        "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+        "proposalDigest": "7c4a46dbb2a349c31215a65e67cfc5c4c599cab52c34f98bcc69e4a1b2c4ead6",
         "expiresAt": "2026-10-25T09:00:00Z"
       }
     }
