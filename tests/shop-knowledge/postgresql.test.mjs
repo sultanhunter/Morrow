@@ -13,8 +13,12 @@
 // and cleared only by a person who sees every entry, at the notebook revision that check read
 // (an entry a run commits in between is a conflict, never erased unseen); the deletion path
 // erases a page's every version, its search entry and its pending proposals in one transaction
-// and records it, and no runtime role can delete a row. Synthetic fixtures only; no provider, credential or
-// merchant data. Run by `npm run lab:shop-knowledge` (CI's postgres `http` leg, last).
+// and records it, and no runtime role can delete a row. The review fixes: a run's reads hand
+// back their content's read tags, so a note or proposal based on them carries them (K11); a
+// proposal racing its page's deletion never lands pending on the deleted page (K12); after
+// "Disconnect store" its stranded pages stay deletable by a person who may delete them, which
+// frees the brand voice (K13). Synthetic fixtures only; no provider, credential or merchant
+// data. Run by `npm run lab:shop-knowledge` (CI's postgres `http` leg, last).
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
