@@ -320,9 +320,44 @@
       "reviewRef": "docs/briefs/v1-connect-store.md"
     },
     {
+      "sequence": 41,
+      "file": "0041.disconnect-store-identity.sql",
+      "sha256": "9dc8c7035a62432ecb000a62a1d32aaf10720fbbd9a7d8424a550f7f9211d01c",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
+    },
+    {
+      "sequence": 42,
+      "file": "0042.disconnect-store-work.sql",
+      "sha256": "ae346a7bd5d2b6062f6ee718f98dd70a7fa47d46a917ea9eb41e31fd5f556e13",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
+    },
+    {
+      "sequence": 43,
+      "file": "0043.runtime-operations.sql",
+      "sha256": "5d9a6d7ef59acc0198c1a64ea2b3be78e89f3a8c501439e152aae7cb9573f153",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/runtime-computer-foundation.md"
+    },
+    {
+      "sequence": 44,
+      "file": "0044.catalog-review.sql",
+      "sha256": "2a8bf9895ea51a7a5a5b42726ccf654b6b43aed5ad1f0b414b4378b9ad1fd5b0",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-review-apply.md"
+    },
+    {
+      "sequence": 45,
+      "file": "0045.catalog-apply.sql",
+      "sha256": "da6ed3498fa01e9e6d9afea8135ddb0199d8dcc0cffd659f7fd92c9fa605aa31",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-review-apply.md"
+    },
+    {
       "sequence": 46,
       "file": "0046.projects-goal-measures.sql",
-      "sha256": "4858c68b31f67f917a15973bb2d7802c5efcdb3c141360f66f0af83cd6a0b282",
+      "sha256": "b6f8e266732275c0e1f6e3d3455c7199fc35bcdd3f43c858445767e8bb8c65f7",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/projects-backend.md"
     }

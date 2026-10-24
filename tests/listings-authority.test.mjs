@@ -585,38 +585,59 @@ test("only the founding principal holds agents.installation.activate: M3 never i
     id: "g4",
   });
   assert.equal(disable.capabilityId, "agents.installation.disable");
-  // No migration's code names agents.installation.activate except M2's template row and
-  // the review-capability row (0018); M3's migrations name it in comments only.
+  // No migration's code names agents.installation.activate except M2's template rows (its
+  // version 1, and version 2 with the disconnect backfill's match on version 1's activate
+  // row) and the review-capability row (0018); M3's migrations name it in comments only.
   const named = manifest.migrations
     .filter((m) =>
       code(readFileSync("migrations/" + m.file, "utf8")).includes("agents.installation.activate"),
     )
     .map((m) => m.file.replace(/^[0-9]+\./, ""));
-  assert.deepEqual(named, ["approval-records.sql", "shopify-install-identity.sql"]);
-  // The template is issued only by link_workspace_store (CREATE, REVOKE and one use in M2
-  // PR-2's migration; one use in v1 PR 1's replacement, which keeps every other check),
-  // only when applied, and only to the founding principal: any other actor is
-  // actor_ineligible.
-  const usesIn = (file) => [
-    ...code(readFileSync("migrations/" + file, "utf8")).matchAll(/store_link_grants_v1\(\)/g),
-  ];
-  const using = manifest.migrations
-    .filter((m) => usesIn(m.file).length > 0)
-    .map((m) => [m.file.replace(/^[0-9]+\./, ""), usesIn(m.file).length]);
-  assert.deepEqual(using, [
-    ["shopify-install-identity.sql", 3],
-    ["shopify-live-store-identity.sql", 1],
+  assert.deepEqual(named, [
+    "approval-records.sql",
+    "shopify-install-identity.sql",
+    "disconnect-store-identity.sql",
   ]);
-  const liveSql = readFileSync(
-    "migrations/" +
-      manifest.migrations.find((m) => m.file.endsWith(".shopify-live-store-identity.sql")).file,
-    "utf8",
+  // The template is issued only by link_workspace_store, only when applied, and only to the
+  // founding principal: any other actor is actor_ineligible. Version 1: CREATE, REVOKE and
+  // 0026's link, one use in v1 PR 1's replacement (which keeps every other check), and the
+  // disconnect migration's prerequisite check; version 2: the identity migration's
+  // prerequisite check, CREATE, REVOKE and the one link that replaces v1 PR 1's, and the
+  // work migration's prerequisite check.
+  const uses = (pattern) =>
+    manifest.migrations.flatMap((m) =>
+      [...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(pattern)].map(() =>
+        m.file.replace(/^[0-9]+\./, ""),
+      ),
+    );
+  assert.deepEqual(uses(/store_link_grants_v1\(\)/g), [
+    "shopify-install-identity.sql",
+    "shopify-install-identity.sql",
+    "shopify-install-identity.sql",
+    "shopify-live-store-identity.sql",
+    "disconnect-store-identity.sql",
+  ]);
+  assert.deepEqual(uses(/store_link_grants_v2\(\)/g), [
+    "disconnect-store-identity.sql",
+    "disconnect-store-identity.sql",
+    "disconnect-store-identity.sql",
+    "disconnect-store-identity.sql",
+    "disconnect-store-work.sql",
+  ]);
+  // Version 2's only issuing use is the link.
+  assert.equal(
+    code(migration("disconnect-store-identity")).split(
+      "FROM morrow_identity.store_link_grants_v2() x",
+    ).length,
+    2,
   );
+  const linkOf = (sql) =>
+    /CREATE OR REPLACE FUNCTION morrow_identity\.link_workspace_store\([\s\S]*?END \$\$;/.exec(
+      code(sql),
+    )?.[0];
+  const liveSql = migration("shopify-live-store-identity");
   for (const sql of [shopifySql, liveSql]) {
-    const link =
-      /CREATE OR REPLACE FUNCTION morrow_identity\.link_workspace_store\([\s\S]*?END \$\$;/.exec(
-        code(sql),
-      )?.[0];
+    const link = linkOf(sql);
     assert.ok(link, "link_workspace_store");
     assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
     assert.ok(
@@ -630,6 +651,13 @@ test("only the founding principal holds agents.installation.activate: M3 never i
         link.indexOf("INSERT INTO morrow_identity.grants"),
     );
   }
+  // The current definition is v1 PR 1's with exactly the template version changed.
+  const linkV2 = linkOf(migration("disconnect-store-identity"));
+  assert.ok(linkV2, "link_workspace_store v2");
+  assert.equal(
+    linkV2,
+    linkOf(liveSql).replace("store_link_grants_v1() x", "store_link_grants_v2() x"),
+  );
 });
 
 test("enable needs activate on the store and every verb the installation receives", async () => {

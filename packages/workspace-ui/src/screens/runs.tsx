@@ -8,7 +8,7 @@ import { useId, useState } from "react";
 import { copy } from "../copy";
 import type { Id, RunDetailView, RunView } from "../model";
 import { useCommand, useRead, useServices } from "../services";
-import { Button } from "../components/controls";
+import { Button, RouteLink } from "../components/controls";
 import { Icon, StatusTag, Time } from "../components/display";
 import { StateView, outcomeState } from "../components/feedback";
 import { CommandFeedback } from "./entry";
@@ -108,6 +108,11 @@ function RunDetails({
               <StatusTag family="runProduct" status={p.status} />
               {p.attempts > 0 ? <span>{copy.runs.attempts(p.attempts)}</span> : null}
               {p.proposalId ? <span>{copy.runs.proposal}</span> : null}
+              {p.proposalId && services.composed["review.get"] ? (
+                <RouteLink route="review" params={{ workspaceId: ws, proposalId: p.proposalId }}>
+                  {copy.runs.review}
+                </RouteLink>
+              ) : null}
             </p>
             {p.failureCode ? (
               <p className="muted">{copy.runs.failureCodes[p.failureCode] ?? p.failureCode}</p>

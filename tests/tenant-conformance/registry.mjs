@@ -17,7 +17,9 @@ export const workRoles = Object.freeze({
 // no api grants), tenant_or_platform (tenant rows, plus platform rows whose tenant keys
 // are both null; readable like tenant_readable, platform rows visible to every tenant).
 // `lease: true` adds the lease-context twin of the command policy (tenant_lease, through
-// current_lease()); `policies` names a table's extra, exactly-checked policies.
+// current_lease()); `commandRead: true` (build order PR 7, as in the S7 spec below) makes
+// tenant_command FOR SELECT, so no session definer writes the table; `policies` names a
+// table's extra, exactly-checked policies.
 // `content` classifies what a row may hold (P09.T05a, spine §11): "none" (ids, digests,
 // codes and times only), "workspace" (text people write, members in their workspace or
 // the operator in platform audit rows; never a store's content) or "store" (a store's
@@ -69,16 +71,18 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["workspace_streams"],
     // M2 PR-3 (0037): shop/redact empties a store's parameters in the connector's own
-    // redaction context (read, and the one change to redacted).
-    policies: ["connector_redact", "connector_redact_read"],
+    // redaction context (read, and the one change to redacted). v1 PR 3 (catalog-apply): the
+    // broker's catalog definers read their operation's tenant (broker_catalog_read).
+    policies: ["broker_catalog_read", "connector_redact", "connector_redact_read"],
     lease: true,
     content: "store",
   },
   proposals: {
     class: "tenant_readable",
     parents: ["proposal_parameters", "review_policies"],
-    // M2 PR-3 (0037): the connector's redaction context reads its store's proposals.
-    policies: ["connector_redact_proposal"],
+    // M2 PR-3 (0037): the connector's redaction context reads its store's proposals. v1 PR 3:
+    // the broker's catalog definers read their operation's tenant (broker_catalog_read).
+    policies: ["broker_catalog_read", "connector_redact_proposal"],
     lease: true,
     content: "workspace",
   },
@@ -132,15 +136,39 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     lease: true,
-    // M5 PR-1 (0029): the broker's own login settles its stripe_write operations.
-    policies: ["broker_stripe"],
+    // M5 PR-1 (0029): the broker's own login settles its stripe_write operations. v1 PR 3
+    // (catalog-apply): its catalog definers reach the one catalog_write operation their own
+    // setting names (broker_catalog) and read their tenant's catalog operations, for the
+    // one-open-write-per-product rule (broker_catalog_tenant, FOR SELECT).
+    policies: ["broker_catalog", "broker_catalog_tenant", "broker_stripe"],
     content: "none",
   },
   operation_transitions: {
     class: "tenant_readable",
     parents: ["operations"],
     lease: true,
-    policies: ["broker_stripe_transition"],
+    policies: ["broker_catalog_transition", "broker_stripe_transition"],
+    content: "none",
+  },
+  // v1 PR 3 (catalog-apply): the send fence's record and the read-backs of one catalog_write
+  // operation: ids, listing field names, verdict codes and Shopify's own updatedAt text
+  // (content-free, 365 days). Only the broker's catalog definers write them
+  // (broker_catalog_operation); the session context only reads them (commandRead), and the
+  // api reads the read-backs' codes column by column.
+  operation_writes: {
+    class: "tenant_internal",
+    parents: ["operations"],
+    commandRead: true,
+    policies: ["broker_catalog_operation"],
+    content: "none",
+  },
+  operation_readbacks: {
+    class: "tenant_readable",
+    parents: ["operations"],
+    commandRead: true,
+    // Review F2: the broker's catalog definers also read their tenant's read-backs, for the
+    // one-open-write-per-product rule (broker_catalog_read, FOR SELECT).
+    policies: ["broker_catalog_operation", "broker_catalog_read"],
     content: "none",
   },
   // M3 PR-1 listings authority (migration 0031).
@@ -171,7 +199,7 @@ export const workTables = Object.freeze({
     lease: true,
     content: "none",
   },
-  // The owner's reason for "Stop AI work" is text a person writes.
+  // The owner's reason for "Stop AI work" and "Disconnect store" is text a person writes.
   kill_switch_records: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
@@ -243,7 +271,9 @@ export const workTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     lease: true,
+    // v1 PR 3: the broker's catalog read-back reads the draft's source snapshot.
     policies: [
+      "broker_catalog_read",
       "connector_content_delete",
       "connector_content_delete_only",
       "connector_content_read",
@@ -262,6 +292,28 @@ export const workTables = Object.freeze({
     ],
     commandDelete: "connector_redact",
     content: "store",
+  },
+  // Build order PR 7 (0043 runtime-operations): the computer's operation ledger (one row per
+  // sandbox, tenant-keyed, its run a composite parent), the runtime holds and the platform's
+  // caps in use. Ids, digests, codes and times only. They live here, beside run_model_calls,
+  // not in morrow_vault, which holds sealed secrets only (lab:spine-foundation V3). The
+  // broker's login reaches them only through its four vault definers (broker_runtime: the
+  // broker's session user); the operations' session template is read-only
+  // (`commandRead: true`, tenant_command FOR SELECT, as on 0029's ledger), so no session
+  // definer writes them; only the owner's operator function lifts a hold.
+  runtime_operations: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces", "runs"],
+    policies: ["broker_runtime"],
+    commandRead: true,
+    content: "none",
+  },
+  runtime_holds: { class: "platform", parents: [], policies: ["broker_runtime"], content: "none" },
+  runtime_capacity: {
+    class: "platform",
+    parents: [],
+    policies: ["broker_runtime"],
+    content: "none",
   },
   // PR 18 (0046, ADR-0033 and ADR-0034). A project names its goal record and a title people
   // write; values are numbers, codes and read tags (the work API filters them per viewer);
@@ -546,6 +598,15 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_work_api"],
     command: "model_default.revise",
   },
+  // v1 PR 2, "Disconnect store" (disconnect-store-work): the connection commands' replay
+  // check, the session tenant's connection target (ids and status) and the disconnect.
+  "begin_connection_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "connection_target(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_store_disconnect(text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "connection.disconnect",
+  },
   // The agent kernel's facts under a run lease (ids and grant payloads; the kernel decides).
   "delegation_facts(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   // M3 PR-2 listings runs. Pure functions of the CHECKs.
@@ -600,6 +661,36 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_runtime_executor"],
   },
   "run_finish(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  // Build order PR 7 (0043 runtime-operations): the ledger's guard, the caps in code (the
+  // command role, inside the broker's vault definers) and the operator's hold lift (nobody).
+  "runtime_guard()": { kind: "trigger", grantees: [] },
+  "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "runtime_hold_lift(text,text,text)": { kind: "operator", grantees: [] },
+  // v1 PR 3 (catalog-review, catalog-apply): the review screen's two reads, the claim and
+  // the per-product dispatch check (the api), the pure helpers over a stored proposal and
+  // its claimed parameters, and the read-back verdicts' CHECK.
+  "catalog_review_sources(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "catalog_claim_of(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_catalog_apply(text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.apply",
+  },
+  "cmd_catalog_dispatch(text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.dispatch",
+  },
+  // Review F2: the claimant sets an uncertain operation aside (uncertain -> cancel_requested).
+  "cmd_catalog_set_aside(text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.set_aside",
+  },
+  "catalog_target(jsonb,integer)": { kind: "helper", grantees: [] },
+  "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },
+  "catalog_item_matches(jsonb,jsonb)": { kind: "helper", grantees: [] },
+  "readback_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   // PR 18 (0046). Pure functions of the CHECKs.
   "goal_time(text)": { kind: "check", grantees: ["morrow_work_command"] },
   "valid_goal_measure(jsonb,timestamp with time zone)": {
@@ -1268,6 +1359,36 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // Build order PR 7 (0043 runtime-operations): the runtime ledger's send mark, create record,
+  // settlement and the sweep's ids-only list (the broker's login). The ledger's tables, guard,
+  // caps and hold lift are morrow_work's (workTables, workFunctions).
+  "runtime_operation_begin(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // v1 PR 3 (catalog-apply): the gateway's apply (resolve, fence, close) and read-back
+  // (resolve, record), keyed by one operation id, and their revisable INVOKER helpers (the
+  // context settings and the send refusal), which only the definers above call.
+  "catalog_write_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_write_begin(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "catalog_write_end(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_reconcile_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_reconcile_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "catalog_context(text,text,text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -1389,6 +1510,17 @@ export const executorLogins = Object.freeze({
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",
+    // Build order PR 7 (0043 runtime-operations).
+    "morrow_vault.runtime_operation_begin(text,text,text,text,text)",
+    "morrow_vault.runtime_operation_created(text,text)",
+    "morrow_vault.runtime_operation_settle(text,text,text)",
+    "morrow_vault.runtime_operations_open(text)",
+    // v1 PR 3 (catalog-apply).
+    "morrow_vault.catalog_reconcile_record(text,text,text,text,text)",
+    "morrow_vault.catalog_reconcile_resolve(text)",
+    "morrow_vault.catalog_write_begin(text,text,text,text,text)",
+    "morrow_vault.catalog_write_end(text,text,text,text)",
+    "morrow_vault.catalog_write_resolve(text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

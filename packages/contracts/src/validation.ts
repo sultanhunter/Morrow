@@ -145,6 +145,15 @@ const goalMeasured = (goal: unknown) => {
       Date.parse(c.measure.dueAt) <= due,
   );
 };
+// A KillSwitchRecord that already passed its v1.1 schema (ADR-0022 item 2 as amended
+// 2026-10-22): a connection target names the connection itself, so its id is its
+// connectionId (the schema makes storeId and connectionId non-null), and every v1
+// ResourceRef target keeps the store rule.
+const killSwitchTargetsBound = (record: unknown) =>
+  (record as { targets: readonly unknown[] }).targets.every((target) => {
+    const t = target as { kind: string; id: string; connectionId: string | null };
+    return t.kind === "connection" ? t.id === t.connectionId : storeBound(t);
+  });
 /**
  * Effective definition: the newest core layer that defines the name. For
  * EventEnvelope (@2), and a StreamFrame carrying one, this is the schema plus
@@ -152,9 +161,11 @@ const goalMeasured = (goal: unknown) => {
  * AskAdminReadRecord, the schema plus its reader and uniqueness rules; for
  * ResourceRef, Scope, Grant and AgentInstallation (v1.1), the schema plus the store
  * rule (a store resource's id is its storeId), applied to every resource a scope,
- * grant or installation scope names; for CriteriaList and Goal (v1.1, ADR-0033), the
- * schema plus unique goal keys and, for a dated goal record, no measure due after it.
- * Product code validates these nine only here, never by their exact selectors.
+ * grant or installation scope names; for KillSwitchRecord, the schema plus the
+ * connection rule (a connection target's id is its connectionId); for CriteriaList and
+ * Goal (v1.1, ADR-0033), the schema plus unique goal keys and, for a dated goal record, no
+ * measure due after it. Product code validates these ten only here, never by their exact
+ * selectors.
  */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
   if (!selected(currentDefinitionSelectors, name, value)) return false;
@@ -168,6 +179,7 @@ export function validateCurrentDefinition(name: CurrentDefinitionName, value: un
   if (name === "Scope") return scopeStoresBound(value);
   if (name === "Grant" || name === "AgentInstallation")
     return scopeStoresBound((value as { scope: unknown }).scope);
+  if (name === "KillSwitchRecord") return killSwitchTargetsBound(value);
   if (name === "CriteriaList") return keysUnique(value);
   if (name === "Goal") return goalMeasured(value);
   return true;

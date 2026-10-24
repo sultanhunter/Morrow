@@ -4,11 +4,15 @@ import {
   challengeLimits,
   challengeTokenValid,
   decodeNeonLeaseGrant,
+  decodeShopifyCredentialResult,
   decodeStripeCheckoutResult,
   decodeStripeCustomerResult,
   decodeStripePortalResult,
   decodeStripeWebhookResult,
+  shopifyInstallationIdPattern,
+  shopifyOperationIdValid,
   shopifyReadLimits,
+  shopifyWriteLimits,
   stripeLimits,
   stripeOperationIdValid,
   type ApiBrokerRpc,
@@ -16,6 +20,8 @@ import {
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { BillingBrokerPort } from "../../../packages/work/src/billing/port.js";
 import type { CatalogReader } from "../../../packages/work/src/catalog/http.js";
+import type { ApplyBrokerPort } from "../../../packages/work/src/review/http.js";
+import type { CredentialDestroyer } from "../../../packages/work/src/connections/http.js";
 import type { LoginControl } from "../../../packages/identity/src/standalone-login-protocol.js";
 import type { WorkosSessionPageReader } from "../../../packages/identity/src/workos-session-status.js";
 
@@ -262,6 +268,28 @@ export function createBrokerStripe(broker: ApiBrokerRpc): BillingBrokerPort {
   });
 }
 
+// "Disconnect store": after the disconnect committed, one ApiBroker.shopifyCredentialDestroy
+// for the disconnected installation (the broker fixes the reason), raced against the
+// caller's signal and the budget plus a small RPC allowance, never retried here (the
+// connector's cron re-drives a destruction that did not complete). The closed result is
+// decoded; anything else, a late reply or a throw is API_BROKER_HELD.
+export const brokerCredentialBudgetMs = 4000;
+export function createBrokerCredentialDestroyer(broker: ApiBrokerRpc): CredentialDestroyer {
+  return Object.freeze({
+    async destroy(installationId: string, signal: AbortSignal) {
+      if (typeof installationId !== "string" || !shopifyInstallationIdPattern.test(installationId))
+        throw held();
+      return decodeShopifyCredentialResult(
+        await raceBrokerCall(
+          () => broker.shopifyCredentialDestroy(installationId),
+          signal,
+          brokerCredentialBudgetMs,
+        ),
+      );
+    },
+  });
+}
+
 // M2 PR-3: the catalogue routes' one ApiBroker.shopifyRead, under the read lease the route's
 // transaction opened: the lease, its generation and subject, the query and its closed
 // variables cross RPC, raced against the caller's signal and the budget plus a small RPC
@@ -300,5 +328,41 @@ export function createBrokerShopifyReader(broker: ApiBrokerRpc): CatalogReader {
         throw held();
       return text;
     },
+  });
+}
+
+// v1 PR 3: the gateway's ApiBroker.shopifyProductApply and shopifyProductReconcile, one
+// operation id and a budget each, raced against the caller's signal and the budget plus a
+// small RPC allowance, never retried here (the review route decides what follows: an apply
+// whose reply is lost is read back, never sent again). The result is returned as text for the
+// route's closed decoder.
+export function createBrokerApplyPort(broker: ApiBrokerRpc): ApplyBrokerPort {
+  const call = async (
+    method: "shopifyProductApply" | "shopifyProductReconcile",
+    operationId: string,
+    budgetMs: number,
+    signal: AbortSignal,
+  ) => {
+    if (
+      !shopifyOperationIdValid(operationId) ||
+      !Number.isSafeInteger(budgetMs) ||
+      budgetMs < 1 ||
+      budgetMs > shopifyWriteLimits.budgetMaxMs
+    )
+      throw held();
+    const text: unknown = await raceBrokerCall(
+      () => broker[method](operationId, budgetMs),
+      signal,
+      budgetMs + 500,
+    );
+    if (typeof text !== "string" || brokerUtf8Bytes(text) > shopifyWriteLimits.resultMaxBytes)
+      throw held();
+    return text;
+  };
+  return Object.freeze({
+    apply: (operationId: string, budgetMs: number, signal: AbortSignal) =>
+      call("shopifyProductApply", operationId, budgetMs, signal),
+    reconcile: (operationId: string, budgetMs: number, signal: AbortSignal) =>
+      call("shopifyProductReconcile", operationId, budgetMs, signal),
   });
 }

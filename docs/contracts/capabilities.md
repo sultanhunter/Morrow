@@ -1466,6 +1466,18 @@ Retention: R05. Verification: Emergency revocation overrides run pinning and ret
 
 Trace: J14; P16.T01, P17.T01; P01.A01, P16.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
+### runtime.execution.use
+
+Run one bounded job in a fresh isolated computer. Owner: Morrow platform owner. Effect: billable_job. Provider: storage_and_runtime (D17, Design recorded).
+
+Input: runId: Id; inputs: ArtifactList. Output: operationId: Id; outputs: ArtifactList; costReceipt: EvidenceRef.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant runtime.execution.use. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: minimised extracts, declared outputs. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: One fresh sandbox per job with no internet or credential; its worst case is reserved before the create, an unknown outcome is reconciled before any retry, and only checked PNG, CSV and XLSX outputs return. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J14; P12.T01, P12.T02; P01.A01, P12.A01, P12.A04. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
 ## Retention classes
 
 - R01, Commerce projections: Permission-filtered mirror with source timestamps and tombstones; configurable retention awaits P01.T02; no launch until settled.

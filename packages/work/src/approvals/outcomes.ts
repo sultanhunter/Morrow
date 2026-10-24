@@ -18,7 +18,10 @@ export type ApprovalRefusal =
   | "state_conflict"
   | "stale_authority"
   | "command_conflict"
-  | "limit_reached";
+  | "limit_reached"
+  // v1 PR 3: a store-bound proposal whose store is no longer linked through the connection
+  // its targets name (relinked or disconnected) is never decided or claimed.
+  | "link_changed";
 
 export interface ApprovalErrorMapping {
   readonly status: 400 | 401 | 403 | 404 | 409;
@@ -81,6 +84,7 @@ export const approvalErrors: Readonly<Record<ApprovalRefusal, ApprovalErrorMappi
     QUORUM_UNREACHABLE: final,
     quorum_unreachable: final,
     limit_reached: final,
+    link_changed: final,
     APPROVAL_ALREADY_CLAIMED: final,
     APPROVAL_EXPIRED: m(409, "approval_expired", "never"),
   });

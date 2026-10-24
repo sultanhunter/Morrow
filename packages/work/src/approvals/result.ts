@@ -22,14 +22,19 @@ const keys = [
   "proposalId",
   "status",
 ].join(",");
+/**
+ * `storeId` is the decided proposal's own store (v1 PR 3: a store-bound catalogue proposal's
+ * ProposalRef names its store, as proposalRef(p) does); the record holds ids only.
+ */
 export function decodeCommandResult(
   a: WorkAuthority,
   r: Readonly<Record<string, unknown>>,
+  storeId: string | null = null,
 ): ApprovalCommandResult {
   const tenant = { organizationId: a.actor.organizationId, workspaceId: a.actor.workspaceId! };
   const proposalRef = {
     ...tenant,
-    storeId: null,
+    storeId,
     kind: "proposal",
     id: r.proposalId,
     revision: 1,
@@ -37,7 +42,7 @@ export function decodeCommandResult(
   };
   const approvalRef = {
     ...tenant,
-    storeId: null,
+    storeId,
     kind: "approval",
     id: r.approvalId,
     revision: r.approvalRevision,

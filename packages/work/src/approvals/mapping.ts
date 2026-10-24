@@ -248,12 +248,16 @@ export function decodePolicy(
   return Object.freeze(policy);
 }
 
-/** The stored approval's ApprovalRef: its digest binds the stored state at this revision. */
-export function storedApprovalRef(a: StoredApprovalRow): Core_ApprovalRef {
+/**
+ * The stored approval's ApprovalRef: its digest binds the stored state at this revision.
+ * `storeId` is its proposal's store (v1 PR 3: a store-bound catalogue approval names its
+ * store, as Approval@2 does; the digest does not cover it).
+ */
+export function storedApprovalRef(a: StoredApprovalRow, storeId: string | null): Core_ApprovalRef {
   return Object.freeze({
     organizationId: a.organizationId,
     workspaceId: a.workspaceId,
-    storeId: null,
+    storeId,
     kind: "approval",
     id: a.id,
     revision: a.revision,
@@ -314,7 +318,9 @@ export function mapApproval(
     id: a.id,
     organizationId: a.organizationId,
     workspaceId: a.workspaceId,
-    storeId: null,
+    // v1 PR 3: a store-bound proposal's approval names its store (the review library binds
+    // each approval to its proposal's store).
+    storeId: proposal.storeId,
     revision: a.revision,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,

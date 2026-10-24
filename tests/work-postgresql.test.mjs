@@ -170,9 +170,10 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
       name,
     );
   }
-  // No later migration redefines them without the interlock. M2 PR-2's identity migration
-  // and v1 PR 1's live-store migration (located by slug) replace link_workspace_store; each
-  // new definition keeps the exclusive interlock before the organization FOR UPDATE.
+  // No later migration redefines them without the interlock. M2 PR-2's identity migration,
+  // v1 PR 1's live-store migration and "Disconnect store"'s (store-link template v2), each
+  // located by slug, replace link_workspace_store; each new definition keeps the exclusive
+  // interlock before the organization FOR UPDATE.
   for (const m of manifest.migrations.filter((x) => x.sequence > 14)) {
     const text = read("migrations/" + m.file);
     assert.doesNotMatch(
@@ -183,7 +184,8 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
     if (!/FUNCTION morrow_identity\.link_workspace_store\(/.test(text)) continue;
     assert.ok(
       m.file.endsWith(".shopify-install-identity.sql") ||
-        m.file.endsWith(".shopify-live-store-identity.sql"),
+        m.file.endsWith(".shopify-live-store-identity.sql") ||
+        m.file.endsWith(".disconnect-store-identity.sql"),
       m.file,
     );
     const replaced = definition(text, "link_workspace_store");
@@ -340,15 +342,34 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   );
   // M2 PR-2 appends its workerd install-and-link lab; M5 PR-1 its workerd api and broker
   // billing lab; M3 PR-1 its listings authority lab (its run-credits lab rides pg-linking);
-  // M2 PR-3 its webhooks, privacy and catalogue-read lab; M3 PR-2 its listings runs lab.
+  // M2 PR-3 its webhooks, privacy and catalogue-read lab; M3 PR-2 its listings runs lab; v1
+  // PR 2 its "Disconnect store" lab; build order PR 7 its runtime operations lab.
   assert.equal(
     pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs",
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs && npm run lab:disconnect-store",
   );
   assert.equal(
     pkg.scripts["lab:plan-start"],
     "node --import tsx --test --test-concurrency=1 tests/plan-start/postgresql.test.mjs",
   );
+  assert.equal(
+    pkg.scripts["lab:disconnect-store"],
+    "node --import tsx scripts/disconnect-store-lab.mjs",
+  );
+  assert.equal(
+    pkg.scripts["lab:runtime-operations"],
+    "node --import tsx scripts/runtime-operations-lab.mjs",
+  );
+  // pg-work passed its 14-minute cap, so build order PR 7's runtime operations lab, then v1
+  // PR 3's review, approve and apply lab (about two minutes of real read-back spacing) and
+  // last PR 18's plan-start lab (with it, pg-work passed its cap: hosted run 40060794401
+  // cancelled the work leg at 14 minutes, every lab passed) ride pg-linking after
+  // run-credits, in that order.
+  assert.equal(
+    pkg.scripts["lab:group:pg-linking"],
+    "npm run lab:workspace-store-linking && npm run lab:browser-session-admission && npm run lab:workspace-linking-read && npm run lab:account-onboarding && npm run lab:shopify-install && npm run lab:run-credits && npm run lab:runtime-operations && npm run lab:catalog-apply && npm run lab:plan-start",
+  );
+  assert.equal(pkg.scripts["lab:catalog-apply"], "node --import tsx scripts/catalog-apply-lab.mjs");
   assert.equal(
     pkg.scripts["lab:shopify-privacy"],
     "node --import tsx scripts/shopify-privacy-lab.mjs",
@@ -363,13 +384,6 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
     "node --import tsx scripts/listings-authority-lab.mjs",
   );
   assert.equal(pkg.scripts["lab:run-credits"], "node --import tsx scripts/run-credits-lab.mjs");
-  // PR 18's plan-start lab rides pg-linking: with it, pg-work passed its 14-minute cap
-  // (hosted run 40060794401 cancelled the work leg at 14 minutes, every lab passed).
-  assert.ok(
-    pkg.scripts["lab:group:pg-linking"].endsWith(
-      " && npm run lab:run-credits && npm run lab:plan-start",
-    ),
-  );
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(
     read(".github/workflows/ci.yml"),

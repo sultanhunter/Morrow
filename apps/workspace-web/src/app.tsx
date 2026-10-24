@@ -18,7 +18,9 @@ import {
   NotFoundScreen,
   QuestionScreen,
   ReentryNotice,
+  ReviewScreen,
   ServicesProvider,
+  SettingsFrame,
   SignedOutScreen,
   SignInScreen,
   SignOutUnconfirmedScreen,
@@ -29,6 +31,7 @@ import {
   WorkspaceLoadFailedScreen,
   WorkspaceUnavailableScreen,
   copy,
+  inSettings,
   useRead,
   useServices,
   useServicesVersion,
@@ -185,7 +188,19 @@ export function screenTitle(view: {
   if (view.session !== "active") return sessionTitles[view.session];
   if (!view.match) return copy.notFound.title;
   if (view.entryFailed) return copy.workspace.loadFailedTitle;
-  return routeTitle(workspaceRoutes, view.match.id) ?? copy.notFound.title;
+  return destinationTitle(view.match.id, view.match.params.section);
+}
+/**
+ * A route's name as the interface shows it: the Sunrise label where it differs from the
+ * contract's title (ADR-0032: "Work" is Projects, "Agents" is Team; a settings section by
+ * its own name), else the contract's.
+ */
+export function destinationTitle(id: string, section?: string): string {
+  if (id === "settings_section" && section !== undefined)
+    if (Object.hasOwn(copy.settings.sections, section)) return copy.settings.sections[section]!;
+  return Object.hasOwn(copy.routeTitles, id)
+    ? copy.routeTitles[id]!
+    : (routeTitle(workspaceRoutes, id) ?? copy.notFound.title);
 }
 
 const workspaceScoped = (match: RouteMatch | null): Id | null =>
@@ -573,12 +588,19 @@ function WorkspaceFrame({
         return services.composed["runs.admit"] ? (
           <AskScreen workspace={workspace} />
         ) : (
-          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+          <UnavailableDestination title={destinationTitle(match.id)} />
         );
       case "inbox":
         return <InboxScreen workspace={workspace} />;
       case "question":
         return <QuestionScreen workspace={workspace} questionId={params.questionId!} />;
+      // v1 PR 3: review, approve and apply one proposal's changes.
+      case "review":
+        return services.composed["review.get"] ? (
+          <ReviewScreen workspace={workspace} proposalId={params.proposalId!} />
+        ) : (
+          <UnavailableDestination title={destinationTitle(match.id)} />
+        );
       // M2 PR-2: the store connections screens.
       case "connections":
         return (
@@ -596,23 +618,33 @@ function WorkspaceFrame({
         return params.section === "governance" ? (
           <ModelDefaultScreen workspace={workspace} />
         ) : (
-          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+          <UnavailableDestination title={destinationTitle(match.id, params.section)} />
         );
       default:
-        return <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />;
+        return <UnavailableDestination title={destinationTitle(match.id)} />;
     }
   })();
+  const page = match.id + JSON.stringify(params);
   return (
     <AppShell
       workspace={workspace}
       currentRoute={match.id}
+      page={page}
       switcherWorkspaces={overview.kind === "ok" ? overview.value.workspaces : null}
       onSignOut={onSignOut}
       signOutBusy={signOutState === "busy"}
       notices={notices}
       fixture={fixture}
     >
-      <div key={match.id + JSON.stringify(params)}>{screen}</div>
+      <div key={page}>
+        {inSettings(match.id) ? (
+          <SettingsFrame workspaceId={workspace.id} route={match.id} sectionParam={params.section}>
+            {screen}
+          </SettingsFrame>
+        ) : (
+          screen
+        )}
+      </div>
     </AppShell>
   );
 }
@@ -653,7 +685,11 @@ export function guardPort(
     },
     work,
     people: { list: watch(port.people.list.bind(port.people), first) },
-    connections: { list: watch(port.connections.list.bind(port.connections), first) },
+    connections: {
+      list: watch(port.connections.list.bind(port.connections), first),
+      disconnectStatus: watch(port.connections.disconnectStatus.bind(port.connections), first),
+      disconnect: watch(port.connections.disconnect.bind(port.connections), first),
+    },
     storeLinks: {
       preview: watch(port.storeLinks.preview.bind(port.storeLinks), first),
       apply: watch(port.storeLinks.apply.bind(port.storeLinks), first),
@@ -671,9 +707,19 @@ export function guardPort(
       get: watch(port.runs.get.bind(port.runs), first),
       reconcile: watch(port.runs.reconcile.bind(port.runs), first),
     },
+    review: {
+      listPending: watch(port.review.listPending.bind(port.review), first),
+      get: watch(port.review.get.bind(port.review), first),
+      decide: watch(port.review.decide.bind(port.review), first),
+      apply: watch(port.review.apply.bind(port.review), first),
+      operationsOfTask: watch(port.review.operationsOfTask.bind(port.review), first),
+      recheck: watch(port.review.recheck.bind(port.review), first),
+      setAside: watch(port.review.setAside.bind(port.review), first),
+    },
     models: {
       list: watch(port.models.list.bind(port.models), first),
       reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
     },
+    samples: { home: watch(port.samples.home.bind(port.samples), first) },
   };
 }

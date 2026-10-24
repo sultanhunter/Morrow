@@ -135,6 +135,20 @@ Two reads of a linked store's catalogue for the Ask screen's picker, under `/wor
 - After COMMIT, one `ApiBroker.shopifyRead` under that lease. The broker resolves the lease, its stops, the store connection and the credential itself, runs one fixed Admin GraphQL document with variables it builds (a title search becomes `title:<word>*` terms) and returns ids (`collection:<n>`, `product:<n>`), titles and a lower-case product status only. A missing collection is 404. A refused, failed or throttled-past-budget read, or one held because the broker's read slots are busy, is 503 unavailable / safe_read_retry. Page size is 25. The whole request has a 9-second deadline; the read gets whatever the transaction leaves of it less 250 ms, never more than the protocol's 15-second budget.
 - Shopify's reply, the token and any provider text never reach the response or a log; each request logs one fixed `morrow_catalog` line (route and outcome).
 
+## Connection routes ("Disconnect store")
+
+A person's kill switch on one store connection, under `/workspace/:ws` on the same api Worker, dependencies and guard rules (`packages/work/src/connections/http.ts`; ADR-0022 items 2, 3, 13 and 15 with the amendments of 2026-10-22; ADR-0005; `docs/briefs/v1-disconnect-store.md`). Only exactly `/connections/:connectionId/disconnect` comes here; every other `/connections` path stays the managed workspace handler's (`WorkspaceConnections@1`).
+
+| Route under `/workspace/:ws` | Body | Success |
+| --- | --- | --- |
+| `GET /connections/:connectionId/disconnect` | none | 200 `{schemaVersion: 1, connectionId, storeId, installationStatus, stop, actions: {disconnect}}` |
+| `POST /connections/:connectionId/disconnect` | `{control: {reason, sourceProposalRef: null}}` | 200 `{schemaVersion: 1, status: "disconnected", killSwitchRecordId, priorStateObserved, stopId, connectionId, storeId, installationId, installation, endReason, credential}` (`replayed: true` on a replay) |
+
+- The connection is resolved against the session tenant's store installations that were ever linked into this workspace; any other id is 404. `installationStatus` is `linked`, `suspended` or `uninstalled`; `stop` is the open connection stop (`{setBy: human | system | operator, reasonCode, createdAt}`) or null; `actions.disconnect` is true only when the kernel allows it, the installation is linked and no stop stands. Any session-eligible member may read it; ids and codes only, never the reason.
+- The command needs `governance.connection.disconnect` `{execute}` on the store resource with fields `connectionId` and `control` (store-link template v2 issues it to the linking owner), 403 otherwise. It never reads entitlement or credits. `checkKillSwitchTarget` accepts the connection, then one definer, in one transaction: the installation ends (`suspended`, end reason `disconnected`), the `KillSwitchRecord` (its target `{kind: connection, id: connectionId, storeId, connectionId}`) commits with the person's connection stop (`human_disconnect`), which revokes every read, run and operation lease on the connection, and `kill_switch.executed`. Disconnecting again records `already_stopped` and changes nothing else; a stop committed between the Worker's read and the definer's lock is 409 conflict (recheck).
+- After COMMIT, one `ApiBroker.shopifyCredentialDestroy` erases the disconnected installation's offline token. `credential` is `destroyed` only when the broker confirmed it; otherwise `pending` (the connector's cron finishes it), and the disconnect stands either way. A replay asks the broker again.
+- A disconnect deletes no store content and starts no deletion clock (ADR-0031 item 3). In this release it cannot be undone: reconnecting needs a new install. Each request logs one fixed `morrow_connections` line (route and outcome).
+
 ## Published limits
 
 Pages of 1–25 goals or 1–50 tasks or questions; bodies of at most 64 KiB; `successCriteria` ≤ 20; `allowedResources` ≤ 1; per workspace up to 10,000 goals, per goal 200 tasks, per task 50 open questions.

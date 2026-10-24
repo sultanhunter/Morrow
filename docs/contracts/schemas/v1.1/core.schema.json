@@ -118,6 +118,39 @@
       "maxItems": 100,
       "uniqueItems": true
     },
+    "KillSwitchConnectionTarget": {
+      "description": "A store connection as the target of a KillSwitchRecord (governance.connection.disconnect, \"Disconnect store\"; ADR-0022 item 2 as amended 2026-10-22). v1 ResourceRef has no kind for a connection, so the record names it here: {kind: connection, id: connectionId, storeId, connectionId}, with storeId and connectionId both non-null. id equals connectionId, which validateCurrentDefinition checks in code. It is a record target only, never a grant or scope resource.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "connectionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "const": "connection"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "connectionId",
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
     "KillSwitchRecord": {
       "description": "Append-only record of one executed kill switch, committed together with its effect. The owner notification is derived from it.",
       "type": "object",
@@ -169,9 +202,17 @@
           "$ref": "#/$defs/KillSwitchControl"
         },
         "targets": {
+          "description": "What the kill switch stopped: v1 ResourceRefs (a campaign, an installation, a membership or a release), or a store connection (KillSwitchConnectionTarget, the target of governance.connection.disconnect; ADR-0022 item 2 as amended 2026-10-22).",
           "type": "array",
           "items": {
-            "$ref": "urn:morrow:contracts:core:v1#/$defs/ResourceRef"
+            "anyOf": [
+              {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/ResourceRef"
+              },
+              {
+                "$ref": "#/$defs/KillSwitchConnectionTarget"
+              }
+            ]
           },
           "minItems": 1,
           "maxItems": 100,

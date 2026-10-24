@@ -31,6 +31,16 @@ import {
   projectsPathPattern,
 } from "../../../packages/work/src/projects/http.js";
 import { planDraftsRecord } from "../../../packages/policy/src/projects/plan-draft.js";
+import {
+  createReviewApiHandler,
+  reviewPathPattern,
+  type ReviewApiDependencies,
+} from "../../../packages/work/src/review/http.js";
+import {
+  connectionsPathPattern,
+  createConnectionsApiHandler,
+  type ConnectionsApiDependencies,
+} from "../../../packages/work/src/connections/http.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 type Handler = Readonly<{
@@ -45,19 +55,36 @@ type Handler = Readonly<{
 //                                                runs (M3 PR-2), ahead of the work API
 //   /workspace/:ws/work/{goals/:goalId/(revise|checks|progress), plans/(start-document|start)}
 //                                                goals and the plan start (PR 18), ahead of it
+//   /workspace/:ws/work/{approvals, proposals/:id/(review|decision|apply),
+//     tasks/:taskId/operations, operations/:id(/reconcile, /set-aside)}
+//                                                review and apply (v1 PR 3), ahead of it too
 //   /workspace/:ws/work(/|$)                     work API (P06.T01a)
 //   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)
 //   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
 //   /workspace/:ws/stores/:storeId/agents/, /workspace/:ws/models, /workspace/:ws/settings/model-default
 //                                                agents (M3 PR-1)
 //   /workspace/:ws/stores/:storeId/catalog/      catalogue reads (M2 PR-3)
+//   /workspace/:ws/connections/:connectionId/disconnect (exact)
+//                                                "Disconnect store", on the work dependencies
+//                                                and the broker's token destruction; every
+//                                                other /connections path stays the P05
+//                                                handler's (the WorkspaceConnections@1 read)
 // The api's per-address session limit (session-limit.ts) runs before this table and answers
-// a path of the runs, work, billing, agents or catalog row in that family's ErrorEnvelope,
-// through `apiDispatch` itself, so there is one matcher.
+// a path of the runs, projects, review, work, billing, agents, catalog or connections row in
+// that family's ErrorEnvelope, through `apiDispatch` itself, so there is one matcher.
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
 export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
 const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
-type RowKey = "runs" | "projects" | "work" | "billing" | "stripe_webhook" | "agents" | "catalog";
+type RowKey =
+  | "runs"
+  | "projects"
+  | "review"
+  | "work"
+  | "billing"
+  | "stripe_webhook"
+  | "agents"
+  | "catalog"
+  | "connections";
 export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
   Object.freeze([
     // M3 PR-2: the runs routes (packages/work/src/runs/http.ts), before the work API's row.
@@ -65,6 +92,8 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
     // PR 18: the goal and plan-start routes (packages/work/src/projects/http.ts), on the work
     // dependencies, also before the work API's row. Both switches default off.
     ["projects", (path: string) => projectsPathPattern.test(path)],
+    // v1 PR 3: the review and apply routes (packages/work/src/review/http.ts), also ahead of it.
+    ["review", (path: string) => reviewPathPattern.test(path)],
     ["work", (path: string) => workPath.test(path)],
     ["billing", (path: string) => billingPath.test(path)],
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
@@ -72,6 +101,9 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
     ["agents", (path: string) => agentsPathPattern.test(path)],
     // M2 PR-3: the catalogue reads, on the work dependencies and the broker's shopifyRead.
     ["catalog", (path: string) => catalogPathPattern.test(path)],
+    // "Disconnect store": its status read and command, on the work dependencies and the
+    // broker's token destruction.
+    ["connections", (path: string) => connectionsPathPattern.test(path)],
   ] as const);
 export function apiDispatch(path: string): RowKey | "workspace" {
   for (const [key, matches] of apiDispatchRows) if (matches(path)) return key;
@@ -80,8 +112,8 @@ export function apiDispatch(path: string): RowKey | "workspace" {
 
 // The configured local fixture imports this exact entry constructor. The ordinary artifact
 // intentionally has no account/secret/environment binding: without dependencies every work,
-// billing, agents, catalogue and runs route is 401 and the webhook 404, with no network or
-// database.
+// billing, agents, catalogue, runs and connections route is 401 and the webhook 404, with no
+// network or database.
 export function createWorkspaceApiWorker(
   dependencies?: ManagedWorkspaceApiDependencies,
   work?: WorkApiDependencies,
@@ -89,6 +121,8 @@ export function createWorkspaceApiWorker(
   webhook?: StripeWebhookDependencies,
   catalog?: CatalogApiDependencies,
   runs?: RunsApiDependencies,
+  review?: ReviewApiDependencies,
+  connections?: ConnectionsApiDependencies,
 ) {
   const workspace = createWorkersManagedWorkspaceApi(dependencies);
   const handlers: Readonly<Record<RowKey, Handler>> = Object.freeze({
@@ -98,12 +132,14 @@ export function createWorkspaceApiWorker(
     projects: createProjectsApiHandler(
       work === undefined ? undefined : { ...work, goals: false, planDrafts: planDraftsRecord },
     ),
+    review: createReviewApiHandler(review),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),
     // GET /models reports whether run admission is open (the runs handler's own flag).
     agents: createAgentsApiHandler(work, runs?.admission === true),
     catalog: createCatalogApiHandler(catalog),
+    connections: createConnectionsApiHandler(connections),
   });
   return Object.freeze({
     fetch(request: Request, env: unknown, ctx: Context): Promise<Response> {

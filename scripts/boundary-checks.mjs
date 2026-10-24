@@ -381,12 +381,13 @@ export const replacedBillingDefinitionNames = (changes) =>
 // Generated files define every exact selector and type, replaced ones included.
 const generatedContracts = /^packages\/contracts\/src\/generated\//;
 // EventEnvelope@2, the StreamFrame carrying it, AskAdminReadRecord, the v1.1
-// ResourceRef, Scope, Grant and AgentInstallation, and the v1.1 CriteriaList and Goal have
-// code rules beyond their schemas (the event registry, the payloadRef binding, the
-// admin-read reader and uniqueness rules, the store rule: a store resource's id is its
-// storeId, ADR-0022 item 2, and the goal rules: unique keys and no measure due after its
-// dated record, ADR-0033 item 2), applied only by `validateCurrentDefinition` in
-// packages/contracts/src/validation.ts.
+// ResourceRef, Scope, Grant and AgentInstallation, KillSwitchRecord, and the v1.1 CriteriaList
+// and Goal have code rules beyond their schemas (the event registry, the payloadRef binding,
+// the admin-read reader and uniqueness rules, the store rule: a store resource's id is its
+// storeId, ADR-0022 item 2, the connection rule: a disconnect's connection target's id is its
+// connectionId, the item 2 amendment of 2026-10-22, and the goal rules: unique keys and no
+// measure due after its dated record, ADR-0033 item 2), applied only by
+// `validateCurrentDefinition` in packages/contracts/src/validation.ts.
 // Product code under apps/ and packages/ never validates them by their exact v1.1
 // selector: a `"core-v1.1:<name>"` literal or `validateDefinition("core-v1.1", <name>)`.
 export const refinedDefinitionNames = Object.freeze([
@@ -396,6 +397,7 @@ export const refinedDefinitionNames = Object.freeze([
   "EventEnvelope",
   "Goal",
   "Grant",
+  "KillSwitchRecord",
   "ResourceRef",
   "Scope",
   "StreamFrame",
@@ -502,6 +504,9 @@ export const entitlementWriterAllowlist = Object.freeze({
   ]),
   // M3 PR-1: the agent kernel's facts reader sets it only from entitlementFor over billing facts.
   "packages/work/src/agents/delegation-reader.ts": Object.freeze(["createLeaseDelegationReader"]),
+  // v1 PR 3: the gateway's claimant check (execute on catalog.content.publish, paid work) sets
+  // it only from entitlementFor over the workspace's billing facts.
+  "packages/work/src/review/claimant.ts": Object.freeze(["claimantMayApply"]),
 });
 const entitlementField = "entitlementAllowed";
 export function inspectEntitlementWriters(file, code) {

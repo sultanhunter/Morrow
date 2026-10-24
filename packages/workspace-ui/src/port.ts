@@ -3,16 +3,26 @@
 import type {
   AccountOverviewView,
   AnswerView,
+  ApplyResultView,
+  ConnectionDisconnectView,
   ConnectionsView,
+  DisconnectResultView,
   GoalView,
+  HomeSamplesView,
   Id,
   ListingsAgentView,
   ListingsChangeView,
   ListingsDocumentView,
   ModelCatalogueView,
+  OperationView,
   Page,
+  PendingApprovalView,
   PersonRef,
   QuestionView,
+  RecordRefView,
+  ReviewDecidedView,
+  ReviewDecisionBody,
+  ReviewView,
   RunAdmittedView,
   RunDetailView,
   RunView,
@@ -126,7 +136,17 @@ export interface WorkspacePort {
   };
   readonly people: { list(ws: Id): Promise<Outcome<readonly PersonRef[]>> }; // not_in_build (§4.14)
   // M2 PR-2: the workspace's store connections and the install-link offer.
-  readonly connections: { list(ws: Id): Promise<Outcome<ConnectionsView>> };
+  readonly connections: {
+    list(ws: Id): Promise<Outcome<ConnectionsView>>;
+    /** "Disconnect store": the connection's state and whether this person may disconnect. */
+    disconnectStatus(ws: Id, connectionId: Id): Promise<Outcome<ConnectionDisconnectView>>;
+    /** "Disconnect store": a person's kill switch on the whole store, with their reason. */
+    disconnect(
+      ws: Id,
+      connectionId: Id,
+      c: Command<{ reason: string }>,
+    ): Promise<Outcome<DisconnectResultView>>;
+  };
   // M2 PR-2 (P05.T03b routes, the P09.T02a issuer behind preview): link the store an install
   // continuation names. The handoff token is the fragment the connector redirect carried;
   // it lives in memory only. All three reuse the handoff's one command key; apply also
@@ -185,6 +205,39 @@ export interface WorkspacePort {
       c: Command<Record<string, never>>,
     ): Promise<Outcome<{ readonly closed: number }>>;
   };
+  /**
+   * v1 PR 3: review, approve and apply. The review shows before and after per product and
+   * field; a decision binds the exact digest it names (a selection previews its own); apply
+   * claims that exact approval and writes each product once through the gateway (the same
+   * key continues an apply that ran out of time); a recheck reads one product back; the
+   * person who applied an uncertain change may set it aside once they checked it in Shopify
+   * (nothing is sent; Morrow keeps checking).
+   */
+  readonly review: {
+    listPending(ws: Id): Promise<Outcome<readonly PendingApprovalView[]>>;
+    get(ws: Id, proposalId: Id, selected: readonly number[] | null): Promise<Outcome<ReviewView>>;
+    decide(
+      ws: Id,
+      proposalId: Id,
+      c: Command<ReviewDecisionBody>,
+    ): Promise<Outcome<ReviewDecidedView>>;
+    apply(
+      ws: Id,
+      proposalId: Id,
+      c: Command<{ readonly proposalRef: RecordRefView; readonly approvalRef: RecordRefView }>,
+    ): Promise<Outcome<ApplyResultView>>;
+    operationsOfTask(ws: Id, taskId: Id): Promise<Outcome<readonly OperationView[]>>;
+    recheck(
+      ws: Id,
+      operationId: Id,
+      c: Command<Record<string, never>>,
+    ): Promise<Outcome<OperationView>>;
+    setAside(
+      ws: Id,
+      operationId: Id,
+      c: Command<Record<string, never>>,
+    ): Promise<Outcome<OperationView>>;
+  };
   /** M3 PR-1: the model catalogue and the workspace's default and member ceiling. */
   readonly models: {
     list(ws: Id): Promise<Outcome<ModelCatalogueView>>;
@@ -198,6 +251,12 @@ export interface WorkspacePort {
       }>,
     ): Promise<Outcome<{ readonly revision: number }>>;
   };
+  /**
+   * ADR-0032 Home preview: sample sections with no backend (no contract, no route). The
+   * HTTP build never composes it; the fixture build composes it only in its
+   * `home_preview` scenario. A default-off switch, not a feature.
+   */
+  readonly samples: { home(ws: Id): Promise<Outcome<HomeSamplesView>> };
 }
 
 export const portMethods = [
@@ -224,6 +283,8 @@ export const portMethods = [
   "work.getAnswer",
   "people.list",
   "connections.list",
+  "connections.disconnectStatus",
+  "connections.disconnect",
   "storeLinks.preview",
   "storeLinks.apply",
   "storeLinks.status",
@@ -237,6 +298,14 @@ export const portMethods = [
   "runs.listOfTask",
   "runs.get",
   "runs.reconcile",
+  "review.listPending",
+  "review.get",
+  "review.decide",
+  "review.apply",
+  "review.operationsOfTask",
+  "review.recheck",
+  "review.setAside",
+  "samples.home",
 ] as const;
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */

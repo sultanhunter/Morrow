@@ -44,6 +44,8 @@ export const capabilitiesAfter0018 = Object.freeze([
   // only propose revoke; its row comes with the forward migration of its definer.
   "workspace.routine.revoke",
   "governance.mail_identity.revise",
+  // Build order PR 7 (ADR-0029 item 7): the computer's capability, not review-required.
+  "runtime.execution.use",
   // PR 18 (ADR-0033 items 4 and 5): both human_only, neither review-required.
   "workspace.goal.revise",
   "workspace.goal.measure.record",

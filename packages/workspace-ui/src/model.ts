@@ -88,6 +88,27 @@ export interface ConnectionsView {
   readonly installations: readonly StoreConnectionView[];
   readonly installLink: InstallLinkView;
 }
+// "Disconnect store": GET /workspace/:ws/connections/:connectionId/disconnect (ids and codes
+// only; never the person's reason, a credential or a token).
+export interface ConnectionDisconnectView {
+  readonly connectionId: Id;
+  readonly storeId: Id;
+  readonly installationStatus: "linked" | "suspended" | "uninstalled";
+  /** The open stop on the connection: a person's disconnect, or an uninstall or scope change. */
+  readonly stop: {
+    readonly setBy: "human" | "system" | "operator";
+    readonly reasonCode: string;
+    readonly createdAt: string;
+  } | null;
+  /** What this person may do now (the server's kernel decided). */
+  readonly actions: { readonly disconnect: boolean };
+}
+/** POST .../disconnect: what the disconnect found, and whether the token is erased yet. */
+export interface DisconnectResultView {
+  readonly priorStateObserved: "active" | "already_stopped";
+  /** "pending": the store is disconnected; Morrow finishes erasing its token on its own. */
+  readonly credential: "destroyed" | "pending";
+}
 /** The store-link preview: the installation it links and the CSRF value apply sends back. */
 export interface StoreLinkPreviewView {
   readonly installationId: Id;
@@ -216,9 +237,191 @@ export interface RunAdmittedView {
   /** The selection the run uses (the workspace default when the request named none). */
   readonly selection: { readonly model: string; readonly effort: string };
 }
+// v1 PR 3: review, approve and apply (GET /work/proposals/:id/review, the decision, the apply
+// and the apply history). Product values are text the screen shows as text (a description's
+// HTML included, never rendered); the refs are passed back to the server exactly as read.
+export type ListingFieldName =
+  | "title"
+  | "descriptionHtml"
+  | "seo.title"
+  | "seo.description"
+  | "tags";
+export interface RecordRefView {
+  readonly organizationId: Id;
+  readonly workspaceId: Id;
+  readonly storeId: Id | null;
+  readonly kind: "proposal" | "approval";
+  readonly id: Id;
+  readonly revision: number;
+  readonly digest: string;
+}
+export interface FieldChangeView {
+  readonly field: ListingFieldName;
+  /** As the draft read it; null when Shopify had none or the snapshot is gone. */
+  readonly before: string | readonly string[] | null;
+  readonly after: string | readonly string[];
+}
+export interface ProductReviewView {
+  /** The product's index in the root proposal. */
+  readonly targetIndex: number;
+  readonly productId: string;
+  /** available, expired (the 90-day snapshot is gone) or redacted (shop/redact). */
+  readonly source: "available" | "expired" | "redacted";
+  readonly changes: readonly FieldChangeView[];
+  readonly tags: { readonly added: readonly string[]; readonly removed: readonly string[] } | null;
+  readonly flags: RunProductView["flags"];
+}
+export interface OperationView {
+  readonly operationId: Id;
+  readonly taskId: Id;
+  readonly proposalId: Id;
+  readonly productId: string;
+  readonly targetIndex: number;
+  /**
+   * authorized, dispatching, submitted, verifying, verified, conflict, failed, uncertain, or
+   * cancel_requested (the person who applied it set it aside after checking it in Shopify).
+   */
+  readonly status: string;
+  readonly reason: string | null;
+  readonly uncertaintyReason: string | null;
+  readonly verdict: string | null;
+  readonly updatedAt: string;
+}
+export interface ReviewView {
+  readonly proposal: {
+    readonly id: Id;
+    readonly digest: string;
+    readonly storeId: Id;
+    readonly taskId: Id | null;
+    readonly targetCount: number;
+    readonly expiresAt: string;
+    readonly partialApproval: boolean;
+    /** Drafted from untrusted content (product text): its sources are named (ADR-0027 item 5). */
+    readonly untrustedSource: boolean;
+    readonly derivedFromId: Id | null;
+    readonly selectedTargetIndexes: readonly number[] | null;
+  };
+  readonly proposalRef: RecordRefView;
+  readonly approval: {
+    readonly id: Id;
+    readonly revision: number;
+    readonly status: string;
+    readonly effectiveAt: string | null;
+    readonly expiresAt: string;
+  } | null;
+  readonly approvalRef: RecordRefView | null;
+  /** reviewer, proposer or viewer. */
+  readonly viewerRole: string;
+  readonly actionable: boolean;
+  /** redacted, link_changed or not_reviewer when the person cannot act here. */
+  readonly blocked: string | null;
+  readonly confirmation: { readonly required: boolean; readonly phrase: string };
+  readonly products: readonly ProductReviewView[];
+  readonly claim: { readonly mine: boolean; readonly operations: readonly OperationView[] } | null;
+}
+export interface ReviewDecisionBody {
+  readonly decision: "approve" | "reject";
+  readonly selectedTargetIndexes: readonly number[] | null;
+  readonly expectedDecisionDigest: string;
+  readonly soloOwnerConfirmation: string | null;
+  readonly expectedRevision: number;
+}
+export interface ReviewDecidedView {
+  readonly proposalRef: RecordRefView;
+  readonly approvalRef: RecordRefView;
+  readonly status: string;
+  readonly expiresAt: string;
+}
+export interface ApplyResultView {
+  /** Products still waiting their turn; the same request again continues them. */
+  readonly pending: number;
+  readonly operations: readonly OperationView[];
+}
+export interface PendingApprovalView {
+  readonly proposalId: Id;
+  readonly storeId: Id | null;
+  readonly capabilityId: string;
+  readonly targetCount: number;
+  readonly expiresAt: string;
+  readonly viewerRole: string;
+}
 export interface Page<T> {
   readonly items: readonly T[];
   readonly next: string | null;
+}
+
+// ADR-0032 Home: the board's sections that have no backend yet. Only the fixture adapter
+// answers `samples.home`, and only where its scenario composes it; the HTTP build keeps
+// it uncomposed (not_in_build, nothing sent). These are presentational strings for a
+// preview, never contract data: the contracts and backend of ADR-0033 and ADR-0034
+// (projects with goals, Morrow drafting plans; accepted 2026-10-24) land in their own PRs.
+export type AgentKind =
+  | "morrow"
+  | "listings"
+  | "analyst"
+  | "inventory"
+  | "support"
+  | "marketing"
+  | "specialist";
+/** An agent a workspace installs (Morrow, the Coordinator, and one-time specialists aren't). */
+export type InstalledAgentKind = Exclude<AgentKind, "morrow" | "specialist">;
+export type SampleHealth = "on_track" | "behind" | "working" | "needs_you";
+export interface HomeSamplesView {
+  readonly viewerName: string;
+  readonly waiting: {
+    readonly review: number;
+    readonly tasks: number;
+    readonly alerts: number;
+  };
+  readonly creditsLeft: string;
+  readonly projects: readonly {
+    readonly id: Id;
+    readonly name: string;
+    readonly ends: string;
+    readonly summary: string;
+    readonly health: SampleHealth;
+  }[];
+  readonly everyday: readonly {
+    readonly name: string;
+    readonly summary: string;
+    readonly health: SampleHealth | null;
+  }[];
+  readonly team: {
+    /** Installed agents, each on the route contract's `agent` route; Morrow is implicit. */
+    readonly agents: readonly {
+      readonly agent: InstalledAgentKind;
+      readonly installationId: Id;
+    }[];
+    readonly people: readonly { readonly name: string; readonly presence: "online" | "away" }[];
+  };
+  readonly today: readonly {
+    readonly when: string;
+    readonly title: string;
+    readonly who: string;
+    readonly agent: AgentKind | null;
+    readonly where: string;
+    readonly status: "done" | "working" | "to_do";
+  }[];
+  readonly glance: {
+    readonly source: string;
+    readonly metrics: readonly {
+      readonly label: string;
+      readonly value: string;
+      readonly note: string | null;
+    }[];
+    readonly take: string;
+  };
+  readonly ideas: readonly {
+    readonly id: Id;
+    readonly agent: AgentKind;
+    readonly text: string;
+    readonly helps: string;
+  }[];
+  readonly recentAsks: readonly {
+    readonly asked: string;
+    readonly when: string;
+    readonly outcome: string;
+  }[];
 }
 
 const kindLabel = { human: "Member", agent: "Agent", service: "Service" } as const;

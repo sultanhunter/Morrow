@@ -3,7 +3,15 @@
 // match the raw pathname, so `%3A` would 404), the only query parameters are the
 // documented ones, bodies are closed literals with no organization, workspace or
 // principal key, and byte limits are checked before anything is sent.
-import type { Command, Composed, Outcome, PortMethod, WorkspacePort } from "@morrow/workspace-ui";
+import type {
+  Command,
+  Composed,
+  Outcome,
+  PortMethod,
+  RecordRefView,
+  ReviewDecisionBody,
+  WorkspacePort,
+} from "@morrow/workspace-ui";
 import {
   byteLength,
   isChallengeToken,
@@ -17,6 +25,7 @@ import {
   decodeStoreLinkPreview,
   decodeStoreLinkResult,
 } from "./connection-decoders";
+import { decodeDisconnectResult, decodeDisconnectStatus } from "./disconnect-decoders";
 import { handoffTokenPattern } from "../handoff";
 import {
   decodeAccountOverview,
@@ -55,6 +64,15 @@ import {
   decodeRunDetail,
   decodeRunsOfTask,
 } from "./runs-decoders";
+import {
+  decodeApplied,
+  decodeDecided,
+  decodeOperationsOfTask,
+  decodePendingApprovals,
+  decodeRechecked,
+  decodeSetAside,
+  decodeReview,
+} from "./review-decoders";
 
 export type HttpRequest =
   | { readonly method: "GET"; readonly path: string }
@@ -119,6 +137,38 @@ const runFields = (value: unknown) =>
   value.every((f) => typeof f === "string" && listingFieldPaths.includes(f)) &&
   new Set(value).size === value.length &&
   value.includes("seo.title") === value.includes("seo.description");
+
+// v1 PR 3: a selection of a proposal's products (root indexes), and the refs the review
+// read returned, sent back exactly.
+const selection = (value: unknown): value is readonly number[] =>
+  Array.isArray(value) &&
+  value.length >= 1 &&
+  value.length <= 100 &&
+  value.every((i) => Number.isSafeInteger(i) && i >= 0 && i <= 99) &&
+  new Set(value).size === value.length;
+const refOf = (value: RecordRefView, kind: "proposal" | "approval") =>
+  value !== null &&
+  typeof value === "object" &&
+  Object.keys(value).sort().join() ===
+    "digest,id,kind,organizationId,revision,storeId,workspaceId" &&
+  value.kind === kind &&
+  isId(value.organizationId) &&
+  isId(value.workspaceId) &&
+  (value.storeId === null || isId(value.storeId)) &&
+  isId(value.id) &&
+  revision(value.revision) &&
+  hex64(value.digest)
+    ? {
+        organizationId: value.organizationId,
+        workspaceId: value.workspaceId,
+        storeId: value.storeId,
+        kind,
+        id: value.id,
+        revision: value.revision,
+        digest: value.digest,
+      }
+    : null;
+const operationIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 
 /** Every request this adapter can send; `null` means refused before sending. */
 export const requests = {
@@ -278,6 +328,19 @@ export const requests = {
   // M2 PR-2: the connections read and the store-link routes. The body is exactly
   // {handoffToken} (the guard's closed shape); the key is the handoff's one command key.
   connections: (ws: string) => (ids(ws) ? get(`/workspace/${ws}/connections`) : null),
+  // "Disconnect store": the status read and the person's kill switch, beside the
+  // connections read (the work API's envelope, the connection id unencoded in the path).
+  disconnectStatus: (ws: string, connectionId: string) =>
+    ids(ws, connectionId) ? get(`/workspace/${ws}/connections/${connectionId}/disconnect`) : null,
+  disconnect(ws: string, connectionId: string, c: Command<{ reason: string }>) {
+    if (!ids(ws, connectionId) || !stopReason(c.body.reason)) return null;
+    return post(
+      `/workspace/${ws}/connections/${connectionId}/disconnect`,
+      { control: { reason: c.body.reason, sourceProposalRef: null } },
+      c.key,
+      byteLimits.work,
+    );
+  },
   storeLink(
     route: "preview" | "apply" | "status",
     ws: string,
@@ -389,6 +452,89 @@ export const requests = {
   reconcileRuns(ws: string, c: Command<Record<string, never>>) {
     if (!ids(ws) || Object.keys(c.body).length !== 0) return null;
     const request = post(workPath(ws, "runs-reconcile"), {}, c.key, byteLimits.work);
+    return request && request.key !== null ? request : null;
+  },
+  // v1 PR 3: the review and apply routes under /workspace/:ws/work.
+  pendingApprovals: (ws: string) =>
+    ids(ws) ? get(workPath(ws, "approvals") + query([["limit", "25"]])) : null,
+  review: (ws: string, proposalId: string, selected: readonly number[] | null) =>
+    ids(ws, proposalId) && (selected === null || selection(selected))
+      ? get(
+          workPath(ws, "proposals", proposalId, "review") +
+            (selected === null ? "" : "?selected=" + [...selected].sort((a, b) => a - b).join(",")),
+        )
+      : null,
+  decide(ws: string, proposalId: string, c: Command<ReviewDecisionBody>): HttpRequest | null {
+    const b = c.body;
+    if (
+      !ids(ws, proposalId) ||
+      (b.decision !== "approve" && b.decision !== "reject") ||
+      !(b.selectedTargetIndexes === null || selection(b.selectedTargetIndexes)) ||
+      (b.decision === "reject" && b.selectedTargetIndexes !== null) ||
+      !hex64(b.expectedDecisionDigest) ||
+      !(b.soloOwnerConfirmation === null || text(b.soloOwnerConfirmation, 256)) ||
+      !revision(b.expectedRevision)
+    )
+      return null;
+    const request = post(
+      workPath(ws, "proposals", proposalId, "decision"),
+      {
+        decision: {
+          decision: b.decision,
+          selectedTargetIndexes:
+            b.selectedTargetIndexes === null
+              ? null
+              : [...b.selectedTargetIndexes].sort((x, y) => x - y),
+          expectedDecisionDigest: b.expectedDecisionDigest,
+          soloOwnerConfirmation: b.soloOwnerConfirmation,
+          comment: null,
+        },
+        expectedRevision: b.expectedRevision,
+      },
+      c.key,
+      byteLimits.work,
+    );
+    return request && request.key !== null ? request : null;
+  },
+  apply(
+    ws: string,
+    proposalId: string,
+    c: Command<{ readonly proposalRef: RecordRefView; readonly approvalRef: RecordRefView }>,
+  ): HttpRequest | null {
+    const proposalRef = refOf(c.body.proposalRef, "proposal");
+    const approvalRef = refOf(c.body.approvalRef, "approval");
+    if (!ids(ws, proposalId) || !proposalRef || !approvalRef || proposalRef.id !== proposalId)
+      return null;
+    const request = post(
+      workPath(ws, "proposals", proposalId, "apply"),
+      { proposalRef, approvalRef },
+      c.key,
+      byteLimits.work,
+    );
+    return request && request.key !== null ? request : null;
+  },
+  operationsOfTask: (ws: string, taskId: string) =>
+    ids(ws, taskId) ? get(workPath(ws, "tasks", taskId, "operations")) : null,
+  recheck(ws: string, operationId: string, c: Command<Record<string, never>>) {
+    if (!ids(ws) || !operationIdPattern.test(operationId) || Object.keys(c.body).length !== 0)
+      return null;
+    const request = post(
+      workPath(ws, "operations", operationId, "reconcile"),
+      {},
+      c.key,
+      byteLimits.work,
+    );
+    return request && request.key !== null ? request : null;
+  },
+  setAside(ws: string, operationId: string, c: Command<Record<string, never>>) {
+    if (!ids(ws) || !operationIdPattern.test(operationId) || Object.keys(c.body).length !== 0)
+      return null;
+    const request = post(
+      workPath(ws, "operations", operationId, "set-aside"),
+      {},
+      c.key,
+      byteLimits.work,
+    );
     return request && request.key !== null ? request : null;
   },
 } as const;
@@ -574,11 +720,26 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
     },
     work,
     people: { list: unbuilt },
+    // ADR-0032 Home preview: no backend, no route and no contract. Never composed over
+    // HTTP, so it answers not_in_build and sends nothing.
+    samples: { home: unbuilt },
     connections: {
       list: gated("connections.list", async (ws: string) => {
         const request = requests.connections(ws);
         return request ? decodeConnections(await send(request), ws) : unknownRecord;
       }),
+      disconnectStatus: gated("connections.disconnectStatus", (ws: string, connectionId: string) =>
+        read(requests.disconnectStatus(ws, connectionId), (b) =>
+          decodeDisconnectStatus(b, connectionId),
+        ),
+      ),
+      disconnect: gated(
+        "connections.disconnect",
+        (ws: string, connectionId: string, c: Command<{ reason: string }>) =>
+          command(requests.disconnect(ws, connectionId, c), (b) =>
+            decodeDisconnectResult(b, connectionId),
+          ),
+      ),
     },
     storeLinks: {
       preview: gated(
@@ -660,6 +821,42 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       ),
       reconcile: gated("runs.reconcile", (ws: string, c: Command<Record<string, never>>) =>
         command(requests.reconcileRuns(ws, c), decodeReconciled),
+      ),
+    },
+    review: {
+      listPending: gated("review.listPending", (ws: string) =>
+        read(requests.pendingApprovals(ws), decodePendingApprovals),
+      ),
+      get: gated(
+        "review.get",
+        (ws: string, proposalId: string, selected: readonly number[] | null) =>
+          read(requests.review(ws, proposalId, selected), (b) => decodeReview(b, proposalId)),
+      ),
+      decide: gated(
+        "review.decide",
+        (ws: string, proposalId: string, c: Command<ReviewDecisionBody>) =>
+          command(requests.decide(ws, proposalId, c), decodeDecided),
+      ),
+      apply: gated(
+        "review.apply",
+        (
+          ws: string,
+          proposalId: string,
+          c: Command<{ readonly proposalRef: RecordRefView; readonly approvalRef: RecordRefView }>,
+        ) => command(requests.apply(ws, proposalId, c), decodeApplied),
+      ),
+      operationsOfTask: gated("review.operationsOfTask", (ws: string, taskId: string) =>
+        read(requests.operationsOfTask(ws, taskId), (b) => decodeOperationsOfTask(b, taskId)),
+      ),
+      recheck: gated(
+        "review.recheck",
+        (ws: string, operationId: string, c: Command<Record<string, never>>) =>
+          command(requests.recheck(ws, operationId, c), (b) => decodeRechecked(b, operationId)),
+      ),
+      setAside: gated(
+        "review.setAside",
+        (ws: string, operationId: string, c: Command<Record<string, never>>) =>
+          command(requests.setAside(ws, operationId, c), (b) => decodeSetAside(b, operationId)),
       ),
     },
     models: {

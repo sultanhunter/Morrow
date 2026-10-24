@@ -106,25 +106,76 @@ export const modelProviderVar = "MORROW_MODEL_PROVIDER";
 export const modelProviderAnthropic = "anthropic";
 /** An Anthropic Console API key (sk-ant-api03-…); never logged, never returned. */
 export const anthropicKeyPattern = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
+// Build order PR 7 (ADR-0029 items 3 and 10): the E2B API key, bound only to the broker and
+// required only while the reviewed runtime switch is not off. The switch is
+// docs/decisions/runtime-staging.json `switch` ("off", "cleanup_only" or "on"), committed
+// "off": while it is off the broker reads no runtime secret, runtimeExecute and runtimeSweep
+// answer BROKER_HELD (RUNTIME_UNAVAILABLE) before any input, database or provider access, and
+// no adapter is composed. Its runtime image is the broker's var MORROW_RUNTIME_SWITCH, exactly
+// "on" or "cleanup_only" while the switch is on or cleanup-only (cleanup-only reconciles and
+// kills, and creates nothing); any other value is off. Production has no switch until the
+// ADR-0007 item 9 custody ADR.
+export const brokerRuntimeSecrets: readonly string[] = Object.freeze(["E2B_API_KEY"]);
+export type BrokerRuntimeSwitch = "off" | "cleanup_only" | "on";
+export const runtimeSwitchVar = "MORROW_RUNTIME_SWITCH";
+export const runtimeSwitchValues: readonly Exclude<BrokerRuntimeSwitch, "off">[] = Object.freeze([
+  "on",
+  "cleanup_only",
+]);
+/** The one runtime provider ADR-0029 selects. */
+export const runtimeProviderE2b = "e2b";
+/** An E2B API key (e2b_…, E2B's documented shape); never logged, never returned. */
+export const e2bKeyPattern = /^e2b_[A-Za-z0-9]{20,128}$/;
 const brokerRequiredSecretsInProduction: readonly string[] = Object.freeze(
   brokerRequiredSecrets.filter((name) => !brokerVaultSecrets.includes(name)),
 );
-// The broker's exact `secrets.required` (development and staging: 14 with both switches off,
-// 16 with Stripe on, 15 with the model provider on, 17 with both; production: 12). Production
-// has neither switch: "on" there is refused.
+// The broker's exact `secrets.required` (development and staging: 14 with every switch off,
+// 16 with Stripe on, 15 with the model provider on, 15 with the runtime switch on or
+// cleanup-only, and each combination's sum; production: 12). Production has no switch: "on"
+// (or cleanup-only) there is refused.
 export function brokerRequiredSecretsFor(
   environment: "development" | "staging" | "production",
   stripe: BrokerStripeSwitch = "off",
   model: BrokerModelSwitch = "off",
+  runtime: BrokerRuntimeSwitch = "off",
 ): readonly string[] {
   if ((stripe !== "off" && stripe !== "on") || (environment === "production" && stripe === "on"))
     throw Error("BROKER_STRIPE_SWITCH_INVALID");
   if ((model !== "off" && model !== "on") || (environment === "production" && model === "on"))
     throw Error("BROKER_MODEL_SWITCH_INVALID");
+  if (
+    (runtime !== "off" && runtime !== "on" && runtime !== "cleanup_only") ||
+    (environment === "production" && runtime !== "off")
+  )
+    throw Error("BROKER_RUNTIME_SWITCH_INVALID");
   if (environment === "production") return brokerRequiredSecretsInProduction;
   const base = stripe === "on" ? brokerRequiredSecretsWithStripe : brokerRequiredSecrets;
-  return model === "on" ? Object.freeze([...base, ...brokerModelSecrets]) : base;
+  const withModel = model === "on" ? [...base, ...brokerModelSecrets] : base;
+  if (runtime === "off") return model === "on" ? Object.freeze(withModel) : base;
+  return Object.freeze([...withModel, ...brokerRuntimeSecrets]);
 }
+// The names a staging broker may hold beyond its required ones: the E2B key, placed ahead of
+// the runtime switch only by the owner's explicit choice (`staging:put-secret E2B_API_KEY
+// --while-runtime-off`). While the switch is off the broker never reads it; gate 6 and
+// secrets-status accept it present or absent. Development and production admit none.
+export function brokerOptionalSecretsFor(
+  environment: "development" | "staging" | "production",
+  runtime: BrokerRuntimeSwitch = "off",
+): readonly string[] {
+  if (runtime !== "off" && runtime !== "on" && runtime !== "cleanup_only")
+    throw Error("BROKER_RUNTIME_SWITCH_INVALID");
+  return environment === "staging" && runtime === "off" ? brokerRuntimeSecrets : Object.freeze([]);
+}
+// RuntimeBroker.runtimeExecute and runtimeSweep (build order PR 7; ADR-0029): an execute's
+// budget holds a create, the inputs, one 120 s exec, the outputs and the kill; a sweep
+// reconciles at most one batch of stale operations.
+export const runtimeGatewayLimits = Object.freeze({
+  executeBudgetMinMs: 60_000,
+  executeBudgetMaxMs: 600_000,
+  sweepBudgetMinMs: 30_000,
+  sweepBudgetMaxMs: 300_000,
+  sweepBatch: 25,
+});
 export const brokerLimits = Object.freeze({
   namespaceMaxBytes: 1024,
   selectorMaxBytes: 2048,
@@ -172,6 +223,21 @@ export interface ApiBrokerRpc {
     variablesJson: string,
     budgetMs: number,
   ): Promise<string>;
+  // v1 PR 3 (ADR-0022 items 7 and 9): the gateway's apply of one dispatching catalog_write
+  // operation (the claimant's own session moved it there), and the read-back of one
+  // operation. Ids and a budget only; the closed results above (encodeShopifyApplyResult,
+  // encodeShopifyReconcileResult). While the apply switch is off, shopifyProductApply is
+  // BROKER_HELD (WRITE_UNAVAILABLE) before any input, database or Shopify access; the
+  // read-back is never blocked by the switch.
+  shopifyProductApply(operationId: string, budgetMs: number): Promise<string>;
+  shopifyProductReconcile(operationId: string, budgetMs: number): Promise<string>;
+  // "Disconnect store" (ADR-0022 items 7 and 13; the M2 brief's PR-3 checklist): after the
+  // api's disconnect committed, destroys that installation's offline token and records the
+  // destruction on it. The reason is fixed (`disconnected`): the api can destroy only a token
+  // whose installation records a person's disconnect, and the vault refuses any other
+  // (ineligible). The closed result is encodeShopifyCredentialResult's; a held broker throws
+  // BROKER_HELD. Idempotent: the connector's cron re-drives one that did not complete.
+  shopifyCredentialDestroy(installationId: string): Promise<string>;
 }
 // M2 PR-1 (ADR-0022 item 7, spine §4): the connector's and the orchestrator's own
 // entrypoints. PR-1 gives each its health and its own role lease; the Shopify and model
@@ -220,6 +286,22 @@ export interface RuntimeBrokerRpc {
     callJson: string,
     budgetMs: number,
   ): Promise<string>;
+  // Build order PR 7 (ADR-0029): the computer's one door. The lease is the run's; jobJson is
+  // RuntimeJob@1 (closed: a step key, a script, minimised extracts and declared outputs; no
+  // command, template, network, environment or limit); the result is a RuntimeResult@1
+  // string. The broker commits the operation's send mark in SQL before any create, never
+  // retries one, always kills, and returns only checked PNG, CSV and XLSX outputs. While the
+  // runtime switch is off (committed, docs/decisions/runtime-staging.json) both methods are
+  // BROKER_HELD before any input, database or provider access.
+  runtimeExecute(
+    leaseId: string,
+    generation: number,
+    jobJson: string,
+    budgetMs: number,
+  ): Promise<string>;
+  // Reconciles stale runtime operations by their metadata (kills leftovers; never creates);
+  // runs under "on" and "cleanup_only". The result counts only, no ids.
+  runtimeSweep(budgetMs: number): Promise<string>;
 }
 /**
  * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant (an RPC stub
@@ -998,6 +1080,168 @@ export function decodeShopifyReadResult(
     }
   }
   throw invalid();
+}
+
+// v1 PR 3: the gateway's apply and read-back (ADR-0022 items 7 and 9; spine §8). The api
+// names one catalog_write operation of its own claim and a budget; the broker loads the
+// operation, its lease, the store, the credential and the claimed proposal's item itself,
+// fences the send in SQL before any request, writes the product at most once and records
+// the outcome; the read-back is keyed by the operation, needs no lease and is never blocked
+// by a stop or the switch. Results are closed JSON with fixed codes: never Shopify's text,
+// a product value or a token.
+//
+// The reviewed apply switch (docs/decisions/shopify-write-staging.json, committed "off"): its
+// one runtime image is the var MORROW_SHOPIFY_WRITE, exactly "on", on the staging api and
+// broker. While it is off the api's apply answers 503 before any database access and the
+// broker's apply answers BROKER_HELD (WRITE_UNAVAILABLE) before any input, database or
+// Shopify access. Any other value is off. Production has no switch until the ADR-0007
+// item 9 custody ADR.
+export type BrokerShopifyWriteSwitch = "off" | "on";
+export const shopifyWriteVar = "MORROW_SHOPIFY_WRITE";
+export const shopifyWriteOn = "on";
+export const shopifyWriteLimits = Object.freeze({
+  budgetMinMs: 1,
+  /** One apply call: the resolution, the pre-send read, the fence, the send and the close. */
+  budgetMaxMs: 30000,
+  resultMaxBytes: 512,
+  /** The pre-send read and each read-back (the THROTTLED wait included). */
+  readMs: 10000,
+  /** The one send (and its single THROTTLED resend, inside the same fence). */
+  sendMs: 15000,
+  replyMaxBytes: 262144,
+});
+export const shopifyApplyOutcomes = Object.freeze([
+  "submitted",
+  "failed",
+  "uncertain",
+  "refused",
+  "held",
+  "in_flight",
+  "settled",
+] as const);
+export type ShopifyApplyOutcome = (typeof shopifyApplyOutcomes)[number];
+export const shopifyReconcileOutcomes = Object.freeze([
+  "recorded",
+  "closed",
+  "too_soon",
+  "unavailable",
+  "held",
+  "settled",
+] as const);
+export type ShopifyReconcileOutcome = (typeof shopifyReconcileOutcomes)[number];
+export const operationStatusNames = Object.freeze([
+  "planned",
+  "awaiting_approval",
+  "authorized",
+  "reserved",
+  "dispatching",
+  "submitted",
+  "verifying",
+  "verified",
+  "rejected",
+  "conflict",
+  "failed",
+  "uncertain",
+  "cancel_requested",
+  "cancelled",
+] as const);
+export type OperationStatusName = (typeof operationStatusNames)[number];
+export interface ShopifyApplyResult {
+  readonly outcome: ShopifyApplyOutcome;
+  /** The operation's status after the call, or null when it is not known (held). */
+  readonly status: OperationStatusName | null;
+  /** The recorded reason code of a refusal or a close, or null. */
+  readonly reason: string | null;
+}
+export interface ShopifyReconcileResult {
+  readonly outcome: ShopifyReconcileOutcome;
+  readonly status: OperationStatusName | null;
+  readonly verdict: "approved" | "source" | "mixed" | "missing" | null;
+}
+const reasonCode = /^[a-z][a-z0-9_]{2,63}$/;
+export const shopifyOperationIdValid = (value: unknown): value is string =>
+  exact(/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/, value);
+export const shopifyWriteBudgetValid = (value: unknown): value is number =>
+  Number.isSafeInteger(value) &&
+  (value as number) >= shopifyWriteLimits.budgetMinMs &&
+  (value as number) <= shopifyWriteLimits.budgetMaxMs;
+function closedResult(text: unknown, keys: readonly string[]): Record<string, unknown> {
+  if (typeof text !== "string" || brokerUtf8Bytes(text) > shopifyWriteLimits.resultMaxBytes)
+    throw invalid();
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw invalid();
+  }
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== [...keys].sort().join(",") ||
+    (value as Record<string, unknown>).schemaVersion !== 1
+  )
+    throw invalid();
+  return value as Record<string, unknown>;
+}
+const statusOrNull = (value: unknown): value is OperationStatusName | null =>
+  value === null || (operationStatusNames as readonly unknown[]).includes(value);
+export function encodeShopifyApplyResult(r: ShopifyApplyResult): string {
+  if (
+    !(shopifyApplyOutcomes as readonly string[]).includes(r.outcome) ||
+    !statusOrNull(r.status) ||
+    !(r.reason === null || exact(reasonCode, r.reason))
+  )
+    throw invalid();
+  return JSON.stringify({
+    schemaVersion: 1,
+    outcome: r.outcome,
+    status: r.status,
+    reason: r.reason,
+  });
+}
+export function decodeShopifyApplyResult(text: unknown): ShopifyApplyResult {
+  const v = closedResult(text, ["schemaVersion", "outcome", "status", "reason"]);
+  if (
+    !(shopifyApplyOutcomes as readonly unknown[]).includes(v.outcome) ||
+    !statusOrNull(v.status) ||
+    !(v.reason === null || exact(reasonCode, v.reason))
+  )
+    throw invalid();
+  return Object.freeze({
+    outcome: v.outcome as ShopifyApplyOutcome,
+    status: v.status as OperationStatusName | null,
+    reason: v.reason as string | null,
+  });
+}
+const verdicts: readonly unknown[] = ["approved", "source", "mixed", "missing", null];
+export function encodeShopifyReconcileResult(r: ShopifyReconcileResult): string {
+  if (
+    !(shopifyReconcileOutcomes as readonly string[]).includes(r.outcome) ||
+    !statusOrNull(r.status) ||
+    !verdicts.includes(r.verdict)
+  )
+    throw invalid();
+  return JSON.stringify({
+    schemaVersion: 1,
+    outcome: r.outcome,
+    status: r.status,
+    verdict: r.verdict,
+  });
+}
+export function decodeShopifyReconcileResult(text: unknown): ShopifyReconcileResult {
+  const v = closedResult(text, ["schemaVersion", "outcome", "status", "verdict"]);
+  if (
+    !(shopifyReconcileOutcomes as readonly unknown[]).includes(v.outcome) ||
+    !statusOrNull(v.status) ||
+    !verdicts.includes(v.verdict)
+  )
+    throw invalid();
+  return Object.freeze({
+    outcome: v.outcome as ShopifyReconcileOutcome,
+    status: v.status as OperationStatusName | null,
+    verdict: v.verdict as ShopifyReconcileResult["verdict"],
+  });
 }
 
 // M5 PR-1: the ApiBroker Stripe protocol. Closed result JSON with fixed codes; never

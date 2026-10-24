@@ -2,7 +2,9 @@ BEGIN;
 -- PR 18 projects behind the scenes (ADR-0033 and ADR-0034; docs/briefs/projects-backend.md).
 -- Executes AS morrow_work_owner, as 0046 after the v1 PRs' 0039-0045 (written after M3
 -- PR-2's listings runs, 0038; the shared CHECKs it widens are asserted below exactly as the
--- head defines them, so a revision by any earlier file stops it). Forward only: no
+-- head defines them, so a revision by any earlier file stops it: the commands CHECKs as
+-- 0042 ("Disconnect store") widened them with connection.disconnect and the connection
+-- aggregate, which 0046 keeps; 0043-0045 change none of them). Forward only: no
 -- published migration is edited. On the ADR-0010 tenant pattern: composite tenant keys,
 -- ENABLE and FORCE RLS, definers owned by morrow_work_command, INVOKER triggers and checks
 -- owned by the owner. No external effect: nothing here sends a request, reserves money,
@@ -68,9 +70,9 @@ DO $$ BEGIN
  -- The shared CHECKs and the trigger this file revises, exactly as the head defines them
  -- (shared protocol: a later revision is never overwritten blind).
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.commands'::regclass AND c.conname='commands_command_type_check')
-  IS DISTINCT FROM 'ca4b097af5cd5ddf3e97bf48b214bc56'
+  IS DISTINCT FROM 'b8901c8a76ad805edca0d04919fac427'
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.commands'::regclass AND c.conname='commands_check')
-  IS DISTINCT FROM 'a517388dfd7a53b7eac1151d9cbccab6'
+  IS DISTINCT FROM '35385133f702d777fc2304f9d7bdf71b'
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.outbox_events'::regclass AND c.conname='outbox_events_event_type_check')
   IS DISTINCT FROM 'c337a4779f7b9e92957152eb064b1962'
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.outbox_events'::regclass AND c.conname='outbox_events_check3')
@@ -399,9 +401,9 @@ ALTER TABLE morrow_work.commands DROP CONSTRAINT commands_command_type_check, DR
  ADD CONSTRAINT commands_command_type_check CHECK (command_type IN ('goal.create','goal.transition','task.create','task.ready','task.assign',
   'question.request','question.answer','question.cancel','proposal.submit','approval.decide','approval.withdraw',
   'installation.document','installation.enable','installation.stop','model_default.revise','run.admit','run.reconcile',
-  'goal.revise','goal.check','plan.start_document','plan.start')),
- ADD CONSTRAINT commands_check CHECK (aggregate_type IN ('goal','task','question','proposal','approval','installation','model_default','run','plan')
-  AND aggregate_type=split_part(command_type,'.',1));
+  'connection.disconnect','goal.revise','goal.check','plan.start_document','plan.start')),
+ ADD CONSTRAINT commands_check CHECK (aggregate_type IN ('goal','task','question','proposal','approval','installation','model_default','run',
+  'connection','plan') AND aggregate_type=split_part(command_type,'.',1));
 -- goal.revised (registered in docs/contracts/event-registry.json, EmptyEventPayload): every
 -- goal revision a person makes (cmd_goal_revise, or a plan change through the start) appends
 -- one, so a goal's aggregate revisions stay contiguous on the stream. The envelope carries the

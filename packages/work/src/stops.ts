@@ -20,6 +20,11 @@ import {
 //   its KillSwitchRecord commit together. `planStopAiWork` is that middle step; its
 //   command and definer land with the installation records (M3 PR-1, spine §10), since
 //   an installation stop names an installation that only "Enable Listings agent" creates.
+// - "Disconnect store" is the human-only kill switch governance.connection.disconnect
+//   (ADR-0022 items 2, 3 and 15 with the amendments of 2026-10-22) on the same path:
+//   `planDisconnect` is its middle step, a connection stop whose KillSwitchRecord names
+//   the connection (KillSwitchConnectionTarget, core v1.1). Its definer also ends the
+//   store installation (suspended, `disconnected`); the broker then destroys the token.
 // - System and operator stops write StopRecord@1: the app/uninstalled and
 //   app/scopes_update connection stops (M2 PR-3 writes them through the connector's
 //   applier, morrow_work.connector_inbox_apply, with exactly these codes and reasons) and
@@ -70,6 +75,17 @@ const exact = (pattern: RegExp, value: unknown): value is string =>
 const inputInvalid = () => new StopBoundaryError("STOP_INPUT_INVALID");
 /** One KillSwitchRecord target, as the record's own schema types it. */
 type KillSwitchTarget = Current_KillSwitchRecord["targets"][number];
+/** A store connection as a KillSwitchRecord target (core v1.1 KillSwitchConnectionTarget). */
+type ConnectionTarget = Extract<KillSwitchTarget, { kind: "connection" }>;
+// The same result checkKillSwitchTarget gives an unknown target.
+const notFound = () =>
+  Object.freeze({
+    allowed: false,
+    code: "TARGET_NOT_FOUND",
+    category: "denied",
+    retry: "never",
+    safeMessage: "The requested target is not available.",
+  } as const);
 
 export type StopAiWorkResult =
   | {
@@ -109,16 +125,7 @@ export function planStopAiWork(
   if (!checked.allowed) return checked;
   const installationId = request.input.installationId;
   const record = facts.records.find((r) => r.kind === "installation" && r.id === installationId);
-  if (!record || record.storeId === null) {
-    // The same result checkKillSwitchTarget gives an unknown target.
-    return Object.freeze({
-      allowed: false,
-      code: "TARGET_NOT_FOUND",
-      category: "denied",
-      retry: "never",
-      safeMessage: "The requested target is not available.",
-    });
-  }
+  if (!record || record.storeId === null) return notFound();
   const plan: StopControlPlan = Object.freeze({
     scope: "installation",
     organizationId: facts.organizationId,
@@ -171,6 +178,112 @@ export function stopAiWorkRecord(
     revision: 1,
     createdAt: command.createdAt,
     capabilityId: "agents.installation.disable",
+    actor,
+    control: request.input.control,
+    targets: result.targets,
+    commandId: command.commandId,
+    requestDigest: command.requestDigest,
+    priorStateObserved: command.priorStateObserved,
+  };
+  if (!validateCurrentDefinition("KillSwitchRecord", record)) throw inputInvalid();
+  return JSON.parse(JSON.stringify(record)) as Current_KillSwitchRecord;
+}
+
+export type DisconnectResult =
+  | {
+      readonly allowed: true;
+      readonly plan: StopControlPlan;
+      /** The one KillSwitchRecord target: the connection, on its store. */
+      readonly targets: readonly [ConnectionTarget];
+    }
+  | Extract<KillSwitchTargetResult, { allowed: false }>;
+
+/**
+ * The target step of "Disconnect store" for an actor the human policy evaluator already
+ * allowed to execute governance.connection.disconnect on the store resource (the
+ * store-link template v2 grant). The actor must be a current human member of the facts'
+ * tenant: an agent never disconnects. The connection must be a store's (its stop takes
+ * that store's interlock, 0020 stop_guard); a storeless one, or a record that names
+ * another connection, is the same not-found denial as an unknown target. Throws
+ * StopBoundaryError or KillSwitchBoundaryError for malformed input.
+ */
+export function planDisconnect(
+  actor: Current_HumanActorRef,
+  request: KillSwitchTargetRequest,
+  facts: KillSwitchTargetFacts,
+): DisconnectResult {
+  if (
+    !validateCurrentDefinition("HumanActorRef", actor) ||
+    !facts ||
+    actor.organizationId !== facts.organizationId ||
+    actor.workspaceId !== facts.workspaceId ||
+    !request ||
+    request.capabilityId !== "governance.connection.disconnect"
+  )
+    throw inputInvalid();
+  const checked = checkKillSwitchTarget(request, facts);
+  if (!checked.allowed) return checked;
+  const connectionId = request.input.connectionId;
+  const record = facts.records.find((r) => r.kind === "connection" && r.id === connectionId);
+  if (
+    !record ||
+    record.storeId === null ||
+    (record.connectionId !== null && record.connectionId !== connectionId)
+  )
+    return notFound();
+  const plan: StopControlPlan = Object.freeze({
+    scope: "connection",
+    organizationId: facts.organizationId,
+    workspaceId: facts.workspaceId,
+    storeId: record.storeId,
+    targetId: connectionId,
+    setBy: Object.freeze({
+      kind: "human",
+      principalId: actor.principalId,
+      membershipId: actor.membershipId,
+    }),
+    reasonCode: stopReasonCodes.disconnect,
+    reason: request.input.control.reason,
+  });
+  const target: ConnectionTarget = Object.freeze({
+    organizationId: facts.organizationId,
+    workspaceId: facts.workspaceId,
+    storeId: record.storeId,
+    connectionId,
+    kind: "connection",
+    id: connectionId,
+  });
+  if (!validateCurrentDefinition("KillSwitchConnectionTarget", target)) throw inputInvalid();
+  return Object.freeze({ allowed: true, plan, targets: Object.freeze([target] as const) });
+}
+
+/**
+ * The KillSwitchRecord committed with a "Disconnect store" stop. The command supplies its
+ * own record id, time, command id, request digest and the prior state it observed (an
+ * open stop on the connection, whoever set it, is already_stopped).
+ */
+export function disconnectRecord(
+  actor: Current_HumanActorRef,
+  request: KillSwitchTargetRequest,
+  result: Extract<DisconnectResult, { allowed: true }>,
+  command: {
+    readonly id: string;
+    readonly createdAt: string;
+    readonly commandId: string;
+    readonly requestDigest: string;
+    readonly priorStateObserved: "active" | "already_stopped";
+  },
+): Current_KillSwitchRecord {
+  if (request.capabilityId !== "governance.connection.disconnect") throw inputInvalid();
+  const record = {
+    schemaVersion: 1,
+    id: command.id,
+    organizationId: result.plan.organizationId,
+    workspaceId: result.plan.workspaceId,
+    storeId: result.plan.storeId,
+    revision: 1,
+    createdAt: command.createdAt,
+    capabilityId: "governance.connection.disconnect",
     actor,
     control: request.input.control,
     targets: result.targets,

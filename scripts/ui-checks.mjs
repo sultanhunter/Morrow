@@ -6,8 +6,10 @@
 // Optional: --only=<a>,<b> runs the cases whose group/name contains any of them.
 // Each state case checks axe (WCAG 2.0/2.1 A and AA, 2.2 AA, plus the ARIA-in-HTML
 // `aria-allowed-role` rule) with zero violations, one visible provisional note, non-text
-// contrast of control borders and focus indicators, reflow, 24 px targets, reduced
-// motion, CSP and console errors; an entry screen's title matches its heading. Keyboard
+// contrast of control borders and focus indicators, reflow, the ADR-0032 item 5 target
+// floors from docs/design/tokens.json (44 px, and 48 px below 760 px; a checkbox or radio
+// is measured by the label that holds it), reduced motion, CSP and console errors; an
+// entry screen's title matches its heading. Keyboard
 // walks run at 1440 and 390. Tracing, HAR and video stay off; screenshots exist only for
 // failed fixture cases. Reports are verdict-only JSON under ui/ in the artifacts directory.
 import { createServer } from "node:net";
@@ -17,6 +19,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { artifactPath, repositoryRoot, writeArtifact } from "./artifacts.mjs";
+import { targetFloors } from "./generate-ui-tokens.mjs";
 
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
@@ -28,6 +31,8 @@ const allWidths = [1440, 768, 390, 320];
 const heights = { 1440: 900, 768: 1024, 390: 844, 320: 640 };
 const ws = "ws-linen";
 const provisional = "Provisional workspace · design under review";
+/** ADR-0032 item 5: 44 px targets, 48 px on a phone (below the 760 px navigation break). */
+export const floors = targetFloors();
 
 /** The `/*` block of apps/workspace-web/public/_headers, as served by Static Assets. */
 export function staticHeaders() {
@@ -136,11 +141,20 @@ const pageChecks = () => {
           'a[href], button, input, select, textarea, [role="tab"], [role="menuitemradio"], [tabindex]:not([tabindex="-1"])',
         ),
       ].filter(visible);
+      const { minimum, phone, phoneBelow } = window.__floors;
+      const floor = window.innerWidth < phoneBelow ? phone : minimum;
       for (const el of targets) {
-        const rect = el.getBoundingClientRect();
+        // A checkbox or radio is hit through its label too: measure the label holding it.
+        const box =
+          el.tagName === "INPUT" && (el.type === "checkbox" || el.type === "radio")
+            ? (el.closest("label") ?? el)
+            : el;
+        const rect = box.getBoundingClientRect();
         const inline = el.tagName === "A" && getComputedStyle(el).display === "inline";
-        if (!inline && (rect.width < 24 || rect.height < 24))
-          failures.push(`target_size:${el.tagName.toLowerCase()}`);
+        if (!inline && (rect.width < floor || rect.height < floor))
+          failures.push(
+            `target_size:${el.tagName.toLowerCase()}${el.classList[0] ? "." + el.classList[0] : ""}`,
+          );
         const style = getComputedStyle(el);
         const border = parse(style.borderTopColor);
         const bordered =
@@ -207,6 +221,8 @@ async function signOut(page) {
   await openDrawerIfNarrow(page);
   await page.getByRole("button", { name: "Sign out" }).click();
 }
+// ADR-0032 Home: the heading greets the person; the scope line names the workspace.
+const homeShown = (page, name = "Linen & Form") => page.getByText(`your day at ${name}`).first();
 const morrowKeys = (page) =>
   page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith("morrow.")));
 const intendedRoute = (page) => page.evaluate(() => sessionStorage.getItem("morrow.intended.v1"));
@@ -301,7 +317,53 @@ export const fixtureCases = [
       await page.getByRole("heading", { name: "Stop AI work for this store" }).waitFor();
     },
   }),
+  // T7 review F1: every connections read fails once the enable is sent, and its reply is
+  // lost. The connection screen reads once per mount, so the review and its Check again
+  // stay through the command's re-reads; the sidebar keeps its last connection line; and
+  // Check again replays the enable under the same key.
+  fixtureCase("agents", "listings_enable_reread_failed", `/w/${ws}/connections/conn-sample-1`, {
+    scenario: "listings_enable_reread_failed",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Enable Listings agent" }).click();
+      await page.getByRole("button", { name: "Confirm and enable" }).click();
+      const checkAgain = page.getByRole("button", { name: "Check again" });
+      await checkAgain.waitFor();
+      // Time for the re-reads the command's start and settle trigger to answer.
+      await page.waitForTimeout(400);
+      expect(await checkAgain.isVisible(), "check_again_kept");
+      expect(
+        (await page.getByRole("heading", { name: "Review before enabling" }).count()) === 1,
+        "review_kept",
+      );
+      expect(
+        (await page
+          .locator(".sidebar .sidebar-status", { hasText: "Shopify connected" })
+          .count()) === 1,
+        "connection_line_kept",
+      );
+      await checkAgain.click();
+      await page.getByRole("heading", { name: "Review before enabling" }).waitFor({
+        state: "detached",
+      });
+      await page.getByText("Active", { exact: true }).first().waitFor();
+    },
+  }),
   fixtureCase("settings", "model_default", `/w/${ws}/settings/governance`),
+  // ADR-0032: a section with no screen yet, inside the Settings frame, whose card lists
+  // Activity under Settings (a placeholder, not a link) and never in the sidebar.
+  fixtureCase("settings", "section_frame", `/w/${ws}/settings/people`, {
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "People and roles" }).waitFor();
+      const settings = page.getByRole("navigation", { name: "Settings" });
+      expect((await settings.getByRole("link").count()) === 5, "five_settings_links");
+      expect((await settings.getByText("Activity").count()) === 1, "activity_listed");
+      expect(
+        (await page.locator('nav[aria-label="Main"]').getByText("Activity").count()) === 0,
+        "activity_not_in_sidebar",
+      );
+    },
+  }),
   fixtureCase("account", "form", "/", { scenario: "account_form" }),
   fixtureCase("account", "chooser", "/", { scenario: "account_chooser" }),
   fixtureCase("account", "invite", "/", { scenario: "account_invite" }),
@@ -375,7 +437,7 @@ export const fixtureCases = [
     setup: async (page) => {
       await fillSignup(page);
       await page.waitForURL(`**/w/${ws}`);
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   }),
   // P05.T01ab (P04.T01i D5): the api guard's 403 challenge_* is the existing "Couldn't
@@ -420,8 +482,72 @@ export const fixtureCases = [
     },
   }),
   fixtureCase("home", "ready", `/w/${ws}`),
-  fixtureCase("home", "partial_denied", `/w/${ws}`, { scenario: "home_partial_denied" }),
+  // A denied open-questions read is never an all-clear: the scope line stays neutral, no
+  // primary is offered, and the Needs you card carries the denial (the AC26 first-run Home).
+  fixtureCase("home", "partial_denied", `/w/${ws}`, {
+    scenario: "home_partial_denied",
+    setup: async (page) => {
+      await page.locator('[data-card="needs"] .state-denied').waitFor();
+      await homeShown(page).waitFor();
+      expect((await page.getByText("Nothing needs you").count()) === 0, "no_false_all_clear");
+      expect((await page.locator("main .title-row .button-primary").count()) === 0, "no_primary");
+    },
+  }),
   fixtureCase("home", "loading", `/w/${ws}`, { scenario: "loading" }),
+  // T7 review F2: Home opens offline, so neither Home nor the shell shows a count; Retry
+  // on Needs you reads the shell's copy again too, so the Inbox count appears with Home's
+  // "Review N items".
+  fixtureCase("home", "offline_retry", `/w/${ws}`, {
+    scenario: "home_offline_retry",
+    setup: async (page) => {
+      const retry = page.locator('[data-card="needs"]').getByRole("button", { name: "Retry" });
+      await retry.waitFor();
+      expect((await page.locator(".count-pill").count()) === 0, "no_count_while_offline");
+      await retry.click();
+      await page.locator("main .title-row .button-primary", { hasText: /^Review / }).waitFor();
+      await page.locator(".topbar .count-pill").waitFor({ state: "attached" });
+      expect(
+        (await page.locator(".sidebar .count-pill").count()) === 1,
+        "sidebar_count_after_retry",
+      );
+    },
+  }),
+  // ADR-0032 Home: nothing waiting (Ask Morrow is the page's one primary), and the
+  // default-off preview of the board's sample sections, the agent characters among them.
+  fixtureCase("home", "nothing_waiting", `/w/${ws}`, {
+    scenario: "empty",
+    setup: async (page) => {
+      await page.getByText("Nothing needs you right now. Here's your day at").waitFor();
+      expect(
+        (await page.locator("main .button-primary").count()) === 1 &&
+          (await page.locator("main .button-primary").textContent()).includes("Ask Morrow"),
+        "one_primary_ask",
+      );
+    },
+  }),
+  fixtureCase("home", "preview", `/w/${ws}`, {
+    scenario: "home_preview",
+    setup: async (page, width) => {
+      await page.getByRole("heading", { name: "Yesterday at a glance" }).waitFor();
+      expect((await page.locator("main .button-primary").count()) === 1, "one_primary");
+      if (width >= 760) {
+        expect(
+          (await page
+            .getByRole("link", { name: /^Business Analyst\s*, agent\s*, sample data$/ })
+            .count()) === 1,
+          "team_member_named_as_agent_and_sample",
+        );
+        // Sample rows in the sidebar say so on screen: pinned projects, Team, credits.
+        const tags = page.locator(".sidebar .nav-sample-tag", { hasText: "Sample data" });
+        expect((await tags.count()) === 3, "sidebar_samples_labelled");
+        for (let i = 0; i < 3; i++) expect(await tags.nth(i).isVisible(), "sample_tag_visible");
+        expect(
+          (await page.getByRole("link", { name: /credits left\s*,\s*Sample data$/ }).count()) === 1,
+          "credits_named_as_sample",
+        );
+      }
+    },
+  }),
   fixtureCase("task", "brief", `/w/${ws}/work/task-titles`),
   fixtureCase("task", "questions", `/w/${ws}/work/task-titles`, {
     setup: (page) => page.getByRole("tab", { name: "Questions" }).click(),
@@ -471,6 +597,43 @@ export const fixtureCases = [
     scenario: "question_expired",
   }),
   fixtureCase("inbox", "question_cancelled", `/w/${ws}/inbox/questions/q-returns`),
+  // v1 PR 3: the review screen of the seeded proposal, approving and applying it (the
+  // fixture "writes" at once), and the task's apply history.
+  fixtureCase("review", "pending", `/w/${ws}/review/proposal-sample-1`),
+  fixtureCase("review", "applied", `/w/${ws}/review/proposal-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      // The apply settles every product, then the screen shows the history.
+      await page.getByRole("heading", { name: "Changes applied" }).waitFor();
+    },
+  }),
+  // Review F2: an uncertain product offers Check again and "I checked it in Shopify"; setting
+  // it aside shows "Checked by you".
+  fixtureCase("review", "uncertain", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_uncertain",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("button", { name: "I checked it in Shopify" }).waitFor();
+    },
+  }),
+  fixtureCase("review", "set_aside", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_uncertain",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("button", { name: "I checked it in Shopify" }).click();
+      await page.getByText("Checked by you").first().waitFor();
+    },
+  }),
+  fixtureCase("task", "applied_history", `/w/${ws}/work/task-titles`, {
+    widths: [1440, 390],
+    setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),
+  }),
   fixtureCase("overlay", "drawer", `/w/${ws}`, {
     widths: [390, 320],
     setup: (page) => page.getByRole("button", { name: "Open navigation" }).click(),
@@ -527,6 +690,25 @@ fixtureCases.push(
   }),
   fixtureCase("connections", "detail", `/w/${ws}/connections/conn-sample-1`, {
     widths: [1440, 390],
+  }),
+  // v1 PR 2: "Disconnect store": the dialog (what happens, the reason, the reconnect note)
+  // and the disconnected connection.
+  fixtureCase("connections", "disconnect_dialog", `/w/${ws}/connections/conn-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Disconnect store" }).click();
+      await page.getByRole("heading", { name: "Disconnect this store from Morrow?" }).waitFor();
+    },
+  }),
+  fixtureCase("connections", "disconnected", `/w/${ws}/connections/conn-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Disconnect store" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Reason").fill("Moving to a new store");
+      await dialog.getByRole("button", { name: "Disconnect store" }).click();
+      await page.getByText("Disconnected in Morrow.").first().waitFor();
+    },
   }),
   fixtureCase("connections", "handoff_confirm", handoffPath, {
     scenario: "connections_handoff",
@@ -649,7 +831,7 @@ export const keyboardWalks = [
         expect(back.text === "Open navigation", "escape_focus_restore");
         await page.keyboard.press("Enter");
       }
-      await tabTo(page, (a) => a.tag === "A" && a.text === "Work");
+      await tabTo(page, (a) => a.tag === "A" && a.text === "Projects");
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}/work`);
       if (width < 760) {
@@ -658,7 +840,7 @@ export const keyboardWalks = [
       const current = await page
         .locator('nav[aria-label="Main"] [aria-current="page"]')
         .textContent();
-      expect(current.trim() === "Work", "aria_current");
+      expect(current.trim() === "Projects", "aria_current");
     },
   },
   {
@@ -744,15 +926,47 @@ export const keyboardWalks = [
     },
   },
   {
+    // ADR-0032 Home preview: Dismiss moves focus to the next idea's Dismiss, then to the
+    // Ideas heading once none are left; focus never drops to the page body.
+    name: "dismiss_ideas",
+    path: `/w/${ws}`,
+    scenario: "home_preview",
+    run: async (page) => {
+      await page.getByRole("button", { name: "Dismiss the idea from Listings" }).focus();
+      await page.keyboard.press("Enter");
+      expect((await active(page)).text === "Dismiss the idea from Business Analyst", "next_idea");
+      await page.keyboard.press("Enter");
+      expect((await active(page)).text === "Dismiss the idea from Inventory", "last_idea");
+      await page.keyboard.press("Enter");
+      expect((await active(page)).id === "home-ideas-title", "heading_when_none_left");
+      const indicator = await page.evaluate(() => window.__morrowUi.focusIndicator());
+      expect(indicator.ok, "focus_indicator:" + indicator.reason);
+      await page.getByText("No more ideas for now.").waitFor();
+    },
+  },
+  {
     name: "answer_question",
     path: `/w/${ws}/inbox/questions/q-source`,
     run: async (page) => {
+      // The shell's Inbox counts (sidebar and top bar) follow the answer without a reload.
+      const counts = (n) =>
+        Promise.all(
+          ['nav[aria-label="Main"]', "header.topbar"].map((at) =>
+            page
+              .locator(`${at} a[href="/w/${ws}/inbox"] .count-pill`, {
+                hasText: new RegExp(`^${n}$`),
+              })
+              .waitFor({ state: "attached" }),
+          ),
+        );
+      await counts(2);
       await tabTo(page, (a) => a.tag === "TEXTAREA");
       await page.keyboard.type("Cite the supplier certificate.");
       await tabTo(page, (a) => a.text === "Send answer");
       await page.keyboard.press("Enter");
       await page.getByText("Answer sent.").waitFor();
       await page.getByText("Cite the supplier certificate.").waitFor();
+      await counts(1);
     },
   },
   {
@@ -764,7 +978,7 @@ export const keyboardWalks = [
       await page.keyboard.press("Enter");
       // The fixture sign-in returns to `/`, which restores the stored intended route.
       await page.waitForURL(`**/w/${ws}`, { timeout: 15000 });
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -852,7 +1066,7 @@ export const keyboardWalks = [
       await page.getByRole("button", { name: "Check again" }).focus();
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}`);
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -873,7 +1087,7 @@ export const keyboardWalks = [
       await page.getByRole("button", { name: "Try again" }).focus();
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}`);
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -931,7 +1145,8 @@ export const keyboardWalks = [
       expect((await active(page)).text.endsWith("Hide tasks"), "expanded");
       await tabTo(
         page,
-        (a) => a.tag === "A" && a.text.length > 0 && !["Work", "Home", "Inbox"].includes(a.text),
+        (a) =>
+          a.tag === "A" && a.text.length > 0 && !["Projects", "Home", "Inbox"].includes(a.text),
       );
     },
   },
@@ -954,7 +1169,7 @@ export const keyboardWalks = [
         await tabTo(page, (a) => a.tag === "A" && a.text === "Go to your workspaces");
         await page.keyboard.press("Enter");
         await loaded;
-        await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+        await homeShown(page).waitFor();
         expect(await page.evaluate(() => window.__sameDocument !== true), "document_load:" + from);
       }
     },
@@ -998,7 +1213,7 @@ export const keyboardWalks = [
       await page.getByRole("heading", { name: "This workspace couldn't load" }).waitFor();
       await tabTo(page, (a) => a.text === "Retry");
       await page.keyboard.press("Enter");
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -1013,7 +1228,7 @@ export const keyboardWalks = [
       await signOut(page);
       await page.getByText("Sign-out didn't complete. You're still signed in.").waitFor();
       if (width < 760) await page.getByRole("button", { name: "Close navigation" }).click();
-      expect(await page.getByRole("heading", { name: "Linen & Form" }).isVisible(), "kept_dom");
+      expect(await homeShown(page).isVisible(), "kept_dom");
       expect((await morrowKeys(page)).length === 1, "kept_storage");
       await tabTo(page, (a) => a.text === "Try again");
       await page.keyboard.press("Enter");
@@ -1089,9 +1304,10 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
     serviceWorkers: "block",
   });
   await context.addInitScript(
-    ({ note }) => {
+    ({ note, targetFloors }) => {
       window.__csp = [];
       window.__provisional = note;
+      window.__floors = targetFloors;
       document.addEventListener("securitypolicyviolation", (event) =>
         window.__csp.push(event.violatedDirective),
       );
@@ -1109,7 +1325,7 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
         return remove.call(this, type, listener, options);
       };
     },
-    { note: provisional },
+    { note: provisional, targetFloors: floors },
   );
   // Measurement helpers load with every document, through CDP (not page script).
   await context.addInitScript({ content: `(${pageChecks.toString()})()` });

@@ -1,24 +1,43 @@
-/* Screens: entry cards, Home panels, Work goals, the task layout and questions. */
+/* Screens (ADR-0032 Sunrise): the entry cards (sign-in, workspace setup), the page header,
+   Home, Work goals, the task layout and questions. */
 .entry-card {
   display: grid;
   gap: var(--space-3);
   justify-items: start;
-  padding: var(--space-5);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-surface);
+  padding: clamp(var(--space-5), 4vw, var(--space-8));
+  border-radius: var(--radius-modal);
   background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+.entry-card h1 + p {
+  color: var(--color-reading);
 }
 .entry-card .field,
 .entry-card .form-actions,
 .entry-card .notice,
-.entry-card .status-region {
+.entry-card .status-region,
+.entry-card .state-view {
   justify-self: stretch;
+}
+/* The board's actions run the card's width: one primary, then any secondary under it. */
+.entry-card .form-actions {
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: var(--space-2);
+}
+.entry-card .horizon-picture {
+  justify-self: center;
+  margin-bottom: var(--space-2);
 }
 .sign-in {
   display: grid;
   gap: var(--space-2);
-  justify-items: start;
-  margin-top: var(--space-2);
+  justify-self: stretch;
+  margin-top: var(--space-3);
+}
+.sign-in > .button {
+  width: 100%;
+  min-height: var(--target-phone);
 }
 .chooser {
   display: grid;
@@ -29,22 +48,29 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 48px;
+  min-height: 64px;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-control-border);
-  border-radius: var(--radius-control);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-card);
   color: var(--color-text);
+  text-decoration: none;
+}
+.chooser-link:hover {
+  background: var(--color-subtle);
   text-decoration: none;
 }
 .chooser-mark {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-selection);
-  background: var(--color-canvas);
-  font-weight: 600;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-control);
+  background: var(--color-store-tile);
+  color: var(--color-store-ink);
+  font-family: var(--type-store);
+  font-weight: 700;
 }
 .chooser-text {
   display: grid;
@@ -52,13 +78,17 @@
   min-width: 0;
 }
 .chooser-name {
-  font-weight: 600;
+  font-weight: 650;
   overflow-wrap: anywhere;
 }
 .chooser-org {
   color: var(--color-subdued);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   overflow-wrap: anywhere;
+}
+.chooser-link .icon {
+  color: var(--color-subdued);
 }
 .account-footer {
   display: flex;
@@ -67,16 +97,21 @@
   justify-content: space-between;
   gap: var(--space-3);
   justify-self: stretch;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-divider);
 }
+
+/* The page header: date or breadcrumb, a 44 px title row with the one primary, scope. */
 .page {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-4);
   min-width: 0;
 }
 .page-header {
-  margin-bottom: var(--space-2);
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
 }
 .page-header-actions {
   display: flex;
@@ -85,38 +120,179 @@
   justify-content: space-between;
   gap: var(--space-3);
 }
-.panels {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: var(--space-5);
+.page-date {
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-meta-weight);
 }
-.panel {
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-surface);
-}
-.panel + .panel {
-  margin-top: var(--space-4);
-}
-.panels .panel + .panel {
-  margin-top: 0;
-}
-.panel-head {
+.title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  min-height: 44px;
+  margin-top: var(--space-2);
+}
+.scope-line {
+  color: var(--color-subdued);
+}
+.page-footer {
+  padding: var(--space-2) 0;
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  text-align: center;
+}
+.panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-4);
+}
+.panels .panel + .panel {
+  margin-top: 0;
+}
+
+/* Home: the main column, and the sample Ask Morrow panel at 1280 px and wider. */
+.home,
+.home-main {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.home.has-panel {
+  gap: var(--space-6);
+  align-items: start;
+}
+.ask-panel {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+.ask-panel .button {
+  justify-self: start;
+}
+.ask-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.sample-note {
+  justify-self: start;
+  width: fit-content;
+  margin-bottom: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-round);
+  background: var(--color-morrow-surface);
+  color: var(--color-text);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: 550;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: var(--space-4);
+}
+.metric {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-inner);
+}
+.metric dt {
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-meta-weight);
+}
+.metric-value {
+  overflow-wrap: anywhere;
+  font-size: var(--type-metric-size);
+  line-height: var(--type-metric-line);
+  font-weight: var(--type-metric-weight);
+}
+.metric-note {
+  color: var(--color-reading);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+.agent-take {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-inner);
+  background: var(--color-subtle);
+  color: var(--color-reading);
+}
+.agent-take-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: 600;
+}
+.agent-take-head + p {
+  margin: 0;
+}
+.source-line {
+  margin-top: var(--space-3);
+}
+.idea-list {
+  display: grid;
+  gap: var(--space-3);
+}
+.idea {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-inner);
+}
+.idea p + p {
+  margin: 0;
+}
+.idea-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
 }
+.idea-text {
+  color: var(--color-reading);
+}
+.idea-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.store-row {
+  margin: 0 calc(-1 * var(--space-5));
+  border-top: 1px solid var(--color-rule);
+}
+
+/* Work: goals as cards on the page grey. */
 .goal-list {
   display: grid;
   gap: var(--space-3);
 }
 .goal {
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-surface);
+  padding: var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
 }
 .goal-head {
   display: flex;
@@ -137,10 +313,12 @@
 .goal-tasks {
   margin-top: var(--space-3);
 }
+
+/* A task: main column and the conversation and activity side panes. */
 .task-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--width-conversation);
-  gap: var(--space-5);
+  gap: var(--space-6);
   align-items: start;
 }
 .task-main {
@@ -149,11 +327,13 @@
 .task-side {
   display: grid;
   gap: var(--space-4);
-  padding-left: var(--space-5);
-  border-left: 1px solid var(--color-border);
+  padding: var(--space-5);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
 }
 .side-pane h2 {
-  font-size: var(--type-reading-size);
+  font-size: var(--type-subhead-size);
 }
 .facts {
   display: grid;
@@ -163,7 +343,8 @@
 }
 .facts dt {
   color: var(--color-subdued);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
 }
 .action-block {
   display: grid;
@@ -185,7 +366,17 @@
 .answer.is-compact {
   margin-top: 0;
   padding: var(--space-2) var(--space-3);
-  border-left: 2px solid var(--color-border);
+  border-radius: var(--radius-inner);
+  background: var(--color-subtle);
+}
+@media (min-width: 1280px) {
+  .home.has-panel {
+    grid-template-columns: minmax(0, 1fr) var(--width-panel);
+  }
+  .ask-panel {
+    position: sticky;
+    top: var(--space-6);
+  }
 }
 @container workspace (max-width: 1119px) {
   .task-layout {
@@ -194,15 +385,64 @@
   .pane-switch {
     display: flex;
   }
-  .task-side {
-    padding-left: 0;
-    border-left: 0;
-  }
   .task-page[data-pane="task"] .task-side,
   .task-page[data-pane="conversation"] .task-main,
   .task-page[data-pane="conversation"] .side-activity,
   .task-page[data-pane="activity"] .task-main,
   .task-page[data-pane="activity"] .side-conversation {
     display: none;
+  }
+}
+/* v1 PR 3: the review screen's before-and-after table. Every value is text (pre-wrap): a
+   description's HTML is shown as its source, never rendered. Its "Include" checkbox is the
+   Sunrise `.check` row (components.css), at the target floor. */
+.review-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.review-table th,
+.review-table td {
+  padding: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+.review-table thead th {
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+}
+.review-table th[scope="row"] {
+  width: 28%;
+}
+.review-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 759px) {
+  .entry-card {
+    padding: var(--space-5);
+  }
+  .row {
+    padding: var(--space-3) var(--space-4);
+  }
+  .row-list,
+  .store-row {
+    margin: 0 calc(-1 * var(--space-4));
+  }
+  .card > .row-list:last-child,
+  .panel > .row-list:last-child,
+  .card > .store-row:last-child {
+    margin-bottom: calc(-1 * var(--space-4));
+  }
+  /* A badge that wraps under a row's text lines up with the text, not the lead tile. */
+  .row-lead + .row-text + .tag {
+    margin-left: 56px;
+  }
+  .card,
+  .panel,
+  .ask-panel,
+  .goal {
+    padding: var(--space-4);
   }
 }

@@ -12,12 +12,17 @@ import {
   brokerPasswordValid,
   brokerVaultKekSecrets,
   brokerVaultRole,
+  e2bKeyPattern,
   modelProviderAnthropic,
   modelProviderVar,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
+  runtimeProviderE2b,
+  runtimeSwitchVar,
   parseStripeConfiguration,
   parseTurnstileConfiguration,
+  shopifyWriteOn,
+  shopifyWriteVar,
   stripeModeTest,
   stripeModeVar,
   stripeRestrictedKeyPattern,
@@ -58,7 +63,13 @@ export type BrokerMethod =
   | "stripePortalCreate"
   | "stripeWebhookVerify"
   // M3 PR-2 (RuntimeBroker): the provider-neutral model gateway.
-  | "modelRespond";
+  | "modelRespond"
+  // Build order PR 7 (RuntimeBroker): the computer's door and its reconciliation sweep.
+  | "runtimeExecute"
+  | "runtimeSweep"
+  // v1 PR 3 (ApiBroker): the gateway's apply and read-back of one catalog_write operation.
+  | "shopifyProductApply"
+  | "shopifyProductReconcile";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"
@@ -78,7 +89,14 @@ export type BrokerFailureCode =
   | "READ_BUSY"
   | "OUTCOME_UNKNOWN"
   // M3 PR-2: the model-provider switch is off (or its key is missing); no model call runs.
-  | "MODEL_UNAVAILABLE";
+  | "MODEL_UNAVAILABLE"
+  // Build order PR 7: the runtime switch is off (or its key, adapter or template is
+  // missing); no sandbox is created or reconciled.
+  | "RUNTIME_UNAVAILABLE"
+  // v1 PR 3: the apply switch is off; no Shopify write runs. And the isolate's one write
+  // slot on the vault login is in use.
+  | "WRITE_UNAVAILABLE"
+  | "WRITE_BUSY";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
     super("BROKER_HELD");
@@ -112,6 +130,13 @@ export interface BrokerModel {
   readonly provider: "anthropic";
   readonly apiKey: string;
 }
+// Build order PR 7 (ADR-0029 item 3): the computer's provider credential, E2B's API key. It
+// never crosses RPC and never enters a sandbox; an adapter receives it per request. (Named
+// `computer` because `runtime` is the orchestrator's role lease above.)
+export interface BrokerComputer {
+  readonly provider: "e2b";
+  readonly apiKey: string;
+}
 export interface BrokerCapabilities {
   readonly sessions: Readonly<BrokerSessions> | null;
   /** The api caller's eight role leases (ApiBroker). */
@@ -134,6 +159,16 @@ export interface BrokerCapabilities {
   readonly model: Readonly<BrokerModel> | null;
   /** The model-provider switch as this broker sees it (MORROW_MODEL_PROVIDER "anthropic"). */
   readonly modelMode: "off" | "anthropic";
+  /** Build order PR 7: the E2B key, only while the runtime switch is not off. */
+  readonly computer: Readonly<BrokerComputer> | null;
+  /** The runtime switch as this broker sees it (MORROW_RUNTIME_SWITCH). */
+  readonly computerMode: "off" | "cleanup_only" | "on";
+  /**
+   * v1 PR 3: the apply switch as this broker sees it: "on" only with MORROW_SHOPIFY_WRITE
+   * exactly "on", in development or staging, with the vault (the fence's definers run on the
+   * broker's own login). Absent (the committed state) or anything else is off.
+   */
+  readonly shopifyWrite: "off" | "on";
   // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
   // health also needs the challenge capability; development may run without it.
   readonly challengeRequired: boolean;
@@ -150,6 +185,9 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   stripeMode: "off",
   model: null,
   modelMode: "off",
+  computer: null,
+  computerMode: "off",
+  shopifyWrite: "off",
   challengeRequired: true,
 });
 const environments = ["development", "staging", "production"] as const;
@@ -365,6 +403,39 @@ function model(
   return Object.freeze({ provider: "anthropic" as const, apiKey });
 }
 
+// The runtime switch (build order PR 7; ADR-0029 item 10): "on" or "cleanup_only" only with
+// MORROW_RUNTIME_SWITCH exactly that value, in development or staging; absent (the committed
+// state while the switch is off) or anything else is off, and then E2B_API_KEY is not read at
+// all, even if the owner placed it ahead of the switch.
+function computerMode(env: object, environment: string): "off" | "cleanup_only" | "on" {
+  if (environment === "production") return "off";
+  const value = own(env, runtimeSwitchVar);
+  return value === "on" ? "on" : value === "cleanup_only" ? "cleanup_only" : "off";
+}
+function computer(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): Readonly<BrokerComputer> | null {
+  if (computerMode(env, environment) === "off" || vaultCapability === null) return null;
+  const apiKey = own(env, "E2B_API_KEY");
+  if (typeof apiKey !== "string" || e2bKeyPattern.exec(apiKey)?.[0] !== apiKey) return null;
+  return Object.freeze({ provider: runtimeProviderE2b, apiKey });
+}
+// The apply switch (v1 PR 3): on only with MORROW_SHOPIFY_WRITE exactly "on", in development
+// or staging, and only with the vault. Production holds it until the custody ADR.
+function shopifyWrite(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): "off" | "on" {
+  return environment !== "production" &&
+    vaultCapability !== null &&
+    own(env, shopifyWriteVar) === shopifyWriteOn
+    ? "on"
+    : "off";
+}
+
 async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
   let result = nothing;
   try {
@@ -385,6 +456,9 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         stripeMode: stripeMode(env, environment),
         model: model(env, environment, vaultCapability),
         modelMode: modelMode(env, environment),
+        computer: computer(env, environment, vaultCapability),
+        computerMode: computerMode(env, environment),
+        shopifyWrite: shopifyWrite(env, environment, vaultCapability),
         challengeRequired: environment !== "development",
       });
     }
@@ -404,6 +478,9 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       stripeMode: result.stripeMode,
       model: result.model !== null,
       modelMode: result.modelMode,
+      computer: result.computer !== null,
+      computerMode: result.computerMode,
+      shopifyWrite: result.shopifyWrite,
     }),
   );
   return result;

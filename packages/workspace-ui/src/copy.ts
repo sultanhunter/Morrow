@@ -73,14 +73,67 @@ export const copy = {
     body: "This address doesn't match a page in Morrow.",
     back: "Go to Morrow",
   },
+  // ADR-0032, the Sunrise sidebar: the seven destinations of the route contract, with
+  // three labels changed for shop owners ("Work" is Projects, "Agents" is Team, "Assets"
+  // is Files). Route ids, paths and the contract's titles don't change.
   destinations: {
     home: "Home",
-    work: "Work",
+    work: "Projects",
     inbox: "Inbox",
-    agents: "Agents",
-    assets: "Assets",
-    knowledge: "Knowledge",
+    agents: "Team",
+    assets: "Files",
+    knowledge: "Shop knowledge",
     settings: "Settings",
+  },
+  /** Tab titles and unbuilt-page names for routes whose label differs from the contract's. */
+  routeTitles: {
+    work: "Projects",
+    agents: "Team",
+    assets: "Files",
+    knowledge: "Shop knowledge",
+    ask: "Ask Morrow",
+    agent_store: "Add agents",
+    connections: "Shopify connection",
+  } as Readonly<Record<string, string>>,
+  shell: {
+    askMorrow: "Ask Morrow",
+    searchLabel: (store: string) => `Search ${store}`,
+    searchPlaceholder: "Search…",
+    searchLater: "Search isn't available in this build yet.",
+    pinnedProjects: "Pinned projects",
+    teamMembers: "Team members",
+    everydayWork: "Everyday work",
+    agentSuffix: ", agent",
+    online: ", online",
+    away: ", away",
+    inboxWaiting: (count: string) => `Inbox, ${count} waiting`,
+    ends: (date: string) => `Ends ${date}`,
+    credits: (count: string) => `${count} credits left`,
+    sampleData: "Sample data",
+    sampleSuffix: ", sample data",
+    connection: {
+      linked: "Shopify connected",
+      unlinked: "Finish connecting your store",
+      suspended: "Store disconnected",
+      uninstalled: "Store disconnected",
+      none: "Connect your store",
+    } as Readonly<Record<string, string>>,
+  },
+  // ADR-0032: the Settings sub-navigation the ConnectStore board draws. Activity sits
+  // under Settings, not in the sidebar; its log arrives with its own route.
+  settings: {
+    navLabel: "Settings",
+    sections: {
+      billing: "Plan and credits",
+      people: "People and roles",
+      notifications: "Notifications",
+      governance: "Model default",
+      usage: "Usage",
+      stores: "Stores",
+    } as Readonly<Record<string, string>>,
+    connection: "Shopify connection",
+    activity: "Activity",
+    activityLater: ", not in this build yet",
   },
   unavailableDestination: (title: string) =>
     `${title} isn't available in this provisional build. Nothing here is hidden from you; it hasn't been built yet.`,
@@ -95,20 +148,72 @@ export const copy = {
     retry: "Retry",
     reference: (reference: string) => `Reference: ${reference}`,
   },
+  // ADR-0032 Home: the day at a glance. Real data today: what waits for you in the Inbox
+  // (open questions), recent work and the store connection. The rest of the board shows
+  // only from fixtures behind the default-off `samples.home` switch.
   home: {
-    questionsTitle: "Questions for you",
-    questionsCount: (count: string) => `${count} open`,
-    noQuestions: "No open questions for you.",
-    goalsTitle: "Goals",
-    noGoals: "No goals yet.",
-    goToWork: "Go to Work",
-    goToInbox: "Go to Inbox",
+    greeting: (hour: number) =>
+      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening",
+    scope: (store: string) => `Here's your day at ${store}.`,
+    scopeClear: (store: string) => `Nothing needs you right now. Here's your day at ${store}.`,
+    review: (count: string) => `Review ${count} ${count === "1" ? "item" : "items"}`,
+    waitingLabel: "Waiting for you",
+    questionsChip: (count: string) => `${count} ${count === "1" ? "question" : "questions"}`,
+    reviewChip: (count: number) => `${count} to review`,
+    tasksChip: (count: number) => `${count} ${count === 1 ? "task" : "tasks"} for you`,
+    alertChip: (count: number) => `${count} ${count === 1 ? "alert" : "alerts"}`,
+    needsTitle: "Needs you",
+    seeAllInbox: (count: string) => `See all ${count} in Inbox`,
+    questionLine: "A question for you",
+    expires: (date: string) => `Expires ${date}`,
+    needsYou: "Needs you",
+    nothingWaiting: "Nothing needs you right now.",
+    recentTitle: "Recent work",
+    seeAllProjects: "See all in Projects",
+    updated: (date: string) => `Updated ${date}`,
+    noWork: "No work yet. Work you and your agents start shows up here.",
+    storeTitle: "Your store",
+    storeOpen: "See connection",
+    storeConnect: "Connect your store",
+    noStore:
+      "No store is connected yet. Connect your Shopify store so agents can suggest changes for you to approve.",
+    footer: "Agents never change your store or reply to a customer without your OK.",
     prepaymentTitle: "Paid work",
     prepayment:
       "Paid work starts once this workspace has an active plan. Plans aren't available in this provisional build.",
+    samples: {
+      note: "Sample data · a preview of what's coming",
+      todayTitle: "Today",
+      todaySource: "From your schedules and due dates",
+      next: "Next",
+      projectsTitle: "Your projects",
+      projectsGroup: "Projects",
+      everydayGroup: "Everyday work",
+      glanceTitle: "Yesterday at a glance",
+      take: (name: string) => `${name}'s take`,
+      ideasTitle: "Ideas",
+      ideasNote: "From your agents. Nothing is added unless you choose.",
+      dismiss: "Dismiss",
+      dismissIdea: (agent: string) => `Dismiss the idea from ${agent}`,
+      noIdeas: "No more ideas for now. New ones show up here.",
+      askIntro:
+        "Tell Morrow what you want to get done. It answers, or drafts a task or project for you to start.",
+      recent: "Recent",
+      openAsk: "Open Ask Morrow",
+      privacy:
+        "Private to you. Admins can read your conversations with Morrow, and each read is recorded.",
+    },
+    status: {
+      done: "Done",
+      working: "Working",
+      to_do: "To do",
+      on_track: "On track",
+      behind: "Behind",
+      needs_you: "Needs you",
+    } as Readonly<Record<string, string>>,
   },
   work: {
-    title: "Work",
+    title: "Projects",
     empty: "No work yet",
     emptyBody: "Create a goal to start organising tasks.",
     denied: "You don't have access to view work",
@@ -134,7 +239,7 @@ export const copy = {
     cancel: "Cancel",
   },
   task: {
-    breadcrumb: "Work",
+    breadcrumb: "Projects",
     tabsLabel: "Task sections",
     brief: "Brief",
     questions: "Questions",
@@ -166,6 +271,11 @@ export const copy = {
     questionsTitle: "Questions for you",
     noQuestions: "No open questions for you.",
     otherTitle: "Other updates",
+    // v1 PR 3: the pending approvals the person may review.
+    approvalsTitle: "Changes to approve",
+    noApprovals: "Nothing to approve.",
+    approvalItem: (n: number) => `${n} product ${n === 1 ? "change" : "changes"} from Listings`,
+    approvalExpires: "Approve by",
   },
   question: {
     title: "Question",
@@ -182,7 +292,7 @@ export const copy = {
   },
   // M2 PR-2: the store connections screens and the install-continuation link step.
   connections: {
-    title: "Connections",
+    title: "Shopify connection",
     storesTitle: "Stores",
     noStores: "No store is connected to this workspace yet.",
     installTitle: "Connect your Shopify store",
@@ -229,20 +339,48 @@ export const copy = {
     linkConflict: "This link request didn't match an earlier one. Nothing was changed.",
     notLinkedYet: "The store isn't linked yet. You can link it now.",
     detailTitle: "Connection",
-    back: "Back to Connections",
+    back: "Back to Shopify connection",
     shop: "Store",
     status: "Status",
-    // M2 PR-3 review: an uninstall or a scope change ends the store's connection for good in
-    // this build (no reinstall under the same app); reconnecting needs a new app from Morrow.
+    // M2 PR-3 review: an uninstall, a scope change or a disconnect ends the store's
+    // connection for good in this build (no reinstall under the same app); reconnecting needs
+    // a new install from Morrow.
     statusHelp: {
       unlinked: "Installed on Shopify, not linked to this workspace yet.",
       linked: "Linked to this workspace.",
       suspended:
-        "Disconnected. Morrow no longer uses this store. Reconnecting isn't available in this build; contact Morrow support to connect it again.",
+        "Disconnected. Morrow no longer reads or changes this store, and its access to the store is erased.",
       uninstalled:
         "The app was uninstalled from Shopify, so Morrow no longer uses this store. Reconnecting isn't available in this build; contact Morrow support to connect it again.",
     } as Readonly<Record<string, string>>,
-    disconnectLater: "Disconnecting a store isn't available in this build.",
+    // "Disconnect store" (ADR-0022 item 15): the person's kill switch for the whole store.
+    disconnect: {
+      title: "Disconnect store",
+      intro:
+        "Stops all AI work on this store at once and ends Morrow's access to it. Running jobs stop at their next step.",
+      button: "Disconnect store",
+      dialogTitle: "Disconnect this store from Morrow?",
+      dialogBody: [
+        "Every agent stops working on this store, and Morrow no longer reads or changes it.",
+        "Morrow erases its access token for the store. Drafts already in Morrow stay for you to review.",
+        "The Morrow app stays installed in your Shopify admin until you uninstall it there.",
+      ],
+      reconnectNote:
+        "Reconnecting needs a new install: uninstall the Morrow app in your Shopify admin, then ask Morrow support for a new install link. You can't undo a disconnect here.",
+      reason: "Reason",
+      reasonHint: "Required. Up to 1,024 characters. Recorded with the disconnect.",
+      confirm: "Disconnect store",
+      cancel: "Cancel",
+      done: "Store disconnected. No AI work runs on it, and Morrow no longer reads or changes it.",
+      credential: {
+        destroyed: "Morrow's access token for this store is erased.",
+        pending:
+          "Morrow is still erasing its access token for this store. That finishes on its own within a few minutes; the store is already disconnected.",
+      } as Readonly<Record<string, string>>,
+      byPerson: "Disconnected in Morrow.",
+      bySystem: "Stopped because the app was uninstalled or its access changed in Shopify.",
+      notPermitted: "Only the workspace owner can disconnect this store.",
+    },
   },
   outcome: {
     uncertain:
@@ -270,9 +408,10 @@ export const copy = {
       agent: "a change to the Listings agent",
       model_default: "the default model",
       run: "a Listings run",
+      disconnect: "disconnecting a store",
     },
     body: (kind: string) =>
-      `A change you started earlier (${kind}) may have been saved. Check Work before creating it again.`,
+      `A change you started earlier (${kind}) may have been saved. Check Projects before creating it again.`,
     dismiss: "Dismiss",
   },
   // M3 PR-1: the Listings agent card (connection screen) and the model default
@@ -362,7 +501,7 @@ export const copy = {
   ask: {
     title: "Ask",
     intro:
-      "Ask the Listings agent to draft better listings for products you pick. It only proposes changes; you review and approve each one, and nothing is published in this build.",
+      "Ask the Listings agent to draft better listings for products you pick. It only proposes changes; you review each one, and nothing reaches your store until you approve and apply that exact change.",
     request: "What should change?",
     requestHint:
       "Up to 8,192 characters. The agent treats product text as data, never as instructions.",
@@ -418,6 +557,7 @@ export const copy = {
     product: "Product",
     attempts: (n: number) => `${n} ${n === 1 ? "attempt" : "attempts"}`,
     proposal: "In a proposal for review",
+    review: "Review the changes",
     flags: (f: {
       newUrls: number;
       newEmails: number;
@@ -476,6 +616,110 @@ export const copy = {
       interrupted: "The run was stopped while drafting it",
     } as Readonly<Record<string, string>>,
   },
+  // v1 PR 3: review, approve and apply to Shopify.
+  review: {
+    title: "Review changes",
+    intro:
+      "This is exactly what Listings drafted. Approving binds this exact set of changes; to change a value, ask Listings again, which makes a new proposal to review.",
+    store: (id: string) => `Store ${id}`,
+    productsTitle: (n: number) => `${n} ${n === 1 ? "product" : "products"}`,
+    untrusted:
+      "Listings drafted these from your Shopify product text, which Morrow treats as data, never as instructions. Check each change before approving.",
+    taskLink: "Open the task",
+    expires: "Approve by",
+    fields: {
+      title: "Title",
+      descriptionHtml: "Description (HTML, shown as text)",
+      "seo.title": "SEO title",
+      "seo.description": "SEO description",
+      tags: "Tags",
+    } as Readonly<Record<string, string>>,
+    field: "Field",
+    before: "Now",
+    after: "Proposed",
+    empty: "(empty)",
+    tagsAdded: "Tags added",
+    tagsRemoved: "Tags removed",
+    flagsNotice: "Check before approving:",
+    expired:
+      "The product as Listings read it is no longer kept (90 days), so only the proposed values are shown.",
+    blocked: {
+      redacted:
+        "This store's data was deleted at Shopify's request. These changes can't be approved or applied.",
+      link_changed:
+        "This store was disconnected or reconnected, so these changes can no longer be approved or applied.",
+      not_reviewer: "You can see these changes, but you can't approve them.",
+    } as Readonly<Record<string, string>>,
+    include: (productId: string) => `Include ${productId}`,
+    approveAll: "Approve all",
+    approveSome: (n: number) => `Approve ${n} selected`,
+    reject: "Reject",
+    confirmLabel: "Type the confirmation to approve",
+    confirmHint: (phrase: string) => `Type exactly: ${phrase}`,
+    approved: "Approved. Nothing has changed in Shopify yet.",
+    rejected: "Rejected. Nothing will change in Shopify.",
+    approvalStatus: (status: string) =>
+      ({
+        pending: "Waiting for your approval",
+        approved: "Approved, not applied yet",
+        rejected: "Rejected",
+        expired: "Expired",
+        invalidated: "No longer valid",
+        withdrawn: "Withdrawn",
+      })[status] ?? status,
+    approvalClaimed: "Approved. Each product's result is below.",
+    apply: "Apply to Shopify",
+    applyIntro:
+      "Morrow checks your permission, the stops and your plan, reads each product again, writes only the approved fields once and reads the product back. A product changed in Shopify since the draft is not written.",
+    applyUnavailable: "Applying changes to Shopify isn't switched on yet. Nothing was changed.",
+    pending: (n: number) =>
+      `${n} more ${n === 1 ? "product is" : "products are"} waiting. Continue to apply ${n === 1 ? "it" : "them"}.`,
+    continue: "Continue applying",
+    results: "Results",
+    history: "Changes applied",
+    historyEmpty: "No changes have been applied from this task.",
+    open: "Open the review",
+    checkAgain: "Check again",
+    setAside: "I checked it in Shopify",
+    setAsideHint:
+      "If you have looked at this product in Shopify yourself, you can set this result aside. Nothing is sent again, and Morrow keeps checking.",
+    setAsideNote:
+      "You checked this in Shopify and set it aside. Nothing was sent again; Morrow still checks it.",
+    reasons: {
+      source_changed: "Not applied: the product changed in Shopify since the draft.",
+      product_busy: "Not applied: another change to this product is still being checked.",
+      product_missing: "Not applied: the product no longer exists in Shopify.",
+      stopped: "Not applied: AI work was stopped for this store.",
+      member_removed: "Not applied: the person who applied it lost access.",
+      lease_ended: "Not applied: it ran out of time. Approve and apply again.",
+      window_passed: "Not applied: it ran out of time. Approve and apply again.",
+      link_lost: "Not applied: the store was disconnected.",
+      installation_inactive: "Not applied: the Listings agent isn't enabled for this store.",
+      scope_missing: "Not applied: Morrow can't edit products in this store.",
+      credential_unavailable: "Not applied: the store's connection changed.",
+      parameters_redacted: "Not applied: the store's data was deleted.",
+      approval_expired: "Not applied: the approval expired.",
+      approval_invalid: "Not applied: the approval is no longer valid.",
+      authority_lost: "Not applied: you no longer have permission to apply it.",
+      not_entitled: "Not applied: the workspace's plan isn't active.",
+      request_mismatch: "Not applied: the change didn't match what was approved.",
+      provider_rejected: "Not applied: Shopify rejected the change.",
+      throttled: "Not applied: Shopify was busy. Ask again later.",
+      connection_unauthorized: "Not applied: Shopify refused the store's connection.",
+      access_denied: "Not applied: Shopify refused the store's connection.",
+      not_sent: "Not applied: it was never sent.",
+      readback_no_effect: "Not applied: Shopify shows it never changed.",
+      readback_differs:
+        "Needs your attention: Shopify now shows different values, perhaps from an edit made at the same moment.",
+      fence_expired: "Needs your attention: Morrow can't tell yet whether Shopify applied it.",
+      credential_gone:
+        "Needs your attention: the store disconnected before Morrow could check the product.",
+      superseded:
+        "Needs your attention: a later change to this product was applied before Morrow could confirm this one. Check the product in Shopify.",
+    } as Readonly<Record<string, string>>,
+    uncertain:
+      "Needs your attention: Morrow can't tell yet whether Shopify applied it. It is never sent twice; check again to read the product back.",
+  },
   leave: {
     title: "Leave this page?",
     body: "Unsent text will be lost.",
@@ -518,6 +762,17 @@ export const copy = {
       drafted: "Drafted",
       failed: "Failed",
       skipped: "Skipped",
+    },
+    operation: {
+      authorized: "Queued",
+      dispatching: "Applying",
+      submitted: "Sent",
+      verifying: "Checking",
+      verified: "Applied",
+      conflict: "Not applied",
+      failed: "Not applied",
+      uncertain: "Needs attention",
+      cancel_requested: "Checked by you",
     },
     installation: {
       unlinked: "Not linked",

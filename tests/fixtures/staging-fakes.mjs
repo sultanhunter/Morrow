@@ -808,6 +808,8 @@ export async function fakeContext({
   // "on". The Stripe vars follow it unless challengeVars sets them: `apiStripeMode` and
   // `brokerStripeMode` (MORROW_STRIPE_MODE) and `brokerStripe` (STRIPE_CONFIGURATION_JSON).
   stripe = "off",
+  // Build order PR 7: the runtime switch, "off" (the committed state), "cleanup_only" or "on".
+  runtime = "off",
   administrator = { name: "neondb_owner", mode: "createrole" },
   now = Date.parse("2026-10-20T12:00:00Z"),
   environment = {},
@@ -819,7 +821,7 @@ export async function fakeContext({
   );
   const { stagingFileSpecs, credentialDirectory } = await import("../../scripts/staging-files.mjs");
   const { loadMigrationChain } = await import("../../scripts/migration-chain.mjs");
-  const constants = await identityConstants({ stripe });
+  const constants = await identityConstants({ stripe, runtime });
   const realRoot = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
   const repoRoot = root ?? realRoot;
   const baseStaging = JSON.parse(
@@ -926,7 +928,11 @@ export async function fakeContext({
     stderr: (line) => err.push(line),
     administrator,
     constants: async () => constants,
-    specs: async () => stagingFileSpecs({ brokerSecretNames: constants.brokerSecrets }),
+    specs: async () =>
+      stagingFileSpecs({
+        brokerSecretNames: constants.brokerSecrets,
+        optionalSecretNames: constants.brokerOptionalSecrets,
+      }),
     config: async () => ({
       staging: stagingValue,
       card,
