@@ -63,9 +63,8 @@ export { documentBinds } from "./projects/plan-start";
 export { planEdits } from "./projects/plan-card";
 export { taskHomes } from "./projects/new-task";
 export { localToday, validAsk, validEnd, validGoal, validTitle } from "./projects/new-project";
-export { ProjectsScreen } from "./projects/projects-screen";
-export { ProjectScreen } from "./projects/project-screen";
-export { AskConversationScreen } from "./projects/ask-conversation";
+// The three screens load on first use, in their own chunk (`projects/deferred`).
+export { AskConversationScreen, ProjectScreen, ProjectsScreen } from "./projects/deferred";
 // T7 PR 16: Team, agent pages, Add agents, Settings, Shop knowledge and Files (Sunrise).
 export { TeamScreen } from "./screens/team";
 export { AgentScreen } from "./screens/agent-page";
