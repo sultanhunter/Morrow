@@ -279,14 +279,19 @@ p.pj-meta span.pj-meta,
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-/* A link inside a sentence stays inline (the wrapper takes any block layout). */
+/* A link inside a sentence stays inline (the wrapper takes any block layout). Sunrise's
+   base drops link underlines, so this one keeps its own: colour alone doesn't set it apart
+   from the sentence (WCAG 1.4.1). */
 .pj-link {
   color: var(--color-link, var(--color-accent));
+  text-decoration: underline;
 }
-/* A link that stands alone is a target: 44 px, 48 px below 760 px (Sunrise's floors). */
+/* A link that stands alone is a target: 44 px, 48 px below 760 px (Sunrise's floors), in
+   both directions, so a one-word name ("Stock") is as easy to hit as a long one. */
 .pj-action-link {
   display: inline-flex;
   align-items: center;
+  min-width: 44px;
   min-height: 44px;
   color: var(--color-link, var(--color-accent));
   font-weight: 550;
@@ -920,6 +925,9 @@ ul.pj-helpers {
   .pj-check,
   .pj-link-button {
     min-height: 48px;
+  }
+  .pj-action-link {
+    min-width: 48px;
   }
   .pj-facts {
     grid-template-columns: minmax(0, 1fr);
