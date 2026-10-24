@@ -1892,6 +1892,8 @@ test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allow
     "packages/policy/src/agent-authority.ts",
     // Each run's call budget comes from the catalogue's data, not its rules module.
     "packages/policy/src/generated/model-catalogue.ts",
+    // v1 PR 3: the snapshot's canonical text, shared with the broker's pre-send check.
+    "packages/work/src/runs/listing-canonical.ts",
   ])
     assert.ok(orchestratorPackageAllowlist.includes(path), path);
   for (const path of [

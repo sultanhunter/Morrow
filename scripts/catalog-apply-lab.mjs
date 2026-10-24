@@ -41,7 +41,7 @@
 //      sets it aside (not before its window, never someone else), and it is still read back;
 //   L  no product text, Shopify text or token reaches a response, a log line or a record.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
-// marked sim stand in for states no API path reaches yet. CI pg-work group.
+// marked sim stand in for states no API path reaches yet. CI pg-linking group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";

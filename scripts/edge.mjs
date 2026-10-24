@@ -499,6 +499,9 @@ export const orchestratorPackageAllowlist = Object.freeze([
   "packages/work/src/digest.ts",
   "packages/work/src/runs/drafting.ts",
   "packages/work/src/runs/html.ts",
+  // v1 PR 3: the one canonical listing snapshot text drafting.ts builds its snapshots with
+  // (pure, validator-free; the broker's pre-send check uses the same file).
+  "packages/work/src/runs/listing-canonical.ts",
   "packages/work/src/runs/producer.ts",
   "packages/work/src/runs/workflow.ts",
   "packages/work/src/runtime/leases.ts",
