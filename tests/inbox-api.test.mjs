@@ -17,6 +17,7 @@ import {
   inboxRoutes,
 } from "../packages/work/src/inbox/http.ts";
 import { inboxStatements } from "../packages/work/src/inbox/sql.ts";
+import { inboxApprovalItems } from "../packages/work/src/inbox/read.ts";
 import { activityLimits } from "../packages/work/src/inbox/activity.ts";
 import { workStatements } from "../packages/work/src/sql.ts";
 import { encodeCursor } from "../packages/work/src/contract-mapping.ts";
@@ -376,6 +377,46 @@ test("GET /work/inbox: a denied question read marks its section; no disconnect r
     items.map((i) => [i.kind, i.reason, i.setBy]),
     [["connection", "uninstalled", "system"]],
   );
+});
+
+test("the Inbox's changes to review: only what this person may decide, counted only while the store is linked", async () => {
+  // One page of the approvals list as the approvals library maps it (its own rule decided
+  // each viewerRole); the Inbox keeps the reviewer's items and asks once per store whether
+  // it is linked now.
+  const summary = (id, viewerRole, storeId) => ({
+    approval: { expiresAt: "2026-10-26T12:00:00.000Z" },
+    approvalRef: { id: "approval_" + id },
+    proposalRef: { id: "proposal_" + id, storeId },
+    capabilityId: "catalog.content.publish",
+    targetCount: 2,
+    viewerRole,
+  });
+  const asked = [];
+  const linked = async (storeId) => {
+    asked.push(storeId);
+    return storeId === "store_linked";
+  };
+  const items = await inboxApprovalItems(
+    [
+      summary("mine", "proposer", "store_linked"),
+      summary("decide", "reviewer", "store_linked"),
+      summary("gone", "reviewer", "store_gone"),
+      summary("workspace", "reviewer", null),
+    ],
+    linked,
+  );
+  assert.deepEqual(
+    items.map((i) => [i.id, i.proposalId, i.storeLinked, i.open]),
+    [
+      ["approval_decide", "proposal_decide", true, true],
+      ["approval_gone", "proposal_gone", false, false],
+      ["approval_workspace", "proposal_workspace", true, true],
+    ],
+  );
+  // A proposer's own change is never an Inbox item, and its store is not even looked up.
+  assert.deepEqual(asked, ["store_linked", "store_gone"]);
+  assert.ok(items.every((i) => i.kind === "approval" && Object.isFrozen(i)));
+  assert.deepEqual(await inboxApprovalItems([summary("x", "proposer", null)], linked), []);
 });
 
 test("GET /work/inbox: a malformed row is a 503 read failure, never a partial Inbox", async (t) => {

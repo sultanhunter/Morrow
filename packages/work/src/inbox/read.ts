@@ -3,7 +3,7 @@ import { storeResource } from "@morrow/policy/store-resource";
 import { disconnectAllowed } from "../connections/commands.js";
 import { listApprovals } from "../approvals/index.js";
 import { readProposalRow } from "../approvals/family.js";
-import { viewerRole } from "../approvals/reads.js";
+import { viewerRole, type ApprovalSummary } from "../approvals/reads.js";
 import type { WorkTx } from "../connection.js";
 import { WorkContextUnavailable, type WorkAuthority } from "../context.js";
 import { mapQuestion } from "../contract-mapping.js";
@@ -161,15 +161,21 @@ async function questions(tx: WorkTx, a: WorkAuthority) {
   return { state: "ok" as const, items, more: rows.length > inboxLimits.questions };
 }
 
-async function approvals(
-  tx: WorkTx,
-  a: WorkAuthority,
+/**
+ * The Inbox's changes to review from one page of the approvals list: only those this
+ * person may decide (the reviewer role; a proposer follows their own on the review
+ * screen), each open only while its store is linked (a change for a disconnected store
+ * can't be applied, so it is listed and never counted).
+ */
+export async function inboxApprovalItems(
+  page: readonly Pick<
+    ApprovalSummary,
+    "approval" | "approvalRef" | "proposalRef" | "capabilityId" | "targetCount" | "viewerRole"
+  >[],
   linked: (storeId: string) => Promise<boolean>,
-) {
-  const page = await listApprovals(tx, a, { after: null, limit: inboxLimits.approvals });
-  if (page === "invalid") throw new WorkContextUnavailable();
+): Promise<InboxApprovalItem[]> {
   const items: InboxApprovalItem[] = [];
-  for (const i of page.items) {
+  for (const i of page) {
     // Only what this person may decide: a proposer sees their own on the review screen.
     if (i.viewerRole !== "reviewer") continue;
     const storeId = i.proposalRef.storeId;
@@ -188,6 +194,16 @@ async function approvals(
       }),
     );
   }
+  return items;
+}
+async function approvals(
+  tx: WorkTx,
+  a: WorkAuthority,
+  linked: (storeId: string) => Promise<boolean>,
+) {
+  const page = await listApprovals(tx, a, { after: null, limit: inboxLimits.approvals });
+  if (page === "invalid") throw new WorkContextUnavailable();
+  const items = await inboxApprovalItems(page.items, linked);
   return { state: "ok" as const, items, more: page.next !== null };
 }
 
