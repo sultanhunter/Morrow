@@ -803,10 +803,8 @@ export function guardPort(
       reviseNotifications: watch(port.settings.reviseNotifications.bind(port.settings), first),
       activity: watch(port.settings.activity.bind(port.settings), first),
     },
-    library: {
-      knowledge: watch(port.library.knowledge.bind(port.library), first),
-      files: watch(port.library.files.bind(port.library), first),
-    },
+    // PR 20: Shop knowledge's methods (default off: uncomposed in this build) and Files.
+    library: watchAll(port.library),
     samples: { home: watch(port.samples.home.bind(port.samples), first) },
   };
 }
