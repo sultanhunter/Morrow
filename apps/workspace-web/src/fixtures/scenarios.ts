@@ -58,6 +58,7 @@ export const scenarioNames = [
   "stop_all",
   "stop_all_uncertain",
   "notifications_conflict",
+  "review_uncertain",
   "home_preview",
   "listings_enable_reread_failed",
   "home_offline_retry",
@@ -363,6 +364,8 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   team_thinking_uncertain: {
     "team.reviseThinking": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // v1 PR 3 (review F2): the first applied product's outcome is unknown (the adapter's apply).
+  review_uncertain: {},
   // ADR-0032: the Home board's sample sections, shown only where `samples.home` is
   // composed (here alone; see `samplesComposedIn`).
   home_preview: {},

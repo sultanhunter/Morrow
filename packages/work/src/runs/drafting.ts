@@ -1,6 +1,7 @@
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { canonicalJson } from "../digest.js";
 import { listingHtmlText, sanitizeListingHtml } from "./html.js";
+import { listingSnapshotText } from "./listing-canonical.js";
 
 // The Listings specialist's code checks (M3 PR-2; mvp-architecture §2 step 8; ADR-0022 items
 // 2, 10 and 13): the model is untrusted, so everything that decides what a draft may change
@@ -86,14 +87,9 @@ export function runFieldsValid(fields: unknown): fields is readonly ListingField
 
 /** The largest canonical snapshot a run stores (product_snapshots holds at most 64 KiB). */
 export const snapshotMaxBytes = 65_536;
-const snapshotText = (snapshot: ListingSnapshot) =>
-  canonicalJson({
-    productId: snapshot.productId,
-    title: snapshot.title,
-    descriptionHtml: snapshot.descriptionHtml,
-    seo: { title: snapshot.seo.title, description: snapshot.seo.description },
-    tags: [...snapshot.tags],
-  });
+// The one canonical form (listing-canonical.ts), shared with the gateway's pre-send check. A
+// snapshot here is already de-duplicated (readSnapshot), so its text is unchanged by it.
+const snapshotText = (snapshot: ListingSnapshot) => listingSnapshotText(snapshot);
 /**
  * A product as M2 PR-3's read returned it, with exact duplicate tags dropped (the first kept):
  * the read's closed result does not require unique tags, ListingSnapshot@1 does, and Shopify

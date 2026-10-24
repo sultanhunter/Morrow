@@ -52,7 +52,15 @@ export function approvalRefDigest(f: ApprovalRefFields): string {
 
 /** The deterministic id of a partial approval's derived proposal (P01.T02a §7 item 8). */
 export function derivedProposalId(parentRef: Core_ProposalRef, indexes: readonly number[]): string {
-  return "derived_" + canonicalDigest({ parentRef, selectedTargetIndexes: [...indexes] });
+  // The store never enters the name (morrow_work.derived_proposal_id, 0018): the parent's
+  // digest binds it, and the derived document's parentRef keeps it (v1 PR 3).
+  return (
+    "derived_" +
+    canonicalDigest({
+      parentRef: { ...parentRef, storeId: null },
+      selectedTargetIndexes: [...indexes],
+    })
+  );
 }
 
 /** A database instant (epoch ms) as utc_text renders it; ms precision, Z. */

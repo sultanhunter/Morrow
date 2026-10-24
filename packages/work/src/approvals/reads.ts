@@ -84,7 +84,7 @@ function memberView(
   const projected = projectApproval(storedProjection(stored, family.decisions), facts, atMs);
   return {
     approval: mapApproval(stored, proposal, family.decisions, projected.status),
-    approvalRef: storedApprovalRef(stored),
+    approvalRef: storedApprovalRef(stored, proposal.storeId),
   };
 }
 
@@ -180,7 +180,7 @@ export async function listApprovals(
       items.push(
         Object.freeze({
           approval: mapApproval(stored, member.proposal, family.decisions, "pending"),
-          approvalRef: storedApprovalRef(stored),
+          approvalRef: storedApprovalRef(stored, member.proposal.storeId),
           proposalRef: proposalRef(member.proposal),
           capabilityId: member.proposal.capabilityId,
           risk: member.proposal.risk,

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "switch": "off",
+  "scope": "The reviewed apply switch of the staging Workers (v1 PR 3; ADR-0022 items 7 and 9; the model-provider switch's protocol). Committed off: the api's POST /workspace/:ws/work/proposals/:proposalId/apply answers 503 (apply_unavailable) before any database access, so no approval is claimed, no operation lease opens and no operation exists; the broker's shopifyProductApply answers BROKER_HELD (WRITE_UNAVAILABLE) before any input, database or Shopify access. Reviews, decisions, the apply history and read-backs keep working (a read-back is never blocked by the switch). It is turned on only by one reviewed commit that sets switch to on and adds MORROW_SHOPIFY_WRITE \"on\" to the staging api and broker vars, after the owner's yes for the first change to the store (the owner approves each exact change inside Morrow in any case). edge:check refuses any mixed state; production has no switch until the ADR-0007 item 9 custody ADR."
+}

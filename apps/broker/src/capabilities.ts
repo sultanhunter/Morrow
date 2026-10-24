@@ -21,6 +21,8 @@ import {
   runtimeSwitchVar,
   parseStripeConfiguration,
   parseTurnstileConfiguration,
+  shopifyWriteOn,
+  shopifyWriteVar,
   stripeModeTest,
   stripeModeVar,
   stripeRestrictedKeyPattern,
@@ -64,7 +66,10 @@ export type BrokerMethod =
   | "modelRespond"
   // Build order PR 7 (RuntimeBroker): the computer's door and its reconciliation sweep.
   | "runtimeExecute"
-  | "runtimeSweep";
+  | "runtimeSweep"
+  // v1 PR 3 (ApiBroker): the gateway's apply and read-back of one catalog_write operation.
+  | "shopifyProductApply"
+  | "shopifyProductReconcile";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"
@@ -87,7 +92,11 @@ export type BrokerFailureCode =
   | "MODEL_UNAVAILABLE"
   // Build order PR 7: the runtime switch is off (or its key, adapter or template is
   // missing); no sandbox is created or reconciled.
-  | "RUNTIME_UNAVAILABLE";
+  | "RUNTIME_UNAVAILABLE"
+  // v1 PR 3: the apply switch is off; no Shopify write runs. And the isolate's one write
+  // slot on the vault login is in use.
+  | "WRITE_UNAVAILABLE"
+  | "WRITE_BUSY";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
     super("BROKER_HELD");
@@ -154,6 +163,12 @@ export interface BrokerCapabilities {
   readonly computer: Readonly<BrokerComputer> | null;
   /** The runtime switch as this broker sees it (MORROW_RUNTIME_SWITCH). */
   readonly computerMode: "off" | "cleanup_only" | "on";
+  /**
+   * v1 PR 3: the apply switch as this broker sees it: "on" only with MORROW_SHOPIFY_WRITE
+   * exactly "on", in development or staging, with the vault (the fence's definers run on the
+   * broker's own login). Absent (the committed state) or anything else is off.
+   */
+  readonly shopifyWrite: "off" | "on";
   // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
   // health also needs the challenge capability; development may run without it.
   readonly challengeRequired: boolean;
@@ -172,6 +187,7 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   modelMode: "off",
   computer: null,
   computerMode: "off",
+  shopifyWrite: "off",
   challengeRequired: true,
 });
 const environments = ["development", "staging", "production"] as const;
@@ -406,6 +422,19 @@ function computer(
   if (typeof apiKey !== "string" || e2bKeyPattern.exec(apiKey)?.[0] !== apiKey) return null;
   return Object.freeze({ provider: runtimeProviderE2b, apiKey });
 }
+// The apply switch (v1 PR 3): on only with MORROW_SHOPIFY_WRITE exactly "on", in development
+// or staging, and only with the vault. Production holds it until the custody ADR.
+function shopifyWrite(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): "off" | "on" {
+  return environment !== "production" &&
+    vaultCapability !== null &&
+    own(env, shopifyWriteVar) === shopifyWriteOn
+    ? "on"
+    : "off";
+}
 
 async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
   let result = nothing;
@@ -429,6 +458,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         modelMode: modelMode(env, environment),
         computer: computer(env, environment, vaultCapability),
         computerMode: computerMode(env, environment),
+        shopifyWrite: shopifyWrite(env, environment, vaultCapability),
         challengeRequired: environment !== "development",
       });
     }
@@ -450,6 +480,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       modelMode: result.modelMode,
       computer: result.computer !== null,
       computerMode: result.computerMode,
+      shopifyWrite: result.shopifyWrite,
     }),
   );
   return result;

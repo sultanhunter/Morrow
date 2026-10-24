@@ -13,10 +13,12 @@ import { createNeonWorkConnector } from "../../../packages/work/src/neon-connect
 import { createConnectionKernel } from "../../../packages/policy/src/connection-authority.js";
 import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
 import type { RunsApiDependencies } from "../../../packages/work/src/runs/http.js";
+import type { ReviewApiDependencies } from "../../../packages/work/src/review/http.js";
 import type { BillingApiDependencies } from "../../../packages/work/src/billing/http.js";
 import type { StripeWebhookDependencies } from "../../../packages/work/src/billing/webhook.js";
 import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
 import {
+  createBrokerApplyPort,
   createBrokerChallengeVerifier,
   createBrokerCredentialDestroyer,
   createBrokerHealth,
@@ -29,6 +31,7 @@ import type { CatalogApiDependencies } from "../../../packages/work/src/catalog/
 import type { ConnectionsApiDependencies } from "../../../packages/work/src/connections/http.js";
 import {
   mapApiEnvironment,
+  type ApiApplyMode,
   type ApiEnvironmentCode,
   type ApiEnvironmentValues,
   type ApiModelMode,
@@ -67,6 +70,7 @@ export function composeApiDependencies(
   stripeMode: ApiStripeMode = "off",
   modelMode: ApiModelMode = "off",
   productReadAvailable: boolean = runtimeProductReadAvailable,
+  applyMode: ApiApplyMode = "off",
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
   const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
@@ -144,6 +148,16 @@ export function composeApiDependencies(
     environment,
     admission: runAdmissionOpen(modelMode, productReadAvailable),
   });
+  // v1 PR 3: the review and apply routes on the work dependencies, with the broker's apply and
+  // read-back behind the ApiBroker binding. While the apply switch is off (committed), apply
+  // answers 503 before any database access; reviews, decisions, the history and read-backs
+  // (never blocked by the switch) keep working.
+  const review: ReviewApiDependencies = Object.freeze({
+    ...work,
+    environment,
+    applyOpen: applyMode === "on",
+    broker: createBrokerApplyPort(broker),
+  });
   // "Disconnect store": the connection routes on the same origin and work login, with the
   // broker's destruction of the disconnected installation's token behind the ApiBroker
   // binding. No switch: a stop is always available (ADR-0005), whatever else is off.
@@ -158,6 +172,7 @@ export function composeApiDependencies(
     webhook,
     catalog,
     runs,
+    review,
     connections,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
@@ -187,6 +202,8 @@ function select(env: unknown): Selected {
         mapped.environment,
         mapped.stripe,
         mapped.model,
+        runtimeProductReadAvailable,
+        mapped.apply,
       );
       selected = {
         api: createWorkspaceApiWorker(
@@ -196,6 +213,7 @@ function select(env: unknown): Selected {
           composed.webhook,
           composed.catalog,
           composed.runs,
+          composed.review,
           composed.connections,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),

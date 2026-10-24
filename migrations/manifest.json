@@ -339,6 +339,20 @@
       "sha256": "5d9a6d7ef59acc0198c1a64ea2b3be78e89f3a8c501439e152aae7cb9573f153",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/runtime-computer-foundation.md"
+    },
+    {
+      "sequence": 44,
+      "file": "0044.catalog-review.sql",
+      "sha256": "2a8bf9895ea51a7a5a5b42726ccf654b6b43aed5ad1f0b414b4378b9ad1fd5b0",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-review-apply.md"
+    },
+    {
+      "sequence": 45,
+      "file": "0045.catalog-apply.sql",
+      "sha256": "da6ed3498fa01e9e6d9afea8135ddb0199d8dcc0cffd659f7fd92c9fa605aa31",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-review-apply.md"
     }
   ]
 }

@@ -16,6 +16,7 @@ import {
   brokerShopifyWebhookVerify,
 } from "./shopify-install.js";
 import { brokerShopifyRead } from "./shopify-read.js";
+import { brokerShopifyProductApply, brokerShopifyProductReconcile } from "./shopify-write.js";
 import {
   brokerStripeCheckoutCreate,
   brokerStripeCustomerEnsure,
@@ -53,11 +54,12 @@ const runtimeGateway = createRuntimeGateway({
 // Each method checks its arity and forwards to a module-scope handler. Results are
 // strings or booleans only.
 
-// The api Worker's entrypoint: exactly ten prototype methods (v0's four, ADR-0019 item 6
+// The api Worker's entrypoint: exactly twelve prototype methods (v0's four, ADR-0019 item 6
 // added challengeVerify; M5 PR-1 adds the four Stripe methods, which take ids, strings and
 // budgets only, as v1 requires: the broker loads every Stripe parameter itself; M2 PR-3 adds
 // shopifyRead under a read lease; "Disconnect store" adds shopifyCredentialDestroy, the
-// disconnected installation's token, with its reason fixed).
+// disconnected installation's token, with its reason fixed; v1 PR 3 adds the gateway's
+// shopifyProductApply and shopifyProductReconcile, keyed by one operation id).
 export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0 ? brokerHealth(this.env) : brokerInputInvalid("health");
@@ -130,6 +132,18 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
     return arguments.length === 1
       ? brokerShopifyDisconnectDestroy(this.env, installationId)
       : brokerInputInvalid("shopifyCredentialDestroy");
+  }
+  // v1 PR 3: the gateway's apply of one dispatching catalog_write operation and its read-back
+  // (ids and a budget only; the switch first, then everything from the database).
+  shopifyProductApply(operationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerShopifyProductApply(this.env, operationId, budgetMs)
+      : brokerInputInvalid("shopifyProductApply");
+  }
+  shopifyProductReconcile(operationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerShopifyProductReconcile(this.env, operationId, budgetMs)
+      : brokerInputInvalid("shopifyProductReconcile");
   }
 }
 
