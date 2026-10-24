@@ -48,7 +48,8 @@ const labsOutsideCi = (name) =>
   name.startsWith("lab:e2b-");
 // The P14.T01a `ui` job installs Chromium and runs 214 browser checks (172 state cases and
 // 21 keyboard walks at two widths) plus the journey lab.
-const timeoutLimit = (id) => (id === "ui" ? 20 : 15);
+// The ui job and the postgres lab legs may run up to 20 minutes; every other job 15.
+const timeoutLimit = (id) => (id === "ui" || id === "postgres" ? 20 : 15);
 // Every ci.yml job runs on GitHub-hosted ubuntu-24.04 unless the repository variable
 // MORROW_CI_RUNS_ON holds the Mac runner's label list (ADR-0014, amendment of 2026-10-22).
 const ciRunsOn = "${{ fromJSON(vars.MORROW_CI_RUNS_ON || '\"ubuntu-24.04\"') }}";

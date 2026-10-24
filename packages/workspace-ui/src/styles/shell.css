@@ -363,7 +363,7 @@
 }
 /* Settings (the ConnectStore board): a white sub-navigation card beside the screen; below
    1120 px it sits above the screen and its items wrap. Activity is listed here, not in the
-   sidebar, as a placeholder until the activity log has a route. */
+   sidebar, and Stop all AI work ends the card, set apart by a rule. */
 .settings-frame {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
@@ -420,9 +420,14 @@ a.settings-link:hover {
 .settings-link[aria-current="page"] .icon {
   color: var(--color-text);
 }
-.settings-link.is-later,
-.settings-link.is-later .icon {
-  color: var(--color-subdued);
+.settings-nav-stop {
+  margin: 6px 2px 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-rule);
+}
+.settings-link-stop,
+.settings-link-stop .icon {
+  color: var(--color-critical-text);
 }
 .settings-content {
   min-width: 0;

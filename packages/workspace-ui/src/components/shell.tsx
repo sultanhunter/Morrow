@@ -663,7 +663,7 @@ export function AppShell({
           <div className="sidebar-foot">
             <ConnectionLine workspaceId={ws} refresh={refresh} onNavigate={navigated} />
             {samples ? (
-              // The contract's credit balance: display only, opening Settings > Usage.
+              // The contract's credit balance: display only, opening Plan and credits (`usage`).
               <RouteLink
                 route="settings_section"
                 params={{ workspaceId: ws, section: "usage" }}

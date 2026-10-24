@@ -558,7 +558,7 @@ test("entry picture: Morrow on the horizon, decorative, colours from tokens only
   assert.equal(new Set(ids).size, 2);
 });
 
-test("settings: Activity sits under Settings as a placeholder, never in the sidebar", () => {
+test("settings: one Settings frame lists every page, Activity under Settings and never in the sidebar", () => {
   const services = { navigate: () => {} };
   const html = render(
     h(
@@ -570,20 +570,26 @@ test("settings: Activity sits under Settings as a placeholder, never in the side
   const links = [
     ...html.matchAll(/<a href="([^"]+)"[^>]*class="settings-link"[^>]*>(.*?)<\/a>/g),
   ].map((m) => [m[1], m[2].replace(/<[^>]+>/g, "")]);
-  // The contract's own paths, under the board's names.
+  // The contract's own paths, under the board's names (T7 PR 16 gives each page a screen;
+  // the contract has no `email` or `activity` section yet, so they use `stores` and
+  // `governance`, and the model default moves to `billing`).
   assert.deepEqual(links, [
-    ["/w/ws-1/settings/billing", "Plan and credits"],
+    ["/w/ws-1/settings/usage", "Plan and credits"],
     ["/w/ws-1/settings/people", "People and roles"],
     ["/w/ws-1/settings/notifications", "Notifications"],
-    ["/w/ws-1/settings/governance", "Model default"],
+    ["/w/ws-1/settings/stores", "Email addresses"],
     ["/w/ws-1/connections", "Shopify connection"],
+    ["/w/ws-1/settings/governance", "Activity"],
+    ["/w/ws-1/settings/billing", "Model default"],
   ]);
   assert.match(html, /href="\/w\/ws-1\/connections" class="settings-link" aria-current="page"/);
-  // Activity is listed, says it isn't built, and isn't a link until it has a route.
+  // Stop all AI work ends the card and opens Activity, where the stop and its typed
+  // confirmation are; the link itself stops nothing.
   assert.match(
     html,
-    /<span class="settings-link is-later">.*Activity<span class="visually-hidden">, not in this build yet<\/span>/,
+    /<div class="settings-nav-stop"><a href="\/w\/ws-1\/settings\/governance" class="settings-link settings-link-stop">.*Stop all AI work<\/span><\/a><\/div>/,
   );
+  assert.doesNotMatch(html, /is-later/);
   assert.equal(
     workspaceRoutes.routes.some((r) => /activity/.test(r.id)),
     false,
@@ -601,7 +607,8 @@ test("settings: Activity sits under Settings as a placeholder, never in the side
   // Which item is current, and which routes the frame wraps.
   assert.equal(settingsCurrent("connection", undefined), "connections");
   assert.equal(settingsCurrent("settings_section", "people"), "people");
-  assert.equal(settingsCurrent("settings_section", "usage"), null);
+  assert.equal(settingsCurrent("settings_section", "usage"), "usage");
+  assert.equal(settingsCurrent("settings_section", "nope"), null);
   assert.equal(settingsCurrent("settings", undefined), null);
   assert.deepEqual(
     ["settings", "settings_section", "connections", "connection", "home", "inbox"].map(inSettings),
@@ -614,7 +621,9 @@ test("settings: Activity sits under Settings as a placeholder, never in the side
     if (item.route === "settings_section") assert.ok(sections.includes(item.key), item.key);
   // Section titles: the board's names; the contract's title stays.
   assert.equal(destinationTitle("settings_section", "people"), "People and roles");
-  assert.equal(destinationTitle("settings_section", "billing"), "Plan and credits");
+  assert.equal(destinationTitle("settings_section", "usage"), "Plan and credits");
+  assert.equal(destinationTitle("settings_section", "governance"), "Activity");
+  assert.equal(destinationTitle("settings_section", "billing"), "Model default");
   assert.equal(destinationTitle("settings_section"), "Settings section");
   assert.equal(
     screenTitle({

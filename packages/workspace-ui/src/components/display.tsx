@@ -64,6 +64,8 @@ const paths = {
   document: ["M5 2h9l5 5v15H5z", "M14 2v6h5"],
   // The Settings sub-navigation (the ConnectStore and SettingsActivity boards).
   bell: ["M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z", "M10 20.5a2 2 0 0 0 4 0"],
+  mail: ["M3 5h18v14H3z", "M3 6l9 7 9-7"],
+  stop: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z", "M9 9h6v6H9z"],
   sliders: ["M4 7h9", "M17 7h3", "M15 5v4", "M4 17h3", "M11 17h9", "M9 15v4"],
   activity: [
     "M4 6h10M4 11h7M4 16h5",

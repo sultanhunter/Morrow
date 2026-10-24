@@ -119,21 +119,21 @@ export const copy = {
       none: "Connect your store",
     } as Readonly<Record<string, string>>,
   },
-  // ADR-0032: the Settings sub-navigation the ConnectStore board draws. Activity sits
-  // under Settings, not in the sidebar; its log arrives with its own route.
+  // ADR-0032: the Settings sub-navigation the ConnectStore board draws, by the route
+  // contract's section values (`settingsRoutes` in components/settings-frame.tsx says which
+  // page each holds; T7 PR 16). Activity sits under Settings, never in the sidebar.
   settings: {
     navLabel: "Settings",
     sections: {
-      billing: "Plan and credits",
+      usage: "Plan and credits",
       people: "People and roles",
       notifications: "Notifications",
-      governance: "Model default",
-      usage: "Usage",
-      stores: "Stores",
+      stores: "Email addresses",
+      governance: "Activity",
+      billing: "Model default",
     } as Readonly<Record<string, string>>,
     connection: "Shopify connection",
-    activity: "Activity",
-    activityLater: ", not in this build yet",
+    stopAll: "Stop all AI work",
   },
   unavailableDestination: (title: string) =>
     `${title} isn't available in this provisional build. Nothing here is hidden from you; it hasn't been built yet.`,
@@ -408,6 +408,8 @@ export const copy = {
       agent: "a change to the Listings agent",
       model_default: "the default model",
       run: "a Listings run",
+      thinking: "a change to how a helper thinks",
+      add_agent: "adding an agent",
       disconnect: "disconnecting a store",
     },
     body: (kind: string) =>
