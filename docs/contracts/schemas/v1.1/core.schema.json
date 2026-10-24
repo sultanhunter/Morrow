@@ -9976,7 +9976,7 @@
       ]
     },
     "ToolRefusalCode": {
-      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused.",
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20: customer_data (a run that read customer data proposes no shop knowledge) and pending_limit (a workspace holds at most 50 pending knowledge proposals).",
       "type": "string",
       "enum": [
         "not_offered",
@@ -9997,11 +9997,13 @@
         "report_in_turn",
         "result_too_large",
         "sender_inactive",
-        "sender_not_usable"
+        "sender_not_usable",
+        "customer_data",
+        "pending_limit"
       ]
     },
     "RunToolCallRecordRef": {
-      "description": "The first record an internal write made, returned again on replay.",
+      "description": "The first record an internal write made, returned again on replay (PR 20 adds the knowledge proposal and the notebook entry).",
       "type": "object",
       "properties": {
         "kind": {
@@ -10013,7 +10015,9 @@
             "suggestion",
             "artifact",
             "proposal",
-            "specialist_spec"
+            "specialist_spec",
+            "knowledge_proposal",
+            "notebook_entry"
           ]
         },
         "id": {
@@ -14104,7 +14108,7 @@
       "additionalProperties": false
     },
     "KnowledgeProposal": {
-      "description": "KnowledgeProposal@1 (PR 20): an installed agent's pending addition (knowledge.propose): a new page (pageId and baseVersion null) or a new version of a page made against its baseVersion. It grants nothing and changes no page; a person accepts or rejects this exact digest, and an accept of a page that changed since is stale. Only a pending proposal keeps its text.",
+      "description": "KnowledgeProposal@1 (PR 20): an installed agent's pending addition (knowledge.propose): a new page (pageId and baseVersion null) or a new version of a page made against its baseVersion. It grants nothing and changes no page; a person accepts or rejects this exact digest, and an accept of a page that changed since is stale. Only a pending proposal keeps its text. contextTaint says the run had consumed untrusted content (product text, mail, uploads or tool output), so the screen says so before a person accepts (ADR-0027 item 5).",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -14150,6 +14154,9 @@
         "installationId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
         },
+        "contextTaint": {
+          "$ref": "#/$defs/ContextTaint"
+        },
         "digest": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
         },
@@ -14167,6 +14174,7 @@
         "text",
         "sources",
         "installationId",
+        "contextTaint",
         "digest",
         "createdAt"
       ],

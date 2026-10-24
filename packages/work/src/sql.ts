@@ -4,6 +4,7 @@ import { billingStatements } from "./billing/sql.js";
 import { catalogStatements } from "./catalog/sql.js";
 import { connectionStatements } from "./connections/sql.js";
 import { reviewStatements } from "./review/sql.js";
+import { knowledgeStatements } from "./knowledge/sql.js";
 import { projectStatements } from "./projects/sql.js";
 import { runStatements } from "./runs/sql.js";
 import { spineStatements } from "./spine-sql.js";
@@ -86,5 +87,7 @@ export const workStatements = Object.freeze({
   ...reviewStatements,
   // PR 18: the goal and plan-start routes (migration 0046).
   ...projectStatements,
+  // PR 20: shop knowledge and notebooks (migration 0047).
+  ...knowledgeStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;
