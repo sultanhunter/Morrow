@@ -1071,9 +1071,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         direct.verdict === "unchanged" &&
         direct.sequence === 1 &&
         requested.status === 201 &&
-        undoRow2?.sequence === (quick2 ? 1 : 2) &&
-        // One read (the recorded check's) when the request came under 10 seconds after it.
-        readsUndo === (quick2 ? 1 : 2),
+        // One read (the recorded check's) when the request came under 10 seconds after it; a
+        // request that took longer may have read again, and then builds on its own check.
+        ((undoRow2?.sequence === 1 && readsUndo === 1) ||
+          (!quick2 && undoRow2?.sequence === 2 && readsUndo === 2)),
       { direct, quick2, undoRow2, readsUndo },
     );
   }
