@@ -61,7 +61,9 @@ import {
 //     record (ledger.tokenPut) before the job starts; each call to the sandbox opens that
 //     record (ledger.tokenGet); the operation's settlement, whatever it is, destroys it in the
 //     same transaction. A job whose token cannot be stored or opened stops there (unknown) and
-//     its sandbox is still killed.
+//     its sandbox is still killed. The open also reads the run's stops and lease: once a stop
+//     covers the run (or its lease has ended or expired) it answers `stopped`, so the job ends
+//     at its next call with the code `stopped` and its own kill follows at once.
 //   * A reply the adapter marks `broken` (the provider's documented protocol did not hold)
 //     records the operation `unknown_effect` with reason reply_invalid before the kill, so a
 //     runtime hold stays until a person lifts it, even when the kill then succeeds.
@@ -142,9 +144,17 @@ export interface RuntimeLedger {
    * is `created`. False when it did not commit (the job then never starts).
    */
   tokenPut(operationId: string, token: string): Promise<boolean>;
-  /** Opens it for one call: null once the operation has settled, or on any doubt. */
-  tokenGet(operationId: string): Promise<string | null>;
+  /**
+   * Opens it for one call. `stopped` while a stop covers the run or its lease has ended or
+   * expired (the job ends there and its sandbox is killed at once); `unavailable` once the
+   * operation has settled, or on any doubt.
+   */
+  tokenGet(operationId: string): Promise<RuntimeTokenRead>;
 }
+export type RuntimeTokenRead =
+  | { readonly outcome: "active"; readonly token: string }
+  | { readonly outcome: "stopped" }
+  | { readonly outcome: "unavailable" };
 export interface RuntimeGatewaySeams {
   readonly ledger: (vault: Readonly<BrokerVault>) => RuntimeLedger;
   /** The adapter of the configured provider, by name ("e2b": runtime-e2b.ts since PR 8). */
@@ -348,10 +358,13 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
         if (tokenHeld && !(await ledger.tokenPut(operationId, created.accessToken as string)))
           outcome = { outcome: "unknown", code: "token_unrecorded", operationId };
         else {
-          const sandbox = async (): Promise<SandboxHandle | null> => {
+          const sandbox = async (): Promise<SandboxHandle | "stopped" | null> => {
             if (!tokenHeld) return Object.freeze({ sandboxRef, accessToken: null });
-            const accessToken = await ledger.tokenGet(operationId);
-            return accessToken === null ? null : Object.freeze({ sandboxRef, accessToken });
+            const read = await ledger.tokenGet(operationId);
+            if (read.outcome === "stopped") return "stopped";
+            return read.outcome === "active"
+              ? Object.freeze({ sandboxRef, accessToken: read.token })
+              : null;
           };
           outcome = await work(
             adapter,
@@ -389,7 +402,7 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
 
   async function work(
     adapter: RuntimeProvider,
-    sandbox: () => Promise<SandboxHandle | null>,
+    sandbox: () => Promise<SandboxHandle | "stopped" | null>,
     job: RuntimeJob,
     files: readonly { readonly path: string; readonly bytes: Uint8Array }[],
     script: Uint8Array,
@@ -398,14 +411,17 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     slice: (ceiling: number) => number,
   ): Promise<Parameters<typeof runtimeResult>[0]> {
     const broken = { outcome: "unknown" as const, code: "reply_invalid", operationId };
-    // The token is opened for each call; once the operation settles (a stop's sweep, say) there
-    // is none, and the job ends here.
-    const tokenGone = { outcome: "unknown" as const, code: "token_unavailable", operationId };
+    // The token is opened for each call; once a stop covers the run, or the operation has
+    // settled (a stop's sweep, say), there is none, and the job ends here.
+    const tokenGone = (handle: "stopped" | null) =>
+      handle === "stopped"
+        ? { outcome: "unknown" as const, code: "stopped", operationId }
+        : { outcome: "unknown" as const, code: "token_unavailable", operationId };
     for (const file of [...files, { path: computerProfile.jobPath, bytes: script }]) {
       if (left() < runtimeTiming.killReserveMs + 1_000)
         return { outcome: "unknown", code: "budget_spent", operationId };
       const handle = await sandbox();
-      if (handle === null) return tokenGone;
+      if (handle === null || handle === "stopped") return tokenGone(handle);
       const written: RuntimeWriteResult = await safely(
         () => adapter.writeFile(handle, file.path, file.bytes, slice(runtimeTiming.writeMaxMs)),
         { outcome: "unknown" },
@@ -419,7 +435,7 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     if (left() < runtimeTiming.killReserveMs + execBudget)
       return { outcome: "unknown", code: "budget_spent", operationId };
     const runner = await sandbox();
-    if (runner === null) return tokenGone;
+    if (runner === null || runner === "stopped") return tokenGone(runner);
     const ran: RuntimeExecResult = await safely(
       () =>
         adapter.exec(
@@ -463,7 +479,7 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
         continue;
       }
       const reader = await sandbox();
-      if (reader === null) return tokenGone;
+      if (reader === null || reader === "stopped") return tokenGone(reader);
       const max = runtimeJobLimits.outputBytesMax[output.type];
       const read: RuntimeReadResult = await safely(
         () => adapter.readFile(reader, outputPath(output), max, slice(runtimeTiming.readMaxMs)),

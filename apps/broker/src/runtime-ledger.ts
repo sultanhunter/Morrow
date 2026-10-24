@@ -4,6 +4,7 @@ import type {
   RuntimeBeginRefusal,
   RuntimeLedger,
   RuntimeOpenOperation,
+  RuntimeTokenRead,
   RuntimeUnknownReason,
 } from "./runtime-gateway.js";
 import { sandboxRefPattern } from "./runtime-provider.js";
@@ -24,8 +25,8 @@ import {
 // column: anything unexpected is a refusal (begin) or false (the writes), never a guess.
 // Build order PR 8 (migration 0047): the sandbox's envd token as a sealed vault record
 // (tokenPut seals it with the vault's keyring and stores it once while the operation is
-// `created`; tokenGet opens it for one call; any settlement destroys it in SQL), and the
-// sweep's `stopped` column.
+// `created`; tokenGet opens it for one call, or answers `stopped` once a stop covers the run;
+// any settlement destroys it in SQL), and the sweep's `stopped` column.
 
 export type VaultTransaction = <T>(
   vault: Readonly<BrokerVault>,
@@ -212,13 +213,22 @@ export function createVaultRuntimeLedger(
         return r !== null && r.outcome === "stored";
       }, false);
     },
-    async tokenGet(operationId) {
-      if (!uuid.test(operationId)) return null;
+    async tokenGet(operationId): Promise<RuntimeTokenRead> {
+      const unavailable: RuntimeTokenRead = Object.freeze({ outcome: "unavailable" });
+      if (!uuid.test(operationId)) return unavailable;
       const envelope = await run(async (query) => {
         const r = one(
           await query(vaultStatements.runtimeTokenGet, [operationId]),
           "kek_version,outcome,sealed_value,wrapped_key",
         );
+        if (
+          r !== null &&
+          r.outcome === "stopped" &&
+          r.kek_version === null &&
+          r.wrapped_key === null &&
+          r.sealed_value === null
+        )
+          return "stopped" as const;
         if (r === null || r.outcome !== "active") return null;
         if (typeof r.kek_version !== "string" || !/^[1-9][0-9]{0,2}$/.test(r.kek_version))
           return null;
@@ -236,14 +246,17 @@ export function createVaultRuntimeLedger(
           ),
         };
       }, null);
-      if (envelope === null) return null;
+      if (envelope === "stopped") return Object.freeze({ outcome: "stopped" });
+      if (envelope === null) return unavailable;
       let plaintext: Uint8Array | null = null;
       try {
         plaintext = await openVaultRecord(vault.keyring, tokenRef(operationId), envelope);
         const token = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(plaintext);
-        return tokenPattern.test(token) ? token : null;
+        return tokenPattern.test(token)
+          ? Object.freeze({ outcome: "active", token })
+          : unavailable;
       } catch {
-        return null;
+        return unavailable;
       } finally {
         plaintext?.fill(0);
       }

@@ -65,7 +65,7 @@ cd ~/Desktop/Morrow && git switch main && git pull
    npx --yes @e2b/cli@2.22.3 auth logout
    ```
 
-The build itself costs a few cents of the project's usage. Nothing starts a sandbox yet:
+The build may use a little of the project's usage. Nothing starts a sandbox yet:
 Morrow's runtime switch stays off until the check in build order PR 9 has passed on exactly
 this build.
 
@@ -83,8 +83,11 @@ this build.
 
 ## What Claude does with your answer
 
-Claude records the build in `template.json` and pins it in the broker as
-`morrow-computer-v1:<build id>`, which names this one build even if the template is rebuilt
-later. Build order PR 9 then runs the recorded check on made-up data: nothing inside can
-reach the internet, Morrow's code inside cannot read the sandbox's token, and the time limit
-kills the sandbox without pausing it. Only after that can the switch go on.
+Claude records the build in `template.json` (the template id, the build id, the envd version
+and the date) and pins the template id in the broker. E2B starts a template's newest finished
+build, and its documents name no way to start one exact build, so the record's build id is
+what Build order PR 9's check compares against: that check runs on made-up data and shows that
+nothing inside can reach the internet, that Morrow's code inside cannot read the sandbox's
+token, and that the time limit kills the sandbox without pausing it. Only after that can the
+switch go on. **Never build `morrow-computer-v1` again** outside a reviewed pull request: a
+new build replaces what the pin starts, so it needs a new record and a new check.

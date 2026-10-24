@@ -11,8 +11,11 @@ BEGIN;
 --     sealed-secret tables (lab:spine-foundation V3); no table is added.
 --   * runtime_token_put and runtime_token_get: the broker's login stores the sealed token once,
 --     while the operation is `created`, and opens it for each call to the sandbox while the
---     operation is still `created`. No definer returns a token in the clear; the envelope's
---     additional data binds the operation id (apps/broker/src/vault.ts).
+--     operation is still `created` and nothing has stopped it: a stop (platform, connection or
+--     installation), an ended lease or an expired one answers `stopped`, so the job ends at its
+--     next call and the gateway kills its sandbox at once (ADR-0029 item 9). No definer returns
+--     a token in the clear; the envelope's additional data binds the operation id
+--     (apps/broker/src/vault.ts).
 --   * morrow_work.runtime_token_end, a trigger on the operations: every settlement, terminal or
 --     unknown_effect, destroys the operation's active envd token in the same statement, by
 --     whichever definer settles it (0043's runtime_operation_settle is unchanged). So no token
@@ -124,14 +127,17 @@ BEGIN
  RETURN QUERY SELECT 'stored'::text;
 END $$;
 
--- The sealed envd token of an operation still `created`, for one call to its sandbox.
--- Outcomes: active (with the envelope), unavailable (settled, unknown, never stored or
--- destroyed), not_found, invalid, denied.
+-- The sealed envd token of an operation still `created`, for one call to its sandbox, while
+-- nothing has stopped it. The lease and the stops are read as runtime_operations_sweep reads
+-- them (resolve_call's broker policies, the settings written before the read and cleared
+-- after). Outcomes: active (with the envelope), stopped (a stop covers the run, or its lease
+-- ended or expired; the token stays until the kill's settlement destroys it), unavailable
+-- (settled, unknown, never stored or destroyed), not_found, invalid, denied.
 CREATE FUNCTION morrow_vault.runtime_token_get(p_operation_id text)
 RETURNS TABLE(outcome text,kek_version text,wrapped_key text,sealed_value text)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
 #variable_conflict use_column
-DECLARE o record; c record;
+DECLARE o record; c record; l record; v_found boolean; v_stopped boolean;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN
   RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text; RETURN;
@@ -139,7 +145,8 @@ BEGIN
  IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
- SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.status INTO o
+ SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.status,x.lease_id::text AS lease_id,
+  x.installation_id::text AS installation_id INTO o
   FROM morrow_work.runtime_operations x WHERE x.id=p_operation_id;
  IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
  SELECT x.kek_version::text AS kek_version,encode(x.wrapped_key,'hex') AS wrapped_key,encode(x.sealed_value,'hex') AS sealed_value INTO c
@@ -148,6 +155,15 @@ BEGIN
  IF NOT FOUND OR o.status<>'created' THEN
   RETURN QUERY SELECT 'unavailable'::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
+ PERFORM pg_catalog.set_config('morrow.vault_resolve_lease',o.lease_id,true),
+  pg_catalog.set_config('morrow.vault_resolve_tenant',o.organization_id||'|'||o.workspace_id,true);
+ SELECT w.status,w.expires_at,w.connection_id::text AS connection_id INTO l FROM morrow_work.work_leases w WHERE w.id=o.lease_id;
+ v_found:=FOUND;
+ v_stopped:=CASE WHEN NOT v_found THEN true
+  ELSE l.status<>'active' OR l.expires_at<=pg_catalog.clock_timestamp()
+   OR morrow_work.stop_active(o.organization_id,o.workspace_id,'run',l.connection_id,o.installation_id) END;
+ PERFORM pg_catalog.set_config('morrow.vault_resolve_lease','',true),pg_catalog.set_config('morrow.vault_resolve_tenant','',true);
+ IF v_stopped THEN RETURN QUERY SELECT 'stopped'::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
  RETURN QUERY SELECT 'active'::text,c.kek_version,c.wrapped_key,c.sealed_value;
 END $$;
 

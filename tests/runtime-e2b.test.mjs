@@ -12,7 +12,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import {
   createE2bRuntime,
   e2bCreateBody,
@@ -865,6 +865,29 @@ test("the adapter's source: plain fetch to two fixed origins, no SDK, no Node, n
     );
 });
 
+test("only the broker composes the adapter: no other Worker names E2B, its key or its origins", () => {
+  const sources = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (["node_modules", "dist", ".wrangler", ".artifacts"].includes(entry.name)) continue;
+      const path = dir + "/" + entry.name;
+      if (entry.isDirectory()) walk(path);
+      else if (/\.(ts|tsx|mts|js|mjs|jsonc?)$/.test(entry.name)) sources.push(path);
+    }
+  };
+  walk("apps");
+  const naming = sources.filter((path) =>
+    /E2B_API_KEY|e2b\.app|runtime-e2b|@e2b\/|from "e2b"/.test(readFileSync(path, "utf8")),
+  );
+  assert.ok(naming.length > 0);
+  for (const path of naming) assert.match(path, /^apps\/broker\/src\//, path);
+  // Inside the broker, only the composition root imports the adapter.
+  const importers = naming.filter((path) =>
+    /from "\.\/runtime-e2b\.js"/.test(readFileSync(path, "utf8")),
+  );
+  assert.deepEqual(importers, ["apps/broker/src/index.ts"]);
+});
+
 test("the pinned template is the owner's build record (none until it is built and qualified)", () => {
   const record = JSON.parse(readFileSync("infra/e2b/morrow-computer/template.json", "utf8"));
   assert.equal(e2bPinnedTemplate, record.template_id);
@@ -902,11 +925,12 @@ test("the template recipe: Debian's Python and data libraries, no browser or net
   assert.equal(record.profile, computerProfile.id + "@" + computerProfile.version);
   assert.equal(record.cpu_count, computerProfile.vcpu);
   assert.equal(record.memory_mb, computerProfile.memoryMiB);
-  // Built or not, as one: the pin names exactly one build (name:build id).
+  // Built or not, as one: the pin is the template's id, recorded with the one build PR 9
+  // qualifies (E2B starts a template's newest ready build; no create by build is documented).
   const built = [record.template_id, record.build_id, record.envd_version, record.built_on];
   assert.ok(built.every((v) => v === null) || built.every((v) => typeof v === "string"));
-  if (record.template_id !== null)
-    assert.equal(record.template_id, record.name + ":" + record.build_id);
+  if (record.template_id !== null) assert.doesNotMatch(record.template_id, /:/);
+  assert.match(record.scope, /new build of the same template/);
   const lines = recipe
     .split("\n")
     .filter((l) => l.trim() && !l.trim().startsWith("#"))

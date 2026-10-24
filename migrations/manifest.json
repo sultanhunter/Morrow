@@ -364,7 +364,7 @@
     {
       "sequence": 47,
       "file": "0047.runtime-e2b.sql",
-      "sha256": "55284ba1b4f783c731c9bd3cfd0b9bb4599190af96b94ae0614d0ef1de1314e5",
+      "sha256": "64661d10cbc9cc5eeb4cb78e92c715c118d7b985ef690963636f6da89c6af14c",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/e2b-adapter.md"
     }

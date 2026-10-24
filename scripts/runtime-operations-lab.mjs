@@ -39,9 +39,11 @@
 //      broker's login executes them; the credentials constraints keep E2B and Shopify rows
 //      apart;
 //   L2 (revised) a stop makes its run's open operations `stopped` in the sweep's list, stale or
-//      not, and the very next sweep kills their sandboxes and destroys their tokens.
+//      not, and its running job's next token open answers `stopped` with no envelope (so the
+//      job ends and kills its own sandbox); the very next sweep kills their sandboxes and
+//      destroys their tokens.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
-// marked sim stand in for states no API path reaches yet. CI pg-work group.
+// marked sim stand in for states no API path reaches yet. CI pg-linking group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
@@ -1270,6 +1272,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     });
     const stopped = await execute(job("after-stop"));
     const stoppedSql = begin("after-stop-sql");
+    // PR 8: the running job's next call opens no token: `stopped`, no envelope, the record
+    // still active until the kill's settlement.
+    const stoppedToken = tokenGet(runningId);
+    const beforeSweep = tokenRow(runningId);
     // PR 8: no aging. The stop alone puts both operations on the sweep's list (stale false,
     // stopped true), and the next sweep kills both sandboxes and destroys the token.
     const listed = db
@@ -1285,6 +1291,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       "L2:a_stop_refuses_the_send_mark_kills_its_runs_sandboxes_at_once_and_never_blocks_cleanup",
       lostBefore.code === "create_unknown" &&
         runningToken === "stored" &&
+        stoppedToken.join("|") === "stopped||" &&
+        beforeSweep?.status === "active" &&
+        beforeSweep.material === true &&
         stop.status === 200 &&
         stopped.held === "STATE_INVALID" &&
         // The stop revokes the run's lease, so the send mark finds it ended (a stop committed
@@ -1302,6 +1311,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       {
         lostBefore,
         runningToken,
+        stoppedToken: stoppedToken[0],
+        beforeSweep,
         stop: stop.status,
         stopped,
         stoppedSql,

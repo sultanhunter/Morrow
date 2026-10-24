@@ -181,8 +181,10 @@ function memoryLedger(
       const o = ops.get(operationId);
       const t = tokens.get(operationId);
       if (failToken === "get" || !o || o.status !== "created" || !t || t.destroyed !== null)
-        return null;
-      return t.token;
+        return { outcome: "unavailable" };
+      // 0047's runtime_token_get: a stop covering the run (or its ended lease) answers stopped.
+      if (o.stopped) return { outcome: "stopped" };
+      return { outcome: "active", token: t.token };
     },
     async open(limit) {
       events.push(["ledger.open", limit]);
@@ -1056,26 +1058,32 @@ test("PR 8: the envd token's vault record: sealed with the keyring, opened stric
     sealed_value: values[3],
   };
   reply = [row];
-  assert.equal(await ledger.tokenGet(op), token);
+  assert.deepEqual(await ledger.tokenGet(op), { outcome: "active", token });
   assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeTokenGet, [op]]);
+  const unavailable = { outcome: "unavailable" };
   for (const r of [
     [{ ...row, outcome: "unavailable" }],
     [{ ...row, kek_version: "2" }],
     [{ ...row, sealed_value: values[3].slice(0, -2) + (values[3].endsWith("00") ? "11" : "00") }],
     [{ ...row, extra: 1 }],
+    // A stop's row carries no envelope; one that does is not believed.
+    [{ ...row, outcome: "stopped" }],
     [],
   ]) {
     reply = r;
-    assert.equal(await ledger.tokenGet(op), null);
+    assert.deepEqual(await ledger.tokenGet(op), unavailable);
   }
+  // A stop covering the run: stopped, with nothing opened.
+  reply = [{ outcome: "stopped", kek_version: null, wrapped_key: null, sealed_value: null }];
+  assert.deepEqual(await ledger.tokenGet(op), { outcome: "stopped" });
   // Another operation's id never opens this envelope (the additional data binds it).
   reply = [row];
-  assert.equal(await ledger.tokenGet(randomUUID()), null);
+  assert.deepEqual(await ledger.tokenGet(randomUUID()), unavailable);
   // Refusals and failures are false; nothing is sent for a bad id or token.
   const count = sent.length;
   assert.equal(await ledger.tokenPut("bad", token), false);
   assert.equal(await ledger.tokenPut(op, "short"), false);
-  assert.equal(await ledger.tokenGet("bad"), null);
+  assert.deepEqual(await ledger.tokenGet("bad"), unavailable);
   assert.equal(sent.length, count);
   reply = [{ outcome: "refused" }];
   assert.equal(await ledger.tokenPut(op, token), false);
@@ -1083,7 +1091,7 @@ test("PR 8: the envd token's vault record: sealed with the keyring, opened stric
     throw Error("VAULT_OUTCOME_UNKNOWN");
   });
   assert.equal(await broken.tokenPut(op, token), false);
-  assert.equal(await broken.tokenGet(op), null);
+  assert.deepEqual(await broken.tokenGet(op), unavailable);
   // A vault without its keyring seals nothing.
   const keyless = createVaultRuntimeLedger(Object.freeze({}), transaction);
   assert.equal(await keyless.tokenPut(op, token), false);
@@ -1219,6 +1227,62 @@ test("PR 8: stops kill their scope's sandboxes at once; a stopped operation is n
     assert.deepEqual(names(s.events.slice(before)), ["ledger.open", "adapter.status"]);
     assert.equal(s.ledger.ops.get(id).reason, "create_unknown");
   }
+});
+
+test("PR 8: a stop ends a running job at its next call, and its own kill follows at once", async () => {
+  // The run is stopped while its command runs; no sweep passes. The next call to the sandbox
+  // (the first output read) opens no token, the job ends `stopped`, and the gateway kills the
+  // sandbox and settles it, which destroys the token. No hold: nothing is unknown.
+  let world_ = null;
+  const w = world({
+    adapter: (fake, events) => {
+      const base = recorded(fake, events);
+      return {
+        ...base,
+        exec: async (...args) => {
+          const ran = await base.exec(...args);
+          const [id] = [...world_.ledger.ops.keys()];
+          world_.ledger.ops.get(id).stopped = true;
+          return ran;
+        },
+      };
+    },
+  });
+  world_ = w;
+  const result = JSON.parse(await w.execute(job()));
+  assert.deepEqual([result.outcome, result.code], ["unknown", "stopped"]);
+  assert.deepEqual(result.outputs, []);
+  const tail = names(w.events).slice(names(w.events).indexOf("adapter.exec"));
+  assert.deepEqual(tail, ["adapter.exec", "ledger.tokenGet", "adapter.kill", "ledger.settle"]);
+  const [[id, record]] = [...w.ledger.tokens.entries()];
+  assert.equal(w.ledger.ops.get(id).status, "killed");
+  assert.equal(record.destroyed, "sandbox_killed");
+  assert.equal(w.ledger.holds.length, 0);
+  assert.deepEqual(w.fake.alive(), []);
+  // Stopped before the first write: nothing reaches the sandbox at all, and it is killed.
+  let early_ = null;
+  const early = world({
+    adapter: (fake, events) => {
+      const base = recorded(fake, events);
+      return {
+        ...base,
+        create: async (...args) => {
+          const made = await base.create(...args);
+          early_.ledger.ops.get(args[0].operationId).stopped = true;
+          return made;
+        },
+      };
+    },
+  });
+  early_ = early;
+  const stopped = JSON.parse(await early.execute(job()));
+  assert.deepEqual([stopped.outcome, stopped.code], ["unknown", "stopped"]);
+  assert.ok(!names(early.events).includes("adapter.writeFile"));
+  assert.deepEqual(early.events.slice(-2), [
+    ["adapter.kill", null],
+    ["ledger.settle", "killed"],
+  ]);
+  assert.deepEqual(early.fake.alive(), []);
 });
 
 test("PR 8: a stop's sweep cuts a running job off at its next call; no hold is left behind", async () => {
