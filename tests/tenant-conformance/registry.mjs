@@ -354,6 +354,7 @@ export const workTables = Object.freeze({
   knowledge_versions: {
     class: "tenant_readable",
     parents: ["knowledge_pages", "knowledge_proposals", "agent_installations"],
+    lease: true,
     content: "workspace",
   },
   knowledge_search_entries: {

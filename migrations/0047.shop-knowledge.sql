@@ -163,7 +163,7 @@ CREATE TABLE morrow_work.knowledge_proposals (
  kind text NOT NULL CHECK (kind IN ('brand_voice','policy','product_fact','supplier','decision')),
  title text CHECK (char_length(title) BETWEEN 1 AND 120 AND title ~ '\S'),
  body text CHECK (char_length(body) BETWEEN 1 AND 8000 AND body ~ '\S'),
- sources jsonb CHECK (morrow_work.knowledge_sources_valid(sources)),
+ sources jsonb CHECK (sources IS NULL OR morrow_work.knowledge_sources_valid(sources)),
  digest morrow_work.digest NOT NULL,
  read_tags jsonb NOT NULL CHECK (morrow_work.knowledge_tags_valid(read_tags)),
  context_taint text NOT NULL CHECK (context_taint IN ('none','untrusted_external')),
@@ -212,7 +212,7 @@ CREATE TABLE morrow_work.knowledge_versions (
  version integer NOT NULL CHECK (version BETWEEN 1 AND 1000),
  title text CHECK (char_length(title) BETWEEN 1 AND 120 AND title ~ '\S'),
  body text CHECK (char_length(body) BETWEEN 1 AND 8000 AND body ~ '\S'),
- sources jsonb CHECK (morrow_work.knowledge_sources_valid(sources)),
+ sources jsonb CHECK (sources IS NULL OR morrow_work.knowledge_sources_valid(sources)),
  digest morrow_work.digest NOT NULL,
  read_tags jsonb NOT NULL CHECK (morrow_work.knowledge_tags_valid(read_tags)),
  author_kind text NOT NULL CHECK (author_kind IN ('person','agent')),
@@ -343,7 +343,7 @@ DO $$ DECLARE t text; BEGIN
    USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))',t);
   EXECUTE format('GRANT SELECT,INSERT ON morrow_work.%I TO morrow_work_command',t);
  END LOOP;
- FOREACH t IN ARRAY ARRAY['knowledge_pages','knowledge_proposals','knowledge_search_entries','agent_notebooks','agent_notebook_entries'] LOOP
+ FOREACH t IN ARRAY ARRAY['knowledge_pages','knowledge_proposals','knowledge_versions','knowledge_search_entries','agent_notebooks','agent_notebook_entries'] LOOP
   EXECUTE format('CREATE POLICY tenant_lease ON morrow_work.%I TO morrow_work_command
    USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c))
    WITH CHECK ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c))',t);
