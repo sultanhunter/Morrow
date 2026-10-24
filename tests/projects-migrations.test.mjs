@@ -47,7 +47,10 @@ test("manifest: its row, executeAs the work owner, its brief and digest, no prer
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
   // 0046 at integration; later migrations follow it (PR 20's shop knowledge is 0047), and the
   // no-gap rule is migration-history's.
-  assert.equal(row, manifest.migrations.find((m) => m.sequence === row.sequence));
+  assert.equal(
+    row,
+    manifest.migrations.find((m) => m.sequence === row.sequence),
+  );
   assert.ok(manifest.migrations.every((m) => m === row || m.file !== row.file));
   assert.deepEqual(
     [row.executeAs, row.reviewRef],
