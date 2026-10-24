@@ -394,6 +394,9 @@ test("P05.T01ab: hosted health needs the challenge capability; development does 
       // v1 PR 3: the apply switch needs the vault and MORROW_SHOPIFY_WRITE "on"; off here
       // (the reviewed record is committed off).
       shopifyWrite: "off",
+      // Build order PR 11: the agent loop needs the vault and MORROW_AGENT_LOOP "on"; off here
+      // (docs/decisions/agent-loop-staging.json is committed off).
+      agentLoop: "off",
     },
   ]);
 });

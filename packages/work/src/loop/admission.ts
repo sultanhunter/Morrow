@@ -11,6 +11,7 @@ import {
   toolCatalogueVersion,
 } from "@morrow/policy/tool-catalogue";
 import type { StepRunIntent } from "@morrow/policy/projects";
+import { agentLoopOn, agentLoopVar } from "../../../identity/src/broker-protocol.js";
 import { generatedLoopCatalogue } from "../../../policy/src/generated/loop-catalogue.js";
 import { canonicalJson } from "../digest.js";
 
@@ -23,8 +24,6 @@ import { canonicalJson } from "../digest.js";
 
 /** The agent-loop switch as the Workers compose it (the var MORROW_AGENT_LOOP, exactly "on"). */
 export type AgentLoopSwitch = "on" | "off";
-export const agentLoopVar = "MORROW_AGENT_LOOP";
-export const agentLoopOn = "on";
 /** The switch of an environment record: on only for exactly "on" (anything else is off). */
 export function agentLoopSwitchOf(env: unknown): AgentLoopSwitch {
   if (env === null || typeof env !== "object") return "off";

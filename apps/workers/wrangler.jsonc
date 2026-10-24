@@ -6,7 +6,10 @@
 // (every Workflow throws dispatch_disabled before any step) until the reviewed model-provider
 // switch (docs/decisions/model-provider-staging.json) is turned on by its own reviewed commit,
 // which adds MORROW_MODEL_PROVIDER and the reviewed MORROW_DATABASE_BINDING_JSON to
-// env.staging.vars (edge:check refuses any mixed state).
+// env.staging.vars (edge:check refuses any mixed state). Build order PR 11 adds
+// AgentRunWorkflow (one instance per agent run, ids only), dispatched only while the
+// reviewed agent-loop switch (docs/decisions/agent-loop-staging.json, committed off) is on as
+// well; its reviewed commit adds MORROW_AGENT_LOOP to env.staging.vars.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-orchestrator",
@@ -29,6 +32,11 @@
       "name": "morrow-development-listings-run",
       "binding": "LISTINGS_RUN",
       "class_name": "ListingsRunWorkflow",
+    },
+    {
+      "name": "morrow-development-agent-run",
+      "binding": "AGENT_RUN",
+      "class_name": "AgentRunWorkflow",
     },
   ],
   "queues": {
@@ -70,6 +78,11 @@
           "binding": "LISTINGS_RUN",
           "class_name": "ListingsRunWorkflow",
         },
+        {
+          "name": "morrow-staging-agent-run",
+          "binding": "AGENT_RUN",
+          "class_name": "AgentRunWorkflow",
+        },
       ],
       "queues": {
         "consumers": [
@@ -99,6 +112,11 @@
           "name": "morrow-production-listings-run",
           "binding": "LISTINGS_RUN",
           "class_name": "ListingsRunWorkflow",
+        },
+        {
+          "name": "morrow-production-agent-run",
+          "binding": "AGENT_RUN",
+          "class_name": "AgentRunWorkflow",
         },
       ],
       "queues": {

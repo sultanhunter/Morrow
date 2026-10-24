@@ -168,7 +168,7 @@ export interface ModelCall {
 }
 
 // RFC 8785 text of plain JSON data, as the run steps' canonicalJson renders it.
-const jcs = (value: unknown): string =>
+export const jcs = (value: unknown): string =>
   Array.isArray(value)
     ? "[" + value.map(jcs).join(",") + "]"
     : value !== null && typeof value === "object"
@@ -179,7 +179,7 @@ const jcs = (value: unknown): string =>
           .join(",") +
         "}"
       : JSON.stringify(value);
-async function sha256(text: string): Promise<string> {
+export async function sha256(text: string): Promise<string> {
   const bytes = new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
   );

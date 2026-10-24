@@ -3,15 +3,24 @@ import {
   createRuntimeAttempt,
   listPendingStarts,
   runLeaseStep,
+  runtimeExecutorProfile,
   type LeaseRef,
   type LeaseStep,
 } from "../../../packages/work/src/runtime/leases.js";
+import { createDelegationAuthority } from "../../../packages/work/src/loop/authority.js";
+import type { AgentRunPorts } from "../../../packages/work/src/loop/runner.js";
+import {
+  listAgentPendingStarts,
+  resolveAgentRunLease,
+} from "../../../packages/work/src/loop/steps.js";
+import { builtInToolHandlers, createToolHandlers } from "../../../packages/work/src/loop/tools.js";
 import {
   createProductReader,
   type ListingsRunPorts,
 } from "../../../packages/work/src/runs/workflow.js";
 import { runtimeProductReadAvailable } from "../../../packages/identity/src/broker-protocol.js";
 import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from "./environment.js";
+import { agentAnswerEvent, runAgentWorkflow } from "./agent-run.js";
 import { runListingsWorkflow } from "./listings-run.js";
 import { createRuntimePool } from "./runtime-pool.js";
 
@@ -26,6 +35,13 @@ import { createRuntimePool } from "./runtime-pool.js";
 // M2 PR-3's product read exists since the integration of M2 PR-3 and M3 PR-2
 // (productReadAvailable, a reviewed constant), so the model-provider switch, committed off,
 // is the only gate. OperationWorkflow joins in M4.
+// Build order PR 11: AgentRunWorkflow (agent-run@1), one instance per agent run, its id the
+// run id, its payload AgentRunParams@1 (ids only). It is dispatched only while the reviewed
+// agent-loop switch is on as well (environment.ts agentRuns); otherwise it throws
+// dispatch_disabled before any step. The same cron lists queued agent runs (ids only,
+// agent_run_pending_starts): a new run starts its Workflow, a run whose question was answered
+// wakes its waiting Workflow (agent-run-answer), and every agent run's lease is kept out of
+// ListingsRunWorkflow's starts. This build composes one tool handler, inbox.ask.
 
 // M2 PR-3's RuntimeBroker.shopifyRead(productContent): the api's admission shares it. Not
 // exported: workerd refuses to start a module whose named export is neither a function nor
@@ -36,15 +52,20 @@ const stepBudgetMs = 25_000;
 interface Selected {
   readonly mapping: OrchestratorEnvironmentMapping;
   readonly ports: ListingsRunPorts | null;
+  readonly agentPorts: AgentRunPorts | null;
 }
 const selections = new WeakMap<object, Selected>();
 function select(env: unknown): Selected {
   if (env === null || typeof env !== "object")
-    return { mapping: { ok: false, code: "ORCHESTRATOR_ENV_RECORD_INVALID" }, ports: null };
+    return {
+      mapping: { ok: false, code: "ORCHESTRATOR_ENV_RECORD_INVALID" },
+      ports: null,
+      agentPorts: null,
+    };
   const existing = selections.get(env);
   if (existing) return existing;
   const mapping = mapOrchestratorEnvironment(env);
-  let selected: Selected = { mapping, ports: null };
+  let selected: Selected = { mapping, ports: null, agentPorts: null };
   if (mapping.ok && productReadAvailable)
     try {
       const pool = createRuntimePool(mapping.binding, mapping.broker);
@@ -68,15 +89,45 @@ function select(env: unknown): Selected {
         sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
         ids: () => crypto.randomUUID(),
       });
-      selected = { mapping, ports };
+      let agentPorts: AgentRunPorts | null = null;
+      if (mapping.agentRuns !== null) {
+        const now = () => Date.now();
+        agentPorts = Object.freeze({
+          lease: ports.lease,
+          async resolveLease(organizationId: string, workspaceId: string, runId: string) {
+            const attempt = createRuntimeAttempt(stepBudgetMs, new AbortController().signal);
+            try {
+              const r = await resolveAgentRunLease(
+                pool,
+                attempt,
+                runtimeExecutorProfile,
+                organizationId,
+                workspaceId,
+                runId,
+              );
+              return r.ok ? r.value : ("failed" as const);
+            } finally {
+              attempt.end();
+            }
+          },
+          modelTurn: (leaseId: string, generation: number, callJson: string, budgetMs: number) =>
+            mapping.broker.modelTurn(leaseId, generation, callJson, budgetMs),
+          tools: createToolHandlers(builtInToolHandlers),
+          authority: createDelegationAuthority({ environment: mapping.environment, now }),
+          now,
+          sleep: ports.sleep,
+        });
+      }
+      selected = { mapping, ports, agentPorts };
     } catch {
-      selected = { mapping, ports: null };
+      selected = { mapping, ports: null, agentPorts: null };
     }
   selections.set(env, selected);
   console.log(
     JSON.stringify({
       event: "morrow_orchestrator_bound",
       dispatch: selected.ports !== null,
+      agentLoop: selected.agentPorts !== null,
       code: mapping.ok ? null : mapping.code,
     }),
   );
@@ -86,6 +137,12 @@ function select(env: unknown): Selected {
 export class ListingsRunWorkflow extends WorkflowEntrypoint<unknown, unknown> {
   async run(event: Readonly<WorkflowEvent<unknown>>, step: WorkflowStep): Promise<string> {
     return runListingsWorkflow(select(this.env).ports, event, step);
+  }
+}
+
+export class AgentRunWorkflow extends WorkflowEntrypoint<unknown, unknown> {
+  async run(event: Readonly<WorkflowEvent<unknown>>, step: WorkflowStep): Promise<string> {
+    return runAgentWorkflow(select(this.env).agentPorts, event, step);
   }
 }
 
@@ -113,14 +170,42 @@ export default {
     const mapping = selected.mapping;
     const attempt = createRuntimeAttempt(stepBudgetMs, new AbortController().signal);
     let started = 0;
+    let agentStarted = 0;
+    let agentWoken = 0;
     try {
-      const pending = await listPendingStarts(
-        createRuntimePool(mapping.binding, mapping.broker),
-        attempt,
-      );
+      const pool = createRuntimePool(mapping.binding, mapping.broker);
+      const pending = await listPendingStarts(pool, attempt);
       if (!pending.ok) return;
+      // Every agent run's lease (a run lease too) is kept out of ListingsRunWorkflow's starts.
+      const agents = await listAgentPendingStarts(pool, attempt, runtimeExecutorProfile);
+      if (!agents.ok) return;
+      const agentLeases = new Set(agents.value.map((a) => a.leaseId));
+      if (mapping.agentRuns !== null && selected.agentPorts !== null)
+        for (const a of agents.value)
+          try {
+            if (a.resume) {
+              const instance = await mapping.agentRuns.get(a.runId);
+              await instance.sendEvent({ type: agentAnswerEvent, payload: {} });
+              agentWoken += 1;
+            } else {
+              await mapping.agentRuns.create({
+                id: a.runId,
+                params: {
+                  schemaVersion: 1,
+                  workflow: "agent-run@1",
+                  organizationId: a.organizationId,
+                  workspaceId: a.workspaceId,
+                  runId: a.runId,
+                },
+              });
+              agentStarted += 1;
+            }
+          } catch {
+            // An existing instance id means it already started; a lost event is found by
+            // the waiting Workflow's own hourly resume check.
+          }
       for (const p of pending.value) {
-        if (p.kind !== "run") continue;
+        if (p.kind !== "run" || agentLeases.has(p.leaseId)) continue;
         try {
           await mapping.workflow.create({
             id: p.subjectId,
@@ -133,7 +218,9 @@ export default {
       }
     } finally {
       attempt.end();
-      console.log(JSON.stringify({ event: "morrow_orchestrator_cron", started }));
+      console.log(
+        JSON.stringify({ event: "morrow_orchestrator_cron", started, agentStarted, agentWoken }),
+      );
     }
   },
 };

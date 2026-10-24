@@ -411,22 +411,47 @@ export function inspectSpecialistCeiling(ceiling, capabilities) {
   return errors;
 }
 
-/** The two switches stay committed off until their reviewed commits (ADR-0027 item 11, ADR-0028 item 8). */
+/**
+ * The two switches stay committed off until their reviewed commits (ADR-0027 item 11, ADR-0028
+ * item 8). Build order PR 11: the agent-loop record names its prerequisites; it may be on only
+ * once every one is recorded (edge:check also checks each one's evidence file and the vars).
+ */
+export const agentLoopPrerequisites = Object.freeze([
+  "catalogue_version_2_confirmed",
+  "gateway_reservations_stops",
+  "lab_agent_loop",
+  "shared_daily_backstop",
+  "store_content_cleanup",
+]);
 export function inspectAgentPlatformSwitches(loop, specialists) {
   const errors = [];
   const keys = (value) =>
     Object.keys(value ?? {})
       .sort()
       .join(",");
+  const prerequisites = loop?.prerequisites;
+  const recorded = (p) =>
+    p !== null &&
+    typeof p === "object" &&
+    keys(p) === "evidence,recorded_on" &&
+    typeof p.recorded_on === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(p.recorded_on) &&
+    typeof p.evidence === "string" &&
+    p.evidence.startsWith("docs/evidence/");
   if (
-    keys(loop) !== "environment_kind,observed_on,schema_version,scope,switch,workflow" ||
+    keys(loop) !== "environment_kind,observed_on,prerequisites,schema_version,scope,switch,workflow" ||
     loop.schema_version !== 1 ||
     loop.environment_kind !== "staging" ||
     loop.workflow !== "agent-run@1" ||
-    loop.switch !== "off" ||
-    loop.observed_on !== null
+    !["off", "on"].includes(loop.switch) ||
+    loop.observed_on !== null ||
+    keys(prerequisites) !== [...agentLoopPrerequisites].sort().join(",") ||
+    !Object.values(prerequisites).every((p) => p === null || recorded(p)) ||
+    (loop.switch === "on" && !Object.values(prerequisites).every(recorded))
   )
-    errors.push("agent-loop-staging.json must be committed off (ADR-0027 item 11)");
+    errors.push(
+      "agent-loop-staging.json must be committed off until every prerequisite is recorded (ADR-0027 item 11)",
+    );
   if (
     keys(specialists) !== "environment_kind,observed_on,release,schema_version,scope,switch" ||
     specialists.schema_version !== 1 ||

@@ -68,12 +68,12 @@ export function claudeCountBody(call: ResolvedModelCall): Record<string, unknown
   const { max_tokens: _cap, ...body } = claudeRequestBody(call);
   return body;
 }
-const headers = (key: string) => ({
+export const claudeHeaders = (key: string) => ({
   "x-api-key": key,
   "anthropic-version": claudeApiVersion,
   "content-type": "application/json",
 });
-function retryAfter(response: Response): number | null {
+export function retryAfter(response: Response): number | null {
   const value = response.headers.get("retry-after");
   if (value === null) return null;
   if (/^[0-9]{1,6}$/.test(value)) return Math.min(Number(value) * 1000, 120_000);
@@ -98,7 +98,7 @@ const count = (value: unknown) =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 10_000_000
     ? value
     : null;
-function usageOf(value: unknown): ModelUsage | null {
+export function usageOf(value: unknown): ModelUsage | null {
   if (!value || typeof value !== "object") return null;
   const u = value as Record<string, unknown>;
   const input = count(u.input_tokens);
@@ -140,7 +140,7 @@ export function createClaudeAdapter(fetch: Fetch): ModelProvider {
     return fetch(
       new Request(claudeEndpoint + path, {
         method: "POST",
-        headers: headers(key),
+        headers: claudeHeaders(key),
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(budgetMs),
       }),
@@ -245,7 +245,7 @@ export function createClaudeAdapter(fetch: Fetch): ModelProvider {
 // The refusals both endpoints share. On the free count every status of 500 or above but 529
 // is not_sent (counting generates nothing); respond never reaches that row, because it
 // answers those statuses as uncertain first.
-async function countRefusal(response: Response): Promise<CountResult> {
+export async function countRefusal(response: Response): Promise<CountResult> {
   const status = response.status;
   if (status === 529) return { outcome: "throttled", retryAfterMs: retryAfter(response) ?? 2_000 };
   if (status >= 500) return { outcome: "not_sent" };
