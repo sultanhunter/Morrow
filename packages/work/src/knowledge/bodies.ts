@@ -33,7 +33,10 @@ function content(r: Record<string, unknown>): Content | null {
   return {
     title: r.title as string,
     text: r.text as string,
-    sources: (r.sources as Current_KnowledgeSource[]).map((s) => ({ kind: s.kind, value: s.value })),
+    sources: (r.sources as Current_KnowledgeSource[]).map((s) => ({
+      kind: s.kind,
+      value: s.value,
+    })),
   };
 }
 

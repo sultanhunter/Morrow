@@ -56,7 +56,11 @@ const invalidInput: KnowledgeToolRefusal = Object.freeze({
   outcome: "invalid_input",
   refusal: "input_invalid",
 });
-function common(tool: "knowledge.propose" | "notebook.write", input: unknown, run: KnowledgeRunFacts) {
+function common(
+  tool: "knowledge.propose" | "notebook.write",
+  input: unknown,
+  run: KnowledgeRunFacts,
+) {
   if (
     !run ||
     !validateCurrentDefinition("ReadTags", run.readTags) ||

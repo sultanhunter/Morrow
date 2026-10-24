@@ -306,7 +306,8 @@ function proposalOf(row: Row): Current_KnowledgeProposal {
     text: text(row, "body"),
     sources: sourcesOf(row),
     installationId: text(row, "installation_id"),
-    contextTaint: text(row, "context_taint") === "untrusted_external" ? "untrusted_external" : "none",
+    contextTaint:
+      text(row, "context_taint") === "untrusted_external" ? "untrusted_external" : "none",
     digest: text(row, "digest"),
     createdAt: text(row, "created_at"),
   } as Current_KnowledgeProposal);

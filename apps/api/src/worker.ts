@@ -32,6 +32,11 @@ import {
 } from "../../../packages/work/src/projects/http.js";
 import { planDraftsRecord } from "../../../packages/policy/src/projects/plan-draft.js";
 import {
+  createKnowledgeApiHandler,
+  knowledgePathPattern,
+} from "../../../packages/work/src/knowledge/http.js";
+import { shopKnowledgeRecord } from "../../../packages/policy/src/knowledge/rules.js";
+import {
   createReviewApiHandler,
   reviewPathPattern,
   type ReviewApiDependencies,
@@ -55,6 +60,8 @@ type Handler = Readonly<{
 //                                                runs (M3 PR-2), ahead of the work API
 //   /workspace/:ws/work/{goals/:goalId/(revise|checks|progress), plans/(start-document|start)}
 //                                                goals and the plan start (PR 18), ahead of it
+//   /workspace/:ws/work/{knowledge/(pages|proposals|search)..., agents/:id/notebook(/clear)}
+//                                                shop knowledge and notebooks (PR 20), ahead of it
 //   /workspace/:ws/work/{approvals, proposals/:id/(review|decision|apply),
 //     tasks/:taskId/operations, operations/:id(/reconcile, /set-aside)}
 //                                                review and apply (v1 PR 3), ahead of it too
@@ -70,7 +77,7 @@ type Handler = Readonly<{
 //                                                other /connections path stays the P05
 //                                                handler's (the WorkspaceConnections@1 read)
 // The api's per-address session limit (session-limit.ts) runs before this table and answers
-// a path of the runs, projects, review, work, billing, agents, catalog or connections row in
+// a path of the runs, projects, knowledge, review, work, billing, agents, catalog or connections row in
 // that family's ErrorEnvelope, through `apiDispatch` itself, so there is one matcher.
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
 export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
@@ -78,6 +85,7 @@ const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
 type RowKey =
   | "runs"
   | "projects"
+  | "knowledge"
   | "review"
   | "work"
   | "billing"
@@ -92,6 +100,9 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
     // PR 18: the goal and plan-start routes (packages/work/src/projects/http.ts), on the work
     // dependencies, also before the work API's row. Both switches default off.
     ["projects", (path: string) => projectsPathPattern.test(path)],
+    // PR 20: the shop knowledge and notebook routes (packages/work/src/knowledge/http.ts), on
+    // the work dependencies, also before the work API's row. The switch is committed off.
+    ["knowledge", (path: string) => knowledgePathPattern.test(path)],
     // v1 PR 3: the review and apply routes (packages/work/src/review/http.ts), also ahead of it.
     ["review", (path: string) => reviewPathPattern.test(path)],
     ["work", (path: string) => workPath.test(path)],
@@ -131,6 +142,10 @@ export function createWorkspaceApiWorker(
     // docs/decisions/plan-drafts-staging.json (held).
     projects: createProjectsApiHandler(
       work === undefined ? undefined : { ...work, goals: false, planDrafts: planDraftsRecord },
+    ),
+    // docs/decisions/shop-knowledge-staging.json (committed off: every route 503).
+    knowledge: createKnowledgeApiHandler(
+      work === undefined ? undefined : { ...work, knowledge: shopKnowledgeRecord.switch },
     ),
     review: createReviewApiHandler(review),
     work: createWorkApiHandler(work),
