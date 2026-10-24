@@ -152,6 +152,10 @@ export const reviewLimits = Object.freeze({
   // the read's own.
   undoRequestMs: 25_000,
   undoCheckBudgetMs: 12_000,
+  // v1 PR 4: "Approve several at once" rebuilds the document and decides up to ten exact
+  // approvals in ONE transaction (all or none), so it has a longer transaction and request.
+  batchTransactionMs: 15_000,
+  batchRequestMs: 20_000,
 });
 
 type Context = Readonly<{ waitUntil(p: Promise<unknown>): void }>;
@@ -721,8 +725,12 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
     request.signal?.addEventListener("abort", stop, { once: true });
     let read = request.method === "GET";
     // One transaction on a connection of its own, within the request's deadline.
-    const transaction = async <T>(readOnly: boolean, body: (tx: WorkTx) => Promise<T>) => {
-      const deadlineMs = Math.min(configured.now() + reviewLimits.transactionMs, start + budget);
+    const transaction = async <T>(
+      readOnly: boolean,
+      body: (tx: WorkTx) => Promise<T>,
+      transactionMs: number = reviewLimits.transactionMs,
+    ) => {
+      const deadlineMs = Math.min(configured.now() + transactionMs, start + budget);
       let connection: WorkSqlConnection;
       try {
         connection = await configured.connector.open({
@@ -1036,10 +1044,17 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
         }
         case "review.batch": {
           const proposalId = g.params.proposalId!;
-          const document = await transaction(true, async (tx) => {
-            const a = await context(tx, g);
-            return batchRefusable(tx, () => buildBatch(tx, a, g.sessionDigest, proposalId, null));
-          });
+          clearTimeout(timer);
+          budget = reviewLimits.batchRequestMs;
+          timer = setTimeout(() => abort.abort(), budget - (configured.now() - start));
+          const document = await transaction(
+            true,
+            async (tx) => {
+              const a = await context(tx, g);
+              return batchRefusable(tx, () => buildBatch(tx, a, g.sessionDigest, proposalId, null));
+            },
+            reviewLimits.batchTransactionMs,
+          );
           if (document instanceof BatchReject) throw document;
           log.outcome = "read";
           return {
@@ -1062,12 +1077,19 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
           if (!parsed || g.commandId === null) throw new WorkReject("invalid");
           const proposalId = g.params.proposalId!;
           const batchKey = g.commandId;
-          const result = await transaction(false, async (tx) => {
-            const a = await context(tx, g);
-            return batchRefusable(tx, () =>
-              decideBatch(tx, a, g.sessionDigest, proposalId, batchKey, parsed, correlationId),
-            );
-          });
+          clearTimeout(timer);
+          budget = reviewLimits.batchRequestMs;
+          timer = setTimeout(() => abort.abort(), budget - (configured.now() - start));
+          const result = await transaction(
+            false,
+            async (tx) => {
+              const a = await context(tx, g);
+              return batchRefusable(tx, () =>
+                decideBatch(tx, a, g.sessionDigest, proposalId, batchKey, parsed, correlationId),
+              );
+            },
+            reviewLimits.batchTransactionMs,
+          );
           if (result instanceof BatchReject) throw result;
           log.outcome = result.replayed ? "replayed" : "applied";
           log.products = result.decided.length;

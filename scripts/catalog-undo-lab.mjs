@@ -1034,8 +1034,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     // and creation moved back, triggers off).
     const p3 = [newProduct(), newProduct()];
     const X3 = await draft(p3);
-    await apply(P.A, X3, await approveAll(X3));
-    const [op3, op4] = ops(X3).map((o) => o.id);
+    const applied3 = await apply(P.A, X3, await approveAll(X3));
+    const ops3 = ops(X3);
+    const [op3, op4] = ops3.map((o) => o.id);
     replica(
       `UPDATE morrow_work.operations SET send_started_at=send_started_at-interval '91 days',submitted_at=submitted_at-interval '91 days',created_at=created_at-interval '91 days' WHERE id=${literal(op3)};`,
     );
@@ -1064,7 +1065,14 @@ DELETE FROM morrow_work.product_snapshots WHERE product_id=${literal("product:" 
         /no longer available/.test(redacted.body.safeMessage) &&
         footprint() === before &&
         undoChecks() === checks0,
-      { h: h.body.undo, late: late.body, redacted: redacted.body },
+      {
+        applied: applied3.body?.pending,
+        ops: ops3.map((o) => [o.status, o.reason]),
+        h90: h90.body.undo,
+        h: h.body.undo,
+        late: late.body,
+        redacted: redacted.body,
+      },
     );
   }
 
@@ -1320,7 +1328,8 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
     );
     // Each approved change is still claimed on its own and rechecked by the gateway: a stop
     // between two applies refuses the second, with nothing written.
-    const [d1, d2] = decided.body.decided;
+    const [d1, d2] = decided.body.decided ?? [];
+    if (!d1 || !d2) throw Error("UNDO_LAB_BATCH_NOT_DECIDED");
     const a1 = await apply(P.A, d1.proposalRef.id, {
       proposalRef: d1.proposalRef,
       approvalRef: d1.approvalRef,

@@ -171,7 +171,19 @@ export function ProductPicker({
     });
   };
   return (
-    <fieldset className="field" aria-describedby={ids.list} data-testid="ask-picker">
+    <fieldset
+      className="field"
+      aria-describedby={ids.list}
+      data-testid="ask-picker"
+      // Enter in the search shows products; it never submits Ask's form (which starts a run).
+      onKeyDown={(event) => {
+        const target = event.target as { tagName?: string; type?: string };
+        if (event.key === "Enter" && target.tagName === "INPUT" && target.type !== "checkbox") {
+          event.preventDefault();
+          show();
+        }
+      }}
+    >
       <legend>{copy.ask.picker}</legend>
       <small id={ids.list}>{copy.ask.pickerIntro}</small>
       <TextField

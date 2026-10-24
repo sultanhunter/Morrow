@@ -674,6 +674,28 @@ export const fixtureCases = [
     widths: [1440, 390],
     setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),
   }),
+  // v1 PR 4: "Approve several at once" with the solo owner's one phrase, and the history's
+  // Undo after an apply (the undo is a new change, waiting for approval).
+  fixtureCase("review", "batch", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_batch",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve several at once" }).click();
+      await page.getByRole("button", { name: "Approve these 2 changes" }).waitFor();
+    },
+  }),
+  fixtureCase("task", "undo_history", `/w/${ws}/review/proposal-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("heading", { name: "Changes applied" }).waitFor();
+      await page.getByRole("link", { name: "Open the task" }).click();
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await page.getByRole("button", { name: "Undo" }).first().click();
+      await page.getByText("Morrow made a change back to the earlier values.").waitFor();
+    },
+  }),
   fixtureCase("overlay", "drawer", `/w/${ws}`, {
     widths: [390, 320],
     setup: (page) => page.getByRole("button", { name: "Open navigation" }).click(),
