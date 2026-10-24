@@ -44,6 +44,7 @@ One Inbox for what only a person can settle: changes to review, questions, probl
 - `ui:check --only=inbox/,settings/,home/,review/,walk/`: 135 state cases and 64 walk runs, 198 of 199; `review/uncertain@1440` timed out on a click under load and passes on rerun (2 of 2). The full run and `ui:edge` are the hosted `ui` job's.
 - `lab:catalog-apply`: I1-I7 pass on both local runs. The first run (at f14cc104's parent) passed all 54 checks in 18.5 minutes; the second, at about twice the load and 54 minutes, failed six of PR 3's Shopify-outcome checks (O5, O7, O9, W1, N1, B4) whose read-back and reconcile routes answered `unavailable` within their 5-second deadline (49 unavailable retries). Those phases are unchanged here; hosted `postgres` (`linking`) is the authority.
 - `lab:workspace-ui-journey` (`lab:group:ui`) runs only on Linux CI.
+- After the self-review fixes (resumed 2026-10-24, evening; the Mac at load 150-1000): `typecheck`, `typecheck:edge`, `edge:check`, `verify` and `format:check` pass. Targeted tests: 87 of 87. `npm test`: 4425 of 4427; the two failures are timing checks in files this branch doesn't touch (`broker-client`'s 50 ms abort took 368 ms; `controlled-neon-tcp-bridge`'s loopback echo) and pass on rerun (18 of 18). `ui:check --only=inbox/,home/,settings/activity,walk/inbox_filters,walk/answer_question` in Playwright's Chromium: 84 state cases and 4 walk runs pass.
 
 ## Open questions
 
