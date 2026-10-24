@@ -351,6 +351,8 @@ export function BatchApprove({
 }) {
   const services = useServices();
   const [open, setOpen] = useState(false);
+  const [phrase, setPhrase] = useState("");
+  const [checked, setChecked] = useState(false);
   const [document, reload] = useRead<BatchDocumentView>(
     open ? `${ws}|review-batch|${proposalId}` : null,
     () => services.port.review.batch(ws, proposalId),
@@ -371,9 +373,13 @@ export function BatchApprove({
     );
   const close = () => {
     command.reset();
+    setPhrase("");
+    setChecked(false);
     setOpen(false);
   };
   const settled = command.phase.phase === "settled" ? command.phase.outcome : null;
+  const needed = document.kind === "ok" ? document.value.confirmation.phrase : null;
+  const phraseValid = needed === null || phrase.normalize("NFC") === needed;
   return (
     <section className="panel" aria-labelledby="review-batch-title" data-testid="review-batch">
       <h2 id="review-batch-title">{copy.review.batchTitle}</h2>
@@ -413,22 +419,37 @@ export function BatchApprove({
           <p className="meta">
             {copy.review.batchExpires} <Time value={document.value.expiresAt} />
           </p>
+          {needed !== null ? (
+            <TextField
+              label={copy.review.batchConfirmLabel}
+              value={phrase}
+              onChange={setPhrase}
+              hint={copy.review.confirmHint(needed)}
+              error={checked && !phraseValid ? copy.outcome.invalid : null}
+              disabled={command.busy}
+              maxLength={256}
+              required
+            />
+          ) : null}
           <div className="form-actions">
             <Button
               variant="primary"
               disabled={command.busy || settled?.kind === "ok"}
-              onClick={() =>
+              onClick={() => {
+                setChecked(true);
+                if (!phraseValid) return;
                 void command.submit({
                   documentDigest: document.value.documentDigest,
                   issuedAt: document.value.issuedAt,
+                  soloOwnerConfirmation: needed === null ? null : phrase,
                   items: document.value.items.map((i) => ({
                     proposalId: i.proposalId,
                     digest: i.digest,
                     approvalId: i.approvalId,
                     revision: i.revision,
                   })),
-                })
-              }
+                });
+              }}
             >
               {copy.review.batchConfirm(document.value.items.length)}
             </Button>

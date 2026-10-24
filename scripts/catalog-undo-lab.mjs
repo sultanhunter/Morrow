@@ -1182,6 +1182,9 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       "B1:the_server_built_document_lists_the_tasks_pending_changes_with_their_exact_digests",
       doc.status === 200 &&
         doc.body.unavailable === null &&
+        // A team: the founder approves without the solo owner's phrase.
+        doc.body.confirmation?.required === false &&
+        doc.body.confirmation.phrase === null &&
         doc.body.taskId === T2 &&
         doc.body.items.length === 2 &&
         doc.body.items.every(
@@ -1194,6 +1197,7 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
     const body = (d) => ({
       documentDigest: d.documentDigest,
       issuedAt: d.issuedAt,
+      soloOwnerConfirmation: d.confirmation?.phrase ?? null,
       items: d.items.map((i) => ({
         proposalId: i.proposalId,
         digest: i.digest,
@@ -1231,6 +1235,11 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       ...body({ ...fresh.body, issuedAt: oldAt }),
       documentDigest: await batchDigest(W, actor, P.A.digest, oldAt, fresh.body.items),
     });
+    // A typed phrase where the document needs none (a team) approves nothing.
+    const needless = await decide2({
+      ...body(fresh.body),
+      soloOwnerConfirmation: "approve 2 changes for 0 credits",
+    });
     check(
       "B2:a_stale_tampered_or_expired_document_approves_nothing",
       stale.status === 409 &&
@@ -1238,10 +1247,11 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
         tampered.status === 409 &&
         expired.status === 409 &&
         /has expired/.test(expired.body.safeMessage) &&
+        needless.status === 403 &&
         decisions() === decisions0 + 1 &&
         status(Y1) === "pending" &&
         status(Y2) === "pending",
-      { stale: stale.body, tampered: tampered.body, expired: expired.body },
+      { stale: stale.body, tampered: tampered.body, expired: expired.body, needless: needless.body },
     );
     check(
       "B3:one_member_decided_elsewhere_refuses_them_all",

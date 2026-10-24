@@ -767,9 +767,12 @@ export const copy = {
       `Approved ${n} changes. Nothing has changed in Shopify yet; apply each one from its review.`,
     batchUnavailable: {
       too_few: "Only this change is waiting on this task, so approve it here.",
-      confirmation_required:
-        "One of these changes needs your typed confirmation, so approve them one at a time.",
+      cost_confirmation:
+        "One of these changes has a cost that needs its own confirmation, so approve them one at a time.",
+      mixed_confirmation:
+        "Only some of these changes need your typed confirmation, so approve them one at a time.",
     } as Readonly<Record<string, string>>,
+    batchConfirmLabel: "Type the confirmation to approve all of them",
     batchExpires: "Confirm by",
   },
   leave: {

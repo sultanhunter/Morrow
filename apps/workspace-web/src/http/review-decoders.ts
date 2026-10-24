@@ -519,6 +519,7 @@ export function decodeBatchDocument(body: unknown, proposalId: string): BatchDoc
       "storeId",
       "items",
       "unavailable",
+      "confirmation",
       "issuedAt",
       "expiresAt",
       "documentDigest",
@@ -530,8 +531,20 @@ export function decodeBatchDocument(body: unknown, proposalId: string): BatchDoc
     !(
       body.unavailable === null ||
       body.unavailable === "too_few" ||
-      body.unavailable === "confirmation_required"
+      body.unavailable === "cost_confirmation" ||
+      body.unavailable === "mixed_confirmation"
     ) ||
+    !record(body.confirmation) ||
+    !exactly(body.confirmation, ["required", "phrase"]) ||
+    typeof body.confirmation.required !== "boolean" ||
+    !(
+      body.confirmation.phrase === null ||
+      (typeof body.confirmation.phrase === "string" &&
+        /^approve [1-9][0-9]{0,4} changes? for [0-9]{1,20} credits$/.test(body.confirmation.phrase))
+    ) ||
+    // A phrase is given exactly when one is required and the batch is offered.
+    (body.confirmation.phrase !== null) !==
+      (body.confirmation.required === true && body.unavailable === null) ||
     !isUtcTime(body.issuedAt) ||
     !isUtcTime(body.expiresAt) ||
     !digest(body.documentDigest) ||
@@ -562,12 +575,14 @@ export function decodeBatchDocument(body: unknown, proposalId: string): BatchDoc
       expiresAt: v.expiresAt,
     });
   }
-  if ((body.unavailable === null) !== items.length >= 2) return null;
+  if (body.unavailable === "too_few" ? items.length >= 2 : items.length < 2) return null;
+  const confirmation = body.confirmation as { required: boolean; phrase: string | null };
   return {
     proposalId,
     taskId: body.taskId,
     items,
     unavailable: body.unavailable as string | null,
+    confirmation: { required: confirmation.required, phrase: confirmation.phrase },
     issuedAt: body.issuedAt,
     expiresAt: body.expiresAt,
     documentDigest: body.documentDigest,

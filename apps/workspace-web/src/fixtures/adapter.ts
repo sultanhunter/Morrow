@@ -1043,11 +1043,17 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
               targetCount: r.productIds.length,
               expiresAt: "2026-10-19T09:00:00.000Z",
             }));
+          // The fixture's owner is a solo owner who asked for every change: one phrase.
+          const changes = items.reduce((n, i) => n + i.targetCount, 0);
           return ok({
             proposalId,
             taskId: anchor.taskId,
             items,
             unavailable: items.length < 2 ? "too_few" : null,
+            confirmation: {
+              required: true,
+              phrase: items.length < 2 ? null : `approve ${changes} changes for ${changes} credits`,
+            },
             issuedAt: at(),
             expiresAt: "2026-10-16T09:05:00.000Z",
             documentDigest: ("b".repeat(64) + items.map((i) => i.revision).join("")).slice(-64),
@@ -1057,6 +1063,13 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         command<BatchDecidedView>("review.decideBatch", c, () => {
           if (!ws(id) || !reviews.get(proposalId)) return notFound;
           const members = c.body.items.map((i) => reviews.get(i.proposalId));
+          const changes = members.reduce((n, r) => n + (r?.productIds.length ?? 0), 0);
+          if (c.body.soloOwnerConfirmation !== `approve ${changes} changes for ${changes} credits`)
+            return {
+              kind: "conflict",
+              recheck: false,
+              message: "The confirmation phrase does not match these changes.",
+            };
           // One member that is no longer exactly as confirmed refuses them all.
           if (
             members.some(

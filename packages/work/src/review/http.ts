@@ -1050,6 +1050,7 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
               storeId: document.storeId,
               items: document.items,
               unavailable: document.unavailable,
+              confirmation: document.confirmation,
               issuedAt: document.issuedAt,
               expiresAt: document.expiresAt,
               documentDigest: document.documentDigest,

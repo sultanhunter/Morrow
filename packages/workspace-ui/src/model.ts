@@ -401,8 +401,10 @@ export interface BatchDocumentView {
   readonly proposalId: Id;
   readonly taskId: Id;
   readonly items: readonly BatchItemView[];
-  /** too_few or confirmation_required when no batch is offered. */
+  /** too_few, cost_confirmation or mixed_confirmation when no batch is offered. */
   readonly unavailable: string | null;
+  /** The solo owner's one phrase for the whole batch (ADR-0024 item 9), when required. */
+  readonly confirmation: { readonly required: boolean; readonly phrase: string | null };
   readonly issuedAt: string;
   readonly expiresAt: string;
   readonly documentDigest: string;
@@ -410,6 +412,8 @@ export interface BatchDocumentView {
 export interface BatchDecisionBody {
   readonly documentDigest: string;
   readonly issuedAt: string;
+  /** The typed phrase, exactly as the document gave it, or null when none is needed. */
+  readonly soloOwnerConfirmation: string | null;
   readonly items: readonly {
     readonly proposalId: Id;
     readonly digest: string;

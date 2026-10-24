@@ -570,7 +570,13 @@ export const requests = {
       !b.items.every(
         (i) => ids(i.proposalId, i.approvalId) && hex64(i.digest) && revision(i.revision),
       ) ||
-      new Set(b.items.map((i) => i.proposalId)).size !== b.items.length
+      new Set(b.items.map((i) => i.proposalId)).size !== b.items.length ||
+      !(
+        b.soloOwnerConfirmation === null ||
+        (typeof b.soloOwnerConfirmation === "string" &&
+          b.soloOwnerConfirmation.length >= 1 &&
+          b.soloOwnerConfirmation.length <= 256)
+      )
     )
       return null;
     const request = post(
@@ -578,6 +584,7 @@ export const requests = {
       {
         documentDigest: b.documentDigest,
         issuedAt: b.issuedAt,
+        soloOwnerConfirmation: b.soloOwnerConfirmation,
         items: b.items.map((i) => ({
           proposalId: i.proposalId,
           digest: i.digest,
