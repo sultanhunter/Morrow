@@ -65,25 +65,30 @@ const jsonOf = (text) => {
   }
 };
 
-// The api's /healthz: "ready", "not_ready" (the api answers but is not ready), or
-// "not_serving" (anything that is not the api's own reply, including unreachable).
-export async function probeHealth(ctx, origin) {
+// A public Worker's /healthz (the api's, or since v1 PR 1 the connector's): "ready",
+// "not_ready" (the Worker answers but is not ready), or "not_serving" (anything that is
+// not that Worker's own reply, including unreachable).
+export async function probeHealth(ctx, origin, service = "api") {
   const reply = await httpProbe(ctx, origin + "/healthz", {
     headers: { Accept: "application/json" },
   });
   if (reply.status !== 200) return "not_serving";
   const body = jsonOf(reply.text);
-  if (body?.schemaVersion !== 1 || body?.service !== "api") return "not_serving";
+  if (body?.schemaVersion !== 1 || body?.service !== service) return "not_serving";
   return body.ready === true ? "ready" : "not_ready";
 }
 export const serving = (state) => state === "ready" || state === "not_ready";
 
 // Polls /healthz until ready, within `timeoutMs` (D2: 90 s).
-export async function waitReady(ctx, origin, { timeoutMs = 90000, intervalMs = 5000 } = {}) {
+export async function waitReady(
+  ctx,
+  origin,
+  { timeoutMs = 90000, intervalMs = 5000, service = "api" } = {},
+) {
   const started = ctx.now();
   let polls = 0;
   for (;;) {
-    const state = await probeHealth(ctx, origin);
+    const state = await probeHealth(ctx, origin, service);
     polls++;
     if (state === "ready")
       return { ready: true, last: state, polls, waitedMs: ctx.now() - started };
@@ -93,8 +98,9 @@ export async function waitReady(ctx, origin, { timeoutMs = 90000, intervalMs = 5
   }
 }
 
-// The hostnames of staging: the api's origin, and the workers.dev hostnames the other
-// three Workers would have if workers.dev were on (they must serve nothing of theirs).
+// The hostnames of staging: the api's origin, the connector's origin (v1 PR 1: on
+// workers.dev, ADR-0035 item 2), and the workers.dev hostnames the broker and the
+// orchestrator would have if workers.dev were on (they must serve nothing of theirs).
 export function stagingHostnames(staging) {
   const cloudflare = staging?.cloudflare ?? {};
   const subdomain = cloudflare.workers_dev_subdomain;
@@ -107,12 +113,14 @@ export function stagingHostnames(staging) {
     throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   const host = (name) => `https://${name}.${subdomain}.workers.dev`;
   if (cloudflare.origin !== host(workers.api)) throw new StagingError("STAGING_ORIGIN_MISMATCH");
+  if (typeof workers.connector !== "string" || workers.connector === workers.api)
+    throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   return Object.freeze({
     origin: cloudflare.origin,
+    connector: host(workers.connector),
     others: Object.freeze({
       broker: host(workers.broker),
       orchestrator: host(workers.orchestrator),
-      connector: host(workers.connector),
     }),
   });
 }
@@ -124,7 +132,7 @@ export const randomSessionSecret = () => randomBytes(32).toString("base64url");
 // the failure codes; it creates no login flow: the login start runs only after
 // /auth/challenge shows the P05.T01ab guard.
 export async function unattendedSmoke(ctx, { staging, csp, acceptance = false }) {
-  const { origin, others } = stagingHostnames(staging);
+  const { origin, connector, others } = stagingHostnames(staging);
   const failures = [];
   const checks = {};
   const fail = (code) => failures.push(code);
@@ -190,7 +198,23 @@ export async function unattendedSmoke(ctx, { staging, csp, acceptance = false })
   });
   checks.databasePath = list.status;
   if (list.status !== 401) fail("SMOKE_DATABASE_PATH");
-  // (6) The other three Workers' workers.dev hostnames serve nothing of theirs. Every
+  // (6) v1 PR 1 (ADR-0035 item 2): the connector's own hostname serves the connector,
+  // ready within 30 s (bound to its configuration and the broker), and its route table
+  // answers an unknown path with its own 404, not the deny-all 503.
+  const connectorHealth = await waitReady(ctx, connector, {
+    timeoutMs: 30000,
+    service: "connector",
+  });
+  const connectorRoot = await httpProbe(ctx, connector + "/", { headers: { Accept: "*/*" } });
+  checks.connector = {
+    health: connectorHealth.last,
+    polls: connectorHealth.polls,
+    unknownPath: connectorRoot.status,
+  };
+  if (!connectorHealth.ready) fail("SMOKE_CONNECTOR_NOT_READY");
+  if (connectorRoot.status !== 404 || jsonOf(connectorRoot.text)?.code !== "not_found")
+    fail("SMOKE_CONNECTOR_ROUTES");
+  // (6b) The other two Workers' workers.dev hostnames serve nothing of theirs. Every
   // Morrow Worker answers in JSON, and the broker and orchestrator answer every path with
   // their own 404 {"code":"not_found"}, so a JSON reply of any status is exposure; only
   // Cloudflare's own non-JSON 404 for a hostname with workers.dev off, or no reply, passes.

@@ -8,7 +8,12 @@
 // and connections read as morrow_identity_linking with the policy package's connection kernel.
 // Shopify is the synthetic oracle (scripts/fixtures/shopify-oracle.mjs); no provider,
 // credential or merchant data. Runs in the CI pg-linking group. The local superuser is used
-// only for fixtures and the shapes marked "sim".
+// only for fixtures and the shapes marked "sim". v1 PR 1 (ADR-0035 item 2) adds the V
+// cases: one app per environment carries the live-store mark for one intended shop; its
+// live store installs and links into the owner's workspace; another live store using its
+// install link stores nothing; a second marked app is refused; every unmarked app still
+// refuses live stores, in the broker and in the database; its end states (uninstall, the
+// credential's destruction, shop/redact) still pass.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import canonicalize from "canonicalize";
@@ -57,12 +62,15 @@ function check(name, passed, detail) {
     );
   }
 }
-// The three migrations of this PR, by slug (numbers change at the final rebase).
+// The three migrations of this PR, by slug (numbers change at the final rebase), and v1
+// PR 1's two (the live store, ADR-0035 item 2: the V cases).
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const slugs = [
   ".shopify-link-route-read.sql",
   ".shopify-install-identity.sql",
   ".shopify-vault-install.sql",
+  ".shopify-live-store-identity.sql",
+  ".shopify-live-store-vault.sql",
 ];
 const files = slugs.map((slug) => manifest.migrations.find((m) => m.file.endsWith(slug))?.file);
 if (files.some((f) => !f)) throw Error("SHOPIFY_INSTALL_LAB_MIGRATIONS_REQUIRED");
@@ -82,12 +90,16 @@ const sourceDigests = Object.fromEntries(
 );
 
 // Fixture ids. O has workspaces W (a website signup, founder F) and W2; P is another tenant.
+// v1 PR 1: V is the owner's own organization and workspace (a website signup, founder L),
+// which the app carrying the live-store mark invites.
 const ids = {
   org: "org_shop",
   ws: "ws_shop",
   ws2: "ws_shop2",
   orgP: "org_other",
   wsP: "ws_other",
+  orgL: "org_live",
+  wsL: "ws_live",
   profile: "profile_shop",
 };
 const people = {
@@ -117,6 +129,13 @@ const people = {
     membership: "membership_other",
     workspaces: ["ws_other"],
     org: "org_other",
+    connect: true,
+  },
+  L: {
+    principal: "person_live_owner",
+    membership: "membership_live_owner",
+    workspaces: ["ws_live"],
+    org: "org_live",
     connect: true,
   },
 };
@@ -192,8 +211,8 @@ const report = await withWorkDatabase(
     db.sql("ALTER ROLE morrow_identity_linking LOGIN;");
     const sessions = {};
     const statements = [
-      `INSERT INTO morrow_identity.organizations VALUES(${literal(ids.org)},'Lab shop',true,1),(${literal(ids.orgP)},'Lab other',true,1);`,
-      `INSERT INTO morrow_identity.workspaces VALUES(${literal(ids.ws)},${literal(ids.org)},'Shop',true),(${literal(ids.ws2)},${literal(ids.org)},'Second',true),(${literal(ids.wsP)},${literal(ids.orgP)},'Other',true);`,
+      `INSERT INTO morrow_identity.organizations VALUES(${literal(ids.org)},'Lab shop',true,1),(${literal(ids.orgP)},'Lab other',true,1),(${literal(ids.orgL)},'Lab live',true,1);`,
+      `INSERT INTO morrow_identity.workspaces VALUES(${literal(ids.ws)},${literal(ids.org)},'Shop',true),(${literal(ids.ws2)},${literal(ids.org)},'Second',true),(${literal(ids.wsP)},${literal(ids.orgP)},'Other',true),(${literal(ids.wsL)},${literal(ids.orgL)},'Live',true);`,
       `INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,environment_id,application_id,client_id,issuer,token_profile_revision,token_profile_digest,record_revision,state) VALUES(${literal(ids.profile)},'workos','environment_${"A".repeat(26)}','app_${"A".repeat(26)}','client_${"A".repeat(26)}','https://api.workos.com/user_management/client_${"A".repeat(26)}',1,${literal("a".repeat(64))},1,'active');`,
     ];
     for (const [key, p] of Object.entries(people)) {
@@ -219,6 +238,8 @@ const report = await withWorkDatabase(
     // The founder's website signup: 0021's trigger records W's unfixed website route.
     statements.push(
       `INSERT INTO morrow_identity.organization_signups VALUES(${literal(people.F.principal)},${literal(randomUUID())},${literal("b".repeat(64))},${literal(ids.profile)},${literal(ids.org)},${literal(ids.ws)},${literal(people.F.membership)},'owner-bootstrap-v1',clock_timestamp());`,
+      // v1 PR 1: the owner's own website signup (V cases).
+      `INSERT INTO morrow_identity.organization_signups VALUES(${literal(people.L.principal)},${literal(randomUUID())},${literal("c".repeat(64))},${literal(ids.profile)},${literal(ids.orgL)},${literal(ids.wsL)},${literal(people.L.membership)},'owner-bootstrap-v1',clock_timestamp());`,
     );
     db.admin(statements.join("\n"));
     const routeOf = () =>
@@ -1140,6 +1161,287 @@ UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='t
       offered.body.installLink.offered === true &&
         offered.body.installLink.reason === "offered" &&
         offered.body.installLink.url === installUrl,
+    );
+
+    // -------------------------------------------------------------------------
+    // V: the owner's live store (v1 PR 1; ADR-0035 item 2). One app per environment carries
+    // the live-store mark, for one intended shop; only that app installs and links a store
+    // that is not a development store, and only that shop. Every other app still refuses
+    // live stores, in the broker and in the database.
+    phase("live_store");
+    const liveKey = "lab-live-1";
+    const liveClient = randomBytes(16).toString("hex");
+    const liveSecret = "shpss_" + randomBytes(16).toString("hex");
+    const liveShop = "lab-live-store.myshopify.com";
+    const otherLiveShop = "lab-other-live.myshopify.com";
+    const liveInstallUrl = `https://admin.shopify.com/oauth/install_custom_app?client_id=${liveClient}&no_redirect=true&signature=live`;
+    const registerLive = (key, client, digest, ws = ids.wsL, org = ids.orgL) =>
+      db.rows(
+        `SELECT outcome FROM morrow_identity.shopify_app_register_live(${literal(key)},${literal(client)},'development',${literal(digest)},${literal(org)},${literal(ws)},${literal(liveInstallUrl)})`,
+        { role: "morrow_identity_owner" },
+      )[0]?.outcome;
+    const liveEnvelope = await sealVaultRecord(
+      keyring,
+      { kind: "app_secret", appKey: liveKey, provider: "shopify", version: 1 },
+      new TextEncoder().encode(liveSecret),
+    );
+    const liveStored = db.rows(
+      `SELECT outcome,version FROM morrow_vault.app_secret_put(${literal(liveKey)},'1',${literal(vaultBytesHex(liveEnvelope.wrappedKey))},${literal(vaultBytesHex(liveEnvelope.sealedValue))})`,
+      { role: "morrow_work_owner" },
+    )[0];
+    const registeredLive = registerLive(liveKey, liveClient, sha(liveShop));
+    const secondLive = registerLive(
+      "lab-live-2",
+      randomBytes(16).toString("hex"),
+      sha(otherLiveShop),
+    );
+    const sameShopLive = registerLive("lab-live-3", randomBytes(16).toString("hex"), sha(liveShop));
+    const unmarkedSameShop = register(
+      "lab-live-4",
+      randomBytes(16).toString("hex"),
+      sha(liveShop),
+      ids.ws2,
+    );
+    const liveAsOther = db.tryRun(
+      `SET ROLE morrow_work_command; SELECT * FROM morrow_identity.shopify_app_register_live('lab-live-9','${"a".repeat(32)}','development','${"b".repeat(64)}','org_live','ws_live','${liveInstallUrl}');`,
+    );
+    const liveRows = () =>
+      db.rows(
+        `SELECT app_key,status,live_store FROM morrow_identity.shopify_apps WHERE live_store ORDER BY app_key`,
+        { role: "morrow_identity_owner" },
+      );
+    check(
+      "V1:one_marked_app_per_environment_for_one_shop_and_only_the_operator_registers_it",
+      liveStored?.outcome === "stored" &&
+        registeredLive === "registered" &&
+        secondLive === "live_store_taken" &&
+        sameShopLive === "exists" &&
+        unmarkedSameShop === "exists" &&
+        !liveAsOther.ok &&
+        JSON.stringify(liveRows()) ===
+          JSON.stringify([{ app_key: liveKey, status: "active", live_store: true }]),
+      { registeredLive, secondLive, sameShopLive, unmarkedSameShop, rows: liveRows() },
+    );
+    // The database's own rules, written around the operator function (sim, each in a
+    // transaction that is rolled back): a second active marked app, a marked app for
+    // another shop, a mark changed on an existing app, and a live installation row under
+    // an unmarked app or for another shop are all refused.
+    const refusedSql = (sql) => {
+      const r = db.tryRun(`BEGIN; SET LOCAL ROLE morrow_identity_owner; ${sql} ROLLBACK;`);
+      return r.ok ? "accepted" : (/SHOPIFY_[A-Z_]+|unique/.exec(r.stderr ?? "")?.[0] ?? "refused");
+    };
+    const appInsert = (key, digest) =>
+      `INSERT INTO morrow_identity.shopify_apps(app_key,client_id,environment_id,intended_shop_digest,invited_organization_id,invited_workspace_id,scopes,api_version,install_url,status,revision,created_at,retired_at,live_store) VALUES(${literal(key)},${literal(randomBytes(16).toString("hex"))},'development',${literal(digest)},${literal(ids.orgL)},${literal(ids.wsL)},'read_products,write_products','2026-10',${literal(liveInstallUrl)},'active',1,date_trunc('milliseconds',clock_timestamp()),NULL,true);`;
+    const liveInstallationInsert = (app, domain) =>
+      `INSERT INTO morrow_identity.store_installations(organization_id,workspace_id,id,app_key,shop_id,shop_domain,store_id,connection_id,generation,status,granted_scopes,credential_id,credential_version,development_store,link_id,revision,created_at,updated_at,reauthorised_at,linked_at) SELECT ${literal(ids.orgL)},${literal(ids.wsL)},${literal(randomUUID())},${literal(app)},'717171',${literal(domain)},${literal(randomUUID())},${literal(randomUUID())},1,'unlinked',ARRAY['read_products','write_products'],${literal(randomUUID())},1,false,NULL,1,t,t,NULL,NULL FROM (SELECT date_trunc('milliseconds',clock_timestamp()) AS t) x;`;
+    const devAppInsert = `INSERT INTO morrow_identity.shopify_apps(app_key,client_id,environment_id,intended_shop_digest,invited_organization_id,invited_workspace_id,scopes,api_version,install_url,status,revision,created_at,retired_at) VALUES('lab-dev-v',${literal(randomBytes(16).toString("hex"))},'development',${literal(sha("lab-dev-v.myshopify.com"))},${literal(ids.orgL)},${literal(ids.wsL)},'read_products,write_products','2026-10',${literal(liveInstallUrl)},'active',1,date_trunc('milliseconds',clock_timestamp()),NULL);`;
+    const dbRules = {
+      secondActive: refusedSql(appInsert("lab-live-5", sha(liveShop))),
+      otherShop: refusedSql(appInsert("lab-live-6", sha(otherLiveShop))),
+      markChanged: refusedSql(
+        `UPDATE morrow_identity.shopify_apps SET live_store=true,revision=revision+1 WHERE app_key=${literal(appKey)};`,
+      ),
+      unmarkedLiveRow: refusedSql(
+        devAppInsert + liveInstallationInsert("lab-dev-v", "lab-dev-v.myshopify.com"),
+      ),
+      otherShopRow: refusedSql(liveInstallationInsert(liveKey, otherLiveShop)),
+    };
+    check(
+      "V2:the_database_refuses_a_second_mark_another_shop_a_changed_mark_and_unmarked_live_rows",
+      dbRules.secondActive === "unique" &&
+        dbRules.otherShop === "SHOPIFY_LIVE_STORE_TAKEN" &&
+        dbRules.markChanged === "SHOPIFY_RECORD_IMMUTABLE" &&
+        dbRules.unmarkedLiveRow === "SHOPIFY_STORE_NOT_DEVELOPMENT" &&
+        dbRules.otherShopRow === "SHOPIFY_STORE_NOT_DEVELOPMENT",
+      dbRules,
+    );
+    // The broker's admission, as its own login only.
+    const admission = (key, domain) =>
+      db.rows(
+        `SELECT morrow_vault.shopify_live_store_admission(${literal(key)},${literal(domain)}) AS outcome`,
+        { user: "morrow_vault_broker" },
+      )[0]?.outcome;
+    const admissionOthers = [
+      "morrow_connector_ingress",
+      "morrow_api_worker",
+      "morrow_identity_linking",
+    ].map(
+      (user) =>
+        db.tryRun(
+          `SELECT morrow_vault.shopify_live_store_admission(${literal(liveKey)},${literal(liveShop)});`,
+          { user },
+        ).ok,
+    );
+    check(
+      "V3:only_the_marked_apps_own_shop_is_admitted_and_only_the_broker_asks",
+      admission(liveKey, liveShop) === "admitted" &&
+        admission(liveKey, otherLiveShop) === "refused" &&
+        admission(appKey, shop) === "refused" &&
+        admission("unknown-app", liveShop) === "refused" &&
+        admission(liveKey, "Not A Shop") === "invalid" &&
+        admissionOthers.every((ok) => !ok),
+    );
+    // The broker installs the live store through the marked app (Shopify reports it is not a
+    // development store).
+    const liveOracle = createShopifyOracle({
+      secret: liveSecret,
+      clientId: liveClient,
+      shop: liveShop,
+      shopId: "525252",
+    });
+    liveOracle.state.development = false;
+    const liveBroker = createShopifyBroker({
+      transaction: (vault, budgetMs, body) =>
+        runVaultTransactionWithDriver(
+          vaultDriver,
+          vault,
+          Math.min(10000, budgetMs * 3),
+          body,
+          Date.now,
+          class {
+            close() {}
+          },
+        ),
+      fetch: (url, init) => liveOracle.fetch(url, init),
+      now: () => Date.now(),
+    });
+    const liveInstall = async (overrides = {}) => {
+      const state = randomBytes(32).toString("base64url");
+      const opened = stateOpen(liveKey, liveShop, sha(state));
+      const query = liveOracle.callbackQuery(state, overrides.query ?? {});
+      const result = decodeShopifyInstallResult(
+        await liveBroker.installComplete(brokerEnv, liveKey, query, sha(state), 10000),
+      );
+      return { state, opened, query, result };
+    };
+    const liveInstallations = () =>
+      db.rows(
+        `SELECT id::text,status,development_store,organization_id::text AS org,workspace_id::text AS ws,store_id::text,connection_id::text FROM morrow_identity.store_installations WHERE app_key=${literal(liveKey)}`,
+        { role: "morrow_identity_owner" },
+      );
+    const liveLaunch = decodeShopifyLaunchVerdict(
+      await liveBroker.launchVerify(brokerEnv, liveKey, liveOracle.launchQuery()),
+    );
+    const liveFirst = await liveInstall();
+    check(
+      "V4:the_marked_apps_live_store_installs_into_the_owners_workspace",
+      liveLaunch.verdict === "verified" &&
+        liveLaunch.workspaceId === ids.wsL &&
+        liveFirst.result.outcome === "installed" &&
+        liveFirst.result.workspaceId === ids.wsL &&
+        liveInstallations().length === 1 &&
+        liveInstallations()[0].development_store === false &&
+        liveInstallations()[0].ws === ids.wsL,
+      { launch: liveLaunch.verdict, outcome: liveFirst.result.outcome },
+    );
+    // Another live store using the marked app's install link stores nothing: its launch is
+    // refused, no state opens for it, and a callback naming it is refused.
+    const otherOracle = createShopifyOracle({
+      secret: liveSecret,
+      clientId: liveClient,
+      shop: otherLiveShop,
+      shopId: "626262",
+    });
+    otherOracle.state.development = false;
+    const otherLaunch = decodeShopifyLaunchVerdict(
+      await liveBroker.launchVerify(brokerEnv, liveKey, otherOracle.launchQuery()),
+    );
+    const otherState = randomBytes(32).toString("base64url");
+    const otherOpened = stateOpen(liveKey, otherLiveShop, sha(otherState));
+    const liveState = randomBytes(32).toString("base64url");
+    stateOpen(liveKey, liveShop, sha(liveState));
+    const otherCallback = decodeShopifyInstallResult(
+      await liveBroker.installComplete(
+        brokerEnv,
+        liveKey,
+        otherOracle.callbackQuery(liveState),
+        sha(liveState),
+        10000,
+      ),
+    );
+    const allLive = () =>
+      db.rows(
+        `SELECT count(*)::int AS n FROM morrow_identity.store_installations WHERE NOT development_store`,
+        { role: "morrow_identity_owner" },
+      )[0].n;
+    check(
+      "V5:another_live_store_using_the_marked_apps_link_stores_nothing",
+      otherLaunch.verdict === "refused" &&
+        otherOpened.startsWith("not_found") &&
+        otherCallback.outcome === "refused" &&
+        allLive() === 1,
+      { otherLaunch: otherLaunch.verdict, otherOpened, otherCallback: otherCallback.outcome },
+    );
+    // Every unmarked app still refuses a live store: the development app's own store, now
+    // reported as not a development store, re-authorises nothing and stores nothing.
+    const credentialsBefore = vaultRows().length;
+    oracle.state.development = false;
+    const unmarked = await install();
+    oracle.state.development = true;
+    check(
+      "V6:an_unmarked_app_still_refuses_a_store_that_is_not_a_development_store",
+      unmarked.result.outcome === "store_not_development" &&
+        vaultRows().length === credentialsBefore &&
+        allLive() === 1,
+      { outcome: unmarked.result.outcome },
+    );
+    // The owner links the live store into the owner's workspace (paid by the test
+    // entitlement in staging; here the route is fixed by hand, as for W).
+    db.workOwner(
+      `UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='test',route_fixed_at=date_trunc('milliseconds',clock_timestamp()),fixing_payment_key='stripe:invoice:in_lab00000003',revision=2,updated_at=date_trunc('milliseconds',clock_timestamp()) WHERE workspace_id=${literal(ids.wsL)};`,
+    );
+    const liveOffer = await connectionsOf("L", ids.wsL);
+    // A relaunch first: the live installation re-authorises under the mark (the database
+    // guard admits its next credential version) with a fresh continuation.
+    const liveFresh = await liveInstall();
+    const liveLink = await preview("L", ids.wsL, liveFresh.result.continuationToken);
+    const liveApplied =
+      liveLink.status === 200
+        ? await service.apply(JSON.stringify(liveLink.input), liveLink.ctx.control)
+        : null;
+    const liveGrants = db.rows(
+      `SELECT count(*)::int AS n FROM morrow_identity.grants WHERE payload->'issuedBy'->>'principalId'='morrow.linking' AND principal_id=${literal(people.L.principal)}`,
+      { role: "morrow_identity_owner" },
+    )[0].n;
+    const foreignLive = await connectionsOf("Q", ids.wsL);
+    check(
+      "V7:the_owner_links_the_live_store_and_receives_the_store_link_grants",
+      liveOffer.body.installLink?.reason === "offered" &&
+        liveOffer.body.installLink.url === liveInstallUrl &&
+        liveFresh.result.outcome === "reauthorised" &&
+        liveLink.status === 200 &&
+        liveApplied?.outcome === "applied" &&
+        liveInstallations()[0].status === "linked" &&
+        liveGrants === 4 &&
+        foreignLive.status === 401,
+      {
+        offer: liveOffer.body.installLink,
+        fresh: liveFresh.result.outcome,
+        link: liveLink.status,
+        applied: liveApplied?.outcome,
+        grants: liveGrants,
+      },
+    );
+    // The live store's end states pass the live-store guard (sim, rolled back): an
+    // uninstall, the credential's destruction and shop/redact's pseudonym change neither the
+    // development flag nor the credential version, so Shopify's uninstall and deletion
+    // requests still end the owner's store through M2 PR-3's paths (0036's record guard
+    // holds each shape).
+    const at = "greatest(date_trunc('milliseconds',clock_timestamp()),x.updated_at)";
+    const ended = db.tryRun(
+      `BEGIN; SET LOCAL ROLE morrow_identity_owner;
+UPDATE morrow_identity.store_installations x SET status='uninstalled',uninstalled_at=${at},revision=x.revision+1,updated_at=${at} WHERE x.app_key=${literal(liveKey)};
+UPDATE morrow_identity.store_installations x SET credential_destroyed_at=${at},revision=x.revision+1,updated_at=${at} WHERE x.app_key=${literal(liveKey)};
+UPDATE morrow_identity.store_installations x SET shop_domain=morrow_identity.shop_pseudonym(x.id::text),redacted_at=${at},revision=x.revision+1,updated_at=${at} WHERE x.app_key=${literal(liveKey)};
+SELECT concat_ws('|',status,development_store::text,(credential_destroyed_at IS NOT NULL)::text,(redacted_at IS NOT NULL)::text,(shop_domain<>${literal(liveShop)})::text) FROM morrow_identity.store_installations WHERE app_key=${literal(liveKey)};
+ROLLBACK;`,
+    );
+    check(
+      "V8:the_live_stores_uninstall_credential_destruction_and_redaction_pass_the_guard",
+      ended.ok &&
+        ended.stdout.split("\n").includes("uninstalled|false|true|true|true") &&
+        liveInstallations()[0].status === "linked",
+      { ok: ended.ok, stdout: ended.stdout, stderr: ended.stderr?.slice(0, 300) },
     );
   },
   { administrator: "createrole" },
