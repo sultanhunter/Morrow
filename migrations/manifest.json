@@ -360,6 +360,13 @@
       "sha256": "b6f8e266732275c0e1f6e3d3455c7199fc35bcdd3f43c858445767e8bb8c65f7",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/projects-backend.md"
+    },
+    {
+      "sequence": 47,
+      "file": "0047.runtime-e2b.sql",
+      "sha256": "64661d10cbc9cc5eeb4cb78e92c715c118d7b985ef690963636f6da89c6af14c",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/e2b-adapter.md"
     }
   ]
 }

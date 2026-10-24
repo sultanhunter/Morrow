@@ -26,6 +26,7 @@ import {
 import { brokerWorkosSessionPage } from "./workos-session.js";
 import { createClaudeAdapter } from "./claude-adapter.js";
 import { createModelGateway } from "./model-gateway.js";
+import { createE2bRuntime, e2bPinnedTemplate } from "./runtime-e2b.js";
 import { createRuntimeGateway } from "./runtime-gateway.js";
 import { createVaultRuntimeLedger } from "./runtime-ledger.js";
 import { runVaultTransaction } from "./vault-database.js";
@@ -37,15 +38,17 @@ const modelGateway = createModelGateway({
   providers: Object.freeze({ anthropic: createClaudeAdapter((request) => fetch(request)) }),
   now: () => Date.now(),
 });
-// Build order PR 7 (ADR-0029): the computer's door on the vault login's operation ledger. No
-// runtime adapter is composed (the E2B adapter is PR 8's; the fake is tests-only), no template
-// is pinned (PR 8's owner-run build) and nothing is qualified (PR 9), so even with the switch
-// on every execute holds RUNTIME_UNAVAILABLE and no sandbox is ever counted as absent.
+// Build order PR 7 (ADR-0029): the computer's door on the vault login's operation ledger.
+// Build order PR 8 composes the E2B adapter here and nowhere else (hand-written fetch to E2B's
+// two fixed origins, no SDK; the fake stays tests-only). No template is pinned until the
+// owner's build (infra/e2b/morrow-computer) and nothing is qualified (PR 9), so even with the
+// switch on every execute holds RUNTIME_UNAVAILABLE and no sandbox is ever counted as absent;
+// with the switch at cleanup_only or on, the sweep reconciles and kills through E2B.
 const runtimeGateway = createRuntimeGateway({
   ledger: (vault) => createVaultRuntimeLedger(vault, runVaultTransaction),
-  providers: Object.freeze({}),
+  providers: Object.freeze({ e2b: createE2bRuntime((request) => fetch(request)) }),
   now: () => Date.now(),
-  template: null,
+  template: e2bPinnedTemplate,
   qualified: false,
 });
 
