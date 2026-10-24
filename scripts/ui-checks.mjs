@@ -684,6 +684,18 @@ export const fixtureCases = [
       await page.getByRole("button", { name: "Approve these 2 changes" }).waitFor();
     },
   }),
+  // v1 PR 4: the product picker on Ask (a scenario whose Listings agent is on), one product
+  // ticked into the list.
+  fixtureCase("ask", "picker", `/w/${ws}/ask`, {
+    scenario: "stop_all",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("combobox", { name: "Store", exact: true }).selectOption({ index: 1 });
+      await page.getByRole("button", { name: "Show products" }).click();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).check();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).isChecked();
+    },
+  }),
   fixtureCase("task", "undo_history", `/w/${ws}/review/proposal-sample-1`, {
     widths: [1440, 390],
     setup: async (page) => {
