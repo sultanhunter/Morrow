@@ -381,6 +381,7 @@ test("an agent's notebook: uncomposed, one exact read, and only that agent's ent
   });
   // The server's reply (commands.ts notebookRead): the entries this person may see, newest first.
   const reply = {
+    schemaVersion: 1,
     installationId: INSTALLATION,
     entries: [entry(2, "Product 4242 needs care facts."), entry(1, "Keep titles under 60.")],
   };
@@ -414,9 +415,10 @@ test("an agent's notebook: uncomposed, one exact read, and only that agent's ent
     calls.map((c) => [c.init.method, c.path]),
     [["GET", path]],
   );
-  assert.deepEqual(decodeNotebook({ installationId: INSTALLATION, entries: [] }, INSTALLATION), {
-    entries: [],
-  });
+  assert.deepEqual(
+    decodeNotebook({ schemaVersion: 1, installationId: INSTALLATION, entries: [] }, INSTALLATION),
+    { entries: [] },
+  );
   // Anything outside the exact shape is not read: another agent's notebook or entry, a read tag
   // (they never leave the server), the oldest first, a repeated entry, empty text, too many.
   for (const bad of [
@@ -429,7 +431,8 @@ test("an agent's notebook: uncomposed, one exact read, and only that agent's ent
     { ...reply, entries: [{ ...reply.entries[0], text: "x".repeat(2001) }] },
     { ...reply, entries: [{ ...reply.entries[0], schemaVersion: 2 }] },
     { ...reply, entries: Array.from({ length: 101 }, (_, i) => entry(101 - i, "Note")) },
-    { ...reply, schemaVersion: 1 },
+    { ...reply, schemaVersion: 2 },
+    { installationId: INSTALLATION, entries: reply.entries },
   ])
     assert.equal(decodeNotebook(bad, INSTALLATION), null, JSON.stringify(bad).slice(0, 120));
   const { port: odd } = onPort(() => json(200, { ...reply, installationId: "installation_other" }));

@@ -277,7 +277,8 @@ export function decodeSuggestionDecided(
 export function decodeNotebook(body: unknown, installationId: string): NotebookView | null {
   if (
     !record(body) ||
-    !keysOf(body, ["installationId", "entries"]) ||
+    !keysOf(body, ["schemaVersion", "installationId", "entries"]) ||
+    body.schemaVersion !== 1 ||
     body.installationId !== installationId ||
     !Array.isArray(body.entries) ||
     body.entries.length > 100
