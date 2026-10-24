@@ -261,6 +261,37 @@ const scenarios = {
     argv: ["put-secret", "STRIPE_RESTRICTED_KEY"],
     tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
   }),
+  // Build order PR 7: the E2B key. With the runtime switch off (committed) put-secret refuses
+  // it before reading the file or running any tool, unless the owner passes
+  // --while-runtime-off; then the owner file reaches the broker only through `secret bulk`
+  // stdin. With the switch on the key is required and the flag is refused.
+  "put-secret-e2b-off": (constants) => ({
+    argv: ["put-secret", "E2B_API_KEY"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
+  "put-secret-e2b-while-off": (constants) => ({
+    argv: ["put-secret", "E2B_API_KEY", "--while-runtime-off"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
+  "put-secret-e2b-on": (constants) => ({
+    runtime: "on",
+    argv: ["put-secret", "E2B_API_KEY"],
+    tools: {
+      emit,
+      wrangler: {
+        secrets: { broker: constants.brokerSecrets.filter((n) => n !== "E2B_API_KEY") },
+      },
+    },
+  }),
+  "put-secret-e2b-on-flag": (constants) => ({
+    runtime: "on",
+    argv: ["put-secret", "E2B_API_KEY", "--while-runtime-off"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
+  "put-secret-flag-other": (constants) => ({
+    argv: ["put-secret", "WORKOS_API_KEY", "--while-runtime-off"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
   "put-secret-fails": (constants) => ({
     argv: ["put-secret", "TURNSTILE_SECRET_KEY"],
     tools: {
@@ -343,7 +374,9 @@ const scenarios = {
 const probe = scenarios[scenario]?.(await identityConstants());
 if (!probe) process.exit(97);
 const stripe = probe.stripe ?? "off";
-const constants = await identityConstants({ stripe });
+// Build order PR 7: likewise the runtime switch (off unless the scenario says otherwise).
+const runtime = probe.runtime ?? "off";
+const constants = await identityConstants({ stripe, runtime });
 const spec = scenarios[scenario](constants);
 const cloud = fakeCloudflare(spec.cloudflare ?? {});
 const fake = fakeTools({ ...(spec.tools ?? {}), cloudflare: cloud });
@@ -381,6 +414,7 @@ const loginConfiguration = {
 const { ctx, reports } = await fakeContext({
   home,
   stripe,
+  runtime,
   tools: fake.tools,
   cloudflare: cloud.api,
   database: spec.database ? db.connector : undefined,

@@ -316,6 +316,8 @@ async function deployWorker(ctx, api, { config, name, sha, secretsFile, previous
 //   staging, configs (worker key -> wrangler config path), names (key -> script name)
 //   github          {repository, environment}
 //   brokerSecrets   the broker's exact secret names (gate 6)
+//   brokerOptionalSecrets  names the broker may also hold (gate 6; build order PR 7: E2B_API_KEY
+//                   placed ahead of the runtime switch); absent means none
 //   schemaHead      the committed chain's head (gate 3)
 //   loginDigest     () -> the committed login configuration's digest (gate 4)
 //   challenge       () -> the checked P05.T01ab challenge configuration (gate 4): the
@@ -479,7 +481,10 @@ async function deployBody(ctx, plan, report, run) {
         "json",
       ]),
     );
-  const sameNames = (names) => names.join() === [...plan.brokerSecrets].sort().join();
+  const optionalNames = plan.brokerOptionalSecrets ?? [];
+  const sameNames = (names) =>
+    names.filter((name) => !optionalNames.includes(name)).join() ===
+    [...plan.brokerSecrets].sort().join();
   if (plan.mode === "first") {
     if ((await deployedVersion(api, names.api)) !== null) {
       report.gates.brokerSecrets = "first";
