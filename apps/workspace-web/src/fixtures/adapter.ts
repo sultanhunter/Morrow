@@ -7,6 +7,15 @@ import {
   projectPortMethods,
   type AnswerView,
   type ApplyResultView,
+  type BatchDecidedView,
+  type BatchDocumentView,
+  type CatalogCollectionView,
+  type CatalogPageView,
+  type CatalogProductView,
+  type HistoryOperationView,
+  type UndoOfView,
+  type UndoRequestedView,
+  type UndoStateView,
   type ConnectionDisconnectView,
   type DisconnectResultView,
   type OperationView,
@@ -48,6 +57,7 @@ import {
 } from "./seed";
 import { createProjectsFixture } from "./projects";
 import {
+  batchIn,
   changedMeanwhileIn,
   listingsOnIn,
   projectsComposedIn,
@@ -225,6 +235,8 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   // v1 PR 3 fixture reviews: one seeded proposal on task-titles (two products), plus one per
   // run that drafted. Decisions bind each proposal's fixed digest; an apply "writes" every
   // product at once (the fixture has no Shopify) and records its operations.
+  // v1 PR 4: an undo is a new review of the same product with the values swapped back
+  // (`undoOf` names the change it undoes); `serial` keeps its operation ids apart.
   interface FixtureReview {
     readonly id: string;
     readonly taskId: string;
@@ -233,9 +245,17 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     revision: number;
     approved: { proposalId: string; selected: readonly number[] | null } | null;
     operations: OperationView[];
+    readonly undoOf: UndoOfView | null;
+    readonly serial: number;
   }
   const reviews = new Map<string, FixtureReview>();
-  const addReview = (id: string, taskId: string, productIds: readonly string[]) =>
+  const addReview = (
+    id: string,
+    taskId: string,
+    productIds: readonly string[],
+    undoOf: UndoOfView | null = null,
+    serial = 0,
+  ) =>
     reviews.set(id, {
       id,
       taskId,
@@ -244,8 +264,39 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       revision: 1,
       approved: null,
       operations: [],
+      undoOf,
+      serial,
     });
   addReview("proposal-sample-1", "task-titles", ["product:11", "product:12"]);
+  // v1 PR 4: a second change waiting on the same task ("Approve several at once").
+  if (batchIn.includes(scenario)) addReview("proposal-sample-2", "task-titles", ["product:14"]);
+  // v1 PR 4: the linked store's catalogue for the product picker (ids, titles, status).
+  const catalogProducts: readonly (CatalogProductView & { readonly collections: string[] })[] = [
+    11, 12, 14, 15, 16, 17,
+  ].map((n) => ({
+    id: `product:${n}`,
+    title: `Linen shirt ${n}`,
+    status: n === 17 ? "draft" : "active",
+    collections: n % 2 === 0 ? ["collection:21"] : ["collection:22"],
+  }));
+  const catalogCollections: readonly CatalogCollectionView[] = [
+    { id: "collection:21", title: "Summer linen" },
+    { id: "collection:22", title: "Everyday basics" },
+  ];
+  const undoState = (r: FixtureReview, o: OperationView): UndoStateView => {
+    const base = {
+      availableUntil: null,
+      undoProposalId: null,
+      undoOfOperationId: r.undoOf?.operationId ?? null,
+    };
+    if (o.status !== "verified") return { ...base, state: "none" };
+    const undo = [...reviews.values()].find((x) => x.undoOf?.operationId === o.operationId);
+    if (undo && undo.operations.some((x) => x.status === "verified"))
+      return { ...base, state: "undone", undoProposalId: undo.id };
+    if (undo && undo.status !== "rejected")
+      return { ...base, state: "requested", undoProposalId: undo.id };
+    return { ...base, state: "available", availableUntil: "2027-01-14T09:00:00.000Z" };
+  };
   const digestOf = (id: string, selected: readonly number[] | null) =>
     ("0".repeat(64) + [id.length, ...(selected ?? [99])].join("")).slice(-64);
   const refOf = (kind: "proposal" | "approval", id: string, digest: string): RecordRefView => ({
@@ -286,7 +337,18 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
           tags: { added: ["summer"], removed: [] },
           flags: { newUrls: 0, newEmails: 0, newPhones: 0, tagsAdded: 1, tagsRemoved: 0 },
         };
-      });
+      })
+      // An undo sets each field back: its "now" is the change's "proposed", and back again.
+      .map((p) =>
+        r.undoOf === null
+          ? p
+          : {
+              ...p,
+              changes: p.changes.map((c) => ({ ...c, before: c.after, after: c.before })),
+              tags: { added: [], removed: ["summer"] },
+              flags: { ...p.flags, tagsAdded: 0, tagsRemoved: 1 },
+            },
+      );
   const reviewView = (r: FixtureReview, selected: readonly number[] | null): ReviewView => {
     const id = selected === null ? r.id : `${r.id}-d${selected.join("")}`;
     const digest = digestOf(r.id, selected);
@@ -329,6 +391,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       },
       products: reviewProducts(r, selected),
       claim: r.operations.length ? { mine: true, operations: [...r.operations] } : null,
+      undoOf: r.undoOf,
     };
   };
   const reviewOf = (proposalId: string) =>
@@ -873,7 +936,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
               // read-back could not tell (the "Check again" and "I checked it in Shopify" state).
               const lost = scenario === "review_uncertain" && r.operations.length === 0;
               r.operations.push({
-                operationId: `00000000-0000-4000-9000-${String(r.operations.length + 1 + created * 100).padStart(12, "0")}`,
+                operationId: `00000000-0000-4000-9000-${String(r.operations.length + 1 + r.serial + created * 100).padStart(12, "0")}`,
                 taskId: r.taskId,
                 proposalId,
                 productId,
@@ -888,12 +951,12 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
           return ok({ pending: 0, operations: [...r.operations] });
         }),
       operationsOfTask: (id, taskId) =>
-        reply<readonly OperationView[]>("review.operationsOfTask", () =>
+        reply<readonly HistoryOperationView[]>("review.operationsOfTask", () =>
           ws(id) && task(taskId)
             ? ok(
                 [...reviews.values()]
                   .filter((r) => r.taskId === taskId)
-                  .flatMap((r) => r.operations),
+                  .flatMap((r) => r.operations.map((o) => ({ ...o, undo: undoState(r, o) }))),
               )
             : notFound,
         ),
@@ -922,6 +985,129 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
           }
           return notFound;
         }),
+      // v1 PR 4: Undo builds a new review of the product back to its earlier values.
+      undo: (id, operationId, c) =>
+        command<UndoRequestedView>("review.undo", c, () => {
+          for (const r of reviews.values()) {
+            const o = r.operations.find((x) => x.operationId === operationId);
+            if (!o || !ws(id)) continue;
+            const state = undoState(r, o).state;
+            if (state !== "available")
+              return {
+                kind: "conflict",
+                recheck: false,
+                message:
+                  state === "none"
+                    ? "Only a change Morrow applied and confirmed in Shopify can be undone."
+                    : state === "undone"
+                      ? "This change was already undone."
+                      : "An undo of this change is already waiting. Open it from the change's history.",
+              };
+            const n = [...reviews.values()].filter((x) => x.undoOf !== null).length + 1;
+            const proposalId = `proposal-undo-${n}`;
+            addReview(
+              proposalId,
+              r.taskId,
+              [o.productId],
+              {
+                operationId,
+                proposalId: o.proposalId,
+                productId: o.productId,
+                appliedAt: o.updatedAt,
+              },
+              50 * n,
+            );
+            return ok({
+              proposalId,
+              approvalId: `approval-${proposalId}`,
+              status: "pending",
+              expiresAt: "2026-10-19T09:00:00.000Z",
+              operationId,
+            });
+          }
+          return notFound;
+        }),
+      // v1 PR 4: the pending changes of the proposal's task, and one confirmation of them.
+      batch: (id, proposalId) =>
+        reply<BatchDocumentView>("review.batch", () => {
+          const anchor = reviews.get(proposalId);
+          if (!ws(id) || !anchor) return notFound;
+          const items = [...reviews.values()]
+            .filter((r) => r.taskId === anchor.taskId && r.status === "pending")
+            .slice(0, 10)
+            .map((r) => ({
+              proposalId: r.id,
+              digest: digestOf(r.id, null),
+              approvalId: `approval-${r.id}`,
+              revision: r.revision,
+              targetCount: r.productIds.length,
+              expiresAt: "2026-10-19T09:00:00.000Z",
+            }));
+          return ok({
+            proposalId,
+            taskId: anchor.taskId,
+            items,
+            unavailable: items.length < 2 ? "too_few" : null,
+            issuedAt: at(),
+            expiresAt: "2026-10-16T09:05:00.000Z",
+            documentDigest: ("b".repeat(64) + items.map((i) => i.revision).join("")).slice(-64),
+          });
+        }),
+      decideBatch: (id, proposalId, c) =>
+        command<BatchDecidedView>("review.decideBatch", c, () => {
+          if (!ws(id) || !reviews.get(proposalId)) return notFound;
+          const members = c.body.items.map((i) => reviews.get(i.proposalId));
+          // One member that is no longer exactly as confirmed refuses them all.
+          if (
+            members.some(
+              (r, k) =>
+                !r ||
+                r.status !== "pending" ||
+                r.revision !== c.body.items[k]!.revision ||
+                digestOf(r.id, null) !== c.body.items[k]!.digest,
+            )
+          )
+            return {
+              kind: "conflict",
+              recheck: true,
+              message: "These changes are not the same as when you opened them. Review them again.",
+            };
+          return ok({
+            decided: members.map((r) => {
+              r!.status = "approved";
+              r!.revision += 1;
+              r!.approved = { proposalId: r!.id, selected: null };
+              const view = reviewView(r!, null);
+              return {
+                proposalRef: view.proposalRef,
+                approvalRef: view.approvalRef!,
+                status: "approved",
+                expiresAt: "2026-10-17T09:00:00.000Z",
+              };
+            }),
+          });
+        }),
+    },
+    // v1 PR 4: the product picker's catalogue reads (one page: the fixture has six).
+    catalog: {
+      products: (id, storeId, q) =>
+        reply<CatalogPageView<CatalogProductView>>("catalog.products", () => {
+          if (!ws(id) || storeId !== fixtureStore.storeId || !storeLinked()) return notFound;
+          const words = (q.query ?? "").toLowerCase().split(" ").filter(Boolean);
+          return ok({
+            items: catalogProducts
+              .filter((p) => q.collectionId === null || p.collections.includes(q.collectionId))
+              .filter((p) => words.every((w) => p.title.toLowerCase().includes(w)))
+              .map(({ id: productId, title, status }) => ({ id: productId, title, status })),
+            nextCursor: null,
+          });
+        }),
+      collections: (id, storeId) =>
+        reply<CatalogPageView<CatalogCollectionView>>("catalog.collections", () =>
+          ws(id) && storeId === fixtureStore.storeId && storeLinked()
+            ? ok({ items: catalogCollections, nextCursor: null })
+            : notFound,
+        ),
     },
     models: {
       list: (id) =>

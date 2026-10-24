@@ -780,6 +780,13 @@ export function guardPort(
       operationsOfTask: watch(port.review.operationsOfTask.bind(port.review), first),
       recheck: watch(port.review.recheck.bind(port.review), first),
       setAside: watch(port.review.setAside.bind(port.review), first),
+      undo: watch(port.review.undo.bind(port.review), first),
+      batch: watch(port.review.batch.bind(port.review), first),
+      decideBatch: watch(port.review.decideBatch.bind(port.review), first),
+    },
+    catalog: {
+      products: watch(port.catalog.products.bind(port.catalog), first),
+      collections: watch(port.catalog.collections.bind(port.catalog), first),
     },
     models: {
       list: watch(port.models.list.bind(port.models), first),

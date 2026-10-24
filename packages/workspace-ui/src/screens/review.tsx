@@ -6,11 +6,19 @@
 // Apply claims exactly that approval; the server checks permission, stops, plan and the
 // product again, writes each product once and reads it back. Every decision is the server's:
 // this screen only sends the exact refs it read.
+// v1 PR 4: Undo on each applied change in the task's history (a NEW change back to the values
+// read before it, reviewed and approved like any other; the server decides when it is
+// offered), the undo's own review says what it undoes, and "Approve several at once": one
+// confirmation of the server-built document of the changes waiting on this task, all or none.
 import { useState, type FormEvent } from "react";
 import { copy } from "../copy";
 import type {
   ApplyResultView,
+  BatchDecidedView,
+  BatchDecisionBody,
+  BatchDocumentView,
   FieldChangeView,
+  HistoryOperationView,
   Id,
   OperationView,
   ProductReviewView,
@@ -18,6 +26,7 @@ import type {
   ReviewDecidedView,
   ReviewDecisionBody,
   ReviewView,
+  UndoRequestedView,
   WorkspaceView,
 } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
@@ -138,7 +147,7 @@ export function OperationList({
   testId,
 }: {
   readonly ws: Id;
-  readonly operations: readonly OperationView[];
+  readonly operations: readonly (OperationView | HistoryOperationView)[];
   readonly onChanged: () => void;
   readonly testId?: string;
 }) {
@@ -160,6 +169,7 @@ export function OperationList({
           {o.status === "uncertain" ? (
             <SetAside ws={ws} operationId={o.operationId} onChanged={onChanged} />
           ) : null}
+          {"undo" in o ? <UndoLine ws={ws} operation={o} onChanged={onChanged} /> : null}
         </li>
       ))}
     </ul>
@@ -227,6 +237,225 @@ function SetAside({
         onRetry={command.retry}
       />
     </div>
+  );
+}
+
+/**
+ * v1 PR 4: one applied change's undo state in the task's history, as the server reports it.
+ * Undo is offered only where the server says it is available; it asks the server to read
+ * the product and build a NEW change back to the earlier values, which then waits for
+ * approval like any other (nothing is written to the store here).
+ */
+export function UndoLine({
+  ws,
+  operation,
+  onChanged,
+}: {
+  readonly ws: Id;
+  readonly operation: HistoryOperationView;
+  readonly onChanged: () => void;
+}) {
+  const services = useServices();
+  const [made, setMade] = useState<UndoRequestedView | null>(null);
+  const command = useCommand<Record<string, never>, UndoRequestedView>({
+    marker: null,
+    send: (c) => services.port.review.undo(ws, operation.operationId, c),
+    onOutcome: (outcome) => {
+      if (outcome.kind === "ok") {
+        setMade(outcome.value);
+        onChanged();
+      }
+    },
+  });
+  const u = operation.undo;
+  const open = (proposalId: Id) => (
+    <RouteLink route="review" params={{ workspaceId: ws, proposalId }} className="text-link">
+      {copy.review.undoOpen}
+    </RouteLink>
+  );
+  const of = u.undoOfOperationId !== null ? <p className="muted">{copy.review.undoOf}</p> : null;
+  if (made !== null)
+    return (
+      <div className="item-actions" role="status">
+        <p>{copy.review.undoRequested}</p>
+        {open(made.proposalId)}
+      </div>
+    );
+  switch (u.state) {
+    case "available":
+      if (!services.composed["review.undo"] || u.availableUntil === null) return of;
+      return (
+        <>
+          {of}
+          <div className="item-actions">
+            <p className="muted">
+              {copy.review.undoAvailable} <Time value={u.availableUntil} />
+            </p>
+            <Button disabled={command.busy} onClick={() => void command.submit({})}>
+              {copy.review.undo}
+            </Button>
+            <CommandFeedback
+              phase={command.phase}
+              onCheckAgain={command.checkAgain}
+              onRetry={command.retry}
+            />
+          </div>
+        </>
+      );
+    case "requested":
+    case "undone":
+      return (
+        <>
+          {of}
+          <div className="item-actions">
+            <p className="muted">
+              {u.state === "requested" ? copy.review.undoWaiting : copy.review.undone}
+            </p>
+            {u.undoProposalId !== null ? open(u.undoProposalId) : null}
+          </div>
+        </>
+      );
+    case "changed":
+      return (
+        <>
+          {of}
+          <p className="muted">{copy.review.undoChanged}</p>
+        </>
+      );
+    case "unavailable":
+      return (
+        <>
+          {of}
+          <p className="muted">{copy.review.undoUnavailable}</p>
+        </>
+      );
+    default:
+      return of;
+  }
+}
+
+/**
+ * v1 PR 4: "Approve several at once" (ADR-0024 item 9). The server builds the document of the
+ * changes waiting on this task (each one's exact digest and revision, for this person and
+ * session, 5 minutes); one confirmation sends it back unchanged and the server approves each
+ * of them exactly, or none. A document that is no longer current approves nothing.
+ */
+export function BatchApprove({
+  ws,
+  proposalId,
+  onDecided,
+}: {
+  readonly ws: Id;
+  readonly proposalId: Id;
+  readonly onDecided: (count: number) => void;
+}) {
+  const services = useServices();
+  const [open, setOpen] = useState(false);
+  const [document, reload] = useRead<BatchDocumentView>(
+    open ? `${ws}|review-batch|${proposalId}` : null,
+    () => services.port.review.batch(ws, proposalId),
+  );
+  const command = useCommand<BatchDecisionBody, BatchDecidedView>({
+    marker: null,
+    send: (c) => services.port.review.decideBatch(ws, proposalId, c),
+    onOutcome: (outcome) => {
+      if (outcome.kind === "ok") onDecided(outcome.value.decided.length);
+    },
+  });
+  if (!services.composed["review.batch"] || !services.composed["review.decideBatch"]) return null;
+  if (!open)
+    return (
+      <div className="form-actions">
+        <Button onClick={() => setOpen(true)}>{copy.review.batch}</Button>
+      </div>
+    );
+  const close = () => {
+    command.reset();
+    setOpen(false);
+  };
+  const settled = command.phase.phase === "settled" ? command.phase.outcome : null;
+  return (
+    <section className="panel" aria-labelledby="review-batch-title" data-testid="review-batch">
+      <h2 id="review-batch-title">{copy.review.batchTitle}</h2>
+      {document.kind !== "ok" ? (
+        outcomeState(document, reload)
+      ) : document.value.unavailable !== null ? (
+        <>
+          <p className="muted">
+            {copy.review.batchUnavailable[document.value.unavailable] ?? copy.states.unavailable}
+          </p>
+          <div className="form-actions">
+            <Button onClick={close}>{copy.review.batchCancel}</Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="muted">{copy.review.batchIntro}</p>
+          <ul className="item-list">
+            {document.value.items.map((item) => (
+              <li key={item.proposalId} className="item">
+                <RouteLink
+                  route="review"
+                  params={{ workspaceId: ws, proposalId: item.proposalId }}
+                  className="text-link"
+                >
+                  {copy.review.batchItem(item.targetCount)}
+                </RouteLink>
+                <p className="meta">
+                  <RecordText>{item.proposalId}</RecordText>
+                  <span>
+                    {copy.review.expires} <Time value={item.expiresAt} />
+                  </span>
+                </p>
+              </li>
+            ))}
+          </ul>
+          <p className="meta">
+            {copy.review.batchExpires} <Time value={document.value.expiresAt} />
+          </p>
+          <div className="form-actions">
+            <Button
+              variant="primary"
+              disabled={command.busy || settled?.kind === "ok"}
+              onClick={() =>
+                void command.submit({
+                  documentDigest: document.value.documentDigest,
+                  issuedAt: document.value.issuedAt,
+                  items: document.value.items.map((i) => ({
+                    proposalId: i.proposalId,
+                    digest: i.digest,
+                    approvalId: i.approvalId,
+                    revision: i.revision,
+                  })),
+                })
+              }
+            >
+              {copy.review.batchConfirm(document.value.items.length)}
+            </Button>
+            <Button disabled={command.busy} onClick={close}>
+              {copy.review.batchCancel}
+            </Button>
+          </div>
+          <CommandFeedback
+            phase={command.phase}
+            onCheckAgain={command.checkAgain}
+            onRetry={command.retry}
+          />
+          {settled?.kind === "conflict" ? (
+            <div className="form-actions">
+              <Button
+                onClick={() => {
+                  command.reset();
+                  reload();
+                }}
+              >
+                {copy.states.retry}
+              </Button>
+            </div>
+          ) : null}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -428,6 +657,7 @@ export function ReviewScreen({
   );
   const [unselected, setUnselected] = useState<readonly number[]>([]);
   const [decided, setDecided] = useState<ReviewDecidedView | null>(null);
+  const [batched, setBatched] = useState<number | null>(null);
   if (review.kind !== "ok") return <div className="page">{outcomeState(review, reload)}</div>;
   const r = review.value;
   const pending = r.approval?.status === "pending";
@@ -486,6 +716,23 @@ export function ReviewScreen({
           <p>{blocked}</p>
         </div>
       ) : null}
+      {r.undoOf !== null ? (
+        <div className="notice" data-testid="review-undo-of">
+          <p>
+            <RecordText>{copy.review.undoBanner(r.undoOf.productId)}</RecordText>
+          </p>
+          {r.undoOf.appliedAt !== null ? (
+            <p className="meta">
+              {copy.review.undoBannerApplied} <Time value={r.undoOf.appliedAt} />
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {batched !== null ? (
+        <div role="status" className="notice">
+          <p>{copy.review.batchApproved(batched)}</p>
+        </div>
+      ) : null}
       <section className="panel" aria-labelledby="review-products-title">
         <h2 id="review-products-title">{copy.review.productsTitle(r.products.length)}</h2>
         {r.products.length ? (
@@ -512,6 +759,16 @@ export function ReviewScreen({
       </section>
       {pending && r.actionable && decided === null ? (
         <Decide ws={ws} review={r} selected={selected} onDecided={setDecided} />
+      ) : null}
+      {pending && r.actionable && decided === null && r.proposal.derivedFromId === null ? (
+        <BatchApprove
+          ws={ws}
+          proposalId={r.proposal.id}
+          onDecided={(count) => {
+            setBatched(count);
+            reload();
+          }}
+        />
       ) : null}
       {refs !== null && r.actionable && r.claim === null ? (
         <Apply ws={ws} proposalId={refs.proposalId} refs={refs} onChanged={reload} />
@@ -541,11 +798,17 @@ export function AppliedPanel({ ws, taskId }: { readonly ws: Id; readonly taskId:
   if (operations.value.length === 0)
     return <StateView kind="empty" message={copy.review.historyEmpty} />;
   return (
-    <OperationList
-      ws={ws}
-      operations={operations.value}
-      onChanged={reload}
-      testId="task-operations"
-    />
+    <>
+      {operations.value.some((o) => o.undo.state === "available") &&
+      services.composed["review.undo"] ? (
+        <p className="muted">{copy.review.undoIntro}</p>
+      ) : null}
+      <OperationList
+        ws={ws}
+        operations={operations.value}
+        onChanged={reload}
+        testId="task-operations"
+      />
+    </>
   );
 }

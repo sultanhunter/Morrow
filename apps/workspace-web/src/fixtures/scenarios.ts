@@ -66,6 +66,7 @@ export const scenarioNames = [
   "stop_all_uncertain",
   "notifications_conflict",
   "review_uncertain",
+  "review_batch",
   "home_preview",
   "listings_enable_reread_failed",
   "home_offline_retry",
@@ -398,6 +399,8 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   },
   // v1 PR 3 (review F2): the first applied product's outcome is unknown (the adapter's apply).
   review_uncertain: {},
+  // v1 PR 4: a second change waits on the seeded proposal's task ("Approve several at once").
+  review_batch: {},
   // ADR-0032: the Home board's sample sections, shown only where `samples.home` is
   // composed (here alone; see `samplesComposedIn`).
   home_preview: {},
@@ -435,6 +438,8 @@ export const projectsComposedIn: readonly ScenarioName[] = [
 export const teammateIn: readonly ScenarioName[] = ["projects_teammate"];
 /** The first read of each project shows the revision before a teammate's change. */
 export const changedMeanwhileIn: readonly ScenarioName[] = ["projects_changed_meanwhile"];
+/** v1 PR 4: these scenarios seed a second pending change on the seeded proposal's task. */
+export const batchIn: readonly ScenarioName[] = ["review_batch"];
 /** T7 PR 16: these scenarios start with the Listings agent on (Stop all AI work has a target). */
 export const listingsOnIn: readonly ScenarioName[] = ["stop_all", "stop_all_uncertain"];
 /** T7 PR 16: who views Team in each scenario (the Owner unless named). */
