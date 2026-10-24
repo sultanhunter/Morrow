@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": 1,
+  "version": 2,
   "tools": [
     {
       "name": "knowledge.search",
@@ -181,6 +181,18 @@
       "inputDefinition": "ToolInputProposalReply",
       "contexts": ["routed", "mandate"],
       "description": "Propose a plain-text reply to one support thread. Morrow sets the sender and every header; a person approves the exact reply before it is sent."
+    },
+    {
+      "name": "plan.draft",
+      "wireName": "plan_draft",
+      "family": "coordination",
+      "capabilityId": "workspace.conversation.post",
+      "verb": "execute",
+      "replayClass": "internal_write",
+      "resultMaxBytes": 8192,
+      "inputDefinition": "ToolInputPlanDraft",
+      "contexts": ["coordinator"],
+      "description": "Post one plan card in this conversation: a project, a task, a repeating task or a change to a project's plan, with its title, why, Done when, goals, steps and target. It creates nothing until the person who asked taps Start, and it grants nothing. Never in a turn holding a report."
     }
   ]
 }

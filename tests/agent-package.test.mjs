@@ -146,6 +146,7 @@ test("built-in kinds: the Coordinator holds exactly its tools; neither built-in 
       "task.create",
       "agent.route",
       "specialist.draft",
+      "plan.draft",
     ];
     p.capabilities = [
       { capabilityId: "workspace.knowledge.read", verbs: ["view"] },

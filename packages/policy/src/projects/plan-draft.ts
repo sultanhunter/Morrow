@@ -1,11 +1,19 @@
 import { createHash } from "node:crypto";
 import type {
   Current_ContextTaint,
+  Current_GoalMeasure,
   Current_PlanDraft,
+  Current_PlanDraftToolAssignee,
+  Current_PlanDraftToolMeasure,
+  Current_PlanDraftToolTarget,
+  Current_PlanStepAssignee,
+  Current_PlanTarget,
   Current_RestrictedSource,
+  Current_ToolInputPlanDraft,
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import planDraftsSwitch from "../../../../docs/decisions/plan-drafts-staging.json";
+import { type ToolEntry, toolEntry } from "../tool-catalogue";
 
 // ADR-0034: Morrow drafts; a person's tap creates. Everything here is a code check outside
 // any model prompt: the tool's closed input, the refusal in a turn holding a report, the
@@ -33,30 +41,19 @@ export function planDraftsSwitchAllowed(state: {
   return state.planDrafts === "off" || (state.agentLoop === "on" && state.askEnvelope);
 }
 
-/** A ToolCatalogue@1 entry, as T2's catalogue lists it (ADR-0027 item 3). */
-export interface ToolEntry {
-  readonly name: string;
-  readonly capabilityId: string;
-  readonly verb: "view" | "execute";
-  readonly replayClass: "read" | "internal_write";
-  readonly resultBoundBytes: 8192;
-  /** What the tool grants: always nothing (ADR-0034 item 2). */
-  readonly grants: readonly never[];
-}
 /**
- * plan.draft (ADR-0034 item 2): posts one card holding a closed, digested PlanDraft@1 and
- * creates no other record. It runs on workspace.conversation.post and grants nothing.
+ * plan.draft (ADR-0034 item 2) as ToolCatalogue@1 version 2 lists it: a coordination tool on
+ * workspace.conversation.post (execute, internal-write replay, 8 KiB results), offered to the
+ * Coordinator only. It posts one card holding a closed, digested PlanDraft@1, creates no
+ * other record and grants nothing (a catalogue entry names no grant).
  */
-export const planDraftTool: ToolEntry = Object.freeze({
-  name: "plan.draft",
-  capabilityId: "workspace.conversation.post",
-  verb: "execute",
-  replayClass: "internal_write",
-  resultBoundBytes: 8192,
-  grants: Object.freeze([]) as readonly never[],
-});
+export const planDraftTool: ToolEntry = (() => {
+  const entry = toolEntry("plan.draft");
+  if (entry === null) throw Error("PLAN_DRAFT_TOOL_MISSING");
+  return entry;
+})();
 
-/** ADR-0027 item 8's Coordinator grant set; it keeps task.create. */
+/** ADR-0027 item 8's Coordinator grant set with plan.draft; it keeps task.create. */
 export const coordinatorGrantTools = Object.freeze([
   "knowledge.search",
   "work.read",
@@ -195,6 +192,117 @@ const canonical = (v: unknown): string =>
           .map((k) => JSON.stringify(k) + ":" + canonical((v as Record<string, unknown>)[k]))
           .join(",") +
         "}";
+const nulls = (...values: readonly unknown[]) => values.every((v) => v === null);
+function targetOf(t: Current_PlanDraftToolTarget): Current_PlanTarget | null {
+  switch (t.kind) {
+    case "new_project":
+      return t.dueAt !== null && nulls(t.projectId, t.goalRevision, t.areaTemplateId)
+        ? { kind: t.kind, dueAt: t.dueAt }
+        : null;
+    case "existing_project":
+      return t.projectId !== null && t.goalRevision !== null && nulls(t.dueAt, t.areaTemplateId)
+        ? { kind: t.kind, projectId: t.projectId, goalRevision: t.goalRevision }
+        : null;
+    case "area":
+      return t.areaTemplateId !== null && nulls(t.dueAt, t.projectId, t.goalRevision)
+        ? { kind: t.kind, areaTemplateId: t.areaTemplateId }
+        : null;
+    case "quick_tasks":
+      return nulls(t.dueAt, t.projectId, t.goalRevision, t.areaTemplateId)
+        ? { kind: t.kind }
+        : null;
+  }
+}
+function measureOf(m: Current_PlanDraftToolMeasure): Current_GoalMeasure | null {
+  const clock = { target: m.target, dueAt: m.dueAt, startRef: null };
+  switch (m.kind) {
+    case "metric":
+      return m.metricId !== null &&
+        nulls(m.checklistId, m.assistant, m.cadenceWeeks) &&
+        m.productIds.length === 0 &&
+        m.rows.length === 0
+        ? { kind: m.kind, metricId: m.metricId, ...clock }
+        : null;
+    case "checklist":
+      return m.checklistId !== null &&
+        nulls(m.metricId, m.assistant, m.cadenceWeeks) &&
+        m.rows.length === 0
+        ? { kind: m.kind, checklistId: m.checklistId, productIds: [...m.productIds], ...clock }
+        : null;
+    case "manual":
+      return m.assistant !== null &&
+        m.cadenceWeeks !== null &&
+        nulls(m.metricId, m.checklistId) &&
+        m.productIds.length === 0
+        ? {
+            kind: m.kind,
+            assistant: m.assistant,
+            cadenceWeeks: m.cadenceWeeks,
+            rows: m.rows.map((r) => ({ productId: r.productId, checkItems: [...r.checkItems] })),
+            ...clock,
+          }
+        : null;
+  }
+}
+function assigneeOf(a: Current_PlanDraftToolAssignee): Current_PlanStepAssignee | null {
+  switch (a.kind) {
+    case "person":
+      return a.principalId !== null && nulls(a.installationId, a.purpose)
+        ? { kind: a.kind, principalId: a.principalId }
+        : null;
+    case "agent":
+      return a.installationId !== null && nulls(a.principalId, a.purpose)
+        ? { kind: a.kind, installationId: a.installationId }
+        : null;
+    case "specialist":
+      return a.purpose !== null && nulls(a.principalId, a.installationId)
+        ? { kind: a.kind, purpose: a.purpose }
+        : null;
+    case "code":
+      return nulls(a.principalId, a.installationId, a.purpose) ? { kind: a.kind } : null;
+  }
+}
+/**
+ * The recorded plan.draft input (ToolInputPlanDraft, the full definition the tool-call step
+ * validates) as PlanDraft@1: schemaVersion 1, every startRef null, each flattened choice
+ * mapped to its branch. A field outside its kind's set that is not null (or empty) is
+ * refused, so one input names one draft. Null when it maps to nothing; PlanDraft@1's
+ * schema and code rules are checked by planDraftValid.
+ */
+export function planDraftFromToolInput(input: unknown): Current_PlanDraft | null {
+  if (!validateCurrentDefinition("ToolInputPlanDraft", input)) return null;
+  const i = input as Current_ToolInputPlanDraft;
+  const target = targetOf(i.target);
+  const goals = i.goals.map((g) => {
+    const measure = measureOf(g.measure);
+    return measure && { key: g.goalKey, description: g.description, measure };
+  });
+  const steps = i.steps.map((s) => {
+    const assignee = assigneeOf(s.assignee);
+    return (
+      assignee && {
+        key: s.stepKey,
+        title: s.title,
+        assignee,
+        dependsOn: [...s.dependsOn],
+        repeat: s.repeat && { cadence: s.repeat.cadence, goalKey: s.repeat.goalKey },
+      }
+    );
+  });
+  if (target === null || goals.some((g) => g === null) || steps.some((s) => s === null))
+    return null;
+  return {
+    schemaVersion: 1,
+    kind: i.kind,
+    title: i.title,
+    why: i.why,
+    doneWhen: i.doneWhen,
+    goals: goals as Current_PlanDraft["goals"],
+    steps: steps as Current_PlanDraft["steps"],
+    target,
+  };
+}
+
 /** sha256 of the canonical JSON (RFC 8785 over closed JSON) of a draft. */
 export const planDraftDigest = (draft: Current_PlanDraft): string =>
   createHash("sha256").update(canonical(draft), "utf8").digest("hex");
@@ -202,9 +310,10 @@ export const planDraftDigest = (draft: Current_PlanDraft): string =>
 /**
  * One plan.draft call, decided in code. Refused while the switch is off, in a turn holding
  * a report (`report_in_context`), in an Ask without its envelope, outside the turn's tool
- * subset; a mention run drafts only task or plan-change cards. The input is the closed
- * PlanDraft@1; nothing a model writes names a capability, scope, grant, cap, model,
- * recipient, sender or store.
+ * subset; a mention run drafts only task or plan-change cards. The input is the recorded
+ * tool_use input (ToolInputPlanDraft, ToolCatalogue@1 version 2), mapped to the closed
+ * PlanDraft@1 by planDraftFromToolInput; nothing a model writes names a capability, scope,
+ * grant, cap, model, recipient, sender or store.
  */
 export function decidePlanDraft(
   turn: TurnFacts,
@@ -217,10 +326,11 @@ export function decidePlanDraft(
   if (turn.conversation === "ask" && !turn.askEnvelope)
     return { ok: false, refusal: "ask_envelope_missing" };
   if (!turnTools(turn).includes("plan.draft")) return { ok: false, refusal: "tool_not_in_subset" };
-  if (!planDraftValid(input)) return { ok: false, refusal: "input_invalid" };
-  if (turn.mentionRun && input.kind !== "task" && input.kind !== "plan_change")
+  const mapped = planDraftFromToolInput(input);
+  if (mapped === null || !planDraftValid(mapped)) return { ok: false, refusal: "input_invalid" };
+  if (turn.mentionRun && mapped.kind !== "task" && mapped.kind !== "plan_change")
     return { ok: false, refusal: "card_kind_not_allowed" };
-  const draft = structuredClone(input);
+  const draft = structuredClone(mapped);
   return { ok: true, draft, digest: planDraftDigest(draft) };
 }
 

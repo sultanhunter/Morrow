@@ -6,7 +6,7 @@
 // a run manifest pins it.
 export const generatedToolCatalogue = {
   schemaVersion: 1,
-  version: 1,
+  version: 2,
   tools: [
     {
       name: "knowledge.search",
@@ -555,6 +555,313 @@ export const generatedToolCatalogue = {
         required: ["threadId", "body"],
       },
     },
+    {
+      name: "plan.draft",
+      wireName: "plan_draft",
+      family: "coordination",
+      capabilityId: "workspace.conversation.post",
+      verb: "execute",
+      replayClass: "internal_write",
+      resultMaxBytes: 8192,
+      inputDefinition: "ToolInputPlanDraft",
+      contexts: ["coordinator"],
+      description:
+        "Post one plan card in this conversation: a project, a task, a repeating task or a change to a project's plan, with its title, why, Done when, goals, steps and target. It creates nothing until the person who asked taps Start, and it grants nothing. Never in a turn holding a report.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["project", "task", "repeating", "plan_change"],
+          },
+          title: {
+            type: "string",
+          },
+          why: {
+            type: "string",
+          },
+          doneWhen: {
+            type: "string",
+          },
+          goals: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                goalKey: {
+                  type: "string",
+                },
+                description: {
+                  type: "string",
+                },
+                measure: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    kind: {
+                      type: "string",
+                      enum: ["metric", "checklist", "manual"],
+                    },
+                    metricId: {
+                      anyOf: [
+                        {
+                          type: "string",
+                          enum: [
+                            "days_of_stock_cover",
+                            "best_sellers_at_risk",
+                            "replied_within_a_day",
+                            "orders_per_week",
+                            "discounted_order_share",
+                          ],
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    checklistId: {
+                      anyOf: [
+                        {
+                          type: "string",
+                          enum: ["product_facts_complete"],
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    productIds: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                      },
+                    },
+                    assistant: {
+                      anyOf: [
+                        {
+                          type: "string",
+                          enum: ["chatgpt", "gemini", "copilot", "perplexity"],
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    cadenceWeeks: {
+                      anyOf: [
+                        {
+                          type: "integer",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    rows: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        properties: {
+                          productId: {
+                            type: "string",
+                          },
+                          checkItems: {
+                            type: "array",
+                            items: {
+                              type: "string",
+                            },
+                          },
+                        },
+                        required: ["productId", "checkItems"],
+                      },
+                    },
+                    target: {
+                      type: "number",
+                    },
+                    dueAt: {
+                      anyOf: [
+                        {
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                  },
+                  required: [
+                    "kind",
+                    "metricId",
+                    "checklistId",
+                    "productIds",
+                    "assistant",
+                    "cadenceWeeks",
+                    "rows",
+                    "target",
+                    "dueAt",
+                  ],
+                },
+              },
+              required: ["goalKey", "description", "measure"],
+            },
+          },
+          steps: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                stepKey: {
+                  type: "string",
+                },
+                title: {
+                  type: "string",
+                },
+                assignee: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    kind: {
+                      type: "string",
+                      enum: ["person", "agent", "specialist", "code"],
+                    },
+                    principalId: {
+                      anyOf: [
+                        {
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    installationId: {
+                      anyOf: [
+                        {
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    purpose: {
+                      anyOf: [
+                        {
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                  },
+                  required: ["kind", "principalId", "installationId", "purpose"],
+                },
+                dependsOn: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                  },
+                },
+                repeat: {
+                  anyOf: [
+                    {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        cadence: {
+                          type: "string",
+                          enum: ["daily", "weekly", "monthly"],
+                        },
+                        goalKey: {
+                          anyOf: [
+                            {
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                      required: ["cadence", "goalKey"],
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+              },
+              required: ["stepKey", "title", "assignee", "dependsOn", "repeat"],
+            },
+          },
+          target: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              kind: {
+                type: "string",
+                enum: ["new_project", "existing_project", "area", "quick_tasks"],
+              },
+              dueAt: {
+                anyOf: [
+                  {
+                    type: "string",
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+              projectId: {
+                anyOf: [
+                  {
+                    type: "string",
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+              goalRevision: {
+                anyOf: [
+                  {
+                    type: "integer",
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+              areaTemplateId: {
+                anyOf: [
+                  {
+                    type: "string",
+                    enum: [
+                      "product_pages",
+                      "stock",
+                      "customer_emails",
+                      "sales_and_numbers",
+                      "promotions",
+                      "quick_tasks",
+                    ],
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+            },
+            required: ["kind", "dueAt", "projectId", "goalRevision", "areaTemplateId"],
+          },
+        },
+        required: ["kind", "title", "why", "doneWhen", "goals", "steps", "target"],
+      },
+    },
   ],
-  digest: "bf471a0d3b852113ad60a8a24d256244d077daee9dc36d76b16de024499855bd",
+  digest: "789859bb9170c1d87d1d083103fc7687f9c9151dd0b4462cfdbd21eb006a5332",
 } as const;

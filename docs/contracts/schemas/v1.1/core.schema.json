@@ -7092,7 +7092,7 @@
       "additionalProperties": false
     },
     "ToolName": {
-      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1 version 1. A new tool is a new catalogue version and a deliberate schema change.",
+      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 adds plan.draft (ADR-0034 item 2; PR 18). A new tool is a new catalogue version and a deliberate schema change.",
       "type": "string",
       "enum": [
         "knowledge.search",
@@ -7109,7 +7109,8 @@
         "agent.route",
         "specialist.draft",
         "proposal.listing",
-        "proposal.reply"
+        "proposal.reply",
+        "plan.draft"
       ]
     },
     "ToolFamily": {
@@ -9446,6 +9447,30 @@
             },
             "input": {
               "$ref": "#/$defs/ToolModelInputProposalReply"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "plan.draft"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputPlanDraft"
             }
           },
           "required": [
@@ -13029,6 +13054,743 @@
         "kind"
       ],
       "additionalProperties": false
+    },
+    "PlanDraftToolTime": {
+      "description": "A UTC time as plan.draft takes it: UtcTime's text without the date-time format keyword, which ADR-0027 item 3 refuses in a tool input. Code maps it to a PlanDraft@1 UtcTime, which is validated again.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,3})?Z$"
+    },
+    "PlanDraftToolTarget": {
+      "description": "PlanTarget as plan.draft takes it, flattened for strict tool use: a kind and only that kind's fields (new_project: dueAt; existing_project: projectId and goalRevision; area: areaTemplateId; quick_tasks: none); every other field null.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "new_project",
+            "existing_project",
+            "area",
+            "quick_tasks"
+          ]
+        },
+        "dueAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanDraftToolTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "goalRevision": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "areaTemplateId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AreaTemplateId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "dueAt",
+        "projectId",
+        "goalRevision",
+        "areaTemplateId"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolMeasure": {
+      "description": "GoalMeasure as plan.draft takes it, flattened for strict tool use: metric names metricId; checklist names checklistId and its productIds; manual names assistant, cadenceWeeks and its rows; every other field null or empty. It has no startRef: code writes it null.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "metric",
+            "checklist",
+            "manual"
+          ]
+        },
+        "metricId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalMetricId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checklistId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalChecklistId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "productIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ListingProductId"
+          },
+          "minItems": 0,
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "assistant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalAssistant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cadenceWeeks": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 13
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalCheckRow"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "target": {
+          "$ref": "#/$defs/GoalTarget"
+        },
+        "dueAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanDraftToolTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "metricId",
+        "checklistId",
+        "productIds",
+        "assistant",
+        "cadenceWeeks",
+        "rows",
+        "target",
+        "dueAt"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolGoal": {
+      "description": "PlanGoalDraft as plan.draft takes it: goalKey is the goal's key.",
+      "type": "object",
+      "properties": {
+        "goalKey": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "measure": {
+          "$ref": "#/$defs/PlanDraftToolMeasure"
+        }
+      },
+      "required": [
+        "goalKey",
+        "description",
+        "measure"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolAssignee": {
+      "description": "PlanStepAssignee as plan.draft takes it, flattened for strict tool use: person names principalId, agent installationId, specialist only a purpose, code none; every other field null.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "person",
+            "agent",
+            "specialist",
+            "code"
+          ]
+        },
+        "principalId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "installationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^[^\\u0000]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "principalId",
+        "installationId",
+        "purpose"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolStep": {
+      "description": "PlanStepDraft as plan.draft takes it: stepKey is the step's key.",
+      "type": "object",
+      "properties": {
+        "stepKey": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "assignee": {
+          "$ref": "#/$defs/PlanDraftToolAssignee"
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalKey"
+          },
+          "minItems": 0,
+          "maxItems": 7,
+          "uniqueItems": true
+        },
+        "repeat": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "cadence": {
+                  "type": "string",
+                  "enum": [
+                    "daily",
+                    "weekly",
+                    "monthly"
+                  ]
+                },
+                "goalKey": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/GoalKey"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "cadence",
+                "goalKey"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "stepKey",
+        "title",
+        "assignee",
+        "dependsOn",
+        "repeat"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputPlanDraft": {
+      "description": "plan.draft (ADR-0034 item 2; ToolCatalogue@1 version 2): one card the Coordinator drafts, PlanDraft@1 flattened for strict tool use. Code maps it to PlanDraft@1 (schemaVersion 1, every startRef null) and checks PlanDraft@1's code rules; it grants nothing, creates no record but the card and is refused in a turn holding a report. No field takes a capability, scope, grant, cap, model, recipient, sender or store.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "project",
+            "task",
+            "repeating",
+            "plan_change"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "doneWhen": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanDraftToolGoal"
+          },
+          "minItems": 0,
+          "maxItems": 3
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanDraftToolStep"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "target": {
+          "$ref": "#/$defs/PlanDraftToolTarget"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "why",
+        "doneWhen",
+        "goals",
+        "steps",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputPlanDraft": {
+      "description": "plan.draft as the model is given it: ToolInputPlanDraft's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputPlanDraft before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "project",
+            "task",
+            "repeating",
+            "plan_change"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        },
+        "doneWhen": {
+          "type": "string"
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "goalKey": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "measure": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "metric",
+                      "checklist",
+                      "manual"
+                    ]
+                  },
+                  "metricId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "days_of_stock_cover",
+                          "best_sellers_at_risk",
+                          "replied_within_a_day",
+                          "orders_per_week",
+                          "discounted_order_share"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "checklistId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "product_facts_complete"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "productIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "assistant": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "chatgpt",
+                          "gemini",
+                          "copilot",
+                          "perplexity"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cadenceWeeks": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "checkItems": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "checkItems"
+                      ]
+                    }
+                  },
+                  "target": {
+                    "type": "number"
+                  },
+                  "dueAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "metricId",
+                  "checklistId",
+                  "productIds",
+                  "assistant",
+                  "cadenceWeeks",
+                  "rows",
+                  "target",
+                  "dueAt"
+                ]
+              }
+            },
+            "required": [
+              "goalKey",
+              "description",
+              "measure"
+            ]
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "stepKey": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "assignee": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "agent",
+                      "specialist",
+                      "code"
+                    ]
+                  },
+                  "principalId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "installationId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "purpose": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "principalId",
+                  "installationId",
+                  "purpose"
+                ]
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "repeat": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "cadence": {
+                        "type": "string",
+                        "enum": [
+                          "daily",
+                          "weekly",
+                          "monthly"
+                        ]
+                      },
+                      "goalKey": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "cadence",
+                      "goalKey"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "stepKey",
+              "title",
+              "assignee",
+              "dependsOn",
+              "repeat"
+            ]
+          }
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "new_project",
+                "existing_project",
+                "area",
+                "quick_tasks"
+              ]
+            },
+            "dueAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "projectId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goalRevision": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "areaTemplateId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "product_pages",
+                    "stock",
+                    "customer_emails",
+                    "sales_and_numbers",
+                    "promotions",
+                    "quick_tasks"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "dueAt",
+            "projectId",
+            "goalRevision",
+            "areaTemplateId"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "why",
+        "doneWhen",
+        "goals",
+        "steps",
+        "target"
+      ]
     }
   }
 }
