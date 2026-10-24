@@ -245,8 +245,12 @@ export function parseModelCallV2(text: unknown): ModelCallV2 | null {
   }
   return v as unknown as ModelCallV2;
 }
-/** The generated loop catalogue's entry at a published or proposed version (SQL decides). */
-function entryOf(version: number, model: string, effort: string) {
+/**
+ * The generated loop catalogue's entry that SQL's run names: the run's model and effort, at a
+ * version (newest first) whose entry has exactly the provider model id and max_tokens the fence
+ * returned from SQL's own catalogue. None (a drift between the two) holds the call.
+ */
+function entryOf(model: string, effort: string, providerModelId: string, maxOutputTokens: number) {
   const versions: readonly {
     readonly version: number;
     readonly limits: { readonly maxInputTokensPerTurn: number };
@@ -257,16 +261,18 @@ function entryOf(version: number, model: string, effort: string) {
       readonly providerModelId: string;
     }[];
   }[] = generatedLoopCatalogue.versions;
-  const v = versions.find((x) => x.version === version);
-  const m = v?.models.find((x) => x.key === model);
-  const e = v?.efforts.find((x) => x.key === effort);
-  if (!v || !m || !e) return null;
-  return {
-    provider: m.provider,
-    providerModelId: m.providerModelId,
-    maxTokens: e.maxOutputTokens,
-    maxInput: v.limits.maxInputTokensPerTurn,
-  };
+  for (const v of [...versions].sort((a, b) => b.version - a.version)) {
+    const m = v.models.find((x) => x.key === model);
+    const e = v.efforts.find((x) => x.key === effort);
+    if (m && e && m.providerModelId === providerModelId && e.maxOutputTokens === maxOutputTokens)
+      return {
+        provider: m.provider,
+        providerModelId: m.providerModelId,
+        maxTokens: e.maxOutputTokens,
+        maxInput: v.limits.maxInputTokensPerTurn,
+      };
+  }
+  return null;
 }
 type Begun = {
   readonly callId: string;
@@ -277,7 +283,6 @@ type Begun = {
   readonly maxOutputTokens: number;
   readonly tools: readonly string[];
   readonly systemTextDigest: string;
-  readonly catalogueVersion: number;
 };
 type Replay = {
   readonly callId: string;
@@ -356,8 +361,6 @@ function decodeBegin(
       maxOutputTokens: Number(r.max_output_tokens),
       tools: Object.freeze(tools as string[]),
       systemTextDigest: r.system_text_digest,
-      // The loop catalogue's one version in SQL is the generated catalogue's (drift-tested).
-      catalogueVersion: generatedLoopCatalogue.versions[0]?.version ?? 0,
     },
   };
 }
@@ -516,7 +519,7 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
       }
     };
     // 5. The call against the run.
-    const entry = entryOf(b.catalogueVersion, b.model, b.effort);
+    const entry = entryOf(b.model, b.effort, b.providerModelId, b.maxOutputTokens);
     const provider = entry ? seams.providers[entry.provider] : undefined;
     const system = loopSystemTexts[b.systemTextDigest];
     const named = call.messages.flatMap((m) =>
