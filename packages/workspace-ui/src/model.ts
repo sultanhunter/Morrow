@@ -225,7 +225,7 @@ export interface Page<T> {
 // answers `samples.home`, and only where its scenario composes it; the HTTP build keeps
 // it uncomposed (not_in_build, nothing sent). These are presentational strings for a
 // preview, never contract data: the contracts and backend of ADR-0033 and ADR-0034
-// (projects with goals, Morrow drafting plans) land in their own PRs.
+// (projects with goals, Morrow drafting plans; accepted 2026-10-24) land in their own PRs.
 export type AgentKind =
   | "morrow"
   | "listings"
