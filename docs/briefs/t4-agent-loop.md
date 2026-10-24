@@ -38,13 +38,14 @@ Follow-ups (not in this PR): **Listings on the runner** (`products.read`, `propo
 
 ## Test checklist
 
-- [x] `tests/agent-loop.test.mjs` (18): the system text digest; caps and holds equal the SQL formula and the policy kernel for all nine entries; AgentRunManifest@1; the off admitter and the exact switch; the conversation and untrusted wrapping; reply checks; caps in code; the runner end to end over an in-memory world (refusals, invalid output, final turn, uncertain resend, throttle, lost reply, the question and answer, a stop, a failed transaction, cost and wall time); the tool seam, authority refusals and the steps' fixed SQL and decoders.
+- [x] `tests/agent-loop.test.mjs` (19): the system text digest; caps and holds equal the SQL formula and the policy kernel for all nine entries; AgentRunManifest@1; the off admitter and the exact switch; the conversation and untrusted wrapping; reply checks; caps in code; the runner end to end over an in-memory world (refusals, invalid output, final turn, uncertain resend, a hold that left nothing in SQL tried again at most twice, throttle, lost reply, the question and answer, a stop, a failed transaction, cost and wall time); the tool seam, authority refusals and the steps' fixed SQL and decoders.
 - [x] `tests/broker-agent-turn.test.mjs` (9): the Messages body, wrapping, the outcome table, ModelCall@2 closed, both switches first, closed inputs and prefixes, the fence, the call and reply against the run, the input cap, throttles, uncertain sends, a lost close and replays.
 - [x] `tests/agent-loop-migrations.test.mjs` (8): the manifest row, the runner contract, FORCE RLS and grants, content classes and retention, catalogue v2 and ToolCatalogue drift, definers and ACLs, the switch record.
 - [x] Updated pins: `broker.test.mjs` (modelTurn on RuntimeBroker only), `edge-config.test.mjs` (the agent-loop record rule, mixed states, prerequisites and evidence, the AGENT_RUN binding), `orchestrator.test.mjs` (the export, the gate, the mapping, the body), `projects-migrations.test.mjs` (no longer the last row), `work-postgresql.test.mjs` and `ci-workflow.test.mjs` (pg-http ends with `lab:agent-loop`), the tenant-conformance registry and static policies.
-- [ ] `lab:agent-loop` (PostgreSQL 17): see the local run below.
-- [ ] `lab:tenant-conformance` with the new objects registered.
-- [ ] `npm test`, `typecheck`, `typecheck:edge`, `edge:check`, `verify`, `format:check`: see the local run below.
+- [x] `lab:agent-loop` (PostgreSQL 17, local, 2026-10-24): 27 of 27 checks in 1,048 s at load 300 to 1,000, no provider requests. Two earlier runs at peak load failed Q3 the same way: turn 2 ended `provider_error` after a broker hold that left nothing in SQL (no fence, so nothing was sent; most likely the fence's transaction timing out on the loaded host). The runner now tries such a hold again at most twice, and the next run passed every check. Q3's failure detail now carries the turn, fence and broker-line codes.
+- [x] `lab:tenant-conformance` with the new objects registered (local): 17 of 17 (P1-P10, S1-S8), including the P1 probes for `cmd_agent_run_admit` and `cmd_agent_run_answer`.
+- [x] `typecheck`, `typecheck:edge`, `edge:check`, `verify`, `format:check` (local): all pass.
+- [ ] `npm test` (local): see the result below.
 - [ ] Hosted CI `foundation` on the PR head; Tier 2 AI review with the security lens (authority, RLS, migrations, money, durable execution).
 
 ## Owner steps
