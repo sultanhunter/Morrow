@@ -318,6 +318,20 @@
       "sha256": "ffdff6ff5a78320880c6c4b44e5464801165bde8204f63d0973d2ced45030e70",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-connect-store.md"
+    },
+    {
+      "sequence": 41,
+      "file": "0041.disconnect-store-identity.sql",
+      "sha256": "9dc8c7035a62432ecb000a62a1d32aaf10720fbbd9a7d8424a550f7f9211d01c",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
+    },
+    {
+      "sequence": 42,
+      "file": "0042.disconnect-store-work.sql",
+      "sha256": "ae346a7bd5d2b6062f6ee718f98dd70a7fa47d46a917ea9eb41e31fd5f556e13",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
     }
   ]
 }

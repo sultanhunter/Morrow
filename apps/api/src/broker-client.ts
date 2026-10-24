@@ -4,10 +4,12 @@ import {
   challengeLimits,
   challengeTokenValid,
   decodeNeonLeaseGrant,
+  decodeShopifyCredentialResult,
   decodeStripeCheckoutResult,
   decodeStripeCustomerResult,
   decodeStripePortalResult,
   decodeStripeWebhookResult,
+  shopifyInstallationIdPattern,
   shopifyReadLimits,
   stripeLimits,
   stripeOperationIdValid,
@@ -16,6 +18,7 @@ import {
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { BillingBrokerPort } from "../../../packages/work/src/billing/port.js";
 import type { CatalogReader } from "../../../packages/work/src/catalog/http.js";
+import type { CredentialDestroyer } from "../../../packages/work/src/connections/http.js";
 import type { LoginControl } from "../../../packages/identity/src/standalone-login-protocol.js";
 import type { WorkosSessionPageReader } from "../../../packages/identity/src/workos-session-status.js";
 
@@ -256,6 +259,28 @@ export function createBrokerStripe(broker: ApiBrokerRpc): BillingBrokerPort {
           () => broker.stripeWebhookVerify(rawBodyBase64, signatureHeader, budget),
           signal,
           allowance,
+        ),
+      );
+    },
+  });
+}
+
+// "Disconnect store": after the disconnect committed, one ApiBroker.shopifyCredentialDestroy
+// for the disconnected installation (the broker fixes the reason), raced against the
+// caller's signal and the budget plus a small RPC allowance, never retried here (the
+// connector's cron re-drives a destruction that did not complete). The closed result is
+// decoded; anything else, a late reply or a throw is API_BROKER_HELD.
+export const brokerCredentialBudgetMs = 4000;
+export function createBrokerCredentialDestroyer(broker: ApiBrokerRpc): CredentialDestroyer {
+  return Object.freeze({
+    async destroy(installationId: string, signal: AbortSignal) {
+      if (typeof installationId !== "string" || !shopifyInstallationIdPattern.test(installationId))
+        throw held();
+      return decodeShopifyCredentialResult(
+        await raceBrokerCall(
+          () => broker.shopifyCredentialDestroy(installationId),
+          signal,
+          brokerCredentialBudgetMs,
         ),
       );
     },

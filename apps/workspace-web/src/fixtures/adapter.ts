@@ -5,6 +5,8 @@
 import {
   portMethods,
   type AnswerView,
+  type ConnectionDisconnectView,
+  type DisconnectResultView,
   type ListingsAgentView,
   type ListingsDocumentView,
   type ModelCatalogueView,
@@ -150,10 +152,12 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     seed.connections.installations.some(
       (i) => i.storeId === fixtureStore.storeId && i.status === "linked",
     );
+  // "Disconnect store": the fixture store's connection stop (a person's disconnect).
+  const disconnect = { stoppedAt: null as string | null };
   const listingsView = (): ListingsAgentView => ({
     storeId: fixtureStore.storeId,
     linked: storeLinked(),
-    blocked: false,
+    blocked: disconnect.stoppedAt !== null,
     installation:
       listings.installationId === null
         ? null
@@ -396,6 +400,51 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
               })
             : { kind: "unauthenticated" },
         ),
+      // Scripted, not simulated: the kernel, the KillSwitchRecord, the stop, the installation's
+      // end and the token's destruction are proved by lab:disconnect-store.
+      disconnectStatus: (id, connectionId) =>
+        reply<ConnectionDisconnectView>("connections.disconnectStatus", () => {
+          const installation = seed.connections.installations.find(
+            (i) => i.connectionId === connectionId && i.status !== "unlinked",
+          );
+          if (!ws(id) || !installation || installation.storeId === null) return notFound;
+          const status =
+            installation.status === "suspended" || installation.status === "uninstalled"
+              ? installation.status
+              : "linked";
+          return ok({
+            connectionId,
+            storeId: installation.storeId,
+            installationStatus: status,
+            stop:
+              disconnect.stoppedAt === null
+                ? null
+                : {
+                    setBy: "human",
+                    reasonCode: "human_disconnect",
+                    createdAt: disconnect.stoppedAt,
+                  },
+            actions: { disconnect: disconnect.stoppedAt === null && status === "linked" },
+          });
+        }),
+      disconnect: (id, connectionId, c) =>
+        command<DisconnectResultView>("connections.disconnect", c, () => {
+          const index = seed.connections.installations.findIndex(
+            (i) => i.connectionId === connectionId && i.status !== "unlinked",
+          );
+          if (!ws(id) || index === -1) return notFound;
+          const prior = disconnect.stoppedAt === null ? "active" : "already_stopped";
+          disconnect.stoppedAt ??= at();
+          const current = seed.connections.installations[index]!;
+          if (current.status === "linked")
+            seed.connections = {
+              ...seed.connections,
+              installations: seed.connections.installations.map((i, n) =>
+                n === index ? { ...i, status: "suspended", updatedAt: at() } : i,
+              ),
+            };
+          return ok({ priorStateObserved: prior, credential: "destroyed" });
+        }),
     },
     storeLinks: {
       preview: (id, c) =>
