@@ -56,7 +56,10 @@ import { agentRun, AgentRunRetry } from "../packages/work/src/loop/runner.ts";
 import { listAgentPendingStarts, resolveAgentRunLease } from "../packages/work/src/loop/steps.ts";
 import { createToolHandlers, inboxAskHandler } from "../packages/work/src/loop/tools.ts";
 import { routedSystemTextDigest } from "../packages/policy/src/loop-prompts.ts";
-import { toolCatalogueDigest, toolCatalogueVersion } from "../packages/policy/src/tool-catalogue.ts";
+import {
+  toolCatalogueDigest,
+  toolCatalogueVersion,
+} from "../packages/policy/src/tool-catalogue.ts";
 import { brokerCapabilities } from "../apps/broker/src/capabilities.ts";
 import { createAgentTurnGateway } from "../apps/broker/src/agent-turn-gateway.ts";
 import { runVaultTransactionWithDriver } from "../apps/broker/src/vault-database.ts";
@@ -603,7 +606,11 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       connectionId: C,
       installationId: installation.id,
       requester: { principalId: c.principal_id, membershipId: c.membership_id },
-      release: { id: installation.release_id, revision: installation.revision, digest: installation.digest },
+      release: {
+        id: installation.release_id,
+        revision: installation.revision,
+        digest: installation.digest,
+      },
       tools: ["products.read", "inbox.ask"],
       profile: { model: "claude_haiku_5_5", effort: "low", catalogueVersion: 2 },
       admittedAt: new Date(Math.floor(Number(c.database_now_us) / 1000)).toISOString(),
@@ -626,7 +633,11 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
           return { ...(await admitRoutedRun(tx, agentLoop, input)), input };
         });
       } catch (error) {
-        if (input && count(`SELECT count(*) FROM morrow_work.agent_runs WHERE id=${literal(input.runId)}`) === 1)
+        if (
+          input &&
+          count(`SELECT count(*) FROM morrow_work.agent_runs WHERE id=${literal(input.runId)}`) ===
+            1
+        )
           return { outcome: "applied", runId: input.runId, input, retried: true };
         if (n >= 6) throw error;
         await sleep(400);
@@ -673,7 +684,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   );
   const costOf = (u) => {
     const units =
-      BigInt(u.inputTokens) * BigInt(rates.input) + BigInt(u.outputTokens) * BigInt(rates.output) + BigInt(u.cacheWriteTokens) * BigInt(rates.cw);
+      BigInt(u.inputTokens) * BigInt(rates.input) +
+      BigInt(u.outputTokens) * BigInt(rates.output) +
+      BigInt(u.cacheWriteTokens) * BigInt(rates.cw);
     const u8 = (units + 9_999n) / 10_000n;
     return u8;
   };
@@ -690,9 +703,20 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const off = await admitRoutedRun(
       { run: async (name) => (sent.push(name), []), markSubmitted() {}, rollbackOnly() {} },
       "off",
-      admissionInput({ principal_id: P.A.principal, membership_id: P.A.membership, database_now_us: String(Date.now() * 1000) }, T1),
+      admissionInput(
+        {
+          principal_id: P.A.principal,
+          membership_id: P.A.membership,
+          database_now_us: String(Date.now() * 1000),
+        },
+        T1,
+      ),
     );
-    check("A1:switch_off_before_any_statement", off.outcome === "switch_off" && sent.length === 0 && footprint() === before, { off, sent });
+    check(
+      "A1:switch_off_before_any_statement",
+      off.outcome === "switch_off" && sent.length === 0 && footprint() === before,
+      { off, sent },
+    );
     // A2: catalogue v2 is committed proposed: SQL refuses catalogue_inactive, nothing persists.
     const proposed = await admit(P.A, T1);
     check(
@@ -758,23 +782,54 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         leaseRow.unstarted === true &&
         command?.command_type === "run.admit" &&
         !command.result.includes("Read the summer"),
-      { admitted: admitted.outcome, r, run: run && { ...run, manifest_canonical: undefined }, child, envelope, hop, leaseRow, command },
+      {
+        admitted: admitted.outcome,
+        r,
+        run: run && { ...run, manifest_canonical: undefined },
+        child,
+        envelope,
+        hop,
+        leaseRow,
+        command,
+      },
     );
     // A4: refusals persist nothing.
     const before = footprint();
     const foreign = await admit(P.A1, T1);
     const coordinatorTool = await admit(P.A, T1, { tools: ["agent.route"] });
-    const opus = await admit(P.A, T1, { profile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 } });
-    const xhigh = await admit(P.A, T1, { profile: { model: "claude_opus_5_5", effort: "xhigh", catalogueVersion: 2 } });
+    const opus = await admit(P.A, T1, {
+      profile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
+    });
+    const xhigh = await admit(P.A, T1, {
+      profile: { model: "claude_opus_5_5", effort: "xhigh", catalogueVersion: 2 },
+    });
     // A forged manifest (a hold other than the one SQL derives): the manifest CHECK refuses it.
     const forged = await apiTx(P.A, async (tx, c) => {
       const input = admissionInput(c, T1);
       const built = routedManifest(input);
       const canonical = built.canonical.replace('"holdUsd":"0.16800000"', '"holdUsd":"0.10000000"');
       const rows = await tx.run("cmdAgentRunAdmit", [
-        input.commandId, input.requestDigest, input.correlationId, T1, S, installation.id, input.runId, input.childTaskId,
-        input.envelopeId, input.hopId, input.coordinatorPrincipalId, input.grantId, "2", "claude_haiku_5_5", "low",
-        JSON.stringify(input.tools), String(toolCatalogueVersion), toolCatalogueDigest, routedSystemTextDigest, canonical, input.admittedAt,
+        input.commandId,
+        input.requestDigest,
+        input.correlationId,
+        T1,
+        S,
+        installation.id,
+        input.runId,
+        input.childTaskId,
+        input.envelopeId,
+        input.hopId,
+        input.coordinatorPrincipalId,
+        input.grantId,
+        "2",
+        "claude_haiku_5_5",
+        "low",
+        JSON.stringify(input.tools),
+        String(toolCatalogueVersion),
+        toolCatalogueDigest,
+        routedSystemTextDigest,
+        canonical,
+        input.admittedAt,
       ]);
       tx.rollbackOnly();
       return rows[0]?.outcome;
@@ -788,25 +843,45 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         xhigh.outcome === "entry_not_offered" &&
         forged === "invalid" &&
         footprint() === before,
-      { foreign: foreign.outcome, coordinatorTool: coordinatorTool.outcome, opus: opus.outcome, xhigh: xhigh.outcome, forged },
+      {
+        foreign: foreign.outcome,
+        coordinatorTool: coordinatorTool.outcome,
+        opus: opus.outcome,
+        xhigh: xhigh.outcome,
+        forged,
+      },
     );
     // A5: the daily backstop (US$25) with the period cap raised (sim): three Opus high runs
     // hold US$19.20 beside R1; a fourth would pass US$25.
-    db.workOwner("UPDATE morrow_work.loop_catalogue_versions SET workspace_period_unrecovered_cost_cap_usd=100 WHERE version=2;");
+    db.workOwner(
+      "UPDATE morrow_work.loop_catalogue_versions SET workspace_period_unrecovered_cost_cap_usd=100 WHERE version=2;",
+    );
     const opusRuns = [];
     for (let i = 0; i < 4; i++)
-      opusRuns.push(await admit(P.A, T1, { profile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 } }));
+      opusRuns.push(
+        await admit(P.A, T1, {
+          profile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
+        }),
+      );
     check(
       "A5:the_daily_backstop_counts_open_holds",
       opusRuns.slice(0, 3).every((x) => x.outcome === "applied") &&
         opusRuns[3].outcome === "daily_backstop" &&
-        opusRuns.slice(0, 3).every((x) => runRow(x.runId)?.hold === "6.40000000" && runRow(x.runId).turn_limit === 10),
+        opusRuns
+          .slice(0, 3)
+          .every(
+            (x) => runRow(x.runId)?.hold === "6.40000000" && runRow(x.runId).turn_limit === 10,
+          ),
       { outcomes: opusRuns.map((x) => x.outcome) },
     );
     // The three end unstarted (sim, the owner's run end), and the cap is restored.
     for (const x of opusRuns.slice(0, 3))
-      db.workOwner(`SELECT outcome FROM morrow_work.agent_run_end(${literal(O)},${literal(W)},${literal(x.runId)},'cancelled','stopped');`);
-    db.workOwner("UPDATE morrow_work.loop_catalogue_versions SET workspace_period_unrecovered_cost_cap_usd=4.50000000 WHERE version=2;");
+      db.workOwner(
+        `SELECT outcome FROM morrow_work.agent_run_end(${literal(O)},${literal(W)},${literal(x.runId)},'cancelled','stopped');`,
+      );
+    db.workOwner(
+      "UPDATE morrow_work.loop_catalogue_versions SET workspace_period_unrecovered_cost_cap_usd=4.50000000 WHERE version=2;",
+    );
     // A6: the cron's ids-only list, and the run's lease kept out of the Listings starts.
     const attempt = createRuntimeAttempt(30000, new AbortController().signal);
     let agentStarts, listingStarts;
@@ -824,7 +899,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         mine.length === 1 &&
         mine[0].resume === false &&
         mine[0].leaseId === runRow(R1).lease_id &&
-        Object.keys(mine[0]).sort().join() === "generation,leaseId,organizationId,resume,runId,workspaceId" &&
+        Object.keys(mine[0]).sort().join() ===
+          "generation,leaseId,organizationId,resume,runId,workspaceId" &&
         listingStarts.ok &&
         listingStarts.value.some((s) => s.leaseId === mine[0].leaseId),
       { agentStarts, listingStarts },
@@ -836,17 +912,30 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   {
     scripts.set("Read the summer products and summarise them", (resolved, turn) =>
       turn === 1
-        ? reply(
-            {
-              role: "assistant",
-              content: [
-                { type: "reasoning", text: "I should read the products first.", continuity: "c2lnLTE", redacted: false },
-                { type: "text", text: "Reading the products." },
-                { type: "tool_use", id: "tu_read", name: "products.read", input: { productIds: null, titleContains: "summer", limit: 5 } },
-                { type: "tool_use", id: "tu_ask", name: "inbox.ask", input: { question: questionText, choices: [] } },
-              ],
-            },
-          )
+        ? reply({
+            role: "assistant",
+            content: [
+              {
+                type: "reasoning",
+                text: "I should read the products first.",
+                continuity: "c2lnLTE",
+                redacted: false,
+              },
+              { type: "text", text: "Reading the products." },
+              {
+                type: "tool_use",
+                id: "tu_read",
+                name: "products.read",
+                input: { productIds: null, titleContains: "summer", limit: 5 },
+              },
+              {
+                type: "tool_use",
+                id: "tu_ask",
+                name: "inbox.ask",
+                input: { question: questionText, choices: [] },
+              },
+            ],
+          })
         : reply(say(replyText)),
     );
     const { result, names } = await execute(R1);
@@ -860,7 +949,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       result.kind === "ended" &&
         result.status === "succeeded" &&
         result.reason === "completed" &&
-        JSON.stringify(names) === JSON.stringify(["start", "turn-1-1", "tool-1-0", "tool-1-1", "turn-2-1", "finish"]) &&
+        JSON.stringify(names) ===
+          JSON.stringify(["start", "turn-1-1", "tool-1-0", "tool-1-1", "turn-2-1", "finish"]) &&
         r.status === "succeeded" &&
         r.ended_reason === "completed" &&
         r.turns === 2 &&
@@ -873,8 +963,13 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         tc[1].outcome === "refused" &&
         tc[1].refusal === "authority_denied" &&
         reads.length === 1 &&
-        decisions.filter((d) => d[0] === R1).map((d) => d[1] + ":" + d[2]).join() === "products.read:allowed,inbox.ask:authority_denied" &&
-        count(`SELECT count(*) FROM morrow_work.agent_run_questions WHERE run_id=${literal(R1)}`) === 0,
+        decisions
+          .filter((d) => d[0] === R1)
+          .map((d) => d[1] + ":" + d[2])
+          .join() === "products.read:allowed,inbox.ask:authority_denied" &&
+        count(
+          `SELECT count(*) FROM morrow_work.agent_run_questions WHERE run_id=${literal(R1)}`,
+        ) === 0,
       { result, names, r, tc, decisions },
     );
     const second = t.find((x) => x.turn === 2);
@@ -891,14 +986,23 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         product.data.products[0].title === productText &&
         JSON.parse(results[1].content).refusal === "authority_denied" &&
         JSON.parse(results[1].content).data === null &&
-        count(`SELECT count(*) FROM morrow_work.run_turns WHERE input::text LIKE ${literal("%" + productText.slice(0, 30) + "%")}`) === 1 &&
-        count(`SELECT count(*) FROM morrow_work.agent_runs WHERE manifest_canonical LIKE ${literal("%IGNORE%")}`) === 0,
+        count(
+          `SELECT count(*) FROM morrow_work.run_turns WHERE input::text LIKE ${literal("%" + productText.slice(0, 30) + "%")}`,
+        ) === 1 &&
+        count(
+          `SELECT count(*) FROM morrow_work.agent_runs WHERE manifest_canonical LIKE ${literal("%IGNORE%")}`,
+        ) === 0,
       { tainted: r.tainted, results },
     );
     check(
       "W3:each_turn_is_booked_at_the_catalogue_rates_and_the_prefix_chains",
       c.length === 2 &&
-        c.every((x) => x.status === "closed" && x.counted === true && x.provider_model_id === "claude-haiku-5-5") &&
+        c.every(
+          (x) =>
+            x.status === "closed" &&
+            x.counted === true &&
+            x.provider_model_id === "claude-haiku-5-5",
+        ) &&
         c.every((x) => x.cost === text8(costOf(usage()))) &&
         r.booked === expected &&
         r.overflow === "0.00000000" &&
@@ -906,7 +1010,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         t[0].outcome === "tool_use" &&
         t[1].outcome === "end_turn" &&
         r.prefix !== null &&
-        provider.sends.filter((s) => s.objective.startsWith("Read the summer")).every((s) => s.tools.join() === "products.read,inbox.ask"),
+        provider.sends
+          .filter((s) => s.objective.startsWith("Read the summer"))
+          .every((s) => s.tools.join() === "products.read,inbox.ask"),
       { c, booked: r.booked, expected, t: t.map((x) => [x.turn, x.outcome]) },
     );
     const first = t.find((x) => x.turn === 1);
@@ -918,9 +1024,15 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         first.output.includes("[reasoning removed]") === false &&
         JSON.parse(first.output).content.length === 3 &&
         lease?.status !== "active" &&
-        count(`SELECT count(*) FROM morrow_work.work_envelopes WHERE id=${literal(r.envelope)} AND revoked_at IS NOT NULL`) === 1 &&
-        count(`SELECT count(*) FROM morrow_work.delegation_hops WHERE id=${literal(r.hop)} AND revoked_at IS NOT NULL`) === 1 &&
-        count(`SELECT count(*) FROM morrow_work.run_turns WHERE run_id=${literal(R1)} AND expires_at>=updated_at+interval '89 days'`) === 2,
+        count(
+          `SELECT count(*) FROM morrow_work.work_envelopes WHERE id=${literal(r.envelope)} AND revoked_at IS NOT NULL`,
+        ) === 1 &&
+        count(
+          `SELECT count(*) FROM morrow_work.delegation_hops WHERE id=${literal(r.hop)} AND revoked_at IS NOT NULL`,
+        ) === 1 &&
+        count(
+          `SELECT count(*) FROM morrow_work.run_turns WHERE run_id=${literal(R1)} AND expires_at>=updated_at+interval '89 days'`,
+        ) === 2,
       { first: first?.output, lease },
     );
   }
@@ -937,7 +1049,13 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     };
     scripts.set("Retitle the summer collection", (resolved, turn) =>
       turn === 1
-        ? reply(say("One question first.", ["tu_q", "inbox.ask", { question: questionText, choices: ["Playful", "Plain"] }]))
+        ? reply(
+            say("One question first.", [
+              "tu_q",
+              "inbox.ask",
+              { question: questionText, choices: ["Playful", "Plain"] },
+            ]),
+          )
         : reply(say("Done with the plain titles.")),
     );
     const q = await admit(P.A, T2, { tools: ["inbox.ask"] });
@@ -953,7 +1071,12 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         const question = one(
           `SELECT id::text AS id,status,question,choices::text AS choices,tool_use_id FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`,
         );
-        seen.waiting = { status: r.status, lease: one(`SELECT status FROM morrow_work.work_leases WHERE id=${literal(r.lease_id)}`)?.status, question };
+        seen.waiting = {
+          status: r.status,
+          lease: one(`SELECT status FROM morrow_work.work_leases WHERE id=${literal(r.lease_id)}`)
+            ?.status,
+          question,
+        };
         seen.stranger = await answer(P.A1, question.id, "Playful");
         seen.blank = await answer(P.A, question.id, "   ");
         seen.answered = await answer(P.A, question.id, answerText);
@@ -961,7 +1084,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         const after = runRow(R2);
         seen.after = {
           status: after.status,
-          lease: one(`SELECT subject_id::text AS subject,status,started_at IS NULL AS unstarted FROM morrow_work.work_leases WHERE id=${literal(after.lease_id)}`),
+          lease: one(
+            `SELECT subject_id::text AS subject,status,started_at IS NULL AS unstarted FROM morrow_work.work_leases WHERE id=${literal(after.lease_id)}`,
+          ),
         };
         const attempt = createRuntimeAttempt(30000, new AbortController().signal);
         try {
@@ -1005,18 +1130,31 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       "Q3:the_answer_reaches_the_next_turn_and_the_run_completes",
       result.kind === "ended" &&
         result.status === "succeeded" &&
-        JSON.stringify(names) === JSON.stringify(["start", "turn-1-1", "tool-1-0", "wait-1", "answer-1-1", "resume-1-1", "turn-2-1", "finish"]) &&
+        JSON.stringify(names) ===
+          JSON.stringify([
+            "start",
+            "turn-1-1",
+            "tool-1-0",
+            "wait-1",
+            "answer-1-1",
+            "resume-1-1",
+            "turn-2-1",
+            "finish",
+          ]) &&
         blocks.length === 2 &&
         blocks[0].type === "tool_result" &&
         blocks[1].type === "text" &&
         blocks[1].text === answerLabel + answerText &&
         runRow(R2).questions === 1 &&
         runRow(R2).tainted === false &&
-        one(`SELECT status FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`)?.status === "answered",
+        one(`SELECT status FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`)
+          ?.status === "answered",
       { result, names, blocks },
     );
     // An answer after the run ended changes nothing.
-    const qid = one(`SELECT id::text AS id FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`).id;
+    const qid = one(
+      `SELECT id::text AS id FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`,
+    ).id;
     const late = await answer(P.A, qid, "Late");
     check("Q4:an_answer_after_the_end_is_refused", late.outcome === "state_conflict", { late });
   }
@@ -1028,7 +1166,15 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     let n = 0;
     scripts.set("Check the product count", () =>
       ++n === 1
-        ? Object.freeze({ outcome: "uncertain", rawStopReason: null, message: null, usage: null, providerRequestId: null, providerModelId: null, retryAfterMs: null })
+        ? Object.freeze({
+            outcome: "uncertain",
+            rawStopReason: null,
+            message: null,
+            usage: null,
+            providerRequestId: null,
+            providerModelId: null,
+            retryAfterMs: null,
+          })
         : reply(say("There are five summer products.")),
     );
     const u = await admit(P.A, T3);
@@ -1061,16 +1207,30 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const R4 = d.runId;
     const ref = { leaseId: runRow(R4).lease_id, generation: runRow(R4).generation };
     const input = { role: "user", content: [{ type: "text", text: "Count the winter products" }] };
-    const digest = sha(JSON.stringify({ content: [{ text: "Count the winter products", type: "text" }], role: "user" }));
+    const digest = sha(
+      JSON.stringify({
+        content: [{ text: "Count the winter products", type: "text" }],
+        role: "user",
+      }),
+    );
     const opened = await lease(ref, async (step) => {
       await step.loop.start();
-      return step.loop.turnOpen({ turn: 1, attempt: 1, inputCanonical: JSON.stringify(input), inputDigest: digest, untrusted: false, readTagsCanonical: "[]" });
+      return step.loop.turnOpen({
+        turn: 1,
+        attempt: 1,
+        inputCanonical: JSON.stringify(input),
+        inputDigest: digest,
+        untrusted: false,
+        readTagsCanonical: "[]",
+      });
     });
     const begun = db.rows(
       `SELECT outcome,call_id FROM morrow_vault.agent_turn_begin(${literal(ref.leaseId)},'1','1','1','1','false','200000','',${literal(digest)})`,
       { user: "morrow_vault_broker" },
     )[0];
-    replica(`UPDATE morrow_work.agent_model_calls SET started_at=started_at-interval '10 minutes' WHERE id=${literal(begun?.call_id ?? randomUUID())};`);
+    replica(
+      `UPDATE morrow_work.agent_model_calls SET started_at=started_at-interval '10 minutes' WHERE id=${literal(begun?.call_id ?? randomUUID())};`,
+    );
     const settled = await lease(ref, (step) => step.loop.turnSettle(1, 1));
     const lateClose = db.rows(
       `SELECT outcome,recorded_outcome FROM morrow_vault.agent_turn_end(${literal(begun?.call_id ?? randomUUID())},'end_turn',NULL,NULL,'claude-haiku-5-5','10','10','0','0','10',${literal(JSON.stringify(say("Forged success.")))},${literal("e".repeat(64))})`,
@@ -1122,7 +1282,14 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const T6 = await taskOf(P.A, "Read everything at once");
     const huge = usage({ inputTokens: 1_000_000, outputTokens: 1_000_000 });
     scripts.set("Read everything at once", () =>
-      reply(say(null, ["tu_all", "products.read", { productIds: null, titleContains: null, limit: 25 }]), { usage: huge }),
+      reply(
+        say(null, [
+          "tu_all",
+          "products.read",
+          { productIds: null, titleContains: null, limit: 25 },
+        ]),
+        { usage: huge },
+      ),
     );
     const o = await admit(P.A, T6);
     const R6 = o.runId;
@@ -1134,7 +1301,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       "C1:usage_past_the_hold_is_overflow_never_dropped_and_no_next_turn_starts",
       r6.status === "failed" &&
         r6.reason === "cost_budget" &&
-        JSON.stringify(names) === JSON.stringify(["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]) &&
+        JSON.stringify(names) ===
+          JSON.stringify(["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]) &&
         provider.sends.length === before + 1 &&
         row.booked === row.hold &&
         parse8(row.booked) + parse8(row.overflow) === cost &&
@@ -1149,7 +1317,13 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   {
     const T7 = await taskOf(P.A, "Read the products then stop");
     scripts.set("Read the products then stop", (resolved, turn) =>
-      reply(say(null, ["tu_s" + turn, "products.read", { productIds: null, titleContains: null, limit: 3 }])),
+      reply(
+        say(null, [
+          "tu_s" + turn,
+          "products.read",
+          { productIds: null, titleContains: null, limit: 3 },
+        ]),
+      ),
     );
     const s = await admit(P.A, T7);
     const R7 = s.runId;
@@ -1180,7 +1354,9 @@ COMMIT;`);
         refused.outcome === "stopped" &&
         after.status === "cancelled" &&
         after.ended_reason === "stopped" &&
-        count(`SELECT count(*) FROM morrow_work.work_envelopes WHERE id=${literal(after.envelope)} AND revoked_at IS NOT NULL`) === 1,
+        count(
+          `SELECT count(*) FROM morrow_work.work_envelopes WHERE id=${literal(after.envelope)} AND revoked_at IS NOT NULL`,
+        ) === 1,
       { stop: stop?.status, result, before: before.status, refused: refused.outcome, after },
     );
   }
@@ -1196,8 +1372,14 @@ COMMIT;`);
         denied("SELECT count(*) FROM morrow_work.agent_runs;", "morrow_api_worker") &&
         denied("SELECT * FROM morrow_work.agent_run_start();", "morrow_api_worker") &&
         denied("SELECT * FROM morrow_work.agent_run_conversation();", "morrow_vault_broker") &&
-        denied(`SELECT * FROM morrow_vault.agent_turn_begin('${randomUUID()}','1','1','1','1','false','200000','','${"a".repeat(64)}');`, "morrow_runtime_executor") &&
-        denied("SELECT * FROM morrow_work.cmd_agent_run_answer('a','b','c','d','e');", "morrow_runtime_executor"),
+        denied(
+          `SELECT * FROM morrow_vault.agent_turn_begin('${randomUUID()}','1','1','1','1','false','200000','','${"a".repeat(64)}');`,
+          "morrow_runtime_executor",
+        ) &&
+        denied(
+          "SELECT * FROM morrow_work.cmd_agent_run_answer('a','b','c','d','e');",
+          "morrow_runtime_executor",
+        ),
     );
     const asApi = (p, select) =>
       db.tryRun(
@@ -1226,7 +1408,10 @@ COMMIT;`);
     check(
       "T3:forged_settings_and_another_tenant_reach_nothing",
       forged.ok &&
-        forged.stdout.split("\n").slice(-2).every((x) => x === "0") &&
+        forged.stdout
+          .split("\n")
+          .slice(-2)
+          .every((x) => x === "0") &&
         other === null &&
         ended === null,
       { forged: forged.stdout, other, ended },
@@ -1243,26 +1428,59 @@ COMMIT;`);
   // ---------------------------------------------------------------------------
   phase("leaks");
   {
-    const secrets = [productText.slice(0, 20), questionText, answerText, replyText, "Read the summer", "Retitle", "reasoning", "Reading the products"];
+    const secrets = [
+      productText.slice(0, 20),
+      questionText,
+      answerText,
+      replyText,
+      "Read the summer",
+      "Retitle",
+      "reasoning",
+      "Reading the products",
+    ];
     const steps = JSON.stringify(stepResults);
     const events = db
-      .rows("SELECT payload::text AS payload FROM morrow_work.outbox_events WHERE correlation_id::text LIKE 'lab-%'")
+      .rows(
+        "SELECT payload::text AS payload FROM morrow_work.outbox_events WHERE correlation_id::text LIKE 'lab-%'",
+      )
       .map((e) => e.payload)
       .join("\n");
-    const commands = db.rows("SELECT result::text AS result FROM morrow_work.commands WHERE command_type IN ('run.admit','question.answer')").map((c) => c.result).join("\n");
+    const commands = db
+      .rows(
+        "SELECT result::text AS result FROM morrow_work.commands WHERE command_type IN ('run.admit','question.answer')",
+      )
+      .map((c) => c.result)
+      .join("\n");
     const lines = brokerLines.join("\n");
     check(
       "L1:no_content_in_step_results_events_commands_or_broker_lines",
       stepResults.length > 20 &&
-        secrets.every((s) => !steps.includes(s) && !events.includes(s) && !commands.includes(s) && !lines.includes(s)) &&
+        secrets.every(
+          (s) =>
+            !steps.includes(s) &&
+            !events.includes(s) &&
+            !commands.includes(s) &&
+            !lines.includes(s),
+        ) &&
         !lines.includes(fakeKey) &&
         !lines.includes("req_lab_"),
-      { leaked: secrets.filter((s) => steps.includes(s) || events.includes(s) || commands.includes(s) || lines.includes(s)) },
+      {
+        leaked: secrets.filter(
+          (s) =>
+            steps.includes(s) || events.includes(s) || commands.includes(s) || lines.includes(s),
+        ),
+      },
     );
     check(
       "L2:every_send_was_the_fake_model_and_the_provider_ids_stay_in_the_fence",
-      provider.sends.length === count("SELECT count(*) FROM morrow_work.agent_model_calls WHERE outcome NOT IN ('not_sent','input_over_cap') AND counted") - 1 &&
-        count("SELECT count(*) FROM morrow_work.agent_model_calls WHERE provider_request_id LIKE 'req_lab_%'") > 0,
+      provider.sends.length ===
+        count(
+          "SELECT count(*) FROM morrow_work.agent_model_calls WHERE outcome NOT IN ('not_sent','input_over_cap') AND counted",
+        ) -
+          1 &&
+        count(
+          "SELECT count(*) FROM morrow_work.agent_model_calls WHERE provider_request_id LIKE 'req_lab_%'",
+        ) > 0,
       { sends: provider.sends.length, retries },
     );
   }

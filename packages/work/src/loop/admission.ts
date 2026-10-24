@@ -115,9 +115,7 @@ export interface RoutedManifestInput {
  * contract: ids, digests, codes, caps and the hold only (no content). Refused: an entry the
  * catalogue lacks (entry_not_offered), caps below one turn (cap_below_turn), no tool.
  */
-export function routedManifest(
-  input: RoutedManifestInput,
-):
+export function routedManifest(input: RoutedManifestInput):
   | {
       readonly ok: true;
       readonly manifest: Current_AgentRunManifest;
@@ -261,10 +259,7 @@ export type RoutedAdmission =
       readonly holdUsd: string;
     }
   | {
-      readonly outcome:
-        | "switch_off"
-        | "no_tools"
-        | (typeof admitRefusals)[number];
+      readonly outcome: "switch_off" | "no_tools" | (typeof admitRefusals)[number];
     };
 /**
  * A person's routed run of one installed agent (ADR-0027 items 1, 6 and 12), inside the
@@ -282,7 +277,9 @@ export async function admitRoutedRun(
   if (agentLoop !== "on") return Object.freeze({ outcome: "switch_off" as const });
   const built = routedManifest(input);
   if (!built.ok)
-    return Object.freeze({ outcome: built.code === "no_tools" ? ("no_tools" as const) : built.code });
+    return Object.freeze({
+      outcome: built.code === "no_tools" ? ("no_tools" as const) : built.code,
+    });
   tx.markSubmitted();
   const rows = await tx.run("cmdAgentRunAdmit", [
     input.commandId,
@@ -399,7 +396,11 @@ export async function answerRunQuestion(
   } catch {
     throw new WorkSqlUnavailable();
   }
-  if (result.questionId !== input.questionId || typeof result.runId !== "string" || result.status !== "queued")
+  if (
+    result.questionId !== input.questionId ||
+    typeof result.runId !== "string" ||
+    result.status !== "queued"
+  )
     throw new WorkSqlUnavailable();
   return Object.freeze({ outcome: "applied" as const, runId: result.runId });
 }

@@ -6,6 +6,5 @@
 export const loopStatements = Object.freeze({
   cmdAgentRunAdmit:
     "SELECT outcome,result FROM morrow_work.cmd_agent_run_admit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
-  cmdAgentRunAnswer:
-    "SELECT outcome,result FROM morrow_work.cmd_agent_run_answer($1,$2,$3,$4,$5)",
+  cmdAgentRunAnswer: "SELECT outcome,result FROM morrow_work.cmd_agent_run_answer($1,$2,$3,$4,$5)",
 } as const);

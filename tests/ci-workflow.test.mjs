@@ -1040,6 +1040,19 @@ test("the staging runner lab is in pg-http and runs once in CI, on the http leg"
   assert.ok(ci.jobs.foundation.needs.includes("postgres"));
 });
 
+// Build order PR 11: the agent loop lab (PostgreSQL 17, the runner, the broker's turn gateway
+// and a fake model) runs once in CI, last in pg-http, on the http leg.
+test("the agent loop lab is the last of pg-http and runs once in CI, on the http leg", () => {
+  const holding = Object.entries(scripts)
+    .filter(([name]) => name.startsWith("lab:group:"))
+    .filter(([, text]) => rootScriptsRun(text).includes("lab:agent-loop"))
+    .map(([name]) => name);
+  assert.deepEqual(holding, ["lab:group:pg-http"]);
+  assert.equal(rootScriptsRun(scripts["lab:group:pg-http"]).at(-1), "lab:agent-loop");
+  assert.equal(scripts["lab:agent-loop"], "node --import tsx scripts/agent-loop-lab.mjs");
+  assert.equal(scriptsReachedByCi().get("lab:agent-loop"), 1);
+});
+
 // ADR-0014, amendment of 2026-10-22: ci.yml alone may run on the owner's Mac runner, chosen
 // by the repository variable MORROW_CI_RUNS_ON (unset: GitHub-hosted ubuntu-24.04). It names
 // no secret and no environment, so GitHub sends that runner no secret; the staging deploy, the
