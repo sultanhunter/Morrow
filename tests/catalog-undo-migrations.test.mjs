@@ -9,7 +9,12 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { migrationSqlViolations } from "../scripts/migration-sql.mjs";
-import { executorLogins, vaultFunctions, workFunctions, workTables } from "./tenant-conformance/registry.mjs";
+import {
+  executorLogins,
+  vaultFunctions,
+  workFunctions,
+  workTables,
+} from "./tenant-conformance/registry.mjs";
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 const code = (text) => text.replace(/--.*$/gm, "");
@@ -58,10 +63,19 @@ test("both tables: tenant keys, ENABLE and FORCE RLS, append-only, never updated
     assert.ok(workTables[t], t);
     assert.equal(workTables[t].content, "none", t);
   }
-  assert.match(sql, /FOREACH t IN ARRAY ARRAY\['operation_undo_checks','catalog_undos'\] LOOP\n {2}EXECUTE format\('ALTER TABLE morrow_work\.%I ENABLE ROW LEVEL SECURITY',t\);\n {2}EXECUTE format\('ALTER TABLE morrow_work\.%I FORCE ROW LEVEL SECURITY',t\);/);
+  assert.match(
+    sql,
+    /FOREACH t IN ARRAY ARRAY\['operation_undo_checks','catalog_undos'\] LOOP\n {2}EXECUTE format\('ALTER TABLE morrow_work\.%I ENABLE ROW LEVEL SECURITY',t\);\n {2}EXECUTE format\('ALTER TABLE morrow_work\.%I FORCE ROW LEVEL SECURITY',t\);/,
+  );
   assert.match(sql, /CREATE TRIGGER append_only BEFORE UPDATE OR DELETE/);
-  assert.match(sql, /GRANT SELECT,INSERT ON morrow_work\.operation_undo_checks,morrow_work\.catalog_undos TO morrow_work_command;/);
-  assert.doesNotMatch(sql, /GRANT[^;]*\b(?:UPDATE|DELETE|TRUNCATE)\b[^;]*ON morrow_work\.(?:operation_undo_checks|catalog_undos)/);
+  assert.match(
+    sql,
+    /GRANT SELECT,INSERT ON morrow_work\.operation_undo_checks,morrow_work\.catalog_undos TO morrow_work_command;/,
+  );
+  assert.doesNotMatch(
+    sql,
+    /GRANT[^;]*\b(?:UPDATE|DELETE|TRUNCATE)\b[^;]*ON morrow_work\.(?:operation_undo_checks|catalog_undos)/,
+  );
   // The only new product_snapshots policy is the broker's INSERT of its own setting's product.
   assert.match(
     sql,
@@ -70,22 +84,49 @@ test("both tables: tenant keys, ENABLE and FORCE RLS, append-only, never updated
 });
 
 test("every function: an explicit ACL, owned by the command role, in the registry", () => {
-  const revoke = /REVOKE ALL ON FUNCTION ([^;]+) FROM PUBLIC;/.exec(sql)[1];
+  // Every REVOKE ... FROM PUBLIC in the file (the CHECK helper's first, then the definers').
+  const revoke = [...sql.matchAll(/REVOKE ALL ON FUNCTION ([^;]+) FROM PUBLIC;/g)]
+    .map((m) => m[1])
+    .join(",");
+  assert.match(revoke, /morrow_work\.undo_verdicts_valid\(jsonb\)/);
+  assert.match(
+    sql,
+    /GRANT EXECUTE ON FUNCTION morrow_work\.undo_verdicts_valid\(jsonb\) TO morrow_work_command;/,
+  );
+  assert.deepEqual(workFunctions["undo_verdicts_valid(jsonb)"], {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  });
   for (const [signature, grantees] of Object.entries(functions)) {
     assert.ok(revoke.includes(signature), signature);
-    assert.match(sql, new RegExp(`ALTER FUNCTION ${signature.replace(/[.()[\]]/g, "\\$&")} OWNER TO morrow_work_command;`), signature);
+    assert.match(
+      sql,
+      new RegExp(
+        `ALTER FUNCTION ${signature.replace(/[.()[\]]/g, "\\$&")} OWNER TO morrow_work_command;`,
+      ),
+      signature,
+    );
     const [schema, name] = signature.split(".");
     const registry = schema === "morrow_vault" ? vaultFunctions : workFunctions;
     assert.deepEqual(registry[name]?.grantees, grantees, signature);
   }
   // The api reaches only its three; the broker's login only its two, each guarded.
-  assert.match(sql, /GRANT EXECUTE ON FUNCTION morrow_vault\.catalog_undo_resolve\(text\),morrow_vault\.catalog_undo_record\(text,text,text,text,text\)\n TO morrow_vault_broker;/);
+  assert.match(
+    sql,
+    /GRANT EXECUTE ON FUNCTION morrow_vault\.catalog_undo_resolve\(text\),morrow_vault\.catalog_undo_record\(text,text,text,text,text\)\n TO morrow_vault_broker;/,
+  );
   for (const name of ["catalog_undo_resolve", "catalog_undo_record"]) {
     const start = sql.indexOf("CREATE FUNCTION morrow_vault." + name + "(");
     const end = sql.indexOf("END $$;", start);
     assert.match(sql.slice(start, end), /SECURITY DEFINER/);
-    assert.match(sql.slice(start, end), /IF NOT morrow_identity\.work_executor_safe\('morrow_vault_broker'\) THEN v_outcome:='denied'/);
-    assert.ok(executorLogins.morrow_vault_broker.some((f) => f.includes(name)), name);
+    assert.match(
+      sql.slice(start, end),
+      /IF NOT morrow_identity\.work_executor_safe\('morrow_vault_broker'\) THEN v_outcome:='denied'/,
+    );
+    assert.ok(
+      executorLogins.morrow_vault_broker.some((f) => f.includes(name)),
+      name,
+    );
   }
   // Tenant and actor come only from the session (the prelude and current_tenant()).
   for (const name of ["catalog_undo_states", "catalog_undo_source", "cmd_catalog_undo"]) {
