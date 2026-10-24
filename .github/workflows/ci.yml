@@ -172,11 +172,13 @@ jobs:
   # Each leg runs its lab groups one lab at a time. pg-core and pg-http shared one
   # `core-http` leg until pg-core gained the approval-records and createrole labs; that
   # leg then ran 11 to 15 minutes against its 14-minute cap, so each now has its own leg.
+  # The v1 labs (disconnect, runtime, catalog apply) took work and linking to 13-14
+  # minutes, so legs were cancelled with nothing failing; the cap is now 20 (2026-10-24).
   postgres:
     needs: scope
     if: needs.scope.outputs.full == 'true'
     runs-on: ${{ fromJSON(vars.MORROW_CI_RUNS_ON || '"ubuntu-24.04"') }}
-    timeout-minutes: 14
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
