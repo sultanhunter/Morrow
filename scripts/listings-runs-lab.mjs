@@ -779,7 +779,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       poor.status === 409 && poor.body.code === "budget_exhausted" && footprint() === before2,
       poor.body,
     );
-    // A member above the default ceiling (1 credit per product): Sonnet medium costs 2.
+    // A member above the default ceiling (4 credits per product since catalogue version 3,
+    // ADR-0036; 1 at version 1): Opus high costs 6.
     const memberGoal = await work(P.A1, "/goals", {
       objective: "Member's listings",
       storeIds: [],
@@ -792,7 +793,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const above = await admit(
       P.A1,
       memberTask,
-      admitBody(["product:1"], { selection: { model: "claude_sonnet_5_5", effort: "medium" } }),
+      admitBody(["product:1"], { selection: { model: "claude_opus_5_5", effort: "high" } }),
     );
     check(
       "B3:member_above_ceiling_403",
@@ -1039,10 +1040,15 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     check(
       "M4:both_member_runs_draft_and_settle",
       ended.every((r) => r.kind === "ended" && r.status === "succeeded") &&
-        credit(defaulted.body.runId)?.settled === 1 &&
+        credit(defaulted.body.runId)?.settled === 4 &&
         credit(opus.body.runId)?.settled === 6 &&
         oracle.requests.some((r) => r.model === "claude-opus-5-5"),
       { ended },
+    );
+    // The default now costs 4 credits, not version 1's 1: the 3 more are returned to W's
+    // 300-credit wallet (sim), so the later phases keep the budget they were written for.
+    replica(
+      `UPDATE morrow_billing.credit_wallets SET available=available+3 WHERE billing_account_id=${literal(account)};`,
     );
   }
 
@@ -1203,6 +1209,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     // and admission still admits; the ledger is restored after. The run limit, the daily cap
     // and the breaker still stop runs (K1, C1 and lab:run-credits C4).
     const ids = [product(91), product(92)];
+    const walletBefore = wallet();
     const admitted = await admit(P.A, T, admitBody(ids));
     const runId = admitted.body.runId;
     const saved = one(
@@ -1231,6 +1238,13 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         nextResult.status === "succeeded",
       { result, run: runRow(runId), next: next.body, nextResult },
     );
+    // The cap stopped these runs before ADR-0036, so they spent no credits; the 3 they now
+    // spend are returned to W's wallet (sim), so the later phases keep their budget.
+    const spent = walletBefore.available - wallet().available;
+    if (spent > 0)
+      replica(
+        `UPDATE morrow_billing.credit_wallets SET available=available+${spent} WHERE billing_account_id=${literal(account)};`,
+      );
   }
 
   // ---------------------------------------------------------------------------
@@ -1917,7 +1931,13 @@ COMMIT;`,
   const noFlags = { newUrls: 0, newEmails: 0, newPhones: 0, tagsAdded: 0, tagsRemoved: 0 };
   async function prepared(storeId, n, through) {
     const id = product(n);
-    const runId = (await admit(P.A, T, admitBody([id], { storeId }))).body.runId;
+    const admitted = await admit(P.A, T, admitBody([id], { storeId }));
+    // A refused admission names its refusal here, not as a missing lease further on.
+    if (!admitted.body.runId)
+      throw new Error(
+        `prepared ${storeId} ${n}: ${admitted.status} ${JSON.stringify(admitted.body)}`,
+      );
+    const runId = admitted.body.runId;
     const ref = leaseOf(runId);
     const canonical = snapshotCanonical(catalog.get(id));
     const steps = await ports.lease(ref, async (step) => {
