@@ -110,6 +110,7 @@ function NeedsYouCard({
   readonly connections: ReadState<ConnectionsView>;
 }) {
   const count = inbox.kind === "ok" ? openItems(inbox.value).length : 0;
+  const label = inbox.kind === "ok" ? inboxCountLabel(inbox.value) : "0";
   const shown = inbox.kind === "ok" ? needsYouItems(inbox.value) : [];
   // A section the server didn't answer for this person: never "nothing waits".
   const denied = inbox.kind === "ok" && !inboxComplete(inbox.value);
@@ -119,7 +120,7 @@ function NeedsYouCard({
         <h2 id="home-needs-title">{copy.home.needsTitle}</h2>
         {count > 0 ? (
           <RouteLink route="inbox" params={{ workspaceId: ws }} className="card-link">
-            {copy.home.seeAllInbox(inboxCountLabel(inbox.value))}
+            {copy.home.seeAllInbox(label)}
           </RouteLink>
         ) : null}
       </div>
