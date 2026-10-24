@@ -3498,7 +3498,7 @@
       ],
       "required_scopes": [],
       "sources": [],
-      "readback": "The runtime operation's ledger row (morrow_vault.runtime_operations: sending before any create, then killed, absent_verified, not_created or unknown_effect) and the worst-case sandbox_compute booking on the run's vendor reservation; outputs are content-checked PNG, CSV and XLSX downloads.",
+      "readback": "The runtime operation's ledger row (morrow_work.runtime_operations, written only through the broker's morrow_vault definers: sending before any create, then killed, absent_verified, not_created or unknown_effect) and the worst-case sandbox_compute booking on the run's vendor reservation; outputs are content-checked PNG, CSV and XLSX downloads.",
       "restriction": "Broker-only E2B_API_KEY, hand-written fetch with no SDK (build order PR 8); the runtime switch (docs/decisions/runtime-staging.json) is committed off, no adapter or template is composed and nothing is qualified, so no sandbox is created. No internet, credential, Morrow or provider URL, shop domain or customer field ever enters a sandbox.",
       "remaining_gap": "The E2B adapter and template recipe (PR 8) and the recorded qualification (PR 9) before the switch goes on.",
       "version": "contracts:v1",
