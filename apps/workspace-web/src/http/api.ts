@@ -182,14 +182,17 @@ const refOf = (value: RecordRefView, kind: "proposal" | "approval") =>
       }
     : null;
 const operationIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
-// PR 20: a knowledge page's typed text (the server's KnowledgeTitle and KnowledgeText) and its
-// one optional note, sent as the version's only source.
+// PR 20: a knowledge page's typed text (the server's KnowledgeTitle and KnowledgeText, counted
+// in characters as the server and the form count them, never a NUL) and its one optional note,
+// sent as the version's only source.
+const typed = (value: unknown, max: number) =>
+  typeof value === "string" &&
+  /\S/.test(value) &&
+  !value.includes("\0") &&
+  value.length <= 2 * max &&
+  [...value].length <= max;
 const knowledgeContent = (b: KnowledgeContent) =>
-  text(b.title, 120) &&
-  /\S/.test(b.title) &&
-  text(b.text, 8000) &&
-  /\S/.test(b.text) &&
-  (b.note === "" || (text(b.note, 200) && /\S/.test(b.note)));
+  typed(b.title, 120) && typed(b.text, 8000) && (b.note === "" || typed(b.note, 200));
 const noteSources = (note: string) => (note === "" ? [] : [{ kind: "note", value: note }]);
 
 /** Every request this adapter can send; `null` means refused before sending. */

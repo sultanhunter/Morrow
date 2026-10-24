@@ -291,6 +291,10 @@ test("knowledge.propose's checks in code: grants nothing, server-held tags and t
     proposeInput({ text: "" }),
     proposeInput({ kind: "customer" }),
     proposeInput({ sources: [{ kind: "product", value: "4242" }] }),
+    // PostgreSQL text holds no NUL: refused in code, never sent to a definer.
+    proposeInput({ title: "Ret\u0000urns" }),
+    proposeInput({ text: "Thirty\u0000days." }),
+    proposeInput({ sources: [{ kind: "note", value: "a\u0000b" }] }),
     proposeInput({ readTags: [] }),
     proposeInput({ storeId: STORE }),
     { ...proposeInput(), pageId: undefined },
@@ -322,6 +326,7 @@ test("notebook.write's checks in code: its own notebook, never customer data", (
   for (const input of [
     { text: "" },
     { text: "x".repeat(2001) },
+    { text: "a\u0000b" },
     { text: "x", installationId: "i" },
   ])
     assert.deepEqual(decideNotebookWrite(input, run()), {
@@ -385,6 +390,15 @@ test("closed bodies: no tag, author, tenant or version the server assigns", () =
   assert.equal(parsePageCreateBody({ kind: "customer", ...content }), null);
   assert.equal(parsePageCreateBody({ kind: "policy", ...content, readTags: [] }), null);
   assert.equal(parsePageCreateBody({ kind: "policy", ...content, workspaceId: "ws" }), null);
+  // A NUL never reaches a definer (PostgreSQL text cannot hold one): 400, not an unknown outcome.
+  for (const over of [
+    { title: "Ret\u0000urns" },
+    { text: "Thirty\u0000days." },
+    { sources: [{ kind: "note", value: "a\u0000b" }] },
+  ]) {
+    assert.equal(parsePageCreateBody({ kind: "policy", ...content, ...over }), null);
+    assert.equal(parseVersionBody({ expectedVersion: 2, ...content, ...over }), null);
+  }
   assert.deepEqual(parseVersionBody({ expectedVersion: 2, ...content }), {
     expectedVersion: 2,
     ...content,

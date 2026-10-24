@@ -1,6 +1,6 @@
 import type { Current_KnowledgePageKind, Current_KnowledgeSource } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
-import { isKnowledgeKind, sourcesValid } from "@morrow/policy/knowledge";
+import { isKnowledgeKind, sourcesValid, storableText } from "@morrow/policy/knowledge";
 
 // Closed request bodies of the knowledge and notebook routes (PR 20). Each parser returns a
 // fresh plain object or null. Tenant, workspace, actor, grant, role, read tags, author and
@@ -27,6 +27,8 @@ function content(r: Record<string, unknown>): Content | null {
   if (
     !validateCurrentDefinition("KnowledgeTitle", r.title) ||
     !validateCurrentDefinition("KnowledgeText", r.text) ||
+    !storableText(r.title as string) ||
+    !storableText(r.text as string) ||
     !sourcesValid(r.sources)
   )
     return null;

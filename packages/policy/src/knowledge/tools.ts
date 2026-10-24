@@ -9,7 +9,7 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { checkToolInput, toolEntry, type ToolContext } from "../tool-catalogue";
-import { customerTagged, sourcesValid } from "./rules";
+import { customerTagged, sourcesValid, storableText } from "./rules";
 
 // The two agent tools' code checks (PR 20; ADR-0027 item 2), run by the tool-call step after
 // lease re-entry and replay and before the server-side command. The agent loop (PR 11) owns
@@ -83,7 +83,8 @@ export function decideKnowledgePropose(
   const refusal = common("knowledge.propose", input, run);
   if (refusal) return refusal;
   const i = input as Current_ToolInputKnowledgePropose;
-  if (!sourcesValid(i.sources)) return invalidInput;
+  if (!storableText(i.title) || !storableText(i.text) || !sourcesValid(i.sources))
+    return invalidInput;
   return Object.freeze({
     ok: true as const,
     args: Object.freeze({
@@ -106,6 +107,7 @@ export function decideNotebookWrite(
   const refusal = common("notebook.write", input, run);
   if (refusal) return refusal;
   const i = input as Current_ToolInputNotebookWrite;
+  if (!storableText(i.text)) return invalidInput;
   return Object.freeze({
     ok: true as const,
     args: Object.freeze({ text: i.text, readTags: run.readTags }),

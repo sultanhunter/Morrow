@@ -30,6 +30,15 @@ import {
 } from "../../packages/policy/src/knowledge/index.ts";
 import { storeResource } from "../../packages/policy/src/store-resource.ts";
 import { validateCurrentDefinition } from "../../packages/contracts/src/validation.ts";
+// The SPA's closed decoders (apps/workspace-web), proven here against the server's real replies.
+import {
+  decodeKnowledgeDeleted,
+  decodeKnowledgePage,
+  decodeKnowledgePages,
+  decodeKnowledgeProposals,
+  decodeKnowledgeWritten,
+  decodeSuggestionDecided,
+} from "../../apps/workspace-web/src/http/knowledge-decoders.ts";
 import {
   asCommandRole,
   fixtureGrant,
@@ -291,6 +300,10 @@ test("K2 a person writes pages and versions with sources; one brand voice; revis
   });
   assert.equal(brand.status, 201, JSON.stringify(brand.body));
   assert.equal(brand.body.version, 1);
+  assert.deepEqual(decodeKnowledgeWritten(brand.body, null), {
+    pageId: brand.body.pageId,
+    version: 1,
+  });
   pages.brand = brand.body.pageId;
   const again = await send(open, P.A, "POST", "/knowledge/pages", {
     kind: "brand_voice",
@@ -360,6 +373,10 @@ test("K2 a person writes pages and versions with sources; one brand voice; revis
   assert.equal(replay.status, 200);
   assert.equal(replay.body.replayed, true);
   assert.equal(replay.body.version, 3);
+  assert.deepEqual(decodeKnowledgeWritten(replay.body, pages.policy), {
+    pageId: pages.policy,
+    version: 3,
+  });
   assert.deepEqual(footprint(), before);
   // A Member without workspace.knowledge.approve writes nothing.
   const member = await send(open, P.B, "POST", "/knowledge/pages", {
@@ -398,6 +415,11 @@ test("K3 reads, lists and search cover only what the viewer may see; another ten
   const a = await list(P.A);
   assert.deepEqual(a.pages.map((x) => x.id).sort(), [pages.brand, pages.policy, pages.fact].sort());
   for (const page of a.pages) assert.ok(validateCurrentDefinition("KnowledgePageSummary", page));
+  // The Shop knowledge screen reads exactly this reply: an excerpt per page and what A may do.
+  const screen = decodeKnowledgePages(a);
+  assert.ok(screen, JSON.stringify(a));
+  assert.equal(screen.facts.length, 3);
+  assert.equal(screen.may.write, true);
   const b = await list(P.B);
   assert.deepEqual(b.pages.map((x) => x.id).sort(), [pages.brand, pages.policy].sort());
   assert.deepEqual((await list(P.C)).pages, []);
@@ -419,6 +441,9 @@ test("K3 reads, lists and search cover only what the viewer may see; another ten
     [3, 2, 1],
   );
   assert.equal(JSON.stringify(page.body).includes("readTags"), false);
+  const form = decodeKnowledgePage(page.body, pages.policy);
+  assert.ok(form, JSON.stringify(page.body));
+  assert.equal(form.version, 3);
   const v1 = await send(open, P.A, "GET", `/knowledge/pages/${pages.policy}/versions/1`);
   assert.equal(v1.status, 200);
   assert.match(v1.body.version.text, /receipt/);
@@ -580,6 +605,9 @@ test("K5 an agent proposes through knowledge.propose; it grants nothing and a pe
   assert.equal(a.body.proposals.length, 1);
   assert.ok(validateCurrentDefinition("KnowledgeProposal", a.body.proposals[0]));
   assert.equal(a.body.proposals[0].contextTaint, "untrusted_external");
+  const suggested = decodeKnowledgeProposals(a.body);
+  assert.ok(suggested, JSON.stringify(a.body));
+  assert.equal(suggested[0].untrusted, true);
   assert.deepEqual((await send(open, P.B, "GET", "/knowledge/proposals")).body.proposals, []);
   assert.equal((await send(open, P.B, "GET", "/knowledge/pages")).body.pendingProposals, 0);
   assert.equal((await send(open, P.A, "GET", "/knowledge/pages")).body.pendingProposals, 1);
@@ -606,6 +634,9 @@ test("K5 an agent proposes through knowledge.propose; it grants nothing and a pe
     { pageId: accepted.body.pageId, version: accepted.body.version },
     { pageId: pages.brand, version: 2 },
   );
+  assert.deepEqual(decodeSuggestionDecided(accepted.body, proposals.voice, "accept"), {
+    decision: "accept",
+  });
   const [version] = db.rows(
     `SELECT author_kind,author_principal_id,author_installation_id,accepted_by_principal_id,proposal_id,body FROM morrow_work.knowledge_versions WHERE page_id=${literal(pages.brand)} AND version=2`,
   );
@@ -661,6 +692,9 @@ test("K5 an agent proposes through knowledge.propose; it grants nothing and a pe
     digest: supplier.digest,
   });
   assert.equal(rejected.status, 200);
+  assert.deepEqual(decodeSuggestionDecided(rejected.body, supplier.id, "reject"), {
+    decision: "reject",
+  });
   assert.equal(
     count(
       "knowledge_proposals",
@@ -841,6 +875,7 @@ test("K8 the deletion path: a page's every version, search entry and pending pro
     expectedVersion: version,
   });
   assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+  assert.deepEqual(decodeKnowledgeDeleted(deleted.body, pages.policy), { pageId: pages.policy });
   assert.deepEqual(
     {
       versionsErased: deleted.body.versionsErased,

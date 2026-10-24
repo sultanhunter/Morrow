@@ -2139,7 +2139,7 @@
       "executor": "agent_direct_write",
       "kill_switch": false,
       "irreversible": false,
-      "verification": "An agent writes only its own installation's notebook; entries carry the run's read tags and expire 90 days after the notebook's last write",
+      "verification": "An agent writes only its own installation's notebook; each entry carries the run's read tags and expires 90 days after its write (ADR-0031 item 1)",
       "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
       "journey": "J01",
       "hosts": [

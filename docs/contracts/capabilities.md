@@ -356,7 +356,7 @@ Input: text: NotebookText. Output: entryId: Id.
 
 Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.notebook.write. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: notebook entry. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
 
-Retention: R02. Verification: An agent writes only its own installation's notebook; entries carry the run's read tags and expire 90 days after the notebook's last write. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+Retention: R02. Verification: An agent writes only its own installation's notebook; each entry carries the run's read tags and expires 90 days after its write (ADR-0031 item 1). Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
 Trace: J01; P10.T02, P13.T02; P01.A01, P10.A02. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 

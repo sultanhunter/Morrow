@@ -330,7 +330,8 @@ function SuggestionActions({
   );
 }
 
-function KnowledgeBody({
+/** The Shop knowledge page's body over one read (exported for the markup tests). */
+export function KnowledgeBody({
   workspaceId,
   view,
   reload,

@@ -44,11 +44,19 @@ export const knowledgeLimits = Object.freeze({
   readTags: 24,
 });
 
+/**
+ * Typed text PostgreSQL can hold: a NUL character never reaches SQL (a text value cannot carry
+ * one, so a definer would fail on it instead of refusing it). The contract's patterns allow it,
+ * so code refuses it at every trust boundary: the routes' bodies and the agent tools' inputs.
+ */
+export const storableText = (value: string): boolean => !value.includes("\u0000");
+
 const productId = /^product:[1-9][0-9]{0,19}$/;
 /** One source's value against its kind: a product id, a Morrow id, or a short note. */
 export function sourceValid(source: unknown): source is Current_KnowledgeSource {
   if (!validateCurrentDefinition("KnowledgeSource", source)) return false;
   const s = source as Current_KnowledgeSource;
+  if (!storableText(s.value)) return false;
   if (s.kind === "product") return productId.test(s.value);
   if (s.kind === "task") return validateDefinition("core", "Id", s.value);
   return true;

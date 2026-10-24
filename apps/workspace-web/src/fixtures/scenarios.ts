@@ -100,6 +100,8 @@ const reads: readonly PortMethod[] = [
   "settings.notifications",
   "settings.activity",
   "library.knowledge",
+  // PR 20.
+  "library.knowledgePage",
   "library.files",
 ];
 const creates: readonly PortMethod[] = [
