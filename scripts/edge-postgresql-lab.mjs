@@ -30,6 +30,7 @@ import {
   workerConfigPath,
 } from "./edge.mjs";
 import { managedWorkspacePostgresqlLab } from "./fixtures/controlled-neon-postgresql.mjs";
+import { loadMigrationChain } from "./migration-chain.mjs";
 import { createControlledNeonTcpService } from "./fixtures/controlled-neon-tcp-bridge.mjs";
 import {
   controlledNeonWireBinding,
@@ -96,12 +97,14 @@ function fixtureAdministratorSql(engineId, sql) {
 // `hook` (P14.T01a) lets the browser lab reuse this setup unchanged: `origin` and
 // `listen` give the api a real HTTPS listener on an ephemeral port, and `journeys`
 // replaces the P04 scenarios; the cleanup and marker checks stay shared. `work`
-// (P14.T01a PR-2) also applies the work role prerequisites and migrations 0014-0015
-// before the seal, so the api's /workspace/:ws/work routes reach PostgreSQL as
-// morrow_api_worker; the engine must then log in that role too.
+// (P14.T01a PR-2) also applies the rest of the verified chain after 0013 (from 0014, with
+// each entry's pinned prerequisites and `executeAs`) before the seal, so the api's
+// /workspace/:ws/work routes reach PostgreSQL as morrow_api_worker on the schema the code
+// reads (PR 18's goal reads need 0046's columns); the engine must then log in that role
+// too.
 export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   const work = hook.work === true;
-  const migrationCount = work ? 15 : 13;
+  const migrationCount = 13;
   const checks = [];
   const cases = [];
   // privateMarkers: never in the report, logs or results. credentialMarkers (a
@@ -126,7 +129,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   );
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
   // The login fixture applies 0001-0013 (0013 is account onboarding); those entries must
-  // be present in order and checksum-verified. Later manifest entries are not applied.
+  // be present in order and checksum-verified. Later entries are applied only with `work`.
   require(manifest.migrations.length >= migrationCount, "MIGRATION_COUNT");
   const appliedManifest = manifest.migrations.slice(0, migrationCount);
   for (const [i, row] of appliedManifest.entries())
@@ -155,16 +158,22 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
     },
     { accountOnboarding: true },
   );
-  // Work (P06.T01a): the reviewed role prerequisites, then 0014 and 0015 with their
-  // manifest `executeAs`, through the same order-checking adapter.
+  // Work (P06.T01a): every later entry of the one verified chain (scripts/migration-chain.mjs:
+  // every migration and pinned prerequisite digest checked before any SQL runs), in order,
+  // each after its pinned prerequisites (0014's work roles, 0019's spine executor roles)
+  // and under its manifest `executeAs`, so the work routes meet the head schema.
+  let chainHead = migrationCount;
   if (work) {
-    engine.sql(readFileSync("infra/work-role-prerequisites.sql", "utf8"), "morrow");
-    for (const [text, sequence] of migrationSql)
-      if (sequence > 13) {
-        require(sequence === appliedMigrations + 1, "MIGRATION_ORDER");
-        engine.sql(text, "morrow");
-        appliedMigrations = sequence;
-      }
+    const later = loadMigrationChain().filter((entry) => entry.sequence > migrationCount);
+    require(later.length > 0 && later[0].sequence === migrationCount + 1, "MIGRATION_COUNT");
+    require(appliedMigrations === migrationCount, "MIGRATION_ORDER");
+    for (const entry of later) {
+      require(entry.sequence > appliedMigrations, "MIGRATION_ORDER");
+      for (const prerequisite of entry.prerequisites) engine.sql(prerequisite.text, "morrow");
+      engine.sql("SET ROLE " + entry.executeAs + ";\n" + entry.text, "morrow");
+      appliedMigrations = entry.sequence;
+    }
+    chainHead = later.at(-1).sequence;
   }
   const origin = hook.origin ?? "https://127.0.0.1";
   const configuration = harness.configured({ origin });
@@ -242,7 +251,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   stage = "seal";
   const sealed = await engine.sealSetup();
   if (work) {
-    check("all_fifteen_unchanged_migrations", appliedMigrations === 15);
+    check("whole_verified_chain_applied", appliedMigrations === chainHead);
     check("eight_scram_roles", sealed.scramOfferedRoles === 8);
   } else {
     check("all_thirteen_unchanged_migrations", appliedMigrations === 13);
