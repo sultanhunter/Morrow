@@ -19,7 +19,8 @@ export const knowledgeStatements = Object.freeze({
     "SELECT outcome,result FROM morrow_work.cmd_knowledge_accept($1,$2,$3,$4,$5,$6)",
   cmdKnowledgeReject: "SELECT outcome,result FROM morrow_work.cmd_knowledge_reject($1,$2,$3,$4,$5)",
   cmdKnowledgeDelete: "SELECT outcome,result FROM morrow_work.cmd_knowledge_delete($1,$2,$3,$4,$5)",
-  cmdNotebookClear: "SELECT outcome,result FROM morrow_work.cmd_notebook_clear($1,$2,$3,$4)",
+  // At the notebook revision read before the clearer's per-viewer check (notebookRevision).
+  cmdNotebookClear: "SELECT outcome,result FROM morrow_work.cmd_notebook_clear($1,$2,$3,$4,$5)",
   // Live pages, most recently changed first (at most 500 live pages exist; one more is read as
   // a guard).
   knowledgePages: `SELECT ${pageColumns},left(v.body,280) AS excerpt FROM morrow_work.knowledge_pages p JOIN morrow_work.knowledge_versions v ON v.organization_id=p.organization_id AND v.workspace_id=p.workspace_id AND v.page_id=p.id AND v.version=p.current_version WHERE p.deleted_at IS NULL ORDER BY p.updated_at DESC,p.id::text COLLATE "C" LIMIT 501`,
@@ -37,6 +38,11 @@ export const knowledgeStatements = Object.freeze({
   // An installation of this workspace (tenant_read), if any.
   knowledgeInstallation:
     "SELECT i.id::text AS id,i.status,i.store_id::text AS store_id,i.connection_id::text AS connection_id FROM morrow_work.agent_installations i WHERE i.id=$1::text",
+  // An installation's notebook revision (every entry written bumps it), if it has one. The
+  // clear reads it before the entries, so an entry committed after this read is a
+  // revision_conflict at cmd_notebook_clear's lock, never erased unseen.
+  notebookRevision:
+    "SELECT n.revision::text AS revision FROM morrow_work.agent_notebooks n WHERE n.installation_id=$1::text",
   // An installation's live, unexpired notebook entries, newest first (at most 100 live).
   notebookEntries: `SELECT e.id::text AS id,e.sequence::text AS sequence,e.body,e.read_tags::text AS read_tags,${utc("e.created_at")} AS created_at FROM morrow_work.agent_notebook_entries e WHERE e.installation_id=$1::text AND e.erased_at IS NULL AND e.expires_at>clock_timestamp() ORDER BY e.sequence DESC LIMIT 101`,
 } as const);

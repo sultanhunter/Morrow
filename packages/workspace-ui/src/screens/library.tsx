@@ -1,6 +1,7 @@
 // T7 PR 16: simple Shop knowledge and Files pages. PR 20 (shop knowledge): a person adds,
 // edits and deletes pages (typed text only, never customer details) and accepts or declines
-// agents' suggested notes, each bound to what the person saw (its version or digest). The
+// agents' suggested notes, each bound to what the person saw (its version or digest; a
+// suggestion shows everything its digest covers, the page it changes and its sources too). The
 // HTTP build composes these methods only when the shop-knowledge switch goes on; until then
 // the screen reads its fixtures and nothing is sent. Uploads wait for their deletion path
 // (P09.T05), so "Upload a file" is marked "Coming soon" and nothing is sent.
@@ -14,6 +15,7 @@ import {
   type FilesView,
   type KnowledgeItemView,
   type KnowledgePageKind,
+  type KnowledgeSourceView,
   type KnowledgeView,
 } from "../team-model";
 import { AgentAvatar, PersonAvatar } from "../sunrise/avatars";
@@ -274,6 +276,76 @@ function DeleteDialog({
   );
 }
 
+/** A product source's value is `product:<id>`; the person reads the id. */
+const sourceText = (source: KnowledgeSourceView) =>
+  source.kind === "product" && source.value.startsWith("product:")
+    ? source.value.slice("product:".length)
+    : source.value;
+/** Whether a suggestion can be decided, and accepted, as this person sees it now. */
+function decidable(item: KnowledgeItemView) {
+  const current = item.target?.current ?? null;
+  const hidden = item.target !== null && current === null;
+  const changed = current !== null && current.version !== item.version;
+  return { decide: !hidden, accept: !hidden && !changed };
+}
+
+/**
+ * Everything accepting a suggestion binds that its title and text do not already show: the
+ * page it changes, the version it replaces and what that page says now, and every source the
+ * accepted version keeps (review F2).
+ */
+function SuggestionDetails({ item }: { readonly item: KnowledgeItemView }) {
+  const current = item.target?.current ?? null;
+  return (
+    <>
+      {item.target !== null && current === null ? (
+        <p className="sr-meta sr-with-icon">
+          <SrIcon name="alert" size={16} />
+          {k.targetHidden}
+        </p>
+      ) : null}
+      <dl className="sr-pairs">
+        {current !== null && item.version !== null ? (
+          <>
+            <div>
+              <dt>{k.target}</dt>
+              <dd dir="auto">{k.targetValue(current.title, item.version)}</dd>
+            </div>
+            <div>
+              <dt>{k.targetNow}</dt>
+              <dd className="sr-reading" dir="auto">
+                {current.excerpt}
+              </dd>
+            </div>
+          </>
+        ) : null}
+        <div>
+          <dt>{k.sources}</dt>
+          <dd>
+            {item.sources.length === 0 ? (
+              k.sourcesNone
+            ) : (
+              <ul className="sr-bullets">
+                {item.sources.map((source) => (
+                  <li key={`${source.kind}:${source.value}`} dir="auto">
+                    {k.sourceKinds[source.kind]}: {sourceText(source)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </dd>
+        </div>
+      </dl>
+      {current !== null && current.version !== item.version ? (
+        <p className="sr-meta sr-with-icon">
+          <SrIcon name="alert" size={16} />
+          {k.targetChanged(current.version)}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 /** Accept or decline one suggested note, bound to the digest the person saw. */
 function SuggestionActions({
   workspaceId,
@@ -284,6 +356,7 @@ function SuggestionActions({
   readonly item: KnowledgeItemView;
   readonly onDecided: () => void;
 }) {
+  const allowed = decidable(item);
   const services = useServices();
   const command = useCommand<{ decision: "accept" | "reject"; digest: string }, unknown>({
     marker: { workspaceId, kind: "knowledge" },
@@ -300,14 +373,14 @@ function SuggestionActions({
         <Button
           variant="primary"
           aria-label={k.accept(item.title)}
-          disabled={command.busy || item.digest === null}
+          disabled={command.busy || item.digest === null || !allowed.accept}
           onClick={() => decide("accept")}
         >
           {k.acceptLabel}
         </Button>
         <Button
           aria-label={k.reject(item.title)}
-          disabled={command.busy || item.digest === null}
+          disabled={command.busy || item.digest === null || !allowed.decide}
           onClick={() => decide("reject")}
         >
           {k.rejectLabel}
@@ -335,12 +408,15 @@ export function KnowledgeBody({
   workspaceId,
   view,
   reload,
+  initialKind = "fact",
 }: {
   readonly workspaceId: string;
   readonly view: KnowledgeView;
   readonly reload: () => void;
+  /** The section first shown (the markup tests render the suggestions). */
+  readonly initialKind?: Kind;
 }) {
-  const [kind, setKind] = useState<Kind>("fact");
+  const [kind, setKind] = useState<Kind>(initialKind);
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<KnowledgeItemView | null>(null);
   const items = view.items.filter((i) => i.kind === kind);
@@ -405,6 +481,7 @@ export function KnowledgeBody({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    {kind === "suggested" ? <SuggestionDetails item={item} /> : null}
                     {kind === "suggested" && item.untrusted ? (
                       <p className="sr-meta sr-with-icon">
                         <SrIcon name="alert" size={16} />

@@ -5,6 +5,7 @@
 // principal key, and byte limits are checked before anything is sent.
 import {
   knowledgePageKinds,
+  withKnowledgeTargets,
   type KnowledgeContent,
   type KnowledgePageKind,
 } from "@morrow/workspace-ui";
@@ -844,9 +845,13 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         if (pages.kind !== "ok") return pages;
         const proposals = await read(requests.knowledgeProposals(ws), decodeKnowledgeProposals);
         if (proposals.kind !== "ok") return proposals;
+        // Each suggestion names the page it changes as this person sees it in the same read.
         return {
           kind: "ok" as const,
-          value: { items: [...pages.value.facts, ...proposals.value], may: pages.value.may },
+          value: {
+            items: withKnowledgeTargets([...pages.value.facts, ...proposals.value]),
+            may: pages.value.may,
+          },
           replayed: false,
         };
       }),

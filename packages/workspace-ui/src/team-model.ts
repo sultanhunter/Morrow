@@ -509,6 +509,24 @@ export const knowledgePageKinds = [
   "decision",
 ] as const;
 export type KnowledgePageKind = (typeof knowledgePageKinds)[number];
+/** One source of a suggestion (KnowledgeSource): a product, a task or a short note. */
+export interface KnowledgeSourceView {
+  readonly kind: "product" | "task" | "note";
+  readonly value: string;
+}
+/** The existing page a suggestion changes. */
+export interface KnowledgeTargetView {
+  readonly pageId: Id;
+  /**
+   * That page as this person sees it in the same read (its title, opening and version); null
+   * when it is not among the pages they may see, so they cannot decide the suggestion.
+   */
+  readonly current: {
+    readonly title: string;
+    readonly excerpt: string;
+    readonly version: number;
+  } | null;
+}
 export interface KnowledgeItemView {
   readonly id: Id;
   readonly kind: "fact" | "suggested" | "lesson";
@@ -522,10 +540,36 @@ export interface KnowledgeItemView {
    * the page it changes, or null for a new page. A lesson: null.
    */
   readonly version: number | null;
-  /** A suggestion's digest: accepting or declining binds exactly what the person saw. */
+  /**
+   * A suggestion's digest, over the page it changes, that page's version, its kind, title, text
+   * and sources. The row shows every one of them (`target`, `version`, `pageKind`, `title`,
+   * `text`, `sources`), so accepting or declining binds exactly what the person saw.
+   */
   readonly digest: string | null;
   /** A suggestion written after the agent read product text, mail or other untrusted content. */
   readonly untrusted: boolean;
+  /** A suggestion's sources, each shown: accepting copies them into the new version. [] otherwise. */
+  readonly sources: readonly KnowledgeSourceView[];
+  /** A suggestion that changes an existing page: that page. Null for a new page, a fact or a lesson. */
+  readonly target: KnowledgeTargetView | null;
+}
+/**
+ * Fills each suggestion's target with the page it changes, from the same read's facts (the
+ * pages this person may see; at most 500 exist, all read). A page not among them stays null.
+ */
+export function withKnowledgeTargets(
+  items: readonly KnowledgeItemView[],
+): readonly KnowledgeItemView[] {
+  const pages = new Map(
+    items
+      .filter((i) => i.kind === "fact" && i.version !== null)
+      .map((i) => [i.id, { title: i.title, excerpt: i.text, version: i.version ?? 0 }] as const),
+  );
+  return items.map((i) =>
+    i.kind === "suggested" && i.target !== null
+      ? { ...i, target: { pageId: i.target.pageId, current: pages.get(i.target.pageId) ?? null } }
+      : i,
+  );
 }
 export interface KnowledgeView {
   readonly items: readonly KnowledgeItemView[];

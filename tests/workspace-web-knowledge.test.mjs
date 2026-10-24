@@ -262,6 +262,8 @@ test("the adapter: pages and suggestions read once each and merged; a reply outs
       version: 2,
       digest: null,
       untrusted: false,
+      sources: [],
+      target: null,
     },
     {
       id: PROPOSAL,
@@ -273,6 +275,13 @@ test("the adapter: pages and suggestions read once each and merged; a reply outs
       version: 2,
       digest: DIGEST,
       untrusted: true,
+      // Everything the digest covers: the page it changes (as this person sees it in the same
+      // read) and every source.
+      sources: [{ kind: "product", value: "product:4242" }],
+      target: {
+        pageId: PAGE,
+        current: { title: "Our voice", excerpt: "Warm, plain and short.", version: 2 },
+      },
     },
   ]);
   // A reply naming read tags (they never leave the server) or missing `may` is not read as ok.
@@ -304,11 +313,34 @@ test("decoders: each reply only for the record the path names", () => {
   assert.equal(decodeKnowledgePages(pagesReply).facts.length, 1);
   assert.equal(decodeKnowledgePages({ ...pagesReply, extra: 1 }), null);
   assert.equal(decodeKnowledgeProposals(proposalsReply).length, 1);
+  // The decoder keeps the page a suggestion changes and every source (review F2); the page's
+  // current title and text are joined from the same read's pages by the adapter.
+  const [decoded] = decodeKnowledgeProposals({
+    schemaVersion: 1,
+    proposals: [
+      { ...proposal, sources: [...proposal.sources, { kind: "note", value: "From mail." }] },
+    ],
+  });
+  assert.deepEqual(decoded.target, { pageId: PAGE, current: null });
+  assert.equal(decoded.version, 2);
+  assert.deepEqual(decoded.sources, [
+    { kind: "product", value: "product:4242" },
+    { kind: "note", value: "From mail." },
+  ]);
+  assert.equal(
+    decodeKnowledgeProposals({
+      schemaVersion: 1,
+      proposals: [{ ...proposal, pageId: null, baseVersion: null }],
+    })[0].target,
+    null,
+  );
   for (const bad of [
     { ...proposal, pageId: null },
     { ...proposal, contextTaint: "maybe" },
     { ...proposal, digest: "x" },
     { ...proposal, readTags: [] },
+    { ...proposal, sources: [{ kind: "url", value: "x" }] },
+    { ...proposal, sources: [{ kind: "note", value: "" }] },
   ])
     assert.equal(decodeKnowledgeProposals({ schemaVersion: 1, proposals: [bad] }), null);
   assert.deepEqual(decodeKnowledgePage(pageReply, PAGE), {
@@ -527,7 +559,9 @@ test("the fixture: the Owner writes and deletes, an Admin writes, a member neith
   assert.equal(late.kind, "conflict");
   assert.equal((await owner.library.knowledgePage(ws, pageId)).value.text, "Free all year.");
   // A suggestion is decided on the digest the person saw.
-  const suggestion = (await view(owner)).items.find((i) => i.kind === "suggested");
+  const suggestion = (await view(owner)).items.find(
+    (i) => i.kind === "suggested" && i.target === null,
+  );
   const wrong = await owner.library.decideSuggestion(
     ws,
     suggestion.id,
@@ -542,10 +576,48 @@ test("the fixture: the Owner writes and deletes, an Admin writes, a member neith
   assert.deepEqual(accepted.value, { decision: "accept" });
   const after = await view(owner);
   assert.equal(
-    after.items.some((i) => i.kind === "suggested"),
+    after.items.some((i) => i.id === suggestion.id),
     false,
   );
   assert.ok(after.items.some((i) => i.kind === "fact" && i.title === suggestion.title));
+  // A suggested next version names the page it changes, at the version it replaces; accepted,
+  // it becomes that page's next version.
+  const next = after.items.find((i) => i.kind === "suggested" && i.target !== null);
+  const shipping = after.items.find((i) => i.id === next.target.pageId);
+  assert.deepEqual(next.target.current, {
+    title: shipping.title,
+    excerpt: shipping.text,
+    version: next.version,
+  });
+  assert.ok(next.sources.length > 0);
+  const nextAccepted = await owner.library.decideSuggestion(
+    ws,
+    next.id,
+    command({ decision: "accept", digest: next.digest }),
+  );
+  assert.deepEqual(nextAccepted.value, { decision: "accept" });
+  const shippingPage = (await owner.library.knowledgePage(ws, shipping.id)).value;
+  assert.deepEqual([shippingPage.version, shippingPage.text], [next.version + 1, next.text]);
+  // Once its page has changed, a suggestion for it cannot be accepted (the server says stale).
+  const fresh = createFixtureAdapter("ready");
+  const freshNext = (await view(fresh)).items.find((i) => i.kind === "suggested" && i.target);
+  await fresh.library.editKnowledge(
+    ws,
+    freshNext.target.pageId,
+    command({ title: "Shipping", text: "Changed.", note: "", expectedVersion: freshNext.version }),
+  );
+  const moved = (await view(fresh)).items.find((i) => i.id === freshNext.id);
+  assert.equal(moved.target.current.version, freshNext.version + 1);
+  assert.equal(
+    (
+      await fresh.library.decideSuggestion(
+        ws,
+        freshNext.id,
+        command({ decision: "accept", digest: freshNext.digest }),
+      )
+    ).kind,
+    "conflict",
+  );
   // The deletion path: at the version read, and the page is gone.
   assert.equal(
     (await owner.library.deleteKnowledge(ws, pageId, command({ expectedVersion: 1 }))).kind,
@@ -584,14 +656,19 @@ const markupServices = {
   subscribe: () => () => {},
   version: () => 0,
 };
-const markup = (view) =>
+const markup = (view, initialKind) =>
   renderToStaticMarkup(
     h(
       ServicesProvider,
       { value: markupServices },
-      h(KnowledgeBody, { workspaceId: ws, view, reload() {} }),
+      h(KnowledgeBody, { workspaceId: ws, view, reload() {}, initialKind }),
     ),
   );
+const buttonTag = (html, label) => {
+  const tag = html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`));
+  assert.ok(tag, label);
+  return tag[0];
+};
 
 test("the screen: typed text only, never customer details; only what the server allows", async () => {
   const owner = (await createFixtureAdapter("ready").library.knowledge(ws)).value;
@@ -614,4 +691,56 @@ test("the screen: typed text only, never customer details; only what the server 
   const write = markup(admin);
   assert.ok(write.includes(`aria-label="${k.edit("Brand voice")}"`));
   assert.ok(!write.includes(`aria-label="${k.remove("Brand voice")}"`));
+});
+
+test("the screen: a suggestion shows everything its digest binds, the page it changes and every source (review F2)", async () => {
+  const note = "Customers asked us to say thank you.";
+  const reply = {
+    schemaVersion: 1,
+    proposals: [{ ...proposal, sources: [...proposal.sources, { kind: "note", value: note }] }],
+  };
+  const viewOf = async (pages) => {
+    const { port } = onPort(({ path }) =>
+      path.endsWith("/knowledge/pages") ? json(200, pages) : json(200, reply),
+    );
+    const outcome = await port.library.knowledge(ws);
+    assert.equal(outcome.kind, "ok");
+    return outcome.value;
+  };
+  // An update: the page it changes, the version it replaces and what that page says now, then
+  // every source, the note's text included.
+  const html = markup(await viewOf(pagesReply), "suggested");
+  assert.ok(html.includes(k.target), "the page it changes");
+  assert.ok(html.includes(k.targetValue("Our voice", 2)), "its title and the replaced version");
+  assert.ok(html.includes(k.targetNow));
+  assert.ok(html.includes("Warm, plain and short."), "what the page says now");
+  assert.ok(html.includes("Warm and short. We say thank you."), "what it would say");
+  assert.ok(html.includes(k.sources));
+  assert.ok(html.includes(`${k.sourceKinds.product}: 4242`), "the product source");
+  assert.ok(html.includes(`${k.sourceKinds.note}: ${note}`), "the note source, in full");
+  assert.doesNotMatch(buttonTag(html, k.accept("Our voice")), /disabled/);
+  assert.doesNotMatch(buttonTag(html, k.reject("Our voice")), /disabled/);
+  // The page changed since the suggestion: it says so, and it can only be declined.
+  const moved = markup(
+    await viewOf({ ...pagesReply, pages: [{ ...pagesReply.pages[0], version: 3 }] }),
+    "suggested",
+  );
+  assert.ok(moved.includes(k.targetChanged(3)));
+  assert.match(buttonTag(moved, k.accept("Our voice")), /disabled/);
+  assert.doesNotMatch(buttonTag(moved, k.reject("Our voice")), /disabled/);
+  // A page this person cannot open: it says so, and neither choice is offered.
+  const hidden = markup(await viewOf({ ...pagesReply, pages: [] }), "suggested");
+  assert.ok(hidden.includes(k.targetHidden));
+  assert.ok(!hidden.includes(k.targetNow));
+  assert.match(buttonTag(hidden, k.accept("Our voice")), /disabled/);
+  assert.match(buttonTag(hidden, k.reject("Our voice")), /disabled/);
+  // A new page shows its sources too, and that it is new.
+  const fixture = markup(
+    (await createFixtureAdapter("ready").library.knowledge(ws)).value,
+    "suggested",
+  );
+  assert.ok(fixture.includes(k.newPage));
+  assert.ok(fixture.includes(`${k.sourceKinds.product}: 4242`));
+  assert.ok(fixture.includes(k.targetValue("Shipping", 1)));
+  assert.ok(fixture.includes("Free shipping in the US on orders over $75."));
 });

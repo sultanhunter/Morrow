@@ -97,12 +97,18 @@ export function decodeKnowledgePages(body: unknown): {
       version: p.version,
       digest: null,
       untrusted: false,
+      sources: [],
+      target: null,
     });
   }
   return { facts, may: { write: body.may.write, delete: body.may.delete } };
 }
 
-/** GET /work/knowledge/proposals: pending suggestions the viewer may see. */
+/**
+ * GET /work/knowledge/proposals: pending suggestions the viewer may see, each with everything
+ * its digest covers: the page it changes (filled from the same read's pages by
+ * withKnowledgeTargets), that page's version, the kind, title, text and every source.
+ */
 export function decodeKnowledgeProposals(body: unknown): readonly KnowledgeItemView[] | null {
   if (
     !record(body) ||
@@ -138,13 +144,14 @@ export function decodeKnowledgeProposals(body: unknown): readonly KnowledgeItemV
       !kind(p.kind) ||
       !text(p.title, 120) ||
       !text(p.text, 8000) ||
-      sources(p.sources) === null ||
       !isId(p.installationId) ||
       (p.contextTaint !== "none" && p.contextTaint !== "untrusted_external") ||
       !hex64(p.digest) ||
       !isUtcTime(p.createdAt)
     )
       return null;
+    const s = sources(p.sources);
+    if (s === null) return null;
     out.push({
       id: p.id,
       kind: "suggested",
@@ -155,6 +162,8 @@ export function decodeKnowledgeProposals(body: unknown): readonly KnowledgeItemV
       version: p.baseVersion as number | null,
       digest: p.digest,
       untrusted: p.contextTaint === "untrusted_external",
+      sources: s,
+      target: p.pageId === null ? null : { pageId: p.pageId as string, current: null },
     });
   }
   return out;

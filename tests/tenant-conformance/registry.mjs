@@ -828,7 +828,7 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_work_api"],
     command: "knowledge.delete",
   },
-  "cmd_notebook_clear(text,text,text,text)": {
+  "cmd_notebook_clear(text,text,text,text,text)": {
     kind: "api",
     grantees: ["morrow_work_api"],
     command: "notebook.clear",

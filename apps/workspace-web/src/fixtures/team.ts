@@ -46,6 +46,7 @@ import {
   summaryHours,
   thinkingEfforts,
   thinkingModels,
+  withKnowledgeTargets,
 } from "@morrow/workspace-ui";
 
 export interface TeamFixtureDeps {
@@ -1225,6 +1226,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     version,
     digest: null,
     untrusted: false,
+    sources: [],
+    target: null,
   });
   let items: Item[] = empty
     ? []
@@ -1275,6 +1278,26 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           version: null,
           digest: "f".repeat(64),
           untrusted: true,
+          sources: [
+            { kind: "product", value: "product:4242" },
+            { kind: "note", value: "Three product reviews this week say the shirt runs small." },
+          ],
+          target: null,
+        },
+        // A suggested next version of an existing page: the row names that page, the version
+        // it replaces and what it says now (filled in by withKnowledgeTargets at each read).
+        {
+          id: "k-shipping-next",
+          kind: "suggested",
+          title: "Shipping",
+          text: "Free shipping in the US on orders over $75. Orders leave within 2 business days.",
+          source: "Suggested by Listings · Oct 23",
+          pageKind: "policy",
+          version: 1,
+          digest: "e".repeat(64),
+          untrusted: false,
+          sources: [{ kind: "note", value: "Our shipping page says 2 business days." }],
+          target: { pageId: "k-shipping", current: null },
         },
         {
           id: "k-sizes",
@@ -1286,10 +1309,12 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           version: null,
           digest: null,
           untrusted: false,
+          sources: [],
+          target: null,
         },
       ];
   const notes = new Map<string, string>([["k-voice", "Written by the owner"]]);
-  const knowledgeView = (): KnowledgeView => ({ items: [...items], may });
+  const knowledgeView = (): KnowledgeView => ({ items: withKnowledgeTargets(items), may });
   const pageOf = (id: string) => items.find((i) => i.id === id && i.kind === "fact") ?? null;
   let pageSeq = 0;
   const files: FilesView = {
@@ -1423,10 +1448,32 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           : undefined;
         if (!item) return notFound;
         if (!may.write) return denied("You can’t change shop knowledge.");
+        // The page it changes must still be there; an accept needs it at the suggestion's
+        // version (a page that changed since is stale), as the server decides.
+        const target = item.target ? pageOf(item.target.pageId) : null;
+        if (item.target && !target) return notFound;
         if (item.digest !== c.body.digest)
           return changed("This changed since you opened it. Open it again.");
+        if (c.body.decision === "accept" && target && target.version !== item.version)
+          return changed("This changed since you opened it. Open it again.");
         items = items.filter((i) => i.id !== suggestionId);
-        if (c.body.decision === "accept" && item.pageKind !== null)
+        const note = item.sources.find((x) => x.kind === "note")?.value;
+        if (c.body.decision === "accept" && target && target.version !== null) {
+          const version = target.version + 1;
+          items = items.map((i) =>
+            i.id === target.id
+              ? {
+                  ...i,
+                  title: item.title,
+                  text: item.text,
+                  version,
+                  source: "Accepted from Listings · Oct 23",
+                }
+              : i,
+          );
+          if (note) notes.set(target.id, note);
+          else notes.delete(target.id);
+        } else if (c.body.decision === "accept" && item.pageKind !== null) {
           items = [
             fact(
               item.id + "-page",
@@ -1437,6 +1484,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
             ),
             ...items,
           ];
+          if (note) notes.set(item.id + "-page", note);
+        }
         return ok({ decision: c.body.decision });
       }),
     files: (ws) =>

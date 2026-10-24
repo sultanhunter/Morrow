@@ -10,9 +10,10 @@
 // is out of scope) and only a person accepts or rejects the exact digest (a page that changed
 // since is stale); the accepted brand voice reaches Listings only as one marked data block; an
 // agent's notebook is per installation, per viewer, clocked 90 days, capped at 100 live entries
-// and cleared only by a person who sees every entry; the deletion path erases a page's every
-// version, its search entry and its pending proposals in one transaction and records it, and
-// no runtime role can delete a row. Synthetic fixtures only; no provider, credential or
+// and cleared only by a person who sees every entry, at the notebook revision that check read
+// (an entry a run commits in between is a conflict, never erased unseen); the deletion path
+// erases a page's every version, its search entry and its pending proposals in one transaction
+// and records it, and no runtime role can delete a row. Synthetic fixtures only; no provider, credential or
 // merchant data. Run by `npm run lab:shop-knowledge` (CI's postgres `http` leg, last).
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -40,7 +41,9 @@ import {
   decodeNotebook,
   decodeSuggestionDecided,
 } from "../../apps/workspace-web/src/http/knowledge-decoders.ts";
+import { withKnowledgeTargets } from "../../packages/workspace-ui/src/team-model.ts";
 import {
+  asApi,
   asCommandRole,
   fixtureGrant,
   grantInsert,
@@ -609,6 +612,16 @@ test("K5 an agent proposes through knowledge.propose; it grants nothing and a pe
   const suggested = decodeKnowledgeProposals(a.body);
   assert.ok(suggested, JSON.stringify(a.body));
   assert.equal(suggested[0].untrusted, true);
+  // The screen gets everything the digest covers (review F2): the page it changes, joined from
+  // the same person's pages read, the version it replaces and every source.
+  const pagesOfA = decodeKnowledgePages((await send(open, P.A, "GET", "/knowledge/pages")).body);
+  const [shown] = withKnowledgeTargets([...pagesOfA.facts, ...suggested]).filter(
+    (i) => i.kind === "suggested",
+  );
+  assert.deepEqual(shown.sources, a.body.proposals[0].sources);
+  assert.equal(shown.target.pageId, a.body.proposals[0].pageId);
+  assert.equal(shown.version, a.body.proposals[0].baseVersion);
+  assert.equal(shown.target.current.version, a.body.proposals[0].baseVersion);
   assert.deepEqual((await send(open, P.B, "GET", "/knowledge/proposals")).body.proposals, []);
   assert.equal((await send(open, P.B, "GET", "/knowledge/pages")).body.pendingProposals, 0);
   assert.equal((await send(open, P.A, "GET", "/knowledge/pages")).body.pendingProposals, 1);
@@ -1006,4 +1019,109 @@ test("K9 no runtime role deletes or rewrites knowledge; erased rows stay erased"
     `BEGIN; SET LOCAL ROLE morrow_work_api; UPDATE morrow_work.knowledge_pages SET title='x'; ROLLBACK;`,
     /permission denied/,
   );
+});
+
+test("K10 a clear erases only at the notebook revision its per-viewer check read: an entry written since is never erased unseen", async () => {
+  // Review finding F1: the work API reads the entries and checks each one's tags, then sends
+  // cmd_notebook_clear, all in READ COMMITTED. A run that commits an entry between that read
+  // and the definer's lock must make the clear a conflict, never an erase of an entry the
+  // clearer may not see. A holds no orders.read on the store.
+  const lease = openRunLease("run_k10");
+  const seen = await underLease(lease, (query) =>
+    notebookWriteStep(query, {
+      toolUseId: "toolu_k10_seen",
+      input: { text: "Care labels go on the left side seam." },
+      run: runFacts({ readTags: [] }),
+      viewer: allTags,
+    }),
+  );
+  assert.equal(seen.outcome, "ok");
+  const hiddenTags = [{ storeId: STORE, capability: "orders.read" }];
+  // The run's transaction is open (lease entered) before the request, so its write and commit
+  // land between the API's check and the definer: two round trips on another connection.
+  const run = await db.connector({ user: "morrow_runtime_executor" }).open({
+    signal: new AbortController().signal,
+    deadlineMs: Date.now() + 120000,
+    waitUntil() {},
+  });
+  const signal = new AbortController().signal;
+  const runQuery = async (sql, values = []) => (await run.query(sql, [...values], signal)).rows;
+  let injected = null;
+  try {
+    await runQuery("BEGIN");
+    const [entered] = await runQuery("SELECT outcome FROM morrow_work.enter_lease($1,$2)", [
+      lease.id,
+      lease.generation,
+    ]);
+    assert.equal(entered.outcome, "entered");
+    const racing = {
+      async open(control) {
+        const inner = await connector.open(control);
+        return {
+          async query(sql, values, querySignal) {
+            if (injected === null && sql.includes("morrow_work.cmd_notebook_clear(")) {
+              injected = await notebookWriteStep(runQuery, {
+                toolUseId: "toolu_k10_hidden",
+                input: { text: "Orders from the coast arrive a day late." },
+                run: runFacts({ readTags: hiddenTags }),
+                viewer: allTags,
+              });
+              await runQuery("COMMIT");
+            }
+            return inner.query(sql, values, querySignal);
+          },
+          close: () => inner.close(),
+        };
+      },
+    };
+    const handler = createKnowledgeApiHandler({
+      origin: workFixtureOrigin,
+      connector: racing,
+      now: Date.now,
+      knowledge: "on",
+    });
+    const raced = await send(handler, P.A, "POST", `/agents/${INSTALLATION}/notebook/clear`, {});
+    assert.equal(injected?.outcome, "ok", "the run's entry committed before the definer ran");
+    assert.equal(raced.status, 409, JSON.stringify(raced.body));
+    assert.equal(raced.body.code, "conflict");
+    assert.equal(raced.body.retryClass, "recheck_before_retry");
+  } finally {
+    await runQuery("ROLLBACK").catch(() => {});
+    await run.close();
+  }
+  // Nothing was erased: neither the entry A saw nor the one A may not see.
+  assert.equal(
+    count(
+      "agent_notebook_entries",
+      `erased_at IS NULL AND body IS NOT NULL AND tool_use_id IN ('toolu_k10_seen','toolu_k10_hidden')`,
+    ),
+    2,
+  );
+  assert.equal(count("agent_notebook_entries", `erased_reason='cleared' AND run_id='run_k10'`), 0);
+  // Asked again, the hidden entry is in A's check: refused, and still nothing erased.
+  const again = await send(open, P.A, "POST", `/agents/${INSTALLATION}/notebook/clear`, {});
+  assert.equal(again.status, 403, JSON.stringify(again.body));
+  assert.equal(count("agent_notebook_entries", `erased_at IS NULL AND run_id='run_k10'`), 2);
+  // The definer itself refuses a clear at any other revision, under its lock (the api login,
+  // TypeScript bypassed).
+  const revision = Number(
+    db.sql(
+      `SELECT revision FROM morrow_work.agent_notebooks WHERE installation_id=${literal(INSTALLATION)};`,
+    ),
+  );
+  const direct = (expected) =>
+    db
+      .sql(
+        asApi(
+          P.A,
+          `SELECT outcome FROM morrow_work.cmd_notebook_clear(${literal(randomUUID())},repeat('c',64),'corr-k10',${literal(INSTALLATION)},${literal(String(expected))});`,
+        ),
+        { user: "morrow_api_worker" },
+      )
+      .split("\n")
+      .at(-1);
+  assert.equal(direct(revision - 1), "revision_conflict");
+  assert.equal(direct(revision + 1), "revision_conflict");
+  assert.equal(direct("0"), "invalid");
+  assert.equal(count("agent_notebook_entries", `erased_at IS NULL AND run_id='run_k10'`), 2);
 });

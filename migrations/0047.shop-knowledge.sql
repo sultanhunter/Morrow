@@ -29,9 +29,9 @@ BEGIN;
 --   * The deletion path, before any real content (ADR-0031 item 4; G9): cmd_knowledge_delete
 --     erases the page's title, every version's text and sources, its search entry and its
 --     pending proposals' text in one transaction and records knowledge_deletions;
---     cmd_notebook_clear erases a notebook. No runtime role holds DELETE (S4): an erased row
---     keeps ids, digests and times only. The retention sweep (the owner, under its maintenance
---     lease) removes expired notebook entries.
+--     cmd_notebook_clear erases a notebook, only at the revision the clearer's check read. No
+--     runtime role holds DELETE (S4): an erased row keeps ids, digests and times only. The
+--     retention sweep (the owner, under its maintenance lease) removes expired notebook entries.
 --   * Definers: begin_knowledge_command, cmd_knowledge_write, cmd_knowledge_accept,
 --     cmd_knowledge_reject, cmd_knowledge_delete and cmd_notebook_clear (the api role, under
 --     the P06.T01a prelude, which rechecks authority under lock); run_knowledge_page,
@@ -789,22 +789,29 @@ BEGIN
 END $$;
 
 -- workspace.notebook.write {administer} (a person; agents never hold administer): erase every
--- live entry of an installation's notebook ('cleared').
-CREATE FUNCTION morrow_work.cmd_notebook_clear(p_command_id text,p_request_digest text,p_correlation_id text,p_installation_id text)
+-- live entry of an installation's notebook ('cleared'), at the notebook revision the work API
+-- read before it checked that this person may see every live entry (ADR-0031 item 6). Every
+-- run_notebook_write bumps the revision, so an entry written after that read is a
+-- revision_conflict under this lock, never erased unseen.
+CREATE FUNCTION morrow_work.cmd_notebook_clear(p_command_id text,p_request_digest text,p_correlation_id text,p_installation_id text,
+ p_expected_revision text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE p record; n record; v_at timestamptz; v_erased integer; v_result jsonb;
 BEGIN
  IF p_correlation_id IS NULL OR p_correlation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
-  OR p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN
+  OR p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_expected_revision IS NULL OR p_expected_revision !~ '^[1-9][0-9]{0,15}$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
+ IF p_expected_revision::numeric>9007199254740991 THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
  SELECT * INTO p FROM morrow_work.command_prelude(p_command_id,p_request_digest);
  IF p.outcome<>'ok' THEN RETURN QUERY SELECT p.outcome,NULL::text; RETURN; END IF;
  SELECT x.revision::bigint AS revision INTO n FROM morrow_work.agent_notebooks x
   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.installation_id=p_installation_id FOR UPDATE;
  IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
+ IF n.revision<>p_expected_revision::bigint THEN RETURN QUERY SELECT 'revision_conflict'::text,NULL::text; RETURN; END IF;
  v_at:=morrow_work.db_now();
  UPDATE morrow_work.agent_notebook_entries x SET body=NULL,erased_at=greatest(v_at,x.created_at),erased_reason='cleared'
   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.installation_id=p_installation_id AND x.erased_at IS NULL;
@@ -1016,7 +1023,7 @@ REVOKE ALL ON FUNCTION morrow_work.cmd_knowledge_write(text,text,text,text,text,
 REVOKE ALL ON FUNCTION morrow_work.cmd_knowledge_accept(text,text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.cmd_knowledge_reject(text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.cmd_knowledge_delete(text,text,text,text,text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION morrow_work.cmd_notebook_clear(text,text,text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_work.cmd_notebook_clear(text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.run_knowledge_page(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.run_brand_voice() FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.run_knowledge_search(text) FROM PUBLIC;
@@ -1025,7 +1032,7 @@ REVOKE ALL ON FUNCTION morrow_work.run_notebook_write(text,text,text) FROM PUBLI
 GRANT EXECUTE ON FUNCTION morrow_work.begin_knowledge_command(text,text,text),
  morrow_work.cmd_knowledge_write(text,text,text,text,text,text,text,text,text,text),
  morrow_work.cmd_knowledge_accept(text,text,text,text,text,text),morrow_work.cmd_knowledge_reject(text,text,text,text,text),
- morrow_work.cmd_knowledge_delete(text,text,text,text,text),morrow_work.cmd_notebook_clear(text,text,text,text) TO morrow_work_api;
+ morrow_work.cmd_knowledge_delete(text,text,text,text,text),morrow_work.cmd_notebook_clear(text,text,text,text,text) TO morrow_work_api;
 GRANT EXECUTE ON FUNCTION morrow_work.run_knowledge_page(text),morrow_work.run_brand_voice(),morrow_work.run_knowledge_search(text),
  morrow_work.run_knowledge_propose(text,text,text,text,text,text,text,text),morrow_work.run_notebook_write(text,text,text)
  TO morrow_runtime_executor;
@@ -1035,7 +1042,7 @@ ALTER FUNCTION morrow_work.cmd_knowledge_write(text,text,text,text,text,text,tex
 ALTER FUNCTION morrow_work.cmd_knowledge_accept(text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_knowledge_reject(text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_knowledge_delete(text,text,text,text,text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_work.cmd_notebook_clear(text,text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.cmd_notebook_clear(text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.run_knowledge_page(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.run_brand_voice() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.run_knowledge_search(text) OWNER TO morrow_work_command;

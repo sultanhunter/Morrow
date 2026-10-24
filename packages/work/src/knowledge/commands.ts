@@ -575,6 +575,12 @@ async function notebookClear(
   const installationId = g.params.installationId!;
   await installationOf(tx, installationId);
   // No blind deletion: a person clears only a notebook whose every live entry they may see.
+  // The revision is read first and the definer erases only at it: each statement here reads
+  // what was committed when it ran (READ COMMITTED), so an entry a run commits after this read
+  // bumps the revision and the clear is a revision_conflict, never an unseen entry erased.
+  const revision = one(await tx.run("notebookRevision", [installationId]));
+  if (!revision) throw new WorkReject("not_found");
+  const expectedRevision = String(integer(text(revision, "revision")));
   const entries = await notebookEntryRows(tx, installationId);
   const viewer = await knowledgeViewer(
     tx,
@@ -587,6 +593,7 @@ async function notebookClear(
     prepared.digest,
     correlationId,
     installationId,
+    expectedRevision,
   ]);
   return { status: 200, body: { installationId, cleared: true }, outcome: "applied" };
 }

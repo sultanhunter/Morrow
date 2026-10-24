@@ -634,7 +634,7 @@ test("migration 0047: forward only, FORCE RLS, no customer tag, clocked notebook
     "cmd_knowledge_accept(text,text,text,text,text,text)",
     "cmd_knowledge_reject(text,text,text,text,text)",
     "cmd_knowledge_delete(text,text,text,text,text)",
-    "cmd_notebook_clear(text,text,text,text)",
+    "cmd_notebook_clear(text,text,text,text,text)",
   ])
     assert.deepEqual(workFunctions[signature].grantees, ["morrow_work_api"], signature);
   for (const signature of [
@@ -645,6 +645,44 @@ test("migration 0047: forward only, FORCE RLS, no customer tag, clocked notebook
     "run_notebook_write(text,text,text)",
   ])
     assert.deepEqual(workFunctions[signature].grantees, ["morrow_runtime_executor"], signature);
+});
+
+test("a notebook clear is bound to the revision its per-viewer check read (review F1)", () => {
+  // The definer compares the expected revision under its lock, before it erases anything.
+  const clear = sql.slice(
+    sql.indexOf("CREATE FUNCTION morrow_work.cmd_notebook_clear("),
+    sql.indexOf("END $$;", sql.indexOf("CREATE FUNCTION morrow_work.cmd_notebook_clear(")),
+  );
+  assert.match(clear, /p_installation_id text,\s*p_expected_revision text\)/);
+  assert.match(
+    clear,
+    /p_expected_revision IS NULL OR p_expected_revision !~ '\^\[1-9\]\[0-9\]\{0,15\}\$'/,
+  );
+  const lock = clear.indexOf("FOR UPDATE;");
+  const compare = clear.indexOf(
+    "IF n.revision<>p_expected_revision::bigint THEN RETURN QUERY SELECT 'revision_conflict'",
+  );
+  const erase = clear.indexOf("UPDATE morrow_work.agent_notebook_entries");
+  assert.ok(lock > 0 && compare > lock && erase > compare, "lock, compare, then erase");
+  // Every entry written bumps the revision the clear compares.
+  const write = sql.slice(sql.indexOf("CREATE FUNCTION morrow_work.run_notebook_write("));
+  assert.match(write, /UPDATE morrow_work\.agent_notebooks y SET [^;]*revision=y\.revision\+1/);
+  // The work API sends the revision it read before the entries it checked, as the fifth value.
+  assert.match(
+    workStatements.cmdNotebookClear,
+    /morrow_work\.cmd_notebook_clear\(\$1,\$2,\$3,\$4,\$5\)$/,
+  );
+  assert.match(workStatements.notebookRevision, /FROM morrow_work\.agent_notebooks n WHERE/);
+  const source = readFileSync("packages/work/src/knowledge/commands.ts", "utf8");
+  const body = source.slice(source.indexOf("async function notebookClear("));
+  const revisionRead = body.indexOf('tx.run("notebookRevision"');
+  const entriesRead = body.indexOf("notebookEntryRows(tx, installationId)");
+  const sent = body.indexOf('submit(tx, "cmdNotebookClear"');
+  assert.ok(
+    revisionRead > 0 && entriesRead > revisionRead && sent > entriesRead,
+    "revision, then entries, then the definer",
+  );
+  assert.match(body.slice(sent, body.indexOf("]);", sent)), /installationId,\s*expectedRevision,/);
 });
 
 test("the deletion path is in the one registry, before any real content (ADR-0031 item 4)", () => {

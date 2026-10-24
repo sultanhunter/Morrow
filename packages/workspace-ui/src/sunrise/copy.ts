@@ -656,6 +656,17 @@ export const sunriseCopy = {
     changed: "This changed since you opened it. Open it again.",
     version: (n: number) => `Version ${n}`,
     newPage: "New page",
+    // A suggestion shows everything accepting it binds: the page it changes, that page's
+    // version, and every source.
+    target: "Changes the page",
+    targetValue: (title: string, n: number) => `“${title}”, version ${n}`,
+    targetNow: "It says now",
+    targetHidden: "It changes a page you can’t open, so you can’t decide it.",
+    targetChanged: (n: number) =>
+      `That page changed after this was suggested (it’s now version ${n}), so it can only be declined.`,
+    sources: "Where this came from",
+    sourcesNone: "No sources given.",
+    sourceKinds: { product: "Product", task: "Task", note: "Note" },
     editLabel: "Edit",
     invalid: "Write something here, within the length allowed.",
   },
