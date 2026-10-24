@@ -392,12 +392,15 @@ export function decodeOperationDetail(body: unknown, id: string): OperationDetai
       occurredAt: t.occurredAt,
     });
   }
+  // Newest first, as the server orders them: each sequence below the one before (the
+  // exception screen counts read-backs from the newest one's sequence).
   const readbacks: OperationDetailView["readbacks"][number][] = [];
   for (const r of body.readbacks) {
     if (
       !record(r) ||
       !exactly(r, ["sequence", "observedAt", "outcome", "verdict", "fields"]) ||
       !integer(r.sequence, 1, Number.MAX_SAFE_INTEGER) ||
+      (readbacks.length > 0 && r.sequence >= readbacks[readbacks.length - 1]!.sequence) ||
       !isUtcTime(r.observedAt) ||
       !code(r.outcome) ||
       !(r.verdict === null || code(r.verdict))

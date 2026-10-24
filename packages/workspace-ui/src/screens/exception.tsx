@@ -23,6 +23,14 @@ export const exceptionKind = (view: OperationDetailView): Kind => {
   if (s === "failed" || s === "conflict") return "failed";
   return "settled";
 };
+/**
+ * How many times Morrow read the product back. The server sends only the 20 latest
+ * read-backs, newest first, so their number would understate it once there are more: each
+ * read-back's sequence counts the operation's read-backs from 1 (0045's two inserts take
+ * max+1, and the table is append-only), so the newest one's sequence is the count.
+ */
+export const readbackCount = (view: OperationDetailView): number =>
+  view.readbacks[0]?.sequence ?? 0;
 const titles = {
   uncertain: d.uncertainTitle,
   set_aside: d.setAsideTitle,
@@ -54,7 +62,7 @@ function Result({
       </div>
       <OperationList ws={ws} operations={[o]} onChanged={onChanged} testId="exception-operation" />
       <p className="muted">
-        {d.checks(view.readbacks.length)}
+        {d.checks(readbackCount(view))}
         {last ? ` ${d.lastCheck(inboxDate(last.observedAt))}` : ""}
       </p>
       <div className="item-actions">

@@ -31,9 +31,11 @@ import {
   inboxTabCount,
   openItems,
 } from "../packages/workspace-ui/src/inbox-model.ts";
-import { InboxRow, needsYouItems } from "../packages/workspace-ui/src/screens/inbox.tsx";
+import { InboxList, InboxRow, needsYouItems } from "../packages/workspace-ui/src/screens/inbox.tsx";
+import { NeedsYouCard } from "../packages/workspace-ui/src/screens/home.tsx";
+import { copy } from "../packages/workspace-ui/src/copy.ts";
 import { describeActivity, activityDay } from "../packages/workspace-ui/src/screens/activity.tsx";
-import { exceptionKind } from "../packages/workspace-ui/src/screens/exception.tsx";
+import { exceptionKind, readbackCount } from "../packages/workspace-ui/src/screens/exception.tsx";
 import { inboxCopy } from "../packages/workspace-ui/src/sunrise/inbox-copy.ts";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import { recordingTransport, json } from "./fixtures/workspace-web.mjs";
@@ -336,6 +338,46 @@ test("decodeActivity and decodeOperationDetail: closed kinds, newest first, the 
   assert.equal(decoded.readbacks.length, 1);
   assert.equal(decodeOperationDetail(doc, "00000000-0000-4000-9000-000000000002"), null);
   assert.equal(decodeOperationDetail({ ...doc, extra: 1 }, exception.id), null);
+  // Read-backs come newest first, each sequence below the one before (F4).
+  const readback = (sequence) => ({ ...doc.readbacks[0], sequence });
+  for (const [name, list] of [
+    ["ascending", [readback(1), readback(2)]],
+    ["duplicate", [readback(2), readback(2)]],
+    ["twenty-one", Array.from({ length: 21 }, (_, i) => readback(21 - i))],
+  ])
+    assert.equal(decodeOperationDetail({ ...doc, readbacks: list }, exception.id), null, name);
+  // The exception screen counts every read-back, not the 20 latest the server sends: the
+  // newest one's sequence is the count (0045 numbers them per operation from 1).
+  const latest20 = decodeOperationDetail(
+    { ...doc, readbacks: Array.from({ length: 20 }, (_, i) => readback(37 - i)) },
+    exception.id,
+  );
+  assert.equal(latest20.readbacks.length, 20);
+  assert.equal(readbackCount(latest20), 37);
+  assert.equal(
+    inboxCopy.detail.checks(readbackCount(latest20)),
+    "Morrow checked the product 37 times.",
+  );
+  assert.equal(readbackCount(decoded), 1);
+  assert.equal(readbackCount({ ...decoded, readbacks: [] }), 0);
+  // The server's read: the 20 latest by sequence. The migration's two read-back inserts take
+  // the operation's max+1, and the table is append-only, so sequences run 1..n without gaps.
+  assert.match(
+    workStatements.operationReadbacks,
+    /WHERE r\.operation_id=\$1::text ORDER BY r\.sequence DESC LIMIT 20$/,
+  );
+  const migration = readFileSync("migrations/0045.catalog-apply.sql", "utf8");
+  const inserts = migration.split("INSERT INTO morrow_work.operation_readbacks(").slice(1);
+  assert.equal(inserts.length, 2);
+  for (const insert of inserts)
+    assert.match(
+      insert,
+      /^[^;]*COALESCE\(max\(x2\.sequence\),0\)\+1[^;]*FROM morrow_work\.operation_readbacks x2\s+WHERE x2\.organization_id=o\.organization_id AND x2\.workspace_id=o\.workspace_id AND x2\.operation_id=p_operation_id;/,
+    );
+  assert.match(
+    migration,
+    /ARRAY\['operation_writes','operation_readbacks'\] LOOP\s+EXECUTE format\('CREATE TRIGGER append_only BEFORE UPDATE OR DELETE/,
+  );
   // The exception screen words the status alone: a change a person checked in Shopify is
   // still unconfirmed to Morrow (never done), and says it was set aside.
   const kind = (status) => exceptionKind({ ...decoded, operation: { ...operation, status } });
@@ -413,6 +455,40 @@ test("one count: Home, the sidebar and the Inbox count the open items of the sam
     inboxComplete({ ...view, sections: { ...view.sections, changes: "denied" } }),
     false,
   );
+});
+
+test("more past the reply is never an all-clear: the Inbox and Home's Needs you (F2)", () => {
+  const connections = { kind: "loading" };
+  const list = (body) => markup(h(InboxList, { ws, view: decodeInbox(body), connections }));
+  const card = (body) =>
+    markup(
+      h(NeedsYouCard, {
+        ws,
+        inbox: { kind: "ok", value: decodeInbox(body), replayed: false },
+        reload() {},
+        connections,
+      }),
+    );
+  const caughtUp = new RegExp(inboxCopy.emptyTitle);
+  const nothingWaiting = new RegExp(copy.home.nothingWaiting);
+  // Every section answered, nothing listed and nothing more: all caught up.
+  assert.match(list(inboxBody([])), caughtUp);
+  assert.match(card(inboxBody([])), nothingWaiting);
+  // More than the reply carries, with nothing open: "0+", the note, never all caught up.
+  const blocked = { ...approval, storeLinked: false, open: false };
+  for (const items of [[], [blocked]]) {
+    const html = list(inboxBody(items, {}, true));
+    assert.doesNotMatch(html, caughtUp);
+    assert.match(html, /Your Inbox count is 0\+/);
+    assert.ok(html.includes(inboxCopy.more), html);
+    const home = card(inboxBody(items, {}, true));
+    assert.doesNotMatch(home, nothingWaiting);
+    assert.ok(home.includes(inboxCopy.home.moreWaiting), home);
+    assert.match(home, new RegExp(`href="/w/${ws}/inbox"`));
+  }
+  // A denied section is not all caught up either (unchanged).
+  assert.doesNotMatch(list(inboxBody([], { questions: "denied" })), caughtUp);
+  assert.doesNotMatch(card(inboxBody([], { questions: "denied" })), nothingWaiting);
 });
 
 test("the fixture answers the boards' states from its own state", async () => {
@@ -601,6 +677,21 @@ function strings(value, path, out) {
     for (const [k, v] of Object.entries(value)) strings(v, `${path}.${k}`, out);
   return out;
 }
+test("copy: never promises a check Morrow doesn't make (F3)", () => {
+  // Morrow reads an unconfirmed change back right after applying it and when a person
+  // presses Check again; nothing checks it on a schedule, so no words say it does.
+  const claims =
+    /on its own|by itself|keeps? checking|still checks|automatically|in the background|(?:will|’ll|'ll) check/i;
+  assert.deepEqual(
+    strings(inboxCopy, "inboxCopy", []).filter(([, text]) => claims.test(text)),
+    [],
+  );
+  assert.match(inboxCopy.detail.uncertainBody, /won’t send the change again/);
+  assert.match(inboxCopy.detail.uncertainBody, /Check again/);
+  assert.match(inboxCopy.detail.setAsideBody, /won’t send the change again\. Check again/);
+  assert.equal(inboxCopy.activity.setAsideDetail, "Nothing was sent again.");
+});
+
 test("copy: plain words, none of the internal terms", () => {
   const all = strings(inboxCopy, "inboxCopy", []);
   assert.ok(all.length > 80, String(all.length));

@@ -85,13 +85,22 @@ export interface InboxDocument {
   };
   readonly items: readonly InboxItem[];
   /**
-   * More may wait than this reply carries: questions or approvals past their page (50 and
-   * 25), or an unknown outcome past the 50 operations. Not-applied changes past it don't count.
+   * More waits for this person than the reply carries: a question or a change to review
+   * past its page (50 and 25), or an unknown outcome past the 50 operations, each one this
+   * person may see. Records the viewer can't see never set it (it would say they exist and
+   * contradict an empty Inbox), and not-applied changes past the limit don't count.
    */
   readonly more: boolean;
 }
 
 export const inboxLimits = Object.freeze({ questions: 50, approvals: 25, changes: 50 });
+/**
+ * How far the read looks past records this person can't see: the operations statement's
+ * rows (it fetches one more, to tell the scan's bound from the end) and pages of the
+ * approvals list (each scans at most 100 rows). A scan that ends at its bound undecided
+ * sets `more` only beside a full page, so it never claims more beside an empty one.
+ */
+export const inboxScan = Object.freeze({ changes: 100, approvalPages: 4 });
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const text = (row: Readonly<Record<string, unknown>>, key: string) => {
   const value = row[key];
@@ -201,31 +210,71 @@ export async function inboxApprovalItems(
   }
   return items;
 }
+type ApprovalPage = {
+  readonly items: Parameters<typeof inboxApprovalItems>[0];
+  readonly next: string | null;
+};
+/**
+ * The changes to review, paged until 25 this person may decide, the end of the list or
+ * the scan's bound; `more` only when one more they may decide lies past the 25 (a page of
+ * a proposer's own changes, or of nothing they may see, never sets it).
+ */
+export async function inboxApprovals(
+  readPage: (after: string | null) => Promise<ApprovalPage>,
+  linked: (storeId: string) => Promise<boolean>,
+): Promise<{ readonly items: InboxApprovalItem[]; readonly more: boolean }> {
+  const items: InboxApprovalItem[] = [];
+  let after: string | null = null;
+  for (let pages = 0; pages < inboxScan.approvalPages; pages++) {
+    const page = await readPage(after);
+    for (const item of await inboxApprovalItems(page.items, linked)) {
+      if (items.length === inboxLimits.approvals) return { items, more: true };
+      items.push(item);
+    }
+    if (page.next === null) return { items, more: false };
+    after = page.next;
+  }
+  return { items, more: items.length === inboxLimits.approvals };
+}
 async function approvals(
   tx: WorkTx,
   a: WorkAuthority,
   linked: (storeId: string) => Promise<boolean>,
 ) {
-  const page = await listApprovals(tx, a, { after: null, limit: inboxLimits.approvals });
-  if (page === "invalid") throw new WorkContextUnavailable();
-  const items = await inboxApprovalItems(page.items, linked);
-  return { state: "ok" as const, items, more: page.next !== null };
+  const { items, more } = await inboxApprovals(async (after) => {
+    const page = await listApprovals(tx, a, { after, limit: inboxLimits.approvals });
+    if (page === "invalid") throw new WorkContextUnavailable();
+    return page;
+  }, linked);
+  return { state: "ok" as const, items, more };
 }
 
 const exceptionStatuses = ["uncertain", "failed", "conflict"] as const;
-async function changes(
-  tx: WorkTx,
-  visible: (proposalId: string) => Promise<StoredProposalRow | null>,
-) {
-  const rows = await tx.run("inboxOperations", []);
+/**
+ * The Inbox's problems from the operations statement's rows (unknown outcomes first): the
+ * first 50 this person may see (the operation read's rule, `visible`), and `more` only
+ * when one more unknown outcome they may see lies past those 50. A row they can't see is
+ * skipped and never counted, so a person who can see none of them gets no items and no
+ * `more`, and learns nothing of the hidden ones. Past the 50, a not-applied change is
+ * information, so the first one ends the search.
+ */
+export async function inboxChangeItems(
+  rows: readonly Readonly<Record<string, unknown>>[],
+  visible: (proposalId: string) => Promise<unknown>,
+): Promise<{ readonly items: InboxExceptionItem[]; readonly more: boolean }> {
   const items: InboxExceptionItem[] = [];
-  for (const row of rows.slice(0, inboxLimits.changes)) {
+  for (const row of rows.slice(0, inboxScan.changes)) {
     const status = text(row, "status");
     if (!(exceptionStatuses as readonly string[]).includes(status))
       throw new WorkContextUnavailable();
-    const proposalId = id(row, "proposal_id");
-    if (!(await visible(proposalId))) continue;
     const uncertain = status === "uncertain";
+    const proposalId = id(row, "proposal_id");
+    if (items.length === inboxLimits.changes) {
+      if (!uncertain) return { items, more: false };
+      if (await visible(proposalId)) return { items, more: true };
+      continue;
+    }
+    if (!(await visible(proposalId))) continue;
     items.push(
       Object.freeze({
         kind: "exception",
@@ -243,10 +292,19 @@ async function changes(
       }),
     );
   }
-  // Unknown outcomes come first, so only an unknown one past the limit can hide something
-  // that waits on a person; not-applied ones past it are information and never counted.
-  const beyond = rows[inboxLimits.changes];
-  return { state: "ok" as const, items, more: !!beyond && text(beyond, "status") === "uncertain" };
+  // The rows ran out: at their end nothing more waits; at the scan's bound (the statement
+  // sent one row past it), more may wait only beside a full page.
+  return {
+    items,
+    more: rows.length > inboxScan.changes && items.length === inboxLimits.changes,
+  };
+}
+async function changes(
+  tx: WorkTx,
+  visible: (proposalId: string) => Promise<StoredProposalRow | null>,
+) {
+  const rows = await tx.run("inboxOperations", []);
+  return { state: "ok" as const, ...(await inboxChangeItems(rows, visible)) };
 }
 
 const setters = ["human", "system", "operator"] as const;

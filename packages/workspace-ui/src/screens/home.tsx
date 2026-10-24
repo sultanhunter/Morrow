@@ -62,8 +62,9 @@ export function byRecent(goals: readonly GoalView[]): GoalView[] {
 
 /**
  * What Home's header says. Nothing is "clear" unless every section of the Inbox read
- * answered: when a section was denied, or the read failed, was rate limited or offline,
- * the scope line stays neutral, no "all clear" primary is offered, and the Needs you card
+ * answered and the server said nothing more waits: when a section was denied, the read
+ * failed, was rate limited or offline, or more waits than the reply carries ("0+"), the
+ * scope line stays neutral, no "all clear" primary is offered, and the Needs you card
  * carries that state. A false all-clear would hide work that waits (the AC26 first-run
  * Home is governance-only, so its questions are denied). Sample counts exist only in the
  * default-off preview.
@@ -83,7 +84,7 @@ export function homeSummary(
   const extra = samples ? samples.waiting.review + samples.waiting.tasks : 0;
   const count = open + extra;
   const total = known && inbox.value.more ? `${count}+` : String(count);
-  const clear = known && inboxComplete(inbox.value) && count === 0;
+  const clear = known && inboxComplete(inbox.value) && count === 0 && !inbox.value.more;
   return { action: count > 0 ? "review" : clear ? "ask" : null, total, open, clear };
 }
 /** Home's waiting chips, from the same read: per kind, the open items. */
@@ -98,7 +99,7 @@ export function homeChips(view: InboxView): {
   return { review: of("review"), questions: of("questions"), problems: of("problems") };
 }
 
-function NeedsYouCard({
+export function NeedsYouCard({
   ws,
   inbox,
   reload,
@@ -112,8 +113,10 @@ function NeedsYouCard({
   const count = inbox.kind === "ok" ? openItems(inbox.value).length : 0;
   const label = inbox.kind === "ok" ? inboxCountLabel(inbox.value) : "0";
   const shown = inbox.kind === "ok" ? needsYouItems(inbox.value) : [];
-  // A section the server didn't answer for this person: never "nothing waits".
+  // A section the server didn't answer for this person, or more than the reply carries:
+  // never "nothing waits".
   const denied = inbox.kind === "ok" && !inboxComplete(inbox.value);
+  const more = inbox.kind === "ok" && inbox.value.more;
   return (
     <section className="card panel" data-card="needs" aria-labelledby="home-needs-title">
       <div className="card-head">
@@ -139,6 +142,12 @@ function NeedsYouCard({
                 </li>
               ))}
             </ul>
+          ) : more ? (
+            <p className="muted">
+              <RouteLink route="inbox" params={{ workspaceId: ws }} className="text-link">
+                {inboxCopy.home.moreWaiting}
+              </RouteLink>
+            </p>
           ) : denied ? null : (
             <StateView kind="empty" compact message={copy.home.nothingWaiting} />
           )}

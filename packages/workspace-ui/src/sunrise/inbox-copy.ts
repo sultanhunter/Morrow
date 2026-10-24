@@ -2,7 +2,9 @@
 // words for shop owners (ADR-0032 item 4; the Inbox, EmptyStates, Phone and SettingsActivity
 // boards). The words say what the records show and never more: a change is "updated in
 // Shopify" only once Morrow read it back, an unknown outcome is never "done", and a store
-// that is disconnected can't take the changes waiting for it.
+// that is disconnected can't take the changes waiting for it. Morrow reads a change it
+// couldn't confirm only right after applying it and when a person presses Check again: the
+// words never promise a check it doesn't make.
 const plural = (n: number, one: string, many: string) =>
   `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 const products = (n: number) => plural(n, "product", "products");
@@ -40,6 +42,7 @@ export const inboxCopy = {
   shopFallback: "Your Shopify store",
   home: {
     problemsChip: (n: number) => `${n} ${n === 1 ? "problem" : "problems"} to check`,
+    moreWaiting: "More may be waiting in your Inbox. Open it to see the rest.",
   },
   storeOf: (shop: string) => `for ${shop}`,
   approval: {
@@ -96,11 +99,11 @@ export const inboxCopy = {
     uncertainTitle: "Morrow couldn’t confirm this change",
     setAsideTitle: "You checked this change in Shopify",
     setAsideBody:
-      "Morrow still hasn’t confirmed it, so it won’t send the change again. It keeps checking the product on its own.",
+      "Morrow still hasn’t confirmed it, so it won’t send the change again. Check again reads the product.",
     failedTitle: "This change wasn’t applied",
     settledTitle: "This change is settled",
     uncertainBody:
-      "Shopify’s answer was lost or unclear. Morrow won’t send the change again until it knows what happened. It checks the product again on its own, and you can check now.",
+      "Shopify’s answer was lost or unclear. Morrow won’t send the change again until it knows what happened. Use Check again to read the product now.",
     failedBody: "Nothing changed in your store because of it.",
     settledBody: "Morrow has an answer for this change now.",
     checks: (n: number) =>
@@ -132,7 +135,7 @@ export const inboxCopy = {
     unknown: "couldn’t confirm a change reached Shopify",
     unknownDetail: "Morrow won’t send it again until it knows what happened.",
     setAside: "noted that a change was checked in Shopify",
-    setAsideDetail: "Morrow keeps checking it.",
+    setAsideDetail: "Nothing was sent again.",
     stopped: "stopped AI work for Listings",
     stoppedDetail: "Listings stays stopped until a person turns it back on.",
     alreadyStopped: "Listings was already stopped.",

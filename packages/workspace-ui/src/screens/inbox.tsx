@@ -269,7 +269,7 @@ function SamplesCard({ samples }: { readonly samples: InboxSamplesView }) {
   );
 }
 
-function InboxList({
+export function InboxList({
   ws,
   view,
   connections,
@@ -282,16 +282,17 @@ function InboxList({
   const shown = byInboxUrgency(
     view.items.filter((i) => filter === "all" || inboxTab(i) === filter),
   );
-  const complete = inboxComplete(view);
   const nothing = view.items.length === 0;
+  // All caught up only when every section answered and nothing more waits past the reply.
+  const caughtUp = nothing && inboxComplete(view) && !view.more;
   return (
     <>
       <PartNotice view={view} />
       <ConnectionBanner ws={ws} view={view} />
       <Filters view={view} filter={filter} onFilter={setFilter} />
       <p className="inbox-count-note">{t.countNote(inboxCountLabel(view))}</p>
-      {/* A denied section with nothing else to show has its notice above, and no card. */}
-      {shown.length === 0 && nothing && !complete ? null : (
+      {/* A denied section (or more past the reply) with nothing to show has its note, no card. */}
+      {nothing && !caughtUp ? null : (
         <section className="card inbox-card" aria-label={t.listLabel}>
           {shown.length ? (
             <ul className="row-list" data-testid="inbox-items">
@@ -305,7 +306,7 @@ function InboxList({
                 </li>
               ))}
             </ul>
-          ) : nothing && complete ? (
+          ) : caughtUp ? (
             <div className="inbox-empty">
               <h2>{t.emptyTitle}</h2>
               <p>{t.emptyBody}</p>

@@ -332,6 +332,15 @@ test("Home: only a fully answered Inbox read is an all-clear (F1, AC26's first-r
     clear: true,
   });
   assert.equal(homeSummary(ok([question], true), null).total, "1+");
+  // More waits than the reply carries: never an all-clear beside "0+" (F2), whatever is
+  // listed but not counted.
+  for (const items of [[], [failed]])
+    assert.deepEqual(homeSummary(ok(items, true), null), {
+      action: null,
+      total: "0+",
+      open: 0,
+      clear: false,
+    });
   // A denied section says nothing about what waits there: no all-clear, no primary.
   assert.deepEqual(homeSummary(ok([], false, { questions: "denied" }), null), {
     action: null,
