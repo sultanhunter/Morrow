@@ -909,13 +909,7 @@ export interface ShopifyWebhookSyncResult {
   readonly unauthorized: number;
   readonly skipped: number;
 }
-const webhookSyncCounts = [
-  "registered",
-  "failed",
-  "unknown",
-  "unauthorized",
-  "skipped",
-] as const;
+const webhookSyncCounts = ["registered", "failed", "unknown", "unauthorized", "skipped"] as const;
 const syncCount = (value: unknown): value is number =>
   typeof value === "number" &&
   Number.isSafeInteger(value) &&
