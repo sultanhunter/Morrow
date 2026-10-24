@@ -1475,4 +1475,15 @@
     font-size: 26px;
     line-height: 32px;
   }
+  /* A row that ends in a status badge: the badge (it never wraps) moves under the text, so
+     the text keeps the row's width instead of the badge pushing the card past the screen
+     (at 320 px with Linux's wider fonts it did). */
+  .sr-list-row-status {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px 12px;
+  }
+  .sr-list-row-status > .sr-badge {
+    grid-column: 2;
+  }
 }

@@ -508,7 +508,7 @@ function EmailBody({
         ) : (
           <ul className="sr-rows">
             {view.waiting.map((w) => (
-              <li key={w.title} className="sr-list-row">
+              <li key={w.title} className="sr-list-row sr-list-row-status">
                 <AgentAvatar character={w.character} size={32} />
                 <div className="sr-list-text">
                   <p className="sr-row-title" dir="auto">

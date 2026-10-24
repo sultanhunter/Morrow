@@ -70,7 +70,7 @@ function Main({
       <Card title={a.worksIn} flush>
         <ul className="sr-rows">
           {view.worksIn.map((place) => (
-            <li key={place.name} className="sr-list-row">
+            <li key={place.name} className="sr-list-row sr-list-row-status">
               <SrIcon name={place.status === "active" ? "tag" : "folder"} />
               <div className="sr-list-text">
                 <p className="sr-row-title" dir="auto">

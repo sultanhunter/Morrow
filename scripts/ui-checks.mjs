@@ -770,7 +770,15 @@ fixtureCases.push(
       await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
       await dialog.getByText("This changed since you opened it.").waitFor();
-      expect(await dialog.getByRole("radio", { name: /Haiku 5\.5/ }).isChecked(), "reread_model");
+      // The reread lands a few renders after the 409's message (as on notifications_conflict).
+      const reread = await dialog
+        .getByRole("radio", { name: /Haiku 5\.5/, checked: true })
+        .waitFor({ timeout: 5000 })
+        .then(
+          () => true,
+          () => false,
+        );
+      expect(reread, "reread_model");
       expect(await dialog.getByRole("radio", { name: /^Medium/ }).isChecked(), "reread_effort");
       await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
@@ -900,15 +908,30 @@ fixtureCases.push(
   }),
   // A save the record moved past (saved from another tab first): the real 409's reread
   // replaces the draft, so the screen shows what the server has, with nothing unsaved.
+  // The message is drawn from the 409 itself; the reread is a second request that lands a
+  // few renders later, so the check waits (bounded) for it rather than reading the switch
+  // between the two (on CI's Linux runner the immediate read came first, run 40058758297).
   fixtureCase("settings", "notifications_conflict", `/w/${ws}/settings/notifications`, {
     widths: two,
     scenario: "notifications_conflict",
     setup: async (page) => {
-      const monday = page.getByRole("switch", { name: "Email me each Monday project update" });
+      const mondayName = "Email me each Monday project update";
+      const monday = page.getByRole("switch", { name: mondayName });
+      const hour = page.getByLabel("Send at");
+      const hourBefore = await hour.inputValue();
       await monday.click();
       await page.getByRole("button", { name: "Save" }).click();
       await page.getByText("These settings changed since you opened them.").waitFor();
-      expect((await monday.getAttribute("aria-checked")) === "true", "draft_replaced");
+      const replaced = await page
+        .getByRole("switch", { name: mondayName, checked: true })
+        .waitFor({ timeout: 5000 })
+        .then(
+          () => true,
+          () => false,
+        );
+      expect(replaced, "draft_replaced");
+      // What the server has now (the other tab moved the summary hour), not just the draft gone.
+      expect((await hour.inputValue()) !== hourBefore, "reread_shown");
       expect(
         (await page.getByRole("region", { name: "You have unsaved changes" }).count()) === 0,
         "nothing_unsaved",
