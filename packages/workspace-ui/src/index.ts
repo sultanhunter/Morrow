@@ -20,8 +20,6 @@ export {
   useHomeSamples,
   useInbox,
   useInboxSamples,
-  useOpenQuestions,
-  waitingCount,
 } from "./workspace-data";
 export {
   AccountScreen,
@@ -36,7 +34,7 @@ export {
   WorkspaceUnavailableScreen,
 } from "./screens/entry";
 export { normalizeName, CommandFeedback } from "./screens/entry";
-export { HomeScreen, byRecent, byUrgency, homeDate, homeHeader } from "./screens/home";
+export { HomeScreen, byRecent, homeDate, homeHeader } from "./screens/home";
 export { WorkScreen } from "./screens/work";
 export { TaskScreen } from "./screens/task";
 export { InboxScreen, QuestionScreen } from "./screens/inbox";

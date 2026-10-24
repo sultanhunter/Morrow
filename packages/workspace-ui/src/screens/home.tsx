@@ -9,15 +9,14 @@
 // opens a screen whose actions the server checks.
 import { useMemo } from "react";
 import { copy } from "../copy";
-import { inboxComplete, inboxTab, openItems, type InboxView } from "../inbox-model";
-import type {
-  ConnectionsView,
-  GoalView,
-  HomeSamplesView,
-  Id,
-  QuestionView,
-  WorkspaceView,
-} from "../model";
+import {
+  inboxComplete,
+  inboxCountLabel,
+  inboxTab,
+  openItems,
+  type InboxView,
+} from "../inbox-model";
+import type { ConnectionsView, GoalView, HomeSamplesView, Id, WorkspaceView } from "../model";
 import { useRead, useServices, type ReadState } from "../services";
 import { primaryStore, useConnections, useHomeSamples, useInbox } from "../workspace-data";
 import { RouteLink } from "../components/controls";
@@ -25,7 +24,7 @@ import { BadgeGlyph, Icon, RecordText, StatusTag, Tag } from "../components/disp
 import { Banner, StateView, outcomeState } from "../components/feedback";
 import { AskMorrowButton } from "../components/shell";
 import { AskPanel, GlanceCard, IdeasCard, ProjectsCard, TodayCard } from "./home-samples";
-import { InboxRow, needsYouItems, shopName } from "./inbox";
+import { InboxRow, PartNotice, needsYouItems, shopName } from "./inbox";
 import { inboxCopy } from "../sunrise/inbox-copy";
 
 const longDate = new Intl.DateTimeFormat("en-US", {
@@ -52,14 +51,6 @@ export function homeHeader(now: Date): { readonly date: string; readonly greetin
 const isoDay = (now: Date) =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-/** The most urgent first: the soonest expiry, then those that don't expire. */
-export function byUrgency(questions: readonly QuestionView[]): QuestionView[] {
-  const at = (q: QuestionView) => {
-    const t = q.expiresAt === null ? Number.NaN : Date.parse(q.expiresAt);
-    return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
-  };
-  return [...questions].sort((a, b) => at(a) - at(b));
-}
 /** The most recently updated first. */
 export function byRecent(goals: readonly GoalView[]): GoalView[] {
   const at = (g: GoalView) => {
@@ -119,35 +110,22 @@ function NeedsYouCard({
   readonly connections: ReadState<ConnectionsView>;
 }) {
   const count = inbox.kind === "ok" ? openItems(inbox.value).length : 0;
-  const label = inbox.kind === "ok" && inbox.value.more ? `${count}+` : String(count);
   const shown = inbox.kind === "ok" ? needsYouItems(inbox.value) : [];
-  const denied =
-    inbox.kind === "ok" &&
-    !inboxComplete(inbox.value) &&
-    Object.values(inbox.value.sections).includes("denied");
+  // A section the server didn't answer for this person: never "nothing waits".
+  const denied = inbox.kind === "ok" && !inboxComplete(inbox.value);
   return (
     <section className="card panel" data-card="needs" aria-labelledby="home-needs-title">
       <div className="card-head">
         <h2 id="home-needs-title">{copy.home.needsTitle}</h2>
         {count > 0 ? (
           <RouteLink route="inbox" params={{ workspaceId: ws }} className="card-link">
-            {copy.home.seeAllInbox(label)}
+            {copy.home.seeAllInbox(inboxCountLabel(inbox.value))}
           </RouteLink>
         ) : null}
       </div>
       {inbox.kind === "ok" ? (
         <>
-          {denied ? (
-            <StateView
-              kind="denied"
-              compact
-              title={inboxCopy.partTitle}
-              message={(Object.keys(inbox.value.sections) as (keyof InboxView["sections"])[])
-                .filter((k) => inbox.value.sections[k] !== "ok")
-                .map((k) => inboxCopy.part[k])
-                .join(" ")}
-            />
-          ) : null}
+          <PartNotice view={inbox.value} />
           {shown.length ? (
             <ul className="row-list">
               {shown.map((item) => (

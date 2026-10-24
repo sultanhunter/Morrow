@@ -2,13 +2,12 @@ import { workPermissions } from "@morrow/contracts/work-permissions";
 import { listingFieldPaths, storeResource } from "@morrow/policy/store-resource";
 import { decideOn, stopAllowed } from "../agents/commands.js";
 import { installationResource, listingsRelease } from "../agents/listings.js";
-import { readProposalRow } from "../approvals/family.js";
-import { viewerRole } from "../approvals/reads.js";
 import { disconnectAllowed } from "../connections/commands.js";
 import type { WorkTx } from "../connection.js";
 import { WorkContextUnavailable, type WorkAuthority } from "../context.js";
 import { decodeCursor, encodeCursor } from "../contract-mapping.js";
 import { decideWork } from "../permissions.js";
+import { proposalReader } from "./read.js";
 
 // GET /work/activity (v1 PR 15; Settings > Activity): what people, agents, Morrow and
 // Shopify did in this workspace, newest first, from the records that exist today (the
@@ -90,7 +89,7 @@ export interface ActivityPage {
 
 type Row = Readonly<Record<string, unknown>>;
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const codePattern = /^[a-z][a-z0-9_.]{0,127}$/;
+const codePattern = /^[a-z][a-z0-9_]{0,63}$/;
 const str = (row: Row, key: string) => {
   const value = row[key];
   if (typeof value !== "string") throw new WorkContextUnavailable();
@@ -126,14 +125,7 @@ const changeOutcomes: Readonly<
 
 /** One request's visibility checks, each cached: proposals, store rights and run reads. */
 function visibility(tx: WorkTx, a: WorkAuthority) {
-  const proposals = new Map<
-    string,
-    Promise<{
-      readonly taskId: string | null;
-      readonly storeId: string | null;
-      readonly targets: number;
-    } | null>
-  >();
+  const readable = proposalReader(tx, a);
   const rights = new Map<string, Promise<boolean>>();
   const cached = (key: string, decide: () => Promise<boolean>) => {
     let value = rights.get(key);
@@ -147,21 +139,15 @@ function visibility(tx: WorkTx, a: WorkAuthority) {
   const ws = a.resource.workspaceId;
   let taskRead: Promise<boolean> | null = null;
   return {
-    proposal(proposalId: string) {
-      let value = proposals.get(proposalId);
-      if (!value) {
-        value = (async () => {
-          const stored = await readProposalRow(tx, a, proposalId);
-          if (!stored || (await viewerRole(a, stored)) === null) return null;
-          return {
-            taskId: stored.proposal.taskId ?? null,
-            storeId: stored.proposal.storeId,
-            targets: stored.proposal.targets.length,
-          };
-        })();
-        proposals.set(proposalId, value);
-      }
-      return value;
+    /** The proposal's task, store and size when the viewer may see its records. */
+    async proposal(proposalId: string) {
+      const stored = await readable(proposalId);
+      if (!stored) return null;
+      return {
+        taskId: stored.proposal.taskId ?? null,
+        storeId: stored.proposal.storeId,
+        targets: stored.proposal.targets.length,
+      };
     },
     mayStopInstallation(storeId: string, connectionId: string, installationId: string) {
       return cached(`stop|${storeId}|${connectionId}|${installationId}`, () =>

@@ -13,7 +13,7 @@
 // anything: the server answers every read and checks every action.
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { InboxSamplesView, InboxView } from "./inbox-model";
-import type { ConnectionsView, HomeSamplesView, Id, Page, QuestionView } from "./model";
+import type { ConnectionsView, HomeSamplesView, Id } from "./model";
 import type { Outcome } from "./port";
 import { useRead, useServices, useServicesVersion, type ReadState } from "./services";
 
@@ -54,18 +54,6 @@ function useSharedRead<T>(
   return [state, shell?.bump ?? reload] as const;
 }
 
-/** Open questions for this person: the Inbox items that exist today. */
-export function useOpenQuestions(
-  ws: Id,
-  follow: Follow = "shell",
-): readonly [ReadState<Page<QuestionView>>, () => void] {
-  const services = useServices();
-  return useSharedRead(
-    `${ws}|questions.mine|first`,
-    () => services.port.work.listMyOpenQuestions(ws, null),
-    follow,
-  );
-}
 /**
  * v1 PR 15: what waits for this person (GET /work/inbox), the one read the Inbox, Home's
  * header and Needs you, and the sidebar and top bar's count share, under the shell's
@@ -89,10 +77,6 @@ export function useInboxSamples(ws: Id): InboxSamplesView | null {
     services.port.samples.inbox(ws),
   );
   return on && samples.kind === "ok" ? samples.value : null;
-}
-/** The count a person sees: the first page's size, or "50+" when more pages follow. */
-export function waitingCount(page: Page<unknown>): string {
-  return page.next !== null ? "50+" : String(page.items.length);
 }
 
 export function useConnections(

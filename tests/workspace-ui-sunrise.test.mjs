@@ -32,12 +32,13 @@ const { ServicesProvider, nextReadSlot } = await import(
   "../packages/workspace-ui/src/services.tsx"
 );
 const { copy } = await import("../packages/workspace-ui/src/copy.ts");
-const { byUrgency, homeDate, homeHeader, homeSummary } = await import(
+const { homeDate, homeHeader, homeSummary } = await import(
   "../packages/workspace-ui/src/screens/home.tsx"
 );
 const { TodayCard } = await import("../packages/workspace-ui/src/screens/home-samples.tsx");
-const { ShellRefreshProvider, useConnections, useOpenQuestions, useShellRefresh, waitingCount } =
-  await import("../packages/workspace-ui/src/workspace-data.ts");
+const { ShellRefreshProvider, useConnections, useInbox, useShellRefresh } = await import(
+  "../packages/workspace-ui/src/workspace-data.ts"
+);
 const { destinationTitle, screenTitle } = await import("../apps/workspace-web/src/app.tsx");
 const { createClient } = await import("../apps/workspace-web/src/http/client.ts");
 const { createHttpPort } = await import("../apps/workspace-web/src/http/api.ts");
@@ -301,15 +302,6 @@ test("Home: date line, greeting, urgency order and counts", () => {
   assert.equal(homeDate("2026-10-26T12:00:00.000Z"), "Mon, Oct 26");
   assert.equal(homeDate("2026-10-26T12:00:00.000Z", "plain"), "Oct 26");
   assert.equal(homeDate("soon"), "soon");
-  const q = (id, expiresAt) => ({ id, expiresAt });
-  assert.deepEqual(
-    byUrgency([q("a", null), q("b", "2026-10-30T00:00:00Z"), q("c", "2026-10-24T00:00:00Z")]).map(
-      (x) => x.id,
-    ),
-    ["c", "b", "a"],
-  );
-  assert.equal(waitingCount({ items: [1, 2], next: null }), "2");
-  assert.equal(waitingCount({ items: [1], next: "cursor" }), "50+");
   assert.equal(copy.home.review("1"), "Review 1 item");
   assert.equal(copy.home.review("6"), "Review 6 items");
 });
@@ -471,12 +463,12 @@ test("shared reads: Home's Retry is the shell's; command pages read once per mou
     version: () => 7,
     read: never,
     composed: {},
-    port: { work: { listMyOpenQuestions: never }, connections: { list: never } },
+    port: { inbox: { read: never }, connections: { list: never } },
   };
   const bump = () => {};
   const seen = {};
   function Page() {
-    seen.questions = useOpenQuestions("ws-1")[1];
+    seen.inbox = useInbox("ws-1")[1];
     seen.connections = useConnections("ws-1")[1];
     seen.mount = useConnections("ws-1", "mount")[1];
     return null;
@@ -484,14 +476,14 @@ test("shared reads: Home's Retry is the shell's; command pages read once per mou
   const inShell = h(ShellRefreshProvider, { value: { mark: "home|7|0", bump } }, h(Page));
   render(h(ServicesProvider, { value: services }, inShell));
   // Inside the shell, Retry on Home reads the shell's copy too (the same mark, one request).
-  assert.equal(seen.questions, bump);
+  assert.equal(seen.inbox, bump);
   assert.equal(seen.connections, bump);
   // A page that holds a command reads on its own: its Retry is its own.
   assert.equal(typeof seen.mount, "function");
   assert.notEqual(seen.mount, bump);
   // Outside the shell every read has its own Retry.
   render(h(ServicesProvider, { value: services }, h(Page)));
-  assert.notEqual(seen.questions, bump);
+  assert.notEqual(seen.inbox, bump);
   // The shell's mark: the page, the command changes and the Retries.
   let refresh = null;
   function Shell() {

@@ -94,6 +94,9 @@ export const inboxCopy = {
     back: "Back to Inbox",
     title: "A change to check",
     uncertainTitle: "Morrow couldn’t confirm this change",
+    setAsideTitle: "You checked this change in Shopify",
+    setAsideBody:
+      "Morrow still hasn’t confirmed it, so it won’t send the change again. It keeps checking the product on its own.",
     failedTitle: "This change wasn’t applied",
     settledTitle: "This change is settled",
     uncertainBody:
@@ -112,6 +115,9 @@ export const inboxCopy = {
   activity: {
     loadingList: "Loading what happened",
     showEarlier: "Show earlier",
+    noneRecent: "Nothing you can see in the latest activity. Show earlier to look further back.",
+    noneOfKindRecent:
+      "Nothing of this kind in the activity shown so far. Show earlier to look further back.",
     earlierFailed: "Couldn’t load earlier activity. Try again.",
     today: (day: string) => `Today, ${day}`,
     yesterday: (day: string) => `Yesterday, ${day}`,
@@ -132,6 +138,7 @@ export const inboxCopy = {
     alreadyStopped: "Listings was already stopped.",
     disconnected: "disconnected the store from Morrow",
     disconnectedDetail: "Morrow can’t read or change the store until it’s connected again.",
+    alreadyDisconnected: "The store’s connection was already stopped.",
     removed: "ended the connection: the Morrow app was removed",
     permissions: "ended the connection: the app’s permissions changed",
     ended: "ended the connection",

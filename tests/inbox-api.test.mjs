@@ -419,6 +419,29 @@ test("the Inbox's changes to review: only what this person may decide, counted o
   assert.deepEqual(await inboxApprovalItems([summary("x", "proposer", null)], linked), []);
 });
 
+test("GET /work/inbox: `more` only when something that waits may lie past the limit", async (t) => {
+  // The statement puts unknown outcomes first: past 50, a not-applied change is information
+  // (never counted), while an unknown one may wait on this person.
+  const read = async (rows) => {
+    const s = scripted({
+      enterContext: () => contextRow([questionRead]),
+      questionPageForRespondent: [],
+      pendingApprovalPage: [],
+      inboxOperations: rows,
+      proposalById: [],
+      inboxConnectionStops: [],
+    });
+    const { result } = await quiet(t, () => s.handler.fetch(get(base + "/inbox"), {}, ctx));
+    assert.equal(result.status, 200);
+    return (await result.json()).more;
+  };
+  const ops = (n, status) => Array.from({ length: n }, (_, i) => operationRow(`op_${i}`, status));
+  assert.equal(await read([...ops(50, "uncertain"), operationRow("op_x", "failed")]), false);
+  assert.equal(await read(ops(51, "failed")), false);
+  assert.equal(await read(ops(51, "uncertain")), true);
+  assert.equal(await read(ops(50, "uncertain")), false);
+});
+
 test("GET /work/inbox: a malformed row is a 503 read failure, never a partial Inbox", async (t) => {
   const s = scripted({
     enterContext: () => contextRow([disconnectRight]),

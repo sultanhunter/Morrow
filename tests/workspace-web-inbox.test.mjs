@@ -33,6 +33,7 @@ import {
 } from "../packages/workspace-ui/src/inbox-model.ts";
 import { InboxRow, needsYouItems } from "../packages/workspace-ui/src/screens/inbox.tsx";
 import { describeActivity, activityDay } from "../packages/workspace-ui/src/screens/activity.tsx";
+import { exceptionKind } from "../packages/workspace-ui/src/screens/exception.tsx";
 import { inboxCopy } from "../packages/workspace-ui/src/sunrise/inbox-copy.ts";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import { recordingTransport, json } from "./fixtures/workspace-web.mjs";
@@ -335,6 +336,16 @@ test("decodeActivity and decodeOperationDetail: closed kinds, newest first, the 
   assert.equal(decoded.readbacks.length, 1);
   assert.equal(decodeOperationDetail(doc, "00000000-0000-4000-9000-000000000002"), null);
   assert.equal(decodeOperationDetail({ ...doc, extra: 1 }, exception.id), null);
+  // The exception screen words the status alone: a change a person checked in Shopify is
+  // still unconfirmed to Morrow (never done), and says it was set aside.
+  const kind = (status) => exceptionKind({ ...decoded, operation: { ...operation, status } });
+  assert.deepEqual(["uncertain", "cancel_requested", "failed", "conflict", "verified"].map(kind), [
+    "uncertain",
+    "set_aside",
+    "failed",
+    "failed",
+    "settled",
+  ]);
 });
 
 test("the HTTP adapter: three GETs with no body, and the preview sends nothing", async () => {
@@ -557,6 +568,11 @@ test("the activity log in plain words: what happened, never more than the record
   assert.equal(drafts.what, "asked Listings to suggest changes for 3 products");
   assert.equal(drafts.detail, "2 suggestions ready to review · 1 product couldn’t be done");
   assert.equal(drafts.category, "work");
+  // A disconnect of a store whose connection was already stopped says so.
+  const disconnect = (alreadyStopped) =>
+    line({ actor: person, kind: "store_disconnected", storeId: S, alreadyStopped }).detail;
+  assert.equal(disconnect(false), inboxCopy.activity.disconnectedDetail);
+  assert.equal(disconnect(true), inboxCopy.activity.alreadyDisconnected);
   const now = new Date(2026, 9, 23, 18, 0);
   assert.match(
     activityDay(new Date(2026, 9, 23, 9, 0).toISOString(), now),

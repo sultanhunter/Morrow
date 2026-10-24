@@ -170,7 +170,7 @@ function ConnectionBanner({ ws, view }: { readonly ws: Id; readonly view: InboxV
 }
 
 /** A section the server didn't answer for this person: never shown as "nothing waits". */
-function PartNotice({ view }: { readonly view: InboxView }) {
+export function PartNotice({ view }: { readonly view: InboxView }) {
   const missing = (Object.keys(view.sections) as (keyof InboxView["sections"])[]).filter(
     (k) => view.sections[k] !== "ok",
   );

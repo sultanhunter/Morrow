@@ -13,20 +13,25 @@ import { inboxCopy } from "../sunrise/inbox-copy";
 import { OperationList } from "./review";
 
 const d = inboxCopy.detail;
-type Kind = "uncertain" | "failed" | "settled" | null;
-const kindOf = (view: OperationDetailView): Kind => {
+type Kind = "uncertain" | "set_aside" | "failed" | "settled" | null;
+/** Which result the page words, from the operation's status alone. */
+export const exceptionKind = (view: OperationDetailView): Kind => {
   const s = view.operation.status;
-  if (s === "uncertain" || s === "cancel_requested") return "uncertain";
+  if (s === "uncertain") return "uncertain";
+  // A person checked it in Shopify; the outcome is still unknown to Morrow, never done.
+  if (s === "cancel_requested") return "set_aside";
   if (s === "failed" || s === "conflict") return "failed";
   return "settled";
 };
 const titles = {
   uncertain: d.uncertainTitle,
+  set_aside: d.setAsideTitle,
   failed: d.failedTitle,
   settled: d.settledTitle,
 } as const;
 const bodies = {
   uncertain: d.uncertainBody,
+  set_aside: d.setAsideBody,
   failed: d.failedBody,
   settled: d.settledBody,
 } as const;
@@ -84,7 +89,7 @@ export function ExceptionScreen({
   const [detail, reload] = useRead(`${ws}|operation|${operationId}`, () =>
     services.port.inbox.operation(ws, operationId),
   );
-  const kind = detail.kind === "ok" ? kindOf(detail.value) : null;
+  const kind = detail.kind === "ok" ? exceptionKind(detail.value) : null;
   return (
     <div className="page exception">
       <header className="page-header">

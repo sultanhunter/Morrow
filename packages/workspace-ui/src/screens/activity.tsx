@@ -85,7 +85,11 @@ export function describeActivity(r: ActivityRecordView): ActivityLine {
     case "ai_work_stopped":
       return line(w.stopped, r.alreadyStopped ? w.alreadyStopped : w.stoppedDetail, "stopped");
     case "store_disconnected":
-      return line(w.disconnected, w.disconnectedDetail, "stopped");
+      return line(
+        w.disconnected,
+        r.alreadyStopped ? w.alreadyDisconnected : w.disconnectedDetail,
+        "stopped",
+      );
     case "store_ended":
       return line(
         r.reason === "uninstalled"
@@ -209,7 +213,15 @@ function ActivityList({ ws }: { readonly ws: Id }) {
       </ul>
       {shown.length === 0 ? (
         <p className="sr-card-intro sr-muted">
-          {paged.items.length === 0 ? a.empty : a.emptyFiltered}
+          {/* A page can hold no record this person may see while older ones exist: never
+              "nothing happened" while Show earlier still has somewhere to go. */}
+          {paged.next !== null
+            ? paged.items.length === 0
+              ? w.noneRecent
+              : w.noneOfKindRecent
+            : paged.items.length === 0
+              ? a.empty
+              : a.emptyFiltered}
         </p>
       ) : (
         days.map((day) => (

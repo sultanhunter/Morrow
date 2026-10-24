@@ -3,6 +3,7 @@ import { storeResource } from "@morrow/policy/store-resource";
 import { disconnectAllowed } from "../connections/commands.js";
 import { listApprovals } from "../approvals/index.js";
 import { readProposalRow } from "../approvals/family.js";
+import type { StoredProposalRow } from "../approvals/mapping.js";
 import { viewerRole, type ApprovalSummary } from "../approvals/reads.js";
 import type { WorkTx } from "../connection.js";
 import { WorkContextUnavailable, type WorkAuthority } from "../context.js";
@@ -83,7 +84,10 @@ export interface InboxDocument {
     readonly connections: InboxSectionState;
   };
   readonly items: readonly InboxItem[];
-  /** A source had more than this reply carries (50 questions, 25 approvals, 50 changes). */
+  /**
+   * More may wait than this reply carries: questions or approvals past their page (50 and
+   * 25), or an unknown outcome past the 50 operations. Not-applied changes past it don't count.
+   */
   readonly more: boolean;
 }
 
@@ -117,18 +121,19 @@ export async function storeLinkedNow(tx: WorkTx, storeId: string): Promise<boole
 }
 
 /**
- * Whether the viewer may see a proposal's records: its reviewer or its own proposer or
- * requester (the approvals library's read rule, which the operation reads share). Cached
- * per proposal for one request.
+ * A proposal's stored row when the viewer may see its records (its reviewer, or its own
+ * proposer or requester: the approvals library's read rule, which the operation reads
+ * share), else null. Cached per proposal for one request; the Inbox and the activity log
+ * both decide through it.
  */
 export function proposalReader(tx: WorkTx, a: WorkAuthority) {
-  const seen = new Map<string, Promise<boolean>>();
-  return (proposalId: string): Promise<boolean> => {
+  const seen = new Map<string, Promise<StoredProposalRow | null>>();
+  return (proposalId: string): Promise<StoredProposalRow | null> => {
     let visible = seen.get(proposalId);
     if (!visible) {
       visible = (async () => {
         const stored = await readProposalRow(tx, a, proposalId);
-        return !!stored && (await viewerRole(a, stored)) !== null;
+        return stored && (await viewerRole(a, stored)) !== null ? stored : null;
       })();
       seen.set(proposalId, visible);
     }
@@ -208,7 +213,10 @@ async function approvals(
 }
 
 const exceptionStatuses = ["uncertain", "failed", "conflict"] as const;
-async function changes(tx: WorkTx, visible: (proposalId: string) => Promise<boolean>) {
+async function changes(
+  tx: WorkTx,
+  visible: (proposalId: string) => Promise<StoredProposalRow | null>,
+) {
   const rows = await tx.run("inboxOperations", []);
   const items: InboxExceptionItem[] = [];
   for (const row of rows.slice(0, inboxLimits.changes)) {
@@ -235,7 +243,10 @@ async function changes(tx: WorkTx, visible: (proposalId: string) => Promise<bool
       }),
     );
   }
-  return { state: "ok" as const, items, more: rows.length > inboxLimits.changes };
+  // Unknown outcomes come first, so only an unknown one past the limit can hide something
+  // that waits on a person; not-applied ones past it are information and never counted.
+  const beyond = rows[inboxLimits.changes];
+  return { state: "ok" as const, items, more: !!beyond && text(beyond, "status") === "uncertain" };
 }
 
 const setters = ["human", "system", "operator"] as const;

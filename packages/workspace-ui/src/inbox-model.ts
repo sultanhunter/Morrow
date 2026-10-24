@@ -57,7 +57,7 @@ export interface InboxView {
     readonly connections: InboxSectionState;
   };
   readonly items: readonly InboxItemView[];
-  /** A source had more than the reply carries: the count shows as "N+". */
+  /** More may wait than the reply carries: the count shows as "N+". */
   readonly more: boolean;
 }
 
