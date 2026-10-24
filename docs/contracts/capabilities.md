@@ -336,6 +336,30 @@ Retention: R02. Verification: A value is append-only and server-computed; a chec
 
 Trace: J01; P06.T01, P10.T02; P01.A01, P06.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
+### workspace.knowledge.propose
+
+Propose an addition to shop knowledge. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: pageId: NullableId; kind: KnowledgePageKind; title: KnowledgeTitle; text: KnowledgeText; sources: KnowledgeSources. Output: proposalId: Id.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.knowledge.propose. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: page, kind, title, text, sources. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: A proposal grants nothing and changes no page; only a person's accept of its exact digest makes a new version, and a run that read customer data cannot propose. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P10.T02, P13.T02; P01.A01, P10.A02. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.notebook.write
+
+Write in an installed agent's own notebook. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: text: NotebookText. Output: entryId: Id.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.notebook.write. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: notebook entry. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: An agent writes only its own installation's notebook; entries carry the run's read tags and expire 90 days after the notebook's last write. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P10.T02, P13.T02; P01.A01, P10.A02. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
 ## Catalog
 
 ### catalog.products.read

@@ -7133,7 +7133,7 @@
       "additionalProperties": false
     },
     "ToolName": {
-      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 adds plan.draft (ADR-0034 item 2; PR 18). A new tool is a new catalogue version and a deliberate schema change.",
+      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 adds plan.draft (ADR-0034 item 2; PR 18); version 3 adds knowledge.propose and notebook.write (PR 20). A new tool is a new catalogue version and a deliberate schema change.",
       "type": "string",
       "enum": [
         "knowledge.search",
@@ -7151,7 +7151,9 @@
         "specialist.draft",
         "proposal.listing",
         "proposal.reply",
-        "plan.draft"
+        "plan.draft",
+        "knowledge.propose",
+        "notebook.write"
       ]
     },
     "ToolFamily": {
@@ -9512,6 +9514,54 @@
             },
             "input": {
               "$ref": "#/$defs/ToolModelInputPlanDraft"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "knowledge.propose"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputKnowledgePropose"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "notebook.write"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputNotebookWrite"
             }
           },
           "required": [
@@ -13831,6 +13881,463 @@
         "goals",
         "steps",
         "target"
+      ]
+    },
+    "KnowledgePageKind": {
+      "description": "PR 20 (shop knowledge; ADR-0031): the closed kinds of a shop knowledge page. A workspace holds at most one brand_voice page; its accepted version is the only page Listings reads, and only as marked data.",
+      "type": "string",
+      "enum": [
+        "brand_voice",
+        "policy",
+        "product_fact",
+        "supplier",
+        "decision"
+      ]
+    },
+    "KnowledgeTitle": {
+      "description": "A knowledge page's title: typed text, 1 to 120 characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "\\S"
+    },
+    "KnowledgeText": {
+      "description": "One version's text: typed text only, 1 to 8,000 characters (no uploads: they wait for their deletion path, P09.T05). Never customer data (ADR-0031 item 2): a page carries no customer tag.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000,
+      "pattern": "\\S"
+    },
+    "KnowledgeSourceKind": {
+      "description": "Where a version's text came from: a store product, a Morrow task, or a short note a person or agent wrote (for example 'Supplier price list, October').",
+      "type": "string",
+      "enum": [
+        "product",
+        "task",
+        "note"
+      ]
+    },
+    "KnowledgeSource": {
+      "description": "One source of a version: a product (value product:<id>), a task (value its Id) or a note (value 1 to 200 characters). Code checks the value against its kind (packages/policy/src/knowledge).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/KnowledgeSourceKind"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeSources": {
+      "description": "A version's sources: at most 5, distinct.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/KnowledgeSource"
+      },
+      "minItems": 0,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+    "KnowledgeAuthor": {
+      "description": "Who wrote a version: a person (installationId null), or an installed agent (its own principal and installation) whose proposal a person accepted.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "person",
+            "agent"
+          ]
+        },
+        "principalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "principalId",
+        "installationId"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeVersion": {
+      "description": "KnowledgeVersion@1 (PR 20): one version of a page, as a viewer may read it. Every version is a person's act: written by them, or an agent's proposal they accepted (acceptedByPrincipalId). Versions are append-only; deleting the page erases every version's text.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "pageId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "text": {
+          "$ref": "#/$defs/KnowledgeText"
+        },
+        "sources": {
+          "$ref": "#/$defs/KnowledgeSources"
+        },
+        "author": {
+          "$ref": "#/$defs/KnowledgeAuthor"
+        },
+        "acceptedByPrincipalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "proposalId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "pageId",
+        "version",
+        "title",
+        "text",
+        "sources",
+        "author",
+        "acceptedByPrincipalId",
+        "proposalId",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgePageSummary": {
+      "description": "One page in the viewer's list: the api lists a page only when the viewer holds view on every one of its read tags (ADR-0031 item 6); the tags never leave the server.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "version",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgePage": {
+      "description": "KnowledgePage@1 (PR 20): one page and its current version, as a viewer may read it, with its version count. Page text is data, never instructions.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "current": {
+          "$ref": "#/$defs/KnowledgeVersion"
+        },
+        "versionCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "kind",
+        "current",
+        "versionCount",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeProposal": {
+      "description": "KnowledgeProposal@1 (PR 20): an installed agent's pending addition (knowledge.propose): a new page (pageId and baseVersion null) or a new version of a page made against its baseVersion. It grants nothing and changes no page; a person accepts or rejects this exact digest, and an accept of a page that changed since is stale. Only a pending proposal keeps its text.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "pageId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseVersion": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "text": {
+          "$ref": "#/$defs/KnowledgeText"
+        },
+        "sources": {
+          "$ref": "#/$defs/KnowledgeSources"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "pageId",
+        "baseVersion",
+        "kind",
+        "title",
+        "text",
+        "sources",
+        "installationId",
+        "digest",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "NotebookText": {
+      "description": "One notebook entry: an agent's working note, 1 to 2,000 characters. Never customer data.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S"
+    },
+    "NotebookEntry": {
+      "description": "NotebookEntry@1 (PR 20): one entry of an installed agent's own notebook. People who can see the agent read it, each entry under its read tags (ADR-0031 item 6). The notebook is kept 90 days after its last write (ADR-0031 item 1) and goes with the installation.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "text": {
+          "$ref": "#/$defs/NotebookText"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "installationId",
+        "sequence",
+        "text",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputKnowledgePropose": {
+      "description": "knowledge.propose (PR 20): propose a new shop knowledge page (pageId null) or a new version of a page the run may see. It grants nothing and changes no page: a person accepts or rejects it. The server sets the read tags, the taint, the author and the page's version; a run that read customer data cannot propose.",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "text": {
+          "$ref": "#/$defs/KnowledgeText"
+        },
+        "sources": {
+          "$ref": "#/$defs/KnowledgeSources"
+        }
+      },
+      "required": [
+        "pageId",
+        "kind",
+        "title",
+        "text",
+        "sources"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputNotebookWrite": {
+      "description": "notebook.write (PR 20): one entry in the run's own installation's notebook. The server sets the installation, read tags and clock.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/NotebookText"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputKnowledgePropose": {
+      "description": "knowledge.propose as the model is given it: ToolInputKnowledgePropose's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputKnowledgePropose before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pageId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "brand_voice",
+            "policy",
+            "product_fact",
+            "supplier",
+            "decision"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "product",
+                  "task",
+                  "note"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "pageId",
+        "kind",
+        "title",
+        "text",
+        "sources"
+      ]
+    },
+    "ToolModelInputNotebookWrite": {
+      "description": "notebook.write as the model is given it: ToolInputNotebookWrite's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputNotebookWrite before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
       ]
     }
   }
