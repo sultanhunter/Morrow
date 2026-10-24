@@ -42,11 +42,15 @@ const body = (name) => {
   return sql.slice(start, sql.indexOf("$$", open + 2) + 2);
 };
 
-test("manifest: the last row, executeAs the work owner, its brief and digest, no prerequisites", () => {
+test("manifest: its row, executeAs the work owner, its brief and digest, no prerequisites", () => {
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
-  // The last row (0046 at integration; the no-gap rule is migration-history's).
-  assert.equal(row, manifest.migrations.at(-1));
+  // The last row when it merged (0046; the no-gap rule is migration-history's); only later
+  // PRs' migrations follow it (ADR-0036's model-defaults-cost-cap).
+  const later = manifest.migrations.slice(manifest.migrations.indexOf(row) + 1);
+  assert.ok(
+    later.every((m) => m.sequence > row.sequence && /\.model-defaults-cost-cap\.sql$/.test(m.file)),
+  );
   assert.deepEqual(
     [row.executeAs, row.reviewRef],
     ["morrow_work_owner", "docs/briefs/projects-backend.md"],
