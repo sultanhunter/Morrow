@@ -1703,6 +1703,7 @@ export async function verifyEdgeConfig({
     modelSwitch: modelSwitch("staging"),
     runtimeSwitch: runtimeSwitch("staging"),
     applySwitch: applySwitch("staging"),
+    cleanupSwitch: cleanupSwitch("staging"),
   };
 }
 

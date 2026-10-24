@@ -10,7 +10,9 @@
 // is lab:connection-health's.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   connectionCleanupOn,
@@ -47,7 +49,13 @@ import {
 } from "../apps/broker/src/vault.ts";
 import { createConnectorHandler } from "../apps/shopify-connector/worker/connector.ts";
 import { connectorSql } from "../apps/shopify-connector/worker/database.ts";
-import { edgeCleanupVarNames, edgeVarNames, reviewedCleanupRecord } from "../scripts/edge.mjs";
+import {
+  edgeCleanupVarNames,
+  edgeVarNames,
+  edgeWorkers,
+  reviewedCleanupRecord,
+  verifyEdgeConfig,
+} from "../scripts/edge.mjs";
 
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const migration = (slug) => {
@@ -714,4 +722,74 @@ test("the clean-up switch: committed off, the connector's var only on staging", 
       !readFileSync(`apps/${worker}/wrangler.jsonc`, "utf8").includes("MORROW_CONNECTION_CLEANUP"),
       worker,
     );
+});
+
+test("edge:check: the clean-up record and the staging connector's var agree, or it is a mixed state", async () => {
+  const scratch = realpathSync(mkdtempSync(join(tmpdir(), "morrow-cleanup-switch-")));
+  try {
+    const committed = JSON.parse(
+      readFileSync("docs/decisions/connection-cleanup-staging.json", "utf8"),
+    );
+    // The committed configs are JSONC: whole-line comments and trailing commas only.
+    const parseConfig = (text) =>
+      JSON.parse(
+        text
+          .split("\n")
+          .filter((line) => !line.trim().startsWith("//"))
+          .join("\n")
+          .replace(/,(\s*[}\]])/g, "$1"),
+      );
+    let copies = 0;
+    const check = async (mutate, value) => {
+      const root = join(scratch, "tree-" + ++copies);
+      for (const worker of edgeWorkers) {
+        mkdirSync(join(root, worker.dir), { recursive: true });
+        const config = parseConfig(readFileSync(join(worker.dir, "wrangler.jsonc"), "utf8"));
+        mutate[worker.key]?.(config);
+        writeFileSync(join(root, worker.dir, "wrangler.jsonc"), JSON.stringify(config, null, 2));
+      }
+      const cleanupPath = join(scratch, "cleanup-" + copies + ".json");
+      writeFileSync(cleanupPath, JSON.stringify({ ...committed, switch: value }));
+      const verdict = await verifyEdgeConfig({ root, cleanupPath });
+      return {
+        codes: [...new Set(verdict.problems.map((problem) => problem.split(":")[0]))].sort(),
+        cleanupSwitch: verdict.cleanupSwitch,
+      };
+    };
+    const set =
+      (value, where = (c) => c.env.staging.vars) =>
+      (c) =>
+        (where(c).MORROW_CONNECTION_CLEANUP = value);
+    // Off, as committed: clean, and no Worker may carry the var.
+    assert.deepEqual(await check({}, "off"), { codes: [], cleanupSwitch: "off" });
+    assert.deepEqual((await check({ connector: set("on") }, "off")).codes, ["EDGE_VARS"]);
+    // On: exactly the staging connector carries exactly "on".
+    assert.deepEqual(await check({ connector: set("on") }, "on"), {
+      codes: [],
+      cleanupSwitch: "on",
+    });
+    assert.deepEqual((await check({}, "on")).codes, ["EDGE_VARS"]);
+    assert.deepEqual((await check({ connector: set("yes") }, "on")).codes, ["EDGE_VARS"]);
+    // Anywhere else is a mixed state (wrangler may add its own diagnostic for a var that a
+    // named environment does not repeat).
+    for (const [index, mutate] of [
+      { connector: (c) => (set("on")(c), set("on", (x) => x.vars)(c)) },
+      { connector: (c) => (set("on")(c), set("on", (x) => x.env.production.vars)(c)) },
+      { connector: set("on"), broker: set("on") },
+      { connector: set("on"), api: set("on") },
+      { connector: set("on"), orchestrator: set("on") },
+    ].entries()) {
+      const { codes } = await check(mutate, "on");
+      assert.ok(codes.includes("EDGE_VARS"), index + ": " + codes.join(","));
+      assert.ok(
+        codes.every((code) => code === "EDGE_VARS" || code === "EDGE_CONFIG_DIAGNOSTIC"),
+        index + ": " + codes.join(","),
+      );
+    }
+    // An unreadable or invalid record is a problem and counts as off.
+    const invalid = await check({}, "maybe");
+    assert.deepEqual(invalid, { codes: ["EDGE_STAGING_CLEANUP_RECORD"], cleanupSwitch: "off" });
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 });
