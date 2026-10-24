@@ -5,8 +5,12 @@
 // offline token, the granted scope), the ShopIdentity Admin GraphQL document and (M2 PR-3)
 // the catalogue reads by operation name (CollectionsPage, ProductsPage,
 // CollectionProductsPage, ProductContent) from a synthetic catalogue, and signs webhook
-// bodies (base64 HMAC of the raw bytes). Every GraphQL call is recorded with its operation
-// and variables. Faults are opt-in: a lost exchange, a 5xx, THROTTLED once, an oversize
+// bodies (base64 HMAC of the raw bytes). The shop-specific webhook subscriptions
+// (docs/briefs/shopify-shop-specific-webhooks.md): WebhookSubscriptions lists the shop's
+// subscriptions of the queried topics (id, topic, uri) and WebhookSubscriptionCreate adds
+// one, refusing a second of the same topic and address with userErrors, as Shopify does;
+// `state.subscriptions` may be seeded with another app path's subscription. Every GraphQL
+// call is recorded with its operation and variables. Faults are opt-in: a lost exchange, a 5xx, THROTTLED once, an oversize
 // reply, a non-development store and another granted scope; `extraFields` adds keys no
 // document asked for (the broker's minimiser must drop them). Recorded development-store
 // fixtures replace or augment it after the owner-approved smoke.
@@ -32,6 +36,9 @@ export function createShopifyOracle({
     tokens: [],
     calls: [],
     extraFields: false,
+    // The shop's webhook subscriptions ({id, topic, uri}); ids count up from 7001.
+    subscriptions: [],
+    nextSubscriptionId: 7001,
     // The synthetic catalogue: two collections, thirty products (the first five in Summer).
     catalog: {
       collections: [
@@ -111,6 +118,60 @@ export function createShopifyOracle({
               v.after,
               productNode,
             ),
+          },
+        };
+      }
+      case "WebhookSubscriptions": {
+        // The broker's fixed list: both app topics, no variables, one page of 25.
+        const topics = ["APP_UNINSTALLED", "APP_SCOPES_UPDATE"];
+        const nodes = state.subscriptions.filter((w) => topics.includes(w.topic));
+        return {
+          webhookSubscriptions: {
+            nodes: nodes.slice(0, 25).map((w) => ({
+              id: "gid://shopify/WebhookSubscription/" + w.id,
+              topic: w.topic,
+              uri: w.uri,
+            })),
+            pageInfo: { hasNextPage: nodes.length > 25 },
+          },
+        };
+      }
+      case "WebhookSubscriptionCreate": {
+        const topic = v.topic;
+        const uri = v.uri;
+        if (
+          !["APP_UNINSTALLED", "APP_SCOPES_UPDATE"].includes(topic) ||
+          typeof uri !== "string" ||
+          !/^https:\/\//.test(uri)
+        )
+          return {
+            webhookSubscriptionCreate: {
+              webhookSubscription: null,
+              userErrors: [{ field: ["webhookSubscription", "uri"], message: "Invalid" }],
+            },
+          };
+        if (state.subscriptions.some((w) => w.topic === topic && w.uri === uri))
+          return {
+            webhookSubscriptionCreate: {
+              webhookSubscription: null,
+              userErrors: [
+                {
+                  field: ["webhookSubscription", "uri"],
+                  message: "Address for this topic has already been taken",
+                },
+              ],
+            },
+          };
+        const created = { id: String(state.nextSubscriptionId++), topic, uri };
+        state.subscriptions.push(created);
+        return {
+          webhookSubscriptionCreate: {
+            webhookSubscription: {
+              id: "gid://shopify/WebhookSubscription/" + created.id,
+              topic,
+              uri,
+            },
+            userErrors: [],
           },
         };
       }
@@ -196,7 +257,7 @@ export function createShopifyOracle({
         if (!state.tokens.includes(headers.get("x-shopify-access-token") ?? ""))
           return json({ errors: "[API] Invalid API key or access token" }, 401);
         const request = JSON.parse(init.body);
-        call.operation = /^query ([A-Za-z]+)/.exec(request.query ?? "")?.[1] ?? null;
+        call.operation = /^(?:query|mutation) ([A-Za-z]+)/.exec(request.query ?? "")?.[1] ?? null;
         call.variables = request.variables ?? null;
         const identity = request.query === shopifyOracleIdentityDocument;
         const data = identity ? null : readData(call.operation, request.variables ?? {});

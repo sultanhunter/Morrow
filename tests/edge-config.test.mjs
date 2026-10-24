@@ -122,10 +122,11 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
     // items 7-8). The vault is held in production until the ADR-0007 item 9 custody ADR,
     // so production binds neither vault secret. M5 PR-1's Stripe names join staging only
     // while the Stripe switch is on; it is off (owner decision (c), 2026-10-21), so no
-    // Worker binds any Stripe name.
+    // Worker binds any Stripe name. The shop-specific webhook subscriptions add the staging
+    // broker's copy of CONNECTOR_CONFIGURATION_JSON.
     assert.equal(
       verdict.resolved["broker:" + environment].bindings.length,
-      { development: 15, staging: 18, production: 13 }[environment],
+      { development: 15, staging: 19, production: 13 }[environment],
       environment,
     );
     assert.ok(verdict.resolved["broker:" + environment].bindings.includes("TURNSTILE_SECRET_KEY"));
@@ -818,6 +819,9 @@ test("P04.T01i AC01/AC02: the committed staging blocks are D1's and pass every v
     }),
   );
   assert.equal(connector.MORROW_DATABASE_BINDING_JSON, api.MORROW_DATABASE_BINDING_JSON);
+  // The shop-specific webhook subscriptions: the broker's copy is the connector's, byte for
+  // byte, so each subscription's URL is the connector's own webhook path.
+  assert.equal(broker.CONNECTOR_CONFIGURATION_JSON, connector.CONNECTOR_CONFIGURATION_JSON);
   const challenge = JSON.parse(api.LOGIN_CHALLENGE_JSON);
   const turnstile = JSON.parse(broker.TURNSTILE_CONFIGURATION_JSON);
   assert.equal(challenge.siteKey, "0x4AAAAAAFdwF1eDox4vfBd2");
@@ -887,6 +891,14 @@ test("P04.T01i AC01: each Worker's staging vars are exactly its allowlist", asyn
     },
     { broker: (c) => delete c.env.staging.vars.TURNSTILE_CONFIGURATION_JSON },
     { broker: (c) => (c.env.staging.vars.WORKSPACE_CONFIGURATION_JSON = "{}") },
+    // The shop-specific webhook subscriptions: the broker's copy of the connector's
+    // configuration, in staging only.
+    { broker: (c) => delete c.env.staging.vars.CONNECTOR_CONFIGURATION_JSON },
+    {
+      broker: (c) =>
+        (c.env.production.vars.CONNECTOR_CONFIGURATION_JSON =
+          c.env.staging.vars.CONNECTOR_CONFIGURATION_JSON),
+    },
     // v1 PR 1: the staging connector's two reviewed identifiers, exactly.
     { connector: (c) => (c.env.staging.vars.EXTRA_JSON = "{}") },
     { connector: (c) => delete c.env.staging.vars.CONNECTOR_CONFIGURATION_JSON },
@@ -990,6 +1002,39 @@ test("v1 PR 1: the staging connector's configuration names its own origin and th
           }),
       },
       "EDGE_STAGING_VALUE_URL",
+    ],
+    // The shop-specific webhook subscriptions: the broker's copy must be the connector's
+    // byte for byte (another origin, or the same members reordered, is refused), and the
+    // connector's origin is admitted in that var only.
+    [
+      {
+        broker: (c) =>
+          (c.env.staging.vars.CONNECTOR_CONFIGURATION_JSON = json({
+            origin: "https://morrow-staging-other.sultanibneusman0.workers.dev",
+            apiOrigin: stagingOrigin,
+          })),
+      },
+      "EDGE_STAGING_SHARED_VARS",
+    ],
+    [
+      {
+        broker: (c) =>
+          (c.env.staging.vars.CONNECTOR_CONFIGURATION_JSON = JSON.stringify({
+            apiOrigin: stagingOrigin,
+            origin: connectorOrigin,
+            schemaVersion: 1,
+          })),
+      },
+      "EDGE_STAGING_SHARED_VARS",
+    ],
+    [
+      {
+        broker: (c) =>
+          patchVar(c.env.staging.vars, "TURNSTILE_CONFIGURATION_JSON", {
+            hostname: new URL(connectorOrigin).hostname,
+          }),
+      },
+      "EDGE_STAGING_VALUE_HOSTNAME",
     ],
   ];
   for (const [index, [mutate, expected]] of cases.entries()) {
@@ -1511,7 +1556,7 @@ test("M5: switched on, the full Stripe set is required and the reviewed configur
   const verdict = await verify(tree(turnedOn()), undefined, on);
   assert.deepEqual(verdict.problems, []);
   assert.equal(verdict.stripeSwitch, "on");
-  assert.equal(verdict.resolved["broker:staging"].bindings.length, 22);
+  assert.equal(verdict.resolved["broker:staging"].bindings.length, 23);
   assert.ok(verdict.resolved["api:staging"].bindings.includes("MORROW_STRIPE_MODE"));
   // Development and production stay off with the switch on.
   for (const environment of ["development", "production"])
