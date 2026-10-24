@@ -204,11 +204,16 @@ export function parseModelCallV2(text: unknown): ModelCallV2 | null {
       previousUses = uses.map((b) => b.id as string);
       if (new Set(previousUses).size !== previousUses.length) return null;
     } else if (i > 0) {
-      // A later turn's input is exactly the previous reply's tool results, in its order.
-      const results = m.content as Record<string, unknown>[];
+      // A later turn's input is exactly the previous reply's tool results, in its order, then
+      // at most one text block per question answered (the requester's own answers).
+      const blocks = m.content as Record<string, unknown>[];
+      const results = blocks.slice(0, previousUses.length);
+      const after = blocks.slice(previousUses.length);
       if (
         results.length !== previousUses.length ||
-        results.some((b, k) => b.type !== "tool_result" || b.toolUseId !== previousUses[k])
+        results.some((b, k) => b.type !== "tool_result" || b.toolUseId !== previousUses[k]) ||
+        after.length > 2 ||
+        after.some((b) => b.type !== "text")
       )
         return null;
     } else if ((m.content as Record<string, unknown>[]).some((b) => b.type === "tool_result")) return null;

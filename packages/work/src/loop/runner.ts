@@ -281,7 +281,7 @@ export async function runTurn(
     } else {
       const previous = replied(rows, turn - 1);
       if (!previous || previous.outcome !== "tool_use") throw retry("conversation");
-      input = nextTurnInput(previous);
+      input = nextTurnInput(previous, await step.loop.answers());
       const output = previous.output as Current_AssistantModelMessage;
       const results = previous.toolResults as readonly { toolUseId: string; outcome: string }[];
       usedTools = output.content

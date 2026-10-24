@@ -22,6 +22,7 @@ export const agentRunSql = Object.freeze({
   objective: "SELECT outcome,objective FROM morrow_work.agent_run_objective()",
   conversation:
     "SELECT turn,attempt,input,input_digest,output,outcome,tool_results,prefix_digest_after FROM morrow_work.agent_run_conversation()",
+  answers: "SELECT tool_use_id,answer FROM morrow_work.agent_run_answers()",
   turnOpen: "SELECT outcome,reason FROM morrow_work.agent_turn_open($1,$2,$3,$4,$5,$6)",
   turnSettle:
     "SELECT outcome,turn_outcome,open_call,last_sequence FROM morrow_work.agent_turn_settle($1,$2)",
@@ -225,6 +226,11 @@ export interface ConversationRow {
   readonly toolResults: readonly unknown[];
   readonly prefixDigestAfter: string | null;
 }
+/** One answered question (content: in memory, inside one step only). */
+export interface QuestionAnswer {
+  readonly toolUseId: string;
+  readonly answer: string;
+}
 export type TurnOpen =
   | { readonly outcome: "opened" | "opened_before" }
   | { readonly outcome: "stop"; readonly reason: "turn_limit" | "cost_budget" | "wall_time" }
@@ -283,6 +289,8 @@ export interface AgentRunSteps {
   /** The person's request (turn 1's text): in memory, within the step only. */
   objective(): Promise<string | "denied">;
   conversation(): Promise<readonly ConversationRow[]>;
+  /** The requester's answers to the run's questions, by the inbox.ask call's tool_use id. */
+  answers(): Promise<readonly QuestionAnswer[]>;
   turnOpen(input: {
     readonly turn: number;
     readonly attempt: number;
@@ -554,6 +562,26 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
             toolResults: Object.freeze(results),
             prefixDigestAfter: r.prefix_digest_after as string | null,
           });
+        }),
+      );
+    },
+    async answers() {
+      const rows = await query(agentRunSql.answers);
+      if (!Array.isArray(rows) || rows.length > 2) throw held();
+      const seen = new Set<string>();
+      return Object.freeze(
+        rows.map((row) => {
+          const r = shape(row, ["tool_use_id", "answer"]);
+          if (
+            !exact(toolUseId, r.tool_use_id) ||
+            seen.has(r.tool_use_id) ||
+            typeof r.answer !== "string" ||
+            r.answer.length < 1 ||
+            [...r.answer].length > 2000
+          )
+            throw held();
+          seen.add(r.tool_use_id);
+          return Object.freeze({ toolUseId: r.tool_use_id, answer: r.answer });
         }),
       );
     },

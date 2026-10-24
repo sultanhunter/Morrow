@@ -732,9 +732,10 @@ export function reviewedModelRecord(record) {
 // PR 18, the plan-drafts switch (ADR-0034 item 10; committed off, start routes held): the
 // api composes it from docs/decisions/plan-drafts-staging.json (packages/policy's
 // planDraftsRecord), so it carries no var or secret. It may be on only once the agent-loop
-// switch (ADR-0027 item 11) is on and P05.T04b's Ask-bound envelope exists. Neither exists
-// yet: until each lands with its own reviewed record, both count as off here, so an "on"
-// plan-drafts record is a problem. start_routes goes `ready` only after lab:plan-start.
+// switch (ADR-0027 item 11) is on and P05.T04b's Ask-bound envelope exists. Build order PR 11
+// gives the loop its reviewed record (docs/decisions/agent-loop-staging.json, committed off),
+// which verifyEdgeConfig passes in; the envelope has none yet and counts as absent, so an
+// "on" plan-drafts record is a problem. start_routes goes `ready` only after lab:plan-start.
 export const edgePlanDraftsPrerequisites = Object.freeze({ agentLoop: "off", askEnvelope: false });
 export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsPrerequisites) {
   if (
@@ -1388,7 +1389,10 @@ export async function verifyEdgeConfig({
     problem("EDGE_STAGING_RECORD_UNREADABLE", "plan-drafts-staging.json");
   else
     try {
-      reviewedPlanDraftsRecord(planDraftsRecord);
+      reviewedPlanDraftsRecord(planDraftsRecord, {
+        agentLoop: loopSwitch("staging"),
+        askEnvelope: edgePlanDraftsPrerequisites.askEnvelope,
+      });
     } catch (error) {
       problem(
         error instanceof Error && error.message === "EDGE_PLAN_DRAFTS_BEFORE_LOOP"

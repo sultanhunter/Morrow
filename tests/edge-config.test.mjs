@@ -40,6 +40,9 @@ import {
   orchestratorPackageAllowlist,
   resolvedEdgeConfig,
   edgePlanDraftsPrerequisites,
+  edgeAgentLoopPrerequisites,
+  edgeAgentLoopVarNames,
+  reviewedAgentLoopRecord,
   reviewedModelRecord,
   reviewedPlanDraftsRecord,
   reviewedRuntimeRecord,
@@ -51,6 +54,7 @@ import {
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
 import { planDraftsSwitchAllowed } from "../packages/policy/src/projects/plan-draft.ts";
+import { agentLoopPrerequisites } from "../scripts/generate-agent-platform.mjs";
 
 // P04.T02a AC01, AC04, AC24 and the static half of AC22. Configuration is read
 // with the pinned wrangler (no account, credential or network).
@@ -1836,11 +1840,18 @@ test("P04.T01i D1: no placement outside the staging api and broker, an explicit 
 test("M3 PR-2: the orchestrator binds exactly ListingsRunWorkflow, RuntimeBroker and the one-minute cron", async () => {
   for (const environment of edgeEnvironments) {
     const config = await resolvedEdgeConfig("orchestrator", environment);
+    // Build order PR 11: AgentRunWorkflow beside it (dispatched only while the agent-loop
+    // switch is on as well).
     assert.deepEqual(config.workflows, [
       {
         name: `morrow-${environment}-listings-run`,
         binding: "LISTINGS_RUN",
         class_name: "ListingsRunWorkflow",
+      },
+      {
+        name: `morrow-${environment}-agent-run`,
+        binding: "AGENT_RUN",
+        class_name: "AgentRunWorkflow",
       },
     ]);
     assert.deepEqual(config.triggers, { crons: ["* * * * *"] });
@@ -1855,6 +1866,8 @@ test("M3 PR-2: the orchestrator binds exactly ListingsRunWorkflow, RuntimeBroker
     { orchestrator: (c) => (c.triggers.crons = ["*/5 * * * *"]) },
     { orchestrator: (c) => (c.env.staging.triggers = { crons: [] }) },
     { orchestrator: (c) => c.workflows.push({ name: "x", binding: "X", class_name: "X" }) },
+    { orchestrator: (c) => c.env.staging.workflows.pop() },
+    { orchestrator: (c) => (c.workflows[1].class_name = "ListingsRunWorkflow") },
   ].entries()) {
     const found = codes(await verify(tree(mutate)));
     assert.ok(found.includes("EDGE_ORCHESTRATOR_BINDINGS"), index + ": " + found.join(","));
@@ -2152,6 +2165,166 @@ test("the plan-drafts switch: committed off and held; on is refused while the lo
     );
     assert.deepEqual(found, [expected]);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Build order PR 11 (ADR-0027 item 11): the agent-loop switch, committed off. Its runtime
+// image is MORROW_AGENT_LOOP ("on") on the staging api, broker and orchestrator, beside the
+// model-provider switch; it may be on only once every prerequisite its record names is
+// recorded with an evidence file that exists.
+const committedLoop = JSON.parse(readFileSync("docs/decisions/agent-loop-staging.json", "utf8"));
+const loopRecorded = (r) => {
+  for (const key of Object.keys(r.prerequisites))
+    r.prerequisites[key] = {
+      recorded_on: "2026-11-02",
+      evidence: "docs/evidence/live/2026-11-02-agent-loop-" + key.replaceAll("_", "-") + ".md",
+    };
+};
+// A records() root holding the loop record (and, with `evidence`, its evidence files).
+const loopRecords = (edit, { model = false, evidence = true } = {}) => {
+  const paths = records(model ? { model: modelOn } : {});
+  const loop = structuredClone(committedLoop);
+  edit?.(loop);
+  writeFileSync(join(paths.evidenceRoot, "agent-loop-staging.json"), JSON.stringify(loop));
+  if (evidence)
+    for (const p of Object.values(loop.prerequisites))
+      if (p && typeof p.evidence === "string") {
+        mkdirSync(join(paths.evidenceRoot, "docs/evidence/live"), { recursive: true });
+        writeFileSync(join(paths.evidenceRoot, p.evidence), "# Evidence\n");
+      }
+  return { ...paths, agentLoopPath: join(paths.evidenceRoot, "agent-loop-staging.json") };
+};
+const loopTurnedOn = (model = modelTurnedOn) =>
+  model({
+    api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+    broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+    orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+  });
+
+test("PR 11: the committed agent-loop record is off with no prerequisite recorded, and the record rule", () => {
+  assert.deepEqual({ ...reviewedAgentLoopRecord(committedLoop) }, { switch: "off" });
+  assert.equal(committedLoop.switch, "off");
+  assert.deepEqual(Object.keys(committedLoop.prerequisites).sort(), [...edgeAgentLoopPrerequisites].sort());
+  assert.deepEqual([...edgeAgentLoopPrerequisites], [...agentLoopPrerequisites]);
+  assert.ok(Object.values(committedLoop.prerequisites).every((p) => p === null));
+  // On before every prerequisite is recorded is refused; one missing is enough.
+  const on = structuredClone(committedLoop);
+  on.switch = "on";
+  assert.throws(() => reviewedAgentLoopRecord(on), /EDGE_AGENT_LOOP_PREREQUISITES/);
+  const evidenceRoot = loopRecords(loopRecorded).evidenceRoot;
+  loopRecorded(on);
+  assert.deepEqual({ ...reviewedAgentLoopRecord(on, evidenceRoot) }, { switch: "on" });
+  const one = structuredClone(on);
+  one.prerequisites.store_content_cleanup = null;
+  assert.throws(() => reviewedAgentLoopRecord(one, evidenceRoot), /EDGE_AGENT_LOOP_PREREQUISITES/);
+  // A recorded prerequisite whose evidence is missing, outside docs/evidence or malformed.
+  assert.throws(() => reviewedAgentLoopRecord(on, scratch), /EDGE_STAGING_AGENT_LOOP_RECORD/);
+  for (const edit of [
+    (r) => (r.prerequisites.lab_agent_loop = { recorded_on: "2026-11-02", evidence: "README.md" }),
+    (r) =>
+      (r.prerequisites.lab_agent_loop = {
+        recorded_on: "02-11-2026",
+        evidence: r.prerequisites.lab_agent_loop.evidence,
+      }),
+    (r) => (r.prerequisites.lab_agent_loop = { recorded_on: "2026-11-02" }),
+    (r) => (r.prerequisites.lab_agent_loop = { ...r.prerequisites.lab_agent_loop, by: "x" }),
+    (r) => (r.prerequisites.lab_agent_loop = { recorded_on: "2026-11-02", evidence: "docs/evidence/../x.md" }),
+    (r) => (r.prerequisites.extra = null),
+    (r) => delete r.prerequisites.gateway_reservations_stops,
+    (r) => (r.switch = true),
+    (r) => (r.workflow = "agent-run@2"),
+    (r) => (r.environment_kind = "production"),
+    (r) => (r.extra = 1),
+    (r) => delete r.prerequisites,
+  ]) {
+    const record = structuredClone(on);
+    edit(record);
+    assert.throws(() => reviewedAgentLoopRecord(record, evidenceRoot), /EDGE_STAGING_AGENT_LOOP_RECORD/);
+  }
+  // The names: only the staging api, broker and orchestrator, never development or production.
+  for (const worker of ["api", "broker", "orchestrator"])
+    assert.deepEqual(edgeAgentLoopVarNames(worker, "staging"), ["MORROW_AGENT_LOOP"], worker);
+  assert.deepEqual(edgeAgentLoopVarNames("connector", "staging"), []);
+  for (const environment of ["development", "production"])
+    for (const worker of ["api", "broker", "orchestrator", "connector"])
+      assert.deepEqual(edgeAgentLoopVarNames(worker, environment), [], worker);
+});
+
+test("PR 11: switched off, the loop var anywhere is a mixed state; on needs its prerequisites and the model switch", async () => {
+  // Committed: clean.
+  assert.deepEqual((await verify(resolve("."))).problems, []);
+  // Off with the var on any Worker, in any environment.
+  for (const [index, mutate] of [
+    { api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on") },
+    { broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on") },
+    { orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on") },
+    { orchestrator: (c) => (c.vars.MORROW_AGENT_LOOP = "on") },
+    { connector: (c) => (c.vars.MORROW_AGENT_LOOP = "on") },
+  ].entries()) {
+    const found = codes(await verify(tree(mutate)));
+    assert.ok(found.includes("EDGE_AGENT_LOOP_SWITCH_MIXED"), index + ": " + found.join(","));
+  }
+  // On, every prerequisite recorded, the model switch on and the three vars: clean.
+  const on = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)), { model: true });
+  assert.deepEqual((await verify(tree(loopTurnedOn()), undefined, on)).problems, []);
+  // On with a Worker missing its var, or the var with another value: mixed or EDGE_VARS.
+  const found = codes(
+    await verify(
+      tree(
+        modelTurnedOn({
+          api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+          broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+        }),
+      ),
+      undefined,
+      on,
+    ),
+  );
+  assert.ok(found.includes("EDGE_AGENT_LOOP_SWITCH_MIXED"), found.join(","));
+  const yes = codes(
+    await verify(
+      tree(
+        modelTurnedOn({
+          api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "yes"),
+          broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+          orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+        }),
+      ),
+      undefined,
+      on,
+    ),
+  );
+  assert.ok(yes.includes("EDGE_VARS"), yes.join(","));
+  // On without the model-provider switch.
+  const noModel = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)));
+  const without = codes(
+    await verify(
+      tree({
+        api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+        broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+        orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+      }),
+      undefined,
+      noModel,
+    ),
+  );
+  assert.ok(without.includes("EDGE_AGENT_LOOP_WITHOUT_MODEL"), without.join(","));
+  // On before its prerequisites, and a recorded prerequisite without its evidence file.
+  const early = loopRecords((r) => (r.switch = "on"), { model: true });
+  assert.ok(
+    codes(await verify(tree(loopTurnedOn()), undefined, early)).includes(
+      "EDGE_AGENT_LOOP_PREREQUISITES",
+    ),
+  );
+  const noEvidence = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)), {
+    model: true,
+    evidence: false,
+  });
+  assert.ok(
+    codes(await verify(tree(loopTurnedOn()), undefined, noEvidence)).includes(
+      "EDGE_STAGING_AGENT_LOOP_RECORD",
+    ),
+  );
 });
 
 // ---------------------------------------------------------------------------

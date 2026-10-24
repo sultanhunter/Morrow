@@ -7,7 +7,7 @@ import type {
   Current_UserModelMessage,
 } from "@morrow/contracts";
 import { canonicalJson, sha256Hex } from "../digest.js";
-import type { ConversationRow, ToolCallOutcome } from "./steps.js";
+import type { ConversationRow, QuestionAnswer, ToolCallOutcome } from "./steps.js";
 
 // The conversation of one agent run (ADR-0027 items 4, 5 and 7), built only from its own
 // run_turns rows inside one step: content never reaches a step result. The conversation is
@@ -43,10 +43,23 @@ export function firstTurnInput(objective: string): Current_UserModelMessage {
     content: Object.freeze([Object.freeze({ type: "text" as const, text: objective })]),
   }) as unknown as Current_UserModelMessage;
 }
-/** Turn n+1's input: the tool results turn n's reply led to, in its tool_use order. */
-export function nextTurnInput(previous: ConversationRow): Current_UserModelMessage {
+/** The fixed label before the requester's answer to an inbox.ask question. */
+export const answerLabel = "The person answered your question: ";
+/**
+ * Turn n+1's input: the tool results turn n's reply led to, in its tool_use order, then, for
+ * each of its inbox.ask calls the requester answered, the answer as one text block (the
+ * requester's own words, as the request is; only the run's requester answers, and the answer
+ * names no tool, recipient or limit: those come from the manifest and SQL).
+ */
+export function nextTurnInput(
+  previous: ConversationRow,
+  answers: readonly QuestionAnswer[] = [],
+): Current_UserModelMessage {
   const output = previous.output as Current_AssistantModelMessage | null;
   if (previous.outcome !== "tool_use" || !output) throw Error("LOOP_INPUT_INVALID");
+  const asks = output.content
+    .filter((b) => b.type === "tool_use" && b.name === "inbox.ask")
+    .map((b) => (b as { readonly id: string }).id);
   const uses = output.content.filter((b) => b.type === "tool_use").map((b) => b.id);
   const results = previous.toolResults as readonly {
     readonly type: string;
@@ -57,9 +70,13 @@ export function nextTurnInput(previous: ConversationRow): Current_UserModelMessa
     results.some((r, i) => r?.type !== "tool_result" || r.toolUseId !== uses[i])
   )
     throw Error("LOOP_INPUT_INVALID");
+  const answered = asks
+    .map((id) => answers.find((a) => a.toolUseId === id))
+    .filter((a): a is QuestionAnswer => a !== undefined)
+    .map((a) => Object.freeze({ type: "text" as const, text: answerLabel + a.answer }));
   return Object.freeze({
     role: "user" as const,
-    content: Object.freeze([...previous.toolResults]),
+    content: Object.freeze([...previous.toolResults, ...answered]),
   }) as unknown as Current_UserModelMessage;
 }
 /** The reply of the attempt that has one, per turn (at most one attempt of a turn has one). */

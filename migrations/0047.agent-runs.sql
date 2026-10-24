@@ -26,7 +26,7 @@ BEGIN;
 --     on one store; this migration admits no other kind) and cmd_agent_run_answer (the
 --     requester's answer, which opens the resume lease, ADR-0027 item 1); the runtime's
 --     agent_run_pending_starts and agent_run_resume_lease (ids only), agent_run_start,
---     agent_run_conversation, agent_turn_open, agent_tool_call_begin, agent_tool_call_finish,
+--     agent_run_conversation, agent_run_answers, agent_turn_open, agent_tool_call_begin, agent_tool_call_finish,
 --     agent_question_ask, agent_run_wait and agent_run_finish; the broker's
 --     morrow_vault.agent_turn_begin and agent_turn_end. Revisable owner helpers:
 --     agent_turn_close_uncertain, agent_run_end and agent_runs_close_stale.
@@ -1264,6 +1264,20 @@ BEGIN
   t.prefix_digest_after::text FROM morrow_work.run_turns t
   WHERE t.organization_id=e.organization_id AND t.workspace_id=e.workspace_id AND t.run_id=e.run_id ORDER BY t.turn,t.attempt;
 END $$;
+-- The entered lease's run's answered questions: each inbox.ask call's tool_use id and the
+-- requester's answer, which the next turn's input carries after that call's tool result (the
+-- requester's own words, as the request is). Content, inside the step only.
+CREATE FUNCTION morrow_work.agent_run_answers() RETURNS TABLE(tool_use_id text,answer text)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+#variable_conflict use_column
+DECLARE e record;
+BEGIN
+ SELECT * INTO e FROM morrow_work.agent_run_entered();
+ IF NOT FOUND THEN RETURN; END IF;
+ RETURN QUERY SELECT q.tool_use_id,q.answer FROM morrow_work.agent_run_questions q
+  WHERE q.organization_id=e.organization_id AND q.workspace_id=e.workspace_id AND q.run_id=e.run_id AND q.status='answered'
+  ORDER BY q.created_at,q.id;
+END $$;
 -- Opens one turn attempt (ADR-0027 items 4 and 6): the run is running; attempt 1 of turn n
 -- is the next turn (n = turns taken + 1) after a tool_use reply whose every tool call
 -- finished (or n = 1); attempt 2 only after attempt 1 of the same turn closed uncertain
@@ -1844,7 +1858,7 @@ DO $$ DECLARE r record; BEGIN
  FOR r IN SELECT p.oid::regprocedure AS signature FROM pg_catalog.pg_proc p WHERE (p.pronamespace='morrow_work'::regnamespace AND p.proname IN (
   'loop_user_message_valid','loop_assistant_message_valid','loop_tool_results_valid','loop_choices_valid','agent_manifest_matches','agent_run_entered',
   'cmd_agent_run_admit','cmd_agent_run_answer','agent_run_pending_starts','agent_run_resume_lease','agent_run_start','agent_run_state',
-  'agent_run_objective','agent_run_conversation','agent_turn_open','agent_turn_settle','agent_tool_call_begin','agent_tool_call_finish',
+  'agent_run_objective','agent_run_conversation','agent_run_answers','agent_turn_open','agent_turn_settle','agent_tool_call_begin','agent_tool_call_finish',
   'agent_question_ask','agent_run_wait','agent_run_finish')) OR (p.pronamespace='morrow_vault'::regnamespace AND p.proname IN (
   'agent_turn_begin','agent_turn_end')) LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',r.signature);
@@ -1858,7 +1872,7 @@ GRANT EXECUTE ON FUNCTION morrow_work.cmd_agent_run_admit(text,text,text,text,te
   text,text,text),
  morrow_work.cmd_agent_run_answer(text,text,text,text,text) TO morrow_work_api;
 GRANT EXECUTE ON FUNCTION morrow_work.agent_run_pending_starts(),morrow_work.agent_run_resume_lease(text,text,text),morrow_work.agent_run_start(),
- morrow_work.agent_run_state(),morrow_work.agent_run_objective(),morrow_work.agent_run_conversation(),
+ morrow_work.agent_run_state(),morrow_work.agent_run_objective(),morrow_work.agent_run_conversation(),morrow_work.agent_run_answers(),
  morrow_work.agent_turn_open(text,text,text,text,text,text),morrow_work.agent_turn_settle(text,text),
  morrow_work.agent_tool_call_begin(text,text,text,text,text),morrow_work.agent_tool_call_finish(text,text,text,text,text,text,text,text),
  morrow_work.agent_question_ask(text,text,text),morrow_work.agent_run_wait(),morrow_work.agent_run_finish(text) TO morrow_runtime_executor;
@@ -1875,6 +1889,7 @@ ALTER FUNCTION morrow_work.agent_run_start() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_run_state() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_run_objective() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_run_conversation() OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.agent_run_answers() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_turn_open(text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_turn_settle(text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_tool_call_begin(text,text,text,text,text) OWNER TO morrow_work_command;
