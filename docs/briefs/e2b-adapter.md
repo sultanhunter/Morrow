@@ -25,7 +25,7 @@ Non-goals: the recorded qualification and switching on (PR 9); agent computer to
 
 ## Interfaces touched
 
-`apps/broker/src/{runtime-e2b,runtime-provider,runtime-gateway,runtime-ledger,runtime-fake,vault,vault-statements-runtime,index}.ts`; `apps/workers/src/{runtime-sweep,orchestrator}.ts`; `migrations/0047.runtime-e2b.sql` and the manifest; `infra/e2b/morrow-computer/*`; `docs/decisions/{provider-bindings,runtime-staging}.json` (text only; the switch stays off); `infra/rotation-runbook.md`; `tests/tenant-conformance/registry.mjs`; `scripts/runtime-operations-lab.mjs` (extended, no new lab; it stays in `lab:group:pg-linking`); `docs/development/ci.md`.
+`apps/broker/src/{runtime-e2b,runtime-provider,runtime-gateway,runtime-ledger,runtime-fake,vault,vault-statements-runtime,index}.ts`; `apps/workers/src/{runtime-sweep,orchestrator}.ts`; `migrations/0047.runtime-e2b.sql` and the manifest; `infra/e2b/morrow-computer/*`; `docs/decisions/{provider-bindings,runtime-staging}.json` (text only; the switch stays off); `infra/rotation-runbook.md`; `tests/tenant-conformance/registry.mjs`; `scripts/runtime-operations-lab.mjs` (extended, no new lab; it stays in `lab:group:pg-linking`); `docs/development/ci.md`; `tests/projects-migrations.test.mjs` (0046 no longer the last row).
 
 ## Security notes
 
@@ -44,6 +44,8 @@ Non-goals: the recorded qualification and switching on (PR 9); agent computer to
 - [x] `tests/broker-runtime.test.mjs` (25): the deployed composition; the token's vault record (sealed, opened strictly, `stopped` with no envelope); token stored before the job, opened per call, destroyed with any settlement; store or open failures still kill; a broken reply holds even after a successful kill; a stop ends a running job at its next call and its own kill follows; stops in the sweep; a stop's sweep cutting a job; a job end to end over E2B's recorded wire.
 - [x] `tests/orchestrator-runtime-sweep.test.mjs` (4): the five-minute schedule, held and unbound brokers, `waitUntil`, sweeping with dispatch off.
 - [x] `lab:runtime-operations` (PostgreSQL 17, extended): J5 (the token sealed during the job, destroyed by the kill), T (put/get edges, destroy reasons, grants, constraints), L2 (a stop: `stopped` in the sweep's list, the running job's token open answers `stopped`, the next sweep kills both sandboxes and destroys the token).
+- [x] `tests/projects-migrations.test.mjs`: its manifest test pinned 0046 as the last row; it now pins row 0046 (applied live), so later migrations may append.
+- [x] Local run, 2026-10-24 (Mac at load 600 to 750, so CI is the authority): `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` and `format:check` pass. The targeted runtime, migration and vault files pass 103 of 103. `lab:runtime-operations` passes 24 checks. `lab:tenant-conformance` passes 16 of 17: P3 got one 503 under load, a work-API route this PR does not touch, and passed alone on rerun; S1, S5 and S7 (the registry, definers and vault grants) pass. A first attempt timed out starting its engine (`ETIMEDOUT`). `npm test` passes 4450 of 4452. The two failures were `projects-migrations`' last-row pin (fixed above) and the `broker-client` AC16 50 ms timing check; both files pass 19 of 19 when rerun.
 - [ ] Hosted CI `foundation` on the PR head; Tier 2 AI review (separate context, same model family) with the security lens.
 
 ## Owner steps (after merge; none needed for the PR itself)
