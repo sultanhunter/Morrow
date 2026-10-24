@@ -5,6 +5,7 @@
 // into these shapes when the routes exist. ADR-0033 and ADR-0034 (projects, goals; accepted
 // 2026-10-24) have no routes yet, and this PR builds no contract or backend for them: "Works
 // toward" and "Works in" are display text here, never records, until their routes exist.
+import type { SpecialistProp } from "./components/avatars";
 import type { Command, Outcome } from "./port";
 import type { Id, ListingsAgentView, ModelCatalogueView, StoreConnectionView } from "./model";
 
@@ -17,8 +18,8 @@ export type AgentCharacter =
   | "support"
   | "marketing"
   | "specialist";
-/** A specialist's prop for its skill (Sunrise brief §2.4). */
-export type SpecialistProp = "calendar" | "envelope" | "magnifier" | "pencil" | "chart";
+/** A specialist's prop for its skill (Sunrise brief §2.4): PR 14's characters' own type. */
+export type { SpecialistProp };
 /** Status words from the closed badge list (ADR-0032 item 2). */
 export type AgentStatus = "active" | "working" | "needs_you" | "paused" | "done";
 export type PersonRole = "owner" | "admin" | "member";

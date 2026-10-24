@@ -1,11 +1,17 @@
-/* Base: system type, light scheme, visible focus, 24 px targets, reduced motion. */
+/* Base (ADR-0032 Sunrise): Inter with tabular figures, 16 px body text, the warm page, a
+   2 px focus ring with a 2 px gap on everything focusable, 44 px targets (48 below
+   760 px, the phone floor) and reduced motion. Colours come only from tokens.css. */
 :root {
   color-scheme: light;
+  --target: var(--target-minimum);
   font-family: var(--type-body);
+  font-optical-sizing: auto;
   font-size: var(--type-body-size);
-  line-height: var(--type-line-height);
+  line-height: var(--type-body-line);
+  font-variant-numeric: tabular-nums;
   color: var(--color-text);
-  background: var(--color-canvas);
+  background: var(--color-page);
+  -webkit-font-smoothing: antialiased;
 }
 *,
 *::before,
@@ -15,6 +21,7 @@
 body {
   margin: 0;
   min-width: 0;
+  background: var(--color-page);
 }
 h1,
 h2,
@@ -27,24 +34,26 @@ figure {
 }
 h1 {
   font-family: var(--type-display);
-  font-size: var(--type-title-size);
-  line-height: 1.25;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line);
+  font-weight: var(--type-h1-weight);
+  letter-spacing: var(--type-h1-tracking);
 }
 h2 {
-  font-size: var(--type-section-size);
-  line-height: 1.35;
-  font-weight: 600;
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line);
+  font-weight: var(--type-title-weight);
 }
 h3 {
-  font-size: var(--type-reading-size);
-  font-weight: 600;
+  font-size: var(--type-subhead-size);
+  line-height: var(--type-subhead-line);
+  font-weight: var(--type-subhead-weight);
 }
 p + p {
   margin-top: var(--space-3);
 }
-ul {
+ul,
+ol {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -61,18 +70,27 @@ textarea {
 .item-link,
 .goal-text,
 .switcher-name,
-.topbar-name {
+.topbar-name,
+.row-title {
   overflow-wrap: anywhere;
 }
 a {
-  color: var(--color-accent);
+  color: var(--color-link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
 }
 :focus {
   outline: none;
 }
 :focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 3px;
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+::placeholder {
+  color: var(--color-subdued);
+  opacity: 1;
 }
 [hidden] {
   display: none !important;
@@ -81,11 +99,13 @@ a {
   color: var(--color-subdued);
 }
 .small {
-  font-size: var(--type-caption-size);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
 }
 .reading {
   font-size: var(--type-reading-size);
-  line-height: 1.65;
+  line-height: var(--type-reading-line);
+  color: var(--color-reading);
 }
 .visually-hidden {
   position: absolute;
@@ -103,11 +123,15 @@ a {
   left: var(--space-2);
   top: -80px;
   z-index: 60;
-  padding: var(--space-3);
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-control-border);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-menu);
+  color: var(--color-text);
+  font-weight: 600;
 }
 .skip-link:focus {
   top: var(--space-2);
@@ -115,8 +139,19 @@ a {
 .text-link {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  margin-top: var(--space-3);
+  min-height: var(--target);
+  margin-top: var(--space-2);
+  font-weight: 550;
+}
+@media (max-width: 759px) {
+  :root {
+    --target: var(--target-phone);
+  }
+  h1 {
+    font-size: var(--type-phone-title-size);
+    line-height: var(--type-phone-title-line);
+    letter-spacing: var(--type-phone-title-tracking);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   *,

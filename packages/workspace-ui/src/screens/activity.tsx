@@ -17,7 +17,7 @@ import {
 import { AgentAvatar, PersonAvatar } from "../sunrise/avatars";
 import { sunriseCopy } from "../sunrise/copy";
 import { AgentPill, Badge, Card } from "../sunrise/parts";
-import { SettingsFrame } from "./settings-pages";
+import { SettingsPage } from "./settings-pages";
 import { StopAllCard } from "./stop-all";
 
 const a = sunriseCopy.activity;
@@ -108,7 +108,7 @@ export function ActivityScreen({ workspace }: { readonly workspace: WorkspaceVie
     services.port.settings.activity(ws),
   );
   return (
-    <SettingsFrame
+    <SettingsPage
       workspaceId={ws}
       current="activity"
       title={a.title}
@@ -122,6 +122,6 @@ export function ActivityScreen({ workspace }: { readonly workspace: WorkspaceVie
           <div className="sr-card-intro">{outcomeState(activity, reload, { compact: true })}</div>
         )}
       </Card>
-    </SettingsFrame>
+    </SettingsPage>
   );
 }

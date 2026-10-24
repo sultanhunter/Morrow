@@ -5,6 +5,8 @@
 // (ADR-0030 item 10). Fixture data only in this build.
 import { useState, type ReactNode } from "react";
 import { RouteLink } from "../components/controls";
+import { Icon } from "../components/display";
+import { settingsItems, type SettingsPage as SettingsPageId } from "../components/settings-frame";
 import { StatusRegion, outcomeState } from "../components/feedback";
 import type { WorkspaceView } from "../model";
 import { useRead, useServices } from "../services";
@@ -18,19 +20,19 @@ import {
   ComingSoon,
   PageHeader,
   Progress,
-  SettingsMenu,
   SrIcon,
   SrTabs,
-  settingsSections,
-  type SettingsSection,
 } from "../sunrise/parts";
 import { ThinkingSummary } from "../sunrise/thinking";
 import { PersonRow } from "./team";
 
 const s = sunriseCopy.settings;
 
-/** The Settings menu beside a settings page; the home has no parent. */
-export function SettingsFrame({
+/**
+ * A settings page's header and body. The app puts every settings page inside the shell's
+ * Settings frame (its menu); the home has no parent.
+ */
+export function SettingsPage({
   workspaceId,
   current,
   title,
@@ -39,7 +41,7 @@ export function SettingsFrame({
   children,
 }: {
   readonly workspaceId: string;
-  readonly current: SettingsSection | null;
+  readonly current: SettingsPageId | null;
   readonly title?: string;
   readonly scope?: ReactNode;
   readonly actions?: ReactNode;
@@ -56,10 +58,7 @@ export function SettingsFrame({
           actions={actions}
         />
       ) : null}
-      <div className="sr-settings-layout">
-        <SettingsMenu workspaceId={workspaceId} current={current} />
-        <div className="sr-settings-content">{children}</div>
-      </div>
+      <div className="sr-settings-content">{children}</div>
     </div>
   );
 }
@@ -67,7 +66,7 @@ export function SettingsFrame({
 export function SettingsHomeScreen({ workspace }: { readonly workspace: WorkspaceView }) {
   const ws = workspace.id;
   return (
-    <SettingsFrame
+    <SettingsPage
       workspaceId={ws}
       current={null}
       title={s.title}
@@ -75,21 +74,21 @@ export function SettingsHomeScreen({ workspace }: { readonly workspace: Workspac
     >
       <Card title={s.title} flush>
         <ul className="sr-rows">
-          {settingsSections.map((section) => (
-            <li key={section.id}>
+          {settingsItems.map((item) => (
+            <li key={item.key}>
               <RouteLink
-                route={section.route}
+                route={item.route}
                 params={
-                  section.section === null
+                  item.route === "connections"
                     ? { workspaceId: ws }
-                    : { workspaceId: ws, section: section.section }
+                    : { workspaceId: ws, section: item.key }
                 }
                 className="sr-list-row sr-list-link"
               >
-                <SrIcon name={section.icon} />
+                <Icon name={item.icon} />
                 <span className="sr-list-text">
-                  <span className="sr-row-title sr-block">{s.items[section.id].title}</span>
-                  <span className="sr-meta sr-block">{s.items[section.id].about}</span>
+                  <span className="sr-row-title sr-block">{item.label}</span>
+                  <span className="sr-meta sr-block">{s.about[item.page]}</span>
                 </span>
                 <SrIcon name="chevronRight" size={18} />
               </RouteLink>
@@ -97,7 +96,7 @@ export function SettingsHomeScreen({ workspace }: { readonly workspace: Workspac
           ))}
         </ul>
       </Card>
-    </SettingsFrame>
+    </SettingsPage>
   );
 }
 
@@ -355,14 +354,14 @@ export function PlanCreditsScreen({ workspace }: { readonly workspace: Workspace
   const ws = workspace.id;
   const [plan, reload] = useRead(`${ws}|settings.plan`, () => services.port.settings.plan(ws));
   return (
-    <SettingsFrame
+    <SettingsPage
       workspaceId={ws}
       current="plan"
       title={p.title}
       scope={p.intro(workspace.displayName)}
     >
       {plan.kind === "ok" ? <PlanBody view={plan.value} /> : outcomeState(plan, reload)}
-    </SettingsFrame>
+    </SettingsPage>
   );
 }
 
@@ -538,7 +537,7 @@ export function EmailAddressesScreen({ workspace }: { readonly workspace: Worksp
     services.port.settings.emailAddresses(ws),
   );
   return (
-    <SettingsFrame
+    <SettingsPage
       workspaceId={ws}
       current="email"
       title={e.title}
@@ -553,7 +552,7 @@ export function EmailAddressesScreen({ workspace }: { readonly workspace: Worksp
       ) : (
         outcomeState(emails, reload)
       )}
-    </SettingsFrame>
+    </SettingsPage>
   );
 }
 
@@ -562,7 +561,7 @@ export function PeopleRolesScreen({ workspace }: { readonly workspace: Workspace
   const ws = workspace.id;
   const [team, reload] = useRead(`${ws}|team`, () => services.port.team.overview(ws));
   return (
-    <SettingsFrame
+    <SettingsPage
       workspaceId={ws}
       current="people"
       title={sunriseCopy.people.title}
@@ -583,6 +582,6 @@ export function PeopleRolesScreen({ workspace }: { readonly workspace: Workspace
       ) : (
         outcomeState(team, reload)
       )}
-    </SettingsFrame>
+    </SettingsPage>
   );
 }

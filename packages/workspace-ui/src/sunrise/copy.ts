@@ -9,10 +9,7 @@ export const number = (n: number) => n.toLocaleString("en-US");
 const stores = (n: number) => plural(n, "store", "stores");
 
 export const sunriseCopy = {
-  pills: { agent: "Agent", specialist: "Specialist · one-time" },
   hidden: {
-    agent: ", agent",
-    specialist: ", specialist, one-time",
     online: ", online",
     away: ", away",
   },
@@ -285,29 +282,16 @@ export const sunriseCopy = {
   settings: {
     title: "Settings",
     intro: (shop: string) => `Your plan, your team and how Morrow works for ${shop}.`,
-    menu: "Settings",
-    items: {
-      plan: { title: "Plan and credits", about: "Your plan, credits left and where they went." },
-      people: {
-        title: "People and roles",
-        about: "Who works here and what each person can approve.",
-      },
-      notifications: {
-        title: "Notifications",
-        about: "What Morrow tells you about, and when. Everyone chooses their own.",
-      },
-      email: { title: "Email addresses", about: "Where replies to your customers are sent from." },
-      shopify: { title: "Shopify connection", about: "Your store and the access Morrow has." },
-      activity: {
-        title: "Activity",
-        about: "Everything people, agents and Morrow did. Stop all AI work from here.",
-      },
-      governance: {
-        title: "Model default",
-        about: "The model your shop starts on, and the most a product may use.",
-      },
+    // What each page holds, under its name in the shell's Settings frame (`settingsItems`).
+    about: {
+      plan: "Your plan, credits left and where they went.",
+      people: "Who works here and what each person can approve.",
+      notifications: "What Morrow tells you about, and when. Everyone chooses their own.",
+      email: "Where replies to your customers are sent from.",
+      shopify: "Your store and the access Morrow has.",
+      activity: "Everything people, agents and Morrow did. Stop all AI work from here.",
+      governance: "The model your shop starts on, and the most a product may use.",
     },
-    stopAll: "Stop all AI work",
   },
   notifications: {
     title: "Notifications",

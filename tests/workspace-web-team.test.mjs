@@ -30,7 +30,10 @@ import {
   thinkingFor,
   thinkingModels,
 } from "../packages/workspace-ui/src/team-model.ts";
-import { settingsRoutes } from "../packages/workspace-ui/src/sunrise/parts.tsx";
+import {
+  settingsItems,
+  settingsRoutes,
+} from "../packages/workspace-ui/src/components/settings-frame.tsx";
 import { workspaceRoutes } from "../packages/contracts/src/routes.ts";
 import { sunriseCopy } from "../packages/workspace-ui/src/sunrise/copy.ts";
 import { AgentAvatar, PersonAvatar } from "../packages/workspace-ui/src/sunrise/avatars.tsx";
@@ -572,6 +575,19 @@ test("settings: each board page has its own section, all within the route contra
     activity: "governance",
     governance: "billing",
   });
+  // The shell's Settings frame is the one menu: the board's order, each page's name.
+  assert.deepEqual(
+    settingsItems.map((item) => [item.key, item.label]),
+    [
+      ["usage", "Plan and credits"],
+      ["people", "People and roles"],
+      ["notifications", "Notifications"],
+      ["stores", "Email addresses"],
+      ["connections", "Shopify connection"],
+      ["governance", "Activity"],
+      ["billing", "Model default"],
+    ],
+  );
 });
 
 const prefsBody = (view, change = {}) => ({
@@ -878,16 +894,20 @@ test("characters: no colour literal, a unique clip per use, a label or hidden", 
   );
   assert.doesNotMatch(html, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
   const clips = [...html.matchAll(/<clipPath id="([^"]+)"/g)].map((m) => m[1]);
-  assert.equal(clips.length, 8);
-  assert.equal(new Set(clips).size, 8);
+  // Six figures with a body, plus the labelled Listings; Morrow's tile needs no clip.
+  assert.equal(clips.length, 7);
+  assert.equal(new Set(clips).size, 7);
   for (const id of clips) {
-    assert.match(id, /^sa-clip-[A-Za-z0-9_-]+$/);
+    assert.match(id, /^sa-[a-z]+-[A-Za-z0-9_-]+$/);
     assert.ok(html.includes(`clip-path="url(#${id})"`), id);
   }
   assert.equal((html.match(/aria-hidden="true"/g) ?? []).length >= characters.length, true);
   assert.match(html, /role="img" aria-label="Listings"/);
+  // PR 14's drawings: the Business Analyst is the shell's `analyst`.
+  assert.match(html, /data-agent="analyst"/);
   // Below 24 px a tile shows the initial, not a drawing.
-  assert.match(html, /class="sa-initial sa-support"[^>]*>S</);
+  assert.match(html, /class="avatar avatar-agent avatar-initial" data-agent="support"[^>]*>S</);
+  assert.match(html, /class="avatar avatar-person"[^>]*aria-hidden="true">MC/);
   assert.match(html, /, online/);
 });
 

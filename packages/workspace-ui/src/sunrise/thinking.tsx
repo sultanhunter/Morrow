@@ -23,7 +23,8 @@ import {
   type ThinkingView,
 } from "../team-model";
 import { sunriseCopy } from "./copy";
-import { SrIcon, settingsRoutes } from "./parts";
+import { settingsRoutes } from "../components/settings-frame";
+import { SrIcon } from "./parts";
 
 const t = sunriseCopy.thinking;
 export const modelName = (key: string) => sunriseCopy.models[key]?.name ?? key;

@@ -275,6 +275,9 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
     );
   }
   const heading = (page, name) => page.getByRole("heading", { name }).waitFor({ timeout: T });
+  // ADR-0032 Home: the heading greets the person; the scope line names the workspace.
+  const home = (page, name) =>
+    page.getByText(`your day at ${name}`).first().waitFor({ timeout: T });
   const text = (page, value) => page.getByText(value).first().waitFor({ timeout: T });
   const morrowKeys = (page) =>
     page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith("morrow.")));
@@ -406,7 +409,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       // The fixture workspace W is named "Synthetic"; W2 carries a planted name.
       await page.locator("a.chooser-link").nth(state.rows.indexOf("Synthetic")).click();
       await page.waitForURL(`**/w/${W}`, { timeout: T });
-      await page.getByRole("link", { name: "Work", exact: true }).click();
+      await page.getByRole("link", { name: "Projects", exact: true }).click();
       await text(page, "No work yet");
       h.check("AC27:empty_state_named", await page.getByText("No work yet").isVisible());
       await page.getByRole("button", { name: "Create goal" }).first().click();
@@ -538,13 +541,13 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       await page.getByRole("button", { name: /Switch workspace/ }).click();
       await page.getByRole("menuitemradio", { name: M.w2 }).click();
       await page.waitForURL(`**/w/${ids.W2}`, { timeout: T });
-      await heading(page, M.w2);
+      await home(page, M.w2);
       const html = await page.content();
       h.check(
         "AC24:no_w1_marker_after_switch",
         !html.includes(M.goal) && !html.includes(M.task) && !html.includes(state.taskId),
       );
-      await page.getByRole("link", { name: "Work", exact: true }).click();
+      await page.getByRole("link", { name: "Projects", exact: true }).click();
       await text(page, "No work yet");
       const tab = await a.context.newPage();
       state.aTab = tab;
@@ -753,7 +756,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       const opened = later(page.waitForURL(/\/w\/[^/]+$/, { timeout: T }));
       await page.getByRole("button", { name: "Check again" }).click();
       await opened;
-      await heading(page, M.workspace);
+      await home(page, M.workspace);
       const sent = posts(c.log, "/organizations");
       h.check(
         "AC25:same_key_and_body_on_check_again",
@@ -782,7 +785,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         "AC26:home_panels_each_denied",
         (await page.locator(".panel .state-denied").count()) === 2,
       );
-      await page.getByRole("link", { name: "Work", exact: true }).click();
+      await page.getByRole("link", { name: "Projects", exact: true }).click();
       await text(page, "You don't have access to view work");
       // The second tab's fresh key: one organization per principal (409 already_onboarded),
       // and the form reads the account again, which now opens the one workspace.
@@ -802,7 +805,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       const refusedBody = await refused.json();
       await refetched;
       await reopened;
-      await heading(stale, M.workspace);
+      await home(stale, M.workspace);
       const keys = posts(c.log, "/organizations").map((r) => r.key);
       h.check(
         "AC25:fresh_key_409_refetches_and_opens",
@@ -950,7 +953,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         ) && (await morrowKeys(page)).length === 0,
       );
       await page.goto(`${origin}/w/${ids.W2}`);
-      await heading(page, M.w2);
+      await home(page, M.w2);
       h.check("AC31:other_workspace_still_works", new URL(page.url()).pathname === `/w/${ids.W2}`);
       // B's W2 goal grant survives: the read is the same field_denied 403 as before, not
       // the denial of a revoked grant.

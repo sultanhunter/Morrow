@@ -11,9 +11,17 @@
 // starts at v2 (§4.14). A unit test feeds this body to the server's `loginStartInput`.
 import { portMethods, teamPortMethods, type Composed, type PortMethod } from "@morrow/workspace-ui";
 
+// ADR-0032: `samples.home` is the Home preview's default-off switch. It has no backend
+// (ADR-0033 and ADR-0034 are accepted, 2026-10-24, but their contracts and backend land
+// in their own PRs), so this build never composes it.
 // T7 PR 16: Team, agent pages, Add agents, Settings, Shop knowledge and Files have no
 // server routes yet; their screens show "not built yet" in this build (a default-off switch).
-const uncomposed: readonly PortMethod[] = ["session.keepAlive", "people.list", ...teamPortMethods];
+const uncomposed: readonly PortMethod[] = [
+  "session.keepAlive",
+  "people.list",
+  ...teamPortMethods,
+  "samples.home",
+];
 export const composed: Composed = Object.freeze(
   Object.fromEntries(portMethods.map((method) => [method, !uncomposed.includes(method)])) as Record<
     PortMethod,

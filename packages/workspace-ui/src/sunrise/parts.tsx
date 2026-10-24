@@ -1,10 +1,12 @@
 // T7 PR 16: Sunrise parts for Team, agent pages, Add agents, Settings, Shop knowledge and
-// Files (ADR-0032 item 2; the Sunrise brief §1.5). They live in their own files so PR 14's
-// shell and Home can adopt or replace them without touching the option 1 components. Every
+// Files (ADR-0032 item 2; the Sunrise brief §1.5). The characters, the Agent pill and the
+// Settings menu are PR 14's shell parts; these are the pieces only these pages use. Every
 // colour comes from a token class in `styles/sunrise-team.css`.
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { AgentPill as ShellAgentPill } from "../components/avatars";
 import { RouteLink } from "../components/controls";
 import type { AgentCharacter, PermissionsView } from "../team-model";
+import { characterKind } from "./avatars";
 import { sunriseCopy } from "./copy";
 
 const icons = {
@@ -213,19 +215,9 @@ export function Badge({ kind }: { readonly kind: BadgeKind }) {
   );
 }
 
-/** The "Agent" pill in the agent's own colours, or the neutral specialist pill. */
+/** The "Agent" pill in the agent's own colours, or the neutral specialist pill (PR 14's). */
 export function AgentPill({ character }: { readonly character: AgentCharacter }) {
-  const specialist = character === "specialist";
-  return (
-    <span className={`sr-pill sa-${character}`}>
-      <span aria-hidden="true">
-        {specialist ? sunriseCopy.pills.specialist : sunriseCopy.pills.agent}
-      </span>
-      <span className="visually-hidden">
-        {specialist ? sunriseCopy.hidden.specialist : sunriseCopy.hidden.agent}
-      </span>
-    </span>
-  );
+  return <ShellAgentPill agent={characterKind[character]} />;
 }
 
 /** A white card with a 56-tall header: a title, and optionally one link or action. */
@@ -506,94 +498,6 @@ export function SrTabs({
   );
 }
 
-export type SettingsSection =
-  | "plan"
-  | "people"
-  | "notifications"
-  | "email"
-  | "shopify"
-  | "activity"
-  | "governance";
-/**
- * The Settings menu, in the board's order. The route contract's `settings_section` has six
- * values (people, governance, usage, billing, notifications, stores) and no `email` or
- * `activity`: until it does (a route-contract change, the brief's open question 1), Email
- * addresses uses `stores` (the shop's own addresses), Activity
- * uses `governance` (the stops and the record of who did what), and M3's model default
- * moves to `billing` (what a product may cost). One rename re-homes each.
- */
-export const settingsRoutes: Readonly<Record<SettingsSection, string | null>> = {
-  plan: "usage",
-  people: "people",
-  notifications: "notifications",
-  email: "stores",
-  shopify: null,
-  activity: "governance",
-  governance: "billing",
-};
-const settingsLinks: readonly {
-  readonly id: SettingsSection;
-  readonly route: string;
-  readonly section: string | null;
-  readonly icon: SrIconName;
-}[] = (
-  [
-    ["plan", "coins"],
-    ["people", "people"],
-    ["notifications", "bell"],
-    ["email", "mail"],
-    ["shopify", "store"],
-    ["activity", "activity"],
-    ["governance", "gear"],
-  ] as const
-).map(([id, icon]) => ({
-  id,
-  route: settingsRoutes[id] === null ? "connections" : "settings_section",
-  section: settingsRoutes[id],
-  icon,
-}));
-/** The Settings menu beside each settings page. */
-export function SettingsMenu({
-  workspaceId,
-  current,
-}: {
-  readonly workspaceId: string;
-  readonly current: SettingsSection | null;
-}) {
-  return (
-    <nav className="sr-settings-menu" aria-label={sunriseCopy.settings.menu}>
-      <p className="sr-settings-menu-title" aria-hidden="true">
-        {sunriseCopy.settings.menu}
-      </p>
-      <ul>
-        {settingsLinks.map((link) => (
-          <li key={link.id}>
-            <RouteLink
-              route={link.route}
-              params={
-                link.section === null ? { workspaceId } : { workspaceId, section: link.section }
-              }
-              current={link.id === current}
-              className="sr-settings-link"
-            >
-              <SrIcon name={link.icon} />
-              {sunriseCopy.settings.items[link.id].title}
-            </RouteLink>
-          </li>
-        ))}
-      </ul>
-      {/* The stop itself is on Activity, with what it stops and the typed confirmation. */}
-      <div className="sr-settings-menu-stop">
-        <RouteLink
-          route="settings_section"
-          params={{ workspaceId, section: settingsRoutes.activity! }}
-          className="sr-settings-link sr-settings-link-stop"
-        >
-          <SrIcon name="stop" />
-          {sunriseCopy.settings.stopAll}
-        </RouteLink>
-      </div>
-    </nav>
-  );
-}
-export const settingsSections = settingsLinks;
+// The Settings menu is the shell's Settings frame (components/settings-frame.tsx): the app
+// wraps every settings page in it, and `settingsRoutes` there says which contract section
+// holds each page.

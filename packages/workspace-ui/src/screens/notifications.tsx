@@ -24,7 +24,7 @@ import {
 import { sunriseCopy } from "../sunrise/copy";
 import { Card, SrIcon } from "../sunrise/parts";
 import { CommandFeedback } from "./entry";
-import { SettingsFrame } from "./settings-pages";
+import { SettingsPage } from "./settings-pages";
 
 const n = sunriseCopy.notifications;
 const choicesOf = (view: NotificationsView): NotificationChoices => ({
@@ -359,14 +359,14 @@ export function NotificationsScreen({ workspace }: { readonly workspace: Workspa
     services.port.settings.notifications(ws),
   );
   return (
-    <SettingsFrame
+    <SettingsPage
       workspaceId={ws}
       current="notifications"
       title={n.title}
       scope={
         prefs.kind === "ok"
           ? n.intro(prefs.value.viewerName, workspace.displayName)
-          : sunriseCopy.settings.items.notifications.about
+          : sunriseCopy.settings.about.notifications
       }
     >
       {prefs.kind === "ok" ? (
@@ -379,6 +379,6 @@ export function NotificationsScreen({ workspace }: { readonly workspace: Workspa
       ) : (
         outcomeState(prefs, reload)
       )}
-    </SettingsFrame>
+    </SettingsPage>
   );
 }

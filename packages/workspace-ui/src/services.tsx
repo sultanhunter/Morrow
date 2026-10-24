@@ -91,33 +91,67 @@ export function useServicesVersion(): number {
 }
 
 export type ReadState<T> = { readonly kind: "loading" } | Outcome<T>;
-/** One shared read per key: a StrictMode double effect sends one request. */
+/** What one `useRead` shows: the reply to `key` (its scoped request key) of read `base`. */
+export interface ReadSlot<T> {
+  readonly key: string | null;
+  readonly base: string | null;
+  readonly value: ReadState<T>;
+}
+/**
+ * The slot after a reply. Under a refresh mark (`keepOk`), a reply that says nothing about
+ * the data (unavailable or offline, rate limited, uncertain) never replaces an ok reply of
+ * the same read already on screen: a background re-read must not take away what a page
+ * shows. An answer (ok, denied, not found, signed out) always replaces it, and so does
+ * any reply while no ok one is shown, so Retry after a failure shows the new reply.
+ */
+export function nextReadSlot<T>(
+  previous: ReadSlot<T>,
+  reply: ReadSlot<T>,
+  keepOk: boolean,
+): ReadSlot<T> {
+  const unanswered =
+    reply.value.kind === "unavailable" ||
+    reply.value.kind === "rate_limited" ||
+    reply.value.kind === "uncertain";
+  if (keepOk && unanswered && previous.base === reply.base && previous.value.kind === "ok")
+    return previous;
+  return reply;
+}
+/**
+ * One shared read per key: a StrictMode double effect sends one request. A new `refresh`
+ * mark reads the same key again, like `reload`, keeping the last reply on screen until
+ * the new one arrives (and keeping an ok one through a failed re-read: `nextReadSlot`);
+ * reads given the same key and mark share one request.
+ */
 export function useRead<T>(
   key: string | null,
   load: () => Promise<Outcome<T>>,
+  refresh = "",
 ): readonly [ReadState<T>, () => void] {
   const services = useServices();
   const [nonce, setNonce] = useState(0);
-  const [state, setState] = useState<{
-    key: string | null;
-    base: string | null;
-    value: ReadState<T>;
-  }>({ key: null, base: null, value: { kind: "loading" } });
+  const [state, setState] = useState<ReadSlot<T>>({
+    key: null,
+    base: null,
+    value: { kind: "loading" },
+  });
   const loader = useRef(load);
   loader.current = load;
-  const scoped = key === null ? null : `${key}#${nonce}`;
+  const scoped = key === null ? null : refresh ? `${key}#${refresh}#${nonce}` : `${key}#${nonce}`;
+  const keepOk = refresh !== "";
   useEffect(() => {
     if (scoped === null) return;
     let live = true;
     services
       .read(scoped, () => loader.current())
       .then((value) => {
-        if (live) setState({ key: scoped, base: key, value });
+        if (live)
+          setState((previous) => nextReadSlot(previous, { key: scoped, base: key, value }, keepOk));
       });
     return () => {
       live = false;
     };
-  }, [services, scoped, key]);
+  }, [services, scoped, key, keepOk]);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   // A reload of the same key keeps showing the last reply until the new one arrives.
   const current = state.key === scoped || (state.base === key && key !== null);
