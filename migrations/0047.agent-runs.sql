@@ -383,9 +383,13 @@ CREATE INDEX agent_runs_queued ON morrow_work.agent_runs (created_at,id) WHERE s
 -- reply, the outcome, the usage and the conversation's digest after it in the transaction
 -- that closes the turn's fence (so a paid reply is never lost); the tool steps append each
 -- tool's result. Reasoning blocks are removed when the run ends (ADR-0027 item 7), and the
--- row expires 90 days after the run ends (ADR-0031 item 1). Content class workspace: the
--- person's request, Morrow's replies and tool results (no tool that reads a store's content
--- is composed until run_turns has its store-content cleanup handler; the brief's follow-up).
+-- row expires 90 days after the run ends (ADR-0031 item 1). The attempt's caps are fixed
+-- when it opens (`final`, whether it may call a tool, and `budget_ms`, its call's whole
+-- budget) and never change: every call of the attempt uses them, and a replayed step reads
+-- them back instead of working them out again from the run's state after its own booking.
+-- Content class workspace: the person's request, Morrow's replies and tool results (no tool
+-- that reads a store's content is composed until run_turns has its store-content cleanup
+-- handler; the brief's follow-up).
 CREATE TABLE morrow_work.run_turns (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -395,6 +399,8 @@ CREATE TABLE morrow_work.run_turns (
  input jsonb NOT NULL CHECK (morrow_work.loop_user_message_valid(input)),
  input_digest morrow_work.digest NOT NULL,
  untrusted boolean NOT NULL,
+ final boolean NOT NULL,
+ budget_ms integer NOT NULL CHECK (budget_ms BETWEEN 1000 AND 600000),
  output jsonb CHECK (output IS NULL OR morrow_work.loop_assistant_message_valid(output)),
  outcome text CHECK (outcome IN ('end_turn','tool_use','incomplete','refusal','invalid_output','spend_limit','provider_error','uncertain',
   'not_sent','input_over_cap','prefix_mismatch')),
@@ -508,7 +514,11 @@ CREATE UNIQUE INDEX agent_model_calls_one_open ON morrow_work.agent_model_calls 
 -- One inbox.ask question of a run and the requester's answer (ADR-0027 item 1: at most two
 -- per run; 72 hours unanswered ends the run). Content class workspace: the question Morrow's
 -- agent wrote and the answer the person wrote. Answered once, by the run's requester only
--- (cmd_agent_run_answer), which opens the resume lease (its subject is the question).
+-- (cmd_agent_run_answer), which opens the resume lease (its subject is the question). Its
+-- clock is run_turns' (ADR-0027 item 7, ADR-0031 item 1): born 90 days after it is asked,
+-- moved to 90 days after the run ends by the run's end (agent_run_end), with every turn of
+-- the run; only ever later. It goes with run_turns in their deletion handlers (the agent
+-- uninstall and the retention sweep, ADR-0031 item 3; the brief's follow-up).
 CREATE TABLE morrow_work.agent_run_questions (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -525,13 +535,15 @@ CREATE TABLE morrow_work.agent_run_questions (
  created_at timestamptz NOT NULL CHECK (created_at=date_trunc('milliseconds',created_at) AND created_at>=timestamptz '2000-01-01T00:00:00Z' AND created_at<timestamptz '9000-01-01T00:00:00Z'),
  answer_by timestamptz NOT NULL,
  answered_at timestamptz CHECK (answered_at=date_trunc('milliseconds',answered_at) AND isfinite(answered_at)),
+ expires_at timestamptz NOT NULL CHECK (expires_at=date_trunc('milliseconds',expires_at) AND isfinite(expires_at)),
  PRIMARY KEY (organization_id,workspace_id,id),
  UNIQUE (organization_id,workspace_id,run_id,tool_use_id),
  FOREIGN KEY (organization_id,workspace_id,run_id) REFERENCES morrow_work.agent_runs(organization_id,workspace_id,id),
  CONSTRAINT agent_run_questions_status CHECK ((status='answered')=(answer IS NOT NULL) AND (status='answered')=(answered_at IS NOT NULL)
   AND (status='answered')=(answered_by_principal_id IS NOT NULL) AND (status='answered')=(answered_by_membership_id IS NOT NULL)
   AND (status='answered')=(resume_lease_id IS NOT NULL) AND (answered_at IS NULL OR answered_at>=created_at)),
- CONSTRAINT agent_run_questions_window CHECK (answer_by=created_at+interval '72 hours')
+ CONSTRAINT agent_run_questions_window CHECK (answer_by=created_at+interval '72 hours'),
+ CONSTRAINT agent_run_questions_times CHECK (expires_at>=created_at+interval '90 days')
 );
 -- At most one open question per run: the run waits on it, and only its answer resumes the
 -- run (a second inbox.ask while one is open is refused question_limit).
@@ -596,7 +608,7 @@ GRANT UPDATE (output,outcome,prefix_digest_before,prefix_digest_after,input_toke
 GRANT UPDATE (outcome,refusal,result_digest,result_bytes,record_kind,record_id,finished_at) ON morrow_work.run_tool_calls TO morrow_work_command;
 GRANT UPDATE (status,outcome,counted,raw_stop_reason,provider_request_id,provider_model_id,counted_input_tokens,input_tokens,
  cache_write_tokens,cache_read_tokens,output_tokens,cost_usd,overflow_usd,closed_at) ON morrow_work.agent_model_calls TO morrow_work_command;
-GRANT UPDATE (status,answer,answered_by_principal_id,answered_by_membership_id,resume_lease_id,answered_at)
+GRANT UPDATE (status,answer,answered_by_principal_id,answered_by_membership_id,resume_lease_id,answered_at,expires_at)
  ON morrow_work.agent_run_questions TO morrow_work_command;
 GRANT SELECT (organization_id,workspace_id,id,revision,kind,task_id,child_task_id,store_id,connection_id,installation_id,status,ended_reason,
  catalogue_version,model_key,effort_key,turn_limit,hold_usd,booked_usd,turns_taken,tool_calls_taken,questions_asked,requester_principal_id,
@@ -640,11 +652,11 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
--- Run turns: born with the input only (no reply, outcome, usage or digests, no tool
--- results). The reply, its outcome, usage and the digests are set once (the broker's close,
--- or the uncertain close); tool results only grow, one block at a time, after a tool_use
--- reply; the one later change of a reply is the run end's removal of its reasoning blocks;
--- the expiry only moves later. The input never changes.
+-- Run turns: born with the input and the attempt's caps only (no reply, outcome, usage or
+-- digests, no tool results). The reply, its outcome, usage and the digests are set once (the
+-- broker's close, or the uncertain close); tool results only grow, one block at a time,
+-- after a tool_use reply; the one later change of a reply is the run end's removal of its
+-- reasoning blocks; the expiry only moves later. The input and the caps never change.
 CREATE FUNCTION morrow_work.run_turn_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE v_mutable text[]:=ARRAY['output','outcome','prefix_digest_before','prefix_digest_after','input_tokens','cache_write_tokens',
@@ -705,17 +717,22 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
--- Questions: born open; answered (once, with the answer, the answerer and the resume
--- lease), expired or cancelled once; nothing else changes.
+-- Questions: born open on run_turns' clock (90 days after it is asked); answered (once, with
+-- the answer, the answerer and the resume lease), expired or cancelled once; the expiry only
+-- moves later (the run's end), whatever the status; nothing else changes.
 CREATE FUNCTION morrow_work.agent_run_question_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
-DECLARE v_mutable text[]:=ARRAY['status','answer','answered_by_principal_id','answered_by_membership_id','resume_lease_id','answered_at'];
+DECLARE v_mutable text[]:=ARRAY['status','answer','answered_by_principal_id','answered_by_membership_id','resume_lease_id','answered_at',
+ 'expires_at'];
 BEGIN
  IF TG_OP='INSERT' THEN
-  IF NEW.status<>'open' THEN RAISE EXCEPTION 'WORK_AGENT_QUESTION_INVALID'; END IF;
+  IF NEW.status<>'open' OR NEW.expires_at<>NEW.created_at+interval '90 days' THEN RAISE EXCEPTION 'WORK_AGENT_QUESTION_INVALID'; END IF;
   RETURN NEW;
  END IF;
- IF TG_OP<>'UPDATE' OR OLD.status<>'open' OR NEW.status='open' OR (to_jsonb(NEW)-v_mutable) IS DISTINCT FROM (to_jsonb(OLD)-v_mutable) THEN
+ IF TG_OP<>'UPDATE' OR (to_jsonb(NEW)-v_mutable) IS DISTINCT FROM (to_jsonb(OLD)-v_mutable) OR NEW.expires_at<OLD.expires_at
+  -- The status: open to a closed one, once, with its answer fields; otherwise only the expiry moves.
+  OR (NEW.status IS DISTINCT FROM OLD.status AND (OLD.status<>'open' OR NEW.status='open'))
+  OR (NEW.status IS NOT DISTINCT FROM OLD.status AND (to_jsonb(NEW)-'expires_at') IS DISTINCT FROM (to_jsonb(OLD)-'expires_at')) THEN
   RAISE EXCEPTION 'WORK_AGENT_QUESTION_INVALID';
  END IF;
  RETURN NEW;
@@ -777,11 +794,11 @@ BEGIN
  RETURN QUERY SELECT 'closed'::text,to_char(r.worst_case_turn_usd,'FM999999999990.00000000');
 END $$;
 -- Ends one open run (queued, running or waiting) with a terminal status and its reason:
--- every reply's reasoning blocks are removed (ADR-0027 item 7), every turn of the run
--- expires 90 days after the end (ADR-0031 item 1), an open question is cancelled (or
--- expired past its 72 hours), the active time is closed, the envelope and the hop are
--- revoked. The caller holds the run's lock and has closed every open call. Outcomes: ended
--- (with the status), invalid.
+-- every reply's reasoning blocks are removed (ADR-0027 item 7), every turn and every
+-- question of the run expires 90 days after the end (ADR-0031 item 1, one clock), an open
+-- question is cancelled (or expired past its 72 hours), the active time is closed, the
+-- envelope and the hop are revoked. The caller holds the run's lock and has closed every
+-- open call. Outcomes: ended (with the status), invalid.
 CREATE FUNCTION morrow_work.agent_run_end(p_org text,p_ws text,p_run_id text,p_status text,p_reason text)
 RETURNS TABLE(outcome text,status text)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -802,8 +819,9 @@ BEGIN
     '[{"type":"text","text":"[reasoning removed]"}]'::jsonb)) ELSE t.output END,
   expires_at=greatest(t.expires_at,v_now+interval '90 days'),updated_at=greatest(v_now,t.updated_at)
   WHERE t.organization_id=p_org AND t.workspace_id=p_ws AND t.run_id=p_run_id;
- UPDATE morrow_work.agent_run_questions q SET status=CASE WHEN q.answer_by<=v_now THEN 'expired' ELSE 'cancelled' END
-  WHERE q.organization_id=p_org AND q.workspace_id=p_ws AND q.run_id=p_run_id AND q.status='open';
+ UPDATE morrow_work.agent_run_questions q SET status=CASE WHEN q.status<>'open' THEN q.status WHEN q.answer_by<=v_now THEN 'expired'
+   ELSE 'cancelled' END,expires_at=greatest(q.expires_at,v_now+interval '90 days')
+  WHERE q.organization_id=p_org AND q.workspace_id=p_ws AND q.run_id=p_run_id;
  UPDATE morrow_work.agent_runs x SET status=p_status,ended_reason=p_reason,ended_at=greatest(v_now,x.created_at),
   active_ms=x.active_ms+CASE WHEN x.segment_started_at IS NULL THEN 0 ELSE greatest((extract(epoch FROM v_now-x.segment_started_at)*1000)::bigint,0) END,
   segment_started_at=NULL,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
@@ -1279,19 +1297,21 @@ BEGIN
   AND t.workspace_id=x.workspace_id AND t.id=x.task_id WHERE x.organization_id=e.organization_id AND x.workspace_id=e.workspace_id AND x.id=e.run_id;
  RETURN QUERY SELECT 'found'::text,v_objective;
 END $$;
--- The entered lease's run's conversation, in order: every turn attempt's input, reply,
--- outcome, the tool results its reply led to and the digest after it. Content, inside the
--- step only (ADR-0027 item 7: no content reaches Workflow outputs, Queues or logs).
+-- The entered lease's run's conversation, in order: every turn attempt's input, the caps it
+-- was opened with, its reply, outcome, the tool results its reply led to and the digest
+-- after it. Content, inside the step only (ADR-0027 item 7: no content reaches Workflow
+-- outputs, Queues or logs).
 CREATE FUNCTION morrow_work.agent_run_conversation()
-RETURNS TABLE(turn text,attempt text,input text,input_digest text,output text,outcome text,tool_results text,prefix_digest_after text)
+RETURNS TABLE(turn text,attempt text,final text,budget_ms text,input text,input_digest text,output text,outcome text,tool_results text,
+ prefix_digest_after text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE e record;
 BEGIN
  SELECT * INTO e FROM morrow_work.agent_run_entered();
  IF NOT FOUND THEN RETURN; END IF;
- RETURN QUERY SELECT t.turn::text,t.attempt::text,t.input::text,t.input_digest::text,t.output::text,t.outcome,t.tool_results::text,
-  t.prefix_digest_after::text FROM morrow_work.run_turns t
+ RETURN QUERY SELECT t.turn::text,t.attempt::text,t.final::text,t.budget_ms::text,t.input::text,t.input_digest::text,t.output::text,t.outcome,
+  t.tool_results::text,t.prefix_digest_after::text FROM morrow_work.run_turns t
   WHERE t.organization_id=e.organization_id AND t.workspace_id=e.workspace_id AND t.run_id=e.run_id ORDER BY t.turn,t.attempt;
 END $$;
 -- The entered lease's run's answered questions: each inbox.ask call's tool_use id and the
@@ -1311,35 +1331,46 @@ END $$;
 -- Opens one turn attempt (ADR-0027 items 4 and 6): the run is running; attempt 1 of turn n
 -- is the next turn (n = turns taken + 1) after a tool_use reply whose every tool call
 -- finished (or n = 1); attempt 2 only after attempt 1 of the same turn closed uncertain
--- (resent at most once; an expired open call of attempt 1 is booked so first); the turn limit, the hold (one more worst-case turn, no overflow)
--- and the wall time are checked again here after the code checked them. The input and its
--- digest are stored before any send; the same input again is opened_before (a replayed
--- step). Outcomes: opened, opened_before, conflict, stop (reason turn_limit, cost_budget or
--- wall_time), run_inactive, invalid, denied.
-CREATE FUNCTION morrow_work.agent_turn_open(p_turn text,p_attempt text,p_input text,p_input_digest text,p_untrusted text,p_read_tags text)
+-- (resent at most once; an expired open call of attempt 1 is booked so first); the turn
+-- limit, the hold (one more worst-case turn, no overflow) and the wall time are checked again
+-- here after the code checked them. The attempt's caps are fixed here, with the input and
+-- its digest, before any send: `final` must be what SQL derives (the last turn the limit
+-- allows, or a hold left under two worst-case turns, nextTurn's rule) and `budget_ms` its
+-- call's whole budget. The same input and caps again is opened_before (a replayed step,
+-- which takes the caps recorded here and is never ended by the caps of the run's state
+-- after its own booking); different ones are a conflict. Outcomes: opened, opened_before,
+-- conflict, stop (reason turn_limit, cost_budget or wall_time), run_inactive, invalid,
+-- denied.
+CREATE FUNCTION morrow_work.agent_turn_open(p_turn text,p_attempt text,p_final text,p_budget_ms text,p_input text,p_input_digest text,
+ p_untrusted text,p_read_tags text)
 RETURNS TABLE(outcome text,reason text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
-DECLARE e record; r record; t record; c record; v_turn integer; v_attempt integer; v_now timestamptz; v_active bigint; n integer;
+DECLARE e record; r record; t record; c record; v_turn integer; v_attempt integer; v_budget integer; v_now timestamptz; v_active bigint;
+ n integer;
 BEGIN
  IF p_turn IS NULL OR p_turn !~ '^[1-9][0-9]?$' OR p_attempt IS NULL OR p_attempt !~ '^[12]$'
+  OR p_final IS NULL OR p_final NOT IN ('true','false') OR p_budget_ms IS NULL OR p_budget_ms !~ '^[1-9][0-9]{3,5}$'
   OR p_input IS NULL OR octet_length(p_input)>393216 OR NOT pg_input_is_valid(p_input,'jsonb')
   OR p_input_digest IS NULL OR p_input_digest !~ '^[a-f0-9]{64}$' OR p_untrusted IS NULL OR p_untrusted NOT IN ('true','false')
   OR p_read_tags IS NULL OR octet_length(p_read_tags)>8192 OR NOT pg_input_is_valid(p_read_tags,'jsonb') THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
- v_turn:=p_turn::integer; v_attempt:=p_attempt::integer;
- IF v_turn>16 OR NOT morrow_work.loop_user_message_valid(p_input::jsonb) OR NOT morrow_work.valid_read_tags(p_read_tags::jsonb) THEN
+ v_turn:=p_turn::integer; v_attempt:=p_attempt::integer; v_budget:=p_budget_ms::integer;
+ IF v_turn>16 OR v_budget NOT BETWEEN 1000 AND 600000 OR NOT morrow_work.loop_user_message_valid(p_input::jsonb)
+  OR NOT morrow_work.valid_read_tags(p_read_tags::jsonb) THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
  SELECT * INTO e FROM morrow_work.agent_run_entered();
  IF NOT FOUND THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
  SELECT x.* INTO r FROM morrow_work.agent_runs x WHERE x.organization_id=e.organization_id AND x.workspace_id=e.workspace_id AND x.id=e.run_id;
  IF r.status<>'running' THEN RETURN QUERY SELECT 'run_inactive'::text,NULL::text; RETURN; END IF;
- SELECT x.input_digest::text AS input_digest INTO t FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id
+ SELECT x.input_digest::text AS input_digest,x.final,x.budget_ms INTO t FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id
   AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=v_attempt;
  IF FOUND THEN
-  RETURN QUERY SELECT CASE WHEN t.input_digest=p_input_digest THEN 'opened_before' ELSE 'conflict' END,NULL::text; RETURN;
+  RETURN QUERY SELECT CASE WHEN t.input_digest=p_input_digest AND t.final=(p_final='true') AND t.budget_ms=v_budget THEN 'opened_before'
+   ELSE 'conflict' END,NULL::text;
+  RETURN;
  END IF;
  IF v_attempt=1 THEN
   IF v_turn<>r.turns_taken+1 THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
@@ -1368,11 +1399,15 @@ BEGIN
  v_now:=morrow_work.db_now();
  v_active:=r.active_ms+greatest((extract(epoch FROM v_now-r.segment_started_at)*1000)::bigint,0);
  IF v_active>=r.wall_time_ms THEN RETURN QUERY SELECT 'stop'::text,'wall_time'::text; RETURN; END IF;
- INSERT INTO morrow_work.run_turns(organization_id,workspace_id,run_id,turn,attempt,input,input_digest,untrusted,output,outcome,
+ -- The final turn as SQL derives it (nextTurn's rule), compared with the code's.
+ IF (p_final='true')<>(v_turn>=r.turn_limit OR r.hold_usd-r.booked_usd<2*r.worst_case_turn_usd) THEN
+  RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+ END IF;
+ INSERT INTO morrow_work.run_turns(organization_id,workspace_id,run_id,turn,attempt,input,input_digest,untrusted,final,budget_ms,output,outcome,
   prefix_digest_before,prefix_digest_after,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,tool_results,read_tags,created_at,
   updated_at,expires_at)
- VALUES (r.organization_id,r.workspace_id,r.id,v_turn,v_attempt,p_input::jsonb,p_input_digest,p_untrusted='true',NULL,NULL,NULL,NULL,NULL,NULL,NULL,
-  NULL,'[]'::jsonb,p_read_tags::jsonb,v_now,v_now,v_now+interval '90 days');
+ VALUES (r.organization_id,r.workspace_id,r.id,v_turn,v_attempt,p_input::jsonb,p_input_digest,p_untrusted='true',p_final='true',v_budget,NULL,NULL,
+  NULL,NULL,NULL,NULL,NULL,NULL,'[]'::jsonb,p_read_tags::jsonb,v_now,v_now,v_now+interval '90 days');
  UPDATE morrow_work.agent_runs x SET turns_taken=CASE WHEN v_attempt=1 THEN v_turn ELSE x.turns_taken END,tainted=x.tainted OR p_untrusted='true',
   revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
   WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.id=r.id;
@@ -1576,9 +1611,9 @@ BEGIN
  v_id:=gen_random_uuid()::text;
  BEGIN
   INSERT INTO morrow_work.agent_run_questions(organization_id,workspace_id,id,run_id,tool_use_id,question,choices,status,answer,
-   answered_by_principal_id,answered_by_membership_id,resume_lease_id,created_at,answer_by,answered_at)
+   answered_by_principal_id,answered_by_membership_id,resume_lease_id,created_at,answer_by,answered_at,expires_at)
   VALUES (r.organization_id,r.workspace_id,v_id,r.id,p_tool_use_id,p_question,p_choices::jsonb,'open',NULL,NULL,NULL,NULL,v_now,
-   v_now+interval '72 hours',NULL);
+   v_now+interval '72 hours',NULL,v_now+interval '90 days');
  EXCEPTION WHEN check_violation THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
   WHEN unique_violation THEN RETURN QUERY SELECT 'question_limit'::text,NULL::text; RETURN;
  END;
@@ -1665,11 +1700,12 @@ END $$;
 -- Opens one model call of one turn attempt, before any provider request: the lease
 -- resolves for purpose `model` with every resolve_call check, repeated under the stop
 -- interlock; the run is the lease's run, running, under exactly this lease; the turn's
--- input row exists with exactly this input digest and no outcome yet; the conversation's
--- prefix is exactly the run's recorded one (null on turn 1), so the conversation is
--- append-only (prefix_mismatch before any request); attempt 2 only after an uncertain
--- attempt 1; the last turn the limit allows is final (tool_choice none); one call per run is
--- open; the hold covers one more worst-case turn. The same fence again never sends: a closed
+-- input row exists with exactly this input digest, the final flag and budget it was opened
+-- with, and no outcome yet; the conversation's prefix is exactly the run's recorded one
+-- (null on turn 1), so the conversation is append-only (prefix_mismatch before any
+-- request); attempt 2 only after an uncertain attempt 1; the last turn the limit allows is
+-- final (tool_choice none); one call per run is open; the hold covers one more worst-case
+-- turn. The same fence again never sends: a closed
 -- one returns its recorded outcome, reply, digest and usage (`replay`), an open one in its
 -- budget is `in_flight`, an expired one is booked as uncertain and replayed. Returns the
 -- run's selection and its catalogue entry (provider model id, input and output caps), its
@@ -1768,9 +1804,12 @@ BEGIN
   END LOOP;
  END IF;
  IF v_outcome IS NULL THEN
-  SELECT x.input_digest::text AS input_digest,x.outcome INTO t FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id
-   AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=v_attempt;
-  IF NOT FOUND OR t.input_digest<>p_input_digest OR t.outcome IS NOT NULL OR v_turn<>r.turns_taken THEN v_outcome:='turn_state';
+  -- The call is the turn attempt as opened: its input, and the caps fixed at its open (final
+  -- and the budget), never ones worked out again by the caller.
+  SELECT x.input_digest::text AS input_digest,x.outcome,x.final,x.budget_ms INTO t FROM morrow_work.run_turns x
+   WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=v_attempt;
+  IF NOT FOUND OR t.input_digest<>p_input_digest OR t.outcome IS NOT NULL OR v_turn<>r.turns_taken OR t.final<>(p_final='true')
+   OR t.budget_ms<>v_budget THEN v_outcome:='turn_state';
   ELSIF (v_turn=1 AND (p_prefix_digest<>'' OR r.prefix_digest IS NOT NULL))
    OR (v_turn>1 AND (r.prefix_digest IS NULL OR p_prefix_digest<>r.prefix_digest::text)) THEN v_outcome:='prefix_mismatch';
   ELSIF v_attempt=2 AND NOT EXISTS(SELECT 1 FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id
@@ -1929,7 +1968,7 @@ GRANT EXECUTE ON FUNCTION morrow_work.cmd_agent_run_admit(text,text,text,text,te
  morrow_work.cmd_agent_run_answer(text,text,text,text,text) TO morrow_work_api;
 GRANT EXECUTE ON FUNCTION morrow_work.agent_run_pending_starts(),morrow_work.agent_run_resume_lease(text,text,text),morrow_work.agent_run_start(),
  morrow_work.agent_run_state(),morrow_work.agent_run_objective(),morrow_work.agent_run_conversation(),morrow_work.agent_run_answers(),
- morrow_work.agent_turn_open(text,text,text,text,text,text),morrow_work.agent_turn_settle(text,text),
+ morrow_work.agent_turn_open(text,text,text,text,text,text,text,text),morrow_work.agent_turn_settle(text,text),
  morrow_work.agent_tool_call_begin(text,text,text,text,text),morrow_work.agent_tool_call_finish(text,text,text,text,text,text,text,text),
  morrow_work.agent_question_ask(text,text,text),morrow_work.agent_run_wait(),morrow_work.agent_run_finish(text) TO morrow_runtime_executor;
 GRANT EXECUTE ON FUNCTION morrow_vault.agent_turn_begin(text,text,text,text,text,text,text,text,text),
@@ -1946,7 +1985,7 @@ ALTER FUNCTION morrow_work.agent_run_state() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_run_objective() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_run_conversation() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_run_answers() OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_work.agent_turn_open(text,text,text,text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.agent_turn_open(text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_turn_settle(text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_tool_call_begin(text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.agent_tool_call_finish(text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;

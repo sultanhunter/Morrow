@@ -21,9 +21,9 @@ export const agentRunSql = Object.freeze({
     "SELECT outcome,run_id,status,kind,task_id,child_task_id,envelope_id,installation_id,agent_principal_id,store_id,connection_id,requester_principal_id,requester_membership_id,release_id,system_text_digest,tools,catalogue_version,model_key,effort_key,turn_limit,tool_calls_per_turn,tool_calls_per_run,questions_limit,max_input_tokens,max_output_tokens,wall_time_ms,hold_usd,worst_case_turn_usd,booked_usd,overflow_usd,turns_taken,tool_calls_taken,questions_asked,active_ms,lease_expires_at_ms,database_now_ms,tainted,prefix_digest FROM morrow_work.agent_run_state()",
   objective: "SELECT outcome,objective FROM morrow_work.agent_run_objective()",
   conversation:
-    "SELECT turn,attempt,input,input_digest,output,outcome,tool_results,prefix_digest_after FROM morrow_work.agent_run_conversation()",
+    "SELECT turn,attempt,final,budget_ms,input,input_digest,output,outcome,tool_results,prefix_digest_after FROM morrow_work.agent_run_conversation()",
   answers: "SELECT tool_use_id,answer FROM morrow_work.agent_run_answers()",
-  turnOpen: "SELECT outcome,reason FROM morrow_work.agent_turn_open($1,$2,$3,$4,$5,$6)",
+  turnOpen: "SELECT outcome,reason FROM morrow_work.agent_turn_open($1,$2,$3,$4,$5,$6,$7,$8)",
   turnSettle:
     "SELECT outcome,turn_outcome,open_call,last_sequence FROM morrow_work.agent_turn_settle($1,$2)",
   toolBegin:
@@ -220,6 +220,9 @@ export interface AgentRunState {
 export interface ConversationRow {
   readonly turn: number;
   readonly attempt: number;
+  /** The attempt's caps, fixed when it opened: whether it may call a tool, its call's budget. */
+  readonly final: boolean;
+  readonly budgetMs: number;
   readonly input: unknown;
   readonly inputDigest: string;
   readonly output: unknown;
@@ -295,6 +298,8 @@ export interface AgentRunSteps {
   turnOpen(input: {
     readonly turn: number;
     readonly attempt: number;
+    readonly final: boolean;
+    readonly budgetMs: number;
     readonly inputCanonical: string;
     readonly inputDigest: string;
     readonly untrusted: boolean;
@@ -538,6 +543,8 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
           const r = shape(row, [
             "turn",
             "attempt",
+            "final",
+            "budget_ms",
             "input",
             "input_digest",
             "output",
@@ -548,6 +555,7 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
           const results = json(r.tool_results);
           if (
             !exact(digest, r.input_digest) ||
+            (r.final !== "true" && r.final !== "false") ||
             (r.outcome !== null && !turnOutcomes.includes(r.outcome as string)) ||
             !Array.isArray(results) ||
             results.length > 4 ||
@@ -558,6 +566,8 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
           return Object.freeze({
             turn: integer(r.turn, 1, 16),
             attempt: integer(r.attempt, 1, 2),
+            final: r.final === "true",
+            budgetMs: integer(r.budget_ms, 1000, 600000),
             input: json(r.input),
             inputDigest: r.input_digest,
             output: r.output === null ? null : json(r.output),
@@ -594,6 +604,10 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         input.turn < 1 ||
         input.turn > 16 ||
         (input.attempt !== 1 && input.attempt !== 2) ||
+        typeof input.final !== "boolean" ||
+        !Number.isSafeInteger(input.budgetMs) ||
+        input.budgetMs < 1000 ||
+        input.budgetMs > 600000 ||
         typeof input.inputCanonical !== "string" ||
         !exact(digest, input.inputDigest) ||
         typeof input.untrusted !== "boolean" ||
@@ -604,6 +618,8 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         await query(agentRunSql.turnOpen, [
           String(input.turn),
           String(input.attempt),
+          String(input.final),
+          String(input.budgetMs),
           input.inputCanonical,
           input.inputDigest,
           String(input.untrusted),

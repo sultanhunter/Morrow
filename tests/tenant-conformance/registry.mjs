@@ -338,7 +338,8 @@ export const workTables = Object.freeze({
   // run_turns is the only place loop content lives (the request, Morrow's replies and tool
   // results: no tool that reads a store's content is composed until it has its store-content
   // cleanup handler, a prerequisite of the loop switch), and a question holds the text the
-  // agent and the requester wrote. The run steps reach them under the run lease
+  // agent and the requester wrote, on run_turns' clock (90 days after the run ends; review
+  // R3). The run steps reach them under the run lease
   // (tenant_lease); the broker's two turn definers reach the one run (and call) their own
   // transaction-local settings name (broker_agent_*); the runtime login's cron and lease
   // lookup read open (queued, running and waiting) runs only (runtime_agent_open).
@@ -861,7 +862,7 @@ export const workFunctions = Object.freeze({
   "agent_run_objective()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   "agent_run_conversation()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   "agent_run_answers()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_turn_open(text,text,text,text,text,text)": {
+  "agent_turn_open(text,text,text,text,text,text,text,text)": {
     kind: "runtime",
     grantees: ["morrow_runtime_executor"],
   },
@@ -1649,7 +1650,7 @@ export const executorLogins = Object.freeze({
     "morrow_work.agent_run_wait()",
     "morrow_work.agent_tool_call_begin(text,text,text,text,text)",
     "morrow_work.agent_tool_call_finish(text,text,text,text,text,text,text,text)",
-    "morrow_work.agent_turn_open(text,text,text,text,text,text)",
+    "morrow_work.agent_turn_open(text,text,text,text,text,text,text,text)",
     "morrow_work.agent_turn_settle(text,text)",
   ],
   morrow_vault_broker: [

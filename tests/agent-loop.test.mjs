@@ -64,6 +64,7 @@ import {
   AgentRunRetry,
   checkReply,
   parseAgentRunParams,
+  runTurn,
   turnCaps,
 } from "../packages/work/src/loop/runner.ts";
 import {
@@ -1125,6 +1126,130 @@ test("a call refused at the run's tool-call cap stays refused when its finish fa
   assert.equal(JSON.parse(input.content[0].content).refusal, "tool_call_limit");
 });
 
+test("a turn step replayed after its close committed keeps its recorded reply and sends nothing (review R1)", async () => {
+  const ref = Object.freeze({ leaseId: ids.lease, generation: 1 });
+  const started = async (world) => {
+    const s = await world.ports.lease(ref, (step) => step.loop.start());
+    assert.equal(s.value.outcome, "started");
+    return world;
+  };
+  const turnOf = (world) =>
+    world.db.turns.map((t) => [t.turn, t.attempt, t.final, t.budgetMs, t.outcome]);
+  const budget = agentWorld().entry.callBudgetMs;
+  // US$0.43 held, US$0.21 worst case (Sonnet low): turn 1 is not final. Its US$0.05 leaves
+  // US$0.38, under two worst-case turns: the caps worked out again from the run's state after
+  // that booking would make turn 1 final and reject its recorded tool_use reply.
+  const tools = await started(
+    compose(
+      agentWorld({
+        holdUsd: "0.43000000",
+        turnCostUsd: "0.05000000",
+        script: async (call) =>
+          usageOk(call.final ? reply("Done.") : reply(null, read("tu_" + call.turn))),
+      }),
+    ),
+  );
+  const first = await runTurn(tools.ports, ref, 1, 1);
+  assert.deepEqual(first, {
+    kind: "reply",
+    outcome: "tool_use",
+    toolUses: [{ id: "tu_1", name: "products.read" }],
+  });
+  assert.deepEqual(await runTurn(tools.ports, ref, 1, 1), first);
+  assert.equal(tools.db.sends.length, 1);
+  assert.deepEqual(turnOf(tools), [[1, 1, false, budget, "tool_use"]]);
+  assert.equal(tools.text8(tools.db.run.booked8), "0.05000000");
+  // US$0.25 held: turn 1 starts (final); its US$0.05 leaves less than one worst-case turn,
+  // so the caps worked out again would end the run cost_budget over a recorded completion.
+  const last = await started(
+    compose(
+      agentWorld({
+        holdUsd: "0.25000000",
+        turnCostUsd: "0.05000000",
+        script: async () => usageOk(reply("Done.")),
+      }),
+    ),
+  );
+  const done = await runTurn(last.ports, ref, 1, 1);
+  assert.deepEqual(done, { kind: "reply", outcome: "end_turn", toolUses: [] });
+  assert.deepEqual(await runTurn(last.ports, ref, 1, 1), done);
+  assert.equal(last.db.sends.length, 1);
+  assert.deepEqual(turnOf(last), [[1, 1, true, budget, "end_turn"]]);
+  // The wall time and the lease's time ran out after the close committed: still the reply.
+  const late = await started(compose(agentWorld({ script: async () => usageOk(reply("Done.")) })));
+  const lateFirst = await runTurn(late.ports, ref, 1, 1);
+  late.db.activeMs = late.state().wallTimeMs;
+  late.db.lease.expiresAtMs = late.now.ms;
+  assert.deepEqual(await runTurn(late.ports, ref, 1, 1), lateFirst);
+  assert.equal(late.db.sends.length, 1);
+  // A whole run whose turn-1 step result is lost once after its body committed: the replayed
+  // step returns the same reply, the tool runs once, and turn 2 is the final one.
+  const run = compose(
+    agentWorld({
+      holdUsd: "0.43000000",
+      turnCostUsd: "0.05000000",
+      script: async (call) =>
+        usageOk(call.final ? reply("Done.") : reply(null, read("tu_" + call.turn))),
+    }),
+  );
+  const d = lossyDurable({ "turn-1-1": null });
+  assert.deepEqual(await agentRun(run.ports, d, params), {
+    kind: "ended",
+    status: "succeeded",
+    reason: "completed",
+  });
+  assert.deepEqual(d.retries, ["turn-1-1:result_lost"]);
+  assert.deepEqual(d.names, ["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]);
+  assert.deepEqual(
+    run.db.sends.map((s) => [s.call.turn, s.call.attempt, s.call.final, s.budgetMs]),
+    [
+      [1, 1, false, budget],
+      [2, 1, true, budget],
+    ],
+  );
+  assert.deepEqual(run.db.dispatched, [["products.read", "tu_1", false]]);
+  // An attempt SQL opened whose step failed before any send is sent under its recorded caps,
+  // and only while the time left still covers its whole budget.
+  const crashBeforeSend = async (world) => {
+    const lease = world.ports.lease;
+    let n = 0;
+    // Its third transaction (after the open and the settle) is the one that builds the call.
+    world.ports.lease = async (r, body) => (++n === 3 ? "failed" : lease(r, body));
+    await assert.rejects(
+      runTurn(world.ports, ref, 1, 1),
+      (e) => e instanceof AgentRunRetry && e.code === "transaction",
+    );
+    world.ports.lease = lease;
+    assert.deepEqual(turnOf(world), [[1, 1, false, budget, null]]);
+    assert.equal(world.db.sends.length, 0);
+    return world;
+  };
+  const resent = await crashBeforeSend(
+    await started(compose(agentWorld({ script: async () => usageOk(reply("Done.")) }))),
+  );
+  assert.deepEqual(await runTurn(resent.ports, ref, 1, 1), {
+    kind: "reply",
+    outcome: "end_turn",
+    toolUses: [],
+  });
+  assert.deepEqual(
+    resent.db.sends.map((s) => [s.call.final, s.budgetMs]),
+    [[false, budget]],
+  );
+  const lapsed = await crashBeforeSend(
+    await started(compose(agentWorld({ script: async () => usageOk(reply("Done.")) }))),
+  );
+  lapsed.db.activeMs = lapsed.state().wallTimeMs - budget;
+  assert.deepEqual(await runTurn(lapsed.ports, ref, 1, 1), { kind: "end", reason: "wall_time" });
+  assert.equal(lapsed.db.sends.length, 0);
+  const ended = await crashBeforeSend(
+    await started(compose(agentWorld({ script: async () => usageOk(reply("Done.")) }))),
+  );
+  ended.db.lease.expiresAtMs = ended.now.ms + budget;
+  assert.deepEqual(await runTurn(ended.ports, ref, 1, 1), { kind: "end", reason: "wall_time" });
+  assert.equal(ended.db.sends.length, 0);
+});
+
 test("the cost, turn and wall-time caps end the run in code", async () => {
   // US$0.50 held, US$0.21 worst case (Sonnet low): turn 1 may be followed by a final turn,
   // but it costs US$0.30, so the US$0.20 left cannot start another: cost_budget, in code,
@@ -1447,6 +1572,71 @@ test("the steps' SQL is source-fixed and each decoder accepts only its closed sh
     ],
   ])
     await assert.rejects(fake(rows).steps.start(), /RUNTIME_AGENT_RUN_HELD/);
+  // A turn attempt carries the caps it was opened with (review R1): turnOpen sends them,
+  // the conversation returns them, and a decoder takes nothing else.
+  const input = JSON.stringify({ role: "user", content: [{ type: "text", text: "Hi" }] });
+  const opener = fake([{ outcome: "opened_before", reason: null }]);
+  assert.deepEqual(
+    await opener.steps.turnOpen({
+      turn: 1,
+      attempt: 1,
+      final: true,
+      budgetMs: 196625,
+      inputCanonical: input,
+      inputDigest: sha(input),
+      untrusted: false,
+      readTagsCanonical: "[]",
+    }),
+    { outcome: "opened_before" },
+  );
+  assert.deepEqual(opener.seen, [
+    [agentRunSql.turnOpen, ["1", "1", "true", "196625", input, sha(input), "false", "[]"]],
+  ]);
+  for (const over of [
+    { final: "true" },
+    { budgetMs: 999 },
+    { budgetMs: 600001 },
+    { budgetMs: 1.5 },
+  ])
+    await assert.rejects(
+      fake([{ outcome: "opened", reason: null }]).steps.turnOpen({
+        turn: 1,
+        attempt: 1,
+        final: false,
+        budgetMs: 196625,
+        inputCanonical: input,
+        inputDigest: sha(input),
+        untrusted: false,
+        readTagsCanonical: "[]",
+        ...over,
+      }),
+      /RUNTIME_AGENT_RUN_HELD/,
+    );
+  const turnRow = {
+    turn: "1",
+    attempt: "1",
+    final: "false",
+    budget_ms: "196625",
+    input,
+    input_digest: sha(input),
+    output: null,
+    outcome: null,
+    tool_results: "[]",
+    prefix_digest_after: null,
+  };
+  const [row] = await fake([turnRow]).steps.conversation();
+  assert.deepEqual([row.turn, row.attempt, row.final, row.budgetMs], [1, 1, false, 196625]);
+  for (const over of [
+    { final: null },
+    { final: "yes" },
+    { budget_ms: "999" },
+    { budget_ms: "600001" },
+    { budget_ms: null },
+  ])
+    await assert.rejects(
+      fake([{ ...turnRow, ...over }]).steps.conversation(),
+      /RUNTIME_AGENT_RUN_HELD/,
+    );
   // The answers: at most two, distinct tool calls, bounded text.
   assert.deepEqual(await fake([{ tool_use_id: "tu_1", answer: "Yes" }]).steps.answers(), [
     { toolUseId: "tu_1", answer: "Yes" },

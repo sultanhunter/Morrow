@@ -86,6 +86,8 @@ export function agentWorld({
       expiresAtMs: now.ms + leaseLeftMs,
     },
     leases: 1,
+    // The run's active time (waits excluded): a test may move it on between steps.
+    activeMs,
     stopped: false,
     turns: [],
     calls: [],
@@ -133,7 +135,7 @@ export function agentWorld({
     turnsTaken: db.run.turnsTaken,
     toolCallsTaken: db.run.toolCallsTaken,
     questionsAsked: db.run.questionsAsked,
-    activeMs,
+    activeMs: db.activeMs,
     leaseExpiresAtMs: db.lease.expiresAtMs,
     databaseNowMs: now.ms,
     tainted: db.run.tainted,
@@ -176,6 +178,8 @@ export function agentWorld({
           Object.freeze({
             turn: t.turn,
             attempt: t.attempt,
+            final: t.final,
+            budgetMs: t.budgetMs,
             input: structuredClone(t.input),
             inputDigest: t.inputDigest,
             output: t.output === null ? null : structuredClone(t.output),
@@ -193,11 +197,21 @@ export function agentWorld({
           .map((q) => Object.freeze({ toolUseId: q.toolUseId, answer: q.answer })),
       );
     },
-    async turnOpen({ turn, attempt, inputCanonical, inputDigest, untrusted }) {
+    async turnOpen({ turn, attempt, final, budgetMs, inputCanonical, inputDigest, untrusted }) {
       if (!running()) return { outcome: "run_inactive" };
+      if (!Number.isSafeInteger(budgetMs) || budgetMs < 1000 || budgetMs > 600_000)
+        return { outcome: "invalid" };
+      // The same input and caps again is opened_before; the caps are the attempt's, fixed here.
       const found = db.turns.find((t) => t.turn === turn && t.attempt === attempt);
       if (found)
-        return { outcome: found.inputDigest === inputDigest ? "opened_before" : "conflict" };
+        return {
+          outcome:
+            found.inputDigest === inputDigest &&
+            found.final === final &&
+            found.budgetMs === budgetMs
+              ? "opened_before"
+              : "conflict",
+        };
       if (attempt === 1) {
         if (turn !== db.run.turnsTaken + 1) return { outcome: "invalid" };
         if (turn > db.run.turnLimit) return { outcome: "stop", reason: "turn_limit" };
@@ -208,11 +222,18 @@ export function agentWorld({
         return { outcome: "invalid" };
       if (db.run.overflow8 > 0n || db.run.hold8 - db.run.booked8 < db.run.worst8)
         return { outcome: "stop", reason: "cost_budget" };
+      // SQL derives the final turn itself (nextTurn's rule) and compares it with the code's.
+      if (
+        final !== (turn >= db.run.turnLimit || db.run.hold8 - db.run.booked8 < 2n * db.run.worst8)
+      )
+        return { outcome: "invalid" };
       if ((await messageDigest(JSON.parse(inputCanonical))) !== inputDigest)
         throw Error("WORLD_INPUT_DIGEST");
       db.turns.push({
         turn,
         attempt,
+        final,
+        budgetMs,
         input: JSON.parse(inputCanonical),
         inputDigest,
         output: null,
@@ -444,7 +465,9 @@ export function agentWorld({
       )
         throw Error("BROKER_HELD");
       const row = db.turns.find((t) => t.turn === call.turn && t.attempt === call.attempt);
-      if (!row || row.outcome !== null) throw Error("BROKER_HELD");
+      // The fence takes the attempt as opened: its caps too (agent_turn_begin's turn_state).
+      if (!row || row.outcome !== null || row.final !== call.final || row.budgetMs !== budgetMs)
+        throw Error("BROKER_HELD");
       const prefix = call.turn === 1 ? null : await conversationDigest(call.messages.slice(0, -1));
       if (prefix !== call.prefixDigest || prefix !== db.run.prefixDigest)
         return result("prefix_mismatch");

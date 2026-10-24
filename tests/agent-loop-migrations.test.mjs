@@ -494,6 +494,94 @@ test("review fixes: settle before a resend, a replayable wait, the uncounted cal
   );
 });
 
+test("review R1: a turn attempt's caps are fixed at its open and the fence takes them", () => {
+  // R1: each attempt carries the caps it was opened with, never changed afterwards.
+  const turns = tableBody("run_turns");
+  assert.match(turns, /^ final boolean NOT NULL,$/m);
+  assert.match(
+    turns,
+    /^ budget_ms integer NOT NULL CHECK \(budget_ms BETWEEN 1000 AND 600000\),$/m,
+  );
+  const turnGuard = fnBody("morrow_work", "run_turn_guard");
+  const turnMutable = /v_mutable text\[\]:=ARRAY\[([^\]]*)\]/.exec(turnGuard)[1];
+  for (const column of ["final", "budget_ms", "input", "input_digest"])
+    assert.ok(!turnMutable.includes("'" + column + "'"), column);
+  const turnUpdate =
+    /GRANT UPDATE \(([^)]*)\) ON morrow_work\.run_turns TO morrow_work_command;/.exec(sql)[1];
+  for (const column of ["final", "budget_ms"])
+    assert.ok(!turnUpdate.split(",").includes(column), column);
+  // The open stores them; the same input and caps again is opened_before, other caps a
+  // conflict; a new attempt's final must be SQL's own derivation (nextTurn's rule).
+  const open = fnBody("morrow_work", "agent_turn_open");
+  assert.match(
+    open,
+    /^CREATE FUNCTION morrow_work\.agent_turn_open\(p_turn text,p_attempt text,p_final text,p_budget_ms text,p_input text,p_input_digest text,\s+p_untrusted text,p_read_tags text\)/,
+  );
+  assert.match(
+    open,
+    /CASE WHEN t\.input_digest=p_input_digest AND t\.final=\(p_final='true'\) AND t\.budget_ms=v_budget THEN 'opened_before'\s+ELSE 'conflict' END/,
+  );
+  assert.match(
+    open,
+    /IF \(p_final='true'\)<>\(v_turn>=r\.turn_limit OR r\.hold_usd-r\.booked_usd<2\*r\.worst_case_turn_usd\) THEN\s+RETURN QUERY SELECT 'invalid'/,
+  );
+  assert.match(open, /p_untrusted='true',p_final='true',v_budget,NULL,NULL,/);
+  // The found row is answered before any cap is checked again (a replayed step).
+  assert.ok(open.indexOf("'opened_before'") < open.indexOf("'turn_limit'"));
+  assert.ok(open.indexOf("'opened_before'") < open.indexOf("'cost_budget'"));
+  assert.ok(open.indexOf("'opened_before'") < open.indexOf("'wall_time'"));
+  assert.match(
+    fnBody("morrow_work", "agent_run_conversation"),
+    /RETURNS TABLE\(turn text,attempt text,final text,budget_ms text,input text,/,
+  );
+  assert.match(agentRunSql.conversation, /^SELECT turn,attempt,final,budget_ms,input,/);
+  // The broker's fence takes the attempt as opened: its final and budget, or turn_state.
+  assert.match(
+    fnBody("morrow_vault", "agent_turn_begin"),
+    /OR v_turn<>r\.turns_taken OR t\.final<>\(p_final='true'\)\s+OR t\.budget_ms<>v_budget THEN v_outcome:='turn_state';/,
+  );
+});
+
+test("review R3: every loop table holding content is on run_turns' clock, the questions too", () => {
+  // Every loop table holding content (the registry's class workspace) has run_turns' clock:
+  // a non-null expiry, at least 90 days after it is made, moved by the run's end to 90 days
+  // after it.
+  const end = fnBody("morrow_work", "agent_run_end");
+  const content = newTables.filter((t) => workTables[t].content === "workspace");
+  assert.deepEqual(content, ["run_turns", "agent_run_questions"]);
+  for (const t of content) {
+    const body = tableBody(t);
+    assert.match(
+      body,
+      /^ expires_at timestamptz NOT NULL CHECK \(expires_at=date_trunc\('milliseconds',expires_at\) AND isfinite\(expires_at\)\),$/m,
+      t,
+    );
+    assert.match(body, /expires_at>=created_at\+interval '90 days'/, t);
+    const alias = t === "run_turns" ? "t" : "q";
+    assert.ok(end.includes(`expires_at=greatest(${alias}.expires_at,v_now+interval '90 days')`), t);
+  }
+  // Every question of the run (answered ones too) moves with the run's end; an open one is
+  // also closed.
+  const questionsEnd = end.slice(end.indexOf("UPDATE morrow_work.agent_run_questions"));
+  assert.match(
+    questionsEnd,
+    /^UPDATE morrow_work\.agent_run_questions q SET status=CASE WHEN q\.status<>'open' THEN q\.status WHEN q\.answer_by<=v_now THEN 'expired'\s+ELSE 'cancelled' END,expires_at=greatest\(q\.expires_at,v_now\+interval '90 days'\)\s+WHERE q\.organization_id=p_org AND q\.workspace_id=p_ws AND q\.run_id=p_run_id;/,
+  );
+  // Born 90 days after it is asked; the expiry only moves later; the command role may move it.
+  assert.match(
+    fnBody("morrow_work", "agent_question_ask"),
+    /created_at,answer_by,answered_at,expires_at\)\s+VALUES \([^;]*v_now,\s+v_now\+interval '72 hours',NULL,v_now\+interval '90 days'\);/,
+  );
+  const questionGuard = fnBody("morrow_work", "agent_run_question_guard");
+  assert.match(questionGuard, /'resume_lease_id','answered_at',\s+'expires_at'\]/);
+  assert.match(questionGuard, /NEW\.expires_at<>NEW\.created_at\+interval '90 days'/);
+  assert.match(questionGuard, /OR NEW\.expires_at<OLD\.expires_at/);
+  assert.match(
+    sql,
+    /GRANT UPDATE \(status,answer,answered_by_principal_id,answered_by_membership_id,resume_lease_id,answered_at,expires_at\)\s+ON morrow_work\.agent_run_questions TO morrow_work_command;/,
+  );
+});
+
 test("the agent-loop switch record is committed off with every prerequisite unrecorded", () => {
   const record = JSON.parse(readFileSync("docs/decisions/agent-loop-staging.json", "utf8"));
   assert.equal(record.switch, "off");

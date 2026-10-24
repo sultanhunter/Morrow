@@ -43,18 +43,20 @@ import type { ToolDispatch, ToolHandlers } from "./tools.js";
 //   turn-n-a   one model turn: the caps in code first (the turn limit, the hold left
 //              against the entry's worst-case turn and the final turn, nextTurn; the wall
 //              time and the lease's time against the call's whole budget), then the input
-//              stored with its digest (agent_turn_open, which checks them again), then the
+//              stored with its digest and the attempt's caps (agent_turn_open, which checks
+//              them again and fixes them: a replayed step takes the recorded final and
+//              budget, never the caps of the run's state after its own booking), then the
 //              fence as SQL sees it (agent_turn_settle: a recorded outcome is used as is, a
 //              live call is waited for, an expired one is booked as uncertain), then one
-//              ModelCall@2 through the broker's modelTurn (a throttle resends the attempt
-//              with the next sequence; a hold, or the broker's own uncertain, is settled
-//              against what SQL recorded, never taken as SQL's verdict; one that left
-//              nothing in SQL is tried again at most twice). The reply is validated with the
-//              generated contract
-//              (the strict tool_use shapes the run was given), its tools must be offered and
-//              a final turn must call none: anything else ends the run invalid_output. An
-//              uncertain attempt 1 is sent again at most once, as attempt 2; an uncertain
-//              attempt 2 ends the run.
+//              ModelCall@2 through the broker's modelTurn, each new send only while the
+//              wall time and the lease's time still cover its budget (a throttle resends
+//              the attempt with the next sequence; a hold, or the broker's own uncertain, is
+//              settled against what SQL recorded, never taken as SQL's verdict; one that
+//              left nothing in SQL is tried again at most twice). The reply is validated
+//              with the generated contract (the strict tool_use shapes the run was given),
+//              its tools must be offered and a final turn must call none: anything else
+//              ends the run invalid_output. An uncertain attempt 1 is sent again at most
+//              once, as attempt 2; an uncertain attempt 2 ends the run.
 //   tool-n-k   one tool call (ADR-0027 item 2): lease re-entry; replay of a recorded call;
 //              validation with the full ToolInput definition (invalid_input goes back to the
 //              model); ids in the run's scope; the authority decision in code; dispatch
@@ -216,11 +218,18 @@ export function turnCaps(
   });
   if (!next.start) return end(next.reason);
   const budgetMs = entry.callBudgetMs;
-  if (run.activeMs + budgetMs + agentRunTimings.finishMarginMs > run.wallTimeMs)
-    return end("wall_time");
-  if (run.leaseExpiresAtMs - run.databaseNowMs < budgetMs + agentRunTimings.finishMarginMs)
-    return end("wall_time");
+  if (!timeCovers(run, budgetMs)) return end("wall_time");
   return Object.freeze({ start: true as const, final: next.final, budgetMs });
+}
+/**
+ * Whether the run's wall time (waits excluded) and its lease's own time still cover one
+ * whole call of `budgetMs` and the finish margin: checked before every new send.
+ */
+function timeCovers(run: AgentRunState, budgetMs: number): boolean {
+  return (
+    run.activeMs + budgetMs + agentRunTimings.finishMarginMs <= run.wallTimeMs &&
+    run.leaseExpiresAtMs - run.databaseNowMs >= budgetMs + agentRunTimings.finishMarginMs
+  );
 }
 /** The reply of the attempt of turn n that has one. */
 function replied(rows: readonly ConversationRow[], turn: number): ConversationRow | null {
@@ -286,14 +295,26 @@ export async function runTurn(
   turn: number,
   attempt: number,
 ): Promise<TurnStep> {
-  // 1. The caps in code, then the input stored with its digest (SQL checks them again).
+  // 1. The caps in code, then the input stored with its digest and the attempt's caps (SQL
+  //    checks them again and fixes them). The caps are the attempt's own, fixed when SQL
+  //    first opened it: a replayed step (its open committed, perhaps its close and booking
+  //    too) takes the recorded final and budget and is never ended by the caps worked out
+  //    again from the run's state after its own booking, so a reply already recorded and
+  //    paid for is the turn's reply (review R1). Only an attempt SQL has not opened is
+  //    checked against the caps here; a new send is checked against the time left below.
   const opened = await under(ports, ref, async (step) => {
     const run = await step.loop.state();
     if (run === "denied") return interrupted("denied");
     if (run.status !== "running") return interrupted("run_inactive");
-    const caps = turnCaps(run, turn);
-    if (!("start" in caps)) return caps;
     const rows = await step.loop.conversation();
+    const recorded = rows.find((r) => r.turn === turn && r.attempt === attempt);
+    let caps: { readonly final: boolean; readonly budgetMs: number };
+    if (recorded) caps = { final: recorded.final, budgetMs: recorded.budgetMs };
+    else {
+      const next = turnCaps(run, turn);
+      if (!("start" in next)) return next;
+      caps = next;
+    }
     let input;
     let usedTools: string[] = [];
     if (turn === 1) {
@@ -314,6 +335,8 @@ export async function runTurn(
     const o = await step.loop.turnOpen({
       turn,
       attempt,
+      final: caps.final,
+      budgetMs: caps.budgetMs,
       inputCanonical: JSON.stringify(input),
       inputDigest: await messageDigest(input),
       untrusted: usedTools.some((t) => untrustedSourceOf(t) !== null),
@@ -369,20 +392,36 @@ export async function runTurn(
     }
     if (state.sequence > agentRunTimings.sequences) return end("provider_error");
     const sequence = state.sequence;
-    const built = await under(ports, ref, async (step) =>
-      modelCall({
-        turn,
-        attempt,
-        sequence,
-        final,
-        messages: turnMessages(await step.loop.conversation(), turn, attempt),
-      }),
-    );
+    // Nothing of this attempt is recorded and no call is open, so nothing it sent is lost
+    // by ending here: a new send goes only while the wall time and the lease's time still
+    // cover its whole budget (a replayed step's first send, or a resend after a throttle).
+    const built = await under(ports, ref, async (step) => {
+      const run = await step.loop.state();
+      if (run === "denied") return interrupted("denied");
+      if (run.status !== "running") return interrupted("run_inactive");
+      if (!timeCovers(run, budgetMs)) return end("wall_time");
+      return Object.freeze({
+        kind: "call" as const,
+        call: await modelCall({
+          turn,
+          attempt,
+          sequence,
+          final,
+          messages: turnMessages(await step.loop.conversation(), turn, attempt),
+        }),
+      });
+    });
     if (!built.entered) return interrupted(built.refusal);
+    if (built.value.kind !== "call") return built.value;
     let result: Current_ModelResultV2 | null = null;
     try {
       result = parseTurnResult(
-        await ports.modelTurn(ref.leaseId, ref.generation, JSON.stringify(built.value), budgetMs),
+        await ports.modelTurn(
+          ref.leaseId,
+          ref.generation,
+          JSON.stringify(built.value.call),
+          budgetMs,
+        ),
       );
     } catch {
       result = null;
