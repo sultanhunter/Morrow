@@ -59,7 +59,7 @@ const report = {
   providers: registry.providers.length,
   bindings: bindings.bindings.length,
   model_catalogue: {
-    active_version: model.catalogue?.active_version ?? null,
+    active_versions: model.catalogue?.active_versions ?? null,
     versions: modelCatalogue.versions,
   },
   scope:

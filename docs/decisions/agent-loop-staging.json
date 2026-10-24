@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "workflow": "agent-run@1",
+  "switch": "off",
+  "observed_on": null,
+  "scope": "The reviewed switch of AgentRunWorkflow (agent-run@1) on the deployed environment (ADR-0027 item 11; PR 10 commits it off). No Worker reads it yet: PR 11 wires it so that, while off, admission answers 503 before any reservation and the Workflow throws dispatch_disabled before any step, and edge:check refuses a mixed state. It turns on only by one reviewed commit after G10 and G12 and the loop's safety tests pass, with catalogue version 2 published on the owner's recorded confirmation. Production refuses it until the production custody ADR."
+}
