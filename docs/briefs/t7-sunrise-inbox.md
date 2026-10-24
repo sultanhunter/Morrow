@@ -32,10 +32,18 @@ One Inbox for what only a person can settle: changes to review, questions, probl
 - [x] `tests/inbox-api.test.mjs` (10): routes and dispatch (`inbox` row ahead of `work`, the session limit's envelope family), statements select no reason text or content, 401 unbound and 405/400 before any connection, questions and connection problems decided on the server, a denied section, a malformed row is 503 never partial, activity entries per rule (none without rights; own stop; steward, stopper, run reader), keyset paging over hidden records, unknown kinds 503.
 - [x] `tests/workspace-web-inbox.test.mjs` (9): the SPA decodes the server's own replies; closed decoders refuse every drift (extra keys, blocked-but-open, failed-but-open, denied section with items, order, duplicates); three GETs with no body and the preview sends nothing; one count for Home, sidebar and Inbox; the fixture's scenarios; a prompt renders as text; the log in plain words; copy free of internal words.
 - [x] Updated: `workspace-ui-sunrise` (Home's summary over the Inbox read), `workspace-web-team` (the log moved to `inbox.activity`; twelve team methods), `workspace-web-account-work` (`samples.inbox` uncomposed), `session-limit` (dispatch).
-- [x] `lab:catalog-apply` I1-I7 (PostgreSQL 17, the createrole administrator, after the lab's apply and disconnect phases): see the result below.
+- [x] `lab:catalog-apply` I1-I7 (PostgreSQL 17, the createrole administrator, after the lab's apply and disconnect phases): see Local results below.
 - [x] `ui:check`: new states `inbox/{problems,filter_problems,filter_empty,loading,unavailable,offline,part_denied,preview,exception_uncertain,exception_failed,exception_missing}` and `settings/{activity_more,activity_empty}`; `inbox/inbox`, `inbox/empty` and `settings/activity` assert their content; the walk `inbox_filters`; `answer_question` counts the Inbox read (3 then 2).
 - [x] The UI journey's B-side Inbox check follows the new list (`[data-testid="inbox-items"]`).
 - [ ] Hosted `foundation`, `ui` and `postgres` jobs; the AI review (separate context, same model family) with the security lens (authority, RLS reads).
+
+## Local results (2026-10-24, the Mac at load 300-950)
+
+- `typecheck`, `typecheck:edge`, `edge:check`, `verify`, `format:check`: pass.
+- Targeted tests (the six files above): 85 of 85 pass. `npm test`: 4424 of 4425; the one failure, `workos-operator-input`'s 5-second CLI spawn, is unrelated and passes on rerun (11 of 11).
+- `ui:check --only=inbox/,settings/,home/,review/,walk/`: 135 state cases and 64 walk runs, 198 of 199; `review/uncertain@1440` timed out on a click under load and passes on rerun (2 of 2). The full run and `ui:edge` are the hosted `ui` job's.
+- `lab:catalog-apply`: I1-I7 pass on both local runs. The first run (at f14cc104's parent) passed all 54 checks in 18.5 minutes; the second, at about twice the load and 54 minutes, failed six of PR 3's Shopify-outcome checks (O5, O7, O9, W1, N1, B4) whose read-back and reconcile routes answered `unavailable` within their 5-second deadline (49 unavailable retries). Those phases are unchanged here; hosted `postgres` (`linking`) is the authority.
+- `lab:workspace-ui-journey` (`lab:group:ui`) runs only on Linux CI.
 
 ## Open questions
 
