@@ -74,7 +74,7 @@ export function decodeReconnectNotices(
     rows.map((row) => {
       if (!row || Object.keys(row).sort().join(",") !== columns) throw new ReconnectNoticeInvalid();
       const missing = typeof row.missing_scopes === "string" ? row.missing_scopes : null;
-      const scopes = missing === null || missing === "" ? [] : missing.split(",");
+      const scopes: string[] = missing === null || missing === "" ? [] : missing.split(",");
       let stopped: unknown;
       try {
         stopped =
