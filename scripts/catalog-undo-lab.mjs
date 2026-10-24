@@ -1251,7 +1251,12 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
         decisions() === decisions0 + 1 &&
         status(Y1) === "pending" &&
         status(Y2) === "pending",
-      { stale: stale.body, tampered: tampered.body, expired: expired.body, needless: needless.body },
+      {
+        stale: stale.body,
+        tampered: tampered.body,
+        expired: expired.body,
+        needless: needless.body,
+      },
     );
     check(
       "B3:one_member_decided_elsewhere_refuses_them_all",

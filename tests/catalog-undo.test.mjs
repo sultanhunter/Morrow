@@ -449,7 +449,11 @@ test("the batch decision body is closed: 2 to 10 distinct exact refs and a bound
     items: [item(1), item(2)],
   };
   assert.deepEqual(parseBatchDecision(body), body);
-  assert.deepEqual(parseBatchDecision({ ...body, soloOwnerConfirmation: "approve 2 changes for 2 credits" })?.soloOwnerConfirmation, "approve 2 changes for 2 credits");
+  assert.deepEqual(
+    parseBatchDecision({ ...body, soloOwnerConfirmation: "approve 2 changes for 2 credits" })
+      ?.soloOwnerConfirmation,
+    "approve 2 changes for 2 credits",
+  );
   for (const bad of [
     { ...body, soloOwnerConfirmation: undefined },
     { ...body, soloOwnerConfirmation: "" },

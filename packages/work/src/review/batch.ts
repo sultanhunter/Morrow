@@ -84,7 +84,12 @@ export function batchPhrase(members: readonly { targetCount: number; credits: bi
 }
 /** The document's confirmation and availability, from its members (pure). */
 export function batchConfirmation(
-  members: readonly { targetCount: number; credits: bigint; phrase: string | null; cost: boolean }[],
+  members: readonly {
+    targetCount: number;
+    credits: bigint;
+    phrase: string | null;
+    cost: boolean;
+  }[],
 ): Pick<BatchDocument, "unavailable" | "confirmation"> {
   const needing = members.filter((m) => m.phrase !== null);
   const required = needing.length > 0;
@@ -229,7 +234,14 @@ async function buildMembers(
   const expiresAt = new Date(Date.parse(at) + batchLimits.lifetimeMs).toISOString();
   const shown = items.map(
     ({ proposalId: id, digest, approvalId, revision, targetCount, expiresAt: until }) =>
-      Object.freeze({ proposalId: id, digest, approvalId, revision, targetCount, expiresAt: until }),
+      Object.freeze({
+        proposalId: id,
+        digest,
+        approvalId,
+        revision,
+        targetCount,
+        expiresAt: until,
+      }),
   );
   const document: BatchDocument = Object.freeze({
     proposalId,
@@ -386,7 +398,8 @@ export async function decideBatch(
   for (const item of body.items) {
     const stored = await readProposalRow(tx, a, item.proposalId);
     if (!stored || (await viewerRole(a, stored)) === null) throw new BatchReject("not_found");
-    const phrase = body.soloOwnerConfirmation === null ? null : memberPhrase(a, policy, stored.proposal);
+    const phrase =
+      body.soloOwnerConfirmation === null ? null : memberPhrase(a, policy, stored.proposal);
     const decision = {
       decision: {
         decision: "approve" as const,

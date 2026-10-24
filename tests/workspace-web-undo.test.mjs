@@ -261,7 +261,10 @@ test("decoders: the history's undo states, the undo, the batch and the picker, e
     expiresAt: "2026-10-24T10:05:00.000Z",
     documentDigest: hex("d"),
   };
-  assert.equal(decodeBatchDocument(document, "proposal_1")?.confirmation.phrase, document.confirmation.phrase);
+  assert.equal(
+    decodeBatchDocument(document, "proposal_1")?.confirmation.phrase,
+    document.confirmation.phrase,
+  );
   assert.ok(
     decodeBatchDocument(
       { ...document, confirmation: { required: false, phrase: null } },
@@ -290,10 +293,18 @@ test("decoders: the history's undo states, the undo, the batch and the picker, e
     { ...document, unavailable: "mixed_confirmation" },
     { ...document, items: [item(1), { ...item(2), title: "Linen" }] },
   ])
-    assert.equal(decodeBatchDocument(wider, "proposal_1"), null, JSON.stringify(wider).slice(0, 90));
+    assert.equal(
+      decodeBatchDocument(wider, "proposal_1"),
+      null,
+      JSON.stringify(wider).slice(0, 90),
+    );
   assert.ok(
     decodeBatchDocument(
-      { ...document, unavailable: "mixed_confirmation", confirmation: { required: true, phrase: null } },
+      {
+        ...document,
+        unavailable: "mixed_confirmation",
+        confirmation: { required: true, phrase: null },
+      },
       "proposal_1",
     ),
   );
@@ -489,7 +500,11 @@ test("fixture: the picker reads the linked store's products by search or collect
   const port = createFixtureAdapter("ready");
   const id = fixtureWorkspace.id;
   const store = fixtureStore.storeId;
-  const all = await port.catalog.products(id, store, { after: null, collectionId: null, query: null });
+  const all = await port.catalog.products(id, store, {
+    after: null,
+    collectionId: null,
+    query: null,
+  });
   assert.equal(all.kind, "ok");
   assert.ok(all.value.items.length >= 5);
   const search = await port.catalog.products(id, store, {
@@ -509,8 +524,13 @@ test("fixture: the picker reads the linked store's products by search or collect
   });
   assert.ok(summer.value.items.length >= 1 && summer.value.items.length < all.value.items.length);
   assert.equal(
-    (await port.catalog.products(id, "store_other", { after: null, collectionId: null, query: null }))
-      .kind,
+    (
+      await port.catalog.products(id, "store_other", {
+        after: null,
+        collectionId: null,
+        query: null,
+      })
+    ).kind,
     "not_found",
   );
 });
