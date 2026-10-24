@@ -223,6 +223,14 @@ export interface ApiBrokerRpc {
     variablesJson: string,
     budgetMs: number,
   ): Promise<string>;
+  // v1 PR 3 (ADR-0022 items 7 and 9): the gateway's apply of one dispatching catalog_write
+  // operation (the claimant's own session moved it there), and the read-back of one
+  // operation. Ids and a budget only; the closed results above (encodeShopifyApplyResult,
+  // encodeShopifyReconcileResult). While the apply switch is off, shopifyProductApply is
+  // BROKER_HELD (WRITE_UNAVAILABLE) before any input, database or Shopify access; the
+  // read-back is never blocked by the switch.
+  shopifyProductApply(operationId: string, budgetMs: number): Promise<string>;
+  shopifyProductReconcile(operationId: string, budgetMs: number): Promise<string>;
   // "Disconnect store" (ADR-0022 items 7 and 13; the M2 brief's PR-3 checklist): after the
   // api's disconnect committed, destroys that installation's offline token and records the
   // destruction on it. The reason is fixed (`disconnected`): the api can destroy only a token
@@ -1072,6 +1080,168 @@ export function decodeShopifyReadResult(
     }
   }
   throw invalid();
+}
+
+// v1 PR 3: the gateway's apply and read-back (ADR-0022 items 7 and 9; spine §8). The api
+// names one catalog_write operation of its own claim and a budget; the broker loads the
+// operation, its lease, the store, the credential and the claimed proposal's item itself,
+// fences the send in SQL before any request, writes the product at most once and records
+// the outcome; the read-back is keyed by the operation, needs no lease and is never blocked
+// by a stop or the switch. Results are closed JSON with fixed codes: never Shopify's text,
+// a product value or a token.
+//
+// The reviewed apply switch (docs/decisions/shopify-write-staging.json, committed "off"): its
+// one runtime image is the var MORROW_SHOPIFY_WRITE, exactly "on", on the staging api and
+// broker. While it is off the api's apply answers 503 before any database access and the
+// broker's apply answers BROKER_HELD (WRITE_UNAVAILABLE) before any input, database or
+// Shopify access. Any other value is off. Production has no switch until the ADR-0007
+// item 9 custody ADR.
+export type BrokerShopifyWriteSwitch = "off" | "on";
+export const shopifyWriteVar = "MORROW_SHOPIFY_WRITE";
+export const shopifyWriteOn = "on";
+export const shopifyWriteLimits = Object.freeze({
+  budgetMinMs: 1,
+  /** One apply call: the resolution, the pre-send read, the fence, the send and the close. */
+  budgetMaxMs: 30000,
+  resultMaxBytes: 512,
+  /** The pre-send read and each read-back (the THROTTLED wait included). */
+  readMs: 10000,
+  /** The one send (and its single THROTTLED resend, inside the same fence). */
+  sendMs: 15000,
+  replyMaxBytes: 262144,
+});
+export const shopifyApplyOutcomes = Object.freeze([
+  "submitted",
+  "failed",
+  "uncertain",
+  "refused",
+  "held",
+  "in_flight",
+  "settled",
+] as const);
+export type ShopifyApplyOutcome = (typeof shopifyApplyOutcomes)[number];
+export const shopifyReconcileOutcomes = Object.freeze([
+  "recorded",
+  "closed",
+  "too_soon",
+  "unavailable",
+  "held",
+  "settled",
+] as const);
+export type ShopifyReconcileOutcome = (typeof shopifyReconcileOutcomes)[number];
+export const operationStatusNames = Object.freeze([
+  "planned",
+  "awaiting_approval",
+  "authorized",
+  "reserved",
+  "dispatching",
+  "submitted",
+  "verifying",
+  "verified",
+  "rejected",
+  "conflict",
+  "failed",
+  "uncertain",
+  "cancel_requested",
+  "cancelled",
+] as const);
+export type OperationStatusName = (typeof operationStatusNames)[number];
+export interface ShopifyApplyResult {
+  readonly outcome: ShopifyApplyOutcome;
+  /** The operation's status after the call, or null when it is not known (held). */
+  readonly status: OperationStatusName | null;
+  /** The recorded reason code of a refusal or a close, or null. */
+  readonly reason: string | null;
+}
+export interface ShopifyReconcileResult {
+  readonly outcome: ShopifyReconcileOutcome;
+  readonly status: OperationStatusName | null;
+  readonly verdict: "approved" | "source" | "mixed" | "missing" | null;
+}
+const reasonCode = /^[a-z][a-z0-9_]{2,63}$/;
+export const shopifyOperationIdValid = (value: unknown): value is string =>
+  exact(/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/, value);
+export const shopifyWriteBudgetValid = (value: unknown): value is number =>
+  Number.isSafeInteger(value) &&
+  (value as number) >= shopifyWriteLimits.budgetMinMs &&
+  (value as number) <= shopifyWriteLimits.budgetMaxMs;
+function closedResult(text: unknown, keys: readonly string[]): Record<string, unknown> {
+  if (typeof text !== "string" || brokerUtf8Bytes(text) > shopifyWriteLimits.resultMaxBytes)
+    throw invalid();
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw invalid();
+  }
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== [...keys].sort().join(",") ||
+    (value as Record<string, unknown>).schemaVersion !== 1
+  )
+    throw invalid();
+  return value as Record<string, unknown>;
+}
+const statusOrNull = (value: unknown): value is OperationStatusName | null =>
+  value === null || (operationStatusNames as readonly unknown[]).includes(value);
+export function encodeShopifyApplyResult(r: ShopifyApplyResult): string {
+  if (
+    !(shopifyApplyOutcomes as readonly string[]).includes(r.outcome) ||
+    !statusOrNull(r.status) ||
+    !(r.reason === null || exact(reasonCode, r.reason))
+  )
+    throw invalid();
+  return JSON.stringify({
+    schemaVersion: 1,
+    outcome: r.outcome,
+    status: r.status,
+    reason: r.reason,
+  });
+}
+export function decodeShopifyApplyResult(text: unknown): ShopifyApplyResult {
+  const v = closedResult(text, ["schemaVersion", "outcome", "status", "reason"]);
+  if (
+    !(shopifyApplyOutcomes as readonly unknown[]).includes(v.outcome) ||
+    !statusOrNull(v.status) ||
+    !(v.reason === null || exact(reasonCode, v.reason))
+  )
+    throw invalid();
+  return Object.freeze({
+    outcome: v.outcome as ShopifyApplyOutcome,
+    status: v.status as OperationStatusName | null,
+    reason: v.reason as string | null,
+  });
+}
+const verdicts: readonly unknown[] = ["approved", "source", "mixed", "missing", null];
+export function encodeShopifyReconcileResult(r: ShopifyReconcileResult): string {
+  if (
+    !(shopifyReconcileOutcomes as readonly string[]).includes(r.outcome) ||
+    !statusOrNull(r.status) ||
+    !verdicts.includes(r.verdict)
+  )
+    throw invalid();
+  return JSON.stringify({
+    schemaVersion: 1,
+    outcome: r.outcome,
+    status: r.status,
+    verdict: r.verdict,
+  });
+}
+export function decodeShopifyReconcileResult(text: unknown): ShopifyReconcileResult {
+  const v = closedResult(text, ["schemaVersion", "outcome", "status", "verdict"]);
+  if (
+    !(shopifyReconcileOutcomes as readonly unknown[]).includes(v.outcome) ||
+    !statusOrNull(v.status) ||
+    !verdicts.includes(v.verdict)
+  )
+    throw invalid();
+  return Object.freeze({
+    outcome: v.outcome as ShopifyReconcileOutcome,
+    status: v.status as OperationStatusName | null,
+    verdict: v.verdict as ShopifyReconcileResult["verdict"],
+  });
 }
 
 // M5 PR-1: the ApiBroker Stripe protocol. Closed result JSON with fixed codes; never

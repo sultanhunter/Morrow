@@ -53,11 +53,44 @@ export function InboxScreen({ workspace }: { readonly workspace: WorkspaceView }
           <StateView kind="empty" message={copy.inbox.noQuestions} />
         )}
       </section>
+      <section className="panel" aria-labelledby="inbox-approvals-title">
+        <h2 id="inbox-approvals-title">{copy.inbox.approvalsTitle}</h2>
+        <PendingApprovals ws={ws} />
+      </section>
       <section className="panel" aria-labelledby="inbox-other-title">
         <h2 id="inbox-other-title">{copy.inbox.otherTitle}</h2>
         <StateView kind="not_in_build" compact />
       </section>
     </div>
+  );
+}
+
+// v1 PR 3: the pending approvals the person may review (GET /work/approvals).
+function PendingApprovals({ ws }: { readonly ws: Id }) {
+  const services = useServices();
+  const [approvals, reload] = useRead(`${ws}|approvals.pending`, () =>
+    services.port.review.listPending(ws),
+  );
+  if (approvals.kind !== "ok") return <>{outcomeState(approvals, reload, { compact: true })}</>;
+  if (approvals.value.length === 0)
+    return <StateView kind="empty" message={copy.inbox.noApprovals} compact />;
+  return (
+    <ul className="item-list" data-testid="inbox-approvals">
+      {approvals.value.map((a) => (
+        <li key={a.proposalId} className="item">
+          <RouteLink
+            route="review"
+            params={{ workspaceId: ws, proposalId: a.proposalId }}
+            className="item-link"
+          >
+            {copy.inbox.approvalItem(a.targetCount)}
+          </RouteLink>
+          <span className="muted">
+            {copy.inbox.approvalExpires} <Time value={a.expiresAt} />
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

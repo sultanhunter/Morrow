@@ -1023,7 +1023,7 @@ test("P01.T04a AC29: only the billing reader and its two forwarders set entitlem
       [],
       path,
     );
-  // The four allowlisted functions pass in their own files only (M3 PR-1 adds the agent
+  // The five allowlisted functions pass in their own files only (M3 PR-1 adds the agent
   // kernel's facts reader, which sets the field only from entitlementFor).
   assert.deepEqual(
     Object.fromEntries(Object.entries(entitlementWriterAllowlist).map(([k, v]) => [k, [...v]])),
@@ -1034,6 +1034,9 @@ test("P01.T04a AC29: only the billing reader and its two forwarders set entitlem
         "createWorkspacePermissionBoundary",
       ],
       "packages/work/src/agents/delegation-reader.ts": ["createLeaseDelegationReader"],
+      // v1 PR 3: the gateway's claimant check sets it only from entitlementFor over the
+      // workspace's billing facts (execute on catalog.content.publish is paid work).
+      "packages/work/src/review/claimant.ts": ["claimantMayApply"],
     },
   );
   const reader =

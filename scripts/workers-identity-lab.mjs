@@ -144,7 +144,14 @@ try {
   for (const { proposal: p } of derived) {
     const { proposalDigest, ...content } = p;
     assert.equal(proposalDigest, oracle(content));
-    assert.equal(p.id, "derived_" + oracle(p.derivedFrom));
+    // The id names the parent without its store, exactly as morrow_work.derived_proposal_id
+    // (0018) does (v1 PR 3); derivedFrom keeps the store.
+    assert.equal(
+      p.id,
+      "derived_" +
+        oracle({ ...p.derivedFrom, parentRef: { ...p.derivedFrom.parentRef, storeId: null } }),
+    );
+    assert.equal(p.derivedFrom.parentRef.storeId, parent.storeId);
   }
   assert.deepEqual(workerd.slice(5), [
     { code: "SELECTION_INVALID" },

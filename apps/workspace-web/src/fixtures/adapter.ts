@@ -5,8 +5,15 @@
 import {
   portMethods,
   type AnswerView,
+  type ApplyResultView,
   type ConnectionDisconnectView,
   type DisconnectResultView,
+  type OperationView,
+  type PendingApprovalView,
+  type ProductReviewView,
+  type RecordRefView,
+  type ReviewDecidedView,
+  type ReviewView,
   type ListingsAgentView,
   type ListingsDocumentView,
   type ModelCatalogueView,
@@ -185,6 +192,118 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   // product:13 is "too long" and fails, as an input over the cap would.
   const runs: RunDetailView[] = [];
   const runId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  // v1 PR 3 fixture reviews: one seeded proposal on task-titles (two products), plus one per
+  // run that drafted. Decisions bind each proposal's fixed digest; an apply "writes" every
+  // product at once (the fixture has no Shopify) and records its operations.
+  interface FixtureReview {
+    readonly id: string;
+    readonly taskId: string;
+    readonly productIds: readonly string[];
+    status: "pending" | "approved" | "rejected";
+    revision: number;
+    approved: { proposalId: string; selected: readonly number[] | null } | null;
+    operations: OperationView[];
+  }
+  const reviews = new Map<string, FixtureReview>();
+  const addReview = (id: string, taskId: string, productIds: readonly string[]) =>
+    reviews.set(id, {
+      id,
+      taskId,
+      productIds,
+      status: "pending",
+      revision: 1,
+      approved: null,
+      operations: [],
+    });
+  addReview("proposal-sample-1", "task-titles", ["product:11", "product:12"]);
+  const digestOf = (id: string, selected: readonly number[] | null) =>
+    ("0".repeat(64) + [id.length, ...(selected ?? [99])].join("")).slice(-64);
+  const refOf = (kind: "proposal" | "approval", id: string, digest: string): RecordRefView => ({
+    organizationId: "org-linen",
+    workspaceId: fixtureWorkspace.id,
+    storeId: kind === "proposal" ? fixtureStore.storeId : null,
+    kind,
+    id,
+    revision: 1,
+    digest,
+  });
+  const reviewProducts = (
+    r: FixtureReview,
+    selected: readonly number[] | null,
+  ): ProductReviewView[] =>
+    r.productIds
+      .map((productId, targetIndex) => ({ productId, targetIndex }))
+      .filter((p) => selected === null || selected.includes(p.targetIndex))
+      .map(({ productId, targetIndex }) => {
+        const n = productId.slice("product:".length);
+        return {
+          targetIndex,
+          productId,
+          source: "available" as const,
+          changes: [
+            {
+              field: "title" as const,
+              before: `Linen shirt ${n}`,
+              after: `Linen shirt ${n}, airy summer cut`,
+            },
+            {
+              field: "descriptionHtml" as const,
+              before: `<p>Linen shirt ${n}.</p>`,
+              after: `<p>A breathable <strong>linen</strong> shirt (${n}).</p>`,
+            },
+            { field: "tags" as const, before: ["linen"], after: ["linen", "summer"] },
+          ],
+          tags: { added: ["summer"], removed: [] },
+          flags: { newUrls: 0, newEmails: 0, newPhones: 0, tagsAdded: 1, tagsRemoved: 0 },
+        };
+      });
+  const reviewView = (r: FixtureReview, selected: readonly number[] | null): ReviewView => {
+    const id = selected === null ? r.id : `${r.id}-d${selected.join("")}`;
+    const digest = digestOf(r.id, selected);
+    const decided = r.approved !== null && r.approved.proposalId === id;
+    const status = selected === null || decided ? r.status : "pending";
+    return {
+      proposal: {
+        id,
+        digest,
+        storeId: fixtureStore.storeId,
+        taskId: r.taskId,
+        targetCount: selected === null ? r.productIds.length : selected.length,
+        expiresAt: "2026-10-19T09:00:00.000Z",
+        partialApproval: true,
+        untrustedSource: true,
+        derivedFromId: selected === null ? null : r.id,
+        selectedTargetIndexes: selected === null ? null : [...selected],
+      },
+      proposalRef: refOf("proposal", id, digest),
+      approval:
+        selected !== null && !decided
+          ? null
+          : {
+              id: `approval-${id}`,
+              revision: r.revision,
+              status,
+              effectiveAt: status === "approved" ? "2026-10-16T09:00:00.000Z" : null,
+              expiresAt: "2026-10-19T09:00:00.000Z",
+            },
+      approvalRef:
+        selected !== null && !decided
+          ? null
+          : refOf("approval", `approval-${id}`, digestOf("approval-" + id, null)),
+      viewerRole: "reviewer",
+      actionable: true,
+      blocked: null,
+      confirmation: {
+        required: false,
+        phrase: `approve ${r.productIds.length} changes for 2 credits`,
+      },
+      products: reviewProducts(r, selected),
+      claim: r.operations.length ? { mine: true, operations: [...r.operations] } : null,
+    };
+  };
+  const reviewOf = (proposalId: string) =>
+    reviews.get(proposalId) ??
+    [...reviews.values()].find((r) => proposalId.startsWith(r.id + "-d"));
   return {
     session: {
       startSignIn: () => reply("session.startSignIn", () => ok({ navigateTo: "/" })),
@@ -589,6 +708,12 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
             };
           });
           const drafted = products.filter((p) => p.status === "drafted").length;
+          if (drafted > 0)
+            addReview(
+              `proposal-${created}`,
+              taskId,
+              products.filter((p) => p.status === "drafted").map((p) => p.productId),
+            );
           const run: RunView = {
             runId: runId(created),
             taskId,
@@ -638,6 +763,134 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         command<{ readonly closed: number }>("runs.reconcile", c, () =>
           ws(id) ? ok({ closed: 0 }) : notFound,
         ),
+    },
+    review: {
+      listPending: (id) =>
+        reply<readonly PendingApprovalView[]>("review.listPending", () =>
+          ws(id)
+            ? ok(
+                [...reviews.values()]
+                  .filter((r) => r.status === "pending")
+                  .map((r) => ({
+                    proposalId: r.id,
+                    storeId: fixtureStore.storeId,
+                    capabilityId: "catalog.content.publish",
+                    targetCount: r.productIds.length,
+                    expiresAt: "2026-10-19T09:00:00.000Z",
+                    viewerRole: "reviewer",
+                  })),
+              )
+            : notFound,
+        ),
+      get: (id, proposalId, selected) =>
+        reply<ReviewView>("review.get", () => {
+          const r = reviewOf(proposalId);
+          if (!ws(id) || !r || (proposalId !== r.id && selected !== null)) return notFound;
+          const derived =
+            proposalId === r.id
+              ? selected
+              : proposalId
+                  .slice(r.id.length + 2)
+                  .split("")
+                  .map(Number);
+          return ok(reviewView(r, derived));
+        }),
+      decide: (id, proposalId, c) =>
+        command<ReviewDecidedView>("review.decide", c, () => {
+          const r = reviews.get(proposalId);
+          if (!ws(id) || !r) return notFound;
+          const selected = c.body.selectedTargetIndexes;
+          if (r.status !== "pending" || c.body.expectedDecisionDigest !== digestOf(r.id, selected))
+            return {
+              kind: "conflict",
+              recheck: true,
+              message: "This change is not allowed from the current state. Reload and try again.",
+            };
+          const view = reviewView(r, selected);
+          r.status = c.body.decision === "approve" ? "approved" : "rejected";
+          r.revision += 1;
+          if (r.status === "approved") r.approved = { proposalId: view.proposal.id, selected };
+          const decided = reviewView(r, selected);
+          return ok({
+            proposalRef: decided.proposalRef,
+            approvalRef:
+              decided.approvalRef ??
+              refOf(
+                "approval",
+                `approval-${view.proposal.id}`,
+                digestOf("approval-" + view.proposal.id, null),
+              ),
+            status: r.status,
+            expiresAt: "2026-10-17T09:00:00.000Z",
+          });
+        }),
+      apply: (id, proposalId, c) =>
+        command<ApplyResultView>("review.apply", c, () => {
+          const r = reviewOf(proposalId);
+          if (!ws(id) || !r) return notFound;
+          if (r.status !== "approved" || r.approved?.proposalId !== proposalId)
+            return {
+              kind: "conflict",
+              recheck: false,
+              message: "This change is not allowed from the current state. Reload and try again.",
+            };
+          if (r.operations.length === 0)
+            r.productIds.forEach((productId, targetIndex) => {
+              if (r.approved!.selected !== null && !r.approved!.selected.includes(targetIndex))
+                return;
+              // review_uncertain: Shopify's reply to the first product was lost and its
+              // read-back could not tell (the "Check again" and "I checked it in Shopify" state).
+              const lost = scenario === "review_uncertain" && r.operations.length === 0;
+              r.operations.push({
+                operationId: `00000000-0000-4000-9000-${String(r.operations.length + 1 + created * 100).padStart(12, "0")}`,
+                taskId: r.taskId,
+                proposalId,
+                productId,
+                targetIndex,
+                status: lost ? "uncertain" : "verified",
+                reason: lost ? "fence_expired" : "readback_matched",
+                uncertaintyReason: lost ? "unknown_submission" : null,
+                verdict: lost ? null : "approved",
+                updatedAt: at(),
+              });
+            });
+          return ok({ pending: 0, operations: [...r.operations] });
+        }),
+      operationsOfTask: (id, taskId) =>
+        reply<readonly OperationView[]>("review.operationsOfTask", () =>
+          ws(id) && task(taskId)
+            ? ok(
+                [...reviews.values()]
+                  .filter((r) => r.taskId === taskId)
+                  .flatMap((r) => r.operations),
+              )
+            : notFound,
+        ),
+      recheck: (id, operationId, c) =>
+        command<OperationView>("review.recheck", c, () => {
+          const found = [...reviews.values()]
+            .flatMap((r) => r.operations)
+            .find((o) => o.operationId === operationId);
+          return ws(id) && found ? ok(found) : notFound;
+        }),
+      setAside: (id, operationId, c) =>
+        command<OperationView>("review.setAside", c, () => {
+          for (const r of reviews.values()) {
+            const i = r.operations.findIndex((o) => o.operationId === operationId);
+            if (i < 0 || !ws(id)) continue;
+            const o = r.operations[i]!;
+            if (o.status !== "uncertain") return ok(o);
+            const set: OperationView = {
+              ...o,
+              status: "cancel_requested",
+              reason: "owner_checked",
+              updatedAt: at(),
+            };
+            r.operations[i] = set;
+            return ok(set);
+          }
+          return notFound;
+        }),
     },
     models: {
       list: (id) =>

@@ -62,7 +62,10 @@ export async function withdrawProposal(
     const stored = await readProposalRow(tx, a, recorded.proposalRef.id);
     if (!stored || (await viewerRole(a, stored)) === null) return refuse("not_found");
     tx.rollbackOnly();
-    return Object.freeze({ outcome: "replayed", ...recorded });
+    return Object.freeze({
+      outcome: "replayed",
+      ...decodeCommandResult(a, begun.result, stored.proposal.storeId),
+    });
   }
   const stored = await readProposalRow(tx, a, i.proposalId);
   if (!stored || (await viewerRole(a, stored)) === null) return refuse("not_found");
@@ -86,6 +89,6 @@ export async function withdrawProposal(
   if (row.outcome !== "applied") return refuse(sqlRefusal(row.outcome));
   return Object.freeze({
     outcome: "applied",
-    ...decodeCommandResult(a, decodeResult(row.result)),
+    ...decodeCommandResult(a, decodeResult(row.result), stored.proposal.storeId),
   });
 }

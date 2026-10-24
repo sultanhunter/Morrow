@@ -318,12 +318,28 @@ const tones: Readonly<Record<string, readonly [TagTone, Glyph]>> = {
   in_progress: ["info", "half"],
   drafted: ["success", "check"],
   skipped: ["neutral", "minus"],
+  // v1 PR 3: each product's apply. An unknown outcome is never shown as done: Checking and
+  // Needs attention carry the three dots until a read-back settles them.
+  authorized: ["info", "half"],
+  dispatching: ["info", "half"],
+  submitted: ["info", "half"],
+  verifying: ["info", "dots"],
+  verified: ["success", "check"],
+  conflict: ["warning", "alert"],
+  uncertain: ["warning", "dots"],
 };
 export function StatusTag({
   family,
   status,
 }: {
-  readonly family: "task" | "goal" | "question" | "installation" | "run" | "runProduct";
+  readonly family:
+    | "task"
+    | "goal"
+    | "question"
+    | "installation"
+    | "run"
+    | "runProduct"
+    | "operation";
   readonly status: string;
 }) {
   const [tone, glyph] = Object.hasOwn(tones, status)

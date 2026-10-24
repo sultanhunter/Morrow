@@ -15,10 +15,13 @@ export { decideApproval, type DecideInput, type DecideResult } from "./decide.js
 export { withdrawProposal, type WithdrawInput, type TransitionResult } from "./withdraw.js";
 export {
   prepareApprovalClaim,
+  claimedApprovalCurrent,
+  type ClaimantCheck,
   type CountedReviewers,
   type PreparedClaim,
   type ClaimRefusal,
 } from "./claim.js";
+export { proposalStore, storeLinkCurrent } from "./kernel.js";
 export {
   readProposal,
   listApprovals,

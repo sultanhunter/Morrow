@@ -393,6 +393,32 @@
     display: none;
   }
 }
+/* v1 PR 3: the review screen's before-and-after table. Every value is text (pre-wrap): a
+   description's HTML is shown as its source, never rendered. Its "Include" checkbox is the
+   Sunrise `.check` row (components.css), at the target floor. */
+.review-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.review-table th,
+.review-table td {
+  padding: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+.review-table thead th {
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+}
+.review-table th[scope="row"] {
+  width: 28%;
+}
+.review-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 759px) {
   .entry-card {
     padding: var(--space-5);

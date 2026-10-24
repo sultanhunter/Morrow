@@ -49,6 +49,7 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "review_uncertain",
   "home_preview",
   "listings_enable_reread_failed",
   "home_offline_retry",
@@ -316,6 +317,8 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // v1 PR 3 (review F2): the first applied product's outcome is unknown (the adapter's apply).
+  review_uncertain: {},
   // ADR-0032: the Home board's sample sections, shown only where `samples.home` is
   // composed (here alone; see `samplesComposedIn`).
   home_preview: {},
