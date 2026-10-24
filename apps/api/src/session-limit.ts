@@ -59,8 +59,8 @@ const retryAfterSeconds = 60;
 // agents, catalog and connections rows of the api Worker's dispatch table (worker.ts), read
 // through `apiDispatch` itself, so there is one matcher. The runs routes (M3 PR-2), the
 // catalogue routes (M2 PR-3), the goal and plan-start routes (PR 18), the shop knowledge and
-// notebook routes (PR 20) and the "Disconnect store" routes answer the work API's envelope. The Stripe webhook row is outside /workspace and never a
-// session route.
+// notebook routes (PR 20) and the "Disconnect store" routes answer the work API's envelope.
+// The Stripe webhook row is outside /workspace and never a session route.
 type EnvelopeFamily =
   | "runs"
   | "projects"

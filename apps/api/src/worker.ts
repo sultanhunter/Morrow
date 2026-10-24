@@ -77,8 +77,9 @@ type Handler = Readonly<{
 //                                                other /connections path stays the P05
 //                                                handler's (the WorkspaceConnections@1 read)
 // The api's per-address session limit (session-limit.ts) runs before this table and answers
-// a path of the runs, projects, knowledge, review, work, billing, agents, catalog or connections row in
-// that family's ErrorEnvelope, through `apiDispatch` itself, so there is one matcher.
+// a path of the runs, projects, knowledge, review, work, billing, agents, catalog or
+// connections row in that family's ErrorEnvelope, through `apiDispatch` itself, so there is
+// one matcher.
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
 export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
 const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
