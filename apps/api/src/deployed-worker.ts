@@ -18,6 +18,7 @@ import type { StripeWebhookDependencies } from "../../../packages/work/src/billi
 import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
 import {
   createBrokerChallengeVerifier,
+  createBrokerCredentialDestroyer,
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
   createBrokerSessionPageReader,
@@ -25,6 +26,7 @@ import {
   createBrokerStripe,
 } from "./broker-client.js";
 import type { CatalogApiDependencies } from "../../../packages/work/src/catalog/http.js";
+import type { ConnectionsApiDependencies } from "../../../packages/work/src/connections/http.js";
 import {
   mapApiEnvironment,
   type ApiEnvironmentCode,
@@ -142,6 +144,13 @@ export function composeApiDependencies(
     environment,
     admission: runAdmissionOpen(modelMode, productReadAvailable),
   });
+  // "Disconnect store": the connection routes on the same origin and work login, with the
+  // broker's destruction of the disconnected installation's token behind the ApiBroker
+  // binding. No switch: a stop is always available (ADR-0005), whatever else is off.
+  const connections: ConnectionsApiDependencies = Object.freeze({
+    ...work,
+    credentials: createBrokerCredentialDestroyer(broker),
+  });
   return Object.freeze({
     dependencies,
     work,
@@ -149,6 +158,7 @@ export function composeApiDependencies(
     webhook,
     catalog,
     runs,
+    connections,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -186,6 +196,7 @@ function select(env: unknown): Selected {
           composed.webhook,
           composed.catalog,
           composed.runs,
+          composed.connections,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         session: createSessionLimit(mapped.guard.limiters?.session ?? null),
