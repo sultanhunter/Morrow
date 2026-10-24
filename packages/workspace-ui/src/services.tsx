@@ -35,7 +35,8 @@ export type MarkerKind =
   | "project"
   | "plan"
   | "thinking"
-  | "add_agent";
+  | "add_agent"
+  | "disconnect";
 export interface Marker {
   readonly workspaceId: Id;
   readonly kind: MarkerKind;

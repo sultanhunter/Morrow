@@ -55,17 +55,19 @@ const sessionRoute = (route: ManagedApiRoute): route is SessionRoute =>
   (sessionLimitedRoutes as readonly ManagedApiRoute[]).includes(route);
 
 const retryAfterSeconds = 60;
-// The api's ErrorEnvelope families: the runs, work, billing, agents and catalog rows of the
-// api Worker's dispatch table (worker.ts), read through `apiDispatch` itself, so there is one
-// matcher. The runs routes (M3 PR-2) and the catalogue routes (M2 PR-3) answer the work API's
-// envelope. The Stripe webhook row is outside /workspace and never a session route.
-type EnvelopeFamily = "runs" | "work" | "billing" | "agents" | "catalog";
+// The api's ErrorEnvelope families: the runs, work, billing, agents, catalog and connections
+// rows of the api Worker's dispatch table (worker.ts), read through `apiDispatch` itself, so
+// there is one matcher. The runs routes (M3 PR-2), the catalogue routes (M2 PR-3) and the
+// "Disconnect store" routes answer the work API's envelope. The Stripe webhook row is outside
+// /workspace and never a session route.
+type EnvelopeFamily = "runs" | "work" | "billing" | "agents" | "catalog" | "connections";
 const envelopeFamilies: readonly string[] = Object.freeze([
   "runs",
   "work",
   "billing",
   "agents",
   "catalog",
+  "connections",
 ]);
 export function envelopeFamily(pathname: string): EnvelopeFamily | null {
   const key = apiDispatch(pathname);

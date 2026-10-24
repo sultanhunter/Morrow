@@ -5,10 +5,14 @@
 // continuation, session, grant and subscription allow a link, and the link itself. This
 // screen shows those decisions. The continuation stays in memory (the app holds it), and
 // preview, apply and status reuse its one command key, so a retry or a Check again is the
-// same request and never a second link.
+// same request and never a second link. The installation's page also holds "Disconnect
+// store", the person's kill switch for the whole store: shown only when the server's kernel
+// allows it, with a recorded reason, and a note that reconnecting needs a new install.
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { copy } from "../copy";
 import type {
+  ConnectionDisconnectView,
+  DisconnectResultView,
   Id,
   InstallLinkView,
   StoreConnectionView,
@@ -16,12 +20,13 @@ import type {
   WorkspaceView,
 } from "../model";
 import type { Command, Outcome, StoreLinkHandoff } from "../port";
-import { useServices } from "../services";
+import { useCommand, useDirty, useRead, useServices } from "../services";
 import { useConnections } from "../workspace-data";
-import { Button, RouteLink } from "../components/controls";
+import { Button, Dialog, RouteLink, TextArea } from "../components/controls";
 import { RecordText, StatusTag, Time } from "../components/display";
 import { OutcomeNotice, StateView, StatusRegion, outcomeState } from "../components/feedback";
 import { ListingsAgentCard } from "./agents";
+import { CommandFeedback } from "./entry";
 
 // The registered install link: https on Shopify's admin or a myshopify host only. The
 // decoder checks the same shape; this is the last check before an href is rendered.
@@ -396,6 +401,149 @@ export function ConnectionsScreen({
   );
 }
 
+// "Disconnect store" (ADR-0022 item 15; ADR-0005): the person's kill switch for the whole
+// store. The person writes a reason, which is recorded with the stop; the server's kernel
+// decides who may (the button shows only when it said so), and the dialog says exactly
+// what happens and that reconnecting needs a new install.
+function DisconnectDialog({
+  ws,
+  connectionId,
+  onDone,
+  onCancel,
+}: {
+  readonly ws: Id;
+  readonly connectionId: Id;
+  readonly onDone: (result: DisconnectResultView) => void;
+  readonly onCancel: () => void;
+}) {
+  const services = useServices();
+  const [reason, setReason] = useState("");
+  useDirty(reason.trim() !== "");
+  const disconnect = useCommand<{ reason: string }, DisconnectResultView>({
+    marker: { workspaceId: ws, kind: "disconnect" },
+    send: (c) => services.port.connections.disconnect(ws, connectionId, c),
+    onOutcome: (outcome) => {
+      if (outcome.kind === "ok") onDone(outcome.value);
+    },
+  });
+  const valid = reason.trim() !== "" && reason.length <= 1024;
+  const d = copy.connections.disconnect;
+  return (
+    <Dialog
+      open
+      title={d.dialogTitle}
+      onClose={onCancel}
+      footer={
+        <>
+          <Button onClick={onCancel} disabled={disconnect.busy}>
+            {d.cancel}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={!valid || disconnect.busy}
+            onClick={() => void disconnect.submit({ reason })}
+          >
+            {d.confirm}
+          </Button>
+        </>
+      }
+    >
+      <ul className="item-list" data-testid="disconnect-effects">
+        {d.dialogBody.map((line) => (
+          <li key={line} className="item">
+            {line}
+          </li>
+        ))}
+      </ul>
+      <p>{d.reconnectNote}</p>
+      <TextArea
+        label={d.reason}
+        hint={d.reasonHint}
+        value={reason}
+        onChange={setReason}
+        maxLength={1024}
+        required
+      />
+      <CommandFeedback
+        phase={disconnect.phase}
+        onCheckAgain={disconnect.checkAgain}
+        onRetry={disconnect.retry}
+        success={d.done}
+        messages={{ denied: d.notPermitted }}
+      />
+    </Dialog>
+  );
+}
+
+/** The connection's "Disconnect store" card: its state and, when allowed, the button. */
+function DisconnectStoreCard({
+  ws,
+  connectionId,
+  onDisconnected,
+}: {
+  readonly ws: Id;
+  readonly connectionId: Id;
+  readonly onDisconnected: () => void;
+}) {
+  const services = useServices();
+  const titleId = useId();
+  const [status, reload] = useRead<ConnectionDisconnectView>(
+    `${ws}|connections.disconnect|${connectionId}`,
+    () => services.port.connections.disconnectStatus(ws, connectionId),
+  );
+  const [open, setOpen] = useState(false);
+  const [done, setDone] = useState<DisconnectResultView | null>(null);
+  const d = copy.connections.disconnect;
+  let body: ReactNode;
+  if (status.kind !== "ok") body = outcomeState(status, reload, { compact: true });
+  else {
+    const view = status.value;
+    body = (
+      <>
+        {view.stop !== null ? (
+          <>
+            <p>{view.stop.setBy === "human" ? d.byPerson : d.bySystem}</p>
+            <p className="muted">{d.reconnectNote}</p>
+          </>
+        ) : view.actions.disconnect ? (
+          <>
+            <p>{d.intro}</p>
+            <div className="item-actions">
+              <Button variant="secondary" onClick={() => setOpen(true)}>
+                {d.button}
+              </Button>
+            </div>
+          </>
+        ) : view.installationStatus === "linked" ? (
+          <p className="muted">{d.notPermitted}</p>
+        ) : null}
+      </>
+    );
+  }
+  return (
+    <section className="panel" aria-labelledby={titleId}>
+      <h2 id={titleId}>{d.title}</h2>
+      {body}
+      {done !== null ? (
+        <StatusRegion message={`${d.done} ${d.credential[done.credential] ?? ""}`.trim()} />
+      ) : null}
+      {open ? (
+        <DisconnectDialog
+          ws={ws}
+          connectionId={connectionId}
+          onCancel={() => setOpen(false)}
+          onDone={(result) => {
+            setOpen(false);
+            setDone(result);
+            reload();
+            onDisconnected();
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}
+
 export function ConnectionScreen({
   workspace,
   connectionId,
@@ -407,6 +555,8 @@ export function ConnectionScreen({
   // Read once per mount and on Retry: a background re-read that failed would unmount the
   // Listings card, and an enable's in-flight or unknown outcome (and Check again) with it.
   const [list, reload] = useConnections(ws, "mount");
+  // A disconnect remounts the agent card, so it reads the connection stop at once.
+  const [generation, setGeneration] = useState(0);
   const installation =
     list.kind === "ok"
       ? (list.value.installations.find((i) => i.connectionId === connectionId) ?? null)
@@ -457,13 +607,27 @@ export function ConnectionScreen({
           {installation.status === "unlinked" ? (
             <p className="muted">{finishCopy(list.value.installLink)}</p>
           ) : null}
-          <StateView kind="not_in_build" compact message={copy.connections.disconnectLater} />
         </article>
       )}
+      {/* "Disconnect store": a connection that was linked here (the server decides who may). */}
+      {installation !== null && installation.status !== "unlinked" ? (
+        <DisconnectStoreCard
+          ws={ws}
+          connectionId={connectionId}
+          onDisconnected={() => {
+            reload();
+            setGeneration((g) => g + 1);
+          }}
+        />
+      ) : null}
       {/* M3 PR-1: the Listings agent of this connection's store (Enable, resume and Stop AI
           work); the server decides what the person may do. */}
       {installation !== null && installation.storeId !== null ? (
-        <ListingsAgentCard workspace={workspace} storeId={installation.storeId} />
+        <ListingsAgentCard
+          key={`${installation.storeId}|${generation}`}
+          workspace={workspace}
+          storeId={installation.storeId}
+        />
       ) : null}
     </div>
   );
