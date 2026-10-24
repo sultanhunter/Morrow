@@ -13,6 +13,7 @@ import { CommandFeedback } from "./entry";
 import { Answer } from "./inbox";
 import { usePaged } from "./work";
 import { RunsPanel } from "./runs";
+import { AppliedPanel } from "./review";
 
 function MarkReady({
   ws,
@@ -223,6 +224,10 @@ export function TaskScreen({
     { id: "brief", label: copy.task.brief },
     { id: "questions", label: copy.task.questions },
     ...(services.composed["runs.listOfTask"] ? [{ id: "runs", label: copy.runs.tab }] : []),
+    // v1 PR 3: the products applied to Shopify from this task's proposals.
+    ...(services.composed["review.operationsOfTask"]
+      ? [{ id: "applied", label: copy.review.history }]
+      : []),
   ];
   return (
     <div className="page task-page" data-pane={pane}>
@@ -294,6 +299,18 @@ export function TaskScreen({
                   className="tab-panel"
                 >
                   {tab === "runs" ? <RunsPanel ws={ws} taskId={taskId} /> : null}
+                </div>
+              ) : null}
+              {services.composed["review.operationsOfTask"] ? (
+                <div
+                  id="task-panel-applied"
+                  role="tabpanel"
+                  aria-labelledby="task-tab-applied"
+                  tabIndex={0}
+                  hidden={tab !== "applied"}
+                  className="tab-panel"
+                >
+                  {tab === "applied" ? <AppliedPanel ws={ws} taskId={taskId} /> : null}
                 </div>
               ) : null}
             </div>

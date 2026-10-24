@@ -29,6 +29,7 @@ import {
   ProjectsScreen,
   QuestionScreen,
   ReentryNotice,
+  ReviewScreen,
   ServicesProvider,
   SettingsFrame,
   SettingsHomeScreen,
@@ -626,6 +627,13 @@ function WorkspaceFrame({
         return <InboxScreen workspace={workspace} />;
       case "question":
         return <QuestionScreen workspace={workspace} questionId={params.questionId!} />;
+      // v1 PR 3: review, approve and apply one proposal's changes.
+      case "review":
+        return services.composed["review.get"] ? (
+          <ReviewScreen workspace={workspace} proposalId={params.proposalId!} />
+        ) : (
+          <UnavailableDestination title={destinationTitle(match.id)} />
+        );
       // M2 PR-2: the store connections screens.
       case "connections":
         return (
@@ -763,6 +771,15 @@ export function guardPort(
       listOfTask: watch(port.runs.listOfTask.bind(port.runs), first),
       get: watch(port.runs.get.bind(port.runs), first),
       reconcile: watch(port.runs.reconcile.bind(port.runs), first),
+    },
+    review: {
+      listPending: watch(port.review.listPending.bind(port.review), first),
+      get: watch(port.review.get.bind(port.review), first),
+      decide: watch(port.review.decide.bind(port.review), first),
+      apply: watch(port.review.apply.bind(port.review), first),
+      operationsOfTask: watch(port.review.operationsOfTask.bind(port.review), first),
+      recheck: watch(port.review.recheck.bind(port.review), first),
+      setAside: watch(port.review.setAside.bind(port.review), first),
     },
     models: {
       list: watch(port.models.list.bind(port.models), first),

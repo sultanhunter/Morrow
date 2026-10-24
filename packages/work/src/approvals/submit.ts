@@ -217,7 +217,13 @@ export async function submitProposal(
   // 2. Grants: the creating verb on the capability over W and every target field;
   // the task attach (own task → execute, another's → administer).
   if (
-    !(await permits(a, "proposal.submit", { capabilityId: i.capabilityId, targets: plan.targets }))
+    !(await permits(a, "proposal.submit", {
+      organizationId: a.actor.organizationId,
+      workspaceId: a.actor.workspaceId!,
+      storeId: null,
+      capabilityId: i.capabilityId,
+      targets: plan.targets,
+    }))
   )
     return refuse("denied");
   let requestedBy: Current_HumanActorRef | null = null;
@@ -237,7 +243,13 @@ export async function submitProposal(
       task.initiator_membership_id === a.actor.membershipId
         ? "own"
         : "other";
-    const attach = { capabilityId: i.capabilityId, targets: plan.targets };
+    const attach = {
+      organizationId: a.actor.organizationId,
+      workspaceId: a.actor.workspaceId!,
+      storeId: null,
+      capabilityId: i.capabilityId,
+      targets: plan.targets,
+    };
     if (!(await permits(a, "proposal.task_attach", attach, basis))) return refuse("denied");
     requestedBy = {
       ...humanRef(a),

@@ -235,9 +235,12 @@ test("AC14: partial approval derives a deterministic proposal and digest", () =>
   assert.deepEqual(previewSelection(parent, [0, 1]), first);
   assert.deepEqual(previewSelection(parent, null), { proposal: parent });
   const derivedFrom = { parentRef: ref(parent), selectedTargetIndexes: [0, 1] };
+  // The id names the parent without its store, exactly as morrow_work.derived_proposal_id
+  // (0018) does (v1 PR 3); derivedFrom keeps the store.
+  const named = { parentRef: { ...ref(parent), storeId: null }, selectedTargetIndexes: [0, 1] };
   assert.deepEqual(derived, {
     ...parent,
-    id: "derived_" + oracle(derivedFrom),
+    id: "derived_" + oracle(named),
     revision: 1,
     scope: { ...parent.scope, resources: parent.scope.resources.slice(0, 2) },
     targets: parent.targets.slice(0, 2),

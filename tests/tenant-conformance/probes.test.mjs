@@ -161,6 +161,10 @@ test("P1: with no context both roles see zero rows and every api function is ine
     // v1 PR 2: "Disconnect store", every scalar and the record well-formed.
     "begin_connection_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_connection_command('connection.disconnect','${uuid}','${digest}')`,
     "cmd_store_disconnect(text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"record_probe","createdAt":"2026-10-23T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_store_disconnect('${uuid}','${digest}','corr','connection_probe',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex')) x`,
+    // v1 PR 3: the claim (a well-formed item list) and one operation's dispatch check.
+    "cmd_catalog_apply(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_apply('${uuid}','${digest}','approval_absent','1','${digest}','proposal_absent','${digest}','{"evaluatedAt":"2026-10-23T00:00:00.000Z","reviewers":[]}','[{"targetIndex":0,"canonical":"{}","digest":"${digest}"}]')`,
+    "cmd_catalog_dispatch(text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_dispatch('${randomUUID()}',NULL)`,
+    "cmd_catalog_set_aside(text)": `SELECT outcome FROM morrow_work.cmd_catalog_set_aside('${randomUUID()}')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -196,6 +200,9 @@ test("P1: with no context both roles see zero rows and every api function is ine
         "agent_enable_document(text)": `morrow_work.agent_enable_document('${"a".repeat(64)}')`,
         // v1 PR 2.
         "connection_target(text)": "morrow_work.connection_target('connection_probe')",
+        // v1 PR 3.
+        "catalog_review_sources(text)": "morrow_work.catalog_review_sources('proposal_absent')",
+        "catalog_claim_of(text)": "morrow_work.catalog_claim_of('proposal_absent')",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(

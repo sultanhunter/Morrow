@@ -71,16 +71,18 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["workspace_streams"],
     // M2 PR-3 (0037): shop/redact empties a store's parameters in the connector's own
-    // redaction context (read, and the one change to redacted).
-    policies: ["connector_redact", "connector_redact_read"],
+    // redaction context (read, and the one change to redacted). v1 PR 3 (catalog-apply): the
+    // broker's catalog definers read their operation's tenant (broker_catalog_read).
+    policies: ["broker_catalog_read", "connector_redact", "connector_redact_read"],
     lease: true,
     content: "store",
   },
   proposals: {
     class: "tenant_readable",
     parents: ["proposal_parameters", "review_policies"],
-    // M2 PR-3 (0037): the connector's redaction context reads its store's proposals.
-    policies: ["connector_redact_proposal"],
+    // M2 PR-3 (0037): the connector's redaction context reads its store's proposals. v1 PR 3:
+    // the broker's catalog definers read their operation's tenant (broker_catalog_read).
+    policies: ["broker_catalog_read", "connector_redact_proposal"],
     lease: true,
     content: "workspace",
   },
@@ -134,15 +136,39 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     lease: true,
-    // M5 PR-1 (0029): the broker's own login settles its stripe_write operations.
-    policies: ["broker_stripe"],
+    // M5 PR-1 (0029): the broker's own login settles its stripe_write operations. v1 PR 3
+    // (catalog-apply): its catalog definers reach the one catalog_write operation their own
+    // setting names (broker_catalog) and read their tenant's catalog operations, for the
+    // one-open-write-per-product rule (broker_catalog_tenant, FOR SELECT).
+    policies: ["broker_catalog", "broker_catalog_tenant", "broker_stripe"],
     content: "none",
   },
   operation_transitions: {
     class: "tenant_readable",
     parents: ["operations"],
     lease: true,
-    policies: ["broker_stripe_transition"],
+    policies: ["broker_catalog_transition", "broker_stripe_transition"],
+    content: "none",
+  },
+  // v1 PR 3 (catalog-apply): the send fence's record and the read-backs of one catalog_write
+  // operation: ids, listing field names, verdict codes and Shopify's own updatedAt text
+  // (content-free, 365 days). Only the broker's catalog definers write them
+  // (broker_catalog_operation); the session context only reads them (commandRead), and the
+  // api reads the read-backs' codes column by column.
+  operation_writes: {
+    class: "tenant_internal",
+    parents: ["operations"],
+    commandRead: true,
+    policies: ["broker_catalog_operation"],
+    content: "none",
+  },
+  operation_readbacks: {
+    class: "tenant_readable",
+    parents: ["operations"],
+    commandRead: true,
+    // Review F2: the broker's catalog definers also read their tenant's read-backs, for the
+    // one-open-write-per-product rule (broker_catalog_read, FOR SELECT).
+    policies: ["broker_catalog_operation", "broker_catalog_read"],
     content: "none",
   },
   // M3 PR-1 listings authority (migration 0031).
@@ -245,7 +271,9 @@ export const workTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     lease: true,
+    // v1 PR 3: the broker's catalog read-back reads the draft's source snapshot.
     policies: [
+      "broker_catalog_read",
       "connector_content_delete",
       "connector_content_delete_only",
       "connector_content_read",
@@ -621,6 +649,31 @@ export const workFunctions = Object.freeze({
   "runtime_guard()": { kind: "trigger", grantees: [] },
   "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "runtime_hold_lift(text,text,text)": { kind: "operator", grantees: [] },
+  // v1 PR 3 (catalog-review, catalog-apply): the review screen's two reads, the claim and
+  // the per-product dispatch check (the api), the pure helpers over a stored proposal and
+  // its claimed parameters, and the read-back verdicts' CHECK.
+  "catalog_review_sources(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "catalog_claim_of(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_catalog_apply(text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.apply",
+  },
+  "cmd_catalog_dispatch(text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.dispatch",
+  },
+  // Review F2: the claimant sets an uncertain operation aside (uncertain -> cancel_requested).
+  "cmd_catalog_set_aside(text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.set_aside",
+  },
+  "catalog_target(jsonb,integer)": { kind: "helper", grantees: [] },
+  "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },
+  "catalog_item_matches(jsonb,jsonb)": { kind: "helper", grantees: [] },
+  "readback_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
 });
 // The identity bridges (0014, 0017): definers owned by the identity owner, EXECUTE
 // for the command role only.
@@ -1252,6 +1305,26 @@ export const vaultFunctions = Object.freeze({
   "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // v1 PR 3 (catalog-apply): the gateway's apply (resolve, fence, close) and read-back
+  // (resolve, record), keyed by one operation id, and their revisable INVOKER helpers (the
+  // context settings and the send refusal), which only the definers above call.
+  "catalog_write_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_write_begin(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "catalog_write_end(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_reconcile_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_reconcile_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "catalog_context(text,text,text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -1378,6 +1451,12 @@ export const executorLogins = Object.freeze({
     "morrow_vault.runtime_operation_created(text,text)",
     "morrow_vault.runtime_operation_settle(text,text,text)",
     "morrow_vault.runtime_operations_open(text)",
+    // v1 PR 3 (catalog-apply).
+    "morrow_vault.catalog_reconcile_record(text,text,text,text,text)",
+    "morrow_vault.catalog_reconcile_resolve(text)",
+    "morrow_vault.catalog_write_begin(text,text,text,text,text)",
+    "morrow_vault.catalog_write_end(text,text,text,text)",
+    "morrow_vault.catalog_write_resolve(text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

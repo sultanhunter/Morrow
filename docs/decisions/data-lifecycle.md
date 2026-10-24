@@ -96,6 +96,14 @@ Listings runs (M3 PR-2; ADR-0022 items 2, 10, 11 and 13; migration 0038 listings
 | `morrow_work.run_drafts` | Store content: the validated change set of one product and its reviewer flags (counts); 90 days (`expires_at`) | shop/redact deletes the store's rows (`delete_rows`, as for snapshots: the connector context only, per-pass counts). A run step that writes a snapshot, a draft or an agent proposal's parameters waits on the store's stop key, so it either commits before the shop/redact pass (which then deletes or empties it) or is refused. P09.T05 prunes at `expires_at` |
 | `morrow_work.model_catalogue_rates` | Platform record: per-token rates, the provider model id and the input cap of each catalogue entry; kept for the life of the platform | None needed |
 
+Review and apply (v1 PR 3, the gateway's first slice; ADR-0022 items 3, 7 and 9; migrations 0044 catalog-review and 0045 catalog-apply). The review screen reads the "before" values from `product_snapshots` and the "after" values from `proposal_parameters`; nothing new holds store content. An apply sends only the approved fields of the claimed parameters, and records ids, codes and Shopify's own `updatedAt` text, never a product value.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_work.operations` (`catalog_write`), `morrow_work.operation_transitions` | Content-free audit of each product's apply: the claim, the approval and its digest, the request digest of the exact approved item, the product id, statuses, reasons and the provider request id; 365 days | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.operation_writes` | Content-free record of the send fence: the credential id and version the send used, the listing field names sent and Shopify's `updatedAt` read just before the send (compared only for equality); 365 days | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.operation_readbacks` | Content-free read-backs: per-field verdict codes (`approved`, `source`, `other`), the overall verdict and Shopify's `updatedAt`; no value and no digest of one; 365 days | P09.T05 prunes after 365 days; no delete path exists |
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.

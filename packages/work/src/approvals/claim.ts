@@ -1,11 +1,27 @@
-import type { CapabilityId, Core_ApprovalRef, Core_ProposalRef } from "@morrow/contracts";
+import type {
+  CapabilityId,
+  Core_ApprovalRef,
+  Core_ProposalRef,
+  Current_Proposal,
+} from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import type { WorkTx } from "../connection.js";
 import { WorkContextUnavailable, type WorkAuthority } from "../context.js";
 import { canonicalText } from "./digests.js";
-import { projectionFacts, readContext, readFamily, readProposalRow } from "./family.js";
+import {
+  projectionFacts,
+  readContext,
+  readFamily,
+  readProposalRow,
+  type ReviewFamily,
+} from "./family.js";
 import { eligibleReviewer, memberAuthority, permits, snapshotGrants } from "./kernel.js";
-import { storedApprovalRef, storedProjection } from "./mapping.js";
+import {
+  storedApprovalRef,
+  storedProjection,
+  type StoredApprovalRow,
+  type StoredProposalRow,
+} from "./mapping.js";
 import type { ReviewCode } from "./producers.js";
 import { projectApproval } from "./projection.js";
 import { viewerRole } from "./reads.js";
@@ -48,8 +64,18 @@ export type ClaimRefusal =
   | ReviewCode
   | "not_found"
   | "denied"
+  | "not_entitled"
   | "stale_authority"
   | "state_conflict";
+/**
+ * The claimant's own `execute` on the proposal's capability, decided by the consumer. A
+ * store-bound consumer (v1 PR 3, catalog.content.publish: external_write, so paid work)
+ * decides it on the store resource with the workspace's entitlement (review/claimant.ts); a
+ * storeless consumer may omit it and the library's kernel (never entitled) decides.
+ */
+export type ClaimantCheck = (
+  proposal: Current_Proposal,
+) => Promise<"allowed" | "denied" | "not_entitled">;
 
 export async function prepareApprovalClaim(
   tx: WorkTx,
@@ -60,6 +86,7 @@ export async function prepareApprovalClaim(
     /** The capability this consumer executes (a constant of the consumer, never request input). */
     readonly capabilityId: CapabilityId;
   },
+  claimant?: ClaimantCheck,
 ): Promise<PreparedClaim | { readonly code: ClaimRefusal }> {
   const tenant = { organizationId: a.actor.organizationId, workspaceId: a.actor.workspaceId! };
   if (
@@ -77,12 +104,12 @@ export async function prepareApprovalClaim(
   if (!family) throw new WorkContextUnavailable();
   const approval = family.approvals.get(stored.proposal.id);
   if (!approval || approval.id !== ref.approvalRef.id) return { code: "not_found" };
-  const current = storedApprovalRef(approval);
+  const current = storedApprovalRef(approval, stored.proposal.storeId);
   if (
     canonicalText(current) !== canonicalText(ref.approvalRef) ||
     ref.proposalRef.digest !== stored.proposal.proposalDigest ||
     ref.proposalRef.revision !== 1 ||
-    ref.proposalRef.storeId !== null ||
+    ref.proposalRef.storeId !== stored.proposal.storeId ||
     ref.capabilityId !== stored.proposal.capabilityId
   )
     return { code: "DIGEST_MISMATCH" };
@@ -96,9 +123,41 @@ export async function prepareApprovalClaim(
   if (approval.status !== "approved" || approval.effectiveAt === null)
     return { code: "state_conflict" };
   if (atMs < Date.parse(approval.effectiveAt)) return { code: "APPROVAL_NOT_EFFECTIVE" };
-  // The claimant's own current execute grant on the capability over every target.
-  if (!(await permits(a, "approval.claim", stored.proposal))) return { code: "denied" };
+  // The claimant's own current execute grant on the capability over every target (a store-
+  // bound proposal: the consumer's check on the store resource, with entitlement; never
+  // without one).
+  if (claimant) {
+    const decided = await claimant(stored.proposal);
+    if (decided !== "allowed") return { code: decided };
+  } else if (stored.proposal.storeId !== null) return { code: "denied" };
+  else if (!(await permits(a, "approval.claim", stored.proposal))) return { code: "denied" };
   // Every counted reviewer is still a member and still eligible for this proposal.
+  const counted = await currentCountedReviewers(tx, a, stored, family, approval, ctx.databaseNow);
+  if ("code" in counted) return counted;
+  return Object.freeze({
+    approvalId: approval.id,
+    approvalRevision: approval.revision,
+    approvalDigest: current.digest,
+    proposalId: stored.proposal.id,
+    proposalDigest: stored.proposal.proposalDigest,
+    capabilityId: stored.proposal.capabilityId,
+    counted,
+    countedJson: canonicalText(counted),
+  });
+}
+
+/**
+ * Every counted reviewer of `approval` is still a member and still eligible for its proposal
+ * (the kernel, on each one's grants as SQL reads them now), or REVIEWER_AUTHORITY_LOST.
+ */
+async function currentCountedReviewers(
+  tx: WorkTx,
+  a: WorkAuthority,
+  stored: StoredProposalRow,
+  family: ReviewFamily,
+  approval: StoredApprovalRow,
+  databaseNow: string,
+): Promise<CountedReviewers | { readonly code: ClaimRefusal }> {
   const countedIds = approval.countedReviewerPrincipalIds ?? [];
   if (!countedIds.length) throw new WorkContextUnavailable();
   const rows = await tx.run("reviewerSnapshot", [
@@ -109,7 +168,7 @@ export async function prepareApprovalClaim(
   const root = family.root.proposal;
   const selected = derived ? stored.proposal.derivedFrom!.selectedTargetIndexes : null;
   const reviewers: CountedReviewers["reviewers"][number][] = [];
-  let evaluatedAt = ctx.databaseNow;
+  let evaluatedAt = databaseNow;
   for (const id of countedIds) {
     const row = rows.find((r) => r.principal_id === id);
     if (!row) return { code: "REVIEWER_AUTHORITY_LOST" };
@@ -131,18 +190,44 @@ export async function prepareApprovalClaim(
       grantsDigest: row.grants_digest,
     });
   }
-  const counted: CountedReviewers = Object.freeze({
-    evaluatedAt,
-    reviewers: Object.freeze(reviewers),
-  });
-  return Object.freeze({
-    approvalId: approval.id,
-    approvalRevision: approval.revision,
-    approvalDigest: current.digest,
-    proposalId: stored.proposal.id,
-    proposalDigest: stored.proposal.proposalDigest,
-    capabilityId: stored.proposal.capabilityId,
-    counted,
-    countedJson: canonicalText(counted),
-  });
+  return Object.freeze({ evaluatedAt, reviewers: Object.freeze(reviewers) });
+}
+
+/**
+ * Whether an approval a consumer already claimed is still one it may act on, before each
+ * effect (v1 PR 3's dispatch; ADR-0011's dispatch rule): the same approval at the same
+ * revision on the same proposal, still approved and in effect, unexpired, under the current
+ * review policy, the solo owner still solo where that applied, and every counted reviewer
+ * still a member and eligible. The claim itself is not a reason to refuse here. Returns "ok"
+ * or the code that voids it.
+ */
+export async function claimedApprovalCurrent(
+  tx: WorkTx,
+  a: WorkAuthority,
+  claimed: {
+    readonly proposalId: string;
+    readonly approvalId: string;
+    readonly approvalRevision: number;
+  },
+): Promise<"ok" | ClaimRefusal> {
+  const stored = await readProposalRow(tx, a, claimed.proposalId);
+  if (!stored) return "not_found";
+  const family = await readFamily(tx, a, stored.familyRootId);
+  if (!family) throw new WorkContextUnavailable();
+  const approval = family.approvals.get(stored.proposal.id);
+  if (
+    !approval ||
+    approval.id !== claimed.approvalId ||
+    approval.revision !== claimed.approvalRevision
+  )
+    return "DIGEST_MISMATCH";
+  const ctx = await readContext(tx, a, stored.proposal.capabilityId, stored.familyRootId);
+  const atMs = Date.parse(ctx.databaseNow);
+  const facts = { ...projectionFacts(ctx, stored.familyRootId, family), hasClaim: false };
+  const projected = projectApproval(storedProjection(approval, family.decisions), facts, atMs);
+  if (projected.code !== null) return projected.code;
+  if (approval.status !== "approved" || approval.effectiveAt === null) return "state_conflict";
+  if (atMs < Date.parse(approval.effectiveAt)) return "APPROVAL_NOT_EFFECTIVE";
+  const counted = await currentCountedReviewers(tx, a, stored, family, approval, ctx.databaseNow);
+  return "code" in counted ? counted.code : "ok";
 }

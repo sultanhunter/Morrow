@@ -519,6 +519,24 @@ export function checkProposal(
 }
 
 // --- Partial approval (§7 item 8) -----------------------------------------------
+/**
+ * The deterministic id of a derived proposal, exactly as morrow_work.derived_proposal_id
+ * (0018) computes it: the parent named by tenant, id and digest, with a null store (v1 PR 3:
+ * a store-bound parent's digest already binds its store, and its derivedFrom.parentRef keeps
+ * the store; only the name ignores it).
+ */
+export function derivedProposalIdOf(
+  parentRef: Current_ProposalRef,
+  indexes: readonly number[],
+): string {
+  return (
+    "derived_" +
+    canonicalDigest({
+      parentRef: { ...parentRef, storeId: null },
+      selectedTargetIndexes: [...indexes],
+    })
+  );
+}
 function derive(parent: Current_Proposal, selected: unknown): Current_Proposal | ReviewCode {
   // Re-derivation is invalid before the partial-approval mode is consulted.
   if (parent.derivedFrom !== null) return "SELECTION_INVALID";
@@ -555,7 +573,7 @@ function derive(parent: Current_Proposal, selected: unknown): Current_Proposal |
   };
   const content: Current_Proposal = {
     ...parent,
-    id: "derived_" + canonicalDigest(derivedFrom),
+    id: derivedProposalIdOf(parentRef, indexes),
     revision: 1,
     scope,
     targets,
@@ -655,6 +673,86 @@ export async function reviewerEligible(
       accountId: accounts[i]!,
       fields: [...p.targets[i]!.fields],
     })),
+  ];
+  for (const request of requests) if (!(await port.decide(request)).decision.allowed) return false;
+  return true;
+}
+
+/**
+ * The store-bound form of `reviewerEligible` (ADR-0022 item 3): a catalogue proposal is
+ * reviewed on the connected store as a whole, `{kind: "store", id: S, storeId: S,
+ * connectionId: C}`, which is where the store-link template and every catalogue grant name
+ * it. The reviewer holds `approve` on `governance.approval.decide` for the workspace and
+ * `approve` on the proposal's capability on `store` with the union of the decided targets'
+ * fields; every decided target must be a resource of that same store and connection, and the
+ * proposal must be bound to that store. `store` is server-built (the caller resolves the
+ * connection), never taken from a request. Anything else is not eligible.
+ */
+export async function reviewerEligibleOnStore(
+  port: ReviewerPermissionPort,
+  proposal: Current_Proposal,
+  selectedTargetIndexes: readonly number[] | null,
+  store: unknown,
+): Promise<boolean> {
+  const p = snapshot<Current_Proposal>(proposal, isProposal, "REVIEW_INPUT_INVALID");
+  if (
+    !valid("ResourceRef", store) ||
+    (store as { kind: string }).kind !== "store" ||
+    !plainJson(store)
+  )
+    return false;
+  const s = JSON.parse(JSON.stringify(store)) as {
+    organizationId: string;
+    workspaceId: string;
+    storeId: string;
+    connectionId: string;
+    kind: "store";
+    id: string;
+  };
+  if (
+    s.organizationId !== p.organizationId ||
+    s.workspaceId !== p.workspaceId ||
+    p.storeId === null ||
+    s.storeId !== p.storeId ||
+    s.id !== s.storeId ||
+    typeof s.connectionId !== "string"
+  )
+    return false;
+  let indexes: number[] = p.targets.map((_, i) => i);
+  if (selectedTargetIndexes !== null) {
+    const derived = previewSelection(p, selectedTargetIndexes);
+    if ("code" in derived) return false;
+    indexes = derived.proposal.derivedFrom!.selectedTargetIndexes;
+  }
+  const fields: string[] = [];
+  for (const i of indexes) {
+    const r = p.targets[i]!.resource;
+    if (
+      r.organizationId !== s.organizationId ||
+      r.workspaceId !== s.workspaceId ||
+      r.storeId !== s.storeId ||
+      r.connectionId !== s.connectionId
+    )
+      return false;
+    for (const field of p.targets[i]!.fields) if (!fields.includes(field)) fields.push(field);
+  }
+  const workspace = {
+    organizationId: p.organizationId,
+    workspaceId: p.workspaceId,
+    storeId: null,
+    connectionId: null,
+    kind: "workspace",
+    id: p.workspaceId,
+  };
+  const requests = [
+    {
+      capabilityId: "governance.approval.decide",
+      verb: "approve",
+      resource: workspace,
+      accountId: null,
+      fields: [...decideFields],
+    },
+    { capabilityId: p.capabilityId, verb: "approve", resource: s, accountId: null, fields },
   ];
   for (const request of requests) if (!(await port.decide(request)).decision.allowed) return false;
   return true;

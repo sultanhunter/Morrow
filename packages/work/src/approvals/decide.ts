@@ -24,7 +24,14 @@ import {
   readProposalRow,
   type ReviewFamily,
 } from "./family.js";
-import { eligibleReviewer, humanRef, memberAuthority, snapshotGrants } from "./kernel.js";
+import {
+  eligibleReviewer,
+  humanRef,
+  memberAuthority,
+  proposalStore,
+  snapshotGrants,
+  storeLinkCurrent,
+} from "./kernel.js";
 import { mapApproval, storedProjection, type StoredApprovalRow } from "./mapping.js";
 import {
   beginApprovalCommand,
@@ -113,7 +120,10 @@ export async function decideApproval(
     const stored = await readProposalRow(tx, a, recorded.proposalRef.id);
     if (!stored || (await viewerRole(a, stored)) === null) return refuse("not_found");
     tx.rollbackOnly();
-    return Object.freeze({ outcome: "replayed", ...recorded });
+    return Object.freeze({
+      outcome: "replayed",
+      ...decodeCommandResult(a, begun.result, stored.proposal.storeId),
+    });
   }
   // 1. The target: not visible, unknown or foreign is one not_found.
   const stored = await readProposalRow(tx, a, i.proposalId);
@@ -122,6 +132,11 @@ export async function decideApproval(
   const family = await readFamily(tx, a, stored.proposal.id);
   if (!family) throw new WorkContextUnavailable();
   const root = family.root.proposal;
+  // A store-bound proposal is decided only while its store is still linked through the
+  // connection its targets name (ADR-0022 item 3): a relinked store's proposals never are.
+  const store = proposalStore(root);
+  if (store === "invalid") return refuse("not_found");
+  if (store !== null && !(await storeLinkCurrent(tx, store))) return refuse("link_changed");
   const input = {
     proposalRef: proposalRef(root),
     decision,
@@ -271,6 +286,6 @@ export async function decideApproval(
   if (row.outcome !== "applied") return refuse(sqlRefusal(row.outcome));
   return Object.freeze({
     outcome: "applied",
-    ...decodeCommandResult(a, decodeResult(row.result)),
+    ...decodeCommandResult(a, decodeResult(row.result), root.storeId),
   });
 }

@@ -42,6 +42,7 @@ export { ListingsAgentCard } from "./screens/agents";
 export { ModelDefaultScreen } from "./screens/settings-models";
 export { AskScreen, parseProducts } from "./screens/ask";
 export { RunsPanel } from "./screens/runs";
+export { AppliedPanel, OperationList, ReviewScreen, operationNote } from "./screens/review";
 export { ConnectionScreen, ConnectionsScreen } from "./screens/connections";
 // T7 PR 19 (ADR-0033, ADR-0034): the project screens, behind the default-off `projects.*`
 // and `plans.*` port methods.
