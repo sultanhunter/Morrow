@@ -457,6 +457,12 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       };
     }
     const scopesBody = (current, previous = ["write_products"]) => ({ id: 1, previous, current });
+    // The broker's launch verdict for a store; a held call is reported, never thrown.
+    const launchOf = (s) =>
+      broker
+        .launchVerify(brokerEnv, s.appKey, s.oracle.launchQuery())
+        .then(decodeShopifyLaunchVerdict)
+        .catch((error) => ({ verdict: "error", code: error?.code ?? "unknown" }));
     const shopBody = (s) => ({ id: Number(s.shopId), name: "Lab", myshopify_domain: s.shop });
     const viewerNotices = (p) => {
       const out = db.sql(
@@ -563,9 +569,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
         inboxRow(restoredLate.webhookId)?.effects?.notice === "unchanged",
     );
     // The launch offers the reconnect: a re-authorisation through OAuth with the app's scopes.
-    const gLaunch = decodeShopifyLaunchVerdict(
-      await broker.launchVerify(brokerEnv, G.appKey, G.oracle.launchQuery()),
-    );
+    const gLaunch = await launchOf(G);
     const gLaunchPage = await connector.fetch(
       new Request(`${connectorOrigin}/shopify/a/${G.appKey}/launch?${G.oracle.launchQuery()}`),
       { waitUntil() {} },
@@ -688,9 +692,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       `SET session_replication_role=replica; UPDATE morrow_identity.store_installations SET scopes_observed_at=scopes_observed_at-interval '25 hours',created_at=created_at-interval '25 hours' WHERE id=${literal(D.installation)}; SET session_replication_role=origin;`,
     );
     const refusedRun = await cleaning.redrive();
-    const dLaunch = decodeShopifyLaunchVerdict(
-      await broker.launchVerify(brokerEnv, D.appKey, D.oracle.launchQuery()),
-    );
+    const dLaunch = await launchOf(D);
     check(
       "C3:a_refused_token_is_recorded_stops_the_stores_agents_and_raises_reconnect_never_an_uninstall",
       again.checks === 0 &&
@@ -800,7 +802,11 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
     };
     const kernel = createConnectionKernel();
     const service = createControlledWorkspaceStoreLinking({ pool: linkingPool, now: Date.now });
-    const linkAs = async (p, token) => {
+    // A thrown error (an unclear outcome under a loaded engine) is reported as the outcome, so
+    // the checks that need it fail with a reason and the later phases still run.
+    const linkAs = (p, token) =>
+      linkOnce(p, token).catch((error) => ({ outcome: "error_" + (error?.code ?? "unknown") }));
+    const linkOnce = async (p, token) => {
       const abort = new AbortController();
       const ctx = Object.freeze({
         workspaceId: p.workspace,
@@ -853,9 +859,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
           `SELECT count(*)::int AS n FROM morrow_work.stop_controls WHERE scope='connection' AND target_id=${literal(r1.connection_id)} AND lifted_at IS NULL`,
         )[0].n === 1,
     );
-    const rLaunch = decodeShopifyLaunchVerdict(
-      await broker.launchVerify(brokerEnv, R.appKey, R.oracle.launchQuery()),
-    );
+    const rLaunch = await launchOf(R);
     const rLaunchPage = await connector.fetch(
       new Request(`${connectorOrigin}/shopify/a/${R.appKey}/launch?${R.oracle.launchQuery()}`),
       { waitUntil() {} },
