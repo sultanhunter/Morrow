@@ -1250,10 +1250,11 @@ test("census: findings for anything that is not exactly Morrow's staging", async
         brokerEntrypoints: ["ApiBroker"],
       },
       { name: "morrow-staging-broker", workersDev: false, previews: false, bindsBroker: false },
-      // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint.
+      // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint; v1 PR 1
+      // (ADR-0035 item 2): it is the second public Worker, on workers.dev.
       {
         name: "morrow-staging-connector",
-        workersDev: false,
+        workersDev: true,
         previews: false,
         bindsBroker: true,
         brokerEntrypoints: ["ConnectorBroker"],
@@ -1272,9 +1273,9 @@ test("census: findings for anything that is not exactly Morrow's staging", async
     members: 1,
   };
   assert.deepEqual(censusFindings(clean, staging), []);
-  // The allow table is entrypoint-checked: another entrypoint, a second binding, a missing
-  // entrypoint or the connector on workers.dev is a finding. The orchestrator's row admits
-  // RuntimeBroker alone.
+  // The allow table is entrypoint-checked: another entrypoint, a second binding or a
+  // missing entrypoint is a finding. The orchestrator's row admits RuntimeBroker alone.
+  // Since v1 PR 1 the connector may be on workers.dev; the broker and the orchestrator not.
   const bound = (name, brokerEntrypoints, workersDev = false) =>
     censusFindings(
       {
@@ -1310,7 +1311,9 @@ test("census: findings for anything that is not exactly Morrow's staging", async
     "BROKER_BOUND_ELSEWHERE",
   ]);
   assert.deepEqual(bound("morrow-staging-broker", ["RuntimeBroker"]), ["BROKER_BOUND_ELSEWHERE"]);
-  assert.deepEqual(bound("morrow-staging-connector", ["ConnectorBroker"], true), [
+  assert.deepEqual(bound("morrow-staging-connector", ["ConnectorBroker"], true), []);
+  assert.deepEqual(bound("morrow-staging-connector", ["ConnectorBroker"], false), []);
+  assert.deepEqual(bound("morrow-staging-orchestrator", ["RuntimeBroker"], true), [
     "WORKERS_DEV_EXPOSED",
   ]);
   const findings = censusFindings(

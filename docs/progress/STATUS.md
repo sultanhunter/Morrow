@@ -4,6 +4,10 @@ Updated 2026-10-23. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active work
 
+**v1 is built live (ADR-0035, OD-2026-10-23-9 and -10):** the deployed environment is v1 production, built and tested on the owner's own store through the custom-distribution app, under one standing approval with a one-line log (`docs/evidence/activity-log.md`). Staging card 2, gate G6 and the G8 questions are dropped for v1. Milestone 1, "Listings suggests changes to my real products and applies the one I approve": PR 1 connect the live store, PR 2 Claude on with "Disconnect store", PR 3 review, approve and apply.
+- **v1 PR 1, "Connect your live store"** (`claude/v1-connect-store`, brief `docs/briefs/v1-connect-store.md`; local commit, not pushed): migrations 0039–0040 (one live-store app per environment; broker admission and database guard; may renumber at integration), the connector's workers.dev address on with the census allow table and both hostnames in `staging:kill`/`unkill`, `staging:shopify-app-register` (secret from a hidden prompt or a 0600 file, sealed at the app's next version), the TOML on the committed connector origin, and the tools repointed to `docs/decisions/standing-approval.json` (no end date; `staging-card.json` kept as history). Local 2026-10-24: typecheck, verify, `edge:check`, the targeted unit files (198 tests), `lab:test-entitlement` (26), `lab:tenant-conformance` (17), `lab:workspace-store-linking` (366), `lab:staging-runner` (107) and `lab:shopify-install` (50, with the linking 5 s deadline stretched locally on a Mac at load 400+; unstretched it times out there) pass; after review fix F2 (`unkill` turns both hostnames off again when turning one on throws) `npm test` 4031 of 4036, the 5 failing identically on the base in the worktree's shared `node_modules` layout (two module copies). Open: hosted `foundation`, the AI review (security lens), merge, then the owner steps in the brief.
+- **v1 PR 3, "Review, approve and apply"** (`claude/v1-gateway-apply`, brief `docs/briefs/v1-review-apply.md`): review screen, store-bound exact-digest approvals, the gateway's first apply with read-back and reconcile; migrations renumbered to 0044 catalog-review and 0045 catalog-apply at integration (2026-10-24); apply switch committed off. Open: hosted `foundation`, merge (after the PRs holding 0041–0043), deploy and `staging:migrate`, then the owner steps in the brief.
+
 The launch plan is ADR-0023 (#45): a lean, full-featured MVP where a shop's people and AI agents run the business together. `docs/plan/mvp.md` holds the scope, tracks T0–T18, gates G1–G18, dates and cut rules. Week 0 starts Monday 2026-10-26; public launch is planned for Monday 2027-03-01 (range mid-February to April 2027).
 - **Companion ADRs accepted** (track T0; `claude/companion-adrs`, PR #47): the owner approved ADR-0024 to ADR-0031 and decisions 32–38 as recommended on 2026-10-23 ("approve all as recommended", OD-2026-10-23-7), with two changes:
   - model and thinking effort per agent: the Coordinator Opus 5.5 at high, specialists Opus 5.5 at medium, the five installed agents Sonnet 5.5 at low (ADR-0027 item 12);
@@ -16,7 +20,7 @@ The launch plan is ADR-0023 (#45): a lean, full-featured MVP where a shop's peop
 
 Merged on `main` (trunk, ADR-0014; branch protection requires `foundation`): PRs #1–#46; `main` is at `cefa3fd`. The merge train of 2026-10-22/23 landed #37 (M5 billing, Stripe off, 0028–0029), #39 (M3 PR-1, 0030–0033), #40 (test entitlement, 0034–0035), #41, #42, #43 (M2 PR-3, 0036–0037) and #44 (M3 PR-2, model switch off, 0038); then #45 (ADR-0023) and #46 (graph phase 0).
 
-## Staging (live, `staging-card-1`)
+## Staging (v1 production, ADR-0035)
 
 - Ledger 38, schema head `07f37ce0…b205`; every deploy since has deployed `main`, health ready; the last, `cefa3fd`, by `Deploy staging` run 39913466966. Records: `docs/evidence/live/2026-10-22-neon-staging-migrate-0028-0029.md` and `…-0030-0038-and-deploys.md`.
 - The deploy flag is on, so each green push to `main` deploys. A merge that carries migrations stops its deploy at gate 3 until `staging:migrate` (E3) runs; then rerun it. Routine fix queued: gate 3 polls the schema head for about 3 minutes.
@@ -36,7 +40,7 @@ Merged on `main` (trunk, ADR-0014; branch protection requires `foundation`): PRs
 ## Next actions
 
 1. PR #47: hosted `foundation`, AI review (security lens), merge.
-2. Send the owner the drafts of staging card 2 and the G8 questions; on approval, send the questions and land card 2 with its tooling change before `staging-card-1` ends on 2026-11-18.
+2. v1 PR 1: hosted `foundation`, AI review (security lens), merge; then `staging:migrate`, the held deploy and the owner steps in `docs/briefs/v1-connect-store.md`. After it merges the tools no longer read `staging-card.json`, so 2026-11-18 stops nothing.
 3. W0–W1: T2 contracts with fakes; the T18 specialists brief; the T10 port, fake and conformance; graph phase 1.
 4. T1: the AC11 acceptance run and the owner's assisted staging sign-in (AC12a); the cleanup PR; the gate-3 polling fix; re-frame `docs/briefs/mvp-architecture.md` and the M2–M5 briefs for ADR-0023.
 5. Carried follow-ups: a KEK fingerprint check in `staging:put-secret`; the #30 advisories; `docs/decisions/providers.json`'s Shopify and E2B rows (T8, T10).
@@ -47,7 +51,7 @@ None for local work. **E2B's written answers** (G5) gate the E2B adapter code un
 
 ## Pending owner actions
 
-- **Approve or change:** staging card 2 (G6); sending the G8 questions; the installed agents' default (Sonnet 5.5 at low, as recorded, or Opus 5.5 at medium like specialists).
+- **v1 setup (owner):** the private Shopify app for the owner's store and its secret sealed by the owner; the Anthropic workspace spend limit and key placed by the owner; the E2B key placed by the owner; new Cloudflare tokens before 2026-11-18. ADR-0033 and ADR-0034 (the project flow) were accepted on 2026-10-24 (OD-2026-10-24-1).
 - **Confirm with catalogue version 2 and rate card v1 (by W8):** the Coordinator's 30-minute wall time and `max_tokens` 16,000 at high (ADR-0027 question 2); ADR-0026's run-hold rules written after the answer; the look-for-work 1% cap against the price (at US$99 no default pass fits); the Morrow address shape `<shop-name>@replies.<domain>`; whether a deleted shop's address may be reissued.
 - **For the tracks:** G3 (Partner account, `morrow` and `morrow-staging` app records, two or three development stores; App Pricing left off); G4 (Anthropic staging workspace with a monthly spend limit, key placed by the owner); G7 (the sending domain); G16 (entity, payout and tax, privacy policy, terms, DPAs); forward E2B's answers.
 - **Old credential rotations:** the Cloudflare Global API Key; a new WorkOS key that revokes the old ones; delete Neon project `cool-butterfly-64820147`; delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files; `tmutil addexclusion ~/.config/morrow`.
@@ -60,4 +64,4 @@ None. The three Neon probe branches of 2026-10-20 carried expiries; their deleti
 
 ## Active approval cards
 
-- `staging-card-1` (`docs/decisions/approvals/staging.md`): staging only; valid until 2026-11-18 or the first production resource. E1 amended 2026-10-21; E13 added 2026-10-21 (per use; not yet used). E11 stays suspended. Staging card 2 is drafted for the owner (G6).
+- The owner's standing approval, ADR-0035 item 4 (`adr-0035`, approved 2026-10-23, no end date; record `docs/evidence/live/2026-10-23-standing-approval.md`). It replaced `staging-card-1`; once v1 PR 1 merges the tools read `docs/decisions/standing-approval.json`, and until then they still read `staging-card.json` (valid until 2026-11-18). Each action is one line in `docs/evidence/activity-log.md`. Staging card 2 is dropped.

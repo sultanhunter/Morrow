@@ -1,7 +1,7 @@
 BEGIN;
 -- v1 PR 3, apply half: the gateway's first slice for Listings' product content (ADR-0022 items
 -- 3, 7, 9 and 15; ADR-0011; spine §2 steps 11-14, §5 and §8; P06.T01c, P08.T03a, P11.T02a and
--- P11.T03a minimum). Executes AS morrow_work_owner, after catalog-review (0039). No external
+-- P11.T03a minimum). Executes AS morrow_work_owner, after catalog-review (0044). No external
 -- effect: nothing here sends a request. On the ADR-0010 tenant pattern: composite tenant keys,
 -- ENABLE and FORCE RLS, definers owned by morrow_work_command.
 --   * Tables (content-free, append-only, 365 days): operation_writes, the send fence's record

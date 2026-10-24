@@ -1,5 +1,5 @@
-// v1 PR 3 PostgreSQL 17 laboratory: review, approve and apply to Shopify (migrations 0039
-// catalog-review and 0040 catalog-apply) on an isolated network-none engine, the full
+// v1 PR 3 PostgreSQL 17 laboratory: review, approve and apply to Shopify (migrations 0044
+// catalog-review and 0045 catalog-apply) on an isolated network-none engine, the full
 // manifest applied by the Neon-shaped non-superuser CREATEROLE administrator (ADR-0020 D4).
 // It drives the real code end to end: a Listings run (runs handler, the Workflow logic and
 // the broker's model gateway against the in-process Messages API stand-in) drafts real

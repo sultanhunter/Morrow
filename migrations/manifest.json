@@ -307,15 +307,29 @@
     },
     {
       "sequence": 39,
-      "file": "0039.catalog-review.sql",
+      "file": "0039.shopify-live-store-identity.sql",
+      "sha256": "30543aa4053278c06ac54af3a54f2e4e21309ab02a8bc30b943570bdf0ecfd41",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-connect-store.md"
+    },
+    {
+      "sequence": 40,
+      "file": "0040.shopify-live-store-vault.sql",
+      "sha256": "ffdff6ff5a78320880c6c4b44e5464801165bde8204f63d0973d2ced45030e70",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-connect-store.md"
+    },
+    {
+      "sequence": 44,
+      "file": "0044.catalog-review.sql",
       "sha256": "2a8bf9895ea51a7a5a5b42726ccf654b6b43aed5ad1f0b414b4378b9ad1fd5b0",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-review-apply.md"
     },
     {
-      "sequence": 40,
-      "file": "0040.catalog-apply.sql",
-      "sha256": "d6080496dc45e38503a0ddbc06e81a2d0c0fb5ad0b7906cf4fcf0b5882cce751",
+      "sequence": 45,
+      "file": "0045.catalog-apply.sql",
+      "sha256": "da6ed3498fa01e9e6d9afea8135ddb0199d8dcc0cffd659f7fd92c9fa605aa31",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-review-apply.md"
     }

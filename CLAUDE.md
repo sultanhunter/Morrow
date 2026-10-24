@@ -29,7 +29,8 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - Default entry denies. Real routes fail closed without qualified configuration.
 - Kill switches are `human_only` and need no second approver. Agents may only propose them (ADR-0005).
 - No agent-initiated external effect before the P11 gateway, budget reservations and stop controls exist.
-- No real merchant data of a given class before its P09.T05 deletion and privacy path exists. Never use the owner's live shop for development.
+- The owner's own store is the only real store until the public launch, and Morrow is built and tested on it (ADR-0035). Agents change it only through an approved exact proposal. Local and CI tests use fakes; only the deployed environment reaches the store.
+- Customer data (names, emails, addresses, phones, customer mail) and uploads never enter before their P09.T05 deletion and privacy path exists. Other classes may hold the owner's store data first; every class has its path before the first outside merchant (ADR-0035).
 - Applied migrations are immutable. Change the schema only with new forward migrations.
 
 ## Change classification (ADR-0002)
@@ -45,11 +46,13 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - Hardening budget: at most two consecutive lettered children on one subsystem without an observable product delta, unless an ADR names the threat being retired.
 - New work uses a one-page brief in `docs/briefs/` (goal, scope, interfaces touched, security notes, test checklist). Full packets only for security-heavy work. No new heavy-fault or soak labs before launch.
 
-## Provider and live effects
-- Every provider resource creation, deployment, migration on a hosted database, sign-in test, paid action or merchant-data access needs owner approval first. Approval is per action, until a standing staging approval card is approved and recorded in `docs/decisions/approvals/`.
-- Production, real merchant or customer data, customer messages, ad spend, publication, app-review submissions, purchases and plan upgrades always need per-action approval.
-- The owner places credentials with `wrangler secret put`, `gh secret set`, interactive logins (suggest `! <command>`), or chmod-600 files under `~/.config/morrow/<env>/`. Never ask for keys in chat. Never read credential files into context.
-- Record each live effect in `docs/evidence/live/YYYY-MM-DD-<provider>-<action>.md`: approval, exact action, resources, cap and observed cost, cleanup, and unknown-outcome status.
+## Provider and live effects (ADR-0035)
+- One environment: the deployed `morrow-staging-*` Workers and the Neon project `morrow-staging` (branch `staging`) are Morrow v1 production. The names keep "staging" until a cosmetic rename. The standing approval replaces `staging-card-1`; the tools read the card file until a routine PR repoints them, before 2026-11-18.
+- The owner's standing approval covers building and running it: deploys, migrations, provider setup, sign-in and test runs, live evals and reads of the owner's store through Morrow, within the owner's spend caps (the Anthropic monthly limit, E2B's US$20, the caps in code).
+- Ask the owner first, every time: purchases, plan upgrades and ad spend; raising a cap; deleting data; sending anything to the owner's customers; the App Store submission; any store other than the owner's. Accepting a provider's terms and anything that needs the owner's own login stay the owner's.
+- Change the owner's store only through Morrow's own flow: the owner approves the exact change in the workspace, and the gateway applies, reads back and audits it. Never write to the store any other way.
+- Log each action as one line in `docs/evidence/activity-log.md`: date, action, result, cost, and any unknown outcome until it is checked. Never put the shop's domain, store data, customer data or secrets in it, or anywhere in this public repository.
+- The owner places credentials with `wrangler secret put`, `gh secret set`, interactive logins (suggest `! <command>`), or chmod-600 files under `~/.config/morrow/<env>/`. Never ask for keys in chat. Never read credential files into context. A secret never goes on a command line; suggest `!` only for logins, never for a command that asks for a secret. Never open a provider page that shows a secret.
 - Do not read or copy anything from the old Codex working directory (`~/Documents/Codex/.../work/morrow-private-staging`). Its credentials must be rotated.
 
 ## Engineering

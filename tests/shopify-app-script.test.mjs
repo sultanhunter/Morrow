@@ -13,9 +13,13 @@ import { join } from "node:path";
 import {
   main,
   parseShopifyAppArguments,
+  resolveTomlOptions,
   shopDigest,
+  shopifyAppLiveRegistration,
+  shopifyAppPackageJson,
   shopifyAppRegisterStatement,
   shopifyAppToml,
+  stagingConnectorOrigin,
 } from "../scripts/shopify-app.mjs";
 
 const clientId = "0123456789abcdef0123456789abcdef";
@@ -197,9 +201,11 @@ test("main: new files outside the repository only; the TOML is named for its app
   console.log = (line) => printed.push(line);
   try {
     const args = (options) => Object.entries(options).flatMap(([k, v]) => ["--" + k, v]);
+    // A development app names its connector origin (staging's is the committed one: below).
+    const devToml = { ...tomlOptions, environment: "development" };
     const toml = join(dir, "shopify.app.beta-store-1.toml");
-    main(["toml", ...args({ ...tomlOptions, out: toml })]);
-    assert.equal(readFileSync(toml, "utf8"), shopifyAppToml(tomlOptions));
+    main(["toml", ...args({ ...devToml, out: toml })]);
+    assert.equal(readFileSync(toml, "utf8"), shopifyAppToml(devToml));
     const statementFile = join(dir, "register.json");
     main(["register", ...args({ ...registerOptions, out: statementFile })]);
     assert.deepEqual(
@@ -211,13 +217,13 @@ test("main: new files outside the repository only; the TOML is named for its app
     assert.equal(printed.length, 2);
     assert.doesNotMatch(printed.join("\n"), /myshopify|admin\.shopify|[a-f0-9]{64}/);
     // Never overwrite, never inside the repository, and the TOML name must match its app.
-    assert.throws(() => main(["toml", ...args({ ...tomlOptions, out: toml })]), /EEXIST/);
+    assert.throws(() => main(["toml", ...args({ ...devToml, out: toml })]), /EEXIST/);
     assert.equal(
-      code(() => main(["toml", ...args({ ...tomlOptions, out: "shopify.app.beta-store-1.toml" })])),
+      code(() => main(["toml", ...args({ ...devToml, out: "shopify.app.beta-store-1.toml" })])),
       "VAULT_SCRIPT_PATH_INSIDE_REPOSITORY",
     );
     assert.equal(
-      code(() => main(["toml", ...args({ ...tomlOptions, out: join(dir, "app.toml") })])),
+      code(() => main(["toml", ...args({ ...devToml, out: join(dir, "app.toml") })])),
       "SHOPIFY_APP_SCRIPT_OUT_NAME_INVALID",
     );
     writeFileSync(join(dir, "marker"), "");
@@ -225,4 +231,138 @@ test("main: new files outside the repository only; the TOML is named for its app
     console.log = log;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// v1 PR 1 (ADR-0035 items 2 and 3): the owner's live-store app. In staging the TOML points at
+// the committed connector origin (its workers.dev hostname, switched on by this PR); another
+// origin is refused, and the CLI's minimal package.json is written beside it once.
+test("toml (v1 PR 1): staging uses the committed connector origin, refuses another, and writes the CLI's package.json once", () => {
+  const committed = stagingConnectorOrigin();
+  assert.equal(committed, "https://morrow-staging-connector.sultanibneusman0.workers.dev");
+  const staging = { ...tomlOptions };
+  delete staging["connector-origin"];
+  assert.equal(resolveTomlOptions(staging)["connector-origin"], committed);
+  assert.equal(
+    resolveTomlOptions({ ...staging, "connector-origin": committed })["connector-origin"],
+    committed,
+  );
+  assert.equal(
+    code(() => resolveTomlOptions(tomlOptions)),
+    "SHOPIFY_APP_SCRIPT_ORIGIN_NOT_STAGING_CONNECTOR",
+  );
+  // Development keeps its own origin, required.
+  const development = { ...tomlOptions, environment: "development" };
+  assert.deepEqual(resolveTomlOptions(development), development);
+  const args = (options) => Object.entries(options).flatMap(([k, v]) => ["--" + k, v]);
+  assert.equal(
+    parseShopifyAppArguments(["toml", ...args({ ...staging, out: "/x" })]).command,
+    "toml",
+  );
+  assert.equal(
+    code(() => {
+      const dev = { ...development };
+      delete dev["connector-origin"];
+      parseShopifyAppArguments(["toml", ...args({ ...dev, out: "/x" })]);
+    }),
+    "SHOPIFY_APP_SCRIPT_USAGE",
+  );
+  // The live app's TOML: not embedded, the two product scopes, the callback and launch on
+  // the connector's own hostname, the uninstall, scope and compliance topics.
+  const toml = shopifyAppToml(resolveTomlOptions(staging));
+  const base = committed + "/shopify/a/beta-store-1";
+  for (const line of [
+    "embedded = false",
+    'scopes = "read_products,write_products"',
+    `application_url = "${base}/launch"`,
+    `redirect_urls = [ "${base}/callback" ]`,
+    'compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]',
+    `uri = "${base}/webhooks"`,
+  ])
+    assert.ok(toml.split("\n").includes(line), line);
+  assert.doesNotMatch(toml, /morrow-staging-api|myshopify/);
+  const dir = mkdtempSync(join(tmpdir(), "morrow-shopify-live-"));
+  const log = console.log;
+  const printed = [];
+  console.log = (line) => printed.push(line);
+  try {
+    const out = join(dir, "shopify.app.beta-store-1.toml");
+    main(["toml", ...args({ ...staging, out })]);
+    assert.equal(readFileSync(out, "utf8"), toml);
+    assert.equal(
+      readFileSync(join(dir, "package.json"), "utf8"),
+      shopifyAppPackageJson("beta-store-1"),
+    );
+    assert.deepEqual(JSON.parse(shopifyAppPackageJson("beta-store-1")), {
+      name: "morrow-beta-store-1",
+      private: true,
+    });
+    const report = JSON.parse(printed[0]);
+    assert.deepEqual(report, {
+      written: "toml",
+      environment: "staging",
+      appKey: "beta-store-1",
+      connectorOrigin: committed,
+      packageJson: "written",
+      deploy: "shopify app deploy --config beta-store-1",
+    });
+    // A second app's TOML in the same folder keeps the package.json.
+    main([
+      "toml",
+      ...args({
+        ...staging,
+        "app-key": "beta-store-2",
+        out: join(dir, "shopify.app.beta-store-2.toml"),
+      }),
+    ]);
+    assert.equal(JSON.parse(printed[1]).packageJson, "kept");
+    assert.equal(
+      code(() =>
+        main([
+          "toml",
+          ...args({
+            ...tomlOptions,
+            "app-key": "beta-store-3",
+            out: join(dir, "shopify.app.beta-store-3.toml"),
+          }),
+        ]),
+      ),
+      "SHOPIFY_APP_SCRIPT_ORIGIN_NOT_STAGING_CONNECTOR",
+    );
+  } finally {
+    console.log = log;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("live registration (v1 PR 1): the shop becomes its digest; staging only; closed values", () => {
+  const options = {
+    "app-key": "morrow-live",
+    "client-id": clientId,
+    shop: "owner-store.myshopify.com",
+    workspace: "ws_owner",
+    "install-url": registerOptions["install-url"],
+  };
+  const values = shopifyAppLiveRegistration(options);
+  assert.deepEqual(values, {
+    appKey: "morrow-live",
+    clientId,
+    shopDigest: createHash("sha256").update("owner-store.myshopify.com").digest("hex"),
+    workspaceId: "ws_owner",
+    installUrl: registerOptions["install-url"],
+  });
+  assert.doesNotMatch(JSON.stringify(values), /owner-store/);
+  for (const [change, expected] of [
+    [{ shop: "owner-store.example.com" }, "SHOPIFY_APP_SCRIPT_SHOP_INVALID"],
+    [{ shop: undefined }, "SHOPIFY_APP_SCRIPT_SHOP_INVALID"],
+    [{ workspace: "ws owner" }, "SHOPIFY_APP_SCRIPT_ID_INVALID"],
+    [{ "install-url": "https://evil.test/install" }, "SHOPIFY_APP_SCRIPT_INSTALL_URL_INVALID"],
+    [{ "client-id": "shpss_" + "a".repeat(32) }, "SHOPIFY_APP_SCRIPT_CLIENT_ID_INVALID"],
+    [{ "app-key": "Live" }, "SHOPIFY_APP_SCRIPT_APP_KEY_INVALID"],
+    // An environment cannot be chosen: the live registration is staging's.
+    [{ environment: "production" }, null],
+  ])
+    assert.equal(
+      code(() => shopifyAppLiveRegistration({ ...options, ...change })),
+      expected,
+    );
 });

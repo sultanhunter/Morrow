@@ -93,7 +93,7 @@ Listings runs (M3 PR-2; ADR-0022 items 2, 10, 11 and 13; migration 0038 listings
 | `morrow_work.run_drafts` | Store content: the validated change set of one product and its reviewer flags (counts); 90 days (`expires_at`) | shop/redact deletes the store's rows (`delete_rows`, as for snapshots: the connector context only, per-pass counts). A run step that writes a snapshot, a draft or an agent proposal's parameters waits on the store's stop key, so it either commits before the shop/redact pass (which then deletes or empties it) or is refused. P09.T05 prunes at `expires_at` |
 | `morrow_work.model_catalogue_rates` | Platform record: per-token rates, the provider model id and the input cap of each catalogue entry; kept for the life of the platform | None needed |
 
-Review and apply (v1 PR 3, the gateway's first slice; ADR-0022 items 3, 7 and 9; migrations 0039 catalog-review and 0040 catalog-apply). The review screen reads the "before" values from `product_snapshots` and the "after" values from `proposal_parameters`; nothing new holds store content. An apply sends only the approved fields of the claimed parameters, and records ids, codes and Shopify's own `updatedAt` text, never a product value.
+Review and apply (v1 PR 3, the gateway's first slice; ADR-0022 items 3, 7 and 9; migrations 0044 catalog-review and 0045 catalog-apply). The review screen reads the "before" values from `product_snapshots` and the "after" values from `proposal_parameters`; nothing new holds store content. An apply sends only the approved fields of the claimed parameters, and records ids, codes and Shopify's own `updatedAt` text, never a product value.
 
 | Table | Class and retention | Erasure hook |
 | --- | --- | --- |

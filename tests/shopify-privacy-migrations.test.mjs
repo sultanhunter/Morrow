@@ -41,8 +41,9 @@ const body = (text, signature) => {
 test("manifest: two contiguous rows after M3 PR-1 and the test entitlement, owners and digests", () => {
   const rows = ["shopify-privacy-identity", "shopify-privacy-work"].map(rowOf);
   assert.equal(rows[1].sequence, rows[0].sequence + 1);
-  // M3 PR-2's listings-runs is the first migration after the pair (it revises 0037's
-  // helpers); later PRs' migrations (v1 PR 3's catalog-review and catalog-apply) follow it.
+  // M3 PR-2's listings-runs is the next migration after the pair (it revises 0037's
+  // helpers); v1 PR 1's two live-store migrations follow it, and later PRs' migrations
+  // (v1 PR 3's catalog-review and catalog-apply) come after those.
   assert.deepEqual(
     manifest.migrations
       .slice(rows[1].sequence, rows[1].sequence + 1)
