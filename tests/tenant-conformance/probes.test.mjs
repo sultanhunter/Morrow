@@ -184,6 +184,10 @@ test("P1: with no context both roles see zero rows and every api function is ine
       return `SELECT x.outcome FROM (SELECT '${doc}'::text AS c) d, morrow_work.cmd_plan_start_document('${uuid}','${digest}','corr','${id}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'${digest}','${digest}') x`;
     })(),
     "cmd_plan_start(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_plan_start('${uuid}','${digest}','corr','${digest}','${digest}','${digest}','{}')`,
+    // Build order PR 11 (0047): agent-run admission and the requester's answer, every scalar
+    // well-formed, so only the missing context refuses.
+    "cmd_agent_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_agent_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','installation_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','agent_${randomUUID()}','${randomUUID()}','2','claude_haiku_5_5','low','["inbox.ask"]','2','${digest}','${digest}','{"schemaVersion":1}','2026-10-24T00:00:00.000Z')`,
+    "cmd_agent_run_answer(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_agent_run_answer('${uuid}','${digest}','corr','${randomUUID()}','Plain')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
