@@ -14,6 +14,7 @@ import { runtimeProductReadAvailable } from "../../../packages/identity/src/brok
 import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from "./environment.js";
 import { runListingsWorkflow } from "./listings-run.js";
 import { createRuntimePool } from "./runtime-pool.js";
+import { keepRuntimeSweep } from "./runtime-sweep.js";
 
 // morrow-<env>-orchestrator (P04.T02a D8; M3 PR-2, mvp-architecture §2 steps 8, 9 and 15 and
 // §3). ListingsRunWorkflow replaces the placeholder MorrowWorkWorkflow: one instance per run,
@@ -104,7 +105,9 @@ export default {
     batch.retryAll();
     console.log(JSON.stringify({ event: "morrow_orchestrator_dispatch_disabled" }));
   },
-  async scheduled(_controller: unknown, env: unknown): Promise<void> {
+  async scheduled(controller: unknown, env: unknown, ctx?: unknown): Promise<void> {
+    // Build order PR 8: the runtime's clean-up, whatever dispatch says (runtime-sweep.ts).
+    keepRuntimeSweep(controller, env, ctx);
     const selected = select(env);
     if (!selected.ports || !selected.mapping.ok) {
       console.log(JSON.stringify({ event: "morrow_orchestrator_dispatch_disabled" }));

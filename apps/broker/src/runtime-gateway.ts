@@ -147,7 +147,7 @@ export interface RuntimeLedger {
 }
 export interface RuntimeGatewaySeams {
   readonly ledger: (vault: Readonly<BrokerVault>) => RuntimeLedger;
-  /** The adapter of the configured provider, by name ("e2b"); none until PR 8. */
+  /** The adapter of the configured provider, by name ("e2b": runtime-e2b.ts since PR 8). */
   readonly providers: Readonly<Record<string, RuntimeProvider>>;
   readonly now: () => number;
   /** The pinned template the profile creates from (ADR-0029 item 1); null holds every create. */

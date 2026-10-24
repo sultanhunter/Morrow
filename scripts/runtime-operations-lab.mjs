@@ -1097,7 +1097,7 @@ async function main() {
     providerRequests: 0,
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
-      "The runtime gateway runs in Node over psql connectors (morrow_vault_broker, morrow_runtime_executor, morrow_api_worker), not in workerd over the Neon transport; the provider is the deterministic fake adapter, not E2B (build order PR 8).",
+      "The runtime gateway runs in Node over psql connectors (morrow_vault_broker, morrow_runtime_executor, morrow_api_worker), not in workerd over the Neon transport; the provider is the deterministic fake adapter, not E2B (build order PR 8's adapter is proved over E2B's recorded wire in tests/runtime-e2b.test.mjs, and on E2B itself only by PR 9's qualification).",
       "The computer release and the installation's move to it are owner-seeded with the guard off (sim): installations change release only through the upgrade flow, which lands later.",
       "Staleness, the absent grace, the concurrency cap, the monthly budget and a spent vendor reservation are reached by owner-seeded clock and counter changes with the triggers off (sim).",
       "M5's billing records are owner-seeded with the triggers off (sim), as in lab:listings-runs; lab:billing proves the receipt path that writes them.",
