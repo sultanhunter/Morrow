@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "adr-0035",
+  "kind": "standing",
+  "record": "docs/decisions/adr/ADR-0035-build-v1-live.md",
+  "replaces": "staging-card-1",
+  "environment": "staging",
+  "status": "approved",
+  "approvedOn": "2026-10-23",
+  "evidence": "docs/evidence/live/2026-10-23-standing-approval.md",
+  "e7": {
+    "observedOn": "2026-10-19",
+    "record": "docs/evidence/live/2026-10-19-workos-signup-disabled.md"
+  },
+  "e13": {
+    "amendedOn": "2026-10-23"
+  }
+}

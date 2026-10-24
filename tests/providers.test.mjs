@@ -113,19 +113,22 @@ test("the catalogue derives each selection's worst case and run limit", () => {
 test("catalogue v1 is active with the owner's confirmation, an effective date and its pinned digest", () => {
   const v1 = modelPolicy.catalogue.versions[0];
   assert.equal(v1.status, "active");
-  assert.equal(modelPolicy.catalogue.active_version, 1);
+  assert.equal(modelPolicy.catalogue.active_versions.per_product, 1);
   assert.match(v1.owner_confirmation, /Confirm all \(Recommended\)/);
   assert.equal(v1.effective_from, "2026-10-19");
   assert.equal(modelPolicy.catalogue.published_digests["1"], catalogueVersionDigest(v1));
 });
-// The rule cases start from v1 as it stood before publication: proposed, nothing pinned.
+// The rule cases start from v1 as it stood before publication: proposed, nothing pinned. They
+// are the per-product shape's, so the proposed loop version (v2, PR 10) is left out here;
+// tests/loop-catalogue.test.mjs has its rule cases.
 const proposedBase = () => {
   const p = structuredClone(modelPolicy);
+  p.catalogue.versions = p.catalogue.versions.filter((entry) => entry.run_shape === undefined);
   const v1 = p.catalogue.versions[0];
   v1.status = "proposed";
   v1.owner_confirmation = null;
   v1.effective_from = null;
-  p.catalogue.active_version = null;
+  p.catalogue.active_versions = { per_product: null, agent_loop: null };
   p.catalogue.published_digests = {};
   return p;
 };
@@ -136,7 +139,7 @@ const publish = (p) => {
   entry.status = "active";
   entry.owner_confirmation = "synthetic owner confirmation";
   entry.effective_from = "2026-10-20";
-  p.catalogue.active_version = entry.version;
+  p.catalogue.active_versions.per_product = entry.version;
   p.catalogue.published_digests[String(entry.version)] = catalogueVersionDigest(entry);
 };
 test("a published catalogue version passes with its pinned digest, and retiring it keeps the digest", () => {
@@ -144,7 +147,7 @@ test("a published catalogue version passes with its pinned digest, and retiring 
   publish(p);
   assert.deepEqual(validateModelPolicy(p, registry), []);
   latest(p).status = "retired";
-  p.catalogue.active_version = null;
+  p.catalogue.active_versions.per_product = null;
   assert.deepEqual(validateModelPolicy(p, registry), []);
 });
 for (const [name, change, expected] of [
@@ -346,9 +349,9 @@ for (const [name, change, expected] of [
     /at most one active/,
   ],
   [
-    "an active_version that names no active version",
-    (p) => (p.catalogue.active_version = 1),
-    /active_version/,
+    "an active pointer that names no active version",
+    (p) => (p.catalogue.active_versions.per_product = 1),
+    /active_versions\.per_product does not name its active version/,
   ],
   ["a version out of sequence", (p) => (latest(p).version = 3), /out of sequence/],
 ])

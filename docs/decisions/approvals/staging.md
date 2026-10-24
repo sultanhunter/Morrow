@@ -1,5 +1,7 @@
 # Staging approval card `staging-card-1`
 
+> **Replaced 2026-10-23** by the owner's standing approval, ADR-0035 item 4 (`docs/decisions/adr/ADR-0035-build-v1-live.md`). Since v1 PR 1 the staging tools read `docs/decisions/standing-approval.json` (id `adr-0035`, no end date) instead of `staging-card.json`; this card and its JSON stay as history. Under the standing approval: the connector's workers.dev hostname is on and `staging:kill` takes it down with the api's (E1, E12); self-service (E7) rests on the recorded WorkOS facts (email verification on, public sign-up off); the test entitlement (E13) needs no per-use answer in chat and runs only for the workspace that the live-store app invites, with a reference `adr-0035.e13.<date>.<n>` and one line in `docs/evidence/activity-log.md`. The list of what still needs the owner each time is ADR-0035 item 4's.
+
 - **Status:** Approved 2026-10-19 by the owner in chat: asked "Approve ADR-0019 (staging rules) and the 30-day staging approval card `staging-card-1`?", the owner answered "Approve both (Recommended)". Valid until 2026-11-18 or the first production resource, whichever comes first. Listed in STATUS under Active approval cards.
 - **Lands as:** `docs/decisions/approvals/staging.md`, in P04.T01i PR-A, alongside ADR-0019.
 - **Scope:** staging only:

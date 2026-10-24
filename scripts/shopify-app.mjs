@@ -4,9 +4,14 @@
 // network call, provider resource or database write itself:
 //
 //   npm run shopify-app -- toml --environment <development|staging> --app-key <key>
-//       --client-id <32 hex> --name <app name> --connector-origin <https origin> --out <file>
+//       --client-id <32 hex> --name <app name> [--connector-origin <https origin>] --out <file>
 //       Writes shopify.app.<key>.toml (a new file outside the repository) for the owner's
-//       `shopify app deploy`: embedded = false; the fixed scopes read_products,write_products
+//       `shopify app deploy --config <key>`, and beside it, when the folder has none, the
+//       minimal package.json the Shopify CLI looks for in an app folder (a name only; no
+//       dependency or script). In staging the connector origin is the committed one
+//       (infra/environments/staging.json: the connector's workers.dev hostname, switched on
+//       by v1 PR 1); --connector-origin may be omitted there, and any other value is refused.
+//       In development it is required. embedded = false; the fixed scopes read_products,write_products
 //       with use_legacy_install_flow = true (the authorization-code grant the connector's
 //       callback completes, for a non-expiring offline token); application_url the
 //       connector's launch path and the one redirect URL its callback path; the webhooks
@@ -21,13 +26,19 @@
 //       administrator's own transaction (the ADR-0020 runner shape), which commits only on
 //       `registered`. The shop domain is digested here and never stored or printed.
 //
-// Production is refused until the production custody ADR (ADR-0007 item 9) and ADR-0022
-// item 4's move off development stores. Fixed error codes only; nothing secret is handled
-// (the client secret goes through `npm run vault -- seal-app-secret`).
+// v1 PR 1 (ADR-0035 items 2 and 3): the owner's own live store connects through one such
+// app, registered with the live-store mark by `npm run staging:shopify-app-register`
+// (scripts/staging.mjs), which checks its values with shopifyAppLiveRegistration below,
+// seals the client secret and runs both statements itself. The same TOML serves it.
+//
+// Production is refused until the production custody ADR (ADR-0007 item 9). Fixed error
+// codes only; nothing secret is handled here (the client secret goes through
+// `npm run vault -- seal-app-secret` or `staging:shopify-app-register`).
 import { createHash } from "node:crypto";
-import { closeSync, openSync, writeSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { closeSync, existsSync, openSync, readFileSync, writeSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { repositoryRoot } from "./artifacts.mjs";
 import { outsideRepository } from "./vault.mjs";
 
 const fail = (code) => Error("SHOPIFY_APP_SCRIPT_" + code);
@@ -43,7 +54,7 @@ const installUrlPattern =
   /^https:\/\/(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)\/[!-~]+$/;
 const environments = ["development", "staging"];
 const usage =
-  "usage: shopify-app.mjs toml --environment <env> --app-key <key> --client-id <hex> --name <name> --connector-origin <origin> --out <file> | register --environment <env> --app-key <key> --client-id <hex> --shop <domain> --organization <id> --workspace <id> --install-url <url> --out <file>";
+  "usage: shopify-app.mjs toml --environment <env> --app-key <key> --client-id <hex> --name <name> [--connector-origin <origin>] --out <file> | register --environment <env> --app-key <key> --client-id <hex> --shop <domain> --organization <id> --workspace <id> --install-url <url> --out <file>";
 
 export function parseShopifyAppArguments(argv) {
   const [command, ...rest] = argv;
@@ -69,8 +80,46 @@ export function parseShopifyAppArguments(argv) {
       throw fail("USAGE");
     options[flag] = value;
   }
-  if (allowed.some((flag) => !Object.hasOwn(options, flag))) throw fail("USAGE");
+  // v1 PR 1: in staging the connector origin defaults to the committed one.
+  const optional =
+    command === "toml" && options.environment === "staging" ? ["connector-origin"] : [];
+  if (allowed.some((flag) => !optional.includes(flag) && !Object.hasOwn(options, flag)))
+    throw fail("USAGE");
   return { command, options };
+}
+
+/**
+ * v1 PR 1 (ADR-0035 item 2): the staging connector's committed origin, its workers.dev
+ * hostname: `https://<cloudflare.workers.connector>.<workers_dev_subdomain>.workers.dev`
+ * from infra/environments/staging.json.
+ */
+export function stagingConnectorOrigin(root = repositoryRoot) {
+  let staging;
+  try {
+    staging = JSON.parse(readFileSync(join(root, "infra/environments/staging.json"), "utf8"));
+  } catch {
+    throw fail("STAGING_RECORD_INVALID");
+  }
+  const subdomain = staging?.cloudflare?.workers_dev_subdomain;
+  const name = staging?.cloudflare?.workers?.connector;
+  const label = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+  if (typeof subdomain !== "string" || !label.test(subdomain) || typeof name !== "string")
+    throw fail("STAGING_RECORD_INVALID");
+  if (!label.test(name)) throw fail("STAGING_RECORD_INVALID");
+  return `https://${name}.${subdomain}.workers.dev`;
+}
+/** The toml command's options with the staging connector origin resolved and held. */
+export function resolveTomlOptions(options, root = repositoryRoot) {
+  if (options.environment !== "staging") return options;
+  const committed = stagingConnectorOrigin(root);
+  const given = options["connector-origin"];
+  if (given !== undefined && given !== committed) throw fail("ORIGIN_NOT_STAGING_CONNECTOR");
+  return { ...options, "connector-origin": committed };
+}
+/** The minimal package.json the Shopify CLI looks for beside the app's TOML. */
+export function shopifyAppPackageJson(appKey) {
+  if (!appKeyPattern.test(appKey ?? "")) throw fail("APP_KEY_INVALID");
+  return JSON.stringify({ name: `morrow-${appKey}`, private: true }, null, 2) + "\n";
 }
 
 function common(options) {
@@ -99,7 +148,7 @@ export function shopifyAppToml(options) {
   const origin = connectorOrigin(options["connector-origin"]);
   const base = `${origin}/shopify/a/${options["app-key"]}`;
   return [
-    `# Morrow custom-distribution app for one beta development store (${options.environment}).`,
+    `# Morrow custom-distribution app for one store (${options.environment}); not embedded.`,
     "# Generated by `npm run shopify-app -- toml`; deploy with `shopify app deploy`, then",
     "# choose custom distribution and generate the install link for the one store.",
     `client_id = "${options["client-id"]}"`,
@@ -164,6 +213,30 @@ export function shopifyAppRegisterStatement(options) {
   });
 }
 
+/**
+ * v1 PR 1: the checked values of the owner's live-store registration
+ * (`staging:shopify-app-register`): the app key, the public client id, the intended shop
+ * as its digest only (the domain is dropped here and never stored, printed or committed),
+ * the workspace the app invites and the custom-distribution install link. Staging only.
+ */
+export function shopifyAppLiveRegistration(options) {
+  common({ ...options, environment: "staging" });
+  if (typeof options.shop !== "string" || !shopPattern.test(options.shop))
+    throw fail("SHOP_INVALID");
+  if (typeof options.workspace !== "string" || !idPattern.test(options.workspace))
+    throw fail("ID_INVALID");
+  const url = options["install-url"];
+  if (typeof url !== "string" || url.length > 2048 || !installUrlPattern.test(url))
+    throw fail("INSTALL_URL_INVALID");
+  return Object.freeze({
+    appKey: options["app-key"],
+    clientId: options["client-id"],
+    shopDigest: shopDigest(options.shop),
+    workspaceId: options.workspace,
+    installUrl: url,
+  });
+}
+
 function writeNew(path, text, mode) {
   const fd = openSync(path, "wx", mode);
   try {
@@ -178,12 +251,23 @@ export function main(argv = process.argv.slice(2)) {
   const out = outsideRepository(options.out);
   if (command === "toml") {
     if (basename(out) !== `shopify.app.${options["app-key"]}.toml`) throw fail("OUT_NAME_INVALID");
-    writeNew(out, shopifyAppToml(options), 0o644);
+    const resolved = resolveTomlOptions(options);
+    const text = shopifyAppToml(resolved);
+    const packagePath = outsideRepository(join(dirname(out), "package.json"));
+    writeNew(out, text, 0o644);
+    let packageJson = "kept";
+    if (!existsSync(packagePath)) {
+      writeNew(packagePath, shopifyAppPackageJson(options["app-key"]), 0o644);
+      packageJson = "written";
+    }
     console.log(
       JSON.stringify({
         written: "toml",
         environment: options.environment,
         appKey: options["app-key"],
+        connectorOrigin: resolved["connector-origin"],
+        packageJson,
+        deploy: `shopify app deploy --config ${options["app-key"]}`,
       }),
     );
     return;
