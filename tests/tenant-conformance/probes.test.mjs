@@ -561,11 +561,14 @@ test("P7: a lease selects one tenant; a forged, stale or foreign lease setting y
   const A = openLease(P.A, "run", "p7_run_a");
   const Y = openLease(P.Y, "run", "p7_run_y");
   // One taskless billing operation per tenant, written in each tenant's session context.
+  // operation_guard (0020) requires updated_at = created_at on insert, so both come from
+  // one clock reading: two clock_timestamp() calls can straddle a millisecond and fail the
+  // insert (hosted run 40055651915).
   for (const p of [P.A, P.Y])
     db.sql(
       asCommandRole(
         p,
-        `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) VALUES(${literal(p.org)},${literal(p.workspace)},'p7_operation',1,'stripe_write','governance.billing.manage','planned',${literal("f".repeat(64))},0,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`,
+        `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) SELECT ${literal(p.org)},${literal(p.workspace)},'p7_operation',1,'stripe_write','governance.billing.manage','planned',${literal("f".repeat(64))},0,stamp,stamp FROM (SELECT date_trunc('milliseconds',clock_timestamp()) AS stamp) clock;`,
         { end: "COMMIT" },
       ),
     );

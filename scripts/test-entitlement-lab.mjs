@@ -121,7 +121,8 @@ INSERT INTO morrow_identity.workspace_memberships VALUES(${lit(p.org)},${lit(p.w
 ${grantInsert(p, fixtureGrant(p, "governance.billing.manage", ["view", "execute"], ["action", "priceKey"]))}`);
       if (route)
         db.workOwner(
-          `INSERT INTO morrow_billing.workspace_billing_routes VALUES(${lit(p.org)},${lit(p.workspace)},'website',NULL,NULL,NULL,NULL,NULL,1,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`,
+          // route_guard (0020) requires updated_at = created_at on insert: one clock reading.
+          `INSERT INTO morrow_billing.workspace_billing_routes SELECT ${lit(p.org)},${lit(p.workspace)},'website',NULL,NULL,NULL,NULL,NULL,1,stamp,stamp FROM (SELECT date_trunc('milliseconds',clock_timestamp()) AS stamp) clock;`,
         );
       return p;
     };
