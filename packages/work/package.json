@@ -9,6 +9,7 @@
     "./agents": "./src/agents/index.ts",
     "./approvals": "./src/approvals/index.ts",
     "./runtime": "./src/runtime/leases.ts",
+    "./loop": "./src/loop/index.ts",
     "./operations": "./src/operations/ledger.ts",
     "./stops": "./src/stops.ts",
     "./billing-route": "./src/billing-route.ts",

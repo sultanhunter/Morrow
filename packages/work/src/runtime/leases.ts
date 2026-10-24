@@ -8,6 +8,7 @@ import {
   type FixedSqlTransactionProfile,
 } from "../../../identity/src/fixed-sql-transaction.js";
 import { createRunSteps, type RunSteps } from "./run-steps.js";
+import { createAgentRunSteps, type AgentRunSteps } from "../loop/steps.js";
 
 // The orchestrator's lease steps (mvp-architecture §5; ADR-0022 item 9; migration 0020).
 // One connection per transaction, logged in as morrow_runtime_executor with the password
@@ -94,6 +95,8 @@ export interface LeaseStep {
   ): Promise<DelegationFactsRow | null>;
   /** M3 PR-2: the run's own definers under this run lease (run-steps.ts). */
   readonly run: RunSteps;
+  /** Build order PR 11: an agent run's definers under its run lease (loop/steps.ts). */
+  readonly loop: AgentRunSteps;
 }
 export type LeaseStepResult<T> =
   | { readonly entered: true; readonly lease: EnteredLease; readonly value: T }
@@ -266,6 +269,7 @@ export async function runLeaseStep<T>(
     const step: LeaseStep = Object.freeze({
       lease: entered,
       run: createRunSteps(query),
+      loop: createAgentRunSteps(query),
       markStarted: async () =>
         (await outcome(runtimeExecutorSql.markStarted, ["started", "already_started"])) as
           | "started"

@@ -557,9 +557,9 @@ DO $$ DECLARE t text; BEGIN
    WITH CHECK (session_user=''morrow_vault_broker'' AND organization_id::text||''|''||workspace_id::text||''|''||run_id::text=pg_catalog.current_setting(''morrow.vault_agent_run'',true))';
  -- The orchestrator's cron lists queued agent runs (ids only, agent_run_pending_starts) and
  -- a Workflow finds its run's current lease (agent_run_resume_lease): the runtime login reads
- -- queued runs only, as lease_pending (0020) shows it unstarted leases.
- EXECUTE 'CREATE POLICY runtime_agent_queued ON morrow_work.agent_runs FOR SELECT TO morrow_work_command
-   USING (session_user=''morrow_runtime_executor'' AND status=''queued'')';
+ -- queued and running runs only, as lease_pending (0020) shows it unstarted leases.
+ EXECUTE 'CREATE POLICY runtime_agent_open ON morrow_work.agent_runs FOR SELECT TO morrow_work_command
+   USING (session_user=''morrow_runtime_executor'' AND status IN (''queued'',''running''))';
 END $$;
 
 -- Privileges: table SELECT and INSERT, column-scoped UPDATE, never DELETE or TRUNCATE.
@@ -1161,9 +1161,10 @@ BEGIN
   WHERE a.status='queued' AND l.status='active' AND l.started_at IS NULL AND l.kind='run' AND l.expires_at>pg_catalog.clock_timestamp()
   ORDER BY a.created_at,a.id LIMIT 100;
 END $$;
--- One queued run's current lease (ids only): what AgentRunWorkflow enters first, and again
--- after an answer. Zero rows unless the run is queued with an active, unstarted, unexpired
--- lease.
+-- One open run's current lease reference (ids only): what AgentRunWorkflow enters first (or
+-- again, when its first step's result was lost after it committed), and after an answer.
+-- Zero rows unless the run is queued or running. It grants nothing: enter_lease decides
+-- whether the lease is still usable.
 CREATE FUNCTION morrow_work.agent_run_resume_lease(p_organization_id text,p_workspace_id text,p_run_id text)
 RETURNS TABLE(lease_id text,generation text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -1175,10 +1176,8 @@ BEGIN
   OR p_run_id IS NULL OR p_run_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' THEN
   RETURN;
  END IF;
- RETURN QUERY SELECT l.id::text,l.generation::text FROM morrow_work.agent_runs a JOIN morrow_work.work_leases l
-  ON l.organization_id=a.organization_id AND l.workspace_id=a.workspace_id AND l.id=a.lease_id
-  WHERE a.organization_id=p_organization_id AND a.workspace_id=p_workspace_id AND a.id=p_run_id AND a.status='queued'
-   AND l.status='active' AND l.started_at IS NULL AND l.kind='run' AND l.expires_at>pg_catalog.clock_timestamp();
+ RETURN QUERY SELECT a.lease_id::text,a.lease_generation::text FROM morrow_work.agent_runs a
+  WHERE a.organization_id=p_organization_id AND a.workspace_id=p_workspace_id AND a.id=p_run_id AND a.status IN ('queued','running');
 END $$;
 -- Starts (or resumes) the entered lease's run: queued -> running, the lease marked started,
 -- a new wall-time segment. A running run is returned as it stands; a waiting or terminal one

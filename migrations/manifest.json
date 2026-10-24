@@ -364,7 +364,7 @@
     {
       "sequence": 47,
       "file": "0047.agent-runs.sql",
-      "sha256": "3f25c70979dce287974784a12406cb266f845eba4c4ab7c48c07020da2624e35",
+      "sha256": "a4b9557e2cd1ad15067156979ecc12024b1ae147658c66f475f593919b0b5601",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/t4-agent-loop.md"
     }
