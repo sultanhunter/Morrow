@@ -644,6 +644,16 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       }
     }
   }
+  async function retried(body) {
+    for (let n = 1; ; n++) {
+      try {
+        return await body();
+      } catch (error) {
+        if (n >= 6) throw error;
+        await sleep(400);
+      }
+    }
+  }
   async function answer(p, questionId, text) {
     for (let n = 1; ; n++) {
       try {
@@ -804,36 +814,42 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       profile: { model: "claude_opus_5_5", effort: "xhigh", catalogueVersion: 2 },
     });
     // A forged manifest (a hold other than the one SQL derives): the manifest CHECK refuses it.
-    const forged = await apiTx(P.A, async (tx, c) => {
-      const input = admissionInput(c, T1);
-      const built = routedManifest(input);
-      const canonical = built.canonical.replace('"holdUsd":"0.16800000"', '"holdUsd":"0.10000000"');
-      const rows = await tx.run("cmdAgentRunAdmit", [
-        input.commandId,
-        input.requestDigest,
-        input.correlationId,
-        T1,
-        S,
-        installation.id,
-        input.runId,
-        input.childTaskId,
-        input.envelopeId,
-        input.hopId,
-        input.coordinatorPrincipalId,
-        input.grantId,
-        "2",
-        "claude_haiku_5_5",
-        "low",
-        JSON.stringify(input.tools),
-        String(toolCatalogueVersion),
-        toolCatalogueDigest,
-        routedSystemTextDigest,
-        canonical,
-        input.admittedAt,
-      ]);
-      tx.rollbackOnly();
-      return rows[0]?.outcome;
-    });
+    // (Retried: the loaded host may time the work transaction out; each try rolls back.)
+    const forged = await retried(() =>
+      apiTx(P.A, async (tx, c) => {
+        const input = admissionInput(c, T1);
+        const built = routedManifest(input);
+        const canonical = built.canonical.replace(
+          '"holdUsd":"0.16800000"',
+          '"holdUsd":"0.10000000"',
+        );
+        const rows = await tx.run("cmdAgentRunAdmit", [
+          input.commandId,
+          input.requestDigest,
+          input.correlationId,
+          T1,
+          S,
+          installation.id,
+          input.runId,
+          input.childTaskId,
+          input.envelopeId,
+          input.hopId,
+          input.coordinatorPrincipalId,
+          input.grantId,
+          "2",
+          "claude_haiku_5_5",
+          "low",
+          JSON.stringify(input.tools),
+          String(toolCatalogueVersion),
+          toolCatalogueDigest,
+          routedSystemTextDigest,
+          canonical,
+          input.admittedAt,
+        ]);
+        tx.rollbackOnly();
+        return rows[0]?.outcome;
+      }),
+    );
     check(
       "A4:refusals_persist_nothing",
       foreign.outcome === "state_conflict" &&
