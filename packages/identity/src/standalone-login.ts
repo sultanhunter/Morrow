@@ -20,7 +20,13 @@ import {
 import { ownRecord, wellFormed } from "./controlled-neon-login-profiles.js";
 import { createLoginFlowCustody } from "./login-flow-custody.js";
 import { createWorkosAuthenticationEvidence } from "./workos-authentication-evidence.js";
-import { createWorkosAccountAdmission } from "./workos-browser-session-admission.js";
+import {
+  browserSessionAdmissionHeldCodes,
+  browserSessionAdmissionLifetimeLeads,
+  createWorkosAccountAdmission,
+  type BrowserSessionAdmissionHeldCode,
+  type BrowserSessionAdmissionLifetimeLead,
+} from "./workos-browser-session-admission.js";
 import type { WorkosSessionPageReader } from "./workos-session-status.js";
 import { runControlledPreauth, type LoginControlledSqlPool } from "./login-preauth-control.js";
 import {
@@ -102,6 +108,63 @@ const decimal = (value: unknown): number => {
   )
     throw loginFailure();
   return Number(value);
+};
+// The sign-in callback's stage diagnostic (docs/briefs/fix-signin-clock-and-stage-log.md).
+// A failed callback emits exactly one line naming the step that failed, from closed sets
+// only: nothing from the request, the provider, a token or the database can reach it, so it
+// carries no code, state, cookie, identifier, time or error text. setup: before the callback
+// was entered (configuration, keyring, pools). finalize: after the database admitted the
+// session (the post-admission checks and the cookie), so its rows were committed.
+export const loginCallbackStages = Object.freeze([
+  "setup",
+  "input",
+  "claim",
+  "capsule_open",
+  "preauth_admit",
+  "eligible_before_exchange",
+  "exchange",
+  "eligible_after_exchange",
+  "jwks",
+  "verify_token",
+  "observe_session",
+  "evidence_read",
+  "admission",
+  "finalize",
+] as const);
+export type LoginCallbackStage = (typeof loginCallbackStages)[number];
+type CallbackProgress = {
+  stage: LoginCallbackStage;
+  sub: BrowserSessionAdmissionHeldCode | null;
+  lead: BrowserSessionAdmissionLifetimeLead | null;
+};
+const member = <T extends string>(values: readonly T[], value: unknown): value is T =>
+  typeof value === "string" && (values as readonly string[]).includes(value);
+// The line itself: four keys, always in this order. sub is the admission's closed held reason
+// (admission stage only, null when the attempt's own deadline ended the wait first); lead is
+// decode_lifetime's coarse bucket, never the value.
+export function loginCallbackFailureLine(progress: unknown): string {
+  let stage: LoginCallbackStage = "setup",
+    sub: BrowserSessionAdmissionHeldCode | null = null,
+    lead: BrowserSessionAdmissionLifetimeLead | null = null;
+  try {
+    const p = progress as Partial<CallbackProgress> | null;
+    if (p && typeof p === "object") {
+      if (member(loginCallbackStages, p.stage)) stage = p.stage;
+      if (stage === "admission" && member(browserSessionAdmissionHeldCodes, p.sub)) sub = p.sub;
+      if (sub === "decode_lifetime" && member(browserSessionAdmissionLifetimeLeads, p.lead))
+        lead = p.lead;
+    }
+  } catch {
+    /* A hostile value yields the closed default. */
+  }
+  return JSON.stringify({ event: "morrow_login_callback_failed", stage, sub, lead });
+}
+const reportCallbackFailure = (progress: Readonly<CallbackProgress>) => {
+  try {
+    console.log(loginCallbackFailureLine(progress));
+  } catch {
+    /* A diagnostic never changes the outcome. */
+  }
 };
 // Trusted source composition. No native provider adapter or normal application
 // entrypoint is enabled by constructing this factory.
@@ -624,7 +687,17 @@ function createLoginCore(context: CoreContext) {
       );
     };
   };
-  const callback = async (request: Request, url: URL, attempt: LoginAttempt): Promise<Finalize> => {
+  const callback = async (
+    request: Request,
+    url: URL,
+    attempt: LoginAttempt,
+    progress: CallbackProgress,
+  ): Promise<Finalize> => {
+    // The stage diagnostic: each mark names the step about to run. No decision reads it.
+    const mark = (stage: LoginCallbackStage) => {
+      progress.stage = stage;
+    };
+    mark("input");
     const input = loginCallbackInput(request, url);
     const [cookieDigest, stateDigest, codeDigest] = await attempt.wait(
       Promise.all([
@@ -633,6 +706,7 @@ function createLoginCore(context: CoreContext) {
         hashFor(input.code, attempt),
       ]),
     );
+    mark("claim");
     const claimed = await attempt.wait(
       custody.claimCallback(
         JSON.stringify({
@@ -685,6 +759,7 @@ function createLoginCore(context: CoreContext) {
         if (current.keyId !== keyId || current.key !== key) throw loginFailure();
       }
     };
+    mark("capsule_open");
     const aadBytes = aad([
       claimed.flow_id,
       claimed.challenge_id,
@@ -747,6 +822,7 @@ function createLoginCore(context: CoreContext) {
       (await attempt.wait(hashFor(proof.verifier, attempt))) !== claimed.verifier_digest
     )
       throw loginFailure();
+    mark("preauth_admit");
     const reserved = await runControlledPreauth(
       preauthPool,
       config.authenticationBindingJson,
@@ -797,7 +873,9 @@ function createLoginCore(context: CoreContext) {
         throw loginFailure();
       attempt.check();
     };
+    mark("eligible_before_exchange");
     await eligible();
+    mark("exchange");
     if (exchangeEntered) throw loginFailure();
     exchangeEntered = true;
     const exchangeDeadline = Math.min(attempt.check() + 10000, attempt.control().deadlineMs);
@@ -848,7 +926,9 @@ function createLoginCore(context: CoreContext) {
       encoder.encode(exchanged.accessToken).length > 16384
     )
       throw loginFailure();
+    mark("eligible_after_exchange");
     await eligible();
+    mark("jwks");
     attempt.check();
     const publicKeyset = await attempt.wait(provider.readPublicKeyset(attempt.control()));
     if (typeof publicKeyset !== "string" || encoder.encode(publicKeyset).length > 65536)
@@ -867,6 +947,7 @@ function createLoginCore(context: CoreContext) {
       },
       signal: attempt.control().signal,
       readPage: async (selectorJson, control) => {
+        mark("observe_session");
         await eligible(control);
         const bounded = Object.freeze({
           deadlineMs: Math.min(
@@ -884,8 +965,10 @@ function createLoginCore(context: CoreContext) {
         return result;
       },
     });
+    mark("verify_token");
     const verified = await attempt.wait(owner.verify(exchanged.accessToken));
     if (verified.outcome !== "verified_active_evidence") throw loginFailure();
+    mark("evidence_read");
     // The completed composition window does not shorten76's separate fresh
     // observation lease. Its owner still checks that lease at every read.
     compositionPending = false;
@@ -902,7 +985,14 @@ function createLoginCore(context: CoreContext) {
       now: attempt.check,
       readEvidence,
       signal: attempt.control().signal,
+      // Closed values only (BrowserSessionAdmissionHeld); kept for the stage line.
+      onHeld: (held) => {
+        if (progress.stage !== "admission") return;
+        progress.sub = held.sub;
+        progress.lead = held.lead;
+      },
     });
+    mark("admission");
     if (issuerEntered) throw loginFailure();
     issuerEntered = true;
     const admitted = await attempt.wait(
@@ -916,8 +1006,10 @@ function createLoginCore(context: CoreContext) {
         }),
       ),
     );
+    if (admitted.outcome !== "newly_admitted") throw loginFailure();
+    // The database committed the session: what remains is the callback's own finalization.
+    mark("finalize");
     if (
-      admitted.outcome !== "newly_admitted" ||
       admitted.correlation?.commandId !== claimed.issuer_command_id ||
       !admitted.credential ||
       !loginSecret(admitted.credential.secret) ||
@@ -951,6 +1043,7 @@ export async function dispatchStandaloneLoginWithAttempt(
   let delivered = false,
     isCallback = false,
     externalSignal: AbortSignal | undefined;
+  const progress: CallbackProgress = { stage: "setup", sub: null, lead: null };
   const deliver = (output: Readonly<AuthDeliveryPlan>) => {
     if (delivered || externalSignal?.aborted) throw loginFailure();
     delivered = true;
@@ -986,6 +1079,7 @@ export async function dispatchStandaloneLoginWithAttempt(
     const config = setup.config;
     if (!core || !config) throw loginFailure();
     const { start, callback } = core;
+    if (isCallback) progress.stage = "input";
     const url = loginRequestEnvelope(request, config.origin);
     if (url.pathname === "/auth/result" && !url.search && request.method === "GET") {
       deliver(resultPage());
@@ -1012,12 +1106,16 @@ export async function dispatchStandaloneLoginWithAttempt(
       deliver(unavailable(403));
       return;
     }
-    const finalize = await (isCallback ? callback(request, url, attempt) : start(request, attempt));
+    const finalize = await (isCallback
+      ? callback(request, url, attempt, progress)
+      : start(request, attempt));
     // Freshness and cookie construction remain in this same stack as sink.
     const output = finalize();
     deliver(output);
   } catch (error) {
     if (delivered) throw Error("STANDALONE_LOGIN_TRANSPORT_UNKNOWN");
+    // Once per failed callback, before the generic result page (or none, when the browser left).
+    if (isCallback) reportCallbackFailure(progress);
     if (!externalSignal?.aborted)
       deliver(
         isCallback
