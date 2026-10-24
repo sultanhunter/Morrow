@@ -139,7 +139,7 @@ CREATE UNIQUE INDEX store_installations_one_live_app_shop ON morrow_identity.sto
 CREATE INDEX store_installations_checks_due ON morrow_identity.store_installations (scopes_observed_at,id)
  WHERE status IN ('unlinked','linked') AND redacted_at IS NULL;
 CREATE INDEX store_installations_deletions_due ON morrow_identity.store_installations (uninstalled_at,id)
- WHERE status='uninstalled' AND redacted_at IS NULL;
+ WHERE status='uninstalled';
 ALTER TABLE morrow_identity.linking_candidates
  DROP CONSTRAINT linking_candidates_provider_id_application_id_environment_i_key;
 CREATE UNIQUE INDEX linking_candidates_one_active ON morrow_identity.linking_candidates
@@ -799,23 +799,27 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,
   AND i.app_key=p_app_key AND i.shop_id=p_shop_id AND i.status='uninstalled' AND i.credential_destroyed_at IS NULL
  ORDER BY i.created_at,i.id LIMIT 20
 $$;
--- The 48-hour deletion's list (ids only, across tenants; ADR-0031 item 3): uninstalled
--- installations not yet redacted, uninstalled at least 48 hours ago, whose deletion has not
--- completed, oldest first, at most 20. A shop/redact that completed redacted them already.
+-- The 48-hour deletion's list (ids only, across tenants; ADR-0031 item 3): installations
+-- uninstalled at least 48 hours ago that are not redacted and have no deletion record (a
+-- shop/redact redacted them already otherwise), and those whose deletion is still open (its
+-- handlers ran and redacted the installation, but the token's destruction was not yet
+-- recorded), oldest first, at most 20.
 CREATE FUNCTION morrow_identity.work_shopify_deletions_due()
 RETURNS TABLE(installation_id text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
  SELECT i.id::text FROM morrow_identity.store_installations i
- WHERE i.status='uninstalled' AND i.redacted_at IS NULL AND i.uninstalled_at<=pg_catalog.clock_timestamp()-interval '48 hours'
-  AND NOT EXISTS(SELECT 1 FROM morrow_identity.store_data_deletions d WHERE d.installation_id=i.id AND d.status='completed')
+ WHERE i.status='uninstalled' AND i.uninstalled_at<=pg_catalog.clock_timestamp()-interval '48 hours'
+  AND ((i.redacted_at IS NULL AND NOT EXISTS(SELECT 1 FROM morrow_identity.store_data_deletions d WHERE d.installation_id=i.id))
+   OR EXISTS(SELECT 1 FROM morrow_identity.store_data_deletions d WHERE d.installation_id=i.id AND d.status='open'))
  ORDER BY i.uninstalled_at,i.id LIMIT 20
 $$;
 -- Opens (or returns) the 48-hour deletion of one installation, under the per-shop install
--- lock: the installation must be uninstalled for 48 hours. The record is born once per
+-- lock: the installation must be uninstalled for 48 hours and not redacted (a shop/redact
+-- that redacted it holds its own record, the privacy request). The record is born once per
 -- installation (UNIQUE); a completed one is reported settled. Returns the tenant and store
 -- the work-side handlers take, and whether the token's destruction is recorded.
--- Outcomes: opened, open, settled, ineligible (not uninstalled, or not yet due), not_found,
--- invalid.
+-- Outcomes: opened, open, settled, ineligible (not uninstalled, not yet due, or redacted
+-- before any deletion record), not_found, invalid.
 CREATE FUNCTION morrow_identity.work_shopify_deletion_open(p_installation_id text)
 RETURNS TABLE(outcome text,organization_id text,workspace_id text,store_id text,connection_id text,app_key text,
  credential_destroyed boolean,credential_version bigint)
@@ -841,7 +845,7 @@ BEGIN
  END IF;
  v_at:=date_trunc('milliseconds',clock_timestamp());
  IF NOT v_recorded THEN
-  IF i.status<>'uninstalled' OR i.uninstalled_at>v_at-interval '48 hours' THEN
+  IF i.status<>'uninstalled' OR i.uninstalled_at>v_at-interval '48 hours' OR i.redacted_at IS NOT NULL THEN
    RETURN QUERY SELECT 'ineligible'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::boolean,NULL::bigint; RETURN;
   END IF;
   INSERT INTO morrow_identity.store_data_deletions(organization_id,workspace_id,id,installation_id,app_key,store_id,trigger,uninstalled_at,

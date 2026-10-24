@@ -1017,7 +1017,10 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       { tPending, tWaiting, tDone },
     );
     // shop/redact after the self-deletion completes at once.
-    const lateRedact = await deliver(D, "shop/redact", { shop_id: Number(D.shopId), shop_domain: D.shop });
+    const lateRedact = await deliver(D, "shop/redact", {
+      shop_id: Number(D.shopId),
+      shop_domain: D.shop,
+    });
     const lateRequest = ownerRows(
       `SELECT status,evidence->>'kind' AS kind FROM morrow_identity.privacy_requests WHERE inbox_id=${literal(inboxRow(lateRedact.webhookId)?.id ?? "")}`,
     )[0];
@@ -1081,12 +1084,21 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       "K1:no_login_but_the_connectors_runs_the_connector_definers",
       ["morrow_api_worker", "morrow_vault_broker", "morrow_runtime_executor"].every(
         (user) =>
-          !asUser(user, `SELECT * FROM morrow_work.connector_inbox_apply_v2(${literal(anyInbox)});`) &&
-          !asUser(user, `SELECT * FROM morrow_work.connector_health_reconcile(${literal(G.installation)});`) &&
+          !asUser(
+            user,
+            `SELECT * FROM morrow_work.connector_inbox_apply_v2(${literal(anyInbox)});`,
+          ) &&
+          !asUser(
+            user,
+            `SELECT * FROM morrow_work.connector_health_reconcile(${literal(G.installation)});`,
+          ) &&
           !asUser(user, "SELECT * FROM morrow_work.connector_checks_due();") &&
           !asUser(user, "SELECT * FROM morrow_work.connector_notices_due();") &&
           !asUser(user, "SELECT * FROM morrow_work.connector_deletions_due();") &&
-          !asUser(user, `SELECT * FROM morrow_work.connector_deletion_apply(${literal(G.installation)});`) &&
+          !asUser(
+            user,
+            `SELECT * FROM morrow_work.connector_deletion_apply(${literal(G.installation)});`,
+          ) &&
           !asUser(user, "SELECT * FROM morrow_work.connector_inbox_stuck();"),
       ),
     );
@@ -1094,7 +1106,10 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       "K2:no_login_but_the_brokers_resolves_or_records_a_read_back",
       ["morrow_api_worker", "morrow_connector_ingress", "morrow_runtime_executor"].every(
         (user) =>
-          !asUser(user, `SELECT * FROM morrow_vault.shopify_check_resolve(${literal(G.installation)});`) &&
+          !asUser(
+            user,
+            `SELECT * FROM morrow_vault.shopify_check_resolve(${literal(G.installation)});`,
+          ) &&
           !asUser(
             user,
             `SELECT morrow_vault.shopify_check_record(${literal(G.installation)},'2','observed','["write_products"]');`,
@@ -1139,7 +1154,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
     // token, whose destruction is lost here: it stays received, counted and logged.
     faults.destroy = true;
     const linesBefore = consoleLines.length;
-    await cleaning.redrive();
+    const stuckRun = await cleaning.redrive();
     faults.destroy = false;
     check(
       "S2:the_cron_logs_inbox_stuck_with_a_count",
@@ -1147,6 +1162,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
         consoleLines
           .slice(linesBefore)
           .some((l) => l.includes('"code":"INBOX_STUCK"') && l.includes('"deliveries":1')),
+      { stuckRun, row: statusOf(stuckRedact.inboxId), lines: consoleLines.slice(linesBefore) },
     );
 
     // -------------------------------------------------------------------------
