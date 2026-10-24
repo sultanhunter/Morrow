@@ -1369,6 +1369,11 @@ export const vaultFunctions = Object.freeze({
   "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // Build order PR 8 (0047 runtime-e2b): the sandbox's envd token as a vault record, stored
+  // once and opened per call by the broker's login (any settlement destroys it); 0047 also
+  // replaces runtime_operations_open (stopped operations) and revises the settle definer.
+  "runtime_token_put(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_token_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // v1 PR 3 (catalog-apply): the gateway's apply (resolve, fence, close) and read-back
   // (resolve, record), keyed by one operation id, and their revisable INVOKER helpers (the
   // context settings and the send refusal), which only the definers above call.
@@ -1515,6 +1520,9 @@ export const executorLogins = Object.freeze({
     "morrow_vault.runtime_operation_created(text,text)",
     "morrow_vault.runtime_operation_settle(text,text,text)",
     "morrow_vault.runtime_operations_open(text)",
+    // Build order PR 8 (0047 runtime-e2b).
+    "morrow_vault.runtime_token_get(text)",
+    "morrow_vault.runtime_token_put(text,text,text,text)",
     // v1 PR 3 (catalog-apply).
     "morrow_vault.catalog_reconcile_record(text,text,text,text,text)",
     "morrow_vault.catalog_reconcile_resolve(text)",

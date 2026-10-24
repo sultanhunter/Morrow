@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "profile": "morrow.computer@1",
+  "name": "morrow-computer-v1",
+  "recipe": "infra/e2b/morrow-computer/e2b.Dockerfile",
+  "recipe_sha256": "93274a47b0a3f53ba2b39c5cbe7f172f063163d7f6f9a420a5b9c1d0a155a207",
+  "cpu_count": 2,
+  "memory_mb": 1024,
+  "cli": "@e2b/cli@2.22.3",
+  "project": "Morrow-staging",
+  "template_id": null,
+  "build_id": null,
+  "envd_version": null,
+  "built_on": null,
+  "scope": "The owner's E2B template build of profile morrow.computer v1 (ADR-0029 item 1 and owner question 1; build order PR 8). Recorded after the owner runs the build in README.md with the owner's own E2B login: template_id is the pin the broker creates from (apps/broker/src/runtime-e2b.ts e2bPinnedTemplate), written as name:build_id so it names exactly one build; build_id, envd_version and built_on come from the owner's `template list` output, which holds no secret. All four stay null until then, and the runtime switch cannot go on (build order PR 9 qualifies this exact build first). A changed recipe_sha256 needs a new build, a new record and a new qualification."
+}

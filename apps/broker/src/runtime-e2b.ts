@@ -56,9 +56,11 @@ export const e2bEnvdPort = 49983;
 export const e2bSandboxDomain = "e2b.app";
 /**
  * The template the profile creates from (ADR-0029 item 1): the owner's build of
- * infra/e2b/morrow-computer (README there). Null until the owner has built it and build order
- * PR 9 has qualified it; while null every execute holds RUNTIME_UNAVAILABLE.
- * tests/runtime-e2b.test.mjs ties it to infra/e2b/morrow-computer/template.json.
+ * infra/e2b/morrow-computer (README there), pinned to that one build as `<name>:<build id>`
+ * (E2B's immutable reference; a bare name follows the `default` tag to later builds). Null
+ * until the owner has built it and build order PR 9 has qualified it; while null every execute
+ * holds RUNTIME_UNAVAILABLE. tests/runtime-e2b.test.mjs ties it to
+ * infra/e2b/morrow-computer/template.json.
  */
 export const e2bPinnedTemplate: string | null = null;
 export type Fetch = (request: Request) => Promise<Response>;
@@ -442,7 +444,10 @@ export function createE2bRuntime(fetch: Fetch): RuntimeProvider {
         typeof id !== "string" ||
         !sandboxRefPattern.test(id) ||
         typeof template !== "string" ||
-        (template !== request.template && alias !== request.template) ||
+        // The reply names the pinned template (by id or alias; a `name:build` pin by its name).
+        ![request.template, request.template.split(":")[0]].some(
+          (name) => name === template || name === alias,
+        ) ||
         typeof version !== "string" ||
         !versionPattern.test(version) ||
         // Secure access is the only access: no token, no sandbox Morrow talks to.
