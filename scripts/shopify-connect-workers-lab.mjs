@@ -12,6 +12,11 @@
 // PR-3) the webhook inbox: a bad signature is 401; a verified app/uninstalled is 200 once
 // recorded, then applied in waitUntil (the installation ends, the connection stops, the
 // token is destroyed); a redelivery is a duplicate; the cron's redrive finds nothing left.
+// The shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md):
+// after the install, in waitUntil, the broker's sync lists the store's subscriptions and
+// creates app/uninstalled and app/scopes_update to the connector's own webhook path, leaving
+// another app path's subscription alone, and records them for the credential version; after
+// the re-authorisation it lists again and creates nothing (H checks).
 // Synthetic data only; runs in the CI pg-work group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -49,6 +54,8 @@ const migrations = [
   ".shopify-vault-install.sql",
   ".shopify-privacy-identity.sql",
   ".shopify-privacy-work.sql",
+  ".shopify-webhook-registrations-identity.sql",
+  ".shopify-webhook-registrations-vault.sql",
 ].map((slug) => manifest.migrations.find((m) => m.file.endsWith(slug))?.file);
 if (migrations.some((f) => !f)) throw Error("SHOPIFY_CONNECT_WORKERS_MIGRATIONS_REQUIRED");
 const sourceDigests = Object.fromEntries(
@@ -62,6 +69,7 @@ const sourceDigests = Object.fromEntries(
     "apps/shopify-connector/worker/webhooks.ts",
     "apps/shopify-connector/worker/oauth-state.ts",
     "apps/broker/src/shopify-install.ts",
+    "apps/broker/src/shopify-webhooks.ts",
     "apps/broker/src/shopify.ts",
     "apps/broker/src/vault-database.ts",
     "packages/identity/src/shopify-link-issuer.ts",
@@ -87,6 +95,7 @@ const inputs = Object.keys(bundled.metafile.inputs);
 for (const required of [
   "apps/shopify-connector/worker/connector.ts",
   "apps/broker/src/shopify-install.ts",
+  "apps/broker/src/shopify-webhooks.ts",
   "apps/broker/src/vault-database.ts",
   "packages/identity/src/shopify-link-issuer.ts",
   "packages/policy/src/connection-authority.ts",
@@ -285,6 +294,14 @@ await withWorkDatabase(
       }
     }
     const oracle = createShopifyOracle({ secret: appSecret, clientId, shop, shopId: "4242424242" });
+    // Another app path's subscription already on the store: never Morrow's, never touched.
+    const foreignSubscription = {
+      id: "6001",
+      topic: "APP_UNINSTALLED",
+      uri: "https://elsewhere.example.test/shopify/webhooks",
+    };
+    oracle.state.subscriptions.push({ ...foreignSubscription });
+    const webhookPath = `${connectorOrigin}/shopify/a/${appKey}/webhooks`;
     const outbound = { shopify: 0, unexpected: [] };
     const logs = [];
     const mf = new Miniflare({
@@ -297,6 +314,12 @@ await withWorkDatabase(
         MORROW_DATABASE_BINDING_JSON: JSON.stringify(binding),
         MORROW_DB_PASSWORD_MORROW_VAULT_BROKER: vaultPassword,
         MORROW_VAULT_KEK_V1: kek,
+        // The broker's copy of the connector's configuration: each subscription's URL.
+        CONNECTOR_CONFIGURATION_JSON: JSON.stringify({
+          schemaVersion: 1,
+          origin: connectorOrigin,
+          apiOrigin,
+        }),
         LAB_CONNECTOR_ORIGIN: connectorOrigin,
         LAB_API_ORIGIN: apiOrigin,
         LAB_LEASE_PASSWORD: leasePassword,
@@ -438,6 +461,40 @@ await withWorkDatabase(
           exchanges() === 1,
         { status: callback.status, installation },
       );
+      // ---- H: the shop-specific webhook subscriptions, after the install's response.
+      const registrations = () =>
+        owner(
+          "SELECT organization_id::text AS org,workspace_id::text AS ws,installation_id::text AS installation,credential_version::int AS version,status,uninstalled_subscription_id AS uninstalled,scopes_update_subscription_id AS scopes,attempts,revision::int AS revision FROM morrow_identity.shopify_webhook_registrations",
+        );
+      const creates = () =>
+        oracle.state.calls.filter((c) => c.operation === "WebhookSubscriptionCreate");
+      const morrowSubscriptions = () =>
+        oracle.state.subscriptions.filter((w) => w.uri === webhookPath);
+      const afterInstall = registrations();
+      check(
+        "H1:the_install_registers_both_shop_specific_subscriptions_to_the_connectors_path",
+        morrowSubscriptions().length === 2 &&
+          JSON.stringify(morrowSubscriptions().map((w) => w.topic)) ===
+            '["APP_UNINSTALLED","APP_SCOPES_UPDATE"]' &&
+          creates().length === 2 &&
+          creates().every(
+            (c) =>
+              JSON.stringify(Object.keys(c.variables)) === '["topic","uri"]' &&
+              c.variables.uri === webhookPath,
+          ) &&
+          JSON.stringify(oracle.state.subscriptions[0]) === JSON.stringify(foreignSubscription) &&
+          oracle.state.subscriptions.length === 3 &&
+          afterInstall.length === 1 &&
+          afterInstall[0].org === ids.org &&
+          afterInstall[0].ws === ids.ws &&
+          afterInstall[0].installation === installation[0]?.id &&
+          afterInstall[0].version === 1 &&
+          afterInstall[0].status === "registered" &&
+          afterInstall[0].uninstalled === morrowSubscriptions()[0].id &&
+          afterInstall[0].scopes === morrowSubscriptions()[1].id &&
+          afterInstall[0].attempts === 0,
+        { subscriptions: oracle.state.subscriptions, afterInstall, creates: creates().length },
+      );
       const replay = await connector("callback", first.callbackQuery, withCookie);
       check(
         "E4:a_replayed_callback_is_refused_before_any_exchange",
@@ -471,6 +528,22 @@ await withWorkDatabase(
           title: /<title>([^<]*)<\/title>/.exec(reauthorised.text ?? "")?.[1],
           vault: vaultRows(),
         },
+      );
+
+      // The re-authorisation's new token lists the subscriptions again and creates nothing.
+      const afterReauthorise = registrations();
+      check(
+        "H2:a_reauthorisation_lists_again_creates_nothing_and_records_the_new_version",
+        creates().length === 2 &&
+          morrowSubscriptions().length === 2 &&
+          oracle.state.subscriptions.length === 3 &&
+          oracle.state.calls.filter((c) => c.operation === "WebhookSubscriptions").length === 2 &&
+          afterReauthorise.length === 1 &&
+          afterReauthorise[0].version === 2 &&
+          afterReauthorise[0].status === "registered" &&
+          afterReauthorise[0].revision === 2 &&
+          afterReauthorise[0].uninstalled === afterInstall[0]?.uninstalled,
+        { afterReauthorise, calls: oracle.state.calls.map((c) => c.operation ?? c.path) },
       );
 
       // ---- L: connections read, preview (issuer), apply and status over the api guard.
@@ -661,6 +734,8 @@ await withWorkDatabase(
               destroyed: 0,
               targetMissed: 0,
               dueMissed: 0,
+              subscriptionsChecked: 0,
+              subscriptionsRegistered: 0,
               unavailable: 0,
             }),
         { redelivered: redelivered.status, redrive },
