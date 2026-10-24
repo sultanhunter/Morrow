@@ -652,6 +652,44 @@ test("an uncertain turn is booked at its worst case and sent again at most once"
   assert.equal(twice.text8(twice.db.run.booked8), "0.42000000");
 });
 
+test("a hold that left nothing in SQL is tried again at most twice, then the run ends", async () => {
+  // Held once before any fence (a transient failure): nothing was sent, the same sequence
+  // goes again after a wait, and the run completes with one counted send.
+  let holds = 1;
+  const world = agentWorld({ script: async () => usageOk(reply("Done.")) });
+  compose(world);
+  const send = world.ports.modelTurn;
+  world.ports.modelTurn = async (...args) => {
+    if (holds-- > 0) throw Error("BROKER_HELD");
+    return send(...args);
+  };
+  const d = world.durable();
+  assert.equal((await agentRun(world.ports, d, params)).reason, "completed");
+  assert.deepEqual(d.names, ["start", "turn-1-1", "finish"]);
+  assert.deepEqual(
+    world.db.sends.map((s) => [s.call.turn, s.call.attempt, s.call.sequence]),
+    [[1, 1, 1]],
+  );
+  assert.deepEqual(world.db.sleeps, [agentRunTimings.heldWaitMs]);
+  // Held every time: three tries in all, nothing sent or booked, then provider_error.
+  let tries = 0;
+  const always = agentWorld({ script: async () => usageOk(reply("Never.")) });
+  compose(always);
+  always.ports.modelTurn = async () => {
+    tries += 1;
+    throw Error("BROKER_HELD");
+  };
+  assert.deepEqual(await agentRun(always.ports, always.durable(), params), {
+    kind: "ended",
+    status: "failed",
+    reason: "provider_error",
+  });
+  assert.equal(tries, agentRunTimings.heldSends);
+  assert.equal(always.db.sends.length, 0);
+  assert.equal(always.text8(always.db.run.booked8), "0.00000000");
+  assert.deepEqual(always.db.sleeps, [agentRunTimings.heldWaitMs, 2 * agentRunTimings.heldWaitMs]);
+});
+
 test("a throttle resends the attempt with the next sequence; a lost reply is read back, never resent", async () => {
   let n = 0;
   const world = agentWorld({

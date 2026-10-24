@@ -46,7 +46,8 @@ import type { ToolDispatch, ToolHandlers } from "./tools.js";
 //              fence as SQL sees it (agent_turn_settle: a recorded outcome is used as is, a
 //              live call is waited for, an expired one is booked as uncertain), then one
 //              ModelCall@2 through the broker's modelTurn (a throttle resends the attempt
-//              with the next sequence). The reply is validated with the generated contract
+//              with the next sequence; a hold that left nothing in SQL is tried again at
+//              most twice). The reply is validated with the generated contract
 //              (the strict tool_use shapes the run was given), its tools must be offered and
 //              a final turn must call none: anything else ends the run invalid_output. An
 //              uncertain attempt 1 is sent again at most once, as attempt 2; an uncertain
@@ -132,6 +133,13 @@ export const agentRunTimings = Object.freeze({
   sequences: 8,
   /** The longest wait before a resend after a throttle. */
   maxThrottleWaitMs: 30_000,
+  /**
+   * A held call that left nothing in SQL (no fence, so no request: a transient database or
+   * binding failure, or a hold that will repeat) is tried at most this many times in all,
+   * the n-th wait heldWaitMs * n, before the run ends provider_error.
+   */
+  heldSends: 3,
+  heldWaitMs: 5_000,
   /** Kept free after a turn's whole call budget, for the tool calls and the finish. */
   finishMarginMs: 60_000,
   /** How often an open fence is looked at again, and how long past its budget it may stay. */
@@ -347,6 +355,7 @@ export async function runTurn(
   let state = await settle();
   let message: unknown = null;
   let outcome: RecordedTurnOutcome | null = null;
+  let held = 0;
   while (outcome === null) {
     if (state.kind === "interrupted") return state;
     if (state.kind === "recorded") {
@@ -372,12 +381,18 @@ export async function runTurn(
       );
     } catch {
       // BROKER_HELD: the gateway refused before any request, or the reply was lost. What SQL
-      // recorded decides; with nothing recorded and no call open, the run ends.
+      // recorded decides. With nothing recorded and no call open nothing was sent (the fence
+      // commits before any request), so the call is tried again, at most heldSends times in
+      // all, before the run ends.
       result = null;
     }
     if (result === null) {
       state = await settle();
-      if (state.kind === "send") return end("provider_error");
+      if (state.kind === "send") {
+        held += 1;
+        if (held >= agentRunTimings.heldSends) return end("provider_error");
+        await ports.sleep(agentRunTimings.heldWaitMs * held);
+      }
       continue;
     }
     if (result.outcome === "not_sent") {

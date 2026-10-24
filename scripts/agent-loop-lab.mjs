@@ -1165,7 +1165,22 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         runRow(R2).tainted === false &&
         one(`SELECT status FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`)
           ?.status === "answered",
-      { result, names, blocks },
+      {
+        result,
+        names,
+        blocks,
+        // Ids, codes and amounts only, for a failure's diagnosis.
+        turns: t.map((x) => [x.turn, x.attempt, x.outcome]),
+        calls: calls(R2).map((x) => [x.turn, x.attempt, x.sequence, x.status, x.outcome]),
+        run: (({ status, ended_reason, turns, generation, prefix }) => ({
+          status,
+          ended_reason,
+          turns,
+          generation,
+          prefix,
+        }))(runRow(R2)),
+        broker: brokerLines.slice(-6),
+      },
     );
     // An answer after the run ended changes nothing.
     const qid = one(
