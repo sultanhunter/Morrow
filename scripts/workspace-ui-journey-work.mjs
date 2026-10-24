@@ -175,11 +175,22 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
     }
     loginStarts.push(Date.now());
   }
+  // Each browser browses from its own client address (TEST-NET-1), as people on their own
+  // machines would. Through the api's listener they would otherwise all be 127.0.0.1, one
+  // address under SESSION_LIMITER's 120 per 60 s (src/session-limit.ts), which Miniflare
+  // counts in fixed wall-clock minutes: the journey's three people together send about
+  // 150 workspace requests in 90 s, so a fast runner put 120 of them in one minute and
+  // the next reads came back 429 (hosted ui runs 40062723970 and 40064367045,
+  // AC25_AC26). Miniflare keeps a client's CF-Connecting-IP; the limit itself is
+  // lab:edge-workers' to check, and the lab's own requests already get a fresh address
+  // each (edge-postgresql-lab.mjs).
+  let people = 0;
   async function person(label, subject) {
     const context = await browser.newContext({
       ignoreHTTPSErrors: true,
       viewport: { width: 1440, height: 900 },
       serviceWorkers: "block",
+      extraHTTPHeaders: { "CF-Connecting-IP": `192.0.2.${10 + people++}` },
     });
     const log = {
       label,
