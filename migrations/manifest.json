@@ -360,6 +360,13 @@
       "sha256": "b6f8e266732275c0e1f6e3d3455c7199fc35bcdd3f43c858445767e8bb8c65f7",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/projects-backend.md"
+    },
+    {
+      "sequence": 47,
+      "file": "0047.agent-runs.sql",
+      "sha256": "3f25c70979dce287974784a12406cb266f845eba4c4ab7c48c07020da2624e35",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/t4-agent-loop.md"
     }
   ]
 }
