@@ -24,6 +24,7 @@ import {
   sourcesValid,
   unionTags,
   viewable,
+  withResultTags,
 } from "../packages/policy/src/knowledge/index.ts";
 import {
   modelToolDefinitions,
@@ -46,7 +47,11 @@ import {
   searchText,
 } from "../packages/work/src/knowledge/bodies.ts";
 import { knowledgeFields } from "../packages/work/src/knowledge/commands.ts";
-import { knowledgeRunSql, listingsBrandVoice } from "../packages/work/src/knowledge/run-steps.ts";
+import {
+  knowledgeRunSql,
+  knowledgeSearchForRun,
+  listingsBrandVoice,
+} from "../packages/work/src/knowledge/run-steps.ts";
 import { workStatements } from "../packages/work/src/sql.ts";
 import { workspaceContentHandlers } from "../packages/work/src/redaction.ts";
 import { workFunctions, workTables } from "./tenant-conformance/registry.mjs";
@@ -249,9 +254,15 @@ test("Listings gets the brand voice only as one marked data block: it chooses no
       },
     ];
   };
-  assert.deepEqual(await listingsBrandVoice(fakeQuery, all, shopKnowledgeRecord.agent_tools), []);
+  assert.deepEqual(await listingsBrandVoice(fakeQuery, all, shopKnowledgeRecord.agent_tools), {
+    blocks: [],
+    readTags: [],
+  });
   assert.equal(reads.length, 0);
-  assert.deepEqual(await listingsBrandVoice(fakeQuery, all, "on"), blocks);
+  assert.deepEqual(await listingsBrandVoice(fakeQuery, all, "on"), {
+    blocks,
+    readTags: [tag("workspace.knowledge.read")],
+  });
   assert.deepEqual(reads, [[knowledgeRunSql.brandVoice, []]]);
   const tags = checkDraft(
     { productId: "product:1", title: null, descriptionHtml: null, seo: null, tags: ["sale"] },
@@ -353,6 +364,70 @@ test("notebook.write's checks in code: its own notebook, never customer data", (
       outcome: "invalid_input",
       refusal: "input_invalid",
     });
+});
+
+test("a run's reads hand back their content's read tags, and a later write carries them (review R1)", async () => {
+  // ADR-0031 item 6: a run's read tags are the union of its tool results' tags, and they only
+  // narrow. A page's tags can be wider than the tool's own (an accepted proposal adds the
+  // proposing run's, here orders.read), so the seam returns them with the content and the
+  // loop unions them before the run's next call.
+  const pageTags = [tag("orders.read"), tag("workspace.knowledge.read")];
+  const voiceQuery = async () => [
+    {
+      page_id: "page_voice",
+      version: "4",
+      body: "Warm and short.",
+      read_tags: JSON.stringify(pageTags),
+    },
+  ];
+  const voice = await listingsBrandVoice(voiceQuery, all, "on");
+  assert.equal(voice.blocks.length, 2);
+  assert.deepEqual(voice.readTags, pageTags);
+  // A run that may not view the page gets neither its text nor its tags.
+  assert.deepEqual(await listingsBrandVoice(voiceQuery, none, "on"), { blocks: [], readTags: [] });
+  const searchQuery = async (text, values) => {
+    assert.equal(text, knowledgeRunSql.search);
+    assert.deepEqual(values, ["coast"]);
+    return [
+      {
+        page_id: "page_orders",
+        kind: "decision",
+        version: "1",
+        title: "Coast orders",
+        body: "Orders from the coast arrive a day late.",
+        read_tags: JSON.stringify(pageTags),
+      },
+    ];
+  };
+  const [hit] = await knowledgeSearchForRun(searchQuery, all, "coast", 5);
+  assert.equal(hit.pageId, "page_orders");
+  assert.deepEqual(hit.readTags, pageTags);
+  assert.deepEqual(await knowledgeSearchForRun(searchQuery, none, "coast", 5), []);
+  // The loop's union: a notebook.write or knowledge.propose after the read carries the page's
+  // tags, so the entry or proposal is never readable by someone who may not see the page.
+  const before = run({ readTags: [tag("catalog.products.read")] });
+  const after = withResultTags(withResultTags(before, voice.readTags), hit.readTags);
+  assert.deepEqual(after.readTags, [
+    tag("catalog.products.read"),
+    tag("orders.read"),
+    tag("workspace.knowledge.read"),
+  ]);
+  assert.deepEqual(before.readTags, [tag("catalog.products.read")], "facts never mutate");
+  assert.deepEqual(decideNotebookWrite({ text: "Coast orders run late." }, after).args.readTags, [
+    tag("catalog.products.read"),
+    tag("orders.read"),
+    tag("workspace.knowledge.read"),
+  ]);
+  assert.deepEqual(decideKnowledgePropose(proposeInput(), after).args.readTags, after.readTags);
+  // A customer-tagged result makes every later internal write refused.
+  assert.deepEqual(
+    decideNotebookWrite({ text: "x" }, withResultTags(after, [tag("support.case.read")])),
+    { ok: false, outcome: "refused", refusal: "customer_data" },
+  );
+  // Facts the loop owns are checked, and more than 24 tags cannot be carried: fail closed.
+  assert.throws(() => withResultTags(after, [{ x: 1 }]), /KNOWLEDGE_RUN_FACTS_INVALID/);
+  const many = Array.from({ length: 24 }, (_, i) => tag("orders.read", "store_" + i));
+  assert.throws(() => withResultTags(after, many), /KNOWLEDGE_RUN_TAGS_OVERFLOW/);
 });
 
 test("ToolCatalogue@1 version 3: the two tools are internal writes for routed and mandate runs only", () => {
@@ -683,6 +758,29 @@ test("a notebook clear is bound to the revision its per-viewer check read (revie
     "revision, then entries, then the definer",
   );
   assert.match(body.slice(sent, body.indexOf("]);", sent)), /installationId,\s*expectedRevision,/);
+});
+
+test("a proposal holds its page under a share lock: none lands pending on a page deleted under it (review R3)", () => {
+  const propose = sql.slice(
+    sql.indexOf("CREATE FUNCTION morrow_work.run_knowledge_propose("),
+    sql.indexOf("END $$;", sql.indexOf("CREATE FUNCTION morrow_work.run_knowledge_propose(")),
+  );
+  // The target is read live under FOR SHARE (FOR KEY SHARE does not wait for the deletion's
+  // FOR UPDATE), so READ COMMITTED waits for an in-flight deletion and re-checks deleted_at.
+  const read = propose.match(
+    /SELECT x\.kind,x\.current_version INTO g FROM morrow_work\.knowledge_pages x[^;]*;/,
+  );
+  assert.ok(read, "the target read");
+  assert.match(read[0], /AND x\.deleted_at IS NULL FOR SHARE;$/);
+  const insert = propose.indexOf("INSERT INTO morrow_work.knowledge_proposals");
+  assert.ok(propose.indexOf(read[0]) < insert, "the lock before the insert");
+  // The deletion locks the page FOR UPDATE before it closes the page's pending proposals.
+  const del = sql.slice(sql.indexOf("CREATE FUNCTION morrow_work.cmd_knowledge_delete("));
+  assert.ok(
+    del.indexOf("FOR UPDATE;") > 0 &&
+      del.indexOf("FOR UPDATE;") <
+        del.indexOf("UPDATE morrow_work.knowledge_proposals x SET status='closed'"),
+  );
 });
 
 test("the deletion path is in the one registry, before any real content (ADR-0031 item 4)", () => {

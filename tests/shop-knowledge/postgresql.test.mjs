@@ -28,6 +28,7 @@ import {
 import {
   brandVoiceInstruction,
   shopKnowledgeRecord,
+  withResultTags,
 } from "../../packages/policy/src/knowledge/index.ts";
 import { storeResource } from "../../packages/policy/src/store-resource.ts";
 import { validateCurrentDefinition } from "../../packages/contracts/src/validation.ts";
@@ -49,6 +50,7 @@ import {
   grantInsert,
   literal,
   seedWorkFixtures,
+  sleep,
   storeInstallationSql,
   withWorkDatabase,
   workFixtureOrigin,
@@ -140,6 +142,9 @@ before(async () => {
       storeGrant(p, "catalog.products.read", ["view"], ["productId"]),
       storeGrant(p, "workspace.artifact.read", ["view"], ["artifactId", "revision"]),
     );
+  // R alone may view order data on the store: an order-derived page R accepts is hidden from A
+  // (K11, K13). A never holds orders.read (K10).
+  statements.push(storeGrant(P.R, "orders.read", ["view"], ["orderIds", "allowedFields"]));
   statements.push(
     grantInsert(
       P.A,
@@ -756,8 +761,12 @@ test("K6 Listings gets the accepted brand voice only as one marked data block", 
   const noRead = () => {
     throw Error("no read while the switch is off");
   };
-  assert.deepEqual(await listingsBrandVoice(noRead, allTags, shopKnowledgeRecord.agent_tools), []);
-  const blocks = await underLease(lease, (query) => listingsBrandVoice(query, allTags, "on"));
+  assert.deepEqual(await listingsBrandVoice(noRead, allTags, shopKnowledgeRecord.agent_tools), {
+    blocks: [],
+    readTags: [],
+  });
+  const voice = await underLease(lease, (query) => listingsBrandVoice(query, allTags, "on"));
+  const blocks = voice.blocks;
   assert.equal(blocks.length, 2);
   assert.deepEqual(blocks[0], { type: "text", text: brandVoiceInstruction });
   assert.deepEqual(blocks[1], {
@@ -770,10 +779,17 @@ test("K6 Listings gets the accepted brand voice only as one marked data block", 
     assert.ok(
       validateCurrentDefinition(block.type === "data" ? "ModelDataBlock" : "ModelTextBlock", block),
     );
-  // A run that may not view the page's tags gets nothing.
+  // The page's own read tags come with its text (review R1), for the loop to union into the
+  // run's: here the knowledge tag and the catalogue tag K5's accepted run added.
+  const tagsOf = (id) =>
+    db.rows(`SELECT read_tags FROM morrow_work.knowledge_pages WHERE id=${literal(id)}`)[0]
+      .read_tags;
+  assert.deepEqual(voice.readTags, tagsOf(pages.brand));
+  assert.ok(voice.readTags.some((t) => t.capability === "catalog.products.read"));
+  // A run that may not view the page's tags gets nothing, its tags included.
   assert.deepEqual(
     await underLease(lease, (query) => listingsBrandVoice(query, { mayView: () => false }, "on")),
-    [],
+    { blocks: [], readTags: [] },
   );
   // knowledge.search's candidates, per run viewer.
   const hits = await underLease(lease, (query) =>
@@ -783,6 +799,7 @@ test("K6 Listings gets the accepted brand voice only as one marked data block", 
     hits.map((h) => h.pageId),
     [pages.policy],
   );
+  assert.deepEqual(hits[0].readTags, tagsOf(pages.policy));
   const none = await underLease(lease, (query) =>
     knowledgeSearchForRun(query, { mayView: () => false }, "zebrafinch", 5),
   );
@@ -874,10 +891,34 @@ test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 10
   assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 100);
   const noGrant = await send(open, P.C, "POST", `/agents/${INSTALLATION}/notebook/clear`, {});
   assert.equal(noGrant.status, 403);
-  const cleared = await send(open, P.A, "POST", `/agents/${INSTALLATION}/notebook/clear`, {});
+  const key = randomUUID();
+  const cleared = await send(
+    open,
+    P.A,
+    "POST",
+    `/agents/${INSTALLATION}/notebook/clear`,
+    {},
+    { key },
+  );
   assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+  assert.deepEqual(cleared.body, {
+    schemaVersion: 1,
+    installationId: INSTALLATION,
+    entriesErased: 100,
+  });
   assert.equal(count("agent_notebook_entries", "erased_at IS NULL OR body IS NOT NULL"), 0);
   assert.deepEqual((await read(P.A)).entries, []);
+  // A retry after an uncertain outcome gets the same body, marked replayed (review R4).
+  const replayed = await send(
+    open,
+    P.A,
+    "POST",
+    `/agents/${INSTALLATION}/notebook/clear`,
+    {},
+    { key },
+  );
+  assert.equal(replayed.status, 200);
+  assert.deepEqual(replayed.body, { ...cleared.body, replayed: true });
 });
 
 test("K8 the deletion path: a page's every version, search entry and pending proposal erased, and recorded", async () => {
@@ -1124,4 +1165,361 @@ test("K10 a clear erases only at the notebook revision its per-viewer check read
   assert.equal(direct(revision + 1), "revision_conflict");
   assert.equal(direct("0"), "invalid");
   assert.equal(count("agent_notebook_entries", `erased_at IS NULL AND run_id='run_k10'`), 2);
+});
+
+test("K11 a run's reads hand back their content's tags; a note or proposal based on them carries them (review R1)", async () => {
+  // An order-derived page: an analyst-like run (it read orders.read) proposes a decision, and R,
+  // who may view order data, accepts it. The page then carries orders.read, wider than the
+  // knowledge.search tool's own tag; A may not view it.
+  const lease = openRunLease("run_k11");
+  const made = await underLease(lease, (query) =>
+    knowledgeProposeStep(query, {
+      toolUseId: "toolu_k11_page",
+      input: {
+        pageId: null,
+        kind: "decision",
+        title: "Coast orders",
+        text: "Orders from the coast arrive a day late. Pelicanberry.",
+        sources: [],
+      },
+      run: runFacts({ readTags: [{ storeId: STORE, capability: "orders.read" }], taint: "none" }),
+      viewer: allTags,
+    }),
+  );
+  assert.equal(made.outcome, "ok");
+  const listed = (await send(open, P.R, "GET", "/knowledge/proposals")).body.proposals.find(
+    (p) => p.id === made.record.id,
+  );
+  assert.ok(listed, "R may view it");
+  const accepted = await send(open, P.R, "POST", `/knowledge/proposals/${made.record.id}/accept`, {
+    digest: listed.digest,
+  });
+  assert.equal(accepted.status, 201, JSON.stringify(accepted.body));
+  pages.orders = accepted.body.pageId;
+  const pageTags = db.rows(
+    `SELECT read_tags FROM morrow_work.knowledge_pages WHERE id=${literal(pages.orders)}`,
+  )[0].read_tags;
+  assert.deepEqual(pageTags, [
+    { storeId: STORE, capability: "orders.read" },
+    { storeId: STORE, capability: "workspace.knowledge.read" },
+  ]);
+  assert.equal(
+    (await send(open, P.A, "GET", "/knowledge/pages")).body.pages.some(
+      (p) => p.id === pages.orders,
+    ),
+    false,
+  );
+  // A later run (it has read nothing yet) searches and gets the page's text with its tags.
+  const later = openRunLease("run_k11b");
+  const facts = runFacts({ readTags: [], taint: "none" });
+  const [hit] = await underLease(later, (query) =>
+    knowledgeSearchForRun(query, allTags, "pelicanberry", 5),
+  );
+  assert.equal(hit.pageId, pages.orders);
+  assert.deepEqual(hit.readTags, pageTags);
+  // The loop unions them before the next call; the note and the proposal then carry orders.read.
+  const after = withResultTags(facts, hit.readTags);
+  const note = await underLease(later, (query) =>
+    notebookWriteStep(query, {
+      toolUseId: "toolu_k11_note",
+      input: { text: "Coast orders run a day late; say so in shipping copy." },
+      run: after,
+      viewer: allTags,
+    }),
+  );
+  assert.equal(note.outcome, "ok");
+  const [entry] = db.rows(
+    `SELECT read_tags FROM morrow_work.agent_notebook_entries WHERE id=${literal(note.record.id)}`,
+  );
+  assert.ok(
+    entry.read_tags.some((t) => t.storeId === STORE && t.capability === "orders.read"),
+    JSON.stringify(entry.read_tags),
+  );
+  // A, who may not view order data, never reads it back through the notebook.
+  const notebook = await send(open, P.A, "GET", `/agents/${INSTALLATION}/notebook`);
+  assert.equal(notebook.status, 200);
+  assert.equal(
+    notebook.body.entries.some((e) => e.text.includes("Coast orders")),
+    false,
+  );
+  const proposed = await underLease(later, (query) =>
+    knowledgeProposeStep(query, {
+      toolUseId: "toolu_k11_proposal",
+      input: {
+        pageId: null,
+        kind: "policy",
+        title: "Shipping to the coast",
+        text: "Coast deliveries take one extra day.",
+        sources: [],
+      },
+      run: after,
+      viewer: allTags,
+    }),
+  );
+  assert.equal(proposed.outcome, "ok");
+  const [row] = db.rows(
+    `SELECT read_tags FROM morrow_work.knowledge_proposals WHERE id=${literal(proposed.record.id)}`,
+  );
+  assert.ok(row.read_tags.some((t) => t.capability === "orders.read"));
+  assert.equal(
+    (await send(open, P.A, "GET", "/knowledge/proposals")).body.proposals.some(
+      (p) => p.id === proposed.record.id,
+    ),
+    false,
+  );
+  // Tidy: R declines it.
+  const pending = (await send(open, P.R, "GET", "/knowledge/proposals")).body.proposals.find(
+    (p) => p.id === proposed.record.id,
+  );
+  assert.equal(
+    (
+      await send(open, P.R, "POST", `/knowledge/proposals/${pending.id}/reject`, {
+        digest: pending.digest,
+      })
+    ).status,
+    200,
+  );
+});
+
+test("K12 a proposal racing its page's deletion never lands pending on the deleted page (review R3)", async () => {
+  const created = await send(open, P.A, "POST", "/knowledge/pages", {
+    kind: "policy",
+    title: "Shipping",
+    text: "We ship within two days. Ostrichfern.",
+    sources: [],
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const pageId = created.body.pageId;
+  const lease = openRunLease("run_k12");
+  // The run's transaction is open (lease entered) before the request, and a second runtime
+  // session watches pg_locks, so the race needs no new connection inside the deletion's window:
+  // the deletion has run its definer (the page locked FOR UPDATE, its pending proposals closed)
+  // but not committed when the run's propose starts, and the propose then waits on the page.
+  const control = () => ({
+    signal: new AbortController().signal,
+    deadlineMs: Date.now() + 120000,
+    waitUntil() {},
+  });
+  const run = await db.connector({ user: "morrow_runtime_executor" }).open(control());
+  const monitor = await db.connector({ user: "morrow_runtime_executor" }).open(control());
+  const signal = new AbortController().signal;
+  const runQuery = async (sql, values = []) => (await run.query(sql, [...values], signal)).rows;
+  const lockWaits = async () =>
+    Number(
+      (
+        await monitor.query(
+          "SELECT count(*)::text AS n FROM pg_locks WHERE NOT granted",
+          [],
+          signal,
+        )
+      ).rows[0].n,
+    );
+  let proposing = null;
+  let waited = false;
+  try {
+    await runQuery("BEGIN");
+    const [entered] = await runQuery("SELECT outcome FROM morrow_work.enter_lease($1,$2)", [
+      lease.id,
+      lease.generation,
+    ]);
+    assert.equal(entered.outcome, "entered");
+    const racing = {
+      async open(c) {
+        const inner = await connector.open(c);
+        return {
+          async query(sql, values, querySignal) {
+            const result = await inner.query(sql, values, querySignal);
+            if (proposing === null && sql.includes("morrow_work.cmd_knowledge_delete(")) {
+              proposing = knowledgeProposeStep(runQuery, {
+                toolUseId: "toolu_k12",
+                input: {
+                  pageId,
+                  kind: "policy",
+                  title: "Shipping",
+                  text: "We ship within one day now.",
+                  sources: [],
+                },
+                run: runFacts({ readTags: [] }),
+                viewer: allTags,
+              }).then(
+                (value) => ({ value }),
+                (error) => ({ error }),
+              );
+              const until = Date.now() + 4000;
+              while (!waited && Date.now() < until) {
+                waited = (await lockWaits()) > 0;
+                if (!waited) await sleep(5);
+              }
+            }
+            return result;
+          },
+          close: () => inner.close(),
+        };
+      },
+    };
+    const handler = createKnowledgeApiHandler({
+      origin: workFixtureOrigin,
+      connector: racing,
+      now: Date.now,
+      knowledge: "on",
+    });
+    const deleted = await send(handler, P.A, "POST", `/knowledge/pages/${pageId}/delete`, {
+      expectedVersion: 1,
+    });
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+    assert.equal(deleted.body.proposalsClosed, 0);
+    assert.equal(waited, true, "the propose waited on the page while the deletion held it");
+    // The propose re-read the page after the deletion committed: out of scope, nothing written.
+    assert.deepEqual(await proposing, {
+      value: { outcome: "refused", refusal: "id_out_of_scope" },
+    });
+    await runQuery("COMMIT");
+  } finally {
+    await runQuery("ROLLBACK").catch(() => {});
+    await run.close();
+    await monitor.close();
+  }
+  assert.equal(count("knowledge_proposals", `tool_use_id='toolu_k12'`), 0);
+  assert.equal(count("knowledge_proposals", `page_id=${literal(pageId)} AND status='pending'`), 0);
+  // The backstop: a pending proposal on a deleted page (as one could land before the share
+  // lock) can still be declined, which erases its text; it can never be accepted.
+  const O = P.A.org,
+    W = P.A.workspace;
+  const strandedId = randomUUID();
+  db.workOwner(`INSERT INTO morrow_work.knowledge_proposals(organization_id,workspace_id,id,page_id,base_version,kind,title,body,sources,digest,read_tags,context_taint,installation_id,agent_principal_id,run_id,tool_use_id,lease_id,status,created_at)
+SELECT ${literal(O)},${literal(W)},${literal(strandedId)},${literal(pageId)},1,'policy','Shipping','We ship within one day now.','[]'::jsonb,morrow_work.knowledge_proposal_digest(${literal(pageId)},1,'policy','Shipping','We ship within one day now.','[]'::jsonb),'[{"storeId":"${STORE}","capability":"workspace.knowledge.read"}]'::jsonb,'none',${literal(INSTALLATION)},${literal(AGENT)},'run_k12','toolu_k12_seeded',${literal(lease.id)},'pending',date_trunc('milliseconds',clock_timestamp());`);
+  const stranded = (await send(open, P.A, "GET", "/knowledge/proposals")).body.proposals.find(
+    (p) => p.id === strandedId,
+  );
+  assert.ok(stranded, "listed to A");
+  const accept = await send(open, P.A, "POST", `/knowledge/proposals/${strandedId}/accept`, {
+    digest: stranded.digest,
+  });
+  assert.equal(accept.status, 404);
+  const reject = await send(open, P.A, "POST", `/knowledge/proposals/${strandedId}/reject`, {
+    digest: stranded.digest,
+  });
+  assert.equal(reject.status, 200, JSON.stringify(reject.body));
+  assert.equal(
+    count(
+      "knowledge_proposals",
+      `id=${literal(strandedId)} AND status='rejected' AND title IS NULL AND body IS NULL AND sources IS NULL`,
+    ),
+    1,
+  );
+});
+
+test("K13 after Disconnect store, its pages stay deletable by a person who may delete them, and a new brand voice can be written (review R2)", async () => {
+  // Before: a page hidden from A by a tag on the linked store is the same 404 for a deletion
+  // (no blind deletion), and nothing is stranded.
+  const orders = await send(open, P.A, "POST", `/knowledge/pages/${pages.orders}/delete`, {
+    expectedVersion: 1,
+  });
+  assert.equal(orders.status, 404);
+  assert.deepEqual((await send(open, P.A, "GET", "/knowledge/pages")).body.disconnectedPages, []);
+  // Disconnect store (#53's identity step): the store keeps no current association.
+  assert.equal(
+    db.sql(
+      `SELECT outcome||'|'||status FROM morrow_identity.work_shopify_installation_end(${literal(P.A.org)},${literal(P.A.workspace)},${literal(STORE_INSTALLATION)},'disconnected');`,
+    ),
+    "applied|suspended",
+  );
+  // Every live page carried the store's tags: no one can open any of them now.
+  const listA = (await send(open, P.A, "GET", "/knowledge/pages")).body;
+  assert.deepEqual(listA.pages, []);
+  // A, who may delete knowledge, is told they exist: id, kind and version, nothing else.
+  const live = [pages.brand, pages.fact, pages.orders].sort();
+  assert.deepEqual(listA.disconnectedPages.map((p) => p.id).sort(), live);
+  for (const p of listA.disconnectedPages)
+    assert.deepEqual(Object.keys(p).sort(), ["id", "kind", "version"]);
+  const brand = listA.disconnectedPages.find((p) => p.id === pages.brand);
+  assert.deepEqual(brand, { id: pages.brand, kind: "brand_voice", version: 2 });
+  // The screen's decoder reads the real reply.
+  assert.deepEqual(
+    decodeKnowledgePages(listA)
+      .disconnected.map((d) => d.id)
+      .sort(),
+    live,
+  );
+  // Someone who may not delete is told nothing and deletes nothing.
+  for (const p of [P.B, P.R]) {
+    assert.deepEqual((await send(open, p, "GET", "/knowledge/pages")).body.disconnectedPages, []);
+    assert.equal(
+      (
+        await send(open, p, "POST", `/knowledge/pages/${pages.brand}/delete`, {
+          expectedVersion: 2,
+        })
+      ).status,
+      403,
+    );
+  }
+  // A new brand voice is refused while the stranded one holds the workspace's one.
+  const blocked = await send(open, P.A, "POST", "/knowledge/pages", {
+    kind: "brand_voice",
+    title: "Our new voice",
+    text: "Plain and kind.",
+    sources: [],
+  });
+  assert.equal(blocked.status, 409);
+  // A deletes it at the version named; another version is a conflict.
+  assert.equal(
+    (
+      await send(open, P.A, "POST", `/knowledge/pages/${pages.brand}/delete`, {
+        expectedVersion: 1,
+      })
+    ).status,
+    409,
+  );
+  const deleted = await send(open, P.A, "POST", `/knowledge/pages/${pages.brand}/delete`, {
+    expectedVersion: brand.version,
+  });
+  assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+  assert.deepEqual(decodeKnowledgeDeleted(deleted.body, pages.brand), { pageId: pages.brand });
+  const [record] = db.rows(
+    `SELECT kind,versions_erased,deleted_by_principal_id FROM morrow_work.knowledge_deletions WHERE page_id=${literal(pages.brand)}`,
+  );
+  assert.deepEqual(record, {
+    kind: "brand_voice",
+    versions_erased: 2,
+    deleted_by_principal_id: P.A.principal,
+  });
+  assert.equal(
+    count(
+      "knowledge_versions",
+      `page_id=${literal(pages.brand)} AND (body IS NOT NULL OR title IS NOT NULL OR erased_at IS NULL)`,
+    ),
+    0,
+  );
+  // The order-derived page A could never see: stranded now, so A may erase it unseen.
+  assert.equal(
+    (
+      await send(open, P.A, "POST", `/knowledge/pages/${pages.orders}/delete`, {
+        expectedVersion: 1,
+      })
+    ).status,
+    200,
+  );
+  // The workspace has a brand voice again: tagged with no store, and A sees it.
+  const voice = await send(open, P.A, "POST", "/knowledge/pages", {
+    kind: "brand_voice",
+    title: "Our new voice",
+    text: "Plain and kind.",
+    sources: [],
+  });
+  assert.equal(voice.status, 201, JSON.stringify(voice.body));
+  assert.deepEqual(
+    db.rows(
+      `SELECT read_tags FROM morrow_work.knowledge_pages WHERE id=${literal(voice.body.pageId)}`,
+    )[0].read_tags,
+    [{ storeId: null, capability: "workspace.knowledge.read" }],
+  );
+  const after = (await send(open, P.A, "GET", "/knowledge/pages")).body;
+  assert.deepEqual(
+    after.pages.map((p) => p.id),
+    [voice.body.pageId],
+  );
+  assert.deepEqual(
+    after.disconnectedPages.map((p) => p.id),
+    [pages.fact],
+  );
 });

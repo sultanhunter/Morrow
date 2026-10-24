@@ -80,6 +80,7 @@ const pagesReply = {
       updatedAt: "2026-10-24T10:00:00.000Z",
     },
   ],
+  disconnectedPages: [],
   pendingProposals: 1,
   may: { write: true, delete: false },
 };
@@ -251,6 +252,7 @@ test("the adapter: pages and suggestions read once each and merged; a reply outs
     ],
   );
   assert.deepEqual(outcome.value.may, { write: true, delete: false });
+  assert.deepEqual(outcome.value.disconnected, []);
   assert.deepEqual(outcome.value.items, [
     {
       id: PAGE,
@@ -312,6 +314,24 @@ test("the adapter: pages and suggestions read once each and merged; a reply outs
 test("decoders: each reply only for the record the path names", () => {
   assert.equal(decodeKnowledgePages(pagesReply).facts.length, 1);
   assert.equal(decodeKnowledgePages({ ...pagesReply, extra: 1 }), null);
+  // Pages a disconnected store left (review R2): only to a person who may delete them, with the
+  // id, kind and version a deletion names; never a title, text or time, never a listed page.
+  const STRANDED = "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a";
+  const admin = { ...pagesReply, may: { write: true, delete: true } };
+  const stranded = { id: STRANDED, kind: "brand_voice", version: 1 };
+  assert.deepEqual(decodeKnowledgePages({ ...admin, disconnectedPages: [stranded] }).disconnected, [
+    { id: STRANDED, pageKind: "brand_voice", version: 1 },
+  ]);
+  for (const reply of [
+    { ...pagesReply, disconnectedPages: [stranded] },
+    { ...admin, disconnectedPages: [{ ...stranded, title: "Our voice" }] },
+    { ...admin, disconnectedPages: [{ ...stranded, version: 0 }] },
+    { ...admin, disconnectedPages: [{ ...stranded, kind: "customer" }] },
+    { ...admin, disconnectedPages: [{ ...stranded, id: PAGE }] },
+    { ...admin, disconnectedPages: [stranded, stranded] },
+    { ...admin, disconnectedPages: undefined },
+  ])
+    assert.equal(decodeKnowledgePages(reply), null, JSON.stringify(reply.disconnectedPages));
   assert.equal(decodeKnowledgeProposals(proposalsReply).length, 1);
   // The decoder keeps the page a suggestion changes and every source (review F2); the page's
   // current title and text are joined from the same read's pages by the adapter.
@@ -743,4 +763,39 @@ test("the screen: a suggestion shows everything its digest binds, the page it ch
   assert.ok(fixture.includes(`${k.sourceKinds.product}: 4242`));
   assert.ok(fixture.includes(k.targetValue("Shipping", 1)));
   assert.ok(fixture.includes("Free shipping in the US on orders over $75."));
+});
+
+test("the screen: a page a disconnected store left is named to a person who may delete it, and only deleted (review R2)", async () => {
+  const STRANDED = "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a";
+  const viewOf = async (may) => {
+    const { port } = onPort(({ path }) =>
+      path.endsWith("/knowledge/pages")
+        ? json(200, {
+            ...pagesReply,
+            pages: [],
+            disconnectedPages: may.delete
+              ? [{ id: STRANDED, kind: "brand_voice", version: 3 }]
+              : [],
+            may,
+          })
+        : json(200, { schemaVersion: 1, proposals: [] }),
+    );
+    const outcome = await port.library.knowledge(ws);
+    assert.equal(outcome.kind, "ok");
+    return outcome.value;
+  };
+  const owner = await viewOf({ write: true, delete: true });
+  assert.deepEqual(owner.disconnected, [{ id: STRANDED, pageKind: "brand_voice", version: 3 }]);
+  const html = markup(owner);
+  const title = k.disconnectedTitle(k.pageKinds.brand_voice);
+  assert.ok(html.includes(k.disconnected), "its section");
+  assert.ok(html.includes(title), "its kind, never a title");
+  assert.ok(html.includes(k.disconnectedBody));
+  // Only a deletion is offered: no edit, nothing to read.
+  assert.doesNotMatch(buttonTag(html, k.remove(title)), /disabled/);
+  assert.ok(!html.includes(`aria-label="${k.edit(title)}"`));
+  // A person who may not delete is told nothing.
+  const admin = markup(await viewOf({ write: true, delete: false }));
+  assert.ok(!admin.includes(k.disconnected));
+  assert.ok(!admin.includes(title));
 });
