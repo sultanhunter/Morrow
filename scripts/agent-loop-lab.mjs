@@ -1351,7 +1351,12 @@ COMMIT;`);
         result.kind === "interrupted" &&
         reads.length === readsBefore &&
         before.status === "running" &&
-        refused.outcome === "stopped" &&
+        // The stop disables the installation, so admission refuses it (denied) and persists
+        // nothing; its lease entry and the broker's fence refuse every step (stopped or ended).
+        refused.outcome === "denied" &&
+        one(
+          `SELECT status FROM morrow_work.agent_installations WHERE id=${literal(installation.id)}`,
+        )?.status === "disabled" &&
         after.status === "cancelled" &&
         after.ended_reason === "stopped" &&
         count(
@@ -1384,14 +1389,17 @@ COMMIT;`);
     const asApi = (p, select) =>
       db.tryRun(
         `BEGIN; SET LOCAL ROLE morrow_work_api; SELECT count(*) FROM morrow_work.enter_context(${literal(p.digest)},${literal(p.workspace)}); ${select}; ROLLBACK;`,
+        { user: "morrow_api_worker" },
       );
     const mineCount = asApi(P.A, "SELECT count(*) FROM morrow_work.agent_runs");
     const otherCount = asApi(P.Y, "SELECT count(*) FROM morrow_work.agent_runs");
     check(
       "T2:the_api_reads_its_own_runs_column_by_column_and_no_content",
       mineCount.ok &&
+        mineCount.stdout.split("\n")[0] === "1" &&
         Number(last(mineCount.stdout)) >= 7 &&
         otherCount.ok &&
+        otherCount.stdout.split("\n")[0] === "1" &&
         Number(last(otherCount.stdout)) === 0 &&
         !asApi(P.A, "SELECT manifest_canonical FROM morrow_work.agent_runs").ok &&
         !asApi(P.A, "SELECT input FROM morrow_work.run_turns").ok &&

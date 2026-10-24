@@ -439,7 +439,8 @@ export function inspectAgentPlatformSwitches(loop, specialists) {
     typeof p.evidence === "string" &&
     p.evidence.startsWith("docs/evidence/");
   if (
-    keys(loop) !== "environment_kind,observed_on,prerequisites,schema_version,scope,switch,workflow" ||
+    keys(loop) !==
+      "environment_kind,observed_on,prerequisites,schema_version,scope,switch,workflow" ||
     loop.schema_version !== 1 ||
     loop.environment_kind !== "staging" ||
     loop.workflow !== "agent-run@1" ||

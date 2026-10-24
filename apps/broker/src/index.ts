@@ -251,7 +251,12 @@ export class RuntimeBroker extends WorkerEntrypoint<unknown> implements RuntimeB
       ? modelGateway.modelRespond(this.env, leaseId, generation, callJson, budgetMs)
       : brokerInputInvalid("modelRespond", "RuntimeBroker");
   }
-  modelTurn(leaseId: string, generation: number, callJson: string, budgetMs: number): Promise<string> {
+  modelTurn(
+    leaseId: string,
+    generation: number,
+    callJson: string,
+    budgetMs: number,
+  ): Promise<string> {
     return arguments.length === 4
       ? agentTurnGateway.modelTurn(this.env, leaseId, generation, callJson, budgetMs)
       : brokerInputInvalid("modelTurn", "RuntimeBroker");

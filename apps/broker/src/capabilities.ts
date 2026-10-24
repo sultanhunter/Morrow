@@ -455,7 +455,9 @@ function agentLoop(
   environment: string,
   vaultCapability: Readonly<BrokerVault> | null,
 ): "off" | "on" {
-  return environment !== "production" && vaultCapability !== null && own(env, agentLoopVar) === agentLoopOn
+  return environment !== "production" &&
+    vaultCapability !== null &&
+    own(env, agentLoopVar) === agentLoopOn
     ? "on"
     : "off";
 }

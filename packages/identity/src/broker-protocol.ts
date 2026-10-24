@@ -305,7 +305,12 @@ export interface RuntimeBrokerRpc {
   // previous reply (append-only) and fences every send in SQL before any provider request.
   // A held broker (either switch off, an invalid call, a stop, a spent hold, an open call)
   // throws BROKER_HELD.
-  modelTurn(leaseId: string, generation: number, callJson: string, budgetMs: number): Promise<string>;
+  modelTurn(
+    leaseId: string,
+    generation: number,
+    callJson: string,
+    budgetMs: number,
+  ): Promise<string>;
   // Build order PR 7 (ADR-0029): the computer's one door. The lease is the run's; jobJson is
   // RuntimeJob@1 (closed: a step key, a script, minimised extracts and declared outputs; no
   // command, template, network, environment or limit); the result is a RuntimeResult@1

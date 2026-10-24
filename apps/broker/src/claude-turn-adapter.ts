@@ -79,7 +79,11 @@ export interface TurnAdapterResult {
 export interface TurnProvider {
   readonly provider: string;
   countTurn(call: ResolvedTurnCall, credential: string, budgetMs: number): Promise<CountResult>;
-  respondTurn(call: ResolvedTurnCall, credential: string, budgetMs: number): Promise<TurnAdapterResult>;
+  respondTurn(
+    call: ResolvedTurnCall,
+    credential: string,
+    budgetMs: number,
+  ): Promise<TurnAdapterResult>;
 }
 
 const tools: readonly {
@@ -119,7 +123,11 @@ function messagesBody(call: ResolvedTurnCall): unknown[] {
         case "data":
           return {
             type: "text",
-            text: wrapData(String(b.source), b.sourceId === null ? null : String(b.sourceId), String(b.text)),
+            text: wrapData(
+              String(b.source),
+              b.sourceId === null ? null : String(b.sourceId),
+              String(b.text),
+            ),
           };
         case "tool_result":
           return {
@@ -129,7 +137,12 @@ function messagesBody(call: ResolvedTurnCall): unknown[] {
             is_error: b.outcome !== "ok",
           };
         case "tool_use":
-          return { type: "tool_use", id: b.id, name: byName.get(String(b.name))?.wireName, input: b.input };
+          return {
+            type: "tool_use",
+            id: b.id,
+            name: byName.get(String(b.name))?.wireName,
+            input: b.input,
+          };
         case "reasoning":
           return b.redacted === true
             ? { type: "redacted_thinking", data: b.continuity }
@@ -150,7 +163,12 @@ export function claudeTurnBody(call: ResolvedTurnCall): Record<string, unknown> 
     tools: call.tools.map((name) => {
       const t = byName.get(name);
       if (!t) throw Error("CLAUDE_TURN_TOOL_UNKNOWN");
-      return { name: t.wireName, description: t.description, input_schema: t.inputSchema, strict: true };
+      return {
+        name: t.wireName,
+        description: t.description,
+        input_schema: t.inputSchema,
+        strict: true,
+      };
     }),
     tool_choice: { type: call.final ? "none" : "auto" },
     thinking: { type: "adaptive" },
@@ -206,12 +224,25 @@ export function replyMessage(
         return null;
       blocks.push(Object.freeze({ type: "tool_use", id: b.id, name: tool.name, input: b.input }));
     } else if (b.type === "thinking") {
-      if (!storable(b.thinking, 65536) || !storable(b.signature, 65536) || !continuityPattern.test(b.signature))
+      if (
+        !storable(b.thinking, 65536) ||
+        !storable(b.signature, 65536) ||
+        !continuityPattern.test(b.signature)
+      )
         return null;
-      blocks.push(Object.freeze({ type: "reasoning", text: b.thinking, continuity: b.signature, redacted: false }));
+      blocks.push(
+        Object.freeze({
+          type: "reasoning",
+          text: b.thinking,
+          continuity: b.signature,
+          redacted: false,
+        }),
+      );
     } else if (b.type === "redacted_thinking") {
       if (!storable(b.data, 65536) || !continuityPattern.test(b.data)) return null;
-      blocks.push(Object.freeze({ type: "reasoning", text: "", continuity: b.data, redacted: true }));
+      blocks.push(
+        Object.freeze({ type: "reasoning", text: "", continuity: b.data, redacted: true }),
+      );
     } else return null;
   }
   if (blocks.length < 1 || blocks.length > 32) return null;
@@ -242,7 +273,12 @@ const turnUsage = (u: unknown): TurnUsage | null => {
 };
 
 export function createClaudeTurnAdapter(fetch: Fetch): TurnProvider {
-  async function post(path: string, body: unknown, key: string, budgetMs: number): Promise<Response> {
+  async function post(
+    path: string,
+    body: unknown,
+    key: string,
+    budgetMs: number,
+  ): Promise<Response> {
     return fetch(
       new Request(claudeEndpoint + path, {
         method: "POST",
@@ -257,7 +293,12 @@ export function createClaudeTurnAdapter(fetch: Fetch): TurnProvider {
     async countTurn(call: ResolvedTurnCall, key: string, budgetMs: number): Promise<CountResult> {
       let response: Response;
       try {
-        response = await post("/v1/messages/count_tokens", claudeTurnCountBody(call), key, budgetMs);
+        response = await post(
+          "/v1/messages/count_tokens",
+          claudeTurnCountBody(call),
+          key,
+          budgetMs,
+        );
       } catch {
         return { outcome: "not_sent" };
       }
@@ -273,7 +314,11 @@ export function createClaudeTurnAdapter(fetch: Fetch): TurnProvider {
       }
       return countRefusal(response);
     },
-    async respondTurn(call: ResolvedTurnCall, key: string, budgetMs: number): Promise<TurnAdapterResult> {
+    async respondTurn(
+      call: ResolvedTurnCall,
+      key: string,
+      budgetMs: number,
+    ): Promise<TurnAdapterResult> {
       let response: Response;
       try {
         response = await post("/v1/messages", claudeTurnBody(call), key, budgetMs);
@@ -290,26 +335,42 @@ export function createClaudeTurnAdapter(fetch: Fetch): TurnProvider {
           return result({ outcome: "uncertain", providerRequestId });
         }
         const usage = turnUsage(body?.usage);
-        const stop = typeof body?.stop_reason === "string" && token.test(body.stop_reason) ? body.stop_reason : null;
-        const model = typeof body?.model === "string" && modelId.test(body.model) ? body.model : null;
-        if (usage === null) return result({ outcome: "uncertain", providerRequestId, providerModelId: model });
+        const stop =
+          typeof body?.stop_reason === "string" && token.test(body.stop_reason)
+            ? body.stop_reason
+            : null;
+        const model =
+          typeof body?.model === "string" && modelId.test(body.model) ? body.model : null;
+        if (usage === null)
+          return result({ outcome: "uncertain", providerRequestId, providerModelId: model });
         const common = { rawStopReason: stop, usage, providerRequestId, providerModelId: model };
         if (model !== call.providerModelId) return result({ outcome: "provider_error", ...common });
         if (stop === "max_tokens") return result({ outcome: "incomplete", ...common });
         if (stop === "refusal") return result({ outcome: "refusal", ...common });
-        if (stop !== "end_turn" && stop !== "tool_use") return result({ outcome: "provider_error", ...common });
+        if (stop !== "end_turn" && stop !== "tool_use")
+          return result({ outcome: "provider_error", ...common });
         const message = replyMessage(body.content);
         if (message === null) return result({ outcome: "invalid_output", ...common });
-        const uses = message.content.filter((b) => (b as { type: string }).type === "tool_use").length;
+        const uses = message.content.filter(
+          (b) => (b as { type: string }).type === "tool_use",
+        ).length;
         return result({ outcome: uses > 0 ? "tool_use" : "end_turn", message, ...common });
       }
       if (response.status < 400 || (response.status >= 500 && response.status !== 529))
         return result({ outcome: "uncertain", providerRequestId });
       if (response.status === 529)
-        return result({ outcome: "throttled", providerRequestId, retryAfterMs: retryAfter(response) ?? 2_000 });
+        return result({
+          outcome: "throttled",
+          providerRequestId,
+          retryAfterMs: retryAfter(response) ?? 2_000,
+        });
       const refused = await countRefusal(response);
       if (refused.outcome === "throttled")
-        return result({ outcome: "throttled", providerRequestId, retryAfterMs: refused.retryAfterMs });
+        return result({
+          outcome: "throttled",
+          providerRequestId,
+          retryAfterMs: refused.retryAfterMs,
+        });
       return result({
         outcome: refused.outcome === "spend_limit" ? "spend_limit" : "provider_error",
         providerRequestId,
