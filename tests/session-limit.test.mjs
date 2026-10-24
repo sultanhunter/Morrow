@@ -162,6 +162,10 @@ test("the session limit and the router agree on the session paths", async () => 
     ["/workspace/workspace_a/work/plans/start", "projects"],
     ["/workspace/workspace_a/work/plans/start-document", "projects"],
     ["/workspace/workspace_a/work/goals/goal_a/status", "work"],
+    // v1 PR 15: the Inbox and activity reads.
+    ["/workspace/workspace_a/work/inbox", "inbox"],
+    ["/workspace/workspace_a/work/activity", "inbox"],
+    ["/workspace/workspace_a/work/inbox/items", "work"],
     ["/workspace/workspace_a/billing", "billing"],
     ["/workspace/workspace_a/billing/morrow/plans", "billing"],
     ["/workspace/workspace_a/stores/store_a/agents/listings", "agents"],

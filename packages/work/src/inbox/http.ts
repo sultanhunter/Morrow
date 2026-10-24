@@ -6,6 +6,7 @@ import {
   type WorkTx,
 } from "../connection.js";
 import { enterWorkContext, type WorkAuthority } from "../context.js";
+import { decodeCursor } from "../contract-mapping.js";
 import {
   WorkGuardError,
   guardWorkspaceRequest,
@@ -118,6 +119,7 @@ export function createInboxApiHandler(d?: WorkApiDependencies) {
       const limit = g.route.op === "activity.list" ? parseActivityLimit(g.query.get("limit")) : 0;
       if (limit === "invalid") throw new WorkReject("invalid");
       const after = g.query.get("after") ?? null;
+      if (after !== null && decodeCursor(after) === null) throw new WorkReject("invalid");
       let connection: WorkSqlConnection;
       try {
         connection = await configured.connector.open({
