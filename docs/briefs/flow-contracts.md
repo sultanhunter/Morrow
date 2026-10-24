@@ -1,6 +1,6 @@
 # Flow contracts (track T2): goal measures, plan drafts and the plan start
 
-- Status: draft brief, 2026-10-23. It waits on the owner's approval of [ADR-0033](../decisions/adr/ADR-0033-work-model-v2.md) and [ADR-0034](../decisions/adr/ADR-0034-morrow-drafts-plans.md) (both proposed, on the W0 flow sheet `docs/decisions/decision-sheet-2026-10-26-flow.md`); nothing that depends on them merges before. The decisions are material and live in the two ADRs. This brief holds only the field-level detail they leave to T2, which T2's contract PRs may refine within the ADRs by routine commits.
+- Status: draft brief, 2026-10-23. It carries out [ADR-0033](../decisions/adr/ADR-0033-work-model-v2.md) and [ADR-0034](../decisions/adr/ADR-0034-morrow-drafts-plans.md), both accepted 2026-10-24 (OD-2026-10-24-1, from the W0 flow sheet `docs/decisions/decision-sheet-2026-10-26-flow.md`). The decisions are material and live in the two ADRs. This brief holds only the field-level detail they leave to T2, which T2's contract PRs may refine within the ADRs by routine commits.
 - Plan: `docs/plan/mvp.md` tracks T2 (W1, 2026-11-02 to 2026-11-06), then T4, T5, T6, T7 and T12. Contracts are generated closed, with fakes and no runtime eval or schema compilation.
 
 ## Goal

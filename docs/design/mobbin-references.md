@@ -2,7 +2,7 @@
 
 Date: 2026-10-19. Supporting reference for UI packets. It changes no plan, contract or token. Where it conflicts with `docs/plan/build-plan.md`, `docs/contracts/screen-contracts.md`, `docs/design/component-baseline.md`, `docs/design/tokens.json` or a packet, those win.
 
-**Sunrise (ADR-0032, 2026-10-23).** ADR-0032 replaced Visual option 1 with Sunrise. Where this guide says option 1 is the direction or wins a conflict (rules 1 and 2, section 2), Sunrise does once T7 (`docs/plan/mvp.md`) lands its tokens and baseline. Section 2's look rules (the violet count and "In progress", underline tabs, round agent glyphs) give way to Sunrise; its layout and behaviour rules, and the references' patterns, stay.
+**Sunrise (ADR-0032, 2026-10-23).** ADR-0032 replaced Visual option 1 with Sunrise. Where this guide says option 1 is the direction or wins a conflict (rules 1 and 2, section 2), Sunrise does: T7 PR 14 landed its tokens (`tokens.json` schema 2, `docs/design/sunrise.md`), and its baseline follows. Section 2's look rules (the violet count and "In progress", underline tabs, round agent glyphs) give way to Sunrise; its layout and behaviour rules, and the references' patterns, stay.
 
 ## 1. Purpose and rules
 

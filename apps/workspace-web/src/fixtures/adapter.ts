@@ -20,6 +20,7 @@ import {
   type Command,
   type Composed,
   type GoalView,
+  type HomeSamplesView,
   type Outcome,
   type Page,
   type PortMethod,
@@ -35,6 +36,7 @@ import {
   createSeed,
   fixtureCatalogue,
   fixtureConnection,
+  fixtureHomeSamples,
   fixtureCsrfToken,
   fixtureHandoffToken,
   fixtureInstallUrl,
@@ -43,7 +45,13 @@ import {
   fixtureWorkspace,
   people,
 } from "./seed";
-import { scenarios, uncomposedIn, unlinkedStoreIn, type ScenarioName } from "./scenarios";
+import {
+  samplesComposedIn,
+  scenarios,
+  uncomposedIn,
+  unlinkedStoreIn,
+  type ScenarioName,
+} from "./scenarios";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -51,7 +59,12 @@ export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
 const unbuilt: readonly PortMethod[] = ["session.keepAlive", "people.list"];
 /** What a scenario's build composes; an uncomposed method answers `not_in_build`. */
 export function fixtureComposedFor(scenario: ScenarioName): Composed {
-  const off = [...unbuilt, ...(uncomposedIn[scenario] ?? [])];
+  const off = [
+    ...unbuilt,
+    ...(uncomposedIn[scenario] ?? []),
+    // ADR-0032: the Home preview switch stays off outside its own scenario.
+    ...(samplesComposedIn.includes(scenario) ? [] : (["samples.home"] as const)),
+  ];
   return Object.freeze(
     Object.fromEntries(portMethods.map((m) => [m, !off.includes(m)])) as Record<
       PortMethod,
@@ -92,7 +105,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     if (!composed[method]) return Promise.resolve({ kind: "not_in_build" });
     const call = calls.get(method) ?? 0;
     calls.set(method, call + 1);
-    const scripted = script[method]?.(call) ?? null;
+    const scripted = script[method]?.(call, (other) => calls.get(other) ?? 0) ?? null;
     if (scripted === "pending") return new Promise(() => {});
     if (scripted === "empty_page")
       return Promise.resolve(ok({ items: [], next: null }) as Outcome<T>);
@@ -492,6 +505,10 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         }),
     },
     people: { list: () => Promise.resolve({ kind: "not_in_build" }) },
+    samples: {
+      home: (id) =>
+        reply<HomeSamplesView>("samples.home", () => (ws(id) ? ok(fixtureHomeSamples) : notFound)),
+    },
     connections: {
       list: (id) =>
         reply("connections.list", () =>

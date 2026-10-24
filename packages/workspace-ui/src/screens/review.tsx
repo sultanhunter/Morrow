@@ -77,7 +77,7 @@ function ProductCard({
         <RecordText>{product.productId}</RecordText>
       </h3>
       {selectable ? (
-        <label className="checkbox">
+        <label className="check">
           <input type="checkbox" checked={selected} onChange={onToggle} />
           {copy.review.include(product.productId)}
         </label>

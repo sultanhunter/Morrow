@@ -148,7 +148,7 @@ const applyRefusals: Readonly<Record<string, Mapped>> = Object.freeze({
     409,
     "conflict",
     "never",
-    "This store was reconnected, so these changes can no longer be applied.",
+    "This store was disconnected or reconnected, so these changes can no longer be applied.",
   ],
   not_catalog: [404, "denied", "never", "The record was not found."],
   already_claimed: [

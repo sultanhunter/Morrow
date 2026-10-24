@@ -25,6 +25,7 @@ import { fixtureWorkspace } from "../apps/workspace-web/src/fixtures/seed.ts";
 import { portMethods } from "../packages/workspace-ui/src/port.ts";
 import { copy } from "../packages/workspace-ui/src/copy.ts";
 import { OperationList, operationNote } from "../packages/workspace-ui/src/screens/review.tsx";
+import { BadgeGlyph, StatusTag } from "../packages/workspace-ui/src/components/display.tsx";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -461,4 +462,31 @@ test("the results render as text: each status and why a product was not applied"
     copy.review.uncertain,
   );
   assert.equal(operationNote(decodeOperation(operation())), null);
+});
+
+test("Sunrise badges: only a read-back that matched shows as applied; an unknown outcome never does", () => {
+  const badge = (status) =>
+    renderToStaticMarkup(React.createElement(StatusTag, { family: "operation", status }));
+  const glyph = (name) => renderToStaticMarkup(React.createElement(BadgeGlyph, { glyph: name }));
+  assert.ok(badge("verified").startsWith(`<span class="tag tag-success">${glyph("check")}`));
+  // Checking and Needs attention carry the three dots until a read-back settles them.
+  for (const status of ["verifying", "uncertain"]) {
+    const html = badge(status);
+    assert.ok(html.includes(glyph("dots")), status);
+    assert.ok(!html.includes("tag-success") && !html.includes(glyph("check")), status);
+  }
+  for (const status of ["authorized", "dispatching", "submitted"])
+    assert.ok(badge(status).startsWith(`<span class="tag tag-info">${glyph("half")}`), status);
+  assert.ok(badge("conflict").startsWith(`<span class="tag tag-warning">${glyph("alert")}`));
+  assert.ok(badge("failed").startsWith(`<span class="tag tag-critical">${glyph("triangle")}`));
+  // Every status the review lists has its own word.
+  for (const status of Object.keys(copy.status.operation))
+    assert.ok(badge(status).includes(copy.status.operation[status]), status);
+});
+
+test("a store that is no longer linked: the review says it was disconnected, not only reconnected", () => {
+  assert.equal(
+    copy.review.blocked.link_changed,
+    "This store was disconnected or reconnected, so these changes can no longer be approved or applied.",
+  );
 });

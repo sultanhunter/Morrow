@@ -1,6 +1,7 @@
-/* The option 1 stylesheet (P14.T01a §4.4). Colours come only from tokens.css. */
+/* The Sunrise stylesheet (ADR-0032; P14.T01a §4.4). Colours come only from tokens.css. */
 @import "./tokens.css";
 @import "./base.css";
 @import "./shell.css";
 @import "./components.css";
+@import "./avatars.css";
 @import "./screens.css";

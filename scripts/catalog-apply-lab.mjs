@@ -1906,15 +1906,20 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       { disconnected, mid: mid.body, rowsD1 },
     );
     // S5: another approved proposal on the disconnected store is refused at its claim and
-    // records nothing.
+    // records nothing. The claim's link check refuses it (the installation is no longer
+    // linked), and the person is told the store was disconnected, never only "reconnected".
     const before = footprint();
     const callsBefore = shop.calls.length;
+    const brokerBefore = brokerCalls.length;
     const refused = await apply(P.A, XD2, refsD2);
     check(
       "S5:after_a_disconnect_an_approved_proposal_is_refused_at_its_claim",
       refused.status === 409 &&
         refused.body.code === "conflict" &&
+        refused.body.safeMessage ===
+          "This store was disconnected or reconnected, so these changes can no longer be applied." &&
         footprint() === before &&
+        brokerCalls.length === brokerBefore &&
         shop.calls.length === callsBefore &&
         shop.updates(String(pD2[0])) === 0,
       { refused: refused.body },

@@ -14,6 +14,7 @@ import {
   type CommandPhase,
 } from "../services";
 import { Button, TextField } from "../components/controls";
+import { HorizonPicture } from "../components/avatars";
 import { Icon } from "../components/display";
 import { OutcomeNotice, StateView, StatusRegion, outcomeState } from "../components/feedback";
 
@@ -61,6 +62,7 @@ export function SignInScreen({
 }) {
   return (
     <section className="entry-card" aria-labelledby="sign-in-title">
+      <HorizonPicture />
       <h1 id="sign-in-title">{fresh ? copy.signIn.title : copy.signIn.sessionEndedTitle}</h1>
       <p>{fresh ? copy.signIn.landing : copy.signIn.sessionEnded}</p>
       {draftsDropped ? <p className="muted">{copy.signIn.draftsDropped}</p> : null}
@@ -72,6 +74,7 @@ export function SignInScreen({
 export function SignedOutScreen() {
   return (
     <section className="entry-card" aria-labelledby="signed-out-title">
+      <HorizonPicture />
       <h1 id="signed-out-title">{copy.signOut.doneTitle}</h1>
       <p>{copy.signOut.done}</p>
       <AccountLink />

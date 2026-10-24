@@ -48,6 +48,7 @@ Non-goals: Undo and "approve several at once" (PR 4); a product picker; the Sunr
 - [x] A product changed since the draft is not written (C1); the source digest equals the draft's (unit).
 - [x] Stop AI work before the apply, a stop and a disconnect between the claim and the write (S1–S3).
 - [x] After the merge with #53: v1 PR 2's real "Disconnect store" (its connections handler and the broker's token destruction) between the claim and the write sends nothing, a later approved proposal is refused at its claim, and the token is erased (`lab:catalog-apply` S4–S6, local 2026-10-24).
+- [x] After the merge with #55 (the Sunrise shell): the review route sits in the new shell under Inbox; each apply status has a Sunrise badge with a glyph and a word, and Checking and Needs attention carry the three dots, never the check; a store that is no longer linked (a disconnect included) is described as "disconnected or reconnected" by the api and the screen (`lab:catalog-apply` S5 pins the api's message and no broker call; `workspace-web-review.test.mjs`).
 - [x] Shopify's answers: userErrors, THROTTLED then success, 401, a 5xx and a lost reply after applying, an edit at the same moment, reformatting, a lost reply that never applied (O1–O9, N1; unit classification table).
 - [x] A replay, a second tab and another claimant write nothing more; lost execute writes nothing (A5–A7).
 - [x] Tenant isolation of review records and operations (V3, A5, O9; the tenant-conformance registry, S1–S8, P1).
