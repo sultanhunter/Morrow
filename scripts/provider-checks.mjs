@@ -131,7 +131,165 @@ export function catalogueVersionDigest(entry) {
   return sha(canonicalJson(content));
 }
 
+// The two run shapes of the catalogue (PR 10): a version without `run_shape` is a
+// per-product version (listings-run@1, ADR-0022); `agent_loop` is a loop version
+// (agent-run@1, ADR-0027). Each shape has its own active pointer in `active_versions`.
+export const RUN_SHAPES = ["per_product", "agent_loop"];
+export const runShapeOf = (entry) =>
+  entry.run_shape === undefined ? "per_product" : entry.run_shape;
+
+// A loop version (ADR-0027 items 6 and 12; PR 10): per-turn prices of four token kinds, no
+// per-product credits (the rate card prices runs, ADR-0026 item 5). Every entry's worst-case
+// turn is the input cap at the 5-minute cache-write rate (the dearest input rate) plus the
+// effort's whole max_tokens at the output rate; it must fit one call budget of at most 600 s
+// at the 128,000-tokens-an-hour floor and two worst-case turns of the run backstop.
+export const LOOP_KINDS = ["coordinator", "specialist", "installed"];
+const LOOP_LIMITS = {
+  max_input_tokens_per_turn: [1, 64000],
+  max_turns_per_run: [2, 16],
+  max_turns_per_coordinator_run: [1, 16],
+  max_tool_calls_per_turn: [1, 4],
+  max_tool_calls_per_run: [1, 40],
+  max_questions_per_run: [0, 2],
+  question_wait_hours: [1, 72],
+  wall_time_minutes: [1, 30],
+  specialist_default_run_minutes: [1, 480],
+  specialist_max_run_minutes: [1, 480],
+  tool_result_max_bytes: [1, 8192],
+};
+// modelCallBudgetMs (packages/identity/src/broker-protocol.ts) at an effort's max_tokens:
+// fence 10 s, count 15 s, first token 30 s, the floor rate and the close's second.
+export const loopCallBudgetMs = (maxOutputTokens) =>
+  10_000 + 15_000 + 30_000 + Math.ceil((maxOutputTokens * 3_600_000) / 128_000) + 1_000;
+function inspectLoopCatalogueVersion(entry, adapters) {
+  const errors = [];
+  const selections = [];
+  const fail = (message) => errors.push(`model catalogue v${entry.version}: ${message}`);
+  const efforts = new Map();
+  for (const effort of entry.efforts ?? []) {
+    const request = effort.request ?? {};
+    // No xhigh or max at launch: the send is non-streaming (ADR-0027 item 12).
+    if (!["low", "medium", "high"].includes(effort.key) || efforts.has(effort.key))
+      fail(`invalid loop effort ${effort.key}`);
+    if (
+      JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
+      JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||
+      JSON.stringify(request.output_config) !== JSON.stringify({ effort: effort.key }) ||
+      !isCount(effort.max_output_tokens) ||
+      !isCount(effort.expected_output_tokens) ||
+      effort.expected_output_tokens > effort.max_output_tokens
+    )
+      fail(`effort ${effort.key} must map to adaptive thinking and its own level`);
+    else if (loopCallBudgetMs(effort.max_output_tokens) > 600_000)
+      fail(`effort ${effort.key}: one call's budget exceeds 600 s`);
+    efforts.set(effort.key, effort);
+  }
+  if (efforts.size === 0) fail("no effort levels");
+  const limits = entry.limits ?? {};
+  for (const [key, [min, max]] of Object.entries(LOOP_LIMITS))
+    if (!Number.isInteger(limits[key]) || limits[key] < min || limits[key] > max)
+      fail(`loop limit ${key} must be ${min} to ${max}`);
+  if (limits.max_turns_per_coordinator_run > limits.max_turns_per_run)
+    fail("the Coordinator's turn limit exceeds the run's");
+  if (limits.specialist_default_run_minutes > limits.specialist_max_run_minutes)
+    fail("the specialist default run exceeds its maximum");
+  const caps = [
+    limits.run_cost_cap_usd,
+    limits.workspace_daily_cost_cap_usd,
+    limits.workspace_period_unrecovered_cost_cap_usd,
+  ];
+  let runCap = null;
+  if (!caps.every(isDecimal) || caps.some((cap) => scaled(cap, 12) === 0n))
+    fail("missing USD caps");
+  else {
+    runCap = scaled(limits.run_cost_cap_usd, 12);
+    if (scaled(limits.workspace_daily_cost_cap_usd, 12) < runCap)
+      fail("the daily cap is below the run cap");
+  }
+  const expected = entry.expected_turn ?? {};
+  if (
+    !isCount(expected.input_tokens) ||
+    !isCount(expected.cached_prefix_tokens) ||
+    expected.cached_prefix_tokens > expected.input_tokens ||
+    expected.input_tokens > (limits.max_input_tokens_per_turn ?? 0)
+  )
+    fail("the expected turn must fit the input cap");
+  const inputCap = limits.max_input_tokens_per_turn;
+  const models = new Map();
+  for (const model of entry.models ?? []) {
+    const price = model.rates_usd_per_million_tokens ?? {};
+    if (!KEY.test(model.key ?? "") || models.has(model.key)) fail(`invalid model key ${model.key}`);
+    models.set(model.key, model);
+    if (!adapters.has(model.provider))
+      fail(`${model.key} has no broker adapter for ${model.provider}`);
+    if (
+      typeof model.provider_model_id !== "string" ||
+      !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(model.provider_model_id) ||
+      /latest/.test(model.provider_model_id)
+    )
+      fail(`${model.key} has an unpinned provider model`);
+    const kinds = ["input", "output", "cache_write_5m", "cache_read"];
+    const priced =
+      JSON.stringify(Object.keys(price).sort()) === JSON.stringify([...kinds].sort()) &&
+      kinds.every((kind) => isDecimal(price[kind]));
+    if (!priced) {
+      fail(`${model.key} needs a rate for each token kind`);
+      continue;
+    }
+    // The cache write is the dearest input rate, and a read the cheapest (owner question 3).
+    if (
+      scaled(price.cache_write_5m, 6) < scaled(price.input, 6) ||
+      scaled(price.cache_read, 6) > scaled(price.input, 6)
+    )
+      fail(`${model.key}: cache rates out of order`);
+    const tier = model.rate_tier_max_input_tokens;
+    if (tier !== null && !isCount(tier)) fail(`${model.key} has no declared price tier`);
+    else if (isCount(tier) && isCount(inputCap) && inputCap > tier)
+      fail(`${model.key}: the input cap leaves its price tier`);
+    for (const [key, effort] of efforts) {
+      if (
+        !Number.isInteger(model.max_output_tokens) ||
+        effort.max_output_tokens > model.max_output_tokens
+      )
+        fail(`${model.key} at ${key} exceeds the model's output limit`);
+      if (!isCount(inputCap) || !isCount(effort.max_output_tokens)) continue;
+      // 10^-12 USD: a per-million rate scaled by 10^6 is the per-token price.
+      const worst =
+        BigInt(inputCap) * scaled(price.cache_write_5m, 6) +
+        BigInt(effort.max_output_tokens) * scaled(price.output, 6);
+      if (runCap !== null && worst * 2n > runCap)
+        fail(`${model.key} at ${key}: two worst-case turns exceed the run backstop`);
+      selections.push({
+        model: model.key,
+        effort: key,
+        worst_case_turn_usd: usd(worst),
+        call_budget_ms: loopCallBudgetMs(effort.max_output_tokens),
+      });
+    }
+  }
+  if (models.size === 0) fail("no models");
+  const profiles = entry.default_profiles ?? {};
+  if (JSON.stringify(Object.keys(profiles).sort()) !== JSON.stringify([...LOOP_KINDS].sort()))
+    fail("default profiles must name the Coordinator, specialists and installed agents");
+  for (const kind of LOOP_KINDS) {
+    const profile = profiles[kind] ?? {};
+    if (
+      JSON.stringify(Object.keys(profile).sort()) !== '["effort","model"]' ||
+      !models.has(profile.model) ||
+      !efforts.has(profile.effort)
+    )
+      fail(`the ${kind} default profile must be an entry of this version`);
+  }
+  return { errors, selections };
+}
+
 function inspectCatalogueVersion(entry, adapters) {
+  if (entry.run_shape === "agent_loop") return inspectLoopCatalogueVersion(entry, adapters);
+  if (entry.run_shape !== undefined)
+    return {
+      errors: [`model catalogue v${entry.version}: unknown run shape ${entry.run_shape}`],
+      selections: [],
+    };
   const errors = [];
   const selections = [];
   const fail = (message) => errors.push(`model catalogue v${entry.version}: ${message}`);
@@ -311,6 +469,29 @@ export function inspectModelPolicy(policy, registry) {
     data.stateful_features.length !== 0
   )
     fail("Unsupported model data/access claim");
+  // The loop's request fields (ADR-0027 item 4; PR 10): strict tools, auto (none on the final
+  // turn), no stream, and never a fallback, sampling, region or server-side feature.
+  const loop = policy.loop_request ?? {};
+  const neverSent = Array.isArray(loop.never_sent) ? loop.never_sent : [];
+  const sent = Array.isArray(loop.sent) ? loop.sent : [];
+  if (
+    gateway.loop_call_contract !== "ModelCall@2" ||
+    gateway.loop_result_contract !== "ModelResult@2" ||
+    gateway.profile_contract !== "ModelProfile@1" ||
+    loop.stream !== false ||
+    loop.strict_tools !== true ||
+    JSON.stringify(loop.tool_choice) !== '{"default":"auto","final_turn":"none"}' ||
+    JSON.stringify(loop.thinking) !== '{"type":"adaptive"}' ||
+    JSON.stringify(loop.tool_definition_fields) !==
+      '["name","description","input_schema","strict"]' ||
+    ["fallbacks", "temperature", "inference_geo", "stream", "mcp_servers", "container"].some(
+      (field) => !neverSent.includes(field),
+    ) ||
+    sent.some((field) => neverSent.includes(field)) ||
+    [...sent].sort().join() !==
+      "cache_control,max_tokens,messages,model,output_config,system,thinking,tool_choice,tools"
+  )
+    fail("model policy: the loop's sent and never-sent fields drifted");
   const selected = new Set(
     registry.providers.filter((p) => p.design_status === "selected").map((p) => p.id),
   );
@@ -328,13 +509,35 @@ export function inspectModelPolicy(policy, registry) {
   const versions = Array.isArray(catalogue.versions) ? catalogue.versions : [];
   const pinned = catalogue.published_digests ?? {};
   if (versions.length === 0) fail("model catalogue: no versions");
-  // Statuses run retired*, active?, proposed*, and versions count up from 1.
-  const order = versions.map((entry) => entry.status?.[0] ?? "?").join("");
-  if (!/^r*a?p*$/.test(order) || versions.some((entry) => !VERSION_STATUSES.includes(entry.status)))
-    fail("model catalogue: statuses must run retired, then at most one active, then proposed");
-  const active = versions.filter((entry) => entry.status === "active");
-  if ((catalogue.active_version ?? null) !== (active[0]?.version ?? null))
-    fail("model catalogue: active_version does not name the active version");
+  if (versions.some((entry) => !VERSION_STATUSES.includes(entry.status)))
+    fail("model catalogue: a version has an unknown status");
+  // Each run shape has its own active pointer (ADR-0027 item 4; PR 10): version 1 stays active
+  // for listings-run@1 while a loop version publishes. Within one shape, statuses run
+  // retired*, active?, proposed*; versions count up from 1 across both shapes.
+  if (Object.hasOwn(catalogue, "active_version"))
+    fail("model catalogue: active_version is replaced by active_versions, one per run shape");
+  const pointers = catalogue.active_versions;
+  if (
+    pointers === null ||
+    typeof pointers !== "object" ||
+    Array.isArray(pointers) ||
+    JSON.stringify(Object.keys(pointers).sort()) !== JSON.stringify([...RUN_SHAPES].sort())
+  )
+    fail(`model catalogue: active_versions must name exactly ${RUN_SHAPES.join(" and ")}`);
+  for (const shape of RUN_SHAPES) {
+    const own = versions.filter((entry) => runShapeOf(entry) === shape);
+    const order = own.map((entry) => entry.status?.[0] ?? "?").join("");
+    if (!/^r*a?p*$/.test(order))
+      fail(
+        `model catalogue: ${shape} statuses must run retired, then at most one active, then proposed`,
+      );
+    const active = own.filter((entry) => entry.status === "active");
+    const pointer = pointers?.[shape];
+    if (pointer !== null && !Number.isInteger(pointer))
+      fail(`model catalogue: active_versions.${shape} must be a version number or null`);
+    else if ((pointer ?? null) !== (active[0]?.version ?? null))
+      fail(`model catalogue: active_versions.${shape} does not name its active version`);
+  }
   const report = [];
   versions.forEach((entry, index) => {
     if (entry.version !== index + 1)
