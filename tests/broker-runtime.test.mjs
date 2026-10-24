@@ -30,13 +30,15 @@ import {
 } from "../packages/identity/src/broker-protocol.ts";
 import { brokerCapabilities } from "../apps/broker/src/capabilities.ts";
 import { createFakeRuntime } from "../apps/broker/src/runtime-fake.ts";
+import { createE2bRuntime, e2bPinnedTemplate } from "../apps/broker/src/runtime-e2b.ts";
 import { createRuntimeGateway } from "../apps/broker/src/runtime-gateway.ts";
 import { createVaultRuntimeLedger } from "../apps/broker/src/runtime-ledger.ts";
-import { vaultStatements } from "../apps/broker/src/vault.ts";
+import { createVaultKeyring, vaultStatements } from "../apps/broker/src/vault.ts";
 import { runtimeVaultStatements } from "../apps/broker/src/vault-statements-runtime.ts";
 import { computerProfile } from "../packages/policy/src/runtime-computer.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 import { makePng, makeXlsx } from "./fixtures/runtime-files.mjs";
+import { createE2bWire } from "./fixtures/e2b-wire.mjs";
 
 const e2bKey = () => "e2b_" + randomBytes(20).toString("hex");
 const login = JSON.parse(
@@ -96,15 +98,25 @@ async function held(pending, method = "runtimeExecute") {
 // and call key, settlement edges, holds raised by unknown outcomes, the sweep's list.
 function memoryLedger(
   events,
-  { refuse = null, leaseRefused = false, now = () => Date.now() } = {},
+  { refuse = null, leaseRefused = false, now = () => Date.now(), failToken = null } = {},
 ) {
   const ops = new Map();
   const keys = new Map();
   const holds = [];
+  // PR 8: the envd token's vault record, per operation: {token, destroyed: null | reason}.
+  const tokens = new Map();
+  const destroy = (operationId, reason) => {
+    const t = tokens.get(operationId);
+    if (t && t.destroyed === null) {
+      t.token = null;
+      t.destroyed = reason;
+    }
+  };
   const terminal = ["killed", "absent_verified", "not_created"];
   const ledger = {
     ops,
     holds,
+    tokens,
     async begin(request) {
       events.push(["ledger.begin", request.callKey]);
       if (leaseRefused) return { outcome: "lease_refused" };
@@ -122,6 +134,7 @@ function memoryLedger(
         deadlineAtMs: now() + 960_000,
         stale: false,
         pastGrace: false,
+        stopped: false,
       });
       keys.set(request.callKey, operationId);
       return { outcome: "begun", operationId, deadlineAtMs: now() + 960_000 };
@@ -141,6 +154,7 @@ function memoryLedger(
       if (status === "not_created" && o.status !== "sending") return false;
       if (status === "absent_verified" && !o.pastGrace) return false;
       o.status = status;
+      destroy(operationId, status === "killed" ? "sandbox_killed" : "sandbox_absent");
       return true;
     },
     async unknown(operationId, reason) {
@@ -149,9 +163,26 @@ function memoryLedger(
       if (!o || terminal.includes(o.status)) return false;
       o.status = "unknown_effect";
       o.reason = reason;
+      destroy(operationId, "sandbox_unknown");
       if (!holds.some((h) => h.operationId === operationId))
         holds.push({ operationId, reason, lifted: false });
       return true;
+    },
+    async tokenPut(operationId, token) {
+      events.push(["ledger.tokenPut", null]);
+      const o = ops.get(operationId);
+      if (failToken === "put" || !o || o.status !== "created" || tokens.has(operationId))
+        return false;
+      tokens.set(operationId, { token, destroyed: null });
+      return true;
+    },
+    async tokenGet(operationId) {
+      events.push(["ledger.tokenGet", null]);
+      const o = ops.get(operationId);
+      const t = tokens.get(operationId);
+      if (failToken === "get" || !o || o.status !== "created" || !t || t.destroyed !== null)
+        return null;
+      return t.token;
     },
     async open(limit) {
       events.push(["ledger.open", limit]);
@@ -166,6 +197,7 @@ function memoryLedger(
           deadlineAtMs: o.deadlineAtMs,
           stale: o.stale,
           pastGrace: o.pastGrace,
+          stopped: o.stopped,
         }));
     },
   };
@@ -314,13 +346,16 @@ test("the switch: off, a missing key, vault, adapter or template, and production
   assert.equal(production.computer, null);
 });
 
-test("the deployed broker composes no runtime adapter, no template and no qualification, never the fake", () => {
+test("the deployed broker composes the E2B adapter only, no template yet and no qualification, never the fake", () => {
   const index = readFileSync("apps/broker/src/index.ts", "utf8");
   assert.doesNotMatch(index, /runtime-fake/);
+  // PR 8: the E2B adapter over the platform fetch is the one provider; the template is the
+  // owner's pinned build (none yet), and nothing is qualified until PR 9.
   assert.match(
     index,
-    /createRuntimeGateway\(\{\n  ledger: \(vault\) => createVaultRuntimeLedger\(vault, runVaultTransaction\),\n  providers: Object\.freeze\(\{\}\),\n  now: \(\) => Date\.now\(\),\n  template: null,\n  qualified: false,\n\}\);/,
+    /createRuntimeGateway\(\{\n  ledger: \(vault\) => createVaultRuntimeLedger\(vault, runVaultTransaction\),\n  providers: Object\.freeze\(\{ e2b: createE2bRuntime\(\(request\) => fetch\(request\)\) \}\),\n  now: \(\) => Date\.now\(\),\n  template: e2bPinnedTemplate,\n  qualified: false,\n\}\);/,
   );
+  assert.equal(e2bPinnedTemplate, null);
   for (const file of [
     "runtime-gateway.ts",
     "runtime-ledger.ts",
@@ -446,15 +481,24 @@ test("the script: a URL, shop domain or email in it refuses the job before the l
 test("a job: the send mark first, one create, the files, the command, the outputs checked, always killed", async () => {
   const w = world();
   const result = JSON.parse(await w.execute(job()));
+  // PR 8: the envd token goes into its vault record before the job, and each call to the
+  // sandbox opens it (ledger.tokenGet); the settlement destroys it.
   assert.deepEqual(names(w.events), [
     "ledger.begin",
     "adapter.create",
     "ledger.created",
+    "ledger.tokenPut",
+    "ledger.tokenGet",
     "adapter.writeFile",
+    "ledger.tokenGet",
     "adapter.writeFile",
+    "ledger.tokenGet",
     "adapter.exec",
+    "ledger.tokenGet",
     "adapter.readFile",
+    "ledger.tokenGet",
     "adapter.readFile",
+    "ledger.tokenGet",
     "adapter.readFile",
     "adapter.kill",
     "ledger.settle",
@@ -790,7 +834,7 @@ test("the vault ledger: registered statements only, rows read strictly, failures
     Object.keys(runtimeVaultStatements).map(
       (k) => vaultStatements[k] === runtimeVaultStatements[k],
     ),
-    [true, true, true, true],
+    [true, true, true, true, true, true],
   );
   const sent = [];
   let reply = [];
@@ -918,6 +962,7 @@ test("the vault ledger: registered statements only, rows read strictly, failures
       deadline_at: "2026-10-23T10:16:00.000Z",
       stale: "true",
       past_grace: "false",
+      stopped: "false",
     },
     {
       operation_id: "bad",
@@ -927,6 +972,7 @@ test("the vault ledger: registered statements only, rows read strictly, failures
       deadline_at: "2026-10-23T10:16:00.000Z",
       stale: "true",
       past_grace: "false",
+      stopped: "false",
     },
     {
       operation_id: op,
@@ -936,6 +982,7 @@ test("the vault ledger: registered statements only, rows read strictly, failures
       deadline_at: "2026-10-23T10:16:00.000Z",
       stale: "true",
       past_grace: "false",
+      stopped: "false",
     },
   ];
   assert.deepEqual(await ledger.open(25), [
@@ -947,7 +994,314 @@ test("the vault ledger: registered statements only, rows read strictly, failures
       deadlineAtMs: Date.parse("2026-10-23T10:16:00.000Z"),
       stale: true,
       pastGrace: false,
+      stopped: false,
     },
   ]);
   assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeOperationsOpen, ["25"]]);
+  // PR 8: a row without `stopped` (0043's shape) is skipped, never guessed.
+  reply = [
+    {
+      operation_id: op,
+      provider: "e2b",
+      sandbox_ref: null,
+      status: "sending",
+      deadline_at: "2026-10-23T10:16:00.000Z",
+      stale: "true",
+      past_grace: "false",
+    },
+  ];
+  assert.deepEqual(await ledger.open(25), []);
+});
+
+test("PR 8: the envd token's vault record: sealed with the keyring, opened strictly, never in the clear", async () => {
+  const keyring = await createVaultKeyring(
+    "staging",
+    new Map([[1, randomBytes(32).toString("hex")]]),
+  );
+  const vault = Object.freeze({ keyring });
+  const sent = [];
+  let reply = [];
+  const transaction = async (_vault, budgetMs, body) => {
+    assert.ok(budgetMs <= 10_000);
+    return body(async (text, values) => {
+      sent.push([text, values]);
+      return typeof reply === "function" ? reply(text, values) : reply;
+    });
+  };
+  const ledger = createVaultRuntimeLedger(vault, transaction);
+  const op = randomUUID();
+  const token = "envd_" + randomBytes(24).toString("hex");
+  reply = [{ outcome: "stored" }];
+  assert.equal(await ledger.tokenPut(op, token), true);
+  const [text, values] = sent.at(-1);
+  assert.equal(text, runtimeVaultStatements.runtimeTokenPut);
+  assert.equal(values[0], op);
+  assert.equal(values[1], "1");
+  assert.match(values[2], /^[0-9a-f]{120}$/);
+  assert.match(values[3], /^[0-9a-f]+$/);
+  assert.ok(!JSON.stringify(sent).includes(token), "the token never travels in the clear");
+  // Opened only from an `active` row of its own operation; anything else is null.
+  const row = {
+    outcome: "active",
+    kek_version: "1",
+    wrapped_key: values[2],
+    sealed_value: values[3],
+  };
+  reply = [row];
+  assert.equal(await ledger.tokenGet(op), token);
+  assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeTokenGet, [op]]);
+  for (const r of [
+    [{ ...row, outcome: "unavailable" }],
+    [{ ...row, kek_version: "2" }],
+    [{ ...row, sealed_value: values[3].slice(0, -2) + (values[3].endsWith("00") ? "11" : "00") }],
+    [{ ...row, extra: 1 }],
+    [],
+  ]) {
+    reply = r;
+    assert.equal(await ledger.tokenGet(op), null);
+  }
+  // Another operation's id never opens this envelope (the additional data binds it).
+  reply = [row];
+  assert.equal(await ledger.tokenGet(randomUUID()), null);
+  // Refusals and failures are false; nothing is sent for a bad id or token.
+  const count = sent.length;
+  assert.equal(await ledger.tokenPut("bad", token), false);
+  assert.equal(await ledger.tokenPut(op, "short"), false);
+  assert.equal(await ledger.tokenGet("bad"), null);
+  assert.equal(sent.length, count);
+  reply = [{ outcome: "refused" }];
+  assert.equal(await ledger.tokenPut(op, token), false);
+  const broken = createVaultRuntimeLedger(vault, async () => {
+    throw Error("VAULT_OUTCOME_UNKNOWN");
+  });
+  assert.equal(await broken.tokenPut(op, token), false);
+  assert.equal(await broken.tokenGet(op), null);
+  // A vault without its keyring seals nothing.
+  const keyless = createVaultRuntimeLedger(Object.freeze({}), transaction);
+  assert.equal(await keyless.tokenPut(op, token), false);
+});
+
+// ---------------------------------------------------------------------------
+// Build order PR 8 (ADR-0029 items 3 and 9; migration 0047).
+
+test("PR 8: the envd token is stored in its vault record before the job, opened per call, destroyed with the kill", async () => {
+  const w = world();
+  const seen = [];
+  const result = JSON.parse(await w.execute(job()));
+  assert.equal(result.outcome, "completed");
+  const [[operationId, record]] = [...w.ledger.tokens.entries()];
+  assert.equal(record.token, null);
+  assert.equal(record.destroyed, "sandbox_killed");
+  assert.equal(w.ledger.ops.get(operationId).status, "killed");
+  // The token the sandbox calls carried is the create's, and it never reaches the result.
+  for (const c of w.fake.guest.commands) seen.push(c.sandboxRef);
+  assert.equal(seen.length, 1);
+  assert.doesNotMatch(JSON.stringify(result), /fake-envd-token/);
+  // Every unknown settlement destroys it too.
+  const u = world({
+    adapter: (fake, events) => ({
+      ...recorded(fake, events),
+      kill: async () => ({ outcome: "unknown" }),
+    }),
+  });
+  await u.execute(job());
+  assert.deepEqual(
+    [...u.ledger.tokens.values()].map((t) => t.destroyed),
+    ["sandbox_unknown"],
+  );
+});
+
+test("PR 8: a token that cannot be stored or opened stops the job; the sandbox is still killed", async () => {
+  for (const [failToken, code] of [
+    ["put", "token_unrecorded"],
+    ["get", "token_unavailable"],
+  ]) {
+    const w = world({ ledger: { failToken } });
+    const result = JSON.parse(await w.execute(job()));
+    assert.equal(result.outcome, "unknown", failToken);
+    assert.equal(result.code, code, failToken);
+    assert.ok(!names(w.events).includes("adapter.writeFile"), failToken);
+    assert.deepEqual(w.events.slice(-2), [
+      ["adapter.kill", null],
+      ["ledger.settle", "killed"],
+    ]);
+    assert.deepEqual(w.fake.alive(), []);
+    assert.equal(w.ledger.holds.length, 0);
+  }
+});
+
+test("PR 8: a broken reply holds the runtime until a person lifts it, even when the kill succeeds", async () => {
+  const broken = { outcome: "unknown", broken: true };
+  for (const step of ["writeFile", "exec", "readFile"]) {
+    const w = world({
+      adapter: (fake, events) => ({
+        ...recorded(fake, events),
+        [step]: async () => broken,
+      }),
+    });
+    const result = JSON.parse(await w.execute(job()));
+    assert.equal(result.outcome, "unknown", step);
+    assert.equal(result.code, "reply_invalid", step);
+    assert.deepEqual(w.events.slice(-3), [
+      ["ledger.unknown", "reply_invalid"],
+      ["adapter.kill", null],
+      ["ledger.settle", "killed"],
+    ]);
+    assert.equal(w.ledger.holds.length, 1, step);
+    assert.equal(w.ledger.holds[0].reason, "reply_invalid");
+    assert.deepEqual(w.fake.alive(), []);
+    // The hold refuses the next create until a person lifts it.
+    const next = JSON.parse(await w.execute(job({ callKey: "after-" + step.toLowerCase() })));
+    assert.deepEqual([next.outcome, next.code], ["refused", "runtime_held"]);
+  }
+  // A plain unknown (a timeout, a 5xx) ends the job without a hold.
+  const plain = world({
+    adapter: (fake, events) => ({
+      ...recorded(fake, events),
+      writeFile: async () => ({ outcome: "unknown" }),
+    }),
+  });
+  const result = JSON.parse(await plain.execute(job()));
+  assert.equal(result.code, "write_unknown");
+  assert.equal(plain.ledger.holds.length, 0);
+  // A broken create reply is recorded as reply_invalid (still never retried).
+  const create = world({
+    adapter: (fake, events) => ({
+      ...recorded(fake, events),
+      create: async () => ({ outcome: "unknown_effect", broken: true }),
+    }),
+  });
+  const created = JSON.parse(await create.execute(job()));
+  assert.deepEqual([created.outcome, created.code], ["unknown", "reply_invalid"]);
+  assert.deepEqual(create.events.at(-1), ["ledger.unknown", "reply_invalid"]);
+});
+
+test("PR 8: stops kill their scope's sandboxes at once; a stopped operation is never recorded unknown early", async () => {
+  // A sandbox left by a lost create, then a stop: killed now, not after the staleness.
+  const w = world();
+  w.fake.fault({ op: "create", outcome: "unknown_effect", created: true });
+  await w.execute(job());
+  const [op] = [...w.ledger.ops.keys()];
+  const lifted = w.ledger.holds.length;
+  w.ledger.ops.get(op).stopped = true;
+  assert.deepEqual(JSON.parse(await w.sweep()), {
+    schemaVersion: 1,
+    examined: 1,
+    killed: 1,
+    absentVerified: 0,
+    unknown: 0,
+    skipped: 0,
+  });
+  assert.equal(w.ledger.ops.get(op).status, "killed");
+  assert.deepEqual(w.fake.alive(), []);
+  assert.equal(w.ledger.holds.length, lifted);
+  // Stopped but not stale, and the provider shows nothing (yet) or cannot answer: skipped,
+  // with no ledger write; the stale pass reconciles it later.
+  for (const fault of [null, { op: "status", outcome: "unknown" }]) {
+    const s = world();
+    s.fake.fault({ op: "create", outcome: "unknown_effect" });
+    await s.execute(job());
+    const [id] = [...s.ledger.ops.keys()];
+    s.ledger.ops.get(id).stopped = true;
+    if (fault) s.fake.fault(fault);
+    const before = s.events.length;
+    const swept = JSON.parse(await s.sweep());
+    assert.equal(swept.skipped, 1);
+    assert.equal(swept.unknown, 0);
+    assert.deepEqual(names(s.events.slice(before)), ["ledger.open", "adapter.status"]);
+    assert.equal(s.ledger.ops.get(id).reason, "create_unknown");
+  }
+});
+
+test("PR 8: a stop's sweep cuts a running job off at its next call; no hold is left behind", async () => {
+  let world_ = null;
+  const w = world({
+    adapter: (fake, events) => {
+      const base = recorded(fake, events);
+      return {
+        ...base,
+        // While the command runs, a person stops the run and the sweep passes.
+        exec: async (...args) => {
+          const [id] = [...world_.ledger.ops.keys()];
+          world_.ledger.ops.get(id).stopped = true;
+          await world_.sweep();
+          return base.exec(...args);
+        },
+      };
+    },
+  });
+  world_ = w;
+  const result = JSON.parse(await w.execute(job()));
+  assert.equal(result.outcome, "unknown");
+  assert.equal(result.code, "exec_unknown");
+  const [[id, record]] = [...w.ledger.tokens.entries()];
+  assert.equal(w.ledger.ops.get(id).status, "killed");
+  assert.equal(record.destroyed, "sandbox_killed");
+  // No output was read after the stop, and the job's own kill found nothing to count.
+  assert.ok(!names(w.events).includes("adapter.readFile"));
+  assert.equal(w.ledger.holds.length, 0);
+  assert.deepEqual(w.fake.alive(), []);
+});
+
+test("PR 8: a job through the E2B adapter over E2B's recorded wire, end to end", async () => {
+  let now = Date.parse("2026-10-24T10:00:00.000Z");
+  const events = [];
+  const key = e2bKey();
+  const wire = createE2bWire({
+    credential: key,
+    now: () => now,
+    templates: ["morrow-computer-test-v1"],
+  });
+  const ledger = memoryLedger(events, { now: () => now });
+  const gateway = createRuntimeGateway({
+    ledger: () => ledger,
+    providers: Object.freeze({ e2b: createE2bRuntime((request) => wire.fetch(request)) }),
+    now: () => now,
+    template: "morrow-computer-test-v1",
+    qualified: false,
+  });
+  const env = brokerEnv("staging", { [runtimeSwitchVar]: "on", E2B_API_KEY: key });
+  const result = JSON.parse(
+    await gateway.runtimeExecute(
+      env,
+      "00000000-0000-4000-8000-0000000000aa",
+      1,
+      JSON.stringify(job()),
+      300_000,
+    ),
+  );
+  assert.equal(result.outcome, "completed");
+  assert.equal(result.stdout, "analysed 1 product\n");
+  assert.deepEqual(
+    result.outputs.map((o) => [o.name, o.type]),
+    [
+      ["chart", "png"],
+      ["table", "csv"],
+      ["book", "xlsx"],
+    ],
+  );
+  assert.deepEqual(wire.alive(), []);
+  assert.deepEqual(wire.violations, []);
+  const [operationId] = [...ledger.ops.keys()];
+  assert.equal(ledger.ops.get(operationId).status, "killed");
+  assert.equal(ledger.tokens.get(operationId).destroyed, "sandbox_killed");
+  const [sandbox] = [...wire.sandboxes.values()];
+  const text = JSON.stringify(result);
+  assert.ok(!text.includes(key) && !text.includes(sandbox.token) && !text.includes(sandbox.id));
+  // Every request went to E2B's two origins, without following anything, and the sandbox saw
+  // no key, token, URL or shop domain.
+  assert.ok(wire.requests.every((r) => r.redirect === "manual"));
+  const guest = JSON.stringify(wire.guest, (k, v) => (v instanceof Uint8Array ? [...v] : v));
+  assert.ok(!guest.includes(key) && !guest.includes(sandbox.token));
+  assert.doesNotMatch(guest, /https?:\/\/|myshopify\.com/);
+  assert.deepEqual(wire.guest.creates[0].metadata, { operation: operationId });
+  assert.equal(wire.guest.creates[0].internet, false);
+  // The sweep under cleanup_only, over the same wire: nothing left, nothing created.
+  const cleanup = brokerEnv("staging", { [runtimeSwitchVar]: "cleanup_only", E2B_API_KEY: key });
+  const creates = wire.requests.filter((r) => r.method === "POST" && r.path === "/v2/sandboxes");
+  await gateway.runtimeSweep(cleanup, 60_000);
+  assert.equal(
+    wire.requests.filter((r) => r.method === "POST" && r.path === "/v2/sandboxes").length,
+    creates.length,
+  );
 });
