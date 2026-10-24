@@ -1,36 +1,82 @@
-// The Settings frame (ADR-0032; the ConnectStore and SettingsActivity boards): a white
-// sub-navigation card beside every settings screen. Plan and credits, People and roles,
-// Notifications, Model default and Shopify connection are the route contract's own
-// destinations; their paths don't change. Activity sits here, under Settings and not in
-// the sidebar, and stays a labelled placeholder until the activity log has a route. The
-// frame only links: each screen's actions are checked by the server.
+// The Settings frame (ADR-0032; the ConnectStore, PlanCredits and SettingsActivity boards):
+// a white sub-navigation card beside every settings screen. It lists the board's pages in
+// order (Plan and credits, People and roles, Notifications, Email addresses, Shopify
+// connection, Activity, Model default) and ends with Stop all AI work, which opens Activity,
+// where the stop and its typed confirmation are. Activity sits here, under Settings, and
+// never in the sidebar. The frame only links: each screen's actions are checked by the
+// server.
 import { useId, type ReactNode } from "react";
 import { copy } from "../copy";
 import type { Id } from "../model";
 import { RouteLink } from "./controls";
 import { Icon, type IconName } from "./display";
 
+/** The Settings pages, in the board's order. */
+export type SettingsPage =
+  | "plan"
+  | "people"
+  | "notifications"
+  | "email"
+  | "shopify"
+  | "activity"
+  | "governance";
+/**
+ * Where each page lives in the route contract: a `settings_section` value, or null for the
+ * store connection screens (`connections`). The contract's `settings_section` has six
+ * values (people, governance, usage, billing, notifications, stores) and no `email` or
+ * `activity`: until it does (a route-contract change, T7 PR 16's open question 1), Email
+ * addresses uses `stores` (the shop's own addresses), Activity uses `governance` (the stops
+ * and the record of who did what), and M3's model default moves to `billing` (what a
+ * product may cost). One rename here re-homes each.
+ */
+export const settingsRoutes: Readonly<Record<SettingsPage, string | null>> = {
+  plan: "usage",
+  people: "people",
+  notifications: "notifications",
+  email: "stores",
+  shopify: null,
+  activity: "governance",
+  governance: "billing",
+};
+const icons: Readonly<Record<SettingsPage, IconName>> = {
+  plan: "credits",
+  people: "agents",
+  notifications: "bell",
+  email: "mail",
+  shopify: "store",
+  activity: "activity",
+  governance: "sliders",
+};
+
 export interface SettingsItem {
+  readonly page: SettingsPage;
   /** The item's key: a `settings_section` value, or `connections`. */
   readonly key: string;
   readonly route: "settings_section" | "connections";
   readonly icon: IconName;
   readonly label: string;
 }
-const section = (key: string, icon: IconName): SettingsItem => ({
-  key,
-  route: "settings_section",
-  icon,
-  label: copy.settings.sections[key]!,
+/** The board's order, each on its contract destination. */
+export const settingsItems: readonly SettingsItem[] = (
+  Object.keys(settingsRoutes) as SettingsPage[]
+).map((page) => {
+  const section = settingsRoutes[page];
+  return section === null
+    ? {
+        page,
+        key: "connections",
+        route: "connections",
+        icon: icons[page],
+        label: copy.settings.connection,
+      }
+    : {
+        page,
+        key: section,
+        route: "settings_section",
+        icon: icons[page],
+        label: copy.settings.sections[section]!,
+      };
 });
-/** The board's order. Usage and Stores have no screen of their own yet. */
-export const settingsItems: readonly SettingsItem[] = [
-  section("billing", "credits"),
-  section("people", "agents"),
-  section("notifications", "bell"),
-  section("governance", "sliders"),
-  { key: "connections", route: "connections", icon: "store", label: copy.settings.connection },
-];
 
 /** The item a route sits under: a section by its parameter, the store screens by route. */
 export function settingsCurrent(route: string, sectionParam: string | undefined): string | null {
@@ -80,16 +126,18 @@ export function SettingsNavigation({
             </RouteLink>
           </li>
         ))}
-        <li>
-          <span className="settings-link is-later">
-            <Icon name="activity" />
-            <span>
-              {copy.settings.activity}
-              <span className="visually-hidden">{copy.settings.activityLater}</span>
-            </span>
-          </span>
-        </li>
       </ul>
+      {/* The stop itself is on Activity, with what it stops and the typed confirmation. */}
+      <div className="settings-nav-stop">
+        <RouteLink
+          route="settings_section"
+          params={{ workspaceId, section: settingsRoutes.activity! }}
+          className="settings-link settings-link-stop"
+        >
+          <Icon name="stop" />
+          <span>{copy.settings.stopAll}</span>
+        </RouteLink>
+      </div>
     </nav>
   );
 }

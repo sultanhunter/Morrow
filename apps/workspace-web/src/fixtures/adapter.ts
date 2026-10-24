@@ -46,12 +46,15 @@ import {
   people,
 } from "./seed";
 import {
+  listingsOnIn,
   samplesComposedIn,
   scenarios,
+  teamViewerIn,
   uncomposedIn,
   unlinkedStoreIn,
   type ScenarioName,
 } from "./scenarios";
+import { createTeamFixture } from "./team";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -147,8 +150,9 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   const goal = (id: string) => seed.goals.find((g) => g.id === id);
   const at = () => new Date(Date.UTC(2026, 9, 16, 9, created)).toISOString();
   // M3 PR-1 fixture state: the Listings agent of the fixture store, and the model default.
+  // T7 PR 16: `stop_all` scenarios start with it on (enabled earlier, not stopped).
   const listings = {
-    installationId: null as string | null,
+    installationId: (listingsOnIn.includes(scenario) ? "inst-listings-0" : null) as string | null,
     status: "active" as "active" | "disabled",
     stopped: false,
     revision: 0,
@@ -181,17 +185,36 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       stop: listings.installationId !== null,
     },
   });
+  // T7 PR 16: who views Team in this scenario. The workspace model default (the Listings
+  // agent's choice) is the Owner's to change, as Team shows; Admins and members only see it.
+  const teamViewer = teamViewerIn[scenario] ?? "owner";
   const modelDefault = {
     model: "claude_sonnet_5_5",
     effort: "low",
     ceiling: 1,
     revision: null as number | null,
-    canRevise: true,
+    canRevise: teamViewer === "owner",
   };
   // M3 PR-2 fixture runs: an admitted run drafts at once (the fixture has no Workflow);
   // product:13 is "too long" and fails, as an input over the cap would.
   const runs: RunDetailView[] = [];
   const runId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  // T7 PR 16: Team, agent pages, Add agents, Settings, Shop knowledge and Files.
+  const teamGroups = createTeamFixture({
+    viewer: teamViewer,
+    empty: scenario === "empty",
+    solo: scenario === "team_solo",
+    teammateSavesFirst: scenario === "team_thinking_conflict",
+    notificationsSavedElsewhereFirst: scenario === "notifications_conflict",
+    isWorkspace: ws,
+    workspaceDefault: () => ({
+      model: modelDefault.model,
+      effort: modelDefault.effort,
+      revision: modelDefault.revision,
+    }),
+    reply,
+    command,
+  });
   // v1 PR 3 fixture reviews: one seeded proposal on task-titles (two products), plus one per
   // run that drafted. Decisions bind each proposal's fixed digest; an apply "writes" every
   // product at once (the fixture has no Shopify) and records its operations.
@@ -305,6 +328,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     reviews.get(proposalId) ??
     [...reviews.values()].find((r) => proposalId.startsWith(r.id + "-d"));
   return {
+    ...teamGroups,
     session: {
       startSignIn: () => reply("session.startSignIn", () => ok({ navigateTo: "/" })),
       signOut: () => reply("session.signOut", () => ok("ended" as const)),
@@ -914,6 +938,12 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       reviseDefault: (id, c) =>
         command("models.reviseDefault", c, () => {
           if (!ws(id)) return notFound;
+          if (!modelDefault.canRevise)
+            return {
+              kind: "denied",
+              message: "Only the Owner can change the default model.",
+              reference: null,
+            };
           if (c.body.expectedRevision !== modelDefault.revision)
             return {
               kind: "conflict",

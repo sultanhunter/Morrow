@@ -31,6 +31,7 @@ import type {
   TaskView,
   WorkspaceView,
 } from "./model";
+import { teamPortMethods, type LibraryPort, type SettingsPort, type TeamPort } from "./team-model";
 
 export type Outcome<T> =
   | { readonly kind: "ok"; readonly value: T; readonly replayed: boolean }
@@ -251,6 +252,10 @@ export interface WorkspacePort {
       }>,
     ): Promise<Outcome<{ readonly revision: number }>>;
   };
+  /** T7 PR 16: Team, agent pages and Add agents; Settings; Shop knowledge and Files. */
+  readonly team: TeamPort;
+  readonly settings: SettingsPort;
+  readonly library: LibraryPort;
   /**
    * ADR-0032 Home preview: sample sections with no backend (no contract, no route). The
    * HTTP build never composes it; the fixture build composes it only in its
@@ -298,6 +303,7 @@ export const portMethods = [
   "runs.listOfTask",
   "runs.get",
   "runs.reconcile",
+  ...teamPortMethods,
   "review.listPending",
   "review.get",
   "review.decide",

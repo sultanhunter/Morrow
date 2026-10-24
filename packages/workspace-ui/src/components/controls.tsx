@@ -206,12 +206,17 @@ export function Dialog({
       if (opener.current?.isConnected) opener.current.focus();
     }
   }, [open]);
-  useEffect(
-    () => () => {
-      if (ref.current?.open && opener.current?.isConnected) opener.current.focus();
-    },
-    [],
-  );
+  // A dialog removed while open (its parent stopped rendering it) leaves focus on the page
+  // body; focus returns to the opener. The element is read when mounted, since the ref is
+  // already detached when this runs; a removed element is the real unmount (StrictMode's
+  // rehearsal keeps it in the document).
+  useEffect(() => {
+    const dialog = ref.current;
+    return () => {
+      if (dialog && !dialog.isConnected && dialog.open && opener.current?.isConnected)
+        opener.current.focus();
+    };
+  }, []);
   return (
     <dialog
       ref={ref}

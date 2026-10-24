@@ -2,7 +2,7 @@
 // call index (and, where a reply depends on it, how often another method was called) to
 // a reply; `null` keeps the seed behaviour. Scripted, not simulated: there
 // are no permissions, digests or caps here; PR-2 proves those over HTTP.
-import type { Outcome, PortMethod } from "@morrow/workspace-ui";
+import type { Outcome, PersonRole, PortMethod } from "@morrow/workspace-ui";
 
 export const scenarioNames = [
   "ready",
@@ -49,6 +49,15 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "team_member",
+  "team_admin",
+  "team_add_uncertain",
+  "team_thinking_conflict",
+  "team_thinking_uncertain",
+  "team_solo",
+  "stop_all",
+  "stop_all_uncertain",
+  "notifications_conflict",
   "review_uncertain",
   "home_preview",
   "listings_enable_reread_failed",
@@ -75,6 +84,16 @@ const reads: readonly PortMethod[] = [
   "work.listMyOpenQuestions",
   "work.getQuestion",
   "work.getAnswer",
+  // T7 PR 16.
+  "team.overview",
+  "team.agent",
+  "team.catalogue",
+  "settings.plan",
+  "settings.emailAddresses",
+  "settings.notifications",
+  "settings.activity",
+  "library.knowledge",
+  "library.files",
 ];
 const creates: readonly PortMethod[] = [
   "work.createGoal",
@@ -317,6 +336,34 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // T7 PR 16: Team as a member (no change controls) and as an Admin (added agents only),
+  // the add confirmation's lost reply (Check again replays it), and a thinking change
+  // whose record moved on (the server's 409: reread).
+  team_member: {},
+  team_admin: {},
+  team_add_uncertain: {
+    "team.addConfirm": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // A one-person shop: adding an agent needs no teammate's review.
+  team_solo: {},
+  // Stop all AI work: the Listings agent is on; in the second, the first stop's reply is
+  // lost and Check again replays the same key.
+  stop_all: {},
+  stop_all_uncertain: {
+    "agents.listingsStop": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // The viewer's notifications are saved from another tab just before their first save
+  // here: the record moves on (the team fixture does it), so the save meets a real 409 and
+  // the reread shows the new choices.
+  notifications_conflict: {},
+  // A teammate changes how a helper thinks just before the viewer's first save: the record
+  // moves on (a new choice and revision; the team fixture does it), so the save meets a real
+  // 409 and only a save of the reread revision goes through.
+  team_thinking_conflict: {},
+  // A thinking change whose reply is lost: the dialog may close, and its marker stays.
+  team_thinking_uncertain: {
+    "team.reviseThinking": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
   // v1 PR 3 (review F2): the first applied product's outcome is unknown (the adapter's apply).
   review_uncertain: {},
   // ADR-0032: the Home board's sample sections, shown only where `samples.home` is
@@ -337,6 +384,13 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "work.listMyOpenQuestions": (call) =>
       call === 0 ? { kind: "unavailable", offline: true } : null,
   },
+};
+/** T7 PR 16: these scenarios start with the Listings agent on (Stop all AI work has a target). */
+export const listingsOnIn: readonly ScenarioName[] = ["stop_all", "stop_all_uncertain"];
+/** T7 PR 16: who views Team in each scenario (the Owner unless named). */
+export const teamViewerIn: Readonly<Partial<Record<ScenarioName, PersonRole>>> = {
+  team_member: "member",
+  team_admin: "admin",
 };
 /**
  * The default-off Home preview switch: `samples.home` is composed only in these

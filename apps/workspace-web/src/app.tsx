@@ -5,27 +5,38 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { routeTitle, workspaceRoutes, type RouteMatch } from "@morrow/contracts/routes";
 import {
   AccountScreen,
+  ActivityScreen,
+  AddAgentsScreen,
+  AgentScreen,
   AppShell,
   AskScreen,
   Button,
   ConnectionScreen,
   ConnectionsScreen,
   Dialog,
+  EmailAddressesScreen,
   EntryLayout,
+  FilesScreen,
   HomeScreen,
   InboxScreen,
   ModelDefaultScreen,
   NotFoundScreen,
+  NotificationsScreen,
+  PeopleRolesScreen,
+  PlanCreditsScreen,
   QuestionScreen,
   ReentryNotice,
   ReviewScreen,
   ServicesProvider,
   SettingsFrame,
+  SettingsHomeScreen,
+  ShopKnowledgeScreen,
   SignedOutScreen,
   SignInScreen,
   SignOutUnconfirmedScreen,
   StateView,
   TaskScreen,
+  TeamScreen,
   UnavailableDestination,
   WorkScreen,
   WorkspaceLoadFailedScreen,
@@ -612,14 +623,43 @@ function WorkspaceFrame({
         );
       case "connection":
         return <ConnectionScreen workspace={workspace} connectionId={params.connectionId!} />;
-      // M3 PR-1: the model default under Settings > Governance (the Listings agent card is
-      // on the connection screen above).
+      // T7 PR 16 (Sunrise): Team, an agent's page and Add agents.
+      case "agents":
+        return <TeamScreen workspace={workspace} />;
+      case "agent":
+        return <AgentScreen workspace={workspace} agentId={params.installationId!} />;
+      case "agent_store":
+        return <AddAgentsScreen workspace={workspace} releaseId={null} />;
+      case "agent_listing":
+        return <AddAgentsScreen workspace={workspace} releaseId={params.releaseId!} />;
+      case "knowledge":
+        return <ShopKnowledgeScreen workspace={workspace} />;
+      case "assets":
+        return <FilesScreen workspace={workspace} />;
+      case "settings":
+        return <SettingsHomeScreen workspace={workspace} />;
+      // Settings sections, each inside the shell's Settings frame below (`settingsItems` in
+      // components/settings-frame.tsx). The route contract has no `email` or `activity`
+      // section yet (T7 PR 16 brief, open question 1): Email addresses uses `stores`,
+      // Activity with Stop all AI work uses `governance`, and M3 PR-1's model default moves
+      // to `billing` (the Listings agent card stays on the connection screen).
       case "settings_section":
-        return params.section === "governance" ? (
-          <ModelDefaultScreen workspace={workspace} />
-        ) : (
-          <UnavailableDestination title={destinationTitle(match.id, params.section)} />
-        );
+        switch (params.section) {
+          case "usage":
+            return <PlanCreditsScreen workspace={workspace} />;
+          case "people":
+            return <PeopleRolesScreen workspace={workspace} />;
+          case "notifications":
+            return <NotificationsScreen workspace={workspace} />;
+          case "stores":
+            return <EmailAddressesScreen workspace={workspace} />;
+          case "governance":
+            return <ActivityScreen workspace={workspace} />;
+          case "billing":
+            return <ModelDefaultScreen workspace={workspace} />;
+          default:
+            return <UnavailableDestination title={destinationTitle(match.id, params.section)} />;
+        }
       default:
         return <UnavailableDestination title={destinationTitle(match.id)} />;
     }
@@ -719,6 +759,25 @@ export function guardPort(
     models: {
       list: watch(port.models.list.bind(port.models), first),
       reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
+    },
+    team: {
+      overview: watch(port.team.overview.bind(port.team), first),
+      agent: watch(port.team.agent.bind(port.team), first),
+      reviseThinking: watch(port.team.reviseThinking.bind(port.team), first),
+      catalogue: watch(port.team.catalogue.bind(port.team), first),
+      addDocument: watch(port.team.addDocument.bind(port.team), first),
+      addConfirm: watch(port.team.addConfirm.bind(port.team), first),
+    },
+    settings: {
+      plan: watch(port.settings.plan.bind(port.settings), first),
+      emailAddresses: watch(port.settings.emailAddresses.bind(port.settings), first),
+      notifications: watch(port.settings.notifications.bind(port.settings), first),
+      reviseNotifications: watch(port.settings.reviseNotifications.bind(port.settings), first),
+      activity: watch(port.settings.activity.bind(port.settings), first),
+    },
+    library: {
+      knowledge: watch(port.library.knowledge.bind(port.library), first),
+      files: watch(port.library.files.bind(port.library), first),
     },
     samples: { home: watch(port.samples.home.bind(port.samples), first) },
   };
