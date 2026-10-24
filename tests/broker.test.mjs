@@ -469,7 +469,9 @@ test("AC10: ApiBroker has exactly ten prototype methods, arity checks and a 404 
   ]);
   // Trust model v1: one class per caller, exactly its own methods. M2 PR-2 gives the
   // connector its three Shopify methods and M2 PR-3 the token's destruction; M2 PR-3 gives
-  // the orchestrator shopifyRead (one product under a run lease) and M3 PR-2 modelRespond.
+  // the orchestrator shopifyRead (one product under a run lease) and M3 PR-2 modelRespond;
+  // build order PR 7 the computer's runtimeExecute and runtimeSweep (held while the runtime
+  // switch is off, tests/broker-runtime.test.mjs).
   assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
     "constructor",
     "health",
@@ -484,6 +486,8 @@ test("AC10: ApiBroker has exactly ten prototype methods, arity checks and a 404 
     "health",
     "modelRespond",
     "neonLease",
+    "runtimeExecute",
+    "runtimeSweep",
     "shopifyRead",
   ]);
   assert.deepEqual(Object.keys(module).sort(), [
@@ -610,6 +614,31 @@ test("AC10: ApiBroker has exactly ten prototype methods, arity checks and a 404 
       ["RuntimeBroker", "shopifyRead", "INPUT_INVALID"],
       ["RuntimeBroker", "shopifyRead", "INPUT_INVALID"],
       ["ApiBroker", "shopifyRead", "INPUT_INVALID"],
+    ],
+  );
+  // Build order PR 7: the computer's two methods are the orchestrator's alone, each with its
+  // exact arity; with the runtime switch off (this env carries no MORROW_RUNTIME_SWITCH) a
+  // well-formed call holds RUNTIME_UNAVAILABLE.
+  for (const name of ["runtimeExecute", "runtimeSweep"]) {
+    assert.equal(typeof entry[name], "undefined", name);
+    assert.equal(typeof connector[name], "undefined", name);
+  }
+  logs.length = 0;
+  await failure(runtime.runtimeExecute(readLease, 1, "{}"));
+  await failure(runtime.runtimeExecute(readLease, 1, "{}", 60000, 1));
+  await failure(runtime.runtimeSweep());
+  await failure(runtime.runtimeSweep(30000, 1));
+  await failure(runtime.runtimeExecute(readLease, 1, "{}", 60000));
+  await failure(runtime.runtimeSweep(30000));
+  assert.deepEqual(
+    logs.map((line) => [JSON.parse(line).method, JSON.parse(line).code]),
+    [
+      ["runtimeExecute", "INPUT_INVALID"],
+      ["runtimeExecute", "INPUT_INVALID"],
+      ["runtimeSweep", "INPUT_INVALID"],
+      ["runtimeSweep", "INPUT_INVALID"],
+      ["runtimeExecute", "RUNTIME_UNAVAILABLE"],
+      ["runtimeSweep", "RUNTIME_UNAVAILABLE"],
     ],
   );
   await failure(entry.neonLease(neonLeaseNamespace(parsed, "morrow_runtime_executor")));

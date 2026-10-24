@@ -106,25 +106,76 @@ export const modelProviderVar = "MORROW_MODEL_PROVIDER";
 export const modelProviderAnthropic = "anthropic";
 /** An Anthropic Console API key (sk-ant-api03-…); never logged, never returned. */
 export const anthropicKeyPattern = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
+// Build order PR 7 (ADR-0029 items 3 and 10): the E2B API key, bound only to the broker and
+// required only while the reviewed runtime switch is not off. The switch is
+// docs/decisions/runtime-staging.json `switch` ("off", "cleanup_only" or "on"), committed
+// "off": while it is off the broker reads no runtime secret, runtimeExecute and runtimeSweep
+// answer BROKER_HELD (RUNTIME_UNAVAILABLE) before any input, database or provider access, and
+// no adapter is composed. Its runtime image is the broker's var MORROW_RUNTIME_SWITCH, exactly
+// "on" or "cleanup_only" while the switch is on or cleanup-only (cleanup-only reconciles and
+// kills, and creates nothing); any other value is off. Production has no switch until the
+// ADR-0007 item 9 custody ADR.
+export const brokerRuntimeSecrets: readonly string[] = Object.freeze(["E2B_API_KEY"]);
+export type BrokerRuntimeSwitch = "off" | "cleanup_only" | "on";
+export const runtimeSwitchVar = "MORROW_RUNTIME_SWITCH";
+export const runtimeSwitchValues: readonly Exclude<BrokerRuntimeSwitch, "off">[] = Object.freeze([
+  "on",
+  "cleanup_only",
+]);
+/** The one runtime provider ADR-0029 selects. */
+export const runtimeProviderE2b = "e2b";
+/** An E2B API key (e2b_…, E2B's documented shape); never logged, never returned. */
+export const e2bKeyPattern = /^e2b_[A-Za-z0-9]{20,128}$/;
 const brokerRequiredSecretsInProduction: readonly string[] = Object.freeze(
   brokerRequiredSecrets.filter((name) => !brokerVaultSecrets.includes(name)),
 );
-// The broker's exact `secrets.required` (development and staging: 14 with both switches off,
-// 16 with Stripe on, 15 with the model provider on, 17 with both; production: 12). Production
-// has neither switch: "on" there is refused.
+// The broker's exact `secrets.required` (development and staging: 14 with every switch off,
+// 16 with Stripe on, 15 with the model provider on, 15 with the runtime switch on or
+// cleanup-only, and each combination's sum; production: 12). Production has no switch: "on"
+// (or cleanup-only) there is refused.
 export function brokerRequiredSecretsFor(
   environment: "development" | "staging" | "production",
   stripe: BrokerStripeSwitch = "off",
   model: BrokerModelSwitch = "off",
+  runtime: BrokerRuntimeSwitch = "off",
 ): readonly string[] {
   if ((stripe !== "off" && stripe !== "on") || (environment === "production" && stripe === "on"))
     throw Error("BROKER_STRIPE_SWITCH_INVALID");
   if ((model !== "off" && model !== "on") || (environment === "production" && model === "on"))
     throw Error("BROKER_MODEL_SWITCH_INVALID");
+  if (
+    (runtime !== "off" && runtime !== "on" && runtime !== "cleanup_only") ||
+    (environment === "production" && runtime !== "off")
+  )
+    throw Error("BROKER_RUNTIME_SWITCH_INVALID");
   if (environment === "production") return brokerRequiredSecretsInProduction;
   const base = stripe === "on" ? brokerRequiredSecretsWithStripe : brokerRequiredSecrets;
-  return model === "on" ? Object.freeze([...base, ...brokerModelSecrets]) : base;
+  const withModel = model === "on" ? [...base, ...brokerModelSecrets] : base;
+  if (runtime === "off") return model === "on" ? Object.freeze(withModel) : base;
+  return Object.freeze([...withModel, ...brokerRuntimeSecrets]);
 }
+// The names a staging broker may hold beyond its required ones: the E2B key, placed ahead of
+// the runtime switch only by the owner's explicit choice (`staging:put-secret E2B_API_KEY
+// --while-runtime-off`). While the switch is off the broker never reads it; gate 6 and
+// secrets-status accept it present or absent. Development and production admit none.
+export function brokerOptionalSecretsFor(
+  environment: "development" | "staging" | "production",
+  runtime: BrokerRuntimeSwitch = "off",
+): readonly string[] {
+  if (runtime !== "off" && runtime !== "on" && runtime !== "cleanup_only")
+    throw Error("BROKER_RUNTIME_SWITCH_INVALID");
+  return environment === "staging" && runtime === "off" ? brokerRuntimeSecrets : Object.freeze([]);
+}
+// RuntimeBroker.runtimeExecute and runtimeSweep (build order PR 7; ADR-0029): an execute's
+// budget holds a create, the inputs, one 120 s exec, the outputs and the kill; a sweep
+// reconciles at most one batch of stale operations.
+export const runtimeGatewayLimits = Object.freeze({
+  executeBudgetMinMs: 60_000,
+  executeBudgetMaxMs: 600_000,
+  sweepBudgetMinMs: 30_000,
+  sweepBudgetMaxMs: 300_000,
+  sweepBatch: 25,
+});
 export const brokerLimits = Object.freeze({
   namespaceMaxBytes: 1024,
   selectorMaxBytes: 2048,
@@ -227,6 +278,22 @@ export interface RuntimeBrokerRpc {
     callJson: string,
     budgetMs: number,
   ): Promise<string>;
+  // Build order PR 7 (ADR-0029): the computer's one door. The lease is the run's; jobJson is
+  // RuntimeJob@1 (closed: a step key, a script, minimised extracts and declared outputs; no
+  // command, template, network, environment or limit); the result is a RuntimeResult@1
+  // string. The broker commits the operation's send mark in SQL before any create, never
+  // retries one, always kills, and returns only checked PNG, CSV and XLSX outputs. While the
+  // runtime switch is off (committed, docs/decisions/runtime-staging.json) both methods are
+  // BROKER_HELD before any input, database or provider access.
+  runtimeExecute(
+    leaseId: string,
+    generation: number,
+    jobJson: string,
+    budgetMs: number,
+  ): Promise<string>;
+  // Reconciles stale runtime operations by their metadata (kills leftovers; never creates);
+  // runs under "on" and "cleanup_only". The result counts only, no ids.
+  runtimeSweep(budgetMs: number): Promise<string>;
 }
 /**
  * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant (an RPC stub

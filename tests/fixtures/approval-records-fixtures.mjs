@@ -44,6 +44,8 @@ export const capabilitiesAfter0018 = Object.freeze([
   // only propose revoke; its row comes with the forward migration of its definer.
   "workspace.routine.revoke",
   "governance.mail_identity.revise",
+  // Build order PR 7 (ADR-0029 item 7): the computer's capability, not review-required.
+  "runtime.execution.use",
 ]);
 /** The catalogue as 0018 copies it, in catalogue order. */
 export const catalogueAt0018 = (catalogue) =>

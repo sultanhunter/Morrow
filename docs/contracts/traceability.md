@@ -121,3 +121,4 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | agents.release.evaluate | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D16 |
 | agents.release.publish | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D16 |
 | agents.release.revoke | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D16 |
+| runtime.execution.use | J14 | P12.T01, P12.T02 | P01.A01, P12.A01, P12.A04 | D17 |
