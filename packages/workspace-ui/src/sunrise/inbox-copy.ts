@@ -100,7 +100,6 @@ export const inboxCopy = {
       "Shopify’s answer was lost or unclear. Morrow won’t send the change again until it knows what happened. It checks the product again on its own, and you can check now.",
     failedBody: "Nothing changed in your store because of it.",
     settledBody: "Morrow has an answer for this change now.",
-    product: "Product",
     checks: (n: number) =>
       n === 0
         ? "Morrow hasn’t checked the product yet."

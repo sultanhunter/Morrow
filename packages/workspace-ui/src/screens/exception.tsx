@@ -8,7 +8,6 @@ import { inboxDate, type OperationDetailView } from "../inbox-model";
 import type { Id, WorkspaceView } from "../model";
 import { useRead, useServices } from "../services";
 import { RouteLink } from "../components/controls";
-import { RecordText } from "../components/display";
 import { outcomeState } from "../components/feedback";
 import { inboxCopy } from "../sunrise/inbox-copy";
 import { OperationList } from "./review";
@@ -48,9 +47,6 @@ function Result({
       <div className="card-head">
         <h2 id="exception-result-title">{d.resultTitle}</h2>
       </div>
-      <p className="muted">
-        {d.product} <RecordText>{o.productId}</RecordText>
-      </p>
       <OperationList ws={ws} operations={[o]} onChanged={onChanged} testId="exception-operation" />
       <p className="muted">
         {d.checks(view.readbacks.length)}

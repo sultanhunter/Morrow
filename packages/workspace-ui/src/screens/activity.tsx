@@ -124,7 +124,6 @@ const longDay = new Intl.DateTimeFormat("en-US", {
   month: "long",
   day: "numeric",
 });
-const shortDay = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 /** The day heading a record sits under, from the viewer's own clock. */
 export function activityDay(at: string, now: Date): string {
@@ -136,19 +135,18 @@ export function activityDay(at: string, now: Date): string {
   if (dayKey(date) === dayKey(yesterday)) return w.yesterday(longDay.format(date));
   return longDay.format(date);
 }
-function activityTime(at: string, today: boolean): string {
+/** The time of day: the day heading above it says which day. */
+function activityTime(at: string): string {
   const date = new Date(at);
-  if (Number.isNaN(date.getTime())) return at;
-  return today ? timeOfDay.format(date) : shortDay.format(date);
+  return Number.isNaN(date.getTime()) ? at : timeOfDay.format(date);
 }
 
-function Entry({ record, now }: { readonly record: ActivityRecordView; readonly now: Date }) {
+function Entry({ record }: { readonly record: ActivityRecordView }) {
   const line = describeActivity(record);
-  const today = dayKey(new Date(record.at)) === dayKey(now);
   return (
     <li className="sr-activity-row" data-kind={record.kind}>
       <span className="sr-activity-time">
-        <time dateTime={record.at}>{activityTime(record.at, today)}</time>
+        <time dateTime={record.at}>{activityTime(record.at)}</time>
       </span>
       {line.actor.kind === "morrow" ? (
         <AgentAvatar character="morrow" size={32} />
@@ -221,7 +219,7 @@ function ActivityList({ ws }: { readonly ws: Id }) {
               {shown
                 .filter((r) => activityDay(r.at, now) === day)
                 .map((r) => (
-                  <Entry key={r.id} record={r} now={now} />
+                  <Entry key={r.id} record={r} />
                 ))}
             </ol>
           </section>
