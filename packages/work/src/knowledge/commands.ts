@@ -530,9 +530,10 @@ async function pageDelete(
   if (replay) return replay;
   await allow(a, "workspace.knowledge.approve", "administer", knowledgeFields.approve);
   // A live page the person may see, or a stranded one (every tag they may not view is on a
-  // disconnected store: no one can view it again). The deletion path stays reachable for the
-  // latter (ADR-0031 item 4; review R2): the person holds administer on the workspace, decided
-  // above, and a deletion erases and shows nothing. Anything else is the same 404.
+  // disconnected store: no one can view it while that lasts). The deletion path stays
+  // reachable for the latter (ADR-0031 item 4; review R2): the person holds administer on the
+  // workspace, decided above, and a deletion erases and shows nothing. Anything else is the
+  // same 404.
   const row = one(await tx.run("knowledgePage", [g.params.pageId!]));
   if (!row) throw new WorkReject("not_found");
   const page = pageRowOf(row);
