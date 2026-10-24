@@ -631,6 +631,175 @@
     }
   },
   {
+    "id": "P01.T02a.record.connection_target",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": true,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "governance.connection.disconnect",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Disconnect the store from Morrow",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "connection",
+          "id": "connection_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.connection_target_storeless",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "governance.connection.disconnect",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Disconnect the store from Morrow",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": null,
+          "connectionId": "connection_a",
+          "kind": "connection",
+          "id": "connection_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.connection_target_no_connection",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "governance.connection.disconnect",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Disconnect the store from Morrow",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": null,
+          "kind": "connection",
+          "id": "connection_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.connection_target_extra_field",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "governance.connection.disconnect",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Disconnect the store from Morrow",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "connection",
+          "id": "connection_a",
+          "installationId": "installation_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
     "id": "P01.T02a.pause.valid",
     "kind": "schema",
     "selector": "capabilities-v1.1:ads.campaign.pause.input",

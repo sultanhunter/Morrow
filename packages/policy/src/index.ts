@@ -22,7 +22,9 @@ export {
 } from "./store-resource";
 export type { ListingFieldPath, StoreResource } from "./store-resource";
 export {
+  disconnectFields,
   storeLinkGrantTemplate,
+  storeLinkGrantTemplateV1,
   storeLinkIssuer,
   storeLinkTemplateId,
 } from "./store-link-template";

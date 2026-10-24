@@ -685,6 +685,25 @@ fixtureCases.push(
   fixtureCase("connections", "detail", `/w/${ws}/connections/conn-sample-1`, {
     widths: [1440, 390],
   }),
+  // v1 PR 2: "Disconnect store": the dialog (what happens, the reason, the reconnect note)
+  // and the disconnected connection.
+  fixtureCase("connections", "disconnect_dialog", `/w/${ws}/connections/conn-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Disconnect store" }).click();
+      await page.getByRole("heading", { name: "Disconnect this store from Morrow?" }).waitFor();
+    },
+  }),
+  fixtureCase("connections", "disconnected", `/w/${ws}/connections/conn-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Disconnect store" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Reason").fill("Moving to a new store");
+      await dialog.getByRole("button", { name: "Disconnect store" }).click();
+      await page.getByText("Disconnected in Morrow.").first().waitFor();
+    },
+  }),
   fixtureCase("connections", "handoff_confirm", handoffPath, {
     scenario: "connections_handoff",
     setup: async (page) => {

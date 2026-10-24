@@ -158,6 +158,9 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "begin_run_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_run_command('run.admit','${uuid}','${digest}')`,
     "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','1','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
     "cmd_runs_reconcile(text,text,text)": `SELECT outcome FROM morrow_work.cmd_runs_reconcile('${uuid}','${digest}','corr')`,
+    // v1 PR 2: "Disconnect store", every scalar and the record well-formed.
+    "begin_connection_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_connection_command('connection.disconnect','${uuid}','${digest}')`,
+    "cmd_store_disconnect(text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"record_probe","createdAt":"2026-10-23T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_store_disconnect('${uuid}','${digest}','corr','connection_probe',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex')) x`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -191,6 +194,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
         // M3 PR-1.
         "store_association(text)": "morrow_work.store_association('store_probe')",
         "agent_enable_document(text)": `morrow_work.agent_enable_document('${"a".repeat(64)}')`,
+        // v1 PR 2.
+        "connection_target(text)": "morrow_work.connection_target('connection_probe')",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(
@@ -556,11 +561,14 @@ test("P7: a lease selects one tenant; a forged, stale or foreign lease setting y
   const A = openLease(P.A, "run", "p7_run_a");
   const Y = openLease(P.Y, "run", "p7_run_y");
   // One taskless billing operation per tenant, written in each tenant's session context.
+  // operation_guard (0020) requires updated_at = created_at on insert, so both come from
+  // one clock reading: two clock_timestamp() calls can straddle a millisecond and fail the
+  // insert (hosted run 40055651915).
   for (const p of [P.A, P.Y])
     db.sql(
       asCommandRole(
         p,
-        `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) VALUES(${literal(p.org)},${literal(p.workspace)},'p7_operation',1,'stripe_write','governance.billing.manage','planned',${literal("f".repeat(64))},0,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`,
+        `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) SELECT ${literal(p.org)},${literal(p.workspace)},'p7_operation',1,'stripe_write','governance.billing.manage','planned',${literal("f".repeat(64))},0,stamp,stamp FROM (SELECT date_trunc('milliseconds',clock_timestamp()) AS stamp) clock;`,
         { end: "COMMIT" },
       ),
     );
