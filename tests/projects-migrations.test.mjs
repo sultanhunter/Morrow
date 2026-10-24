@@ -42,11 +42,17 @@ const body = (name) => {
   return sql.slice(start, sql.indexOf("$$", open + 2) + 2);
 };
 
-test("manifest: the last row, executeAs the work owner, its brief and digest, no prerequisites", () => {
+test("manifest: its row, executeAs the work owner, its brief and digest, no prerequisites", () => {
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
-  // The last row (0046 at integration; the no-gap rule is migration-history's).
-  assert.equal(row, manifest.migrations.at(-1));
+  // 0046 at integration; later links of the merge train append after it, never between
+  // (v1 PR 4's catalog-undo first; the no-gap rule is migration-history's).
+  assert.equal(row.sequence, 46);
+  assert.ok(
+    manifest.migrations
+      .slice(manifest.migrations.indexOf(row) + 1)
+      .every((m) => m.sequence > row.sequence),
+  );
   assert.deepEqual(
     [row.executeAs, row.reviewRef],
     ["morrow_work_owner", "docs/briefs/projects-backend.md"],
