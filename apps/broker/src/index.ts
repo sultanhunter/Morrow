@@ -15,6 +15,7 @@ import {
   brokerShopifyLaunchVerify,
   brokerShopifyWebhookVerify,
 } from "./shopify-install.js";
+import { brokerShopifyConnectionCheck } from "./shopify-health.js";
 import { brokerShopifyRead } from "./shopify-read.js";
 import { brokerShopifyProductApply, brokerShopifyProductReconcile } from "./shopify-write.js";
 import {
@@ -152,6 +153,8 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
 // webhook signature checks and the install's claim, exchange, identity read and vault
 // write. M2 PR-3 makes the webhook check record the delivery and adds the token's
 // destruction (shopifyRead is the api's and the orchestrator's, never the connector's).
+// v1 PR 5 adds the read-back of a live installation's granted scopes
+// (shopifyConnectionCheck, apps/broker/src/shopify-health.ts).
 export class ConnectorBroker extends WorkerEntrypoint<unknown> implements ConnectorBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -191,6 +194,13 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
     return arguments.length === 2
       ? brokerShopifyCredentialDestroy(this.env, installationId, reason)
       : brokerInputInvalid("shopifyCredentialDestroy", "ConnectorBroker");
+  }
+  // v1 PR 5 (ADR-0025 item 10): the read-back of a live installation's granted scopes (an id
+  // and a budget only).
+  shopifyConnectionCheck(installationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerShopifyConnectionCheck(this.env, installationId, budgetMs)
+      : brokerInputInvalid("shopifyConnectionCheck", "ConnectorBroker");
   }
 }
 

@@ -408,6 +408,52 @@ export async function readShopifyIdentity(
   return Object.freeze({ kind: "identity", shopId: match[1]!, domain, development });
 }
 
+// v1 PR 5 (ADR-0025 item 10): the installation's granted scopes, read back with its own token
+// (deliveries of app/scopes_update can arrive out of order). One fixed Admin GraphQL document
+// with no variables; the reply keeps only the scope handles.
+export const shopifyAccessScopesDocument =
+  "query AccessScopes { currentAppInstallation { accessScopes { handle } } }";
+export const shopifyAccessScopesMaxBytes = 16384;
+export type ShopifyAccessScopes =
+  | Readonly<{ kind: "scopes"; scopes: readonly string[] }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "unavailable" }>;
+/**
+ * The scopes Shopify holds for the app's installation: sorted, unique handles. `refused` is
+ * Shopify refusing the token (401: uninstalled or revoked); anything else that is not a
+ * well-formed answer (a transport failure, another status, a GraphQL error, a malformed or
+ * oversize reply, more than 64 handles) is `unavailable`, which records nothing.
+ */
+export async function readShopifyAccessScopes(
+  fetcher: ShopifyFetch,
+  shop: string,
+  token: string,
+  deadlineMs: number,
+  now: () => number = Date.now,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<ShopifyAccessScopes> {
+  const unavailable = Object.freeze({ kind: "unavailable" as const });
+  const reply = await shopifyAdminGraphql(
+    fetcher,
+    shop,
+    token,
+    shopifyAccessScopesDocument,
+    {},
+    deadlineMs,
+    now,
+    sleep,
+    shopifyAccessScopesMaxBytes,
+  );
+  if (reply.kind === "unauthorized") return Object.freeze({ kind: "refused" });
+  if (reply.kind !== "data") return unavailable;
+  const list = own(own(reply.data, "currentAppInstallation"), "accessScopes");
+  if (!Array.isArray(list) || list.length > 64) return unavailable;
+  const handles = list.map((entry) => own(entry, "handle"));
+  if (!handles.every((h): h is string => typeof h === "string" && /^[a-z][a-z_]{0,63}$/.test(h)))
+    return unavailable;
+  return Object.freeze({ kind: "scopes", scopes: Object.freeze([...new Set(handles)].sort()) });
+}
+
 /** The webhook signature: base64 HMAC-SHA256 of the raw body, compared in constant time. */
 export async function verifyShopifyWebhookHmac(
   secret: string,

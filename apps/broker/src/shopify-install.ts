@@ -51,7 +51,10 @@
 //      (AES-256-GCM; the additional data binds environment, tenant, credential, subject =
 //      installation, version and KEK version), then store the vault row and the identity
 //      install record together. A lost COMMIT acknowledgement is outcome_unknown; the
-//      merchant relaunches and the database reconciles.
+//      merchant relaunches and the database reconciles. v1 PR 5: a reinstall after an
+//      uninstall is a fresh install (new ids, born unlinked: a person links it again), and
+//      the prepare (shopify_install_prepare_v2) destroys the earlier installations' leftover
+//      tokens in this same transaction, so a new token is never stored beside an old one.
 // The offline token never leaves the broker, and nothing here logs.
 //
 // M2 PR-3: shopifyWebhookVerify also records the delivery. In one ingress transaction it
@@ -73,6 +76,7 @@ import {
   shopifyCredentialOutcomes,
   shopifyCredentialReasons,
   shopifyInstallationIdPattern,
+  shopifyInstallationStates,
   shopifyAppKeyPattern,
   shopifyDigestPattern,
   shopifyLimits,
@@ -129,13 +133,8 @@ export interface ShopifyBrokerDependencies {
 
 const exact = (pattern: RegExp, value: unknown): value is string =>
   typeof value === "string" && pattern.exec(value)?.[0] === value;
-const installationStates: readonly string[] = [
-  "none",
-  "unlinked",
-  "linked",
-  "suspended",
-  "uninstalled",
-];
+// v1 PR 5: the launch states, "reconnect" included (the protocol's own list).
+const installationStates: readonly string[] = shopifyInstallationStates;
 // The one database step of a launch or webhook gets at most this much.
 const readBudgetMs = 3000;
 // Ingress vault transactions at once per broker isolate (layer 3 of the header):

@@ -261,6 +261,12 @@ export interface ConnectorBrokerRpc {
   // M2 PR-3: destroys an ended installation's offline token, only with the end reason its
   // row records, and records the destruction on it (encodeShopifyCredentialResult).
   shopifyCredentialDestroy(installationId: string, reason: string): Promise<string>;
+  // v1 PR 5 (ADR-0025 item 10): reads a live installation's granted scopes back from Shopify
+  // with its own token and records what Shopify answered (the scopes, or that it refused the
+  // token). The installation id and a budget only; the closed result is
+  // encodeShopifyConnectionCheck's. The connector calls it only while the connection
+  // clean-up switch is on (docs/decisions/connection-cleanup-staging.json).
+  shopifyConnectionCheck(installationId: string, budgetMs: number): Promise<string>;
 }
 export interface RuntimeBrokerRpc {
   health(): Promise<boolean>;
@@ -600,14 +606,25 @@ export const shopifyShopPattern = /^[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com$/;
 export const shopifySecretPattern = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 export const shopifyDigestPattern = /^[a-f0-9]{64}$/;
 const workspacePattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-export type ShopifyInstallationState = "none" | "unlinked" | "linked" | "suspended" | "uninstalled";
-const installationStates: readonly string[] = [
+// v1 PR 5: "uninstalled" launches a reinstall (a new installation); "reconnect" is a live
+// installation that lacks a scope the app requests, or whose token Shopify refused, and
+// launches a re-authorisation (the Reconnect item's path).
+export type ShopifyInstallationState =
+  | "none"
+  | "unlinked"
+  | "linked"
+  | "suspended"
+  | "uninstalled"
+  | "reconnect";
+export const shopifyInstallationStates: readonly ShopifyInstallationState[] = Object.freeze([
   "none",
   "unlinked",
   "linked",
   "suspended",
   "uninstalled",
-];
+  "reconnect",
+]);
+const installationStates: readonly string[] = shopifyInstallationStates;
 export type ShopifyLaunchVerdict =
   | Readonly<{
       verdict: "verified";
@@ -817,6 +834,39 @@ export function decodeShopifyCredentialResult(text: unknown): ShopifyCredentialO
     throw invalid();
   return v.outcome as ShopifyCredentialOutcome;
 }
+// v1 PR 5 (ADR-0025 item 10): the read-back of a live installation's granted scopes.
+// observed: Shopify answered with the scopes, recorded; token_refused: Shopify refused the
+// token (401), recorded; stale: another token replaced the one read, nothing recorded;
+// not_applicable: the installation is not live, or holds no active token; unavailable:
+// Shopify or the vault did not answer clearly, nothing assumed (the next run asks again).
+export const shopifyConnectionCheckOutcomes = Object.freeze([
+  "observed",
+  "token_refused",
+  "stale",
+  "not_applicable",
+  "unavailable",
+] as const);
+export type ShopifyConnectionCheckOutcome = (typeof shopifyConnectionCheckOutcomes)[number];
+export function encodeShopifyConnectionCheck(outcome: ShopifyConnectionCheckOutcome): string {
+  const text = JSON.stringify({ schemaVersion: 1, outcome });
+  decodeShopifyConnectionCheck(text);
+  return text;
+}
+export function decodeShopifyConnectionCheck(text: unknown): ShopifyConnectionCheckOutcome {
+  const v = verdictJson(text, ["schemaVersion", "outcome"]);
+  if (
+    v.schemaVersion !== 1 ||
+    !(shopifyConnectionCheckOutcomes as readonly unknown[]).includes(v.outcome)
+  )
+    throw invalid();
+  return v.outcome as ShopifyConnectionCheckOutcome;
+}
+// v1 PR 5: the connection clean-up switch (docs/decisions/connection-cleanup-staging.json,
+// committed "off"). The connector's cron runs the read-backs, the 48-hour deletion and the
+// stuck-delivery close only while its var is exactly "on"; any other value is off. The
+// scope-change, reinstall and token re-drive paths do not depend on it.
+export const connectionCleanupVar = "MORROW_CONNECTION_CLEANUP";
+export const connectionCleanupOn = "on";
 
 // ---------------------------------------------------------------------------
 // M2 PR-3: shopifyRead (spine §4; ADR-0022 items 4 and 7). One fixed Admin GraphQL document

@@ -24,7 +24,8 @@ export type ConnectorPage =
   | "scopes_mismatch"
   | "uncertain"
   | "limited"
-  | "ineligible";
+  | "ineligible"
+  | "reconnect";
 const pages: Readonly<Record<ConnectorPage, readonly [number, string, string]>> = Object.freeze({
   invalid: [
     403,
@@ -68,6 +69,13 @@ const pages: Readonly<Record<ConnectorPage, readonly [number, string, string]>> 
     "Too many connection attempts. Wait a few minutes, then open the app again.",
   ],
   ineligible: [409, "Not available", "This store can't be connected right now."],
+  // v1 PR 5: a live connection that lacks a permission Morrow asks for, or whose access
+  // Shopify no longer accepts. Opening the app again from Shopify reconnects it.
+  reconnect: [
+    200,
+    "Reconnect",
+    "Morrow needs this store's permissions again. Open the app again from your Shopify admin to reconnect it. Paused agents stay paused until you resume them in Morrow.",
+  ],
 });
 
 export function connectorPage(

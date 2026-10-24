@@ -26,6 +26,26 @@
 //             destroyed again. The inbox row is the queue: no Queue resource exists. Then
 //             (M2 PR-3 review) the count of open privacy requests past their target or
 //             their 30-day due time, logged as PRIVACY_TARGET_MISSED / PRIVACY_DUE_MISSED.
+// v1 PR 5 ("Keep the store connection healthy"; ADR-0025 items 9 and 10; ADR-0031 item 3):
+//   launch    an uninstalled installation launches OAuth (a reinstall: a new installation,
+//             a new token, born unlinked, so only a person links it again); a live one that
+//             lacks a scope or whose token Shopify refused (reconnect) launches OAuth too,
+//             and the re-authorisation records the new token's scopes (the Reconnect item's
+//             path). A suspended installation (a person's disconnect) stays ineligible.
+//   webhooks  the applier is connector_inbox_apply_v2: app/scopes_update keeps the
+//             connection and its token, stops only the agents that need a missing scope and
+//             raises the Reconnect item; with the clean-up switch on it then asks the broker
+//             to read the granted scopes back (deliveries can arrive out of order) and
+//             reconciles again from what Shopify answered.
+//   cron      always: the open Reconnect items reconciled again (cleared once the scopes are
+//             back; an agent a person resumed while a scope is missing is stopped again).
+//             With the connection clean-up switch on (MORROW_CONNECTION_CLEANUP, committed
+//             off): the daily read-back of every live installation (a missed scope change, or
+//             a token Shopify refused: a missed uninstall is reconciled into a Reconnect
+//             item, never assumed), the 48-hour deletion of an installation whose shop/redact
+//             never completed (once, with its record; its token destroyed first), and the
+//             stuck-delivery close (logged INBOX_STUCK). All ids only; each step runs in its
+//             tenant from the row it names.
 // Ingress limits (M2 PR-2 review, layer 1 of apps/broker/src/shopify-install.ts; ADR-0019
 // items 6 and 8 applied to the second public Worker): every request that would reach the
 // broker is first counted per client address (CF-Connecting-IP, the api's P05.T01ab key),
@@ -37,6 +57,7 @@
 // address or a failed limiter fails closed (503) with one fixed-code
 // morrow_connector_guard line.
 import {
+  decodeShopifyConnectionCheck,
   decodeShopifyCredentialResult,
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
@@ -67,10 +88,16 @@ export interface ConnectorDependencies {
     | "shopifyInstallComplete"
     | "shopifyWebhookVerify"
     | "shopifyCredentialDestroy"
+    | "shopifyConnectionCheck"
   >;
   readonly database: ConnectorDatabase;
   /** The ingress limits; null or absent only in development (a lab without them). */
   readonly limiters?: Readonly<ConnectorLimiters> | null;
+  /**
+   * v1 PR 5: the connection clean-up switch (MORROW_CONNECTION_CLEANUP exactly "on");
+   * absent or false is off: no read-back, no 48-hour deletion, no stuck-delivery close.
+   */
+  readonly cleanup?: boolean;
 }
 // RPC and SQL budgets inside the platform's request time. The install RPC's own timer
 // adds installSlackMs to the broker's budget: the broker returns by its deadline (its last
@@ -89,6 +116,12 @@ export const connectorBudgets = Object.freeze({
   destroyMs: 4000,
   pendingMs: 3000,
   redriveMs: 60000,
+  // v1 PR 5: one read-back of an installation's scopes (the broker's two vault steps and
+  // the Shopify call) and the RPC's slack, one reconcile, one 48-hour deletion step.
+  checkMs: 8000,
+  checkSlackMs: 1500,
+  reconcileMs: 4000,
+  deletionMs: 6000,
 });
 /** A request's context: the response may return before work handed to waitUntil ends. */
 export type ConnectorContext = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
@@ -115,6 +148,7 @@ async function rpc<T>(start: () => Promise<T>, ms: number): Promise<T> {
 export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   const { configuration, broker, database } = deps;
   const limiters = deps.limiters ?? null;
+  const cleanup = deps.cleanup === true;
   const redirectUri = (appKey: string) => `${configuration.origin}/shopify/a/${appKey}/callback`;
 
   // One count for this request's address; "allowed" when no limiter is bound (development).
@@ -164,12 +198,18 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     const link = connectionsUrl(configuration.apiOrigin, verdict.workspaceId);
     if (verdict.installation === "linked")
       return connectorPage("connected", { shop: verdict.shop, link });
-    if (verdict.installation === "suspended" || verdict.installation === "uninstalled")
+    // A person's disconnect (suspended) needs the app uninstalled first. v1 PR 5: an
+    // uninstalled installation launches a reinstall, and reconnect a re-authorisation.
+    if (verdict.installation === "suspended")
       return connectorPage("ineligible", { shop: verdict.shop });
     if (statusOnly)
       return verdict.installation === "unlinked"
         ? connectorPage("installed_unlinked", { shop: verdict.shop, link })
-        : connectorPage("invalid");
+        : verdict.installation === "reconnect"
+          ? connectorPage("reconnect", { shop: verdict.shop, link })
+          : verdict.installation === "uninstalled"
+            ? connectorPage("ineligible", { shop: verdict.shop })
+            : connectorPage("invalid");
     const state = newOAuthState();
     let opened;
     try {
@@ -278,9 +318,45 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     }
     return false;
   }
+  // v1 PR 5: one reconcile of an installation's agent stops and Reconnect item, from its
+  // recorded state. Failures are the cron's (the open item is reconciled again).
+  async function reconcile(installationId: string): Promise<boolean> {
+    try {
+      const r = await database.healthReconcile(installationId, connectorBudgets.reconcileMs);
+      return r.outcome === "reconciled" || r.outcome === "ended";
+    } catch {
+      log("morrow_connector_health", { code: "RECONCILE_UNAVAILABLE" });
+      return false;
+    }
+  }
+  // v1 PR 5 (ADR-0025 item 10; the clean-up switch on): the broker reads the installation's
+  // granted scopes back with its own token and records what Shopify answered; then the
+  // reconcile. Nothing is assumed from an unclear answer.
+  async function readBack(installationId: string): Promise<"observed" | "refused" | "skipped"> {
+    let outcome;
+    try {
+      outcome = decodeShopifyConnectionCheck(
+        await rpc(
+          () => broker.shopifyConnectionCheck(installationId, connectorBudgets.checkMs),
+          connectorBudgets.checkMs + connectorBudgets.checkSlackMs,
+        ),
+      );
+    } catch {
+      log("morrow_connector_health", { code: "CHECK_UNAVAILABLE" });
+      return "skipped";
+    }
+    if (outcome !== "observed" && outcome !== "token_refused") {
+      if (outcome === "unavailable") log("morrow_connector_health", { code: "CHECK_UNAVAILABLE" });
+      return "skipped";
+    }
+    if (outcome === "token_refused") log("morrow_connector_health", { code: "TOKEN_REFUSED" });
+    await reconcile(installationId);
+    return outcome === "observed" ? "observed" : "refused";
+  }
   // Applies one recorded inbox row; when the applier reports the installation's token still
   // to destroy, destroys it, and a shop/redact waiting on that destruction is applied once
-  // more so its privacy request completes. Anything left is the cron's.
+  // more so its privacy request completes. Anything left is the cron's. v1 PR 5: a scope
+  // change keeps the token; with the clean-up switch on its scopes are then read back.
   async function apply(inboxId: string): Promise<"applied" | "pending" | "failed"> {
     for (let round = 0; round < 2; round++) {
       let applied;
@@ -296,6 +372,13 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
         applied.reason !== null;
       if (applied.outcome === "applied" || applied.outcome === "settled") {
         if (tokenPending) await destroy(applied.installationId!, applied.reason!);
+        if (
+          cleanup &&
+          applied.outcome === "applied" &&
+          applied.topic === "app/scopes_update" &&
+          applied.installationId !== null
+        )
+          await readBack(applied.installationId);
         return "applied";
       }
       if (applied.outcome !== "pending") {
@@ -349,10 +432,35 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     return connectorJson(200, { schemaVersion: 1, received: true });
   }
 
+  // v1 PR 5: one 48-hour deletion (ADR-0031 item 3): its handlers, then the token's
+  // destruction when it is still recorded as pending, then the deletion once more so its
+  // record completes. Anything left is the next cron's.
+  async function deletion(installationId: string): Promise<"applied" | "pending" | "failed"> {
+    for (let round = 0; round < 2; round++) {
+      let d;
+      try {
+        d = await database.deletionApply(installationId, connectorBudgets.deletionMs);
+      } catch {
+        log("morrow_connector_deletion", { code: "DELETION_UNAVAILABLE" });
+        return "failed";
+      }
+      if (d.outcome === "applied" || d.outcome === "settled") return "applied";
+      if (d.outcome !== "pending") {
+        log("morrow_connector_deletion", { code: "DELETION_" + d.outcome.toUpperCase() });
+        return "failed";
+      }
+      if (d.credential !== "pending" || !(await destroy(installationId, "uninstalled")))
+        return "pending";
+    }
+    return "pending";
+  }
+
   // The cron's re-drives (ids only, both cross-tenant): received inbox rows, then the tokens
   // of ended installations whose destruction is not yet recorded; then the privacy deadline
   // check (M2 PR-3 review; ADR-0022 item 14): open requests past their target or their
-  // 30-day due time, each logged with a fixed code an alert can match.
+  // 30-day due time, each logged with a fixed code an alert can match. v1 PR 5: then the
+  // open Reconnect items, and, with the clean-up switch on, the read-backs due, the 48-hour
+  // deletions due and the stuck deliveries.
   async function redrive(): Promise<Readonly<Record<string, number>>> {
     const deadline = Date.now() + connectorBudgets.redriveMs;
     const counts = {
@@ -363,6 +471,15 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       targetMissed: 0,
       dueMissed: 0,
       unavailable: 0,
+      notices: 0,
+      reconciled: 0,
+      checks: 0,
+      observed: 0,
+      refused: 0,
+      deletions: 0,
+      deleted: 0,
+      stuckClosed: 0,
+      stuck: 0,
     };
     let ids: readonly string[] = [];
     try {
@@ -403,6 +520,58 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     } catch {
       counts.unavailable++;
       log("morrow_connector_privacy", { code: "PRIVACY_CHECK_UNAVAILABLE" });
+    }
+    // v1 PR 5: the open Reconnect items, reconciled again from each installation's state.
+    let notices: readonly string[] = [];
+    try {
+      notices = await database.noticesDue(connectorBudgets.pendingMs);
+    } catch {
+      counts.unavailable++;
+    }
+    for (const id of notices) {
+      if (Date.now() > deadline) break;
+      counts.notices++;
+      if (await reconcile(id)) counts.reconciled++;
+    }
+    if (cleanup) {
+      // The daily read-back of every live installation (a missed scope change or uninstall
+      // is reconciled from what Shopify answers, never assumed).
+      let checks: readonly string[] = [];
+      try {
+        checks = await database.checksDue(connectorBudgets.pendingMs);
+      } catch {
+        counts.unavailable++;
+      }
+      for (const id of checks) {
+        if (Date.now() > deadline) break;
+        counts.checks++;
+        const read = await readBack(id);
+        if (read === "observed") counts.observed++;
+        else if (read === "refused") counts.refused++;
+      }
+      // The 48-hour deletions whose shop/redact never completed.
+      let deletions: readonly string[] = [];
+      try {
+        deletions = await database.deletionsDue(connectorBudgets.pendingMs);
+      } catch {
+        counts.unavailable++;
+      }
+      for (const id of deletions) {
+        if (Date.now() > deadline) break;
+        counts.deletions++;
+        if ((await deletion(id)) === "applied") counts.deleted++;
+      }
+      // Stuck deliveries: a scope change still received after 24 hours is closed (the
+      // read-back reconciles its scopes); every other topic is counted and logged only.
+      try {
+        const stuck = await database.inboxStuck(connectorBudgets.pendingMs);
+        counts.stuckClosed = stuck.closed;
+        counts.stuck = stuck.stuck;
+        if (stuck.stuck > 0)
+          log("morrow_connector_inbox", { code: "INBOX_STUCK", deliveries: stuck.stuck });
+      } catch {
+        counts.unavailable++;
+      }
     }
     log("morrow_connector_redrive", counts);
     return Object.freeze(counts);

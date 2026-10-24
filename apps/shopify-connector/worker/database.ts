@@ -3,12 +3,16 @@
 // for this request only, over the one pinned WebSocket endpoint of the binding. Each
 // transaction is BEGIN, the ADR-0020 D5 role preflight (the session and current user are
 // exactly the connector login, every attribute is off, it is a member of nothing), the
-// timeouts, one fixed statement and COMMIT. The login executes exactly five definers:
-// morrow_identity.connector_oauth_state_open (M2 PR-2) and, since M2 PR-3 (migration
-// 0037), the inbox applier morrow_work.connector_inbox_apply, the two ids-only re-drives
-// connector_inbox_pending and connector_credentials_pending, and the count-only privacy
-// deadline check connector_privacy_overdue. Every failure is CONNECTOR_SQL_UNAVAILABLE;
-// nothing is logged and the password never appears in an error.
+// timeouts, one fixed statement and COMMIT. The login calls these definers:
+// morrow_identity.connector_oauth_state_open (M2 PR-2); since M2 PR-3 (migration 0037) the
+// two ids-only re-drives connector_inbox_pending and connector_credentials_pending and the
+// count-only privacy deadline check connector_privacy_overdue; and since v1 PR 5
+// (connection-health-work) the inbox applier morrow_work.connector_inbox_apply_v2 (0037's
+// connector_inbox_apply stays executable, and _v2 calls it for every topic but a scope
+// change), connector_health_reconcile, the ids-only lists connector_checks_due,
+// connector_notices_due and connector_deletions_due, connector_deletion_apply and the
+// count-only connector_inbox_stuck. Every failure is CONNECTOR_SQL_UNAVAILABLE; nothing is
+// logged and the password never appears in an error.
 import { Client } from "@neondatabase/serverless";
 import {
   brokerLimits,
@@ -34,14 +38,27 @@ export const connectorSql = Object.freeze({
   idleTimeout: "SET LOCAL idle_in_transaction_session_timeout='5s'",
   stateOpen:
     "SELECT outcome,client_id,scopes FROM morrow_identity.connector_oauth_state_open($1,$2,$3)",
-  // M2 PR-3 (0037): the inbox applier and the two re-drives (ids only).
+  // M2 PR-3 (0037): the inbox applier and the two re-drives (ids only). v1 PR 5
+  // (connection-health-work): the applier is connector_inbox_apply_v2 (a scope change keeps
+  // the connection and its token; every other topic is 0037's applier, unchanged).
   inboxApply:
-    "SELECT outcome,topic,installation_id,credential,reason FROM morrow_work.connector_inbox_apply($1)",
+    "SELECT outcome,topic,installation_id,credential,reason FROM morrow_work.connector_inbox_apply_v2($1)",
   inboxPending: "SELECT inbox_id FROM morrow_work.connector_inbox_pending()",
   credentialsPending:
     "SELECT installation_id,reason FROM morrow_work.connector_credentials_pending()",
   // M2 PR-3 review: open privacy requests past their target and their due time (counts).
   privacyOverdue: "SELECT target_missed,due_missed FROM morrow_work.connector_privacy_overdue()",
+  // v1 PR 5 (connection-health-work): the reconcile of one installation (agent stops and the
+  // Reconnect item, from its recorded state), the clean-up jobs' ids-only lists, the 48-hour
+  // deletion of one installation and the stuck-delivery close (counts).
+  healthReconcile:
+    "SELECT outcome,notice,stopped,newly FROM morrow_work.connector_health_reconcile($1)",
+  checksDue: "SELECT installation_id FROM morrow_work.connector_checks_due()",
+  noticesDue: "SELECT installation_id FROM morrow_work.connector_notices_due()",
+  deletionsDue: "SELECT installation_id FROM morrow_work.connector_deletions_due()",
+  deletionApply:
+    "SELECT outcome,installation_id,credential,reason FROM morrow_work.connector_deletion_apply($1)",
+  inboxStuck: "SELECT closed,stuck FROM morrow_work.connector_inbox_stuck()",
   commit: "COMMIT",
   rollback: "ROLLBACK",
 });
@@ -91,9 +108,47 @@ export interface ConnectorDatabase {
     budgetMs: number,
   ): Promise<readonly Readonly<{ installationId: string; reason: ShopifyCredentialReason }>[]>;
   privacyOverdue(budgetMs: number): Promise<PrivacyOverdue>;
+  // v1 PR 5 (connection-health-work).
+  healthReconcile(installationId: string, budgetMs: number): Promise<HealthReconcileResult>;
+  checksDue(budgetMs: number): Promise<readonly string[]>;
+  noticesDue(budgetMs: number): Promise<readonly string[]>;
+  deletionsDue(budgetMs: number): Promise<readonly string[]>;
+  deletionApply(installationId: string, budgetMs: number): Promise<DeletionApplyResult>;
+  inboxStuck(budgetMs: number): Promise<InboxStuck>;
 }
 /** Open privacy requests past their target and past their due time, across tenants. */
 export type PrivacyOverdue = Readonly<{ targetMissed: number; dueMissed: number }>;
+/**
+ * v1 PR 5: one reconcile of an installation's agent stops and Reconnect item: what it did to
+ * the item (raised, revised, unchanged, cleared, none) and how many agents it names as
+ * stopped (and how many it stopped now).
+ */
+export type HealthReconcileResult = Readonly<{
+  outcome: "reconciled" | "ended" | "not_found" | "invalid" | "denied";
+  notice: "raised" | "revised" | "unchanged" | "cleared" | "none" | null;
+  stopped: number | null;
+  newly: number | null;
+}>;
+/** v1 PR 5: one 48-hour deletion step, with the token still to destroy (as inboxApply). */
+export type DeletionApplyResult = Readonly<{
+  outcome: "applied" | "pending" | "settled" | "ineligible" | "not_found" | "invalid" | "denied";
+  installationId: string | null;
+  credential: "pending" | "destroyed" | null;
+  reason: "uninstalled" | null;
+}>;
+/** v1 PR 5: stuck scope-change deliveries closed, and every delivery still stuck. */
+export type InboxStuck = Readonly<{ closed: number; stuck: number }>;
+const reconcileOutcomes: readonly string[] = ["reconciled", "ended", "not_found", "invalid", "denied"];
+const noticeActions: readonly string[] = ["raised", "revised", "unchanged", "cleared", "none"];
+const deletionOutcomes: readonly string[] = [
+  "applied",
+  "pending",
+  "settled",
+  "ineligible",
+  "not_found",
+  "invalid",
+  "denied",
+];
 const inboxIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const applyOutcomes: readonly string[] = [
   "applied",
@@ -304,6 +359,23 @@ export function createConnectorDatabase(
     if (!row || Object.keys(row).sort().join(",") !== names) throw unavailable();
     return row;
   };
+  // v1 PR 5: an ids-only list of installations (at most 20).
+  const idList = (budgetMs: number, statement: string) =>
+    transaction(budgetMs, async (send) => {
+      const rows = await send(statement);
+      if (rows.length > 20) throw unavailable();
+      return Object.freeze(
+        rows.map((row) => {
+          const r = columns(row, "installation_id");
+          if (
+            typeof r.installation_id !== "string" ||
+            !shopifyInstallationIdPattern.test(r.installation_id)
+          )
+            throw unavailable();
+          return r.installation_id;
+        }),
+      );
+    });
   return Object.freeze({
     inboxApply(inboxId: string, budgetMs: number): Promise<InboxApplyResult> {
       if (!inboxIdPattern.test(inboxId)) return Promise.reject(unavailable());
@@ -364,6 +436,79 @@ export function createConnectorDatabase(
             return Object.freeze({ installationId: r.installation_id, reason: r.reason });
           }),
         );
+      });
+    },
+    healthReconcile(installationId: string, budgetMs: number): Promise<HealthReconcileResult> {
+      if (!shopifyInstallationIdPattern.test(installationId)) return Promise.reject(unavailable());
+      return transaction(budgetMs, async (send) => {
+        const rows = await send(connectorSql.healthReconcile, [installationId]);
+        const r = columns(rows.length === 1 ? rows[0] : undefined, "newly,notice,outcome,stopped");
+        const count = (v: unknown) =>
+          v === null || (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 && v <= 32);
+        const done = r.outcome === "reconciled" || r.outcome === "ended";
+        if (
+          !reconcileOutcomes.includes(r.outcome as string) ||
+          (done
+            ? !noticeActions.includes(r.notice as string) ||
+              typeof r.stopped !== "number" ||
+              typeof r.newly !== "number"
+            : r.notice !== null || r.stopped !== null || r.newly !== null) ||
+          !count(r.stopped) ||
+          !count(r.newly)
+        )
+          throw unavailable();
+        return Object.freeze({
+          outcome: r.outcome as HealthReconcileResult["outcome"],
+          notice: r.notice as HealthReconcileResult["notice"],
+          stopped: r.stopped as number | null,
+          newly: r.newly as number | null,
+        });
+      });
+    },
+    checksDue(budgetMs: number) {
+      return idList(budgetMs, connectorSql.checksDue);
+    },
+    noticesDue(budgetMs: number) {
+      return idList(budgetMs, connectorSql.noticesDue);
+    },
+    deletionsDue(budgetMs: number) {
+      return idList(budgetMs, connectorSql.deletionsDue);
+    },
+    deletionApply(installationId: string, budgetMs: number): Promise<DeletionApplyResult> {
+      if (!shopifyInstallationIdPattern.test(installationId)) return Promise.reject(unavailable());
+      return transaction(budgetMs, async (send) => {
+        const rows = await send(connectorSql.deletionApply, [installationId]);
+        const r = columns(
+          rows.length === 1 ? rows[0] : undefined,
+          "credential,installation_id,outcome,reason",
+        );
+        const done = r.outcome === "applied" || r.outcome === "pending" || r.outcome === "settled";
+        if (
+          !deletionOutcomes.includes(r.outcome as string) ||
+          (done
+            ? r.installation_id !== installationId ||
+              (r.credential !== "pending" && r.credential !== "destroyed") ||
+              r.reason !== "uninstalled" ||
+              (r.outcome !== "pending" && r.credential !== "destroyed")
+            : r.installation_id !== null || r.credential !== null || r.reason !== null)
+        )
+          throw unavailable();
+        return Object.freeze({
+          outcome: r.outcome as DeletionApplyResult["outcome"],
+          installationId: r.installation_id as string | null,
+          credential: r.credential as DeletionApplyResult["credential"],
+          reason: r.reason as DeletionApplyResult["reason"],
+        });
+      });
+    },
+    inboxStuck(budgetMs: number): Promise<InboxStuck> {
+      return transaction(budgetMs, async (send) => {
+        const rows = await send(connectorSql.inboxStuck);
+        const r = columns(rows.length === 1 ? rows[0] : undefined, "closed,stuck");
+        const count = (v: unknown): v is number =>
+          typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+        if (!count(r.closed) || !count(r.stuck) || r.closed > 20) throw unavailable();
+        return Object.freeze({ closed: r.closed, stuck: r.stuck });
       });
     },
     privacyOverdue(budgetMs: number): Promise<PrivacyOverdue> {
