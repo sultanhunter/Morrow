@@ -252,9 +252,7 @@ export function createVaultRuntimeLedger(
       try {
         plaintext = await openVaultRecord(vault.keyring, tokenRef(operationId), envelope);
         const token = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(plaintext);
-        return tokenPattern.test(token)
-          ? Object.freeze({ outcome: "active", token })
-          : unavailable;
+        return tokenPattern.test(token) ? Object.freeze({ outcome: "active", token }) : unavailable;
       } catch {
         return unavailable;
       } finally {
