@@ -806,7 +806,11 @@ test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 10
   await write("toolu_n2", "Product 4242 needs care facts.", [
     { storeId: STORE, capability: "catalog.products.read" },
   ]);
-  const read = async (p) => (await send(open, p, "GET", `/agents/${INSTALLATION}/notebook`)).body;
+  const read = async (p) => {
+    const r = await send(open, p, "GET", `/agents/${INSTALLATION}/notebook`);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    return r.body;
+  };
   const a = await read(P.A);
   assert.deepEqual(
     a.entries.map((e) => e.text),

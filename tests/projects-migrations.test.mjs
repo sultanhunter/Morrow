@@ -42,11 +42,13 @@ const body = (name) => {
   return sql.slice(start, sql.indexOf("$$", open + 2) + 2);
 };
 
-test("manifest: the last row, executeAs the work owner, its brief and digest, no prerequisites", () => {
+test("manifest: its row, executeAs the work owner, its brief and digest, no prerequisites", () => {
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
-  // The last row (0046 at integration; the no-gap rule is migration-history's).
-  assert.equal(row, manifest.migrations.at(-1));
+  // 0046 at integration; later migrations follow it (PR 20's shop knowledge is 0047), and the
+  // no-gap rule is migration-history's.
+  assert.equal(row, manifest.migrations.find((m) => m.sequence === row.sequence));
+  assert.ok(manifest.migrations.every((m) => m === row || m.file !== row.file));
   assert.deepEqual(
     [row.executeAs, row.reviewRef],
     ["morrow_work_owner", "docs/briefs/projects-backend.md"],

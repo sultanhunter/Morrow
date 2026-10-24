@@ -14,7 +14,7 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "af2b005c8f4fbd2b6f142cec136558b855aca3aa25be7d44b7ad7b1d8a3423b5",
+    "docs/contracts/schemas/v1.1/core.schema.json": "ae61958d9114b18f9cc03e8bb407e64fdae3fbb969ee579367e562559c63b12d",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "4248429dfa207dbe56b6e21685b243519bfc77b3c8bbb1a87d9d62a7d4f59dfc",
     "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206"
   },
