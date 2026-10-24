@@ -733,6 +733,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   const decide = (p, id, body) => call(reviewOn, p, "POST", "/proposals/" + id + "/decision", body);
   async function approveAll(id, p = P.A) {
     const r = await review(p, id);
+    if (r.status !== 200 || !r.body?.proposal || !r.body.approval)
+      throw Error(
+        "UNDO_LAB_REVIEW_FAILED:" + JSON.stringify({ id, status: r.status, body: r.body }),
+      );
     const d = await decide(p, id, decision(r.body.proposal.digest, r.body.approval.revision));
     if (d.status !== 201) throw Error("UNDO_LAB_DECIDE_FAILED:" + JSON.stringify(d.body));
     return { proposalRef: d.body.proposalRef, approvalRef: d.body.approvalRef };
@@ -1009,6 +1013,20 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     await apply(P.A, X2, await approveAll(X2));
     op2 = ops(X2)[0].id;
     const requested = await undo(P.A, op2);
+    if (requested.status !== 201)
+      throw Error(
+        "UNDO_LAB_UNDO_FAILED:" +
+          JSON.stringify({
+            status: requested.status,
+            body: requested.body,
+            op: one(
+              `SELECT status,send_started_at::text AS sent FROM morrow_work.operations WHERE id=${literal(op2)}`,
+            ),
+            checks: db.rows(
+              `SELECT sequence,outcome,verdict,field_verdicts::text AS fields FROM morrow_work.operation_undo_checks WHERE operation_id=${literal(op2)} ORDER BY sequence`,
+            ),
+          }),
+      );
     const U2 = requested.body.proposalId;
     const refsU2 = await approveAll(U2);
     shop.edit(p2[0], { tags: ["merchant", "own"] });
