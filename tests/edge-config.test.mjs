@@ -39,7 +39,9 @@ import {
   edgeWorkersDev,
   orchestratorPackageAllowlist,
   resolvedEdgeConfig,
+  edgePlanDraftsPrerequisites,
   reviewedModelRecord,
+  reviewedPlanDraftsRecord,
   reviewedRuntimeRecord,
   reviewedStripeRecord,
   runWrangler,
@@ -48,6 +50,7 @@ import {
 } from "../scripts/edge.mjs";
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
+import { planDraftsSwitchAllowed } from "../packages/policy/src/projects/plan-draft.ts";
 
 // P04.T02a AC01, AC04, AC24 and the static half of AC22. Configuration is read
 // with the pinned wrangler (no account, credential or network).
@@ -2072,6 +2075,82 @@ test("M3 PR-2: switched on, the full model set is required and the orchestrator 
     const found = codes(await verify(tree(mutate), undefined, on));
     for (const code of expected)
       assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
+  }
+});
+
+// PR 18 (ADR-0034 item 10): the plan-drafts switch is committed off with its start routes
+// held, and edge:check refuses it on while the agent loop is off or before P05.T04b's
+// Ask-bound envelope exists (neither has a record yet, so both count as off).
+test("the plan-drafts switch: committed off and held; on is refused while the loop is off", async () => {
+  const committed = JSON.parse(readFileSync("docs/decisions/plan-drafts-staging.json", "utf8"));
+  assert.deepEqual(
+    { ...reviewedPlanDraftsRecord(committed) },
+    { switch: "off", start_routes: "held" },
+  );
+  assert.deepEqual({ ...edgePlanDraftsPrerequisites }, { agentLoop: "off", askEnvelope: false });
+  const on = { ...committed, switch: "on" };
+  assert.throws(() => reviewedPlanDraftsRecord(on), /EDGE_PLAN_DRAFTS_BEFORE_LOOP/);
+  assert.throws(
+    () => reviewedPlanDraftsRecord(on, { agentLoop: "on", askEnvelope: false }),
+    /EDGE_PLAN_DRAFTS_BEFORE_LOOP/,
+  );
+  assert.throws(
+    () => reviewedPlanDraftsRecord(on, { agentLoop: "off", askEnvelope: true }),
+    /EDGE_PLAN_DRAFTS_BEFORE_LOOP/,
+  );
+  assert.deepEqual(
+    { ...reviewedPlanDraftsRecord(on, { agentLoop: "on", askEnvelope: true }) },
+    { switch: "on", start_routes: "held" },
+  );
+  // The edge check and the policy rule agree on every combination.
+  for (const planDrafts of ["off", "on"])
+    for (const agentLoop of ["off", "on"])
+      for (const askEnvelope of [false, true]) {
+        const record = { ...committed, switch: planDrafts };
+        let edge = true;
+        try {
+          reviewedPlanDraftsRecord(record, { agentLoop, askEnvelope });
+        } catch {
+          edge = false;
+        }
+        assert.equal(edge, planDraftsSwitchAllowed({ planDrafts, agentLoop, askEnvelope }));
+      }
+  assert.deepEqual(
+    { ...reviewedPlanDraftsRecord({ ...committed, start_routes: "ready" }) },
+    { switch: "off", start_routes: "ready" },
+  );
+  for (const edit of [
+    (r) => (r.switch = true),
+    (r) => (r.start_routes = "open"),
+    (r) => delete r.start_routes,
+    (r) => (r.extra = 1),
+    (r) => (r.environment_kind = "production"),
+    (r) => (r.schema_version = 2),
+    (r) => (r.scope = null),
+  ]) {
+    const record = structuredClone(committed);
+    edit(record);
+    assert.throws(() => reviewedPlanDraftsRecord(record), /EDGE_STAGING_PLAN_DRAFTS_RECORD/);
+  }
+  // Through verifyEdgeConfig: the committed record passes; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "plan-drafts-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [value, expected] of [
+    [on, "EDGE_PLAN_DRAFTS_BEFORE_LOOP"],
+    [{ ...committed, switch: "yes" }, "EDGE_STAGING_PLAN_DRAFTS_RECORD"],
+    [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+  ]) {
+    const found = codes(
+      await verify(resolve("."), undefined, {
+        planDraftsPath: write("plan-drafts-staging.json", value),
+      }),
+    );
+    assert.deepEqual(found, [expected]);
   }
 });
 

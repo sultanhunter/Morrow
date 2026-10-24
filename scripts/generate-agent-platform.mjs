@@ -47,7 +47,9 @@ export const jcs = (value) =>
       : JSON.stringify(value);
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
-// ADR-0027 item 8: the Coordinator's fixed grant set, as tools.
+// ADR-0027 item 8: the Coordinator's fixed grant set, as tools, with plan.draft (ADR-0034
+// item 2 amends item 8; catalogue version 2). The launch subset and the plan-drafts switch
+// narrow what a Coordinator turn is offered (packages/policy/src/projects/plan-draft.ts).
 export const coordinatorToolNames = Object.freeze([
   "knowledge.search",
   "work.read",
@@ -56,6 +58,7 @@ export const coordinatorToolNames = Object.freeze([
   "task.create",
   "agent.route",
   "specialist.draft",
+  "plan.draft",
 ]);
 // ADR-0027 item 3: no tool takes SQL, a URL, a role, a store, a recipient, a sender, a
 // credential or a model. Field names that would carry one, anywhere in a tool's input.
@@ -359,7 +362,9 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
   });
   const coordinator = tools.filter((t) => t.contexts?.includes("coordinator")).map((t) => t.name);
   if (JSON.stringify([...coordinator].sort()) !== JSON.stringify([...coordinatorToolNames].sort()))
-    fail("the Coordinator's tools must be exactly ADR-0027 item 8's fixed set");
+    fail(
+      "the Coordinator's tools must be exactly ADR-0027 item 8's fixed set (with ADR-0034 item 2's plan.draft)",
+    );
   return errors;
 }
 

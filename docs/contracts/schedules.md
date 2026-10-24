@@ -10,6 +10,10 @@ Schemas: Schedule, AutomationMandate. Exact field types, nullability, required p
 
 Schedules preserve IANA timezone and define daylight-saving behavior, overlap policy, missed-run policy, maximum parallelism and bounded catchup. Activation requires current mandate. Default disabled until configuration. An active routine can emit work only inside its explicit stores/account scope and cannot manufacture approval. Deactivation stops new dispatch and reconciles active jobs.
 
+## Goal records (ADR-0033 item 8; PR 18)
+
+A routine or recurring task names its goal record (`workspace.routine.configure`'s `goalId`), and an alert also the goal's `key` (`goalKey`), so repeating work lives in its project, area or Quick tasks. Moving one is a person's act. A configure revision of an active routine leaves it `disabled` and never activates it; only `workspace.routine.activate` (`human_only`, ADR-0011 Q9's access-change gate) turns one on. A plan start creates an agent's repeating task as a routine configured disabled (ADR-0034 item 5(c)).
+
 ## Failure invariant
 
 A schedule burst does not create unbounded child tasks or duplicate a missed occurrence. Failures use ErrorEnvelope and must not leak inaccessible content. Current policy and resource checks apply to all reads, mutations and derived artifacts.

@@ -1,27 +1,27 @@
 {
   "schema_version": 3,
   "contract_version": "morrow.contracts.v1.1",
-  "definitions": 665,
+  "definitions": 722,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
-    "core-v1.1": 267,
-    "capabilities-v1.1": 36,
+    "core-v1.1": 319,
+    "capabilities-v1.1": 41,
     "billing-v1.1": 28
   },
-  "current_definitions": 376,
+  "current_definitions": 426,
   "current_billing_definitions": 35,
-  "capability_bodies": 236,
-  "event_types": 22,
+  "capability_bodies": 240,
+  "event_types": 23,
   "inputs": {
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "989eef55a980b5df7c027fc6bfdc1eaeb2e675779bd5df1748ee2ffe94e5bca1",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "cfdb9973160913993d1040eb91d6a7fad43989288c033f03e3164bf757980f56",
+    "docs/contracts/schemas/v1.1/core.schema.json": "3263f8d5d7778cb5f76d1756bdb54a52b4841341ad5131f1ad91cf77fee96e07",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "2166f78251ef2602510ee33be4e5c6d4250e20be940f41f6a65ca4ed0a89f682",
     "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206",
-    "docs/contracts/event-registry.json": "db4a4f3a1b8735cf1203a778ce861a22601e48125f6323356a2d23e228ed46a7"
+    "docs/contracts/event-registry.json": "3187243efde263c6de85f11bce2984ee818e48b4fb18d1a216c9473ef68d07ba"
   },
   "compiler": {
     "ajv": "8.20.0",
@@ -30,7 +30,7 @@
   },
   "output": {
     "path": "packages/contracts/src/generated/runtime-validators.mjs",
-    "sha256": "0910e7b2f99a5a3de2d96c4314dc7fbf072dd310e73e572b53ff2594fe4067ec"
+    "sha256": "03086d5b4911e1b26608995a1124c0abe0e928a630624254179ccf3929f8265f"
   },
   "browser_validators": {
     "SessionRotationResult": {

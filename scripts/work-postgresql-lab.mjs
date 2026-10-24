@@ -11,7 +11,10 @@ import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { createWorkApiHandler, workErrorResponse } from "../packages/work/src/http.ts";
 import { workStatements } from "../packages/work/src/sql.ts";
-import { validateDefinition } from "../packages/contracts/src/validation.ts";
+import {
+  validateCurrentDefinition,
+  validateDefinition,
+} from "../packages/contracts/src/validation.ts";
 import {
   asApi,
   asCommandRole,
@@ -348,6 +351,11 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     check("AC05:serialized", waiting);
   });
 
+  // Finish's code-computed results record (0046), as owner fixture SQL.
+  const finishResults = (goalId, revision) =>
+    db.workOwner(
+      `INSERT INTO morrow_work.goal_finish_results SELECT ${literal(P.A.org)},${literal(P.A.workspace)},${literal(goalId)},${revision},'achieved',c,morrow_work.sha256_text(c),${literal(randomUUID())},${literal(P.A.principal)},${literal(P.A.membership)},date_trunc('milliseconds',clock_timestamp()) FROM (SELECT '{"outcome":"achieved"}'::text AS c) x;`,
+    );
   await section("AC06", async () => {
     const statuses = {
       goal: ["draft", "active", "paused", "achieved", "cancelled"],
@@ -372,6 +380,9 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         const g = await goal(P.A, "Machine " + from + " " + to);
         let revision = 1;
         for (const step of path[from]) {
+          // Since PR 18 (0046) `achieved` needs Finish's results record at that revision,
+          // even for owner maintenance; the fixture writes one first.
+          if (step === "achieved") finishResults(g, revision + 1);
           db.workOwner(
             `UPDATE morrow_work.goals SET status=${literal(step)},revision=revision+1,updated_at=clock_timestamp() WHERE id=${literal(g)};`,
           );
@@ -487,11 +498,13 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
   });
 
   await section("AC07", async () => {
-    // draft→ready under a cancelled goal (owner maintenance cancels the goal).
+    // draft→ready under a cancelled goal (owner maintenance cancels the goal). Since PR 18
+    // (0046) a goal with an open task cannot be cancelled at all; the fixture lifts that
+    // guard for this one statement to keep proving the task-side guard.
     const g1 = await goal(P.A, "Guard ready");
     const t1 = await task(g1);
     db.workOwner(
-      `UPDATE morrow_work.goals SET status='cancelled',revision=revision+1,updated_at=clock_timestamp() WHERE id=${literal(g1)};`,
+      `BEGIN; ALTER TABLE morrow_work.goals DISABLE TRIGGER goal_kind_guard; UPDATE morrow_work.goals SET status='cancelled',revision=revision+1,updated_at=clock_timestamp() WHERE id=${literal(g1)}; ALTER TABLE morrow_work.goals ENABLE TRIGGER goal_kind_guard; COMMIT;`,
     );
     const ready = await send(P.A, "POST", "/tasks/" + t1 + "/status", {
       to: "ready",
@@ -798,17 +811,16 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         "AC10:V_reads_" + path.split("/")[1].split("?")[0] + "_" + reads.indexOf(path),
         r.status === 200,
       );
+      // Goals are the current Goal (v1.1, a declared superset of v1; ADR-0033 item 2).
       for (const item of r.body.items ?? [])
-        valid &&= validateDefinition(
-          "core",
-          path.startsWith("/goals")
-            ? "Goal"
-            : path.startsWith("/tasks") && !path.endsWith("questions")
-              ? "Task"
-              : "Question",
-          item,
-        );
-      if (r.body.goal) valid &&= validateDefinition("core", "Goal", r.body.goal);
+        valid &&= path.startsWith("/goals")
+          ? validateCurrentDefinition("Goal", item)
+          : validateDefinition(
+              "core",
+              path.startsWith("/tasks") && !path.endsWith("questions") ? "Task" : "Question",
+              item,
+            );
+      if (r.body.goal) valid &&= validateCurrentDefinition("Goal", r.body.goal);
       if (r.body.task) valid &&= validateDefinition("core", "Task", r.body.task);
       if (r.body.question) valid &&= validateDefinition("core", "Question", r.body.question);
     }

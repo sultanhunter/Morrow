@@ -196,9 +196,9 @@ Trace: J01; P14.T01, P17.T01; P01.A01, P14.A01. Complete domain workflow in stan
 
 Configure a disabled schedule and bounded mandate. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
 
-Input: installationId: Id; schedule: ScheduleRef; mandate: MandateRef. Output: routineId: Id; revision: Revision.
+Input: installationId: Id; schedule: ScheduleRef; mandate: MandateRef; goalId: Id; goalKey: NullableGoalKey. Output: routineId: Id; revision: Revision.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.routine.configure. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: trigger, timezone, overlap policy, mandate. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.routine.configure. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: trigger, timezone, overlap policy, mandate, goal record. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
 
 Retention: R02. Verification: Configuration does not activate background authority. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -311,6 +311,30 @@ Authority: human_or_bounded_installation_with_explicit_capability_grant; explici
 Retention: R02. Verification: The mandate admits no run after revocation, unclaimed approvals of its proposals are void and its running run ends; a claimed operation still finishes and reconciles. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
 Trace: J01; P05.T04, P12.T04; P01.A01, P05.A03. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.goal.revise
+
+Revise a project's goal record. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: goalId: Id; expectedRevision: Revision; objective: GoalObjective; dueAt: NullableUtcTime; successCriteria: GoalCriteria. Output: revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.goal.revise. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: objective, end date, targets, check questions, assistant. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: Only a person changes a goal record, within 3 measured goals; no tool or model writes a target, date or value. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P06.T01, P07.T03, P14.T02; P01.A01, P06.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.goal.measure.record
+
+Record a hand check of a measured goal. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: goalId: Id; key: GoalKey; productId: ListingProductId; assistant: GoalAssistant; answers: GoalCheckAnswers. Output: valueId: Id; counted: Boolean.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.goal.measure.record. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: goal, product row, assistant, answers. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: A value is append-only and server-computed; a check in another assistant never counts. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P06.T01, P10.T02; P01.A01, P06.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
 ## Catalog
 

@@ -4,6 +4,7 @@ import { billingStatements } from "./billing/sql.js";
 import { catalogStatements } from "./catalog/sql.js";
 import { connectionStatements } from "./connections/sql.js";
 import { reviewStatements } from "./review/sql.js";
+import { projectStatements } from "./projects/sql.js";
 import { runStatements } from "./runs/sql.js";
 import { spineStatements } from "./spine-sql.js";
 
@@ -23,7 +24,7 @@ const micros = (column: string) => `(extract(epoch FROM ${column})*1000000)::big
 const after = (alias: string, a: number, b: number) =>
   `($${a}::text IS NULL OR ${alias}.created_at>timestamptz 'epoch'+($${a}::text||' microseconds')::interval OR (${alias}.created_at=timestamptz 'epoch'+($${a}::text||' microseconds')::interval AND ${alias}.id::text COLLATE "C">$${b}::text COLLATE "C"))`;
 
-const goalColumns = `g.id::text AS id,g.organization_id::text AS organization_id,g.workspace_id::text AS workspace_id,g.revision::text AS revision,g.status,g.objective,g.scope::text AS scope,g.success_criteria::text AS success_criteria,g.owner_principal_id::text AS owner_principal_id,g.owner_membership_id::text AS owner_membership_id,${utc("g.created_at")} AS created_at,${utc("g.updated_at")} AS updated_at,${micros("g.created_at")} AS cursor_us,COALESCE((SELECT jsonb_agg(t.id::text ORDER BY t.created_at,t.id::text COLLATE "C") FROM morrow_work.tasks t WHERE t.organization_id=g.organization_id AND t.workspace_id=g.workspace_id AND t.goal_id=g.id),'[]'::jsonb)::text AS task_ids`;
+const goalColumns = `g.id::text AS id,g.organization_id::text AS organization_id,g.workspace_id::text AS workspace_id,g.revision::text AS revision,g.status,g.objective,g.scope::text AS scope,g.success_criteria::text AS success_criteria,${utc("g.due_at")} AS due_at,g.area_template_id,g.owner_principal_id::text AS owner_principal_id,g.owner_membership_id::text AS owner_membership_id,${utc("g.created_at")} AS created_at,${utc("g.updated_at")} AS updated_at,${micros("g.created_at")} AS cursor_us,COALESCE((SELECT jsonb_agg(t.id::text ORDER BY t.created_at,t.id::text COLLATE "C") FROM morrow_work.tasks t WHERE t.organization_id=g.organization_id AND t.workspace_id=g.workspace_id AND t.goal_id=g.id),'[]'::jsonb)::text AS task_ids`;
 const taskColumns = `t.id::text AS id,t.organization_id::text AS organization_id,t.workspace_id::text AS workspace_id,t.revision::text AS revision,t.goal_id::text AS goal_id,t.status,t.objective,t.scope::text AS scope,t.initiator_principal_id::text AS initiator_principal_id,t.initiator_membership_id::text AS initiator_membership_id,t.owner_principal_id::text AS owner_principal_id,t.owner_membership_id::text AS owner_membership_id,${utc("t.created_at")} AS created_at,${utc("t.updated_at")} AS updated_at,${micros("t.created_at")} AS cursor_us`;
 const questionColumns = `q.id::text AS id,q.organization_id::text AS organization_id,q.workspace_id::text AS workspace_id,q.revision::text AS revision,q.task_id::text AS task_id,q.status,q.prompt,q.respondent_principal_id::text AS respondent_principal_id,a.id::text AS answer_id,a.body_digest::text AS answer_digest,a.answered_by_principal_id::text AS answered_by_principal_id,a.answered_by_membership_id::text AS answered_by_membership_id,${utc("q.created_at")} AS created_at,${utc("q.updated_at")} AS updated_at,${micros("q.created_at")} AS cursor_us`;
 const questionFrom = `morrow_work.questions q LEFT JOIN morrow_work.question_answers a ON a.organization_id=q.organization_id AND a.workspace_id=q.workspace_id AND a.question_id=q.id`;
@@ -83,5 +84,7 @@ export const workStatements = Object.freeze({
   ...connectionStatements,
   // v1 PR 3: the review sources, the claim, the dispatch check and the operation reads.
   ...reviewStatements,
+  // PR 18: the goal and plan-start routes (migration 0046).
+  ...projectStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

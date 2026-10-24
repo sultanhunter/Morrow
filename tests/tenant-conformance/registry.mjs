@@ -315,6 +315,23 @@ export const workTables = Object.freeze({
     policies: ["broker_runtime"],
     content: "none",
   },
+  // PR 18 (0046, ADR-0033 and ADR-0034). A project names its goal record and a title people
+  // write; values are numbers, codes and read tags (the work API filters them per viewer);
+  // Finish's results are keys and health codes (never a number); a card's revisions and a start
+  // document hold text people and Morrow write (titles, steps, "Done when").
+  projects: { class: "tenant_readable", parents: ["goals"], content: "workspace" },
+  goal_measure_values: { class: "tenant_readable", parents: ["goals"], content: "none" },
+  goal_finish_results: { class: "tenant_readable", parents: ["goals"], content: "none" },
+  plan_draft_revisions: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    content: "workspace",
+  },
+  plan_start_documents: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    content: "workspace",
+  },
 });
 
 // API functions: SECURITY DEFINER, owned by the command role, EXECUTE for the api
@@ -674,6 +691,53 @@ export const workFunctions = Object.freeze({
   "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },
   "catalog_item_matches(jsonb,jsonb)": { kind: "helper", grantees: [] },
   "readback_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  // PR 18 (0046). Pure functions of the CHECKs.
+  "goal_time(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "valid_goal_measure(jsonb,timestamp with time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "valid_goal_criteria(jsonb,timestamp with time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "valid_project_criteria(jsonb,timestamp with time zone,text)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "valid_read_tags(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "valid_check_answers(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "goal_kind_guard()": { kind: "trigger", grantees: [] },
+  "project_guard()": { kind: "trigger", grantees: [] },
+  "plan_draft_guard()": { kind: "trigger", grantees: [] },
+  "plan_start_document_guard()": { kind: "trigger", grantees: [] },
+  // Revisable owner helpers: the 200-task cap's count (an area or Quick tasks record counts
+  // only tasks not ended) and a hand check's read tags (the linked stores' catalogue tag).
+  "goal_task_count(text,text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "hand_check_read_tags(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  // The goal and plan-start commands.
+  "begin_project_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "plan_start_document(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_goal_revise(text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "goal.revise",
+  },
+  "cmd_goal_check(text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "goal.check",
+  },
+  "cmd_plan_start_document(text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "plan.start_document",
+  },
+  "cmd_plan_start(text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "plan.start",
+  },
 });
 // The identity bridges (0014, 0017): definers owned by the identity owner, EXECUTE
 // for the command role only.

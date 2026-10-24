@@ -157,6 +157,13 @@
       "payloadDefinition": "EmptyEventPayload",
       "producer": "P11.T05",
       "since": "1.1"
+    },
+    {
+      "eventType": "goal.revised",
+      "aggregateType": "goal",
+      "payloadDefinition": "EmptyEventPayload",
+      "producer": "P06.T01, P14.T02",
+      "since": "1.1"
     }
   ]
 }

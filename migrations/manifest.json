@@ -353,6 +353,13 @@
       "sha256": "da6ed3498fa01e9e6d9afea8135ddb0199d8dcc0cffd659f7fd92c9fa605aa31",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-review-apply.md"
+    },
+    {
+      "sequence": 46,
+      "file": "0046.projects-goal-measures.sql",
+      "sha256": "b6f8e266732275c0e1f6e3d3455c7199fc35bcdd3f43c858445767e8bb8c65f7",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/projects-backend.md"
     }
   ]
 }

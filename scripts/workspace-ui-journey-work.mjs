@@ -1,6 +1,6 @@
 // P14.T01a PR-2 browser journeys (AC22-AC32), run by scripts/workspace-ui-journey-lab.mjs
 // after the PR-1 smoke (AC20) on the same configured harness: the real api and broker
-// bundles in Miniflare, PostgreSQL 17 with migrations 0001-0015 and the api Worker's work
+// bundles in Miniflare, PostgreSQL 17 with the whole verified chain and the api Worker's work
 // login, the synthetic WorkOS oracle and owner-SQL fixtures. Three people sign in for
 // real through the SPA (button, POST, intercepted authorize, callback, cookie): A (the
 // fixture owner, seeded work grants), B (seeded task view and question answer) and C (a

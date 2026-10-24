@@ -4,7 +4,8 @@
 // gets an HTTPS listener on 127.0.0.1:<ephemeral> with a lab-generated certificate, and
 // serves the production dist through Static Assets. PR-1 (AC20): the browser signs in
 // through the SPA, enters the workspace through bootstrap and signs out. PR-2 (AC22-AC32,
-// scripts/workspace-ui-journey-work.mjs): the engine also applies 0014-0015 and logs in
+// scripts/workspace-ui-journey-work.mjs): the engine also applies the rest of the verified
+// migration chain after 0013 (the work routes read the head schema) and logs in
 // the api Worker's work login, and three people work through the account and work
 // routes. Every request other than the lab origin and the intercepted WorkOS authorize
 // navigation is aborted and counted: zero egress. No trace, HAR, video or screenshot is
@@ -373,7 +374,7 @@ async function main() {
     status: passed ? "passed" : "held",
     scope: local
       ? "Local-only supporting run (Docker Desktop engine, loopback-published port). Not CI evidence: the hosted `ui` job is the authority."
-      : "Real Chromium (Playwright) against the real wrangler dry-run api and broker bundles in local workerd, with the production SPA on Static Assets, isolated PostgreSQL 17 (migrations 0001-0015, owner-SQL work grants) and synthetic WorkOS; zero egress. Not hosted Cloudflare, Neon or WorkOS qualification.",
+      : "Real Chromium (Playwright) against the real wrangler dry-run api and broker bundles in local workerd, with the production SPA on Static Assets, isolated PostgreSQL 17 (the whole verified migration chain, owner-SQL work grants) and synthetic WorkOS; zero egress. Not hosted Cloudflare, Neon or WorkOS qualification.",
     platform: process.platform,
     durationMs: Date.now() - started,
     appliedMigrations: result?.appliedMigrations ?? null,

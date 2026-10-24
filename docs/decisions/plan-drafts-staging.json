@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "switch": "off",
+  "start_routes": "held",
+  "scope": "The plan-drafts switch (ADR-0034 item 10; PR 18, docs/briefs/projects-backend.md). Committed off: plan.draft, choice questions, Morrow in an Ask and the @Morrow mention are absent from every manifest and refused in code (plan_drafts_off). It goes on by one reviewed commit only after the agent-loop switch (ADR-0027 item 11) is on and P05.T04b's Ask-bound envelope exists. start_routes is committed held: POST /plans/start-document and POST /plans/start answer 503 before any document, lock or record until lab:plan-start passes, when one reviewed commit sets it ready. While the switch is off and the routes are ready they accept only code-built cards (an Everyday work area, Quick tasks or Finish), so ADR-0033's areas, Quick tasks and Finish never wait on the loop. Identifiers only; no provider, key or tenant."
+}

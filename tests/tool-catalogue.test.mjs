@@ -29,6 +29,7 @@ import {
   toolByWireName,
   toolCatalogue,
   toolCatalogueDigest,
+  toolCatalogueVersion,
   toolEntry,
   ToolCatalogueError,
   toolsForContext,
@@ -75,7 +76,7 @@ test("the committed catalogue, ceiling and switches inspect clean", () => {
 
 test("the digest a run manifest pins is sha256 of the RFC 8785 text of the catalogue", () => {
   const content = JSON.parse(
-    JSON.stringify({ schemaVersion: 1, version: 1, tools: toolCatalogue }),
+    JSON.stringify({ schemaVersion: 1, version: toolCatalogueVersion, tools: toolCatalogue }),
   );
   assert.equal(createHash("sha256").update(jcs(content)).digest("hex"), toolCatalogueDigest);
   // Any change to a tool moves the digest.
@@ -159,6 +160,17 @@ for (const [name, change, expected] of [
     "a coordination tool for installed agents",
     (c) => tool(c, "agent.route").contexts.push("routed"),
     /agent\.route: coordination tools belong to the Coordinator only/,
+  ],
+  [
+    // ADR-0034 item 2 (PR 18, catalogue version 2): plan.draft is the Coordinator's only.
+    "a plan card drafted by an installed agent",
+    (c) => tool(c, "plan.draft").contexts.push("routed"),
+    /plan\.draft: coordination tools belong to the Coordinator only/,
+  ],
+  [
+    "a plan card that executes something other than a post",
+    (c) => (tool(c, "plan.draft").capabilityId = "workspace.project.create"),
+    /plan\.draft: (an internal tool executes|no tool uses a human_only)/,
   ],
   [
     "a proposal in look-for-work",

@@ -165,6 +165,25 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_catalog_apply(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_apply('${uuid}','${digest}','approval_absent','1','${digest}','proposal_absent','${digest}','{"evaluatedAt":"2026-10-23T00:00:00.000Z","reviewers":[]}','[{"targetIndex":0,"canonical":"{}","digest":"${digest}"}]')`,
     "cmd_catalog_dispatch(text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_dispatch('${randomUUID()}',NULL)`,
     "cmd_catalog_set_aside(text)": `SELECT outcome FROM morrow_work.cmd_catalog_set_aside('${randomUUID()}')`,
+    // PR 18 (0046): the goal and plan-start commands, every scalar and document well-formed.
+    "begin_project_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_project_command('plan.start','${uuid}','${digest}')`,
+    "cmd_goal_revise(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_goal_revise('${uuid}','${digest}','corr','${records.A.goal}','1','own','x',NULL,'[{"description":"d","verificationCapabilityId":null,"evidenceRequired":false}]')`,
+    "cmd_goal_check(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_goal_check('${uuid}','${digest}','corr','${records.A.goal}','named','product:1','chatgpt','["named_no_shop"]','${randomUUID()}')`,
+    "cmd_plan_start_document(text,text,text,text,text,text,text,text)": (() => {
+      const id = randomUUID();
+      const doc = JSON.stringify({
+        schemaVersion: 1,
+        id,
+        purpose: "quick_tasks",
+        createdAt: "2026-10-24T00:00:00.000Z",
+        grantSummaryDigest: digest,
+        records: { goal: { areaTemplateId: "quick_tasks" } },
+        target: { kind: "quick_tasks" },
+        draft: null,
+      });
+      return `SELECT x.outcome FROM (SELECT '${doc}'::text AS c) d, morrow_work.cmd_plan_start_document('${uuid}','${digest}','corr','${id}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'${digest}','${digest}') x`;
+    })(),
+    "cmd_plan_start(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_plan_start('${uuid}','${digest}','corr','${digest}','${digest}','${digest}','{}')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -203,6 +222,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
         // v1 PR 3.
         "catalog_review_sources(text)": "morrow_work.catalog_review_sources('proposal_absent')",
         "catalog_claim_of(text)": "morrow_work.catalog_claim_of('proposal_absent')",
+        // PR 18: the actor's own start document.
+        "plan_start_document(text)": `morrow_work.plan_start_document('${"a".repeat(64)}')`,
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(

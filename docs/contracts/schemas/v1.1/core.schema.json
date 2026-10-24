@@ -2038,6 +2038,9 @@
         },
         {
           "$ref": "#/$defs/AgentMentionTarget"
+        },
+        {
+          "$ref": "#/$defs/CoordinatorMentionTarget"
         }
       ]
     },
@@ -2092,7 +2095,7 @@
       "additionalProperties": false
     },
     "MentionRequest": {
-      "description": "What the author asks of the target, under the author's own verbs: notify (an inbox item), task (a draft task, execute on workspace.task.create) or delegate (an agent child task in a task conversation, delegate on workspace.task.delegate). Never authority.",
+      "description": "What the author asks of the target, under the author's own verbs: notify (an inbox item), task (a draft task, execute on workspace.task.create), delegate (an agent child task in a task conversation, delegate on workspace.task.delegate) or ask (@Morrow in a project conversation, ADR-0034 item 8). Never authority.",
       "anyOf": [
         {
           "$ref": "#/$defs/NotifyMentionRequest"
@@ -2102,6 +2105,9 @@
         },
         {
           "$ref": "#/$defs/DelegateMentionRequest"
+        },
+        {
+          "$ref": "#/$defs/AskMentionRequest"
         }
       ]
     },
@@ -2251,7 +2257,7 @@
       "additionalProperties": false
     },
     "MentionPart": {
-      "description": "A mention of one target: a human with notify or task, or an agent with delegate. Agent-authored messages carry no mention part.",
+      "description": "A mention of one target: a human with notify or task, an agent with delegate, or @Morrow (the coordinator) with ask (ADR-0034 item 8). Agent-authored messages carry no mention part.",
       "anyOf": [
         {
           "type": "object",
@@ -2299,11 +2305,31 @@
             "request"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "mention"
+            },
+            "target": {
+              "$ref": "#/$defs/CoordinatorMentionTarget"
+            },
+            "request": {
+              "$ref": "#/$defs/AskMentionRequest"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "request"
+          ],
+          "additionalProperties": false
         }
       ]
     },
     "MessagePart": {
-      "description": "One typed message part. text and mention parts add no view requirement.",
+      "description": "One typed message part. text and mention parts add no view requirement. ADR-0034 item 9 adds plan_card, plan_change_card and choice_question (Coordinator only), project_update and checkup_done (system author only).",
       "anyOf": [
         {
           "$ref": "#/$defs/TextPart"
@@ -2322,6 +2348,21 @@
         },
         {
           "$ref": "#/$defs/MentionPart"
+        },
+        {
+          "$ref": "#/$defs/PlanCardPart"
+        },
+        {
+          "$ref": "#/$defs/PlanChangeCardPart"
+        },
+        {
+          "$ref": "#/$defs/ChoiceQuestionPart"
+        },
+        {
+          "$ref": "#/$defs/ProjectUpdatePart"
+        },
+        {
+          "$ref": "#/$defs/CheckupDonePart"
         }
       ]
     },
@@ -2371,7 +2412,7 @@
       "maxContains": 10
     },
     "MessageOrigin": {
-      "description": "Where an agent message comes from: a run in a project or task conversation (its task is the subject task or a task under the project's goal), or an Ask turn.",
+      "description": "Where an agent message comes from: a run in a project or task conversation (its task is the subject task or a task under the project's goal), an Ask turn, or a Coordinator turn in a project conversation (ADR-0034 items 8 and 9).",
       "anyOf": [
         {
           "type": "object",
@@ -2402,6 +2443,22 @@
           "required": [
             "kind",
             "turnId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "coordinator_turn"
+            },
+            "runId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "runId"
           ],
           "additionalProperties": false
         }
@@ -2450,8 +2507,15 @@
           "$ref": "#/$defs/StreamPosition"
         },
         "author": {
-          "description": "A human (a HumanActorRef) or an agent naming its installation, with no membership; a service author is invalid.",
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+          "description": "A human (a HumanActorRef), an agent naming its installation with no membership, or Morrow's own code (SystemAuthor, ADR-0034 item 9); a service author is invalid.",
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+            },
+            {
+              "$ref": "#/$defs/SystemAuthor"
+            }
+          ]
         },
         "status": {
           "$ref": "#/$defs/MessageStatus"
@@ -2590,40 +2654,44 @@
             }
           },
           "else": {
-            "type": "object",
-            "properties": {
-              "author": {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "const": "agent"
+            "if": {
+              "type": "object",
+              "properties": {
+                "author": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "system"
+                    }
                   },
-                  "workspaceId": {
-                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-                  },
-                  "membershipId": {
-                    "type": "null"
-                  },
-                  "installationId": {
-                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-                  }
+                  "required": [
+                    "kind"
+                  ]
+                }
+              },
+              "required": [
+                "author"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "const": "completed"
                 },
-                "required": [
-                  "kind"
-                ]
-              },
-              "origin": {
-                "type": "object"
-              },
-              "parts": {
-                "type": "array",
-                "not": {
+                "origin": {
+                  "type": "null"
+                },
+                "parts": {
                   "type": "array",
-                  "contains": {
+                  "items": {
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "const": "mention"
+                        "enum": [
+                          "project_update",
+                          "checkup_done"
+                        ]
                       }
                     },
                     "required": [
@@ -2631,6 +2699,130 @@
                     ]
                   }
                 }
+              }
+            },
+            "else": {
+              "type": "object",
+              "properties": {
+                "author": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "agent"
+                    },
+                    "workspaceId": {
+                      "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                    },
+                    "membershipId": {
+                      "type": "null"
+                    },
+                    "installationId": {
+                      "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "origin": {
+                  "type": "object"
+                },
+                "parts": {
+                  "type": "array",
+                  "not": {
+                    "type": "array",
+                    "contains": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "mention"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "project_update",
+                        "checkup_done"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "parts"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/SystemAuthor"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "plan_card",
+                        "plan_change_card",
+                        "choice_question"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "parts"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "author": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "agent"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
               }
             }
           }
@@ -6941,7 +7133,7 @@
       "additionalProperties": false
     },
     "ToolName": {
-      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1 version 1. A new tool is a new catalogue version and a deliberate schema change.",
+      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 adds plan.draft (ADR-0034 item 2; PR 18). A new tool is a new catalogue version and a deliberate schema change.",
       "type": "string",
       "enum": [
         "knowledge.search",
@@ -6958,7 +7150,8 @@
         "agent.route",
         "specialist.draft",
         "proposal.listing",
-        "proposal.reply"
+        "proposal.reply",
+        "plan.draft"
       ]
     },
     "ToolFamily": {
@@ -9304,6 +9497,30 @@
             "input"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "plan.draft"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputPlanDraft"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -10959,6 +11176,2661 @@
             }
           }
         }
+      ]
+    },
+    "AreaTemplateId": {
+      "description": "ADR-0033 items 6 and 7: an Everyday work area template of a first-party release, or quick_tasks, the workspace's one built-in, always-open and unmeasured Quick tasks record.",
+      "type": "string",
+      "enum": [
+        "product_pages",
+        "stock",
+        "customer_emails",
+        "sales_and_numbers",
+        "promotions",
+        "quick_tasks"
+      ]
+    },
+    "GoalKey": {
+      "description": "A measured goal's key, unique in its goal record (ADR-0033 item 2; flow-contracts.md).",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$"
+    },
+    "NullableGoalKey": {
+      "description": "A GoalKey or null (a capability body field type; R11 needs a named type).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GoalKey"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "GoalMetricId": {
+      "description": "A metric of T5's catalogue offered as a goal measure at launch (ADR-0033 item 3). Its unit, direction (at least or at most), read tag and data class are fixed in code (packages/policy/src/projects/measures.ts), never by a request or a model.",
+      "type": "string",
+      "enum": [
+        "days_of_stock_cover",
+        "best_sellers_at_risk",
+        "replied_within_a_day",
+        "orders_per_week",
+        "discounted_order_share"
+      ]
+    },
+    "GoalChecklistId": {
+      "description": "A checklist code counts (ADR-0033 item 3): at launch only the 12-fact Product facts complete.",
+      "type": "string",
+      "enum": [
+        "product_facts_complete"
+      ]
+    },
+    "GoalAssistant": {
+      "description": "The one AI assistant a hand check is done in (ADR-0033 item 3 and owner question 3); ChatGPT is the default. A check recorded in another assistant never counts.",
+      "type": "string",
+      "enum": [
+        "chatgpt",
+        "gemini",
+        "copilot",
+        "perplexity"
+      ]
+    },
+    "GoalTarget": {
+      "description": "A goal's target number: finite, 0 to 1,000,000,000. Its direction is the measure's, from code.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    "GoalCheckItem": {
+      "description": "One buying question a hand check asks: Morrow writes it from shop knowledge and a person may edit it.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^[^\\u0000]*$"
+    },
+    "GoalCheckRow": {
+      "description": "One product row of a hand check: 1 to 10 questions.",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "$ref": "#/$defs/ListingProductId"
+        },
+        "checkItems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalCheckItem"
+          },
+          "minItems": 1,
+          "maxItems": 10
+        }
+      },
+      "required": [
+        "productId",
+        "checkItems"
+      ],
+      "additionalProperties": false
+    },
+    "GoalMeasure": {
+      "description": "How one goal is measured (ADR-0033 item 3), from closed lists: a T5 metric, a checklist code counts, or a hand check in one assistant. A goal record holds targets and dates, never a measured number.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "metric"
+            },
+            "metricId": {
+              "$ref": "#/$defs/GoalMetricId"
+            },
+            "target": {
+              "$ref": "#/$defs/GoalTarget"
+            },
+            "dueAt": {
+              "description": "Null, or no later than the goal record's dueAt (checked in code).",
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "startRef": {
+              "description": "Server-derived at read time: the goal's oldest kept goal_measure_values row. No request body carries it, and a stored goal record holds it null.",
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "metricId",
+            "target",
+            "dueAt",
+            "startRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "checklist"
+            },
+            "checklistId": {
+              "$ref": "#/$defs/GoalChecklistId"
+            },
+            "productIds": {
+              "description": "0 to 20 products; none means every active product.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ListingProductId"
+              },
+              "minItems": 0,
+              "maxItems": 20,
+              "uniqueItems": true
+            },
+            "target": {
+              "$ref": "#/$defs/GoalTarget"
+            },
+            "dueAt": {
+              "description": "Null, or no later than the goal record's dueAt (checked in code).",
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "startRef": {
+              "description": "Server-derived at read time: the goal's oldest kept goal_measure_values row. No request body carries it, and a stored goal record holds it null.",
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "checklistId",
+            "productIds",
+            "target",
+            "dueAt",
+            "startRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "manual"
+            },
+            "assistant": {
+              "$ref": "#/$defs/GoalAssistant"
+            },
+            "cadenceWeeks": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 13
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/GoalCheckRow"
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "target": {
+              "$ref": "#/$defs/GoalTarget"
+            },
+            "dueAt": {
+              "description": "Null, or no later than the goal record's dueAt (checked in code).",
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "startRef": {
+              "description": "Server-derived at read time: the goal's oldest kept goal_measure_values row. No request body carries it, and a stored goal record holds it null.",
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "assistant",
+            "cadenceWeeks",
+            "rows",
+            "target",
+            "dueAt",
+            "startRef"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CriteriaList": {
+      "description": "CriteriaList, a declared superset of v1 (ADR-0033 item 2): items may add key and measure, a measured item needs its key, and at most 3 items are measured. Keys are unique in a list and a measure's dueAt is no later than its goal record's (checked in code, validateCurrentDefinition). The work API keeps its cap of 20 criteria.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "verificationCapabilityId": {
+            "anyOf": [
+              {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidenceRequired": {
+            "type": "boolean"
+          },
+          "key": {
+            "$ref": "#/$defs/GoalKey"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/GoalMeasure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "description",
+          "verificationCapabilityId",
+          "evidenceRequired"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "type": "object",
+              "properties": {
+                "measure": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "measure"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "$ref": "#/$defs/GoalKey"
+                }
+              },
+              "required": [
+                "key"
+              ]
+            }
+          }
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "contains": {
+        "type": "object",
+        "properties": {
+          "measure": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "measure"
+        ]
+      },
+      "minContains": 0,
+      "maxContains": 3
+    },
+    "GoalCriteria": {
+      "description": "The current CriteriaList as a capability field type (workspace.goal.revise; R11 needs a named type).",
+      "$ref": "#/$defs/CriteriaList"
+    },
+    "GoalObjective": {
+      "description": "A goal record's objective: 1 to 8192 characters, NUL-free.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "pattern": "^[^\\u0000]*$"
+    },
+    "NullableUtcTime": {
+      "description": "A UtcTime or null (a capability body field type; R11 needs a named type).",
+      "anyOf": [
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Goal": {
+      "description": "Goal, a declared superset of v1 (ADR-0033 items 1 and 2): one goal record behind a project, with 1 to 3 measured goals. dueAt marks a dated project, areaTemplateId an Everyday work area or Quick tasks; never both, and project commands refuse a record with neither. Writers always emit both keys.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "status": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/GoalStatus"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "scope": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Scope"
+        },
+        "owner": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+        },
+        "successCriteria": {
+          "$ref": "#/$defs/CriteriaList"
+        },
+        "taskIds": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/IdList"
+        },
+        "dueAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "areaTemplateId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AreaTemplateId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "status",
+        "objective",
+        "scope",
+        "owner",
+        "successCriteria",
+        "taskIds"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "dueAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "dueAt"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "areaTemplateId": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GoalCheckAnswer": {
+      "description": "One hand-check answer, from a closed set (flow-contracts.md).",
+      "type": "string",
+      "enum": [
+        "named_this_product",
+        "named_other_shops_only",
+        "named_no_shop"
+      ]
+    },
+    "GoalCheckAnswers": {
+      "description": "The answers of one hand-check row, one per question, in question order.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/GoalCheckAnswer"
+      },
+      "minItems": 1,
+      "maxItems": 10
+    },
+    "GoalValueClass": {
+      "description": "A value's data class (ADR-0031 items 1 and 2): work (no clock), order_aggregates (90 days from its day) or customer (a customer-tagged value, on its cases' clock, stored only in a content: customer table).",
+      "type": "string",
+      "enum": [
+        "work",
+        "order_aggregates",
+        "customer"
+      ]
+    },
+    "GoalMeasureValue": {
+      "description": "GoalMeasureValue@1 (ADR-0033 item 4): one append-only value of one goal, written by code, or for a hand check by a person (workspace.goal.measure.record). Read tags, class and clock are server-derived. No model or tool writes a value.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "key": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "productId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListingProductId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "observedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "recorder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HumanActorRef"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "code"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "assistant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalAssistant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalCheckAnswer"
+          },
+          "minItems": 0,
+          "maxItems": 10
+        },
+        "counted": {
+          "type": "boolean"
+        },
+        "readTags": {
+          "$ref": "#/$defs/ReadTags"
+        },
+        "dataClass": {
+          "$ref": "#/$defs/GoalValueClass"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "goalId",
+        "key",
+        "productId",
+        "value",
+        "observedAt",
+        "recorder",
+        "assistant",
+        "answers",
+        "counted",
+        "readTags",
+        "dataClass",
+        "expiresAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "dataClass": {
+                "const": "work"
+              }
+            },
+            "required": [
+              "dataClass"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "expiresAt": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "expiresAt": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "recorder": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "human"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "recorder"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "assistant": {
+                "$ref": "#/$defs/GoalAssistant"
+              },
+              "answers": {
+                "type": "array",
+                "minItems": 1
+              },
+              "productId": {
+                "$ref": "#/$defs/ListingProductId"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "assistant": {
+                "type": "null"
+              },
+              "answers": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GoalHealth": {
+      "description": "A health word, computed in code per viewer (ADR-0033 item 4): On track, Behind, Done (only after Finish for a project), Needs you, or Not measured.",
+      "type": "string",
+      "enum": [
+        "on_track",
+        "behind",
+        "done",
+        "needs_you",
+        "not_measured"
+      ]
+    },
+    "GoalHealthReason": {
+      "description": "Why a health word holds; the sentence comes from a fixed template (flow-contracts.md).",
+      "type": "string",
+      "enum": [
+        "on_target_side",
+        "off_target_side",
+        "too_early_to_judge",
+        "target_met",
+        "finished",
+        "check_overdue",
+        "not_checked_yet",
+        "starting_point",
+        "ended",
+        "waiting_on_you",
+        "not_started",
+        "no_progress",
+        "no_value"
+      ]
+    },
+    "GoalValueSource": {
+      "description": "Where a shown value comes from.",
+      "type": "string",
+      "enum": [
+        "store",
+        "checklist",
+        "hand_check"
+      ]
+    },
+    "GoalMeasureProgress": {
+      "description": "One measured goal as one viewer may see it.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "health": {
+          "$ref": "#/$defs/GoalHealth"
+        },
+        "reason": {
+          "$ref": "#/$defs/GoalHealthReason"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000
+                },
+                "source": {
+                  "$ref": "#/$defs/GoalValueSource"
+                },
+                "observedAt": {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                }
+              },
+              "required": [
+                "value",
+                "source",
+                "observedAt"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/GoalTarget"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "at_least",
+            "at_most"
+          ]
+        },
+        "dueAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "health",
+        "reason",
+        "since",
+        "value",
+        "target",
+        "direction",
+        "dueAt"
+      ],
+      "additionalProperties": false
+    },
+    "GoalProgress": {
+      "description": "GoalProgress@1 (ADR-0033 item 4), computed per viewer from the values that viewer may see: a goal whose values the viewer may not see is left out, never counted; the project's word uses only the goals shown. Customer-tagged values never reach it except for a viewer holding view on support.case.read, and never a project_update or the Coordinator's context.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "goalRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "health": {
+          "$ref": "#/$defs/GoalHealth"
+        },
+        "reason": {
+          "$ref": "#/$defs/GoalHealthReason"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalMeasureProgress"
+          },
+          "minItems": 0,
+          "maxItems": 3
+        },
+        "computedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "goalId",
+        "goalRevision",
+        "health",
+        "reason",
+        "since",
+        "goals",
+        "computedAt"
+      ],
+      "additionalProperties": false
+    },
+    "AreaRepeatingTask": {
+      "description": "A repeating task an area template offers: off until a person turns it on.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "cadence": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "weekly",
+            "monthly"
+          ]
+        },
+        "defaultOn": {
+          "const": false
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "cadence",
+        "defaultOn"
+      ],
+      "additionalProperties": false
+    },
+    "EverydayAreaTemplate": {
+      "description": "EverydayAreaTemplate@1 (ADR-0033 item 6): closed data per first-party agent release. A person creates the area with one tap after adding the agent, at most one per template; it changes no agent package, install document or mandate.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "#/$defs/AreaTemplateId"
+        },
+        "releaseId": {
+          "type": "string",
+          "pattern": "^morrow\\.[a-z_]{1,48}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "goal": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/GoalKey"
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^[^\\u0000]*$"
+            },
+            "measure": {
+              "$ref": "#/$defs/GoalMeasure"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "at_least",
+                "at_most"
+              ]
+            },
+            "onTrackThreshold": {
+              "$ref": "#/$defs/GoalTarget"
+            }
+          },
+          "required": [
+            "key",
+            "description",
+            "measure",
+            "direction",
+            "onTrackThreshold"
+          ],
+          "additionalProperties": false
+        },
+        "repeatingTasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AreaRepeatingTask"
+          },
+          "minItems": 0,
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "releaseId",
+        "label",
+        "objective",
+        "goal",
+        "repeatingTasks"
+      ],
+      "additionalProperties": false
+    },
+    "PlanTarget": {
+      "description": "Where a card's records go: a new dated project, an existing project at a revision (a plan change), an Everyday work area, or Quick tasks.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "new_project"
+            },
+            "dueAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "kind",
+            "dueAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "existing_project"
+            },
+            "projectId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "goalRevision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "kind",
+            "projectId",
+            "goalRevision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "area"
+            },
+            "areaTemplateId": {
+              "$ref": "#/$defs/AreaTemplateId"
+            }
+          },
+          "required": [
+            "kind",
+            "areaTemplateId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "quick_tasks"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PlanStepAssignee": {
+      "description": "Who a step goes to. A specialist step carries only a purpose: specialist.draft stays the only spec drafter.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "person"
+            },
+            "principalId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "principalId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "agent"
+            },
+            "installationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "installationId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "specialist"
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^[^\\u0000]*$"
+            }
+          },
+          "required": [
+            "kind",
+            "purpose"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "code"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PlanStepDraft": {
+      "description": "One step of a card.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "assignee": {
+          "$ref": "#/$defs/PlanStepAssignee"
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalKey"
+          },
+          "minItems": 0,
+          "maxItems": 7,
+          "uniqueItems": true
+        },
+        "repeat": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "cadence": {
+                  "type": "string",
+                  "enum": [
+                    "daily",
+                    "weekly",
+                    "monthly"
+                  ]
+                },
+                "goalKey": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/GoalKey"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "cadence",
+                "goalKey"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "title",
+        "assignee",
+        "dependsOn",
+        "repeat"
+      ],
+      "additionalProperties": false
+    },
+    "PlanGoalDraft": {
+      "description": "One measured goal of a card: its measure from ADR-0033's closed lists, its startRef null.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "measure": {
+          "$ref": "#/$defs/GoalMeasure"
+        }
+      },
+      "required": [
+        "key",
+        "description",
+        "measure"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraft": {
+      "description": "PlanDraft@1 (ADR-0034 item 2): the closed, digested card plan.draft posts. The model writes these fields only; code writes the values, credit range, balance, helper permissions and audience per viewer at read time. No field takes a capability, scope, grant, cap, model, recipient, sender or store.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "project",
+            "task",
+            "repeating",
+            "plan_change"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "doneWhen": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanGoalDraft"
+          },
+          "minItems": 0,
+          "maxItems": 3
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanStepDraft"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "target": {
+          "$ref": "#/$defs/PlanTarget"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "title",
+        "why",
+        "doneWhen",
+        "goals",
+        "steps",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "PlanStartRecords": {
+      "description": "The records code computes for one start, exactly what the transaction creates under the person's own permissions.",
+      "type": "object",
+      "properties": {
+        "goal": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "objective": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 8192,
+                  "pattern": "^[^\\u0000]*$"
+                },
+                "dueAt": {
+                  "anyOf": [
+                    {
+                      "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "areaTemplateId": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AreaTemplateId"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "successCriteria": {
+                  "$ref": "#/$defs/CriteriaList"
+                }
+              },
+              "required": [
+                "objective",
+                "dueAt",
+                "areaTemplateId",
+                "successCriteria"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "project": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "$ref": "#/$defs/ProjectTitle"
+                },
+                "pin": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "title",
+                "pin"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "stepKey": {
+                "$ref": "#/$defs/GoalKey"
+              },
+              "objective": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192,
+                "pattern": "^[^\\u0000]*$"
+              },
+              "assignee": {
+                "$ref": "#/$defs/PlanStepAssignee"
+              }
+            },
+            "required": [
+              "stepKey",
+              "objective",
+              "assignee"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 8
+        },
+        "repeating": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "stepKey": {
+                "$ref": "#/$defs/GoalKey"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120,
+                "pattern": "^[^\\u0000]*$"
+              },
+              "cadence": {
+                "type": "string",
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly"
+                ]
+              },
+              "goalKey": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/GoalKey"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "agent": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "stepKey",
+              "title",
+              "cadence",
+              "goalKey",
+              "agent"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "goal",
+        "project",
+        "tasks",
+        "repeating"
+      ],
+      "additionalProperties": false
+    },
+    "PlanStartDocument": {
+      "description": "PlanStartDocument@1 (ADR-0034 item 5): built by the server on Start for the asker (or, for a code-built card, the person who opened it) on a standalone-workspace session. It binds the draft digest, the target and its revision, the records code computes, the estimate shown and a digest of the person's grant summary (never the authority). It lasts 5 minutes and is consumed once.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "plan_card",
+            "area",
+            "quick_tasks",
+            "finish"
+          ]
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "actor": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                "revision": {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+                },
+                "digest": {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+                }
+              },
+              "required": [
+                "messageId",
+                "revision",
+                "digest"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/PlanTarget"
+        },
+        "records": {
+          "$ref": "#/$defs/PlanStartRecords"
+        },
+        "estimate": {
+          "type": "object",
+          "properties": {
+            "creditsLow": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            },
+            "creditsHigh": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          },
+          "required": [
+            "creditsLow",
+            "creditsHigh"
+          ],
+          "additionalProperties": false
+        },
+        "grantSummaryDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "contextTaint": {
+          "$ref": "#/$defs/ContextTaint"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "purpose",
+        "organizationId",
+        "workspaceId",
+        "actor",
+        "draft",
+        "target",
+        "records",
+        "estimate",
+        "grantSummaryDigest",
+        "contextTaint",
+        "createdAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "PlanStepRun": {
+      "description": "What the same tap started for one step after commit (ADR-0034 item 6): each run is admitted on its own; a refusal leaves the step Not started with its own button.",
+      "type": "object",
+      "properties": {
+        "stepKey": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "admitted",
+            "not_started"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z_]{1,48}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "stepKey",
+        "status",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "PlanStartResult": {
+      "description": "The answer of POST /plans/start: the created ids and each run admitted or not started.",
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskIds": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 8
+        },
+        "routineIds": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 8
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanStepRun"
+          },
+          "minItems": 0,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "goalId",
+        "projectId",
+        "taskIds",
+        "routineIds",
+        "runs"
+      ],
+      "additionalProperties": false
+    },
+    "CheckupNextStepCode": {
+      "description": "A closed next-step code of a report's form (ADR-0034 item 9): code writes its sentence from a template, never report text.",
+      "type": "string",
+      "enum": [
+        "add_photo",
+        "ask_reviews",
+        "answer_question",
+        "fill_fact",
+        "check_ai_answers"
+      ]
+    },
+    "PlanCardPart": {
+      "description": "A Coordinator's card: one PlanDraft revision by id, revision and digest. Whether it was started is derived, so the message never changes.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "plan_card"
+        },
+        "draft": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            "digest": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            }
+          },
+          "required": [
+            "id",
+            "revision",
+            "digest"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "draft"
+      ],
+      "additionalProperties": false
+    },
+    "PlanChangeCardPart": {
+      "description": "A Coordinator's plan-change card for a project at a revision.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "plan_change_card"
+        },
+        "draft": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            "digest": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            }
+          },
+          "required": [
+            "id",
+            "revision",
+            "digest"
+          ],
+          "additionalProperties": false
+        },
+        "projectId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "draft",
+        "projectId"
+      ],
+      "additionalProperties": false
+    },
+    "ChoiceQuestionPart": {
+      "description": "A Coordinator's choice question (at most 2 per run, counted in code): 2 to 8 options; code adds Something else and Skip, you decide, and fills product and date pickers. Morrow sees only the tapped answer.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "choice_question"
+        },
+        "questionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/GoalKey"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "pattern": "^[^\\u0000]*$"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 2,
+          "maxItems": 8
+        },
+        "picker": {
+          "type": "string",
+          "enum": [
+            "none",
+            "product",
+            "date"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "questionId",
+        "prompt",
+        "options",
+        "picker"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectUpdatePart": {
+      "description": "The Monday project update: ids and the week only. Each viewer's copy is rendered at read time from GoalProgress@1, leaving out goals the viewer may not see and every customer-tagged value.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "project_update"
+        },
+        "projectId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "weekOf": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      },
+      "required": [
+        "kind",
+        "projectId",
+        "goalId",
+        "weekOf"
+      ],
+      "additionalProperties": false
+    },
+    "CheckupDonePart": {
+      "description": "A check-up's end: built from report@1's typed counts and closed next-step codes, never from report text.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "checkup_done"
+        },
+        "taskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "reportId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "counts": {
+          "type": "object",
+          "properties": {
+            "checked": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "missing": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "questions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            }
+          },
+          "required": [
+            "checked",
+            "missing",
+            "questions"
+          ],
+          "additionalProperties": false
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckupNextStepCode"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "taskId",
+        "reportId",
+        "counts",
+        "nextSteps"
+      ],
+      "additionalProperties": false
+    },
+    "SystemAuthor": {
+      "description": "Morrow's own code as a message author (ADR-0034 item 9): only for project_update and checkup_done parts, never with text or a model-written field.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "system"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "CoordinatorMentionTarget": {
+      "description": "@Morrow (ADR-0034 item 8): the workspace's Coordinator. At launch only in project conversations; never in an Ask (MENTION_NOT_ALLOWED).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "coordinator"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "AskMentionRequest": {
+      "description": "Ask Morrow: the author needs execute on workspace.conversation.create and workspace.conversation.post and goal view of the project. It starts one Coordinator run with the author as requester; never authority.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "ask"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolTime": {
+      "description": "A UTC time as plan.draft takes it: UtcTime's text without the date-time format keyword, which ADR-0027 item 3 refuses in a tool input. Code maps it to a PlanDraft@1 UtcTime, which is validated again.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,3})?Z$"
+    },
+    "PlanDraftToolTarget": {
+      "description": "PlanTarget as plan.draft takes it, flattened for strict tool use: a kind and only that kind's fields (new_project: dueAt; existing_project: projectId and goalRevision; area: areaTemplateId; quick_tasks: none); every other field null.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "new_project",
+            "existing_project",
+            "area",
+            "quick_tasks"
+          ]
+        },
+        "dueAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanDraftToolTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "goalRevision": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "areaTemplateId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AreaTemplateId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "dueAt",
+        "projectId",
+        "goalRevision",
+        "areaTemplateId"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolMeasure": {
+      "description": "GoalMeasure as plan.draft takes it, flattened for strict tool use: metric names metricId; checklist names checklistId and its productIds; manual names assistant, cadenceWeeks and its rows; every other field null or empty. It has no startRef: code writes it null.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "metric",
+            "checklist",
+            "manual"
+          ]
+        },
+        "metricId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalMetricId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checklistId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalChecklistId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "productIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ListingProductId"
+          },
+          "minItems": 0,
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "assistant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GoalAssistant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cadenceWeeks": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 13
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalCheckRow"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        },
+        "target": {
+          "$ref": "#/$defs/GoalTarget"
+        },
+        "dueAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanDraftToolTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "metricId",
+        "checklistId",
+        "productIds",
+        "assistant",
+        "cadenceWeeks",
+        "rows",
+        "target",
+        "dueAt"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolGoal": {
+      "description": "PlanGoalDraft as plan.draft takes it: goalKey is the goal's key.",
+      "type": "object",
+      "properties": {
+        "goalKey": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "measure": {
+          "$ref": "#/$defs/PlanDraftToolMeasure"
+        }
+      },
+      "required": [
+        "goalKey",
+        "description",
+        "measure"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolAssignee": {
+      "description": "PlanStepAssignee as plan.draft takes it, flattened for strict tool use: person names principalId, agent installationId, specialist only a purpose, code none; every other field null.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "person",
+            "agent",
+            "specialist",
+            "code"
+          ]
+        },
+        "principalId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "installationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^[^\\u0000]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "principalId",
+        "installationId",
+        "purpose"
+      ],
+      "additionalProperties": false
+    },
+    "PlanDraftToolStep": {
+      "description": "PlanStepDraft as plan.draft takes it: stepKey is the step's key.",
+      "type": "object",
+      "properties": {
+        "stepKey": {
+          "$ref": "#/$defs/GoalKey"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "assignee": {
+          "$ref": "#/$defs/PlanDraftToolAssignee"
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GoalKey"
+          },
+          "minItems": 0,
+          "maxItems": 7,
+          "uniqueItems": true
+        },
+        "repeat": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "cadence": {
+                  "type": "string",
+                  "enum": [
+                    "daily",
+                    "weekly",
+                    "monthly"
+                  ]
+                },
+                "goalKey": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/GoalKey"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "cadence",
+                "goalKey"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "stepKey",
+        "title",
+        "assignee",
+        "dependsOn",
+        "repeat"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputPlanDraft": {
+      "description": "plan.draft (ADR-0034 item 2; ToolCatalogue@1 version 2): one card the Coordinator drafts, PlanDraft@1 flattened for strict tool use. Code maps it to PlanDraft@1 (schemaVersion 1, every startRef null) and checks PlanDraft@1's code rules; it grants nothing, creates no record but the card and is refused in a turn holding a report. No field takes a capability, scope, grant, cap, model, recipient, sender or store.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "project",
+            "task",
+            "repeating",
+            "plan_change"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "doneWhen": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanDraftToolGoal"
+          },
+          "minItems": 0,
+          "maxItems": 3
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanDraftToolStep"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "target": {
+          "$ref": "#/$defs/PlanDraftToolTarget"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "why",
+        "doneWhen",
+        "goals",
+        "steps",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputPlanDraft": {
+      "description": "plan.draft as the model is given it: ToolInputPlanDraft's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputPlanDraft before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "project",
+            "task",
+            "repeating",
+            "plan_change"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        },
+        "doneWhen": {
+          "type": "string"
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "goalKey": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "measure": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "metric",
+                      "checklist",
+                      "manual"
+                    ]
+                  },
+                  "metricId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "days_of_stock_cover",
+                          "best_sellers_at_risk",
+                          "replied_within_a_day",
+                          "orders_per_week",
+                          "discounted_order_share"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "checklistId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "product_facts_complete"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "productIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "assistant": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "chatgpt",
+                          "gemini",
+                          "copilot",
+                          "perplexity"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cadenceWeeks": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "productId": {
+                          "type": "string"
+                        },
+                        "checkItems": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "productId",
+                        "checkItems"
+                      ]
+                    }
+                  },
+                  "target": {
+                    "type": "number"
+                  },
+                  "dueAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "metricId",
+                  "checklistId",
+                  "productIds",
+                  "assistant",
+                  "cadenceWeeks",
+                  "rows",
+                  "target",
+                  "dueAt"
+                ]
+              }
+            },
+            "required": [
+              "goalKey",
+              "description",
+              "measure"
+            ]
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "stepKey": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "assignee": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "agent",
+                      "specialist",
+                      "code"
+                    ]
+                  },
+                  "principalId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "installationId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "purpose": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "principalId",
+                  "installationId",
+                  "purpose"
+                ]
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "repeat": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "cadence": {
+                        "type": "string",
+                        "enum": [
+                          "daily",
+                          "weekly",
+                          "monthly"
+                        ]
+                      },
+                      "goalKey": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "cadence",
+                      "goalKey"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "stepKey",
+              "title",
+              "assignee",
+              "dependsOn",
+              "repeat"
+            ]
+          }
+        },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "new_project",
+                "existing_project",
+                "area",
+                "quick_tasks"
+              ]
+            },
+            "dueAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "projectId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goalRevision": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "areaTemplateId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "product_pages",
+                    "stock",
+                    "customer_emails",
+                    "sales_and_numbers",
+                    "promotions",
+                    "quick_tasks"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "dueAt",
+            "projectId",
+            "goalRevision",
+            "areaTemplateId"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "why",
+        "doneWhen",
+        "goals",
+        "steps",
+        "target"
       ]
     }
   }

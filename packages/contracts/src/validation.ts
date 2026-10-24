@@ -123,6 +123,28 @@ const storeBound = (ref: unknown) => {
 };
 const scopeStoresBound = (scope: unknown) =>
   (scope as { resources: readonly unknown[] }).resources.every(storeBound);
+// A CriteriaList that already passed its v1.1 schema (ADR-0033 item 2): a goal's key is
+// unique in its record. JSON Schema cannot compare items, so the rule is checked here.
+type Criterion = { key?: string; measure?: { dueAt: string | null } | null };
+const keysUnique = (list: unknown) => {
+  const keys = (list as readonly Criterion[]).flatMap((c) => (c.key === undefined ? [] : [c.key]));
+  return new Set(keys).size === keys.length;
+};
+// A Goal that already passed its v1.1 schema: unique keys, and no measure due after its
+// dated record (ADR-0033 item 2; flow-contracts.md).
+const goalMeasured = (goal: unknown) => {
+  const g = goal as { dueAt?: string | null; successCriteria: readonly Criterion[] };
+  if (!keysUnique(g.successCriteria)) return false;
+  if (typeof g.dueAt !== "string") return true;
+  const due = Date.parse(g.dueAt);
+  return g.successCriteria.every(
+    (c) =>
+      c.measure === undefined ||
+      c.measure === null ||
+      c.measure.dueAt === null ||
+      Date.parse(c.measure.dueAt) <= due,
+  );
+};
 // A KillSwitchRecord that already passed its v1.1 schema (ADR-0022 item 2 as amended
 // 2026-10-22): a connection target names the connection itself, so its id is its
 // connectionId (the schema makes storeId and connectionId non-null), and every v1
@@ -140,8 +162,10 @@ const killSwitchTargetsBound = (record: unknown) =>
  * ResourceRef, Scope, Grant and AgentInstallation (v1.1), the schema plus the store
  * rule (a store resource's id is its storeId), applied to every resource a scope,
  * grant or installation scope names; for KillSwitchRecord, the schema plus the
- * connection rule (a connection target's id is its connectionId). Product code
- * validates these eight only here, never by their exact selectors.
+ * connection rule (a connection target's id is its connectionId); for CriteriaList and
+ * Goal (v1.1, ADR-0033), the schema plus unique goal keys and, for a dated goal record, no
+ * measure due after it. Product code validates these ten only here, never by their exact
+ * selectors.
  */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
   if (!selected(currentDefinitionSelectors, name, value)) return false;
@@ -156,6 +180,8 @@ export function validateCurrentDefinition(name: CurrentDefinitionName, value: un
   if (name === "Grant" || name === "AgentInstallation")
     return scopeStoresBound((value as { scope: unknown }).scope);
   if (name === "KillSwitchRecord") return killSwitchTargetsBound(value);
+  if (name === "CriteriaList") return keysUnique(value);
+  if (name === "Goal") return goalMeasured(value);
   return true;
 }
 /** Effective billing definition: the newest billing layer that defines the name (ADR-0015). */

@@ -1138,6 +1138,16 @@
             "type": "MandateRef",
             "required": true,
             "nullable": false
+          },
+          "goalId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "goalKey": {
+            "type": "NullableGoalKey",
+            "required": true,
+            "nullable": false
           }
         }
       },
@@ -1163,7 +1173,8 @@
         "trigger",
         "timezone",
         "overlap policy",
-        "mandate"
+        "mandate",
+        "goal record"
       ],
       "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
       "retention_class": "R02",
@@ -1833,6 +1844,175 @@
       "acceptance_cases": [
         "P01.A01",
         "P05.A03"
+      ],
+      "activation": "blocked_until_contract_and_provider_qualified"
+    },
+    {
+      "id": "workspace.goal.revise",
+      "name": "Revise a project's goal record",
+      "domain": "Workspace coordination",
+      "contract_version": "0.1.0-draft",
+      "status": "Proposed",
+      "owner": "Morrow platform owner",
+      "effect": "internal_write",
+      "provider_dependency": "D01",
+      "input": {
+        "envelope": "ScopedRequestV1",
+        "fields": {
+          "goalId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "expectedRevision": {
+            "type": "Revision",
+            "required": true,
+            "nullable": false
+          },
+          "objective": {
+            "type": "GoalObjective",
+            "required": true,
+            "nullable": false
+          },
+          "dueAt": {
+            "type": "NullableUtcTime",
+            "required": true,
+            "nullable": false
+          },
+          "successCriteria": {
+            "type": "GoalCriteria",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "output": {
+        "envelope": "EvidenceResultV1",
+        "fields": {
+          "revision": {
+            "type": "Revision",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "eligible_principal": "human_or_bounded_installation_with_explicit_capability_grant",
+      "grant": "workspace.goal.revise",
+      "resource_scope": "Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable.",
+      "field_scope": [
+        "objective",
+        "end date",
+        "targets",
+        "check questions",
+        "assistant"
+      ],
+      "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
+      "retention_class": "R02",
+      "review_required": false,
+      "executor": "human_only",
+      "kill_switch": false,
+      "irreversible": false,
+      "verification": "Only a person changes a goal record, within 3 measured goals; no tool or model writes a target, date or value",
+      "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "layout": "Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.",
+      "implementation_tasks": [
+        "P06.T01",
+        "P07.T03",
+        "P14.T02"
+      ],
+      "acceptance_cases": [
+        "P01.A01",
+        "P06.A01"
+      ],
+      "activation": "blocked_until_contract_and_provider_qualified"
+    },
+    {
+      "id": "workspace.goal.measure.record",
+      "name": "Record a hand check of a measured goal",
+      "domain": "Workspace coordination",
+      "contract_version": "0.1.0-draft",
+      "status": "Proposed",
+      "owner": "Morrow platform owner",
+      "effect": "internal_write",
+      "provider_dependency": "D01",
+      "input": {
+        "envelope": "ScopedRequestV1",
+        "fields": {
+          "goalId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "key": {
+            "type": "GoalKey",
+            "required": true,
+            "nullable": false
+          },
+          "productId": {
+            "type": "ListingProductId",
+            "required": true,
+            "nullable": false
+          },
+          "assistant": {
+            "type": "GoalAssistant",
+            "required": true,
+            "nullable": false
+          },
+          "answers": {
+            "type": "GoalCheckAnswers",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "output": {
+        "envelope": "EvidenceResultV1",
+        "fields": {
+          "valueId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "counted": {
+            "type": "Boolean",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "eligible_principal": "human_or_bounded_installation_with_explicit_capability_grant",
+      "grant": "workspace.goal.measure.record",
+      "resource_scope": "Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable.",
+      "field_scope": [
+        "goal",
+        "product row",
+        "assistant",
+        "answers"
+      ],
+      "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
+      "retention_class": "R02",
+      "review_required": false,
+      "executor": "human_only",
+      "kill_switch": false,
+      "irreversible": false,
+      "verification": "A value is append-only and server-computed; a check in another assistant never counts",
+      "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "layout": "Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.",
+      "implementation_tasks": [
+        "P06.T01",
+        "P10.T02"
+      ],
+      "acceptance_cases": [
+        "P01.A01",
+        "P06.A01"
       ],
       "activation": "blocked_until_contract_and_provider_qualified"
     },

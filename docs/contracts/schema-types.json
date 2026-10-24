@@ -133,6 +133,26 @@
       "schema": "urn:morrow:contracts:core:v1#/$defs/FreshnessRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     },
+    "GoalAssistant": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/GoalAssistant",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "GoalCheckAnswers": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/GoalCheckAnswers",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "GoalCriteria": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/GoalCriteria",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "GoalKey": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/GoalKey",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "GoalObjective": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/GoalObjective",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "GrantRef": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/GrantRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
@@ -185,6 +205,10 @@
       "schema": "urn:morrow:contracts:core:v1#/$defs/ListingList",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     },
+    "ListingProductId": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/ListingProductId",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "MandateRef": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/MandateRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
@@ -205,6 +229,10 @@
       "schema": "urn:morrow:contracts:core:v1#/$defs/MoneyRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     },
+    "NullableGoalKey": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableGoalKey",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "NullableId": {
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableId",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
@@ -219,6 +247,10 @@
     },
     "NullableStripePriceKey": {
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableStripePriceKey",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "NullableUtcTime": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableUtcTime",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
     "OptionList": {

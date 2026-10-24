@@ -1112,6 +1112,22 @@ test("P01.T02c AC08: agents get capability_denied for view, propose and execute 
       }
   }
 });
+// ADR-0033 items 4 and 5 (PR 18): only people change a goal record or record a value. No
+// tool, agent or delegation gets any verb on the two goal capabilities, whatever its grants.
+test("ADR-0033: agents get capability_denied for view, propose and execute on the two goal capabilities", async () => {
+  for (const id of ["workspace.goal.revise", "workspace.goal.measure.record"]) {
+    const c = catalogue.capabilities.find((x) => x.id === id);
+    assert.equal(c.executor, "human_only", id);
+    assert.equal(c.kill_switch || c.review_required, false, id);
+    for (const mode of ["delegation", "automation"])
+      for (const verb of ["view", "propose", "execute"]) {
+        const make = mode === "delegation" ? delegationFixture : automationFixture;
+        const f = retarget(make(), id, verb, "task", ["goalId"]);
+        assert.equal(await reasonFor(f, mode), "capability_denied", `${mode} ${verb} ${id}`);
+        await denied(f, mode);
+      }
+  }
+});
 // The workspace W every collaboration row names as its resource. A W request has
 // no store and no account, so every scope on the path is W-scoped (storeIds and
 // accountIds empty, as ADR-0010 work grants are), and the installation and its

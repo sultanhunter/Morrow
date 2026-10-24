@@ -1,6 +1,6 @@
 {
   "contract_version": "morrow.contracts.v1.1",
-  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, and writers emit only the current shape. Each is incompatible with the v1 shape in both directions, except the declared supersets, whose reasons say 'superset of v1': AllocationShare@2 is a superset of v1 AllocationShare, never stored on its own, only inside CostAllocation@2, whose schemaVersion 2 keeps v1 and v1.1 allocations apart; core ResourceRef, Scope and Grant (ADR-0022 item 2) are supersets of v1, so every stored v1 grant, scope and resource stays valid, a v1 reader refuses the one addition (kind store) and so fails closed, and kernels match resources exactly, so the addition widens no existing authority; and core AgentInstallation (ADR-0022 items 2 and 3, M3 PR-1) is a superset of v1 whose scope is the v1.1 Scope, so a store-bound installation can name its store resource and a v1 reader refuses it. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs; the supersets by tests/contract-versioning.test.mjs.",
+  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, and writers emit only the current shape. Each is incompatible with the v1 shape in both directions, except the declared supersets, whose reasons say 'superset of v1': AllocationShare@2 is a superset of v1 AllocationShare, never stored on its own, only inside CostAllocation@2, whose schemaVersion 2 keeps v1 and v1.1 allocations apart; core ResourceRef, Scope and Grant (ADR-0022 item 2) are supersets of v1, so every stored v1 grant, scope and resource stays valid, a v1 reader refuses the one addition (kind store) and so fails closed, and kernels match resources exactly, so the addition widens no existing authority; core AgentInstallation (ADR-0022 items 2 and 3, M3 PR-1) is a superset of v1 whose scope is the v1.1 Scope, so a store-bound installation can name its store resource and a v1 reader refuses it; and core Goal and CriteriaList (ADR-0033 item 2) are supersets of v1, so every stored v1 goal and criteria list stays valid, while a v1 reader refuses a measured criterion, a dueAt or an areaTemplateId and so fails closed. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs; the supersets by tests/contract-versioning.test.mjs.",
   "changes": [
     {
       "kind": "capability_body",
@@ -127,6 +127,27 @@
       "replaces": "core:AgentInstallation",
       "reason": "AgentInstallation v1.1: its scope is the v1.1 Scope, so the Listings installation (ADR-0022 item 3) can be scoped to exactly its store resource and the agent kernel can read it; nothing else changes. A superset of v1: every v1 AgentInstallation is valid, a v1 reader refuses a store-scoped installation and so fails closed, and validateCurrentDefinition applies the store rule to every resource its scope names.",
       "adr": "ADR-0022"
+    },
+    {
+      "kind": "definition",
+      "name": "CriteriaList",
+      "replaces": "core:CriteriaList",
+      "reason": "A declared superset of v1: an item may add key (GoalKey) and measure (GoalMeasure or null); a measured item needs its key and at most 3 items are measured. Keys are unique and a measure's dueAt is no later than its goal record's, checked in code (validateCurrentDefinition). Every v1 list is valid; a v1 reader refuses a measured item.",
+      "adr": "ADR-0033"
+    },
+    {
+      "kind": "definition",
+      "name": "Goal",
+      "replaces": "core:Goal",
+      "reason": "A declared superset of v1: optional dueAt (a dated project) and areaTemplateId (an Everyday work area or Quick tasks), never both, and successCriteria as the v1.1 CriteriaList. Every v1 goal is valid; a v1 reader refuses a measured goal, a dueAt or an areaTemplateId.",
+      "adr": "ADR-0033"
+    },
+    {
+      "kind": "capability_body",
+      "name": "workspace.routine.configure.input",
+      "replaces": "capabilities:workspace.routine.configure.input",
+      "reason": "A routine or recurring task names its goal record (goalId), and an alert also the goal's key (goalKey), so repeating work lives in its project (ADR-0033 item 8). A v1 body lacks both and is not a valid v1.1 body.",
+      "adr": "ADR-0033"
     }
   ]
 }

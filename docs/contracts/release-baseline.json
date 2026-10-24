@@ -14,8 +14,8 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "989eef55a980b5df7c027fc6bfdc1eaeb2e675779bd5df1748ee2ffe94e5bca1",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "cfdb9973160913993d1040eb91d6a7fad43989288c033f03e3164bf757980f56",
+    "docs/contracts/schemas/v1.1/core.schema.json": "3263f8d5d7778cb5f76d1756bdb54a52b4841341ad5131f1ad91cf77fee96e07",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "2166f78251ef2602510ee33be4e5c6d4250e20be940f41f6a65ca4ed0a89f682",
     "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206"
   },
   "event_registry": {
@@ -43,7 +43,8 @@
       "approval.status_changed": "fa49f159db3eb4087ba6be5a2f7293e179913289093eb9e021db659e7cf2c96c",
       "operation.status_changed": "77f68806b8792ef092e1b1ecfeecafd2226db206fa79e0a58bc427b2f417c396",
       "kill_switch.executed": "54d2860b376c8f4154bef4a58e572b5806101ef5afec6a082f9a3a8a6af4d8ca",
-      "stop_proposal.dismissed": "140f29eb5979a7e9b0f9b2f1698f7025b1100474f3d00c72baa53a66c042ea38"
+      "stop_proposal.dismissed": "140f29eb5979a7e9b0f9b2f1698f7025b1100474f3d00c72baa53a66c042ea38",
+      "goal.revised": "f2e261aa3f143e7a1767608bf88f84e6dd6e5286e1414e6641cbc85450ab8b72"
     }
   },
   "change_policy": "Any schema delta requires reviewed compatibility/migration evidence and deliberate baseline update; generation never updates this baseline. v1 is frozen. v1.1 stays a candidate until the Tier 3 P01 contract sign-off; until then a change to it is a deliberate edit of this baseline, and afterwards additions open schemas/v1.2/ (docs/contracts/contract-versions.md). The event registry rows are pinned the same way (event_registry)."

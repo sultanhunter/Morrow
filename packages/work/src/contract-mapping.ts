@@ -1,17 +1,18 @@
 import type {
   Core_ActorRef,
-  Core_Goal,
   Core_Question,
   Core_SchemaRef,
   Core_Task,
+  Current_AreaTemplateId,
+  Current_Goal,
 } from "@morrow/contracts";
-import { validateDefinition } from "@morrow/contracts/validation";
+import { validateCurrentDefinition, validateDefinition } from "@morrow/contracts/validation";
 import type { WorkAuthority } from "./context.js";
 import { answerTextSchemaDigest } from "./digest.js";
 
 // Rows → v1 objects (P06.T01a §4.9). Every object passes the generated v1
-// validator before it is sent; a row that cannot map is a server fault (503),
-// never a partial object.
+// validator before it is sent (a goal, the current Goal: v1.1, a declared superset of v1,
+// ADR-0033 item 2); a row that cannot map is a server fault (503), never a partial object.
 export class WorkMappingError extends Error {
   constructor() {
     super("WORK_MAPPING_INVALID");
@@ -69,13 +70,15 @@ export function answerSchemaRef(a: WorkAuthority): Core_SchemaRef {
     digest: answerTextSchemaDigest,
   };
 }
-function checked<T>(name: "Goal" | "Task" | "Question", value: T): T {
+function checked<T>(name: "Task" | "Question", value: T): T {
   return validateDefinition("core", name, value) ? value : fail();
 }
 
-export function mapGoal(row: Row, a: WorkAuthority): Core_Goal {
+const nullableText = (row: Row, key: string): string | null =>
+  row[key] === null || row[key] === undefined ? null : text(row, key);
+export function mapGoal(row: Row, a: WorkAuthority): Current_Goal {
   tenant(row, a);
-  return checked("Goal", {
+  const goal: Current_Goal = {
     schemaVersion: 1,
     id: text(row, "id"),
     organizationId: text(row, "organization_id"),
@@ -84,13 +87,16 @@ export function mapGoal(row: Row, a: WorkAuthority): Core_Goal {
     revision: revision(row),
     createdAt: text(row, "created_at"),
     updatedAt: text(row, "updated_at"),
-    status: text(row, "status") as Core_Goal["status"],
+    status: text(row, "status") as Current_Goal["status"],
     objective: text(row, "objective"),
-    scope: json(row, "scope") as Core_Goal["scope"],
+    scope: json(row, "scope") as Current_Goal["scope"],
     owner: workActorRef(a, text(row, "owner_principal_id"), text(row, "owner_membership_id")),
-    successCriteria: json(row, "success_criteria") as Core_Goal["successCriteria"],
+    successCriteria: json(row, "success_criteria") as Current_Goal["successCriteria"],
     taskIds: json(row, "task_ids") as string[],
-  });
+    dueAt: nullableText(row, "due_at"),
+    areaTemplateId: nullableText(row, "area_template_id") as Current_AreaTemplateId | null,
+  };
+  return validateCurrentDefinition("Goal", goal) ? goal : fail();
 }
 
 export function mapTask(row: Row, a: WorkAuthority): Core_Task {

@@ -27,6 +27,11 @@ import {
   type RunsApiDependencies,
 } from "../../../packages/work/src/runs/http.js";
 import {
+  createProjectsApiHandler,
+  projectsPathPattern,
+} from "../../../packages/work/src/projects/http.js";
+import { planDraftsRecord } from "../../../packages/policy/src/projects/plan-draft.js";
+import {
   createReviewApiHandler,
   reviewPathPattern,
   type ReviewApiDependencies,
@@ -48,6 +53,8 @@ type Handler = Readonly<{
 // serves ahead of Static Assets (run_worker_first). Later PRs add one row each:
 //   /workspace/:ws/work/{tasks/:taskId/runs, runs/:runId, runs-reconcile}
 //                                                runs (M3 PR-2), ahead of the work API
+//   /workspace/:ws/work/{goals/:goalId/(revise|checks|progress), plans/(start-document|start)}
+//                                                goals and the plan start (PR 18), ahead of it
 //   /workspace/:ws/work/{approvals, proposals/:id/(review|decision|apply),
 //     tasks/:taskId/operations, operations/:id(/reconcile, /set-aside)}
 //                                                review and apply (v1 PR 3), ahead of it too
@@ -63,13 +70,14 @@ type Handler = Readonly<{
 //                                                other /connections path stays the P05
 //                                                handler's (the WorkspaceConnections@1 read)
 // The api's per-address session limit (session-limit.ts) runs before this table and answers
-// a path of the runs, work, billing, agents, catalog or connections row in that family's
-// ErrorEnvelope, through `apiDispatch` itself, so there is one matcher.
+// a path of the runs, projects, review, work, billing, agents, catalog or connections row in
+// that family's ErrorEnvelope, through `apiDispatch` itself, so there is one matcher.
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
 export const workPath = new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`);
 const billingPath = new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`);
 type RowKey =
   | "runs"
+  | "projects"
   | "review"
   | "work"
   | "billing"
@@ -81,6 +89,9 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
   Object.freeze([
     // M3 PR-2: the runs routes (packages/work/src/runs/http.ts), before the work API's row.
     ["runs", (path: string) => runsPathPattern.test(path)],
+    // PR 18: the goal and plan-start routes (packages/work/src/projects/http.ts), on the work
+    // dependencies, also before the work API's row. Both switches default off.
+    ["projects", (path: string) => projectsPathPattern.test(path)],
     // v1 PR 3: the review and apply routes (packages/work/src/review/http.ts), also ahead of it.
     ["review", (path: string) => reviewPathPattern.test(path)],
     ["work", (path: string) => workPath.test(path)],
@@ -116,6 +127,11 @@ export function createWorkspaceApiWorker(
   const workspace = createWorkersManagedWorkspaceApi(dependencies);
   const handlers: Readonly<Record<RowKey, Handler>> = Object.freeze({
     runs: createRunsApiHandler(runs),
+    // The goal routes stay off until T7 uses them; the start routes follow
+    // docs/decisions/plan-drafts-staging.json (held).
+    projects: createProjectsApiHandler(
+      work === undefined ? undefined : { ...work, goals: false, planDrafts: planDraftsRecord },
+    ),
     review: createReviewApiHandler(review),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
