@@ -39,9 +39,15 @@
 //   4. the code exchange, sent once (a transport loss is exchange_uncertain, never
 //      retried);
 //   5. the expanded granted scopes equal to the requested ones exactly;
-//   6. the ShopIdentity read; a store that is not a Partner development store is refused
-//      (development and staging are the only environments with a vault);
-//   7. one transaction: prepare (the ids the envelope binds), seal the token
+//   6. the ShopIdentity read; a store that is not a Partner development store is admitted
+//      only for the app that carries the live-store mark and only for its own intended
+//      shop (ADR-0035 item 2: the owner's store), which step 7 asks the registry first, in
+//      the same transaction and before any prepare or seal; every other app refuses it
+//      (store_not_development), and the database refuses such an installation row again
+//      (migration shopify-live-store-identity). Development and staging are the only
+//      environments with a vault;
+//   7. one transaction: the live-store admission when step 6 needs it, then prepare (the
+//      ids the envelope binds), seal the token
 //      (AES-256-GCM; the additional data binds environment, tenant, credential, subject =
 //      installation, version and KEK version), then store the vault row and the identity
 //      install record together. A lost COMMIT acknowledgement is outcome_unknown; the
@@ -431,7 +437,8 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     // 5. Least privilege: exactly the requested scopes, expanded.
     const scopes = shopifyScopesExact(exchanged.scopes);
     if (!scopes) return answer("scopes_mismatch");
-    // 6. The shop's identity; development stores only (ADR-0022 item 4).
+    // 6. The shop's identity: a development store (ADR-0022 item 4), or the live-store
+    // app's own shop, which step 7 asks the registry first (ADR-0035 item 2).
     const identity = await readShopifyIdentity(
       deps.fetch,
       shop,
@@ -440,8 +447,8 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       deps.now,
     );
     if (identity.kind !== "identity") return answer("refused");
-    if (!identity.development) return answer("store_not_development");
-    // 7. Prepare, seal and store in one transaction.
+    // 7. The live-store admission when needed, then prepare, seal and store in one
+    // transaction.
     const continuationToken = base64urlRandom(32);
     const continuationDigest = await sha256Hex(continuationToken);
     const budget = Math.min(shopifyLimits.budgetMaxMs, Math.max(1, remaining()));
@@ -452,6 +459,19 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     };
     try {
       stored = await deps.transaction(vault, budget, async (query) => {
+        // A store that is not a development store: only the marked app's own shop, asked
+        // before anything is prepared or sealed. Any other answer stores nothing.
+        if (!identity.development) {
+          const a = row(await query(vaultStatements.shopifyLiveStoreAdmission, [appKey, shop]), [
+            "outcome",
+          ]);
+          if (a.outcome !== "admitted")
+            return {
+              outcome: "store_not_development" as const,
+              workspaceId: null,
+              continuation: false,
+            };
+        }
         const p = row(
           await query(vaultStatements.shopifyInstallPrepare, [
             appKey,

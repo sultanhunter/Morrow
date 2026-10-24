@@ -1,14 +1,15 @@
 BEGIN;
 -- "Disconnect store", the identity side (ADR-0022 items 2, 3 and 15 with the amendments of
 -- 2026-10-22, owner decision 8; the M2 brief's PR-3 checklist). Executes AS
--- morrow_identity_owner, after 0038. It adds:
+-- morrow_identity_owner, after 0040. It adds:
 --   * store-link template v2: morrow_identity.store_link_grants_v2(), version 1's four rows
 --     and governance.connection.disconnect {execute} (fields connectionId and control, its
 --     v1.1 input names), the human kill switch "Disconnect store" (ADR-0005; the item 3
 --     amendment). packages/policy/src/store-link-template.ts is its TypeScript twin, pinned
 --     equal by tests/store-link-template.test.mjs. Version 1 stays as 0026 wrote it;
---   * link_workspace_store replaced with 0026's definition exactly (signature, result,
---     owner, ACL and body), except that a link applies template v2;
+--   * link_workspace_store replaced with 0039's definition exactly (signature, result,
+--     owner, ACL and body: 0026's, with v1 PR 1's live-store linkability), except that a
+--     link applies template v2;
 --   * the one forward backfill: on every store installation still linked, the linking
 --     owner who holds version 1's agents.installation.activate row on that store resource
 --     (issued by morrow.linking, unrevoked) receives the disconnect grant once, issued by
@@ -25,11 +26,11 @@ DO $$ BEGIN
  OR to_regclass('morrow_identity.store_installations') IS NULL
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid='morrow_identity.grants'::regclass
    AND a.attname='principal_kind' AND NOT a.attisdropped)
- -- The function this file replaces, exactly as 0026 wrote it (shared protocol: a later
- -- revision is never overwritten blind).
+ -- The function this file replaces, exactly as v1 PR 1's live-store identity migration
+ -- (0039) wrote it (shared protocol: a later revision is never overwritten blind).
  OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p
    WHERE p.oid=to_regprocedure('morrow_identity.link_workspace_store(text,text,text,text,text,text,text,text,text,text,text)'))
-  IS DISTINCT FROM '74cb9d49a95458e4335ab522cc8defb2'
+  IS DISTINCT FROM '955c8e1effa1291b7a8019eba2cc5fd8'
  THEN RAISE EXCEPTION 'DISCONNECT_STORE_IDENTITY_PREREQUISITES_INVALID'; END IF;
 END $$;
 
@@ -47,10 +48,11 @@ $$;
 REVOKE ALL ON FUNCTION morrow_identity.store_link_grants_v2() FROM PUBLIC;
 
 -- ---------------------------------------------------------------------------
--- link_workspace_store: 0026's definition (same signature, result, owner and ACL; CREATE
+-- link_workspace_store: 0039's definition (same signature, result, owner and ACL; CREATE
 -- OR REPLACE keeps them), with one change: an applied shopify_oauth link issues store-link
 -- template v2 (store_link_grants_v2()) to the linking owner, so a store linked from now on
--- can be disconnected by that owner. Every other rule is 0026's, word for word.
+-- can be disconnected by that owner. Every other rule is 0039's (0026's, with the live
+-- store linkable), word for word.
 CREATE OR REPLACE FUNCTION morrow_identity.link_workspace_store(
  p_handoff text,p_command text,p_digest text,p_session text,p_nonce text,p_org text,p_workspace text,p_installation text,p_purpose text,p_policy text,p_ownership text)
 RETURNS TABLE(outcome text,link_id text,ownership_revision text,policy_revision text,audit_id text)
@@ -145,9 +147,10 @@ BEGIN
  route_now:=morrow_billing.link_route_current(h.organization_id::text,h.workspace_id::text);
  installation_ok:=c.proof_kind<>'shopify_oauth' OR (inst.id IS NOT NULL AND inst.organization_id=h.organization_id
    AND inst.workspace_id=h.workspace_id AND inst.id=c.installation_id AND inst.generation=h.generation
-   AND inst.status='unlinked' AND inst.link_id IS NULL AND inst.development_store
+   AND inst.status='unlinked' AND inst.link_id IS NULL
    AND EXISTS(SELECT 1 FROM morrow_identity.shopify_apps a WHERE a.app_key=inst.app_key AND a.status='active'
-    AND a.invited_organization_id=inst.organization_id AND a.invited_workspace_id=inst.workspace_id));
+    AND a.invited_organization_id=inst.organization_id AND a.invited_workspace_id=inst.workspace_id
+    AND (inst.development_store OR (a.live_store AND a.intended_shop_digest=encode(sha256(convert_to(inst.shop_domain,'UTF8')),'hex')))));
  -- ADR-0022 item 3: the store-link template goes to the linking owner.
  owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s
    WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);
@@ -200,7 +203,8 @@ END $$;
 -- The forward backfill: a store linked under template v1 gains the disconnect right, and
 -- nothing else. For each installation still linked, the holder of version 1's
 -- agents.installation.activate row on exactly its store resource (the linking owner, the
--- organization's founding principal: 0026 issues the template to no one else) receives
+-- organization's founding principal: 0026's link and 0039's issue the template to no one
+-- else) receives
 -- governance.connection.disconnect {execute} on the same store resource, issued by
 -- morrow.linking at the organization's current policy revision, never expiring, once (a
 -- holder who already has that exact grant receives nothing). An installation that is not

@@ -41,11 +41,14 @@ const body = (text, signature) => {
 test("manifest: two contiguous rows after M3 PR-1 and the test entitlement, owners and digests", () => {
   const rows = ["shopify-privacy-identity", "shopify-privacy-work"].map(rowOf);
   assert.equal(rows[1].sequence, rows[0].sequence + 1);
-  // M3 PR-2's listings-runs follows the pair (it revises 0037's helpers), then "Disconnect
-  // store", whose work definer ends an installation through 0036's bridge.
+  // M3 PR-2's listings-runs is the next migration after the pair (it revises 0037's
+  // helpers); v1 PR 1's two live-store migrations follow it, then "Disconnect store", whose
+  // work definer ends an installation through 0036's bridge.
   assert.deepEqual(
-    manifest.migrations.slice(rows[1].sequence).map((m) => m.file.replace(/^\d{4}\./, "")),
-    ["listings-runs.sql", "disconnect-store-identity.sql", "disconnect-store-work.sql"],
+    manifest.migrations
+      .slice(rows[1].sequence, rows[1].sequence + 1)
+      .map((m) => m.file.replace(/^\d{4}\./, "")),
+    ["listings-runs.sql"],
   );
   // The merge train (2026-10-22) put the staging test entitlement's two rows between M3
   // PR-1's run-credits and these (by slug, never by number).

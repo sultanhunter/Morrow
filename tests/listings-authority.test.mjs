@@ -600,9 +600,10 @@ test("only the founding principal holds agents.installation.activate: M3 never i
   ]);
   // The template is issued only by link_workspace_store, only when applied, and only to the
   // founding principal: any other actor is actor_ineligible. Version 1: CREATE, REVOKE and
-  // 0026's link (and the disconnect migration's prerequisite check); version 2: the identity
-  // migration's prerequisite check, CREATE, REVOKE and the one link that replaces 0026's,
-  // and the work migration's prerequisite check.
+  // 0026's link, one use in v1 PR 1's replacement (which keeps every other check), and the
+  // disconnect migration's prerequisite check; version 2: the identity migration's
+  // prerequisite check, CREATE, REVOKE and the one link that replaces v1 PR 1's, and the
+  // work migration's prerequisite check.
   const uses = (pattern) =>
     manifest.migrations.flatMap((m) =>
       [...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(pattern)].map(() =>
@@ -613,6 +614,7 @@ test("only the founding principal holds agents.installation.activate: M3 never i
     "shopify-install-identity.sql",
     "shopify-install-identity.sql",
     "shopify-install-identity.sql",
+    "shopify-live-store-identity.sql",
     "disconnect-store-identity.sql",
   ]);
   assert.deepEqual(uses(/store_link_grants_v2\(\)/g), [
@@ -633,21 +635,28 @@ test("only the founding principal holds agents.installation.activate: M3 never i
     /CREATE OR REPLACE FUNCTION morrow_identity\.link_workspace_store\([\s\S]*?END \$\$;/.exec(
       code(sql),
     )?.[0];
-  const link = linkOf(shopifySql);
+  const liveSql = migration("shopify-live-store-identity");
+  for (const sql of [shopifySql, liveSql]) {
+    const link = linkOf(sql);
+    assert.ok(link, "link_workspace_store");
+    assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
+    assert.ok(
+      link.includes(
+        "owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s\n   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);",
+      ),
+    );
+    assert.ok(link.includes("WHEN NOT actor_ok OR owner_ok IS NOT TRUE THEN 'actor_ineligible'"));
+    assert.ok(
+      link.indexOf("IF reason_code='applied' THEN") <
+        link.indexOf("INSERT INTO morrow_identity.grants"),
+    );
+  }
+  // The current definition is v1 PR 1's with exactly the template version changed.
   const linkV2 = linkOf(migration("disconnect-store-identity"));
-  assert.ok(link && linkV2, "link_workspace_store");
-  assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
-  // The current definition is 0026's with exactly the template version changed.
-  assert.equal(linkV2, link.replace("store_link_grants_v1() x", "store_link_grants_v2() x"));
-  assert.ok(
-    link.includes(
-      "owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s\n   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);",
-    ),
-  );
-  assert.ok(link.includes("WHEN NOT actor_ok OR owner_ok IS NOT TRUE THEN 'actor_ineligible'"));
-  assert.ok(
-    link.indexOf("IF reason_code='applied' THEN") <
-      link.indexOf("INSERT INTO morrow_identity.grants"),
+  assert.ok(linkV2, "link_workspace_store v2");
+  assert.equal(
+    linkV2,
+    linkOf(liveSql).replace("store_link_grants_v1() x", "store_link_grants_v2() x"),
   );
 });
 

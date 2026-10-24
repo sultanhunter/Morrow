@@ -170,10 +170,10 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
       name,
     );
   }
-  // No later migration redefines them without the interlock. M2 PR-2's identity migration
-  // and "Disconnect store"'s (store-link template v2), located by slug, replace
-  // link_workspace_store; each new definition keeps the exclusive interlock before the
-  // organization FOR UPDATE.
+  // No later migration redefines them without the interlock. M2 PR-2's identity migration,
+  // v1 PR 1's live-store migration and "Disconnect store"'s (store-link template v2), each
+  // located by slug, replace link_workspace_store; each new definition keeps the exclusive
+  // interlock before the organization FOR UPDATE.
   for (const m of manifest.migrations.filter((x) => x.sequence > 14)) {
     const text = read("migrations/" + m.file);
     assert.doesNotMatch(
@@ -184,6 +184,7 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
     if (!/FUNCTION morrow_identity\.link_workspace_store\(/.test(text)) continue;
     assert.ok(
       m.file.endsWith(".shopify-install-identity.sql") ||
+        m.file.endsWith(".shopify-live-store-identity.sql") ||
         m.file.endsWith(".disconnect-store-identity.sql"),
       m.file,
     );
