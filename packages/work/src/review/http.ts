@@ -267,12 +267,6 @@ const applyRefusals: Readonly<Record<string, Mapped>> = Object.freeze({
     "never",
     "Morrow can't undo this change on its own: an earlier value is longer than Morrow can write. Change it back in Shopify.",
   ],
-  undo_too_soon: [
-    409,
-    "conflict",
-    "recheck_before_retry",
-    "Morrow checked this product a moment ago. Try again in a few seconds.",
-  ],
   credential_unavailable: [
     409,
     "conflict",
@@ -1009,22 +1003,24 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
             log.outcome = "check_unavailable";
             return { log, response: workErrorResponse("unavailable", correlationId) };
           }
-          if (checked.outcome !== "recorded") {
+          // too_soon: a check of this change was recorded under 10 seconds ago (this request's
+          // own when it is sent again after a lost reply, or another's) and nothing was read;
+          // step 3 builds on the change's latest check while it is recent (admitUndo).
+          if (checked.outcome !== "recorded" && checked.outcome !== "too_soon") {
             log.outcome = "check_" + checked.outcome;
             if (checked.outcome === "held")
               return { log, response: workErrorResponse("unavailable", correlationId) };
-            throw new UndoReject(
-              checked.outcome === "too_soon" ? "undo_too_soon" : checked.outcome,
-            );
+            throw new UndoReject(checked.outcome);
           }
           if (checked.verdict === "missing") throw new UndoReject("product_missing");
-          if (checked.verdict !== "unchanged")
+          if (checked.outcome === "recorded" && checked.verdict !== "unchanged")
             throw new UndoReject(
               "changed_since_apply",
               Object.entries(checked.fields ?? {})
                 .filter(([, v]) => v === "changed")
                 .map(([k]) => k),
             );
+          const sequence = checked.outcome === "recorded" ? checked.sequence : null;
           // 3. The new exact change, rechecked and stored in SQL.
           const admitted = await transaction(false, async (tx) => {
             const a = await context(tx, g);
@@ -1032,7 +1028,7 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
               const replayed = await replayedUndo(tx, a, commandId, digest);
               if (replayed) return replayed;
               const prepared = await prepareUndo(tx, a, operationId);
-              return admitUndo(tx, a, prepared, commandId, digest, checked.sequence!);
+              return admitUndo(tx, a, prepared, commandId, digest, sequence);
             });
           });
           if (admitted instanceof UndoReject) throw admitted;

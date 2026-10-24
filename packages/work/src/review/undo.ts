@@ -52,8 +52,7 @@ export type UndoRefusal =
   | "limit_reached"
   | "stale_authority"
   | "command_conflict"
-  // The broker's undo check: read less than 10 seconds ago, or no readable token now.
-  | "undo_too_soon"
+  // The broker's undo check: no readable token now.
   | "credential_unavailable";
 export class UndoReject extends Error {
   constructor(
@@ -129,14 +128,39 @@ interface UndoSource {
     readonly sequence: number;
     readonly digest: string | null;
     readonly verdict: "unchanged" | "changed" | "missing";
+    /** The listing fields the check found changed since the apply (empty when none). */
+    readonly changed: readonly string[];
     readonly observedAt: string;
   } | null;
+}
+/** The check's per-field codes (a closed object of the listing fields), or null. */
+function checkChanged(value: unknown): readonly string[] | null {
+  if (value === null) return [];
+  if (typeof value !== "string") return null;
+  let codes: unknown;
+  try {
+    codes = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!codes || typeof codes !== "object" || Array.isArray(codes)) return null;
+  const entries = Object.entries(codes as Record<string, unknown>);
+  if (
+    !entries.every(
+      ([k, v]) =>
+        (listingFields as readonly string[]).includes(k) && (v === "unchanged" || v === "changed"),
+    )
+  )
+    return null;
+  return Object.freeze(entries.filter(([, v]) => v === "changed").map(([k]) => k));
 }
 async function undoSource(tx: WorkTx, operationId: string): Promise<UndoSource | null> {
   const rows = await tx.run("catalogUndoSource", [operationId]);
   if (rows.length === 0) return null;
   const r = rows[0]!;
+  const changed = checkChanged(r.check_fields ?? null);
   if (
+    changed === null ||
     rows.length !== 1 ||
     typeof r.state !== "string" ||
     !undoStates.includes(r.state) ||
@@ -164,6 +188,7 @@ async function undoSource(tx: WorkTx, operationId: string): Promise<UndoSource |
             sequence: Number(r.check_sequence),
             digest: r.check_digest as string | null,
             verdict: r.check_verdict as "unchanged" | "changed" | "missing",
+            changed,
             observedAt: r.check_observed_at as string,
           }),
   });
@@ -424,25 +449,38 @@ export async function replayedUndo(
  * The undo proposal, after the broker's check recorded `checkSequence` with every field
  * unchanged: built from the change's before values and the check's read by the Listings
  * producer (one target, one item), then cmd_catalog_undo, which rebuilds and rechecks it.
+ *
+ * `checkSequence` null: the broker found a check of this change recorded less than 10
+ * seconds ago (too_soon: this request's own, sent again after its reply was lost, or another
+ * person's) and read nothing. The change's latest check then stands in, only while it is at
+ * most `undoLimits.recentCheckMs` old by the database's clock; cmd_catalog_undo still requires
+ * it to be the latest, every field unchanged and its read stored. It is a read of the product,
+ * never an authority: every check of the person's own runs here again, and the gateway's
+ * pre-send read guards the write.
  */
+export const undoLimits = Object.freeze({ recentCheckMs: 30_000 });
 export async function admitUndo(
   tx: WorkTx,
   a: WorkAuthority,
   prepared: PreparedUndo,
   commandId: string,
   requestDigest: string,
-  checkSequence: number,
+  checkSequence: number | null,
 ): Promise<UndoAdmitted> {
   const op = prepared.operation;
   const source = await undoSource(tx, op.operationId);
   if (!source) throw new UndoReject("not_found");
   if (source.state !== "available") throw new UndoReject(undoStateRefusal(source.state));
   const check = source.check;
-  if (!check || check.sequence !== checkSequence || source.before === null)
+  if (
+    !check ||
+    (checkSequence !== null && check.sequence !== checkSequence) ||
+    source.before === null
+  )
     throw new UndoReject("check_stale");
   if (check.verdict === "missing") throw new UndoReject("product_missing");
   if (check.verdict !== "unchanged" || check.digest === null)
-    throw new UndoReject("changed_since_apply");
+    throw new UndoReject("changed_since_apply", check.changed);
   const before = parseBefore(source.before, op.productId);
   const set = undoSet(before, prepared.fields);
   if (!undoSetWritable(set)) throw new UndoReject("not_reversible");
@@ -458,6 +496,12 @@ export async function admitUndo(
   const revision = Number(text(policy, "revision"));
   if (!Number.isSafeInteger(revision) || revision < 1) throw new WorkContextUnavailable();
   const ctx = await readContext(tx, a, "catalog.content.publish", null);
+  // A check this request did not record itself stands in only while it is recent.
+  if (
+    checkSequence === null &&
+    !(Date.parse(ctx.databaseNow) - Date.parse(check.observedAt) <= undoLimits.recentCheckMs)
+  )
+    throw new UndoReject("check_stale");
   const membershipId = a.actor.membershipId;
   if (membershipId === null) throw new UndoReject("denied");
   let packed;
@@ -504,7 +548,7 @@ export async function admitUndo(
     commandId,
     requestDigest,
     op.operationId,
-    String(checkSequence),
+    String(check.sequence),
     p.approvalId,
     p.policyDigest,
     p.parametersCanonical,

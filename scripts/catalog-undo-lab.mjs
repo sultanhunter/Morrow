@@ -17,7 +17,9 @@
 //      through the same gateway and Shopify holds the values read before the apply again;
 //      a second undo is refused (requested, then undone); a product changed since the apply
 //      stops Undo (nothing written), and a change between the undo and its apply is refused
-//      by the gateway's pre-send read (nothing written); after 90 days or the shop's data
+//      by the gateway's pre-send read (nothing written); Undo asked again within 10 seconds
+//      of a recorded check (a lost reply, or a second person) reads nothing more and builds on
+//      that check, or stops on it the same way; after 90 days or the shop's data
 //      being deleted it is "no longer available"; another workspace gets not_found; a person
 //      without the propose and delegate grants is denied before any read; the broker's undo
 //      definers refuse every other login;
@@ -75,6 +77,7 @@ import {
   decodeUndoRequested,
 } from "../apps/workspace-web/src/http/review-decoders.ts";
 import { decodeCatalogProducts } from "../apps/workspace-web/src/http/catalog-decoders.ts";
+import { decodeShopifyUndoCheckResult } from "../packages/identity/src/broker-protocol.ts";
 
 const checks = [];
 const failures = [];
@@ -991,10 +994,16 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const op = ops1[1].id;
     shop.edit(n, { title: "Merchant's own title " + n });
     const before = footprint();
+    const t8 = Date.now();
     const stopped = await undo(P.A, op);
     const checkRow = one(
       `SELECT verdict,field_verdicts FROM morrow_work.operation_undo_checks WHERE operation_id=${literal(op)} ORDER BY sequence DESC LIMIT 1`,
     );
+    // Asked again at once (under 10 seconds): the broker reads nothing, and the latest check
+    // stops Undo the same way, naming the same field.
+    const reads8 = shop.count("ProductWriteState", n);
+    const again = await undo(P.A, op);
+    const quick8 = Date.now() - t8 < 9000;
     check(
       "U8:a_product_changed_since_the_apply_stops_undo_and_nothing_is_written",
       stopped.status === 409 &&
@@ -1003,16 +1012,26 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         ) &&
         checkRow?.verdict === "changed" &&
         JSON.parse(JSON.stringify(checkRow.field_verdicts)).title === "changed" &&
+        again.status === 409 &&
+        again.body.safeMessage === stopped.body.safeMessage &&
+        (!quick8 || shop.count("ProductWriteState", n) === reads8) &&
         footprint() === before &&
         shop.view(n).title === "Merchant's own title " + n,
-      { stopped: stopped.body, checkRow },
+      { stopped: stopped.body, again: again.body, quick8, checkRow },
     );
     // A change between the undo and its apply: the gateway's pre-send read refuses it.
     const p2 = [newProduct()];
     const X2 = await draft(p2);
     await apply(P.A, X2, await approveAll(X2));
     op2 = ops(X2)[0].id;
+    // A check recorded just before (a first attempt whose reply was lost, or another person's
+    // Undo): the request reads nothing more and builds on that check.
+    const reads2 = shop.count("ProductWriteState", p2[0]);
+    const t2 = Date.now();
+    const direct = decodeShopifyUndoCheckResult(await brokerPort.undoCheck(op2, 12000));
     const requested = await undo(P.A, op2);
+    const quick2 = Date.now() - t2 < 9000;
+    const readsUndo = shop.count("ProductWriteState", p2[0]) - reads2;
     if (requested.status !== 201)
       throw Error(
         "UNDO_LAB_UNDO_FAILED:" +
@@ -1042,6 +1061,20 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         shop.count("ProductUpdate", p2[0]) === updates &&
         JSON.stringify(shop.view(p2[0]).tags) === '["merchant","own"]',
       { appliedU2: appliedU2.body, opsU2 },
+    );
+    const undoRow2 = one(
+      `SELECT check_sequence::int AS sequence FROM morrow_work.catalog_undos WHERE proposal_id=${literal(U2)}`,
+    );
+    check(
+      "U14:an_undo_within_10_seconds_of_a_recorded_check_builds_on_it_and_reads_nothing_more",
+      direct.outcome === "recorded" &&
+        direct.verdict === "unchanged" &&
+        direct.sequence === 1 &&
+        requested.status === 201 &&
+        undoRow2?.sequence === (quick2 ? 1 : 2) &&
+        // One read (the recorded check's) when the request came under 10 seconds after it.
+        readsUndo === (quick2 ? 1 : 2),
+      { direct, quick2, undoRow2, readsUndo },
     );
   }
 
