@@ -9819,6 +9819,86 @@
       }
     },
     {
+      "id": "P01.T02c.event.goal.revised",
+      "kind": "event",
+      "valid": true,
+      "value": {
+        "schemaVersion": 2,
+        "eventId": "event_e1",
+        "eventType": "goal.revised",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "aggregateType": "goal",
+        "aggregateId": "aggregate_a",
+        "aggregateRevision": 3,
+        "streamPosition": "pos_AbCdEfGhIjKlMnOp",
+        "correlationId": "correlation_c",
+        "causationId": null,
+        "actor": {
+          "kind": "human",
+          "principalId": "human_maya",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": "membership_maya",
+          "installationId": null,
+          "mandateId": null
+        },
+        "occurredAt": "2026-10-24T10:00:00Z",
+        "payload": {},
+        "payloadRef": {
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "storeId": null,
+          "kind": "event_payload",
+          "id": "event_e1",
+          "revision": 1,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "P01.T02c.event.goal.revised.objective",
+      "kind": "event",
+      "valid": false,
+      "value": {
+        "schemaVersion": 2,
+        "eventId": "event_e1",
+        "eventType": "goal.revised",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "aggregateType": "goal",
+        "aggregateId": "aggregate_a",
+        "aggregateRevision": 3,
+        "streamPosition": "pos_AbCdEfGhIjKlMnOp",
+        "correlationId": "correlation_c",
+        "causationId": null,
+        "actor": {
+          "kind": "human",
+          "principalId": "human_maya",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": "membership_maya",
+          "installationId": null,
+          "mandateId": null
+        },
+        "occurredAt": "2026-10-24T10:00:00Z",
+        "payload": {
+          "objective": "Every product has a complete listing"
+        },
+        "payloadRef": {
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "storeId": null,
+          "kind": "event_payload",
+          "id": "event_e1",
+          "revision": 1,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
       "id": "P01.T02c.event.redacted",
       "kind": "event",
       "valid": true,

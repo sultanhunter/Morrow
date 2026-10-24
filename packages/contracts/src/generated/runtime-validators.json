@@ -13,7 +13,7 @@
   "current_definitions": 302,
   "current_billing_definitions": 32,
   "capability_bodies": 234,
-  "event_types": 22,
+  "event_types": 23,
   "inputs": {
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
@@ -21,7 +21,7 @@
     "docs/contracts/schemas/v1.1/core.schema.json": "e8807ba16d2f01970c6bc8b7a8c0c807d9f54d8829be53ebd204c2dda53590e1",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "e1295ff6a199b390632ab4ce974a0977d10298776811a33c3b578b05c67fc8ac",
     "docs/contracts/schemas/v1.1/billing.schema.json": "0d3fa0baed844d062be4333790ba96015ee785ab5ec8515c81841fbf20e0438c",
-    "docs/contracts/event-registry.json": "db4a4f3a1b8735cf1203a778ce861a22601e48125f6323356a2d23e228ed46a7"
+    "docs/contracts/event-registry.json": "3187243efde263c6de85f11bce2984ee818e48b4fb18d1a216c9473ef68d07ba"
   },
   "compiler": {
     "ajv": "8.20.0",
@@ -30,7 +30,7 @@
   },
   "output": {
     "path": "packages/contracts/src/generated/runtime-validators.mjs",
-    "sha256": "cda165a96809192a136d1ab0e094522fa4af14227c2445cb4a51d0f7f0b7e3d4"
+    "sha256": "6a3d79a528bc5fd65a8347760b74803a437e761b9f519775208b4496654a0eed"
   },
   "browser_validators": {
     "SessionRotationResult": {

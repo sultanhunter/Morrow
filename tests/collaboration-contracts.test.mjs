@@ -366,7 +366,7 @@ test("AC05: the eight inbox kinds with their subjects and machines; read state i
 });
 
 test("AC06: the additive event registry", () => {
-  assert.equal(registry.events.length, 22);
+  assert.equal(registry.events.length, 23);
   assert.deepEqual(inspectEventRegistry(registry), []);
   const rows = eventPayloadSelectors(layered, registry);
   for (const row of registry.events) {

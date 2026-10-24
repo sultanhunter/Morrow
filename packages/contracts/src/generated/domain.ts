@@ -1408,6 +1408,7 @@ export interface EventPayloads {
   "operation.status_changed": { aggregateType: "operation"; payload: CoreV1_1_OperationStatusChangedPayload; };
   "kill_switch.executed": { aggregateType: "kill_switch"; payload: CoreV1_1_KillSwitchExecutedPayload; };
   "stop_proposal.dismissed": { aggregateType: "stop_proposal"; payload: CoreV1_1_EmptyEventPayload; };
+  "goal.revised": { aggregateType: "goal"; payload: CoreV1_1_EmptyEventPayload; };
 }
 export type EventType = keyof EventPayloads;
 export type EventPayloadOf<K extends EventType> = EventPayloads[K]["payload"];

@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { migrationSqlViolations } from "../scripts/migration-sql.mjs";
 import { loadMigrationChain } from "../scripts/migration-chain.mjs";
 import { workFunctions, workTables } from "./tenant-conformance/registry.mjs";
+import { goalMetrics } from "../packages/policy/src/projects/measures.ts";
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 const code = (text) => text.replace(/--.*$/gm, "");
@@ -67,6 +68,8 @@ test("the runner contract: one transaction, fixed prerequisites, pinned paths, n
   for (const name of [
     "commands_command_type_check",
     "commands_check",
+    "outbox_events_event_type_check",
+    "outbox_events_check3",
     "goals_valid_criteria",
     "enforce_status()",
   ])
@@ -302,7 +305,7 @@ test("review fixes: card digests, Quick tasks and areas, a project's criteria, b
   const start = body("cmd_plan_start");
   assert.equal([...start.matchAll(/morrow_work\.valid_project_criteria\(/g)].length, 2);
   // A plan change never revises Quick tasks (cmd_goal_revise's own rule).
-  assert.ok(start.includes("x.due_at,x.area_template_id INTO g"));
+  assert.ok(start.includes("x.due_at,x.area_template_id,x.success_criteria INTO g"));
   assert.ok(
     start.includes(
       "IF g.area_template_id='quick_tasks' THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;",
@@ -331,4 +334,60 @@ test("review fixes: card digests, Quick tasks and areas, a project's criteria, b
   const check = body("cmd_goal_check");
   assert.ok(check.includes("x.observed_at>=v_day AND x.observed_at<v_day+interval '1 day')>=3"));
   assert.ok(check.indexOf("'limit_reached'") < check.indexOf("INSERT INTO"));
+});
+
+test("second review fixes: goal.revised on the stream; a plan change keeps customer-class goals", () => {
+  // The outbox CHECKs this file revises are pinned as 0038 left them, then widened by
+  // goal.revised with an empty payload (ids and revision ride in the envelope).
+  const md5 = (name) =>
+    new RegExp(`c\\.conname='${name}'\\)\\n  IS DISTINCT FROM '[a-f0-9]{32}'`).test(text);
+  assert.ok(md5("outbox_events_event_type_check") && md5("outbox_events_check3"));
+  const outbox = sql.slice(sql.indexOf("ALTER TABLE morrow_work.outbox_events"));
+  const altered = outbox.slice(0, outbox.indexOf(";\n"));
+  assert.match(
+    altered,
+    /DROP CONSTRAINT outbox_events_event_type_check, DROP CONSTRAINT outbox_events_check3,/,
+  );
+  assert.match(altered, /'run\.admitted','run\.status_changed','goal\.revised'\)\)/);
+  assert.ok(
+    altered.includes("WHEN event_type='goal.revised' THEN payload='{}'::jsonb\n  ELSE false END)"),
+  );
+  // The registry row: aggregate goal, the empty payload, pinned in the release baseline.
+  const registry = JSON.parse(readFileSync("docs/contracts/event-registry.json", "utf8"));
+  const revised = registry.events.find((e) => e.eventType === "goal.revised");
+  assert.deepEqual(
+    [revised.aggregateType, revised.payloadDefinition, revised.since],
+    ["goal", "EmptyEventPayload", "1.1"],
+  );
+  const baseline = JSON.parse(readFileSync("docs/contracts/release-baseline.json", "utf8"));
+  assert.ok(Object.hasOwn(baseline.event_registry.rows, "goal.revised"));
+  // Both writers of a goal revision append exactly one goal.revised at the new revision,
+  // before the command row, in the same transaction.
+  const revise = body("cmd_goal_revise");
+  const event =
+    "PERFORM morrow_work.append_event(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,'goal.revised','goal',";
+  assert.equal(revise.split(event).length, 2);
+  assert.ok(
+    revise.includes(event + "p_goal_id,v_revision,NULL,\n  '{}'::jsonb,p_correlation_id,v_at);"),
+  );
+  assert.ok(revise.indexOf(event) < revise.indexOf("morrow_work.record_command("));
+  const start = body("cmd_plan_start");
+  assert.equal(start.split(event).length, 2);
+  assert.ok(
+    start.includes(event + "v_goal_id,v_revision,NULL,\n   '{}'::jsonb,p_correlation_id,v_now);"),
+  );
+  const change = start.slice(start.indexOf("v_revision:=g.revision+1;"));
+  assert.ok(change.indexOf("UPDATE morrow_work.goals") < change.indexOf(event));
+  // A plan change never drops a customer-class goal, refused under lock before any write.
+  // The SQL names the one customer-class metric code has (measures.ts).
+  assert.deepEqual(
+    Object.entries(goalMetrics)
+      .filter(([, m]) => m.valueClass === "customer")
+      .map(([id]) => id),
+    ["replied_within_a_day"],
+  );
+  const keep =
+    "e#>>'{measure,metricId}'='replied_within_a_day'\n     AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v_records#>'{goal,successCriteria}') n WHERE n=e)) THEN\n    RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN;";
+  assert.ok(start.includes(keep));
+  assert.ok(start.indexOf(keep) < start.indexOf("INSERT INTO morrow_work.goals"));
 });

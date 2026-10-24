@@ -13,7 +13,9 @@
 // one draft, Quick tasks only by the Owner and never revised, paused or ended, an area
 // that never ends, a project's 1 to 3 measured goals, a bounded values read and a daily
 // check cap, hand checks judged on the current measure, and a customer-class goal hidden
-// from the goal reads. Synthetic fixtures only; no provider, credential or merchant data.
+// from the goal reads. Second review: every goal revision appends goal.revised, and a plan
+// change answers goal view and hidden goals as revise does and never drops a customer-class
+// goal (refused under lock). Synthetic fixtures only; no provider, credential or merchant data.
 // Run by `npm run lab:plan-start` (CI's postgres `work` leg).
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -667,6 +669,20 @@ test("a plan change: revised against the project's current revision; another mem
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.deepEqual([r.body.goalId, r.body.projectId], [cardProject.goalId, null]);
   assert.equal(revisionOf(), revision + 1);
+  // The revision is on the stream: one goal.revised (ids and revision only), so the goal's
+  // aggregate revisions stay contiguous.
+  const goalEvents = db.rows(
+    `SELECT event_type,aggregate_revision::int AS revision,payload FROM morrow_work.outbox_events WHERE aggregate_type='goal' AND aggregate_id=${literal(cardProject.goalId)} ORDER BY aggregate_revision`,
+  );
+  assert.deepEqual(
+    goalEvents.map((e) => e.revision),
+    Array.from({ length: revision + 1 }, (_, i) => i + 1),
+  );
+  assert.deepEqual(goalEvents.at(-1), {
+    event_type: "goal.revised",
+    revision: revision + 1,
+    payload: {},
+  });
   const [goal] = db.rows(
     `SELECT success_criteria FROM morrow_work.goals WHERE id=${literal(cardProject.goalId)}`,
   );
@@ -704,10 +720,26 @@ test("a plan change: revised against the project's current revision; another mem
     change(P.C, revision + 1, "Add a care check"),
   );
   assert.ok(theirs.ok, theirs.stderr);
-  const refused = await send(open, P.C, "POST", "/plans/start-document", {
-    messageId: "message_change_c",
-    draftDigest: theirs.digest,
-  });
+  const askC = () =>
+    send(open, P.C, "POST", "/plans/start-document", {
+      messageId: "message_change_c",
+      draftDigest: theirs.digest,
+    });
+  // Without goal view the target is not found (the goal reads' rule), before any kernel.
+  const unseen = await askC();
+  assert.equal(unseen.status, 404, JSON.stringify(unseen.body));
+  db.admin(
+    grantInsert(
+      P.C,
+      fixtureGrant(
+        P.C,
+        "workspace.goal.create",
+        ["view"],
+        ["objective", "owner", "scope", "status", "successCriteria", "taskIds"],
+      ),
+    ),
+  );
+  const refused = await askC();
   assert.equal(refused.status, 403);
   const admin = insertCard(
     P.R,
@@ -1050,6 +1082,14 @@ test("a person's hand check, revise and the per-viewer progress", async () => {
   const revised = await send(open, P.A, "POST", "/goals/goal_area/revise", body());
   assert.equal(revised.status, 200, JSON.stringify(revised.body));
   assert.equal(revised.body.revision, revision + 1);
+  // One goal.revised at the new revision, with the command's correlation; a refused revise
+  // appends nothing.
+  assert.deepEqual(
+    db.rows(
+      `SELECT aggregate_revision::int AS revision,payload FROM morrow_work.outbox_events WHERE event_type='goal.revised' AND aggregate_id='goal_area'`,
+    ),
+    [{ revision: revision + 1, payload: {} }],
+  );
   assert.equal(
     (await send(open, P.A, "POST", "/goals/goal_area/revise", body())).status,
     409,
@@ -1292,5 +1332,138 @@ test("goal reads: a customer-class goal is seen only by members who may read cus
       "SELECT jsonb_array_length(success_criteria) FROM morrow_work.goals WHERE id='goal_mixed';",
     ),
     "2",
+  );
+
+  // A plan change applies as revise does (ADR-0034 item 5). Both records become projects.
+  for (const [project, goalId] of [
+    ["project_mixed", "goal_mixed"],
+    ["project_emails", "goal_emails"],
+  ]) {
+    const made = commandRole(
+      P.A,
+      `INSERT INTO morrow_work.projects(organization_id,workspace_id,id,revision,goal_id,title,pin_position,created_by_principal_id,created_by_membership_id,created_at,updated_at)
+ SELECT ${literal(P.A.org)},${literal(P.A.workspace)},${literal(project)},1,${literal(goalId)},${literal(project)},NULL,${literal(P.A.principal)},${literal(P.A.membership)},t,t FROM (SELECT ${now} AS t) x;`,
+    );
+    assert.ok(made.ok, made.stderr);
+  }
+  const page = {
+    key: "photos",
+    description: "Three photos",
+    measure: {
+      kind: "checklist",
+      checklistId: "product_facts_complete",
+      productIds: ["product:2"],
+      target: 12,
+      dueAt: null,
+      startRef: null,
+    },
+  };
+  const change = (projectId, goals) => ({
+    schemaVersion: 1,
+    kind: "plan_change",
+    title: "Photos too",
+    why: "The photos need a look.",
+    doneWhen: "Every page has its photos.",
+    goals,
+    steps: [
+      {
+        key: "photo_check",
+        title: "Check the photos",
+        assignee: { kind: "person", principalId: P.A.principal },
+        dependsOn: [],
+        repeat: null,
+      },
+    ],
+    target: { kind: "existing_project", projectId, goalRevision: 1 },
+  });
+  const documentFor = async (messageId, draft) => {
+    const card = insertCard(P.A, messageId, 1, draft);
+    assert.ok(card.ok, card.stderr);
+    return {
+      card,
+      response: await send(open, P.A, "POST", "/plans/start-document", {
+        messageId,
+        draftDigest: card.digest,
+      }),
+    };
+  };
+  const before = counts();
+  // A goal-changing card for the mixed record would replace a goal A may not see: 403. The
+  // Customer emails record reads as absent: 404 for any card. A steps-only card goes on.
+  const hiddenChange = await documentFor("message_mixed", change("project_mixed", [page]));
+  assert.equal(hiddenChange.response.status, 403, JSON.stringify(hiddenChange.response.body));
+  assert.equal(
+    (await documentFor("message_emails", change("project_emails", []))).response.status,
+    404,
+  );
+  assert.deepEqual(counts(), before);
+  const steps = await documentFor("message_mixed_steps", change("project_mixed", []));
+  assert.equal(steps.response.status, 201, JSON.stringify(steps.response.body));
+  assert.equal(steps.response.body.document.records.goal, null);
+  // Under lock: a plan change that would drop the customer-class goal is refused, nothing
+  // written; one that keeps it unchanged applies, with its goal.revised.
+  const records = (criteria) => ({
+    goal: {
+      objective: "Every page has its photos.",
+      dueAt,
+      areaTemplateId: null,
+      successCriteria: criteria,
+    },
+    project: null,
+    tasks: [],
+    repeating: [],
+  });
+  const criterion = {
+    description: page.description,
+    verificationCapabilityId: null,
+    evidenceRequired: false,
+    key: page.key,
+    measure: page.measure,
+  };
+  const forced = (criteria) =>
+    insertDocument(P.A, {
+      purpose: "plan_card",
+      target: { kind: "existing_project", projectId: "project_mixed", goalRevision: 1 },
+      draft: { messageId: "message_mixed", revision: 1, digest: hiddenChange.card.digest },
+      records: records(criteria),
+    });
+  const revisedEvents = () =>
+    count("outbox_events", "event_type='goal.revised' AND aggregate_id='goal_mixed'");
+  assert.equal(lastLine(startDefiner(P.A, forced([criterion]))), "state_conflict");
+  assert.equal(
+    lastLine(
+      startDefiner(
+        P.A,
+        forced([criterion, { ...replied, measure: { ...replied.measure, target: 50 } }]),
+      ),
+    ),
+    "state_conflict",
+  );
+  assert.equal(db.sql("SELECT revision FROM morrow_work.goals WHERE id='goal_mixed';"), "1");
+  assert.equal(revisedEvents(), 0);
+  // The same definer call, committed this time.
+  const kept = forced([criterion, replied]);
+  const committed = db.tryRun(
+    asApi(
+      P.A,
+      `SELECT outcome FROM morrow_work.cmd_plan_start(${literal(randomUUID())},${literal(sha(randomUUID()))},'lab-plan-start',${literal(kept.digest)},${literal(sha(kept.nonce))},${literal(kept.summary)},'{}');`,
+      { end: "COMMIT" },
+    ),
+    { user: "morrow_api_worker" },
+  );
+  assert.equal(lastLine(committed), "applied", committed.stderr);
+  const [mixedGoal] = db.rows(
+    "SELECT revision::int AS revision,success_criteria FROM morrow_work.goals WHERE id='goal_mixed'",
+  );
+  assert.equal(mixedGoal.revision, 2);
+  assert.deepEqual(
+    mixedGoal.success_criteria.map((c) => c.key),
+    ["photos", "replied_in_a_day"],
+  );
+  assert.deepEqual(
+    db.rows(
+      "SELECT aggregate_revision::int AS revision,payload FROM morrow_work.outbox_events WHERE event_type='goal.revised' AND aggregate_id='goal_mixed'",
+    ),
+    [{ revision: 2, payload: {} }],
   );
 });
