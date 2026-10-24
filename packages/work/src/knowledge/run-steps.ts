@@ -207,8 +207,17 @@ export async function brandVoiceForRun(query: FixedSqlQuery): Promise<BrandVoice
     readTags: tags(r),
   });
 }
-/** The brand voice blocks of a Listings turn: the accepted page as marked data, if viewable. */
-export async function listingsBrandVoice(query: FixedSqlQuery, viewer: TagViewer) {
+/**
+ * The brand voice blocks of a Listings turn: the accepted page as marked data, if viewable.
+ * `agentTools` is the shop-knowledge switch's (committed off): while it is off, Listings gets
+ * no brand voice and nothing is read.
+ */
+export async function listingsBrandVoice(
+  query: FixedSqlQuery,
+  viewer: TagViewer,
+  agentTools: "on" | "off",
+): Promise<ReturnType<typeof brandVoiceBlocks>> {
+  if (agentTools !== "on") return Object.freeze([]);
   return brandVoiceBlocks(await brandVoiceForRun(query), viewer);
 }
 

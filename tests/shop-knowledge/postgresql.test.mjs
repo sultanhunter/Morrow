@@ -737,7 +737,13 @@ test("K5 an agent proposes through knowledge.propose; it grants nothing and a pe
 
 test("K6 Listings gets the accepted brand voice only as one marked data block", async () => {
   const lease = openRunLease("run_k6");
-  const blocks = await underLease(lease, (query) => listingsBrandVoice(query, allTags));
+  // While the switch's agent_tools is off (as committed), Listings gets nothing and reads nothing.
+  assert.equal(shopKnowledgeRecord.agent_tools, "off");
+  const noRead = () => {
+    throw Error("no read while the switch is off");
+  };
+  assert.deepEqual(await listingsBrandVoice(noRead, allTags, shopKnowledgeRecord.agent_tools), []);
+  const blocks = await underLease(lease, (query) => listingsBrandVoice(query, allTags, "on"));
   assert.equal(blocks.length, 2);
   assert.deepEqual(blocks[0], { type: "text", text: brandVoiceInstruction });
   assert.deepEqual(blocks[1], {
@@ -752,7 +758,7 @@ test("K6 Listings gets the accepted brand voice only as one marked data block", 
     );
   // A run that may not view the page's tags gets nothing.
   assert.deepEqual(
-    await underLease(lease, (query) => listingsBrandVoice(query, { mayView: () => false })),
+    await underLease(lease, (query) => listingsBrandVoice(query, { mayView: () => false }, "on")),
     [],
   );
   // knowledge.search's candidates, per run viewer.
