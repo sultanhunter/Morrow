@@ -2146,6 +2146,206 @@
         "revision"
       ],
       "additionalProperties": false
+    },
+    "RateCardModelRate": {
+      "description": "One catalogue entry's rates: credits per million tokens of each kind (output includes thinking) and its worst-case turn in credits. An entry without a rate is refused at admission.",
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey"
+        },
+        "effort": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey"
+        },
+        "creditsPerMillionTokens": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,8})(\\.[0-9]{1,8})?$"
+            },
+            "cacheWrite": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,8})(\\.[0-9]{1,8})?$"
+            },
+            "cacheRead": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,8})(\\.[0-9]{1,8})?$"
+            },
+            "output": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,8})(\\.[0-9]{1,8})?$"
+            }
+          },
+          "required": [
+            "input",
+            "cacheWrite",
+            "cacheRead",
+            "output"
+          ],
+          "additionalProperties": false
+        },
+        "worstCaseTurnCredits": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        }
+      },
+      "required": [
+        "model",
+        "effort",
+        "creditsPerMillionTokens",
+        "worstCaseTurnCredits"
+      ],
+      "additionalProperties": false
+    },
+    "RateCardFree": {
+      "type": "string",
+      "enum": [
+        "reads",
+        "monitors",
+        "approvals",
+        "gateway_apply",
+        "exports",
+        "deletion",
+        "stops",
+        "routine_revoke",
+        "sync",
+        "notifications"
+      ]
+    },
+    "RateCard": {
+      "description": "RateCard@1 (ADR-0026 item 5; PR 10): the shape of docs/decisions/rate-card.json, versioned, digest-pinned data that publishes only with the owner's recorded confirmation. It meters model tokens per catalogue entry, computer minutes and email sends, converted to whole credits once per run. No version is published by this change.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "catalogueVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "modelRates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RateCardModelRate"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "computerCreditsPerMinute": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,8})(\\.[0-9]{1,8})?$"
+        },
+        "emailSendCredits": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,8})(\\.[0-9]{1,8})?$"
+        },
+        "caps": {
+          "description": "Rate card v1 configuration (ADR-0026 item 4): lowerable by merchants, raised only by the Owner. Basis points of the monthly grant.",
+          "type": "object",
+          "properties": {
+            "installationDailyCredits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "installationMonthlyCredits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "workspaceDailyCredits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "lookForWorkPassBasisPoints": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "specialistRunBasisPoints": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "specialistWorkspaceDailyBasisPoints": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            }
+          },
+          "required": [
+            "installationDailyCredits",
+            "installationMonthlyCredits",
+            "workspaceDailyCredits",
+            "lookForWorkPassBasisPoints",
+            "specialistRunBasisPoints",
+            "specialistWorkspaceDailyBasisPoints"
+          ],
+          "additionalProperties": false
+        },
+        "backstops": {
+          "type": "object",
+          "properties": {
+            "runUsd": {
+              "$ref": "urn:morrow:contracts:billing:v1.1#/$defs/UsdBillingMoney"
+            },
+            "workspaceDailyUsd": {
+              "$ref": "urn:morrow:contracts:billing:v1.1#/$defs/UsdBillingMoney"
+            }
+          },
+          "required": [
+            "runUsd",
+            "workspaceDailyUsd"
+          ],
+          "additionalProperties": false
+        },
+        "margin": {
+          "description": "Each rate's vendor cost is at most this share of the lowest net revenue per credit after the fee (ADR-0026 item 5: 50% at 17.9%).",
+          "type": "object",
+          "properties": {
+            "maxVendorShareBasisPoints": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "feeBasisPoints": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          },
+          "required": [
+            "maxVendorShareBasisPoints",
+            "feeBasisPoints"
+          ],
+          "additionalProperties": false
+        },
+        "free": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RateCardFree"
+          },
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "description": "Exactly the free activities; revoke and stops are never paid."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "version",
+        "catalogueVersion",
+        "modelRates",
+        "computerCreditsPerMinute",
+        "emailSendCredits",
+        "caps",
+        "backstops",
+        "margin",
+        "free"
+      ],
+      "additionalProperties": false
     }
   }
 }

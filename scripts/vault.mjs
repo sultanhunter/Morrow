@@ -135,6 +135,13 @@ const positive = (value, maximum) => {
 // C0 and C1 control characters and DEL: never part of a client secret.
 const controlCharacter = /[\u0000-\u001f\u007f-\u009f]/;
 export async function sealAppSecret(options, secret) {
+  if (options.environment === "production") throw fail("PRODUCTION_HELD");
+  return sealAppSecretWithKek(options, secret, () => readKekFile(options["kek-file"]));
+}
+// The same seal with the KEK supplied by the caller (`readKek`, called only after the
+// secret passed its checks): v1 PR 1's `staging:shopify-app-register` reads the KEK from
+// the owner's file through the staging tools' own reader.
+export async function sealAppSecretWithKek(options, secret, readKek) {
   // Production custody needs its own ADR (ADR-0007 item 9); until then no production
   // envelope is made.
   if (options.environment === "production") throw fail("PRODUCTION_HELD");
@@ -151,10 +158,14 @@ export async function sealAppSecret(options, secret) {
     bytes.fill(0);
     throw fail("SECRET_INVALID");
   }
-  const keyring = await createVaultKeyring(
-    options.environment,
-    new Map([[kekVersion, readKekFile(options["kek-file"])]]),
-  );
+  let kek;
+  try {
+    kek = readKek();
+  } catch (error) {
+    bytes.fill(0);
+    throw error;
+  }
+  const keyring = await createVaultKeyring(options.environment, new Map([[kekVersion, kek]]));
   const ref = { kind: "app_secret", appKey: options["app-key"], provider: "shopify", version };
   const envelope = await sealVaultRecord(keyring, ref, bytes);
   bytes.fill(0);

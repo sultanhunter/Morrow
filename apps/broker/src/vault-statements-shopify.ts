@@ -18,4 +18,7 @@ export const shopifyVaultStatements = Object.freeze({
   shopifyCredentialDestroy: "SELECT morrow_vault.shopify_credential_destroy($1,$2) AS outcome",
   shopifyReadResolve:
     "SELECT outcome,organization_id,workspace_id,lease_kind,store_id,connection_id,installation_id,shop_domain,credential_id,credential_version,kek_version,wrapped_key,sealed_value FROM morrow_vault.shopify_read_resolve($1,$2,$3,$4,NULLIF($5,''))",
+  // v1 PR 1 (migration shopify-live-store-vault; ADR-0035 item 2): whether the app may
+  // install a store that is not a development store (only the marked app's own shop).
+  shopifyLiveStoreAdmission: "SELECT morrow_vault.shopify_live_store_admission($1,$2) AS outcome",
 } as const);
