@@ -206,16 +206,9 @@ export function inboxComplete(view: InboxView): boolean {
  * to review (soonest expiry first), questions (newest first), then information.
  */
 export function byInboxUrgency(items: readonly InboxItemView[]): InboxItemView[] {
-  const rank = (i: InboxItemView) =>
-    !i.open
-      ? 5
-      : i.kind === "connection"
-        ? 0
-        : i.kind === "exception"
-          ? 1
-          : i.kind === "approval"
-            ? 2
-            : 3;
+  const kind = { connection: 0, exception: 1, approval: 2, question: 3 } as const;
+  // Information (not open) follows everything that waits, in the same kind order.
+  const rank = (i: InboxItemView) => (i.open ? 0 : 4) + kind[i.kind];
   const time = (i: InboxItemView) => {
     const value =
       i.kind === "approval"

@@ -314,19 +314,41 @@ test("Home: date line, greeting, urgency order and counts", () => {
   assert.equal(copy.home.review("6"), "Review 6 items");
 });
 
-test("Home: only an answered open-questions read is an all-clear (F1, AC26's first-run Home)", () => {
-  const ok = (items, next = null) => ({ kind: "ok", value: { items, next }, replayed: false });
+test("Home: only a fully answered Inbox read is an all-clear (F1, AC26's first-run Home)", () => {
+  // v1 PR 15: Home's header counts the Inbox read's open items (the sidebar's count too).
+  const sections = { questions: "ok", approvals: "ok", changes: "ok", connections: "ok" };
+  const ok = (items, more = false, over = {}) => ({
+    kind: "ok",
+    value: { sections: { ...sections, ...over }, items, more },
+    replayed: false,
+  });
+  const question = { kind: "question", id: "q", open: true };
+  const failed = { kind: "exception", id: "op", open: false };
   // Nothing waits, and the server said so: Ask Morrow is the primary and the line is clear.
   assert.deepEqual(homeSummary(ok([]), null), { action: "ask", total: "0", open: 0, clear: true });
-  assert.deepEqual(homeSummary(ok([{ id: "q" }]), null), {
+  assert.deepEqual(homeSummary(ok([question]), null), {
     action: "review",
     total: "1",
     open: 1,
     clear: false,
   });
-  assert.equal(homeSummary(ok([{ id: "q" }], "cursor"), null).total, "50+");
+  // A change that wasn't applied is listed, not counted: still clear.
+  assert.deepEqual(homeSummary(ok([failed]), null), {
+    action: "ask",
+    total: "0",
+    open: 0,
+    clear: true,
+  });
+  assert.equal(homeSummary(ok([question], true), null).total, "1+");
+  // A denied section says nothing about what waits there: no all-clear, no primary.
+  assert.deepEqual(homeSummary(ok([], false, { questions: "denied" }), null), {
+    action: null,
+    total: "0",
+    open: 0,
+    clear: false,
+  });
   // A read that didn't answer says nothing about what waits: no primary, no all-clear.
-  for (const failed of [
+  for (const failedRead of [
     { kind: "loading" },
     { kind: "denied", message: "", reference: null },
     { kind: "unavailable", offline: true },
@@ -336,9 +358,9 @@ test("Home: only an answered open-questions read is an all-clear (F1, AC26's fir
     { kind: "not_in_build" },
   ])
     assert.deepEqual(
-      homeSummary(failed, null),
+      homeSummary(failedRead, null),
       { action: null, total: "0", open: 0, clear: false },
-      failed.kind,
+      failedRead.kind,
     );
   // The preview's sample counts never make a failed read look clear either.
   const samples = { waiting: { review: 3, tasks: 1, alerts: 1 } };
