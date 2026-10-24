@@ -193,15 +193,32 @@ test("a database clock lead of up to 5 s reads as the 12-hour bound; more is unk
         assert.equal(response.headers.getSetCookie().length, 0);
       }
     }
-  // The idle expiry is bounded the same way.
-  const { handler } = await setup({
-    row: (state) => ({
-      outcome: "rotated",
-      idle_expires_at_ms: String(state.now() + 43205001),
-      absolute_expires_at_ms: String(state.now() + 43200000),
-    }),
-  });
-  assert.equal((await handler.fetch(rotateRequest())).status, 503);
+});
+// The rotation-control decoder rejects idle > absolute before the dispatcher reads either, so
+// the 12-hour bound on the absolute expiry also bounds the idle one; the dispatcher's own idle
+// comparison has no reachable case. An idle expiry past the absolute one is refused as
+// unknown whether or not it is within the 12-hour bound.
+test("an idle expiry past the absolute expiry is refused by the decoder as unknown", async () => {
+  for (const [idle, absolute] of [
+    [43205001, 43200000],
+    [1800001, 1800000],
+  ])
+    for (const outcome of ["rotated", "current"]) {
+      const { handler } = await setup({
+        row: (state) => ({
+          outcome,
+          idle_expires_at_ms: String(state.now() + idle),
+          absolute_expires_at_ms: String(state.now() + absolute),
+        }),
+      });
+      const response = await handler.fetch(rotateRequest());
+      assert.equal(response.status, 503, outcome + " " + idle);
+      assert.deepEqual(await response.json(), {
+        schemaVersion: 1,
+        outcome: "rotation_outcome_unknown",
+      });
+      assert.equal(response.headers.getSetCookie().length, 0);
+    }
 });
 
 test("AC24: current → 200 without a cookie; denied and reuse → identical 401 bytes, no cookie", async () => {

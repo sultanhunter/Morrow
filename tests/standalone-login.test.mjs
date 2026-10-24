@@ -747,10 +747,12 @@ async function failedLine(t, options = {}, request) {
   const lines = [];
   t.mock.method(console, "log", (line) => lines.push(String(line)));
   let armed = false;
-  const trigger = options.trigger ? once(options.trigger) : null;
+  const trigger = options.trigger ? once(options.trigger) : null,
+    reached = [];
   const f = fixture({
       ...options.fixture,
       stage: async (name, state) => {
+        if (armed) reached.push(name);
         if (armed && trigger) trigger(name, state, options.effect);
       },
     }),
@@ -760,11 +762,31 @@ async function failedLine(t, options = {}, request) {
   armed = true;
   const r = await b.fetch(request ? request(flow) : callbackRequest(flow));
   t.mock.restoreAll();
-  return { r, lines, f };
+  return { r, lines, f, reached };
 }
+// A callback that fails before claim (setup, input) has asked no pool for a connection, so it
+// has logged no cleanup event. Workers Logs attaches the callback URL, with the code and the
+// state, to every line, so the stage line would be its only record: it emits nothing.
+for (const [name, request] of [
+  ["provider error", () => new Request(origin + "/auth/workos/callback?error=access_denied")],
+  ["no login cookie", (flow) => callbackRequest(flow, { headers: { Cookie: "" } })],
+  [
+    "extra query field",
+    (flow) =>
+      callbackRequest(flow, {
+        path: `/auth/workos/callback?code=synthetic-code&state=${flow.state}&x=1`,
+      }),
+  ],
+])
+  test("a callback that fails at input emits no stage line: " + name, async (t) => {
+    const { r, lines, reached } = await failedLine(t, {}, request);
+    assert.equal(r.status, 303);
+    assert.equal(r.headers.get("location"), "/auth/result");
+    assert.equal(r.headers.has("set-cookie"), false);
+    assert.deepEqual(reached, [], "no pool was asked for a connection");
+    assert.deepEqual(lines, []);
+  });
 for (const [expected, options, request] of [
-  [{ stage: "input" }, {}, () => new Request(origin + "/auth/workos/callback?error=access_denied")],
-  [{ stage: "input" }, {}, (flow) => callbackRequest(flow, { headers: { Cookie: "" } })],
   [{ stage: "claim" }, { trigger: "login:claimCallback" }],
   [{ stage: "capsule_open" }, { fixture: { claimChange: { aad_digest: "a".repeat(64) } } }],
   [{ stage: "preauth_admit" }, { trigger: "preauth:admit" }],
@@ -808,9 +830,10 @@ for (const [expected, options, request] of [
     "a failed callback emits one closed stage line: " +
       [expected.stage, expected.sub, expected.lead].filter(Boolean).join("/"),
     async (t) => {
-      const { r, lines, f } = await failedLine(t, options, request);
+      const { r, lines, f, reached } = await failedLine(t, options, request);
       assert.equal(r.headers.get("location"), "/auth/result");
       assert.equal(r.headers.has("set-cookie"), false);
+      assert.equal(reached[0], "login:connect", "claim and later follow a pool connection");
       assert.equal(lines.length, 1, lines.join("\n"));
       const row = closedLine(lines[0]);
       assert.deepEqual(row, {

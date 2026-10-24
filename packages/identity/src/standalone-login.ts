@@ -110,10 +110,12 @@ const decimal = (value: unknown): number => {
   return Number(value);
 };
 // The sign-in callback's stage diagnostic (docs/briefs/fix-signin-clock-and-stage-log.md).
-// A failed callback emits exactly one line naming the step that failed, from closed sets
-// only: nothing from the request, the provider, a token or the database can reach it, so it
-// carries no code, state, cookie, identifier, time or error text. setup: before the callback
-// was entered (configuration, keyring, pools). finalize: after the database admitted the
+// A callback that fails at claim or later emits exactly one line naming the step that failed,
+// from closed sets only: nothing from the request, the provider, a token or the database can
+// reach it, so it carries no code, state, cookie, identifier, time or error text. A failure
+// at setup or input emits nothing (silentCallbackStages). setup: before the callback was
+// entered (configuration, keyring, pools); it remains the builder's closed default.
+// finalize: after the database admitted the
 // session (the post-admission checks and the cookie), so its rows were committed.
 export const loginCallbackStages = Object.freeze([
   "setup",
@@ -159,8 +161,15 @@ export function loginCallbackFailureLine(progress: unknown): string {
   }
   return JSON.stringify({ event: "morrow_login_callback_failed", stage, sub, lead });
 }
+// Workers Logs attaches the request URL, with WorkOS's code and the state, to every line. From
+// claim on, the callback has asked a pool for a connection, and every pooled connection
+// already publishes a cleanup event carrying that same URL. Before it (setup, input) nothing
+// is logged, so a stage line would be the request's only record of the URL: those failures
+// stay silent, as before this line existed (docs/briefs/fix-signin-clock-and-stage-log.md).
+const silentCallbackStages: readonly LoginCallbackStage[] = Object.freeze(["setup", "input"]);
 const reportCallbackFailure = (progress: Readonly<CallbackProgress>) => {
   try {
+    if (silentCallbackStages.includes(progress.stage)) return;
     console.log(loginCallbackFailureLine(progress));
   } catch {
     /* A diagnostic never changes the outcome. */
@@ -1114,7 +1123,8 @@ export async function dispatchStandaloneLoginWithAttempt(
     deliver(output);
   } catch (error) {
     if (delivered) throw Error("STANDALONE_LOGIN_TRANSPORT_UNKNOWN");
-    // Once per failed callback, before the generic result page (or none, when the browser left).
+    // At most once per failed callback (none before claim), before the generic result page
+    // (or none, when the browser left).
     if (isCallback) reportCallbackFailure(progress);
     if (!externalSignal?.aborted)
       deliver(

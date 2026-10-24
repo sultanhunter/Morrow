@@ -181,7 +181,9 @@ async function dispatch(
       // moments of its admission has an absolute expiry up to the database's lead past
       // at + 12 hours. Up to CROSS_CLOCK_ALLOWANCE_MS past the bound reads as the bound
       // (clock-allowance.ts); beyond it the answer is not trusted. Reporting less time than
-      // the database granted never lengthens a lifetime.
+      // the database granted never lengthens a lifetime. The rotation-control decoder already
+      // refuses idle > absolute, so the absolute comparison dominates; the idle one is defence
+      // in depth with no reachable case of its own.
       const idleRemainingMs = Math.max(0, answer.idleExpiresAtMs - at),
         absoluteRemainingMs = Math.max(0, answer.absoluteExpiresAtMs - at);
       if (
