@@ -5,8 +5,9 @@
 // over a scripted vault and Shopify (one read, never a write, codes only across the
 // binding); the closed undo-check result; Undo's "what changed" message; the batch's one
 // phrase, its availability and its closed decision body; and the routes (paths, closed
-// bodies, a port without the undo check answering 503). lab:catalog-undo drives the same
-// code against PostgreSQL 17.
+// bodies, a port without the undo check answering 503); and review F1, the proposing Listings
+// installation's checks (its owner, the owner's grants, its grant set, scope and stops).
+// lab:catalog-undo drives the same code against PostgreSQL 17.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
@@ -22,7 +23,15 @@ import { createShopifyWriter } from "../apps/broker/src/shopify-write.ts";
 import { sealVaultRecord, vaultBytesHex, vaultStatements } from "../apps/broker/src/vault.ts";
 import { listingSnapshotText } from "../packages/work/src/runs/listing-canonical.ts";
 import { appliedStateVerdicts } from "../packages/work/src/runs/listing-compare.ts";
-import { undoRequestDigest, undoSet, undoSetWritable } from "../packages/work/src/review/undo.ts";
+import {
+  decodeUndoProposer,
+  undoProposerRefusal,
+  undoRequestDigest,
+  undoSet,
+  undoSetWritable,
+} from "../packages/work/src/review/undo.ts";
+import { WorkContextUnavailable } from "../packages/work/src/context.ts";
+import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
 import {
   batchConfirmation,
   batchDigest,
@@ -35,7 +44,10 @@ import {
   createReviewApiHandler,
   reviewPathPattern,
 } from "../packages/work/src/review/http.ts";
-import { validateDefinition } from "../packages/contracts/src/validation.ts";
+import {
+  validateCurrentDefinition,
+  validateDefinition,
+} from "../packages/contracts/src/validation.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 import { workGuardOrigin, workGuardSecret } from "./fixtures/work-guard-cases.mjs";
 
@@ -593,4 +605,184 @@ test("the undo command's request digest names the workspace and the operation on
   assert.notEqual(d, await undoRequestDigest("ws_w", "0b6f2c1e-5d4a-4f8e-9c3b-2a1d0e9f8c7c"));
   assert.equal(d, await undoRequestDigest("ws_w", operationId));
   assert.equal(sha("x").length, 64);
+});
+
+// ---------------------------------------------------------------------------
+// Review F1: the installation that proposes an undo must be able to propose it, as the agent
+// kernel requires of a Listings run on that store, beyond the person's own grants.
+const O = "org_o",
+  W = "ws_w";
+const store = storeResource(O, W, "store_s", "connection_c");
+const human = (principalId, membershipId) => ({
+  kind: "human",
+  principalId,
+  organizationId: O,
+  workspaceId: W,
+  membershipId,
+  installationId: null,
+  mandateId: null,
+});
+const person = Object.freeze({
+  actor: human("user_member", "membership_member"),
+  policyRevision: 3,
+  grants: [],
+  databaseNowMs: Date.parse("2026-10-25T12:00:00.000Z"),
+  resource: {
+    organizationId: O,
+    workspaceId: W,
+    storeId: null,
+    connectionId: null,
+    kind: "workspace",
+    id: W,
+  },
+});
+const listingScope = (resource = store, fields = [...listingFieldPaths]) => ({
+  organizationId: O,
+  workspaceId: W,
+  storeIds: [resource.storeId],
+  accountIds: [],
+  resources: [resource],
+  fields,
+});
+function ownerGrant(changes = {}) {
+  const g = {
+    id: "g_owner_publish",
+    principal: human("user_owner", "membership_owner"),
+    capabilityId: "catalog.content.publish",
+    verbs: ["propose", "approve", "execute", "delegate"],
+    scope: listingScope(),
+    issuedBy: { ...human("morrow.linking", null), kind: "service" },
+    validFrom: "2026-01-01T00:00:00.000Z",
+    expiresAt: null,
+    revokedAt: null,
+    policyRevision: 1,
+    ...changes,
+  };
+  assert.ok(validateCurrentDefinition("Grant", g), "fixture grant");
+  return g;
+}
+function proposerRow(changes = {}, grants = [ownerGrant()]) {
+  return {
+    installation_id: "installation_l",
+    agent_principal_id: "agent_0b6f2c1e-5d4a-4f8e-9c3b-2a1d0e9f8c7b",
+    scope: JSON.stringify(listingScope()),
+    owner_principal_id: "user_owner",
+    owner_membership_id: "membership_owner",
+    owner_live: "true",
+    owner_grants: JSON.stringify(grants),
+    owner_grant_count: String(grants.length),
+    owner_grants_digest: "d".repeat(64),
+    agent_grant_set: "exact",
+    stopped: "false",
+    ...changes,
+  };
+}
+const refusalOf = (row, fields = [...listingFieldPaths], grants) =>
+  undoProposerRefusal(
+    person,
+    store,
+    fields,
+    decodeUndoProposer(row === null ? [] : [proposerRow(row, grants)], person),
+  );
+
+test("F1: an active installation whose live owner may propose, unstopped, may propose the undo", async () => {
+  assert.equal(await refusalOf({}), null);
+  const p = decodeUndoProposer([proposerRow()], person);
+  // The owner is a person of this tenant (never a client value), with the read's digest.
+  assert.deepEqual(p.owner, human("user_owner", "membership_owner"));
+  assert.equal(p.ownerGrantsDigest, "d".repeat(64));
+  assert.equal(p.ownerGrants.length, 1);
+  assert.equal(decodeUndoProposer([], person), null);
+});
+
+test("F1: no installation, an owner no longer a member or a changed grant set: installation_inactive", async () => {
+  assert.equal(await refusalOf(null), "installation_inactive");
+  assert.equal(await refusalOf({ owner_live: "false" }), "installation_inactive");
+  for (const set of ["differs", "invalid", "denied"])
+    assert.equal(await refusalOf({ agent_grant_set: set }), "installation_inactive", set);
+  // Before a stop: the kernel's origin checks come first.
+  assert.equal(await refusalOf({ owner_live: "false", stopped: "true" }), "installation_inactive");
+});
+
+test("F1: an owner whose grants no longer cover propose on the store and fields is denied", async () => {
+  const narrowed = [ownerGrant({ scope: listingScope(store, ["title"]) })];
+  assert.equal(await refusalOf({}, [...listingFieldPaths], narrowed), "denied");
+  // The same narrowed grant still covers an undo of the title alone.
+  assert.equal(await refusalOf({}, ["title"], narrowed), null);
+  assert.equal(
+    await refusalOf({}, ["title"], [ownerGrant({ verbs: ["approve", "execute", "delegate"] })]),
+    "denied",
+  );
+  assert.equal(
+    await refusalOf({}, ["title"], [ownerGrant({ revokedAt: "2026-10-01T00:00:00.000Z" })]),
+    "denied",
+  );
+  assert.equal(
+    await refusalOf({}, ["title"], [ownerGrant({ expiresAt: "2026-10-25T11:59:59.000Z" })]),
+    "denied",
+  );
+  const elsewhere = storeResource(O, W, "store_s", "connection_other");
+  assert.equal(
+    await refusalOf({}, ["title"], [ownerGrant({ scope: listingScope(elsewhere) })]),
+    "denied",
+  );
+  assert.equal(
+    await refusalOf({}, ["title"], [ownerGrant({ capabilityId: "catalog.content.propose" })]),
+    "denied",
+  );
+  assert.equal(await refusalOf({}, ["title"], []), "denied");
+  // More than 1,000 grants: the kernel never decides on a partial list.
+  assert.equal(await refusalOf({ owner_grant_count: "1001" }), "denied");
+  // The person's own grants never stand in for the owner's.
+  const ownerOnly = { ...person, grants: [ownerGrant({ principal: person.actor })] };
+  assert.equal(
+    await undoProposerRefusal(
+      ownerOnly,
+      store,
+      ["title"],
+      decodeUndoProposer([proposerRow({}, [])], ownerOnly),
+    ),
+    "denied",
+  );
+});
+
+test("F1: an installation scope that does not cover the store and fields is denied", async () => {
+  const other = storeResource(O, W, "store_s", "connection_other");
+  for (const scope of [
+    listingScope(store, ["title"]),
+    listingScope(other),
+    { ...listingScope(), storeIds: [] },
+  ])
+    assert.equal(await refusalOf({ scope: JSON.stringify(scope) }), "denied");
+});
+
+test("F1: a stop on the installation's runs refuses the undo before any read: stopped", async () => {
+  assert.equal(await refusalOf({ stopped: "true" }), "stopped");
+});
+
+test("F1: the proposer row is closed", () => {
+  const bad = [
+    { extra: "x" },
+    { owner_live: "t" },
+    { stopped: "1" },
+    { agent_grant_set: "exactly" },
+    { owner_grants_digest: "D".repeat(64) },
+    { owner_principal_id: "user owner" },
+    { scope: "{" },
+    { scope: JSON.stringify({ ...listingScope(), fields: "title" }) },
+    { owner_grants: JSON.stringify([{ id: "g" }]), owner_grant_count: "1" },
+    { owner_grant_count: "2" },
+  ];
+  for (const changes of bad)
+    assert.throws(
+      () => decodeUndoProposer([proposerRow(changes)], person),
+      WorkContextUnavailable,
+      JSON.stringify(changes),
+    );
+  const { stopped: _, ...missing } = proposerRow();
+  assert.throws(() => decodeUndoProposer([missing], person), WorkContextUnavailable);
+  assert.throws(
+    () => decodeUndoProposer([proposerRow(), proposerRow()], person),
+    WorkContextUnavailable,
+  );
 });

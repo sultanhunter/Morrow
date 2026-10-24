@@ -22,7 +22,10 @@
 //      that check, or stops on it the same way; after 90 days or the shop's data
 //      being deleted it is "no longer available"; another workspace gets not_found; a person
 //      without the propose and delegate grants is denied before any read; the broker's undo
-//      definers refuse every other login;
+//      definers refuse every other login; and (review F1) the Listings installation that
+//      proposes it must still be able to propose there, as a Listings run must: its owner
+//      removed, the owner's grant narrowed or a stop on its runs refuses Undo before any read,
+//      and again in SQL under the command's lock when the change lands after the read;
 //   B  "Approve several at once": the server-built document lists the task's pending changes
 //      with their exact digests; a stale, tampered or expired document approves nothing; one
 //      member decided elsewhere refuses them all; one confirmation records one exact approval
@@ -494,9 +497,20 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     connector: db.connector(),
     now: Date.now,
   });
+  // Review F1: a hook that runs once just before the review handler sends cmd_catalog_undo
+  // (after the Worker's own checks in that transaction), to land a change in between.
+  const labHooks = { beforeUndoCommand: null };
   const reviewOn = createReviewApiHandler({
     origin: workFixtureOrigin,
-    connector: db.connector(),
+    connector: db.connector({
+      async beforeQuery(record) {
+        const hook = labHooks.beforeUndoCommand;
+        if (hook && record.text.includes("morrow_work.cmd_catalog_undo(")) {
+          labHooks.beforeUndoCommand = null;
+          await hook();
+        }
+      },
+    }),
     now: Date.now,
     environment: "development",
     applyOpen: true,
@@ -1230,6 +1244,8 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
 
   // ---------------------------------------------------------------------------
   phase("batch");
+  // B7's first change, applied and verified: the "proposer" phase undoes it.
+  let opB;
   {
     const T2 = await newTask("Tidy the summer collection");
     const Y1 = await draft([newProduct()], T2);
@@ -1392,6 +1408,7 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       proposalRef: d2.proposalRef,
       approvalRef: d2.approvalRef,
     });
+    opB = ops(d1.proposalRef.id)[0]?.id;
     check(
       "B7:each_batch_approval_is_still_claimed_alone_and_rechecked_by_the_gateway",
       a1.status === 200 &&
@@ -1403,6 +1420,129 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       { a1: a1.body, a2: a2.body },
     );
     await enableListings();
+  }
+
+  // ---------------------------------------------------------------------------
+  phase("proposer");
+  {
+    // Review F1: an undo is proposed by the store's Listings installation, which the founder
+    // (A) enabled and owns, so it needs what the agent kernel requires of a Listings run
+    // proposing on this store, beyond the asking person's own grants. A1, a member holding
+    // `propose` and `delegate`, asks to undo B7's verified change while the founder's side
+    // changes. sim (owner-seeded, each restored at once): the founder's workspace membership
+    // switched off alone (grants kept, so only the owner's liveness can refuse it); the
+    // founder's catalog.content.publish grant narrowed to the title; an operator's stop on the
+    // installation's runs (it stays active, so only the stop can refuse it).
+    if (!opB) throw Error("UNDO_LAB_NO_BATCH_CHANGE");
+    const agent = one(
+      `SELECT id::text AS id,agent_principal_id::text AS agent FROM morrow_work.agent_installations WHERE store_id=${literal(S)} AND status='active'`,
+    );
+    const ownerGrantId = "g_a_catalog_content_publish";
+    const savedGrant = last(
+      db.sql(`SELECT payload::text FROM morrow_identity.grants WHERE id=${literal(ownerGrantId)};`),
+    );
+    const membership = (active) =>
+      db.admin(
+        `UPDATE morrow_identity.workspace_memberships SET active=${active} WHERE workspace_id=${literal(W)} AND membership_id=${literal(P.A.membership)};`,
+      );
+    const grant = (payload, bump) =>
+      db.admin(
+        `UPDATE morrow_identity.grants SET payload=${payload} WHERE id=${literal(ownerGrantId)};` +
+          (bump
+            ? `\nUPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE id=${literal(O)};`
+            : ""),
+      );
+    let stopId = null;
+    const stopOn = () => {
+      stopId = randomUUID();
+      replica(
+        `SET LOCAL ROLE morrow_work_owner; INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,set_by_operator_id,reason_code,reason,created_at) VALUES(${literal(O)},${literal(W)},${literal(stopId)},'installation',${literal(S)},${literal(agent.id)},'operator',NULL,NULL,'lab_operator','lab_stop_sim','Laboratory stop',${ms});`,
+      );
+    };
+    const stopOff = () =>
+      db.workOwner(
+        `UPDATE morrow_work.stop_controls SET lifted_at=greatest(${ms},created_at),lifted_by_kind='operator',lifted_by_operator_id='lab_operator' WHERE id=${literal(stopId)};`,
+      );
+    // bump: a real grant change also bumps the policy revision (which the prelude's own
+    // recheck catches); the race case leaves it, so only the owner's grants digest can.
+    const cases = (bump) => ({
+      owner_removed: [() => membership(false), () => membership(true)],
+      owner_narrowed: [
+        () => grant(`jsonb_set(payload,'{scope,fields}','["title"]'::jsonb)`, bump),
+        () => grant(`${literal(savedGrant)}::jsonb`, bump),
+      ],
+      stopped: [stopOn, stopOff],
+    });
+    const shape = (r) => ({ status: r.status, code: r.body.code, message: r.body.safeMessage });
+    const inactive = /^The Listings agent is not enabled for this store\.$/;
+    const halted = /^AI work is stopped for this store\.$/;
+    // U15: before any read. Each refusal reads nothing and writes nothing.
+    const early = {};
+    for (const [name, [on, off]] of Object.entries(cases(true))) {
+      const before = footprint();
+      const checks0 = undoChecks();
+      on();
+      let r;
+      try {
+        r = await undo(P.A1, opB);
+      } finally {
+        off();
+      }
+      early[name] = { ...shape(r), clean: footprint() === before && undoChecks() === checks0 };
+    }
+    check(
+      "U15:undo_needs_the_listings_installations_live_owner_its_grant_and_no_stop_before_any_read",
+      early.owner_removed.status === 409 &&
+        inactive.test(early.owner_removed.message) &&
+        early.owner_narrowed.status === 403 &&
+        early.owner_narrowed.code === "denied" &&
+        early.stopped.status === 409 &&
+        halted.test(early.stopped.message) &&
+        Object.values(early).every((x) => x.clean),
+      early,
+    );
+    // U16: the same changes landing after the Worker's checks, just before cmd_catalog_undo
+    // (the broker has read): the command refuses under its lock and stores nothing.
+    const late = {};
+    for (const [name, [on, off]] of Object.entries(cases(false))) {
+      const before = footprint();
+      let fired = false;
+      labHooks.beforeUndoCommand = async () => {
+        fired = true;
+        on();
+      };
+      let r;
+      try {
+        r = await undo(P.A1, opB);
+      } finally {
+        labHooks.beforeUndoCommand = null;
+        if (fired) off();
+      }
+      late[name] = { ...shape(r), fired, clean: footprint() === before };
+    }
+    // With everything restored, the same person's undo is stored, proposed by that
+    // installation for A1.
+    const control = await undo(P.A1, opB);
+    const stored = one(
+      `SELECT proposer_kind,proposer_installation_id::text AS installation,proposer_principal_id::text AS proposer,requester_principal_id::text AS requester FROM morrow_work.proposals WHERE id=${literal(control.body.proposalId ?? "absent")}`,
+    );
+    check(
+      "U16:cmd_catalog_undo_rechecks_the_owner_its_grants_and_stops_under_its_lock",
+      Object.values(late).every((x) => x.fired && x.clean) &&
+        late.owner_removed.status === 409 &&
+        inactive.test(late.owner_removed.message) &&
+        late.owner_narrowed.status === 409 &&
+        late.owner_narrowed.code === "conflict" &&
+        /authority changed/i.test(late.owner_narrowed.message) &&
+        late.stopped.status === 409 &&
+        halted.test(late.stopped.message) &&
+        control.status === 201 &&
+        stored?.proposer_kind === "agent" &&
+        stored.installation === agent.id &&
+        stored.proposer === agent.agent &&
+        stored.requester === P.A1.principal,
+      { late, control: control.body, stored },
+    );
   }
 
   // ---------------------------------------------------------------------------
