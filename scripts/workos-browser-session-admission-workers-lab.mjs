@@ -137,8 +137,10 @@ for (const row of [
   { outcome: "replayed" },
   { family_id: null },
   { generation_id: "foreign" },
-  // P05.T01y-AC30: a generation may live 30 minutes after admission; one ms more is held.
-  { expires_at_ms: String(now + 1800001) },
+  // P05.T01y-AC30: the database admits only before the evidence lease end (now + 5000), so an
+  // expiry at that end + 30 minutes is beyond the SQL's own bound and held. A database clock
+  // that leads the Worker's by less is accepted (fix-signin-clock-and-stage-log brief).
+  { expires_at_ms: String(now + 1805000) },
   { outcome: "denied" },
 ])
   cases.push(make("malformed_reply_" + cases.length, { row, expected: "held" }));
