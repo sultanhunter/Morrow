@@ -108,7 +108,7 @@ export const inboxCopy = {
     settledBody: "Morrow has an answer for this change now.",
     checks: (n: number) =>
       n === 0
-        ? "Morrow hasn’t checked the product yet."
+        ? "Morrow hasn’t checked the product."
         : `Morrow checked the product ${plural(n, "time", "times")}.`,
     lastCheck: (date: string) => `Last checked ${date}.`,
     openReview: "Open the changes",

@@ -741,7 +741,14 @@ export const fixtureCases = [
     {
       scenario: "inbox_problems",
       widths: [1440, 390],
-      setup: (page) => page.getByRole("heading", { name: "This change wasn’t applied" }).waitFor(),
+      setup: async (page) => {
+        await page.getByRole("heading", { name: "This change wasn’t applied" }).waitFor();
+        // Review F1: a change that wasn't applied is never read back; no line says it was or will be.
+        expect(
+          (await page.getByText(/checked the product|Last checked/).count()) === 0,
+          "no_readback_line",
+        );
+      },
     },
   ),
   fixtureCase(

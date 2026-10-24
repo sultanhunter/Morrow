@@ -31,6 +31,22 @@ export const exceptionKind = (view: OperationDetailView): Kind => {
  */
 export const readbackCount = (view: OperationDetailView): number =>
   view.readbacks[0]?.sequence ?? 0;
+/**
+ * The line saying how often Morrow read the product back, or null when no read-back has
+ * happened and none can (review F1). Check again is offered only for a change Morrow
+ * couldn't confirm or a person set aside (review.tsx), and 0045's reconcile reads back only
+ * submitted, uncertain and cancel_requested operations: a change that wasn't applied (a
+ * definite failure, or a conflict found before sending) or is settled is never read back
+ * later, so a line about checks it hasn't had would promise one that never comes.
+ */
+export const checksLine = (view: OperationDetailView): string | null => {
+  const last = view.readbacks[0] ?? null;
+  if (last === null) {
+    const kind = exceptionKind(view);
+    return kind === "uncertain" || kind === "set_aside" ? d.checks(0) : null;
+  }
+  return `${d.checks(readbackCount(view))} ${d.lastCheck(inboxDate(last.observedAt))}`;
+};
 const titles = {
   uncertain: d.uncertainTitle,
   set_aside: d.setAsideTitle,
@@ -44,7 +60,8 @@ const bodies = {
   settled: d.settledBody,
 } as const;
 
-function Result({
+/** The result card: the operation, its read-back line when there is one, and the links. */
+export function ExceptionResult({
   ws,
   view,
   onChanged,
@@ -54,17 +71,14 @@ function Result({
   readonly onChanged: () => void;
 }) {
   const o = view.operation;
-  const last = view.readbacks[0] ?? null;
+  const checks = checksLine(view);
   return (
     <section className="card" aria-labelledby="exception-result-title">
       <div className="card-head">
         <h2 id="exception-result-title">{d.resultTitle}</h2>
       </div>
       <OperationList ws={ws} operations={[o]} onChanged={onChanged} testId="exception-operation" />
-      <p className="muted">
-        {d.checks(readbackCount(view))}
-        {last ? ` ${d.lastCheck(inboxDate(last.observedAt))}` : ""}
-      </p>
+      {checks !== null ? <p className="muted">{checks}</p> : null}
       <div className="item-actions">
         <RouteLink
           route="review"
@@ -112,7 +126,7 @@ export function ExceptionScreen({
         {kind !== null ? <p className="scope-line">{bodies[kind]}</p> : null}
       </header>
       {detail.kind === "ok" ? (
-        <Result ws={ws} view={detail.value} onChanged={reload} />
+        <ExceptionResult ws={ws} view={detail.value} onChanged={reload} />
       ) : (
         outcomeState(detail, reload)
       )}

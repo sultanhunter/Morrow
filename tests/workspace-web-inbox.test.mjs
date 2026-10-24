@@ -35,7 +35,12 @@ import { InboxList, InboxRow, needsYouItems } from "../packages/workspace-ui/src
 import { NeedsYouCard } from "../packages/workspace-ui/src/screens/home.tsx";
 import { copy } from "../packages/workspace-ui/src/copy.ts";
 import { describeActivity, activityDay } from "../packages/workspace-ui/src/screens/activity.tsx";
-import { exceptionKind, readbackCount } from "../packages/workspace-ui/src/screens/exception.tsx";
+import {
+  checksLine,
+  ExceptionResult,
+  exceptionKind,
+  readbackCount,
+} from "../packages/workspace-ui/src/screens/exception.tsx";
 import { inboxCopy } from "../packages/workspace-ui/src/sunrise/inbox-copy.ts";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import { recordingTransport, json } from "./fixtures/workspace-web.mjs";
@@ -681,15 +686,58 @@ test("copy: never promises a check Morrow doesn't make (F3)", () => {
   // Morrow reads an unconfirmed change back right after applying it and when a person
   // presses Check again; nothing checks it on a schedule, so no words say it does.
   const claims =
-    /on its own|by itself|keeps? checking|still checks|automatically|in the background|(?:will|’ll|'ll) check/i;
+    /on its own|by itself|keeps? checking|still checks|automatically|in the background|(?:will|’ll|'ll) check|hasn’t checked .* yet/i;
   assert.deepEqual(
     strings(inboxCopy, "inboxCopy", []).filter(([, text]) => claims.test(text)),
     [],
   );
+  // The walk above calls the read-back line with a word, never 0; the counts on their own.
+  for (const n of [0, 1, 2]) assert.doesNotMatch(inboxCopy.detail.checks(n), claims, String(n));
   assert.match(inboxCopy.detail.uncertainBody, /won’t send the change again/);
   assert.match(inboxCopy.detail.uncertainBody, /Check again/);
   assert.match(inboxCopy.detail.setAsideBody, /won’t send the change again\. Check again/);
   assert.equal(inboxCopy.activity.setAsideDetail, "Nothing was sent again.");
+});
+
+test("the exception screen: a read-back line only where one can happen or has (F1)", async () => {
+  // A change that wasn't applied is never read back: Check again is offered only for an
+  // uncertain or set-aside change, and 0045's reconcile reads back only submitted,
+  // uncertain and cancel_requested operations. So its screen says nothing about checks.
+  const problems = createFixtureAdapter("inbox_problems");
+  const failed = (await problems.inbox.operation(ws, "00000000-0000-4000-9000-000000000202")).value;
+  assert.equal(failed.operation.status, "conflict");
+  assert.equal(exceptionKind(failed), "failed");
+  assert.deepEqual(failed.readbacks, []);
+  assert.equal(checksLine(failed), null);
+  const services = { ...markupServices, composed: {}, port: {} };
+  const render = (view) =>
+    renderToStaticMarkup(
+      h(ServicesProvider, { value: services }, h(ExceptionResult, { ws, view, onChanged() {} })),
+    );
+  const html = render(failed);
+  assert.doesNotMatch(html, /checked the product|Last checked/);
+  assert.match(html, /Open the changes/);
+  // A definite failure and a settled change with no read-back say nothing either.
+  for (const status of ["failed", "conflict", "verified"]) {
+    const view = { ...failed, operation: { ...failed.operation, status } };
+    assert.equal(checksLine(view), null, status);
+    assert.doesNotMatch(render(view), /checked the product/, status);
+  }
+  // A change Morrow couldn't confirm or a person set aside can be read back (Check again);
+  // with none so far the line says so, and promises nothing.
+  for (const status of ["uncertain", "cancel_requested"]) {
+    const view = { ...failed, operation: { ...failed.operation, status, reason: null } };
+    assert.equal(checksLine(view), "Morrow hasn’t checked the product.", status);
+    assert.match(render(view), /Morrow hasn’t checked the product\./, status);
+  }
+  // Every read-back that happened is counted, whatever the status now.
+  const uncertain = (await problems.inbox.operation(ws, "00000000-0000-4000-9000-000000000201"))
+    .value;
+  assert.equal(uncertain.readbacks.length, 1);
+  assert.match(checksLine(uncertain), /^Morrow checked the product 1 time\. Last checked .+\.$/);
+  const failedAfterCheck = { ...failed, readbacks: uncertain.readbacks };
+  assert.match(checksLine(failedAfterCheck), /^Morrow checked the product 1 time\. Last checked /);
+  assert.match(render(failedAfterCheck), /Morrow checked the product 1 time\./);
 });
 
 test("copy: plain words, none of the internal terms", () => {
