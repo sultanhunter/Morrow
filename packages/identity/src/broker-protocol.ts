@@ -651,6 +651,20 @@ export const shopifyWebhookTopics = Object.freeze([
   "shop/redact",
 ] as const);
 export type ShopifyWebhookTopic = (typeof shopifyWebhookTopics)[number];
+// Shopify CLI 4.9 refuses app-specific subscriptions with use_legacy_install_flow (the
+// connector's own authorization-code install), so the app configuration subscribes only the
+// three compliance topics (they are always app-specific), and the broker registers the two
+// app topics for each installation as shop-specific subscriptions through the Admin API, to
+// the same signed webhook path (docs/briefs/shopify-shop-specific-webhooks.md).
+export const shopifyComplianceWebhookTopics = Object.freeze([
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact",
+] as const);
+export const shopifyShopWebhookTopics = Object.freeze([
+  "app/uninstalled",
+  "app/scopes_update",
+] as const);
 // The selected X-Shopify-* headers, lower-case, that the connector forwards as JSON.
 export const shopifyWebhookHeaderNames = Object.freeze([
   "x-shopify-api-version",
