@@ -98,8 +98,17 @@ async function held(pending, method = "runtimeExecute") {
 // and call key, settlement edges, holds raised by unknown outcomes, the sweep's list.
 function memoryLedger(
   events,
-  { refuse = null, leaseRefused = false, now = () => Date.now(), failToken = null } = {},
+  {
+    refuse = null,
+    leaseRefused = false,
+    now = () => Date.now(),
+    failToken = null,
+    // The first failUnknown unknown writes do not commit (a reset, a timeout, an unknown
+    // commit): they answer false and change nothing.
+    failUnknown = 0,
+  } = {},
 ) {
+  let unknownFailures = failUnknown;
   const ops = new Map();
   const keys = new Map();
   const holds = [];
@@ -159,6 +168,10 @@ function memoryLedger(
     },
     async unknown(operationId, reason) {
       events.push(["ledger.unknown", reason]);
+      if (unknownFailures > 0) {
+        unknownFailures--;
+        return false;
+      }
       const o = ops.get(operationId);
       if (!o || terminal.includes(o.status)) return false;
       o.status = "unknown_effect";
@@ -1190,6 +1203,61 @@ test("PR 8: a broken reply holds the runtime until a person lifts it, even when 
   const created = JSON.parse(await create.execute(job()));
   assert.deepEqual([created.outcome, created.code], ["unknown", "reply_invalid"]);
   assert.deepEqual(create.events.at(-1), ["ledger.unknown", "reply_invalid"]);
+});
+
+test("PR 8: a broken reply whose hold write fails is never settled killed; a hold still follows", async () => {
+  const brokenWrite = (fake, events) => ({
+    ...recorded(fake, events),
+    writeFile: async () => ({ outcome: "unknown", broken: true }),
+  });
+  // The hold's first write does not commit; its one retry after the kill does: held, then
+  // killed, and the hold refuses the next create.
+  const once = world({ ledger: { failUnknown: 1 }, adapter: brokenWrite });
+  const first = JSON.parse(await once.execute(job()));
+  assert.deepEqual([first.outcome, first.code], ["unknown", "reply_invalid"]);
+  assert.deepEqual(once.events.slice(-4), [
+    ["ledger.unknown", "reply_invalid"],
+    ["adapter.kill", null],
+    ["ledger.unknown", "reply_invalid"],
+    ["ledger.settle", "killed"],
+  ]);
+  assert.deepEqual(once.fake.alive(), []);
+  assert.deepEqual(
+    once.ledger.holds.map((h) => h.reason),
+    ["reply_invalid"],
+  );
+  const after = JSON.parse(await once.execute(job({ callKey: "after-once" })));
+  assert.deepEqual([after.outcome, after.code], ["refused", "runtime_held"]);
+  // Neither write commits: the sandbox is still killed, but the operation is never settled
+  // (a `killed` settlement would end it with no hold). It stays open for the stale sweep,
+  // which finds no sandbox and records it not_found_unverified: the hold follows there.
+  const twice = world({ ledger: { failUnknown: 2 }, adapter: brokenWrite });
+  const second = JSON.parse(await twice.execute(job()));
+  assert.deepEqual([second.outcome, second.code], ["unknown", "reply_invalid"]);
+  assert.deepEqual(twice.events.slice(-3), [
+    ["ledger.unknown", "reply_invalid"],
+    ["adapter.kill", null],
+    ["ledger.unknown", "reply_invalid"],
+  ]);
+  assert.ok(!names(twice.events).includes("ledger.settle"));
+  assert.deepEqual(twice.fake.alive(), []);
+  const [id] = [...twice.ledger.ops.keys()];
+  assert.equal(twice.ledger.ops.get(id).status, "created");
+  assert.equal(twice.ledger.holds.length, 0);
+  twice.ledger.ops.get(id).stale = true;
+  assert.deepEqual(JSON.parse(await twice.sweep()), {
+    schemaVersion: 1,
+    examined: 1,
+    killed: 0,
+    absentVerified: 0,
+    unknown: 1,
+    skipped: 0,
+  });
+  assert.equal(twice.ledger.ops.get(id).reason, "not_found_unverified");
+  assert.equal(twice.ledger.tokens.get(id).destroyed, "sandbox_unknown");
+  assert.equal(twice.ledger.holds.length, 1);
+  const next = JSON.parse(await twice.execute(job({ callKey: "after-twice" })));
+  assert.deepEqual([next.outcome, next.code], ["refused", "runtime_held"]);
 });
 
 test("PR 8: stops kill their scope's sandboxes at once; a stopped operation is never recorded unknown early", async () => {

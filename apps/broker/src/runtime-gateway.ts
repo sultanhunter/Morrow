@@ -66,7 +66,9 @@ import {
 //     at its next call with the code `stopped` and its own kill follows at once.
 //   * A reply the adapter marks `broken` (the provider's documented protocol did not hold)
 //     records the operation `unknown_effect` with reason reply_invalid before the kill, so a
-//     runtime hold stays until a person lifts it, even when the kill then succeeds.
+//     runtime hold stays until a person lifts it, even when the kill then succeeds. Until
+//     that write commits (it is retried once after the kill) the operation is never settled
+//     `killed`: it stays open for the stale sweep, which records it unknown.
 //   * Stops: the sweep's list also carries operations a stop (platform, connection or
 //     installation), an ended lease or an expired one has cut off (`stopped`), stale or not.
 //     The sweep kills such a sandbox at once (its settlement destroys the token, so a job still
@@ -352,6 +354,9 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
       code: "ledger_unrecorded",
       operationId,
     };
+    // False only while a broken reply's hold is not committed: the operation then never
+    // settles `killed` (which would end it with no hold), whatever the kill says.
+    let held = true;
     try {
       if (await ledger.created(operationId, sandboxRef)) {
         // The envd token's only home from here on is its vault record.
@@ -377,7 +382,8 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
             slice,
           );
           // A reply that broke the provider's protocol leaves a hold, whatever the kill says.
-          if (outcome.code === "reply_invalid") await ledger.unknown(operationId, "reply_invalid");
+          if (outcome.code === "reply_invalid")
+            held = await ledger.unknown(operationId, "reply_invalid");
         }
       }
     } finally {
@@ -390,8 +396,13 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
           ),
         { outcome: "unknown" },
       );
-      if (killed.outcome === "killed") await ledger.settle(operationId, "killed");
-      else
+      if (killed.outcome === "killed") {
+        // The hold is retried once. If it still did not commit, the operation stays open
+        // (never `killed` without its hold), and the stale sweep, finding no sandbox, records
+        // it not_found_unverified, which holds.
+        if (!held) held = await ledger.unknown(operationId, "reply_invalid");
+        if (held) await ledger.settle(operationId, "killed");
+      } else
         await ledger.unknown(
           operationId,
           killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
