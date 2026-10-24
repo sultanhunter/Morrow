@@ -74,3 +74,9 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 > approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
 
 What it approves: this record as written and each owner question above with its recommended answer.
+
+## Amendments
+
+### 2026-10-25: item 4's failed runs and the installed agents' default (ADR-0036)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes these lines; the text above is kept as approved. Failed runs still cost 0 credits; their cost is recorded and counts toward no cap, since the unrecovered-cost cap is removed. The installed agents' default becomes Opus 5.5 at medium, so at either price no look-for-work pass at the default fits the 1% cap (two worst-case turns cost US$1.12) until the owner confirms that cap's value or floor with the price. The US$7 and US$25 backstops stand.

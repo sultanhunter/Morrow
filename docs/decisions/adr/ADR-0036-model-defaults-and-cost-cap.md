@@ -6,6 +6,7 @@
 - Amends: ADR-0027 item 12 (the installed agents' default) and item 6 (the unrecovered-cost cap for loop runs); ADR-0022 item 11's failed-products bullet and its verify sentence (the US$4.50 unrecovered-cost cap), item 16's default (Sonnet 5.5 at low for Listings) and default member ceiling, and its owner-confirmed values 2, 6 (the cap) and 7 (the ceiling's default); ADR-0026 item 4's failed-runs bullet and its look-for-work arithmetic at the installed agents' default; ADR-0034's "Does not change" note that the installed agents keep Sonnet 5.5 at low (OD-2026-10-23-8 answer 8); ADR-0023 decision 7 as ADR-0027 item 12 restated it.
 - Does not change: the per-agent choice of ADR-0027 item 12 and who makes it; `governance.model_default.revise` stays `human_only`; the per-run US$7 and per-day US$25 backstops (ADR-0026 item 4); credit holds and reservations; the three-failure breaker; the Anthropic Console monthly limit; every authority rule; catalogue version 2's other values.
 - Unblocks: loop runs at Opus 5.5 before billing (track T4); Listings at the new default.
+- Brief: `docs/briefs/adr-0036-model-defaults-cost-cap.md` (the change on `main`, and the same change for the agent-loop branch).
 
 ## Context
 

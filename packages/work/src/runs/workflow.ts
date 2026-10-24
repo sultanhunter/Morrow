@@ -38,8 +38,8 @@ import { packListingProposals } from "./producer.js";
 //   start    run_start (queued -> running, lease started), under the lease whose subject is
 //            the Workflow's instance id (the run id; anything else interrupts the run).
 //   product  one per product: decideDelegation (execute on catalog.content.propose, view on
-//            catalog.products.read); run_product_begin (the breaker, the unrecovered-cost cap
-//            and the reservation); the product read (M2 PR-3's shopifyRead productContent,
+//            catalog.products.read); run_product_begin (the breaker and the reservation; its
+//            unrecovered-cost check caps nothing since migration 0047, ADR-0036); the product read (M2 PR-3's shopifyRead productContent,
 //            named by the run id: a read that throws is tried again within the step, the
 //            lease entered before each retry, at most runTimings.readWaitsMs.length + 1
 //            reads; one still unavailable, not_found or a reply outside the protocol fails

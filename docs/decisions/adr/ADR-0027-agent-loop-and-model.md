@@ -88,3 +88,9 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 What it approves: this record as written and each owner question above with its recommended answer.
 
 The rest of the statement changes owner question 1: model and thinking effort are chosen per agent, with the Coordinator on Opus 5.5 at high effort and specialists on Opus 5.5 at medium by default, and the five installed agents keep the recommended Sonnet 5.5 at low. Item 12 records the change.
+
+## Amendments
+
+### 2026-10-25: items 6 and 12, the defaults and the cap for loop runs (ADR-0036)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes these lines; the text above is kept as approved. Item 12's defaults: the Coordinator stays on Opus 5.5 at high, and every other agent kind, specialists, sub-agents and the five installed agents, runs Opus 5.5 at medium (an installed agent's worst-case turn US$0.56, turn limit 12, hold US$6.72). Item 6: loop runs before the rate card count toward no unrecovered-cost cap, which is removed; the US$7 and US$25 backstops, holds, `cost_budget` and `cap_below_turn` stand. Catalogue version 2's other values stay proposed.

@@ -72,6 +72,7 @@ const refusals: Readonly<Record<RunRefusal, readonly [number, string, string, st
       "never",
       "Today's AI spending limit for this workspace is reached.",
     ],
+    // Never returned since migration 0047 (ADR-0036 removed the unrecovered-cost cap).
     unrecovered_cost_cap: [
       409,
       "budget_exhausted",
