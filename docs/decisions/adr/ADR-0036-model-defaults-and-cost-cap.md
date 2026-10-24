@@ -10,7 +10,7 @@
 
 ## Context
 
-ADR-0027 item 12 set the defaults: the Coordinator on Opus 5.5 at high, specialists on Opus 5.5 at medium, the five installed agents on Sonnet 5.5 at low. Listings' per-product runs (`listings-run@1`) default to Sonnet 5.5 at low through catalogue version 1 (ADR-0022 item 16). ADR-0022 item 11 caps each workspace's unrecovered cost, the AI cost of products and runs that earned no credit, at US$4.50 a billing period, and ADR-0027 item 6 counts every loop run toward it before the rate card. One Opus 5.5 hold (US$3.84 to US$6.72) passes that cap, so the cap blocks every Opus run before billing exists. The lead put both points to the owner, who answered on 2026-10-25 (OD-2026-10-25-1); the lead confirmed its reading below to the owner in chat.
+ADR-0027 item 12 set the defaults: the Coordinator on Opus 5.5 at high, specialists on Opus 5.5 at medium, the five installed agents on Sonnet 5.5 at low. Listings' per-product runs (`listings-run@1`) default to Sonnet 5.5 at low through catalogue version 1 (ADR-0022 item 16). ADR-0022 item 11 caps each workspace's unrecovered cost, the AI cost of products and runs that earned no credit, at US$4.50 a billing period, and ADR-0027 item 6 counts every loop run toward it, at its hold, before the rate card. An Opus 5.5 run at medium or high holds US$6.40 to US$6.72 on its own, and the Coordinator's US$3.84 leaves no room for a second run, so the cap blocks Opus runs before billing exists. The lead put both points to the owner, who answered on 2026-10-25 (OD-2026-10-25-1); the lead confirmed its reading below to the owner in chat.
 
 ## Decision
 
