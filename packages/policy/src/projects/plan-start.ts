@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type {
   CapabilityId,
   Current_AreaTemplateId,
@@ -14,6 +13,7 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { areaStartRecords, quickTasksStartRecords, type AreaId } from "./area-templates";
+import { canonicalText, sha256Hex } from "./digest";
 import { isCustomerMeasure } from "./measures";
 import { planDraftsRecord, planDraftValid } from "./plan-draft";
 
@@ -281,19 +281,6 @@ export function startChecks(
   return Object.freeze(checks);
 }
 
-const canonical = (v: unknown): string =>
-  v === null || typeof v !== "object"
-    ? JSON.stringify(v)
-    : Array.isArray(v)
-      ? "[" + v.map(canonical).join(",") + "]"
-      : "{" +
-        Object.keys(v as object)
-          .sort()
-          .map((k) => JSON.stringify(k) + ":" + canonical((v as Record<string, unknown>)[k]))
-          .join(",") +
-        "}";
-const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
-
 /**
  * The grant summary a document binds: for each current grant on a capability the start
  * checks, its id, capability, sorted verbs, fields and validity. Any grant issued, revoked,
@@ -304,7 +291,7 @@ export function grantSummaryDigest(
   grants: readonly Current_Grant[],
   capabilities: readonly CapabilityId[],
   nowMs: number,
-): string {
+): Promise<string> {
   const wanted = new Set<string>(capabilities);
   const rows = grants
     .filter(
@@ -322,7 +309,7 @@ export function grantSummaryDigest(
       expiresAt: g.expiresAt,
     }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return sha256(canonical(["morrow.plan_start.grant_summary", 1, rows]));
+  return sha256Hex(canonicalText(["morrow.plan_start.grant_summary", 1, rows]));
 }
 
 export interface DocumentInput {
@@ -341,7 +328,7 @@ export interface BuiltDocument {
   readonly digest: string;
 }
 /** PlanStartDocument@1, its canonical text and digest (what the definer stores). */
-export function buildPlanStartDocument(input: DocumentInput): BuiltDocument {
+export async function buildPlanStartDocument(input: DocumentInput): Promise<BuiltDocument> {
   const at = input.nowMs - (input.nowMs % 1000);
   const card = input.card;
   const document: Current_PlanStartDocument = {
@@ -368,8 +355,8 @@ export function buildPlanStartDocument(input: DocumentInput): BuiltDocument {
     input.estimate.creditsLow > input.estimate.creditsHigh
   )
     throw new TypeError("PLAN_START_DOCUMENT_INVALID");
-  const text = canonical(document);
-  return Object.freeze({ document, canonical: text, digest: sha256(text) });
+  const text = canonicalText(document);
+  return Object.freeze({ document, canonical: text, digest: await sha256Hex(text) });
 }
 /** The target a card names, as the document binds it. */
 export function startTarget(card: StartCard): Current_PlanTarget {
@@ -378,7 +365,7 @@ export function startTarget(card: StartCard): Current_PlanTarget {
   return card.draft.target;
 }
 /** A nonce's stored digest: the definer keeps only this. */
-export const nonceDigest = (nonce: string) => sha256(nonce);
+export const nonceDigest = (nonce: string): Promise<string> => sha256Hex(nonce);
 
 export interface StoredDocument {
   readonly canonical: string;
@@ -411,10 +398,10 @@ export interface StartAttempt {
  * unknown, expired or reused digest, or any change, is `stale`; an agent, another member
  * or another surface is `actor_ineligible`. The definer repeats each under lock.
  */
-export function checkStartAttempt(
+export async function checkStartAttempt(
   stored: StoredDocument | null,
   attempt: StartAttempt,
-): "ok" | "stale" | "actor_ineligible" {
+): Promise<"ok" | "stale" | "actor_ineligible"> {
   if (attempt.actor.kind !== "human" || attempt.surface !== "standalone") return "actor_ineligible";
   if (stored === null) return "stale";
   if (
@@ -424,8 +411,8 @@ export function checkStartAttempt(
     return "actor_ineligible";
   if (stored.sessionDigest !== attempt.sessionDigest) return "actor_ineligible";
   if (stored.consumed || attempt.nowMs >= stored.expiresAtMs) return "stale";
-  if (stored.nonceDigest !== nonceDigest(attempt.nonce)) return "stale";
-  if (sha256(stored.canonical) !== stored.digest) return "stale";
+  if (stored.nonceDigest !== (await nonceDigest(attempt.nonce))) return "stale";
+  if ((await sha256Hex(stored.canonical)) !== stored.digest) return "stale";
   const document = JSON.parse(stored.canonical) as Current_PlanStartDocument;
   if (document.draft !== null) {
     if (

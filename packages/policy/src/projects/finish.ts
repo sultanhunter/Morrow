@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type {
   Current_CriteriaList,
   Current_GoalMeasure,
@@ -6,6 +5,7 @@ import type {
   Current_GoalStatus,
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
+import { canonicalText, sha256Hex } from "./digest";
 import { isCustomerMeasure } from "./measures";
 import { codeViewer, goalProgress, type GoalRecordFacts, type GoalValueFacts } from "./progress";
 
@@ -54,19 +54,8 @@ export interface FinishResultsRecord {
   readonly computedAt: string;
 }
 /** sha256 of the canonical JSON of a results record (sorted keys). */
-export function finishResultsDigest(record: FinishResultsRecord): string {
-  const canonical = (v: unknown): string =>
-    v === null || typeof v !== "object"
-      ? JSON.stringify(v)
-      : Array.isArray(v)
-        ? "[" + v.map(canonical).join(",") + "]"
-        : "{" +
-          Object.keys(v as object)
-            .sort()
-            .map((k) => JSON.stringify(k) + ":" + canonical((v as Record<string, unknown>)[k]))
-            .join(",") +
-          "}";
-  return createHash("sha256").update(canonical(record), "utf8").digest("hex");
+export function finishResultsDigest(record: FinishResultsRecord): Promise<string> {
+  return sha256Hex(canonicalText(record));
 }
 
 /** The Product pages area's goal record, when "Keep the monthly check" moves into it. */
@@ -116,7 +105,9 @@ const areaNamedKey = "ai_named";
  * the hand check's product rows join the area's goal "AI assistants name your products"
  * through workspace.goal.revise, refusing when that would make a 4th measured goal.
  */
-export function planFinish(input: FinishInput): FinishPlan | { readonly refusal: FinishRefusal } {
+export async function planFinish(
+  input: FinishInput,
+): Promise<FinishPlan | { readonly refusal: FinishRefusal }> {
   const { record } = input;
   if (record.areaTemplateId !== null || record.dueAtMs === null)
     return { refusal: "not_a_project" };
@@ -193,7 +184,7 @@ export function planFinish(input: FinishInput): FinishPlan | { readonly refusal:
   return {
     to: results.outcome,
     results,
-    resultsDigest: finishResultsDigest(results),
+    resultsDigest: await finishResultsDigest(results),
     cancelTaskIds: open.map((t) => t.id),
     areaRevision,
   };

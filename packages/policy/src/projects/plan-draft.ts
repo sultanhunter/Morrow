@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type {
   Current_ContextTaint,
   Current_GoalMeasure,
@@ -14,6 +13,7 @@ import type {
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import planDraftsSwitch from "../../../../docs/decisions/plan-drafts-staging.json";
 import { type ToolEntry, toolEntry } from "../tool-catalogue";
+import { canonicalText, sha256Hex } from "./digest";
 
 // ADR-0034: Morrow drafts; a person's tap creates. Everything here is a code check outside
 // any model prompt: the tool's closed input, the refusal in a turn holding a report, the
@@ -181,17 +181,6 @@ export function planDraftValid(value: unknown): value is Current_PlanDraft {
   return true;
 }
 
-const canonical = (v: unknown): string =>
-  v === null || typeof v !== "object"
-    ? JSON.stringify(v)
-    : Array.isArray(v)
-      ? "[" + v.map(canonical).join(",") + "]"
-      : "{" +
-        Object.keys(v as object)
-          .sort()
-          .map((k) => JSON.stringify(k) + ":" + canonical((v as Record<string, unknown>)[k]))
-          .join(",") +
-        "}";
 const nulls = (...values: readonly unknown[]) => values.every((v) => v === null);
 function targetOf(t: Current_PlanDraftToolTarget): Current_PlanTarget | null {
   switch (t.kind) {
@@ -304,8 +293,8 @@ export function planDraftFromToolInput(input: unknown): Current_PlanDraft | null
 }
 
 /** sha256 of the canonical JSON (RFC 8785 over closed JSON) of a draft. */
-export const planDraftDigest = (draft: Current_PlanDraft): string =>
-  createHash("sha256").update(canonical(draft), "utf8").digest("hex");
+export const planDraftDigest = (draft: Current_PlanDraft): Promise<string> =>
+  sha256Hex(canonicalText(draft));
 
 /**
  * One plan.draft call, decided in code. Refused while the switch is off, in a turn holding
@@ -315,12 +304,13 @@ export const planDraftDigest = (draft: Current_PlanDraft): string =>
  * PlanDraft@1 by planDraftFromToolInput; nothing a model writes names a capability, scope,
  * grant, cap, model, recipient, sender or store.
  */
-export function decidePlanDraft(
+export async function decidePlanDraft(
   turn: TurnFacts,
   input: unknown,
-):
+): Promise<
   | { readonly ok: true; readonly draft: Current_PlanDraft; readonly digest: string }
-  | { readonly ok: false; readonly refusal: ToolRefusal } {
+  | { readonly ok: false; readonly refusal: ToolRefusal }
+> {
   if (turn.switchState === "off") return { ok: false, refusal: "plan_drafts_off" };
   if (turn.holdsReport) return { ok: false, refusal: "report_in_context" };
   if (turn.conversation === "ask" && !turn.askEnvelope)
@@ -331,7 +321,7 @@ export function decidePlanDraft(
   if (turn.mentionRun && mapped.kind !== "task" && mapped.kind !== "plan_change")
     return { ok: false, refusal: "card_kind_not_allowed" };
   const draft = structuredClone(mapped);
-  return { ok: true, draft, digest: planDraftDigest(draft) };
+  return { ok: true, draft, digest: await planDraftDigest(draft) };
 }
 
 /** A choice question: Coordinator only, at most 2 per run (ADR-0034 item 7). */
@@ -402,11 +392,11 @@ export interface PlanDraftRevision {
  * keeping the original's taint and restricted sources (ADR-0024 item 8). An edit can never
  * clear a taint, and the edited draft passes the same code rules.
  */
-export function reviseDraft(
+export async function reviseDraft(
   current: PlanDraftRevision,
   edited: unknown,
   editorPrincipalId: string,
-): PlanDraftRevision | null {
+): Promise<PlanDraftRevision | null> {
   if (!planDraftValid(edited)) return null;
   if (edited.kind !== current.draft.kind) return null;
   const draft = structuredClone(edited);
@@ -414,7 +404,7 @@ export function reviseDraft(
     messageId: current.messageId,
     revision: current.revision + 1,
     draft,
-    digest: planDraftDigest(draft),
+    digest: await planDraftDigest(draft),
     editorPrincipalId,
     contextTaint: current.contextTaint,
     restrictedSources: current.restrictedSources,

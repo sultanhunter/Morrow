@@ -349,37 +349,40 @@ test("Morrow in an Ask: only under the envelope; never task.create, specialist.d
   assert.deepEqual(turnTools(turn({ mentionRun: true })), [...mentionRunTools]);
 });
 
-test("plan.draft: refused while off, in a turn holding a report, without the Ask envelope", () => {
-  assert.deepEqual(decidePlanDraft(turn({ switchState: "off" }), asToolInput(project)), {
+test("plan.draft: refused while off, in a turn holding a report, without the Ask envelope", async () => {
+  assert.deepEqual(await decidePlanDraft(turn({ switchState: "off" }), asToolInput(project)), {
     ok: false,
     refusal: "plan_drafts_off",
   });
-  assert.deepEqual(decidePlanDraft(turn({ holdsReport: true }), asToolInput(project)), {
+  assert.deepEqual(await decidePlanDraft(turn({ holdsReport: true }), asToolInput(project)), {
     ok: false,
     refusal: "report_in_context",
   });
-  assert.deepEqual(decidePlanDraft(turn({ conversation: "ask" }), asToolInput(project)), {
+  assert.deepEqual(await decidePlanDraft(turn({ conversation: "ask" }), asToolInput(project)), {
     ok: false,
     refusal: "ask_envelope_missing",
   });
-  const decided = decidePlanDraft(turn(), asToolInput(project));
+  const decided = await decidePlanDraft(turn(), asToolInput(project));
   assert.equal(decided.ok, true);
   assert.deepEqual(decided.draft, project);
-  assert.equal(decided.digest, planDraftDigest(project));
+  assert.equal(decided.digest, await planDraftDigest(project));
   // The model's input is the tool's, never PlanDraft@1 itself, and never one that breaks
   // PlanDraft@1's code rules.
-  assert.deepEqual(decidePlanDraft(turn(), project), { ok: false, refusal: "input_invalid" });
-  assert.deepEqual(decidePlanDraft(turn(), asToolInput({ ...project, title: "Tote" })), {
+  assert.deepEqual(await decidePlanDraft(turn(), project), {
+    ok: false,
+    refusal: "input_invalid",
+  });
+  assert.deepEqual(await decidePlanDraft(turn(), asToolInput({ ...project, title: "Tote" })), {
     ok: false,
     refusal: "input_invalid",
   });
   // A mention run drafts only a task or a plan change.
-  assert.deepEqual(decidePlanDraft(turn({ mentionRun: true }), asToolInput(project)), {
+  assert.deepEqual(await decidePlanDraft(turn({ mentionRun: true }), asToolInput(project)), {
     ok: false,
     refusal: "card_kind_not_allowed",
   });
-  assert.equal(decidePlanDraft(turn({ mentionRun: true }), asToolInput(task)).ok, true);
-  assert.equal(decidePlanDraft(turn({ mentionRun: true }), asToolInput(change)).ok, true);
+  assert.equal((await decidePlanDraft(turn({ mentionRun: true }), asToolInput(task))).ok, true);
+  assert.equal((await decidePlanDraft(turn({ mentionRun: true }), asToolInput(change))).ok, true);
 });
 
 test("PlanDraft@1's code rules: titles, kinds, keys, order, start values, dates", () => {
@@ -464,7 +467,7 @@ test("@Morrow: human-authored, project conversations only, three verbs, never au
   assert.equal(decideCoordinatorMention({ ...ok, switchState: "off" }), "plan_drafts_off");
 });
 
-test("a person's edit is a new revision that keeps the original's taint and sources", () => {
+test("a person's edit is a new revision that keeps the original's taint and sources", async () => {
   const source = {
     capabilityId: "catalog.products.read",
     resource: {
@@ -482,12 +485,12 @@ test("a person's edit is a new revision that keeps the original's taint and sour
     messageId: "message_a",
     revision: 1,
     draft: project,
-    digest: planDraftDigest(project),
+    digest: await planDraftDigest(project),
     editorPrincipalId: null,
     contextTaint: "untrusted_external",
     restrictedSources: [source],
   };
-  const edited = reviseDraft(
+  const edited = await reviseDraft(
     original,
     { ...project, title: "Tote in AI answers" },
     "principal_maya",
@@ -497,6 +500,6 @@ test("a person's edit is a new revision that keeps the original's taint and sour
   assert.notEqual(edited.digest, original.digest);
   assert.equal(edited.contextTaint, "untrusted_external", "an edit never clears a taint");
   assert.deepEqual(edited.restrictedSources, [source]);
-  assert.equal(reviseDraft(original, { ...project, title: "x" }, "principal_maya"), null);
-  assert.equal(reviseDraft(original, task, "principal_maya"), null, "an edit keeps the kind");
+  assert.equal(await reviseDraft(original, { ...project, title: "x" }, "principal_maya"), null);
+  assert.equal(await reviseDraft(original, task, "principal_maya"), null, "an edit keeps the kind");
 });

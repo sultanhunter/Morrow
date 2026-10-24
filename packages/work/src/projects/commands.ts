@@ -712,7 +712,7 @@ async function startDocument(
   const pieces = await decideStartPieces(checks, pieceDecider(a));
   if (!pieces.ok)
     throw new WorkReject(pieces.reason === "field_denied" ? "field_denied" : "denied");
-  const built = buildPlanStartDocument({
+  const built = await buildPlanStartDocument({
     id: crypto.randomUUID(),
     card,
     actor: humanActor(a),
@@ -720,7 +720,7 @@ async function startDocument(
     records,
     // The credit range is T4's per-viewer estimate; a code-built card spends nothing.
     estimate: { creditsLow: 0, creditsHigh: 0 },
-    grantSummaryDigest: grantSummaryDigest(a.grants, startCapabilities, a.databaseNowMs),
+    grantSummaryDigest: await grantSummaryDigest(a.grants, startCapabilities, a.databaseNowMs),
     nowMs: a.databaseNowMs,
   });
   const nonce = randomHex(32);
@@ -784,7 +784,7 @@ async function start(
   }
   await areaAgentAdded(tx, card);
   // (b) Every piece under live grants, and the grant summary the document bound.
-  const live = grantSummaryDigest(a.grants, startCapabilities, a.databaseNowMs);
+  const live = await grantSummaryDigest(a.grants, startCapabilities, a.databaseNowMs);
   if (live !== document.grantSummaryDigest) throw new ProjectReject("stale");
   const checks = startChecks(card, document.records, a.actor.principalId);
   const pieces = await decideStartPieces(checks, pieceDecider(a));

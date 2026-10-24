@@ -9,6 +9,7 @@ import {
   areaTemplate,
   criteriaForViewer,
   everydayAreaTemplates,
+  finishResultsDigest,
   goalAssistants,
   goalMetrics,
   goalProgress,
@@ -343,9 +344,9 @@ test("goal records per viewer: a customer-class goal only for members who may re
   assert.deepEqual(criteriaForViewer(quick, only(), []), quick);
 });
 
-test("Finish's results record leaves a customer-class goal out and stores no number", () => {
+test("Finish's results record leaves a customer-class goal out and stores no number", async () => {
   const record = dated([criterion("facts", facts), criterion("replied", replied)]);
-  const plan = planFinish({
+  const plan = await planFinish({
     record,
     values: [value("facts", 5, t0), value("facts", 12, t0 + 30 * day)],
     tasks: [],
@@ -489,7 +490,7 @@ test("step words: Not started before its date, No progress after 3 days unmoved"
   });
 });
 
-test("Finish: achieved only when code finds every goal Done; the monthly check moves", () => {
+test("Finish: achieved only when code finds every goal Done; the monthly check moves", async () => {
   const record = dated([criterion("facts", facts), criterion("named", named)]);
   const doneValues = [
     value("facts", 5, t0),
@@ -507,36 +508,46 @@ test("Finish: achieved only when code finds every goal Done; the monthly check m
     productPagesArea: null,
     cancelEdgesAvailable: false,
   };
-  const achieved = planFinish(base);
+  const achieved = await planFinish(base);
   assert.equal(achieved.to, "achieved");
   assert.match(achieved.resultsDigest, /^[a-f0-9]{64}$/);
+  assert.equal(achieved.resultsDigest, await finishResultsDigest(achieved.results));
   // The results record keeps keys and health codes only, never a measured number.
   assert.deepEqual(achieved.results.goals, [
     { key: "facts", health: "done" },
     { key: "named", health: "done" },
   ]);
   assert.doesNotMatch(JSON.stringify(achieved.results), /"value"|"observedAt"/);
-  const partial = planFinish({ ...base, values: doneValues.slice(0, 2) });
+  const partial = await planFinish({ ...base, values: doneValues.slice(0, 2) });
   assert.equal(partial.to, "cancelled");
   // An open task: refused until the P06 cancel edges exist; a running one always.
-  assert.deepEqual(planFinish({ ...base, tasks: [{ id: "t", status: "ready" }] }), {
+  assert.deepEqual(await planFinish({ ...base, tasks: [{ id: "t", status: "ready" }] }), {
     refusal: "tasks_open",
   });
   assert.deepEqual(
-    planFinish({ ...base, tasks: [{ id: "t", status: "running" }], cancelEdgesAvailable: true }),
+    await planFinish({
+      ...base,
+      tasks: [{ id: "t", status: "running" }],
+      cancelEdgesAvailable: true,
+    }),
     { refusal: "tasks_open" },
   );
   assert.deepEqual(
-    planFinish({ ...base, tasks: [{ id: "t", status: "ready" }], cancelEdgesAvailable: true })
-      .cancelTaskIds,
+    (
+      await planFinish({
+        ...base,
+        tasks: [{ id: "t", status: "ready" }],
+        cancelEdgesAvailable: true,
+      })
+    ).cancelTaskIds,
     ["t"],
   );
-  assert.deepEqual(planFinish({ ...base, record: { ...record, status: "achieved" } }), {
+  assert.deepEqual(await planFinish({ ...base, record: { ...record, status: "achieved" } }), {
     refusal: "already_finished",
   });
   const area = areaStartRecords("product_pages");
   // Keep the monthly check: a new area goal, then a product row on it.
-  const keep = planFinish({
+  const keep = await planFinish({
     ...base,
     keepMonthlyCheck: true,
     productPagesArea: {
@@ -551,7 +562,7 @@ test("Finish: achieved only when code finds every goal Done; the monthly check m
   assert.equal(added.key, "ai_named");
   assert.deepEqual(added.measure.rows, named.rows);
   assert.equal(added.measure.startRef, null);
-  const second = planFinish({
+  const second = await planFinish({
     ...base,
     record: dated([
       criterion("facts", facts),
@@ -572,16 +583,18 @@ test("Finish: achieved only when code finds every goal Done; the monthly check m
   // A 4th measured area goal is refused.
   const full = ["a", "b", "c"].map((k) => criterion(k, { ...cover, dueAt: null }));
   assert.deepEqual(
-    planFinish({
+    await planFinish({
       ...base,
       keepMonthlyCheck: true,
       productPagesArea: { goalId: "g", revision: 1, objective: "x", successCriteria: full },
     }),
     { refusal: "area_goal_limit" },
   );
-  assert.deepEqual(planFinish({ ...base, keepMonthlyCheck: true }), { refusal: "area_missing" });
+  assert.deepEqual(await planFinish({ ...base, keepMonthlyCheck: true }), {
+    refusal: "area_missing",
+  });
   assert.deepEqual(
-    planFinish({ ...base, record: { ...record, dueAtMs: null, areaTemplateId: "stock" } }),
+    await planFinish({ ...base, record: { ...record, dueAtMs: null, areaTemplateId: "stock" } }),
     { refusal: "not_a_project" },
   );
 });

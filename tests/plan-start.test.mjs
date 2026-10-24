@@ -106,11 +106,12 @@ const draft = {
   ],
   target: { kind: "new_project", dueAt: "2026-12-04T00:00:00Z" },
 };
+const draftDigest = await planDraftDigest(draft);
 const card = (extra = {}) => ({
   kind: "draft",
   messageId: "message_a",
   revision: 1,
-  digest: planDraftDigest(draft),
+  digest: draftDigest,
   draft,
   askerPrincipalId: "principal_maya",
   contextTaint: "none",
@@ -264,14 +265,15 @@ test("only the asker, a human on a standalone session, gets a document", () => {
   assert.equal(startEligible(leoActor, "embedded", quick, leoOwner), "actor_ineligible");
 });
 
-test("a plan change never revises Quick tasks", () => {
+test("a plan change never revises Quick tasks", async () => {
   const change = {
     ...draft,
     kind: "plan_change",
     target: { kind: "existing_project", projectId: "project_quick", goalRevision: 2 },
   };
+  const changeDigest = await planDraftDigest(change);
   const changeCard = (targetAreaTemplateId) =>
-    card({ draft: change, digest: planDraftDigest(change), targetAreaTemplateId });
+    card({ draft: change, digest: changeDigest, targetAreaTemplateId });
   assert.equal(changesQuickTasks(changeCard("quick_tasks")), true);
   assert.equal(startRecords(changeCard("quick_tasks")), null);
   for (const target of [null, undefined, "product_pages"]) {
@@ -287,7 +289,7 @@ test("a plan change never revises Quick tasks", () => {
   assert.equal(changesQuickTasks({ kind: "quick_tasks" }), false);
 });
 
-test("a plan change keeps the record's customer-class goals, which no card can see", () => {
+test("a plan change keeps the record's customer-class goals, which no card can see", async () => {
   const replied = {
     description: "Replied within a day",
     verificationCapabilityId: null,
@@ -317,11 +319,11 @@ test("a plan change keeps the record's customer-class goals, which no card can s
     steps: draft.steps.filter((s) => s.repeat === null),
     target: { kind: "existing_project", projectId: "project_emails", goalRevision: 3 },
   };
-  const changeCard = (goals, keptCriteria) => {
+  const changeCard = async (goals, keptCriteria) => {
     const d = { ...change, goals };
-    return card({ draft: d, digest: planDraftDigest(d), keptCriteria, targetOwner: "own" });
+    return card({ draft: d, digest: await planDraftDigest(d), keptCriteria, targetOwner: "own" });
   };
-  const records = startRecords(changeCard(draft.goals, [replied]));
+  const records = startRecords(await changeCard(draft.goals, [replied]));
   assert.ok(validateCurrentDefinition("PlanStartRecords", records));
   assert.deepEqual(
     records.goal.successCriteria.map((c) => c.key),
@@ -329,17 +331,17 @@ test("a plan change keeps the record's customer-class goals, which no card can s
   );
   assert.deepEqual(records.goal.successCriteria[1], replied);
   // A card that changes only the steps leaves every goal as it is: nothing to keep.
-  assert.equal(startRecords(changeCard([], [replied])).goal, null);
+  assert.equal(startRecords(await changeCard([], [replied])).goal, null);
   // A kept key the card also names, or a 4th measured goal: no records (409 at the route).
   const fact = (key) => ({ key, description: "Page complete", measure: checklist });
-  assert.equal(startRecords(changeCard([fact("replied_in_a_day")], [replied])), null);
-  assert.equal(startRecords(changeCard([fact("a"), fact("b"), fact("c")], [replied])), null);
-  assert.notEqual(startRecords(changeCard([fact("a"), fact("b")], [replied])), null);
+  assert.equal(startRecords(await changeCard([fact("replied_in_a_day")], [replied])), null);
+  assert.equal(startRecords(await changeCard([fact("a"), fact("b"), fact("c")], [replied])), null);
+  assert.notEqual(startRecords(await changeCard([fact("a"), fact("b")], [replied])), null);
   assert.equal(planChangeCriteria([pages], [{ ...replied, key: undefined }]), null);
   assert.deepEqual(planChangeCriteria([pages]), [pages]);
 });
 
-test("the records code computes, and one kernel check per piece", () => {
+test("the records code computes, and one kernel check per piece", async () => {
   const records = startRecords(card());
   assert.equal(validateCurrentDefinition("PlanStartRecords", records), true);
   assert.equal(records.goal.dueAt, "2026-12-04T00:00:00Z");
@@ -383,7 +385,7 @@ test("the records code computes, and one kernel check per piece", () => {
   };
   const changeCard = card({
     draft: change,
-    digest: planDraftDigest(change),
+    digest: await planDraftDigest(change),
     currentDueAt: "2026-12-04T00:00:00Z",
   });
   const changeRecords = startRecords(changeCard);
@@ -441,10 +443,10 @@ test("every piece under live grants: a Member without project.create, a revoked 
   );
 });
 
-test("the document binds the draft, target, records, estimate and grant summary; 5 minutes", () => {
+test("the document binds the draft, target, records, estimate and grant summary; 5 minutes", async () => {
   const records = startRecords(card());
-  const summary = grantSummaryDigest(ownerGrants(), capabilities, now);
-  const built = buildPlanStartDocument({
+  const summary = await grantSummaryDigest(ownerGrants(), capabilities, now);
+  const built = await buildPlanStartDocument({
     id: "4f9c1d2e-0000-4000-8000-000000000001",
     card: card(),
     actor: maya,
@@ -459,7 +461,7 @@ test("the document binds the draft, target, records, estimate and grant summary;
   assert.deepEqual(built.document.draft, {
     messageId: "message_a",
     revision: 1,
-    digest: planDraftDigest(draft),
+    digest: await planDraftDigest(draft),
   });
   assert.equal(
     Date.parse(built.document.expiresAt) - Date.parse(built.document.createdAt),
@@ -467,7 +469,7 @@ test("the document binds the draft, target, records, estimate and grant summary;
   );
   assert.match(built.digest, /^[a-f0-9]{64}$/);
   // A tainted card's document says so.
-  const tainted = buildPlanStartDocument({
+  const tainted = await buildPlanStartDocument({
     id: "4f9c1d2e-0000-4000-8000-000000000002",
     card: card({ contextTaint: "untrusted_external" }),
     actor: maya,
@@ -478,7 +480,7 @@ test("the document binds the draft, target, records, estimate and grant summary;
     nowMs: now,
   });
   assert.equal(tainted.document.contextTaint, "untrusted_external");
-  assert.throws(
+  await assert.rejects(
     () =>
       buildPlanStartDocument({
         id: "4f9c1d2e-0000-4000-8000-000000000003",
@@ -493,7 +495,7 @@ test("the document binds the draft, target, records, estimate and grant summary;
     /PLAN_START_DOCUMENT_INVALID/,
   );
   // An area card: code-built, no draft, its own target.
-  const area = buildPlanStartDocument({
+  const area = await buildPlanStartDocument({
     id: "4f9c1d2e-0000-4000-8000-000000000004",
     card: { kind: "area", areaTemplateId: "stock" },
     actor: leo,
@@ -506,32 +508,35 @@ test("the document binds the draft, target, records, estimate and grant summary;
   assert.deepEqual([area.document.purpose, area.document.draft], ["area", null]);
 });
 
-test("the grant summary changes with any issued, revoked, narrowed or expiring grant", () => {
-  const base = grantSummaryDigest(ownerGrants(), capabilities, now);
+test("the grant summary changes with any issued, revoked, narrowed or expiring grant", async () => {
+  const base = await grantSummaryDigest(ownerGrants(), capabilities, now);
   assert.equal(
-    grantSummaryDigest([...ownerGrants()].reverse(), capabilities, now),
+    await grantSummaryDigest([...ownerGrants()].reverse(), capabilities, now),
     base,
     "order-free",
   );
-  const changed = (grants) => grantSummaryDigest(grants, capabilities, now) !== base;
-  assert.ok(changed(ownerGrants().slice(1)), "revoked");
+  const changed = async (grants) => (await grantSummaryDigest(grants, capabilities, now)) !== base;
+  assert.ok(await changed(ownerGrants().slice(1)), "revoked");
   assert.ok(
-    changed([...ownerGrants(), grant("workspace.task.assign", ["taskId"], { id: "grant_new" })]),
+    await changed([
+      ...ownerGrants(),
+      grant("workspace.task.assign", ["taskId"], { id: "grant_new" }),
+    ]),
     "issued",
   );
   assert.ok(
-    changed(ownerGrants().map((g, i) => (i === 0 ? { ...g, verbs: ["view"] } : g))),
+    await changed(ownerGrants().map((g, i) => (i === 0 ? { ...g, verbs: ["view"] } : g))),
     "narrowed",
   );
   assert.ok(
-    changed(
+    await changed(
       ownerGrants().map((g, i) => (i === 0 ? { ...g, expiresAt: "2026-10-25T00:00:00.000Z" } : g)),
     ),
     "expiry",
   );
   // A grant on another capability does not matter.
   assert.equal(
-    grantSummaryDigest(
+    await grantSummaryDigest(
       [...ownerGrants(), grant("catalog.products.read", ["title"])],
       capabilities,
       now,
@@ -540,10 +545,10 @@ test("the grant summary changes with any issued, revoked, narrowed or expiring g
   );
 });
 
-test("single use: expired, reused, unknown, edited or changed documents are stale", () => {
+test("single use: expired, reused, unknown, edited or changed documents are stale", async () => {
   const records = startRecords(card());
-  const summary = grantSummaryDigest(ownerGrants(), capabilities, now);
-  const built = buildPlanStartDocument({
+  const summary = await grantSummaryDigest(ownerGrants(), capabilities, now);
+  const built = await buildPlanStartDocument({
     id: "4f9c1d2e-0000-4000-8000-000000000001",
     card: card(),
     actor: maya,
@@ -559,7 +564,7 @@ test("single use: expired, reused, unknown, edited or changed documents are stal
     actorPrincipalId: "principal_maya",
     actorMembershipId: "membership_maya",
     sessionDigest: "s".repeat(64).replace(/s/g, "a"),
-    nonceDigest: nonceDigest("nonce_a"),
+    nonceDigest: await nonceDigest("nonce_a"),
     expiresAtMs: Date.parse(built.document.expiresAt),
     consumed: false,
   };
@@ -569,12 +574,12 @@ test("single use: expired, reused, unknown, edited or changed documents are stal
     sessionDigest: stored.sessionDigest,
     nonce: "nonce_a",
     nowMs: now + 60_000,
-    currentDraft: { revision: 1, digest: planDraftDigest(draft) },
+    currentDraft: { revision: 1, digest: draftDigest },
     currentTargetRevision: null,
     liveGrantSummaryDigest: summary,
     assigneesCurrent: true,
   };
-  assert.equal(checkStartAttempt(stored, attempt), "ok");
+  assert.equal(await checkStartAttempt(stored, attempt), "ok");
   for (const [name, s, a, expected] of [
     ["unknown", null, attempt, "stale"],
     ["reused", { ...stored, consumed: true }, attempt, "stale"],
@@ -610,15 +615,16 @@ test("single use: expired, reused, unknown, edited or changed documents are stal
     ["an embedded session", stored, { ...attempt, surface: "embedded" }, "actor_ineligible"],
     ["an email session", stored, { ...attempt, surface: "email" }, "actor_ineligible"],
   ])
-    assert.equal(checkStartAttempt(s, a), expected, name);
+    assert.equal(await checkStartAttempt(s, a), expected, name);
   // A plan change binds the project's revision.
   const change = {
     ...draft,
     kind: "plan_change",
     target: { kind: "existing_project", projectId: "project_a", goalRevision: 3 },
   };
-  const changeCard = card({ draft: change, digest: planDraftDigest(change) });
-  const changeDoc = buildPlanStartDocument({
+  const changeDigest = await planDraftDigest(change);
+  const changeCard = card({ draft: change, digest: changeDigest });
+  const changeDoc = await buildPlanStartDocument({
     id: "4f9c1d2e-0000-4000-8000-000000000005",
     card: changeCard,
     actor: maya,
@@ -631,14 +637,14 @@ test("single use: expired, reused, unknown, edited or changed documents are stal
   const changeStored = { ...stored, canonical: changeDoc.canonical, digest: changeDoc.digest };
   const changeAttempt = {
     ...attempt,
-    currentDraft: { revision: 1, digest: planDraftDigest(change) },
+    currentDraft: { revision: 1, digest: changeDigest },
   };
   assert.equal(
-    checkStartAttempt(changeStored, { ...changeAttempt, currentTargetRevision: 3 }),
+    await checkStartAttempt(changeStored, { ...changeAttempt, currentTargetRevision: 3 }),
     "ok",
   );
   assert.equal(
-    checkStartAttempt(changeStored, { ...changeAttempt, currentTargetRevision: 4 }),
+    await checkStartAttempt(changeStored, { ...changeAttempt, currentTargetRevision: 4 }),
     "stale",
   );
 });
