@@ -22,7 +22,7 @@ export const knowledgeStatements = Object.freeze({
   cmdNotebookClear: "SELECT outcome,result FROM morrow_work.cmd_notebook_clear($1,$2,$3,$4)",
   // Live pages, most recently changed first (at most 500 live pages exist; one more is read as
   // a guard).
-  knowledgePages: `SELECT ${pageColumns} FROM morrow_work.knowledge_pages p WHERE p.deleted_at IS NULL ORDER BY p.updated_at DESC,p.id::text COLLATE "C" LIMIT 501`,
+  knowledgePages: `SELECT ${pageColumns},left(v.body,280) AS excerpt FROM morrow_work.knowledge_pages p JOIN morrow_work.knowledge_versions v ON v.organization_id=p.organization_id AND v.workspace_id=p.workspace_id AND v.page_id=p.id AND v.version=p.current_version WHERE p.deleted_at IS NULL ORDER BY p.updated_at DESC,p.id::text COLLATE "C" LIMIT 501`,
   knowledgePage: `SELECT ${pageColumns} FROM morrow_work.knowledge_pages p WHERE p.id=$1::text AND p.deleted_at IS NULL`,
   // One version, live or erased (an erased version's title, text and sources are null).
   knowledgeVersion: `SELECT ${versionColumns} FROM morrow_work.knowledge_versions v WHERE v.page_id=$1::text AND v.version=$2::integer`,

@@ -494,14 +494,53 @@ export function isStopConfirmation(typed: string): boolean {
   return typed.trim().toLowerCase() === stopWord;
 }
 
+// PR 20: the closed kinds of a shop knowledge page (KnowledgePage@1).
+export const knowledgePageKinds = [
+  "brand_voice",
+  "policy",
+  "product_fact",
+  "supplier",
+  "decision",
+] as const;
+export type KnowledgePageKind = (typeof knowledgePageKinds)[number];
+export interface KnowledgeItemView {
+  readonly id: Id;
+  readonly kind: "fact" | "suggested" | "lesson";
+  readonly title: string;
+  readonly text: string;
+  readonly source: string;
+  /** A fact's or a suggestion's page kind; null for a lesson. */
+  readonly pageKind: KnowledgePageKind | null;
+  /**
+   * A fact: its current version (an edit or a delete names it). A suggestion: the version of
+   * the page it changes, or null for a new page. A lesson: null.
+   */
+  readonly version: number | null;
+  /** A suggestion's digest: accepting or declining binds exactly what the person saw. */
+  readonly digest: string | null;
+  /** A suggestion written after the agent read product text, mail or other untrusted content. */
+  readonly untrusted: boolean;
+}
 export interface KnowledgeView {
-  readonly items: readonly {
-    readonly id: Id;
-    readonly kind: "fact" | "suggested" | "lesson";
-    readonly title: string;
-    readonly text: string;
-    readonly source: string;
-  }[];
+  readonly items: readonly KnowledgeItemView[];
+  /** What this person may do (the server decides again on every command). */
+  readonly may: { readonly write: boolean; readonly delete: boolean };
+}
+/** One page as the edit form reads it: its current text and the version it edits. */
+export interface KnowledgePageView {
+  readonly id: Id;
+  readonly pageKind: KnowledgePageKind;
+  readonly title: string;
+  readonly text: string;
+  /** The current version's first note source ("Where this came from"), or "". */
+  readonly note: string;
+  readonly version: number;
+}
+export interface KnowledgeContent {
+  readonly title: string;
+  readonly text: string;
+  /** "Where this came from": one short note, or "" for none. */
+  readonly note: string;
 }
 export interface FilesView {
   readonly files: readonly {
@@ -552,6 +591,31 @@ export interface SettingsPort {
 }
 export interface LibraryPort {
   knowledge(ws: Id): Promise<Outcome<KnowledgeView>>;
+  /** PR 20: one page's current text, for the edit form. */
+  knowledgePage(ws: Id, pageId: Id): Promise<Outcome<KnowledgePageView>>;
+  /** A person's new page (typed text only, never customer details). */
+  addKnowledge(
+    ws: Id,
+    c: Command<KnowledgeContent & { pageKind: KnowledgePageKind }>,
+  ): Promise<Outcome<{ readonly pageId: Id; readonly version: number }>>;
+  /** The next version of a page, at the version the person read. */
+  editKnowledge(
+    ws: Id,
+    pageId: Id,
+    c: Command<KnowledgeContent & { expectedVersion: number }>,
+  ): Promise<Outcome<{ readonly version: number }>>;
+  /** Deletes a page and all its versions (the deletion path). */
+  deleteKnowledge(
+    ws: Id,
+    pageId: Id,
+    c: Command<{ expectedVersion: number }>,
+  ): Promise<Outcome<{ readonly pageId: Id }>>;
+  /** A person accepts or declines an agent's suggestion, bound to its digest. */
+  decideSuggestion(
+    ws: Id,
+    suggestionId: Id,
+    c: Command<{ decision: "accept" | "reject"; digest: string }>,
+  ): Promise<Outcome<{ readonly decision: "accept" | "reject" }>>;
   files(ws: Id): Promise<Outcome<FilesView>>;
 }
 export const teamPortMethods = [
@@ -567,5 +631,10 @@ export const teamPortMethods = [
   "settings.reviseNotifications",
   "settings.activity",
   "library.knowledge",
+  "library.knowledgePage",
+  "library.addKnowledge",
+  "library.editKnowledge",
+  "library.deleteKnowledge",
+  "library.decideSuggestion",
   "library.files",
 ] as const;

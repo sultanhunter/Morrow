@@ -396,6 +396,8 @@ async function submit(
 // Rows as this viewer may see them.
 interface PageRow {
   readonly id: string;
+  /** The current version's first 280 characters (the pages list only). */
+  readonly excerpt: string | null;
   readonly kind: Current_KnowledgePageKind;
   readonly title: string;
   readonly version: number;
@@ -406,6 +408,7 @@ interface PageRow {
 function pageRowOf(row: Row): PageRow {
   return {
     id: text(row, "id"),
+    excerpt: "excerpt" in row ? text(row, "excerpt") : null,
     kind: text(row, "kind") as Current_KnowledgePageKind,
     title: text(row, "title"),
     version: integer(text(row, "version")),
@@ -630,12 +633,20 @@ async function pagesRead(tx: WorkTx, a: WorkAuthority): Promise<Record<string, u
         kind: p.kind,
         title: p.title,
         version: p.version,
+        excerpt: p.excerpt ?? "",
         updatedAt: p.updatedAt,
       }),
     );
+  // What this person may do, for the screen only (each command decides again).
+  const may = async (capabilityId: CapabilityId, verb: PermissionVerb, fields: readonly string[]) =>
+    (await decideOn(a, a.resource, capabilityId, verb, fields)).allowed;
   return {
     pages: shown,
     pendingProposals: proposalTags.filter((tags) => viewable(viewer, tags)).length,
+    may: {
+      write: await may("workspace.knowledge.approve", "execute", knowledgeFields.approve),
+      delete: await may("workspace.knowledge.approve", "administer", knowledgeFields.approve),
+    },
   };
 }
 async function pageRead(tx: WorkTx, a: WorkAuthority, pageId: string) {

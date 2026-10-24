@@ -14042,7 +14042,7 @@
       "additionalProperties": false
     },
     "KnowledgePageSummary": {
-      "description": "One page in the viewer's list: the api lists a page only when the viewer holds view on every one of its read tags (ADR-0031 item 6); the tags never leave the server.",
+      "description": "One page in the viewer's list: the api lists a page only when the viewer holds view on every one of its read tags (ADR-0031 item 6); the tags never leave the server. It carries the current version's first 280 characters; the full text is read by its page.",
       "type": "object",
       "properties": {
         "id": {
@@ -14061,6 +14061,12 @@
         },
         "updatedAt": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "excerpt": {
+          "description": "The first 280 characters of the current version's text.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280
         }
       },
       "required": [
@@ -14068,7 +14074,8 @@
         "kind",
         "title",
         "version",
-        "updatedAt"
+        "updatedAt",
+        "excerpt"
       ],
       "additionalProperties": false
     },
