@@ -1,6 +1,6 @@
 # Project knowledge graph
 
-The project's knowledge and progress as one linked, checked graph, in place of Markdown files that do not link to each other. The owner asked for it on 2026-10-22 (OD-2026-10-22-1) and adopted it on 2026-10-23 as decision 10 of the redefined MVP (OD-2026-10-23-1). This is phase 0: the engine, the full schema, the graph built from what already has a home, and a small hand-written seed.
+The project's knowledge and progress as one linked, checked graph, in place of Markdown files that do not link to each other. The owner asked for it on 2026-10-22 (OD-2026-10-22-1) and adopted it on 2026-10-23 as decision 10 of the redefined MVP (OD-2026-10-23-1). Phase 0 built the engine, the full schema, the graph built from what already has a home, and a small hand-written seed. Phase 1 adds the redefined MVP as nodes: its tracks, gates, features, agents, skills, installation kinds, data classes, decision questions with their answers, risks, the v1 build order and the train's branches (see "Phase 1" below).
 
 ## How it works
 
@@ -15,9 +15,9 @@ The project's knowledge and progress as one linked, checked graph, in place of M
   - acceptance tables in `docs/acceptance/*.md`: a row whose status cell starts "Open" or "Not done" is `open`, one that starts "Deferred" is `deferred`, and either only `mentions` the live records it cites; any other row is `verified` by them (`verifies`);
   - `docs/decisions/approvals/*.json`, `dependencies.json`, `sources.json`, `capabilities.json`;
   - `apps/*` and `packages/*` (components);
-  - git history: merged pull requests from `(#n)` subjects, the tasks and milestones they name (`implements`) and the components they change (`touches`).
-- **Only what has no home is hand-written**, one small file per node under this folder, so parallel agents do not conflict: the vision, features, agents, skills, installation kinds, tracks, gates, data classes, owner decisions with verbatim quotes, questions, risks and unmerged branches.
-- **Each edge is stored once, on its "from" node.** Views show the inverse as backlinks.
+  - git history: merged pull requests from `(#n)` subjects and from GitHub's merge commits ("Merge pull request #n from owner/branch", titled by the commit body's first line); the tasks and milestones the title's label names (`implements`: "P04.T01i PR-D:", "M2 PR-1:", "v1 PR 18:" for `V1-PR18`, and a stacked step's "v1 PR 3a:" for `V1-PR03`); the branch node it came from (`from_branch`), whose `implements` the PR inherits; and the components it changes (`touches`); and each local or remote-tracking branch's newest commit date, which tells an open branch node from an abandoned one.
+- **Only what has no home is hand-written**, one small file per node under this folder, so parallel agents do not conflict: the vision, features, agents, skills, installation kinds, tracks, gates, data classes, the v1 build order's steps, owner decisions with verbatim quotes, questions, risks and the train's branches.
+- **Each edge is stored once, on its "from" node.** Views show the inverse as backlinks. One edge has a stored inverse: a question written after the owner decision that answered it carries `answered_by`, because a decision's file is never edited (`answers` stays for a decision recorded with its question).
 - **An id's shape tells you its type.** A dropped node keeps its id with a dropped or superseded status; ids are never reused. Tracks and gates have slug ids and short labels, so renumbering a label never breaks a link.
 - **Body text links too.** Unambiguous ids in a body (ADR, task, acceptance, decision, question, risk and the other hand-written families) become `mentions`. The ambiguous ones (`S`, `D`, `M`, `PR-`, track and gate labels) count only in typed links or as `[[S149]]`.
 - **The graph is documentation, never authority.** Nothing in `apps/` or `packages/` may import it (`GRAPH_IMPORTED_BY_CODE`). Every permission, budget and data-class rule stays in code. The graph describes kinds (skills, releases, installation kinds), never a merchant's records: those are tenant data under FORCE RLS, and this repository is public (`GRAPH_TENANT_RECORD`, `GRAPH_SECRET`, `GRAPH_EMAIL`).
@@ -37,12 +37,26 @@ docs/graph/
   gates/GATE-*.md
   data/DC-*.md
   milestones/M<n>.md             (beta milestones with no brief)
+  milestones/V1-PR<nn>.md        (the v1 build order's PRs 1 to 26)
+  milestones/MS-*.md             (a track's stage the plan names without a PR)
   decisions/OD-YYYY-MM-DD-n.md
   questions/Q-*.md
   risks/RISK-*.md
   components/C-*.md              (logical components only)
   branches/claude--<slug>.md     ("/" becomes "--" in the file name)
 ```
+
+## Phase 1
+
+- **Tracks and gates** are `docs/plan/mvp.md`'s T0 to T18 and G1 to G18, as ADR-0035 changed them (G6 and G15 dropped). T16 is the header of its brief, `docs/briefs/project-graph.md`. The launch is `GATE-launch`, labelled G19 because every gate needs a label; `query critical` walks back from it. A gate carries the plan's week as `due_week`; where the plan names an event instead (G9 "before real data", G10, G17), it carries `due_when` and no week, so it is never reported overdue and every `query gates --week` lists it.
+- **T17's simulated week** is the milestone `MS-simulated-week` (`MS-<slug>`: a track's stage that the plan names without a PR). App Review submission (G13), the owner's sign-off (G17) and the launch depend on it, and T17 itself `waits_on` those gates, since the track ends with the launch. The critical chain is the plan's: T0, T2, T4, T12, the simulated week, submission, review, launch.
+- **Coverage.** Each of the 80 plan tasks is included or deferred by name by a track, directly, through its package, or through every one of its lettered children, so `query uncovered` is empty; features also include the tasks they draw on (mvp.md's "Plan IDs"). Work left until after launch is a feature with `must: later` that `defers` its tasks, or a track's `defers`. A lettered child deferred by name is left out of a parent that another node includes (P05.T01aa, SSO and SCIM, out of P05.T01). Package 17 at launch is the Resend adapter (P17.T02g) and P17.T01's support-reply contract; P17.T02a to P17.T02f are deferred by name.
+- **The v1 build order** (`docs/plan/v1-build-order.md`, ADR-0035) is 26 milestones, `V1-PR01` to `V1-PR26`: each is `part_of` its tracks (a new edge, milestone to track), `delivers` its features or agents, `depends_on` the steps it starts after, `waits_on` its gates and claims its briefs as `docs`. A merged PR whose title starts "v1 PR <n>:" implements it; #48, #49 and #53, whose titles name no step, implement theirs through their branch nodes. The schema has no build-step type, so milestone is the closest kind.
+- **Branches** are the train's: the six building from `5541e430` and this phase's, status `open`, and the merged branches whose PRs name nothing (#46 to #49, #53, #59), status `merged` with their head. A merged PR from a branch node that is not marked merged is `GRAPH_WARN_BRANCH_MERGED`. An open or built branch counts as recent work for `GRAPH_WARN_STALE_ACTIVE` only while a local or remote branch of its name has a commit within the window (7 days, or `query stale --days N`); otherwise the branch node is `GRAPH_WARN_BRANCH_STALE`, so an abandoned or squash-merged branch cannot hide stale work. The build-order steps that deliver a feature count for it too.
+- **Decision questions** are the MVP's decisions 1 to 11 and the billing option (answered by OD-2026-10-23-1 and OD-2026-10-23-3), each companion record's owner questions (OD-2026-10-23-7, OD-2026-10-24-1), the visual direction, the UX flow and ADR-0035; open ones are the owner's actions and provider answers that STATUS.md and ADR-0035 name.
+- **Installation kinds** document ceilings by capability id, never by verb. `IK-task-specialist`'s `may_hold` is exactly the 12 ids of `docs/contracts/specialist-ceiling.json` plus `runtime.execution.use` (under the runtime switch), and a repository test compares them; the two publish ids are held with `propose` only. The code's allowlist stays the authority.
+- **Skills** carry working ids until `skills/<id>/skill.json` exists (Q-skill-ids); only `listing-content` is named in the plan.
+- **Data classes** are the five the deletion registry handles since #43 (`deletion-ready`) and ADR-0031's new classes (`planned`), each `deleted_by` the PR or track that owns its path.
 
 A node file is a header and an optional body:
 
@@ -80,7 +94,7 @@ All offline. `npm run graph -- <command>`:
 | `query skills <agent id>`, `query ceiling <installation kind or agent id>` | An agent's bundled or composable skills; a kind's documented ceiling (the code's allowlist stays the authority) |
 | `query uncovered` | Plan tasks that no feature or track includes (`includes`) or leaves until after launch (`defers`) by name, directly or through their package; a dropped feature or track covers nothing |
 | `query blockers <ID>`, `impact <ID>`, `why <ID>`, `path <A> <B>` | What is in the way; what depends on it and who cites it; what governs it; how two nodes connect |
-| `query stale [--days 7]`, `query todo` | Active nodes with no recent PR or evidence; governed docs still without a header |
+| `query stale [--days 7]`, `query todo` | Active nodes with no recent PR or evidence and no open or built branch with a recent commit; governed docs still without a header |
 | `render [--check]` | Writes `graph.json` and a self-contained `graph.html` under the artifacts directory (`.artifacts/graph/`, git-ignored), and refreshes the generated blocks. `--check` fails if a block is stale |
 | `view <ID> --mermaid [--depth 2]` | A Mermaid snippet of a neighbourhood, for PRs and briefs |
 | `status [--write]` | The live status from the graph, with where STATUS.md disagrees with history. `--write` fills STATUS.md's marked block (phase 3 adds the markers) |
@@ -102,7 +116,7 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | Phase | Content |
 | --- | --- |
 | 0. The engine | This folder's seed, the schema, the derived graph and the check (merged in PR #46) |
-| 1. The MVP as nodes | Vision, features, agents, skills, installation kinds, tracks, gates and data classes of the redefined MVP; its decision questions and answers; the train branches. Every plan task included or deferred by name, so `query uncovered` starts empty |
+| 1. The MVP as nodes | Vision, features, agents, skills, installation kinds, tracks, gates and data classes of the redefined MVP; its decision questions and answers; the train branches; the v1 build order. Every plan task included or deferred by name, so `query uncovered` starts empty |
 | 2. Headers in place; strict mode | Headers on ADRs, briefs, evidence, acceptance files and the card; the ADR index generated; build-plan's M1 to M5 become GP1 to GP5; `graph:check` takes over `plan:check`; the phase-0 warnings become errors; owner decisions of 2026-10-17 to 2026-10-22 backfilled |
 | 3. Change the habit | STATUS.md's fact block generated; the CLAUDE.md session-start step (done 2026-10-23: the owner approved it, OD-2026-10-23-7, item 35) |
 | 4. Archive, after launch | Packets, acceptance files and references that nothing pins leave the tree for a new archive tag; the six paths pinned by applied migrations stay |
@@ -122,9 +136,9 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | skill | `SK-<slug>` | hand-written until `skills/<id>/skill.json` exists (`docs/graph/skills/`) | proposed, planned, built, released, revoked, dropped | **`specialist_eligible` (yes, no)**; `runtime` (none, computer, computer-optional, fallback); `output_contract`; `job_tags` (list) |
 | installation_kind | `IK-<slug>` | hand-written (`docs/graph/installation-kinds/`) | proposed, planned, built, dropped | `lifetime`; **`mandate` (yes, no)**; **`triggers` (yes, no)**; `started_by` (owner-admin-install, owner-start, member-start); **`routable` (yes, no)**; `authority_records` |
 | track | `TRK-<slug>` | hand-written or brief frontmatter (`docs/graph/tracks/`) | proposed, active, done, dropped | **`label` (`^T[0-9]{1,2}$`)**; `weeks`; `agents` (list) |
-| gate | `GATE-<slug>` | hand-written (`docs/graph/gates/`) | open, passed, waived, dropped | **`label` (`^G[0-9]{1,2}$`)**; `owner_kind` (owner, shopify, provider, ci, claude); `due_week` (`^W[0-9]{1,2}$`) |
+| gate | `GATE-<slug>` | hand-written (`docs/graph/gates/`) | open, passed, waived, dropped | **`label` (`^G[0-9]{1,2}$`)**; `owner_kind` (owner, shopify, provider, ci, claude); `due_week` (`^W[0-9]{1,2}$`); `due_when` |
 | data_class | `DC-<slug>` | hand-written (`docs/graph/data/`) | planned, deletion-ready, live, retired | `retention`; `deletion`; `customer` (yes, no) |
-| milestone | `M<n> (beta), GP<n> (golden path)` | brief frontmatter, a file when there is no brief, or the plan (GP) (`docs/graph/milestones/`) | proposed, active, done, folded, dropped | `label` (`^M[1-9]$`) |
+| milestone | `M<n> (beta), GP<n> (golden path), V1-PR<nn> (v1 build order), MS-<slug> (a track's stage)` | brief frontmatter, a file when there is no brief (V1-PR<nn>, MS-<slug>), or the plan (GP) (`docs/graph/milestones/`) | proposed, active, done, folded, dropped | `label` (`^M[1-9]$`) |
 | package | `P<nn>` | the plan; acceptance-file frontmatter | from its source | `kind` (security) |
 | task | `P<nn>.T<nn>, P<nn>.T<nn><letters>` | the plan and `tasks.json`; packet frontmatter | Planned, Ready, In progress, In review, Self-reviewed, Verified, Blocked, Dropped | `kind` (security) |
 | acceptance | `P<nn>.A<nn>, <task>-AC<nn>[a-z]` | the plan, packets and `docs/acceptance/` | open, passed, deferred | none |
@@ -133,7 +147,7 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | card | `<env>-card-<n>` | `docs/decisions/approvals/*.json` and their record | approved, expired, revoked | `approved_on` (date); `expires_on` (date) |
 | evidence | `<yyyy-mm-dd>-<slug> (the file stem)` | `docs/evidence/live/` (bullets; frontmatter from phase 2) | recorded | `unknown_outcome` (none, open, closed) |
 | pr | `PR-<n>` | merged pull requests from git history | open, merged, closed | `commit` (`^[0-9a-f]{7,40}$`); `date` (date) |
-| branch | `claude/<slug>` | hand-written (unmerged branches only) (`docs/graph/branches/`) | built, open, merged, abandoned | `head` (`^[0-9a-f]{7,40}$`) |
+| branch | `claude/<slug>` | hand-written: the train's branches; a merged one keeps its node, status merged (`docs/graph/branches/`) | built, open, merged, abandoned | `head` (`^[0-9a-f]{7,40}$`) |
 | component | `C-<slug>` | `apps/*` and `packages/*`; logical parts hand-written (`docs/graph/components/`) | local, staging, production | none |
 | dependency | `D<nn>` | `docs/decisions/dependencies.json` | from its source | none |
 | source | `S<nn>, S<nnn>` | `docs/research/sources.json` | from its source | none |
@@ -146,7 +160,7 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 
 | Edge | From → to |
 | --- | --- |
-| `part_of` | task → package, task; acceptance → task, package; feature → vision; component → component |
+| `part_of` | task → package, task; acceptance → task, package; feature → vision; component → component; milestone → track |
 | `includes` | feature, track, milestone → task, package |
 | `defers` | feature, track → task, package |
 | `delivers` | track, milestone → feature, agent, skill, installation_kind |
@@ -167,6 +181,7 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | `amends` | adr → adr; decision → decision |
 | `refines` | adr → adr; decision → decision |
 | `answers` | decision → question |
+| `answered_by` | question → decision |
 | `implements` | pr, branch → task, track, milestone |
 | `from_branch` | pr → branch |
 | `stacked_on` | branch → branch |
@@ -196,7 +211,7 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | `GRAPH_CYCLE` | No cycles in part_of, supersedes, depends_on or waits_on | error |
 | `GRAPH_STATUS` | Status values come from the type's list | error |
 | `GRAPH_TASK_STATUS_DRIFT` | Parent task statuses equal tasks.json, and both list the same tasks | error |
-| `GRAPH_GATE_FIELDS` | An open gate has owner_kind and due_week | error |
+| `GRAPH_GATE_FIELDS` | An open gate has owner_kind, and due_week or (when the plan sets no week) due_when | error |
 | `GRAPH_DATA_CLASS` | A live data class has a deleted_by link to a merged PR (without history, a PR link is a warning) | error |
 | `GRAPH_SKILL_ELIGIBLE` | A skill a task_specialist composes is specialist_eligible and holds no customer data class | error |
 | `GRAPH_AGENT_KIND` | delegates_to starts at a builtin agent; a task_specialist delegates nothing and never_holds workspace.task.delegate; bundles starts at an installable agent | error |
@@ -212,11 +227,13 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | `GRAPH_STATUS_LINES` | STATUS.md is at most 80 lines | error |
 | `GRAPH_IMPORTED_BY_CODE` | Nothing in apps/ or packages/ imports the graph | error |
 | `GRAPH_WARN_SUPERSEDED_BASIS` | An accepted ADR whose approving decision was superseded | warning |
-| `GRAPH_WARN_STALE_ACTIVE` | An active node with no recent PR or evidence | warning |
+| `GRAPH_WARN_STALE_ACTIVE` | An active node with no recent PR or evidence and no open or built branch with a recent commit | warning |
 | `GRAPH_WARN_CARD_EXPIRING` | An approval card expires within 14 days | warning |
 | `GRAPH_WARN_GATE_OVERDUE` | An open gate past its due week | warning |
 | `GRAPH_WARN_PLAN_UNCOVERED` | A plan task that no feature or track includes or defers by name | warning |
 | `GRAPH_WARN_LABEL_COLLISION` | Two milestones share a label (M2 to M5: beta and golden path) | warning |
 | `GRAPH_WARN_LEGACY_MENTION` | A doc without a header mentions an id that does not resolve (an error once it has one) | warning |
 | `GRAPH_WARN_NO_HISTORY` | Git history is shallow or missing, so PR nodes are skipped and PR links are not checked | warning |
+| `GRAPH_WARN_BRANCH_MERGED` | A merged PR came from a branch node that is not marked merged | warning |
+| `GRAPH_WARN_BRANCH_STALE` | An open or built branch node with no local or remote ref, or no commit on it within 7 days | warning |
 <!-- graph:schema:end -->
