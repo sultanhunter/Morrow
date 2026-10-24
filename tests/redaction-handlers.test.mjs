@@ -58,9 +58,9 @@ test("every registered table is classified, and every store table has exactly on
 // tables later (spine §6 and §11), is classified table by table like the others.
 test("every morrow_identity table is classified; the shop identity is store content", () => {
   const identity = registeredTables().filter(([name]) => name.startsWith("morrow_identity."));
-  // 43 through M5 PR-1, plus M3 PR-1's agent_principals (ids only) and M2 PR-3's inbox and
-  // privacy requests.
-  assert.equal(identity.length, 46);
+  // 43 through M5 PR-1, plus M3 PR-1's agent_principals (ids only), M2 PR-3's inbox and
+  // privacy requests, and v1 PR 5's store_data_deletions (the 48-hour deletion's record).
+  assert.equal(identity.length, 47);
   assert.equal(identityTables.agent_principals.content, "none");
   assert.deepEqual(
     identity.filter(([, spec]) => spec.content === "store").map(([name]) => name),
@@ -73,12 +73,14 @@ test("every morrow_identity table is classified; the shop identity is store cont
   // M2 PR-2: the other two new identity tables hold digests and ids; the app registry's
   // install link names the shop (the PR-2 review), so it is store content. M2 PR-3: the
   // inbox holds the minimised bodies (ids, scope names, a keyed customer digest; 7 days)
-  // and the privacy requests content-free evidence.
+  // and the privacy requests content-free evidence. v1 PR 5: the 48-hour deletion's record
+  // is content-free too (ids, codes, counts and times).
   for (const name of [
     "install_continuations",
     "shopify_oauth_states",
     "shopify_webhook_inbox",
     "privacy_requests",
+    "store_data_deletions",
   ])
     assert.equal(identityTables[name].content, "none", name);
   // The linking records that only point at a candidate hold no shop content of their own.
