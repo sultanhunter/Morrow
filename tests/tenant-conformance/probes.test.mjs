@@ -224,6 +224,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
         "catalog_claim_of(text)": "morrow_work.catalog_claim_of('proposal_absent')",
         // PR 18: the actor's own start document.
         "plan_start_document(text)": `morrow_work.plan_start_document('${"a".repeat(64)}')`,
+        // v1 PR 5: the viewer's open Reconnect items.
+        "connection_notices_open()": "morrow_work.connection_notices_open()",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(
@@ -995,6 +997,14 @@ test("P10: a forged connector context confers nothing; the applier acts only on 
       "SELECT * FROM morrow_work.connector_inbox_pending()",
       "SELECT * FROM morrow_work.connector_credentials_pending()",
       "SELECT * FROM morrow_work.connector_privacy_overdue()",
+      // v1 PR 5 (connection-health-work).
+      `SELECT * FROM morrow_work.connector_inbox_apply_v2(${literal(inbox)})`,
+      `SELECT * FROM morrow_work.connector_health_reconcile(${literal(y.installationId)})`,
+      "SELECT * FROM morrow_work.connector_checks_due()",
+      "SELECT * FROM morrow_work.connector_notices_due()",
+      "SELECT * FROM morrow_work.connector_deletions_due()",
+      `SELECT * FROM morrow_work.connector_deletion_apply(${literal(y.installationId)})`,
+      "SELECT * FROM morrow_work.connector_inbox_stuck()",
     ]) {
       const r = db.tryRun(call + ";", { user });
       assert.equal(r.ok, false, user + " " + call);
@@ -1011,6 +1021,35 @@ test("P10: a forged connector context confers nothing; the applier acts only on 
       .at(-1),
     "denied",
   );
+  assert.deepEqual(state(y), { installation: "linked", lease: "active|", stops: 0 });
+  // v1 PR 5 (connection-health-work): the health context's settings, forged by the connector
+  // login, read nothing directly (no table privilege), confer nothing on the command role from
+  // any other session user, and the definers overwrite them: Y's state is unchanged.
+  const forgeHealth = (s) =>
+    `SELECT set_config('morrow.connector_health',${literal(stopSetting(s))},true),set_config('morrow.connector_agent_stop',${literal(`${s.p.org}|${s.p.workspace}|${s.storeId}`)},true),set_config('morrow.connector_sweep','open',true) IS NOT NULL;`;
+  for (const table of ["morrow_work.connection_notices", "morrow_work.agent_installations"]) {
+    const r = db.tryRun(`BEGIN; ${forgeHealth(y)} SELECT count(*) FROM ${table}; ROLLBACK;`, {
+      user: "morrow_connector_ingress",
+    });
+    assert.equal(r.ok, false, table);
+    assert.match(r.stderr, /permission denied/, table);
+  }
+  assert.equal(
+    db
+      .sql(
+        `BEGIN; SET LOCAL ROLE morrow_work_command; ${forgeHealth(y)} SELECT (SELECT count(*) FROM morrow_work.connection_notices)+(SELECT count(*) FROM morrow_work.agent_installations)+(SELECT count(*) FROM morrow_work.stop_controls WHERE organization_id IS NOT NULL); ROLLBACK;`,
+      )
+      .split("\n")
+      .at(-1),
+    "0",
+  );
+  const reconciled = db
+    .sql(
+      `BEGIN; ${forgeHealth(y)} SELECT outcome FROM morrow_work.connector_health_reconcile(${literal(a.installationId)}); SELECT '['||current_setting('morrow.connector_health',true)||']['||current_setting('morrow.connector_agent_stop',true)||']['||current_setting('morrow.connector_sweep',true)||']'; COMMIT;`,
+      { user: "morrow_connector_ingress" },
+    )
+    .split("\n");
+  assert.deepEqual(reconciled.slice(-2), ["ended", "[][][]"]);
   assert.deepEqual(state(y), { installation: "linked", lease: "active|", stops: 0 });
   recordConformance("P10", true);
 });

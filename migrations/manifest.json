@@ -371,7 +371,7 @@
     {
       "sequence": 48,
       "file": "0048.connection-health-work.sql",
-      "sha256": "0a62541114246512c7f8b43ccf4b37a5f9ec94d47cf8567f2066487dee2aa300",
+      "sha256": "8e2b840c26ca72f53e8876c277a96279eece4084b6a708d669f9a08580eed449",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-connection-health.md"
     }

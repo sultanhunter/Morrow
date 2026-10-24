@@ -602,7 +602,7 @@ END $$;
 -- scope names, codes and times only; at most 20.
 CREATE FUNCTION morrow_work.connection_notices_open()
 RETURNS TABLE(notice_id text,kind text,cause text,store_id text,connection_id text,installation_id text,missing_scopes text,
- stopped_installations text,revision text,created_at text,updated_at text,still_open boolean)
+ stopped_installations text,revision text,created_at text,updated_at text,still_open text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE t record;
@@ -614,7 +614,7 @@ BEGIN
   n.revision::text,morrow_work.utc_text(n.created_at),morrow_work.utc_text(n.updated_at),
   EXISTS(SELECT 1 FROM morrow_identity.work_shopify_health_target(n.installation_id::text) h WHERE h.outcome='found'
    AND h.status IN ('unlinked','linked') AND (h.token_refused OR NOT (string_to_array(h.requested_scopes,',')
-    <@COALESCE(string_to_array(NULLIF(h.granted_scopes,''),','),'{}'::text[]))))
+    <@COALESCE(string_to_array(NULLIF(h.granted_scopes,''),','),'{}'::text[]))))::text
   FROM morrow_work.connection_notices n
   WHERE n.organization_id=t.organization_id AND n.workspace_id=t.workspace_id AND n.cleared_at IS NULL
    AND n.recipients ? t.principal_id
