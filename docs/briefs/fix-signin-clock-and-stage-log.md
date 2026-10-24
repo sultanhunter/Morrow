@@ -70,7 +70,21 @@ The owner's first live sign-in failed every time with "Sign-in could not be comp
 - [x] `tests/workos-session-status.test.mjs`: `updated_at` up to 5 s ahead is observed (also as another session's `created_at`); 5001 ms is held.
 - [x] `tests/standalone-session-rotation.test.mjs`: a lead of 1, 1000 or 5000 ms reads as 12 h on `rotated` and `current`; 5001 ms and 60 s give 503 unknown with no cookie; the idle bound behaves the same.
 - [x] `tests/standalone-login.test.mjs`: one closed line per failed stage (input, claim, capsule_open, preauth_admit, both eligibility checks, exchange, jwks, verify_token, observe_session, the admission subs connect, session_setup, role, admit_query, commit, release and decode_lifetime with its bucket, and finalize); no request, token, id, number or error text reaches the line; success and start emit nothing; an aborted callback emits one line and delivers nothing; hostile inputs to the line builder stay closed; a database lead of up to 4.999 s signs in with `Max-Age=1800`.
-- [x] Labs: the AC30 case in `lab:browser-session-admission-workers`, and in `lab:workos-session-status-workers` `future_update` now at 5001 ms plus a new 5000 ms observed case.
+- [x] Lab cases changed: the AC30 case in `lab:browser-session-admission-workers`, and in `lab:workos-session-status-workers` `future_update` now at 5001 ms plus a new 5000 ms observed case.
+- [x] Local run on 2026-10-24, host load 400 to 1000:
+  - `typecheck`, `typecheck:edge`, `edge:check`, `verify` and `format:check` pass.
+  - `npm test`: 4444 of 4446 pass. The two failures were `edge-config` (the wrangler `--env-file` control) and `local-postgres-diagnostics` (a `spawnSync` timeout). Neither is touched here, and both pass on rerun.
+  - Workers labs pass:
+    - `lab:browser-session-admission-workers`: 43 cases, 281 checks.
+    - `lab:workos-session-status-workers`: 61 cases, 415 checks.
+    - `lab:standalone-login-workers`: 62 cases, 635 checks. Its workerd output holds only closed stage lines.
+    - `lab:fixed-workos-login-workers`: 90 cases, 995 checks.
+  - `lab:browser-session-admission` (PostgreSQL 17): 341 checks pass on the third run. The first two stopped at different admissions under load. In a run with an uncommitted `onHeld` print, every held reason was one of the lab's deliberate negatives; none was `decode_lifetime`.
+- [ ] `lab:standalone-login-https` and `lab:fixed-workos-login-https` are not green locally.
+  - Twice each, they failed at the start route's unchanged 5-second cap, where one pool release took 2.9 s.
+  - Then they failed on Docker timeouts (`rm`, `run`) and on a pool-cleanup verification.
+  - In the third `standalone` run, the `malformed_and_happy`, `key_loss_and_concurrent`, `code_alias` and `unmapped_subject` phases passed, including a real callback over PostgreSQL. Each failing check stops that lab.
+  - Hosted CI is the authority.
 - [ ] `evidence_read` has no direct test; there is no hook between `verify()` and `readEvidence()`.
 - [ ] Hosted CI on the PR head; one AI review (separate context, same model family) with the security lens.
 - [ ] After deploy: the owner signs in once. If it still fails, read the `morrow_login_callback_failed` line from Workers Logs.
