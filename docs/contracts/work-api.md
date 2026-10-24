@@ -149,6 +149,36 @@ A person's kill switch on one store connection, under `/workspace/:ws` on the sa
 - After COMMIT, one `ApiBroker.shopifyCredentialDestroy` erases the disconnected installation's offline token. `credential` is `destroyed` only when the broker confirmed it; otherwise `pending` (the connector's cron finishes it), and the disconnect stands either way. A replay asks the broker again.
 - A disconnect deletes no store content and starts no deletion clock (ADR-0031 item 3). In this release it cannot be undone: reconnecting needs a new install. Each request logs one fixed `morrow_connections` line (route and outcome).
 
+## Shop knowledge and notebooks (PR 20)
+
+Pages for brand voice, policies, product facts, suppliers and decisions, each with versions and sources, and each installed agent's notebook, under `/workspace/:ws/work` on the same api Worker, dependencies and guard rules (`packages/work/src/knowledge/http.ts`; ADR-0031 items 1, 2, 4 and 6; ADR-0024; `docs/briefs/shop-knowledge.md`). The api's dispatch table sends exactly these paths here, ahead of the work API's row. Behind `docs/decisions/shop-knowledge-staging.json` (committed `off`): every route answers 503 `unavailable` ("Shop knowledge is not available yet.") before any body work or connection. Bodies are closed and typed text only (no uploads, never a NUL): a body never names a tenant, read tag, author, version number or digest the server assigns.
+
+| Route under `/workspace/:ws/work` | Body | Success |
+| --- | --- | --- |
+| `GET /knowledge/pages` | – | 200 `{pages: [KnowledgePageSummary], pendingProposals, may: {write, delete}}` |
+| `POST /knowledge/pages` | `{kind, title, text, sources}` | 201 `{pageId, version: 1}` |
+| `GET /knowledge/pages/:pageId` | – | 200 `{page: KnowledgePage, versions: [{version, author, acceptedByPrincipalId, proposalId, createdAt}]}` |
+| `GET /knowledge/pages/:pageId/versions/:version` | – | 200 `{version: KnowledgeVersion}` |
+| `POST /knowledge/pages/:pageId/versions` | `{expectedVersion, title, text, sources}` | 201 `{pageId, version}` |
+| `POST /knowledge/pages/:pageId/delete` | `{expectedVersion}` | 200 `{pageId, versionsErased, searchEntriesErased, proposalsClosed}` |
+| `GET /knowledge/proposals` | – | 200 `{proposals: [KnowledgeProposal]}` |
+| `POST /knowledge/proposals/:proposalId/accept` | `{digest}` | 201 `{proposalId, pageId, version}` |
+| `POST /knowledge/proposals/:proposalId/reject` | `{digest}` | 200 `{proposalId, status: "rejected"}` |
+| `GET /knowledge/search?text=` | – | 200 `{results: [{pageId, kind, title, version, snippet}]}` (at most 20) |
+| `GET /agents/:installationId/notebook` | – | 200 `{installationId, entries: [NotebookEntry]}` |
+| `POST /agents/:installationId/notebook/clear` | `{}` | 200 `{installationId, cleared: true}` |
+
+Every command takes an `Idempotency-Key`; a replay returns the recorded result with `replayed: true` and changes nothing.
+
+- **Who.** Writing a page or its next version, and accepting or rejecting an agent's proposal, need `workspace.knowledge.approve` `{execute}` (`human_only`: a person, never an agent or a mandate, ADR-0024); deleting a page needs `{administer}`; clearing a notebook needs `workspace.notebook.write` `{administer}`. The kernel decides on the workspace resource first; the definer rechecks the session's authority under lock (the P06.T01a prelude). `may` in the pages read is for the screen only; every command decides again. No reviewed grant template issues these grants yet, so the switch stays off until one does (edge:check).
+- **Read tags** (ADR-0031 item 6) are computed by the server, never sent: `workspace.knowledge.read` on each linked store (a null store before any is linked) and, for a product fact, the store's `catalog.products.read`; a version accepted from a proposal adds the proposing run's tags. A page, version, proposal, search hit or notebook entry is returned only when the viewer holds `view` on every one of its tags under live grants; otherwise it is left out of lists, counts and search, and a direct read is the same 404 as an absent record. No reply carries a tag. A notebook is cleared only by a person who may see every live entry (403 otherwise).
+- **No customer data** (ADR-0031 item 2): nothing in knowledge or a notebook carries the customer tag (`support.case.read`), refused by CHECK on every table and by the agent tools.
+- **Versions** are append-only, at most 1,000 per page, each a person's act (written, or a proposal accepted). A version is written at the version the person read: anything else is 409 `conflict` (recheck). One live brand-voice page per workspace (a second is 409); at most 500 live pages and 50 pending proposals.
+- **Proposals** come only from an installed agent's `knowledge.propose` tool (`workspace.knowledge.propose`, an internal write that grants nothing and changes no page). An accept or reject names the digest the person saw, and an accept is refused as stale when the page moved past the version the proposal was made on: 409 `conflict` (recheck). A decision erases the proposal's text and keeps its digest; an accept makes the next version, authored by the agent and accepted by the person.
+- **The deletion path** (ADR-0031 item 4): a delete, at the version read, erases the page's title, every version's text and sources, its search entry and its pending proposals' text in one transaction, and records a content-free `knowledge_deletions` row and the command. Nothing of the content can be read afterwards. A notebook clear erases every live entry. Notebook entries are clocked 90 days from their write; the retention sweep and the deletion at agent uninstall come with their own work.
+- **Agents** never call these routes: the agent loop's tool-call step runs `knowledge.propose`, `notebook.write` and `knowledge.search` under the run's lease (`packages/work/src/knowledge/run-steps.ts`), behind the switch's `agent_tools` (committed `off`; it needs the routes and the agent loop on).
+- Each request logs one fixed `morrow_knowledge` line (route and outcome), never page text.
+
 ## Published limits
 
 Pages of 1–25 goals or 1–50 tasks or questions; bodies of at most 64 KiB; `successCriteria` ≤ 20; `allowedResources` ≤ 1; per workspace up to 10,000 goals, per goal 200 tasks, per task 50 open questions.

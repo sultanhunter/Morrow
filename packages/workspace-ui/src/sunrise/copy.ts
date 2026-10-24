@@ -611,7 +611,7 @@ export const sunriseCopy = {
     tabs: "Shop knowledge sections",
     kinds: { fact: "Shop facts", suggested: "Suggested notes", lesson: "Lessons" },
     empty: {
-      fact: "No shop facts yet. Facts from your Shopify store show here once your store is connected.",
+      fact: "No shop facts yet. Add your brand voice, a policy or a supplier, or accept a note an agent suggests.",
       suggested: "No suggested notes. Agents suggest one when they learn something useful.",
       lesson: "No lessons yet. Lessons are notes you saved from an agent’s work.",
     },
@@ -633,7 +633,8 @@ export const sunriseCopy = {
     textLabel: "What agents should know",
     noteLabel: "Where this came from (optional)",
     noteHelp: "For example: our returns page, or a supplier email from October.",
-    brandVoiceHelp: "Your brand voice is the one page Listings reads when it writes. A shop has one.",
+    brandVoiceHelp:
+      "Your brand voice is the one page Listings reads when it writes. A shop has one.",
     save: "Save",
     cancel: "Cancel",
     saved: "Saved.",
