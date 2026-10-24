@@ -26,8 +26,14 @@ const code = (value: unknown): value is string =>
   typeof value === "string" && /^[a-z][a-z0-9_]{1,63}$/.test(value);
 const oneOf = <T extends string>(value: unknown, list: readonly T[]): value is T =>
   typeof value === "string" && (list as readonly string[]).includes(value);
+// The database bounds a question's prompt in characters (code points), so an astral-heavy
+// prompt may be up to twice as long in UTF-16 units.
 const text = (value: unknown, max: number): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= max && !value.includes("\0");
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length <= 2 * max &&
+  [...value].length <= max &&
+  !value.includes("\0");
 const capabilityId = (value: unknown): value is string =>
   typeof value === "string" && value.length <= 128 && /^[a-z]+(\.[a-z_]+)+$/.test(value);
 const operationId = (value: unknown): value is string =>

@@ -266,16 +266,9 @@ export const copy = {
     conversationTitle: "Conversation",
     activityTitle: "Activity",
   },
+  // v1 PR 15: the Inbox's own words are in sunrise/inbox-copy.ts.
   inbox: {
     title: "Inbox",
-    questionsTitle: "Questions for you",
-    noQuestions: "No open questions for you.",
-    otherTitle: "Other updates",
-    // v1 PR 3: the pending approvals the person may review.
-    approvalsTitle: "Changes to approve",
-    noApprovals: "Nothing to approve.",
-    approvalItem: (n: number) => `${n} product ${n === 1 ? "change" : "changes"} from Listings`,
-    approvalExpires: "Approve by",
   },
   question: {
     title: "Question",

@@ -290,33 +290,36 @@ function InboxList({
       <ConnectionBanner ws={ws} view={view} />
       <Filters view={view} filter={filter} onFilter={setFilter} />
       <p className="inbox-count-note">{t.countNote(inboxCountLabel(view))}</p>
-      <section className="card inbox-card" aria-label={t.listLabel}>
-        {shown.length ? (
-          <ul className="row-list" data-testid="inbox-items">
-            {shown.map((item) => (
-              <li key={item.kind + ":" + item.id} data-kind={item.kind} data-open={item.open}>
-                <InboxRow
-                  ws={ws}
-                  item={item}
-                  shop={shopName(connections, "storeId" in item ? item.storeId : null)}
-                />
-              </li>
-            ))}
-          </ul>
-        ) : nothing && complete ? (
-          <div className="inbox-empty">
-            <h2>{t.emptyTitle}</h2>
-            <p>{t.emptyBody}</p>
-            <AskMorrowButton workspaceId={ws} />
-          </div>
-        ) : !nothing ? (
-          <div className="inbox-empty">
-            <h2>{t.filterEmptyTitle}</h2>
-            <p>{t.filterEmptyBody}</p>
-            <Button onClick={() => setFilter("all")}>{t.showEverything}</Button>
-          </div>
-        ) : null}
-      </section>
+      {/* A denied section with nothing else to show has its notice above, and no card. */}
+      {shown.length === 0 && nothing && !complete ? null : (
+        <section className="card inbox-card" aria-label={t.listLabel}>
+          {shown.length ? (
+            <ul className="row-list" data-testid="inbox-items">
+              {shown.map((item) => (
+                <li key={item.kind + ":" + item.id} data-kind={item.kind} data-open={item.open}>
+                  <InboxRow
+                    ws={ws}
+                    item={item}
+                    shop={shopName(connections, "storeId" in item ? item.storeId : null)}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : nothing && complete ? (
+            <div className="inbox-empty">
+              <h2>{t.emptyTitle}</h2>
+              <p>{t.emptyBody}</p>
+              <AskMorrowButton workspaceId={ws} />
+            </div>
+          ) : !nothing ? (
+            <div className="inbox-empty">
+              <h2>{t.filterEmptyTitle}</h2>
+              <p>{t.filterEmptyBody}</p>
+              <Button onClick={() => setFilter("all")}>{t.showEverything}</Button>
+            </div>
+          ) : null}
+        </section>
+      )}
       {view.more ? <p className="inbox-count-note">{t.more}</p> : null}
     </>
   );
