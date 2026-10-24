@@ -28,9 +28,10 @@
 //     leftover token in its own install transaction (morrow_vault.shopify_install_prepare_v2);
 //   * the 48-hour deletion (v1 PR 5; ADR-0031 item 3): when shop/redact has not come 48 hours
 //     after an uninstall, morrow_work.connector_deletion_apply runs the same shop_redact
-//     handlers once (store_content_redact, then the identity's pseudonym and install link),
-//     and completes its content-free record (morrow_identity.store_data_deletions) only when
-//     nothing is outstanding, the token's destruction included.
+//     handlers once (store_content_redact, then work_shopify_redact_identity itself for the
+//     identity's pseudonym and install link), and completes its content-free record
+//     (morrow_identity.store_data_deletions) only when nothing is outstanding, the token's
+//     destruction included.
 
 export type StoreContentTrigger = "shop_redact" | "uninstall_or_disconnect";
 export type StoreContentAction =
@@ -84,7 +85,10 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
     // Retirement clears it already; shop/redact clears it for the redacted installation's
     // own app only. An app registered later for the same shop (after the first was
     // uninstalled and retired), which may invite another tenant, keeps its link (M2 PR-3
-    // review: shop/redact covers what Morrow holds through the app it was sent to).
+    // review: shop/redact covers what Morrow holds through the app it was sent to). v1 PR 5
+    // (connection-health-identity): the link is kept while the app has an installation
+    // that is not uninstalled (a reinstall connects through it, and its live installation
+    // holds the same shop domain), for shop/redact and the 48-hour deletion alike.
     {
       table: "morrow_identity.shopify_apps",
       dataClass: "shop_identity",

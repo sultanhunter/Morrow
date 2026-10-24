@@ -364,14 +364,14 @@
     {
       "sequence": 47,
       "file": "0047.connection-health-identity.sql",
-      "sha256": "22096826e2c9a49e0c668fe89d622656b7ac2588ff9ee96853aab446c85a9665",
+      "sha256": "6c7b0b63dd4eca31b2c00a70d0e9d74b07e2f5a8b2c890134fc17b8da45a66e7",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/v1-connection-health.md"
     },
     {
       "sequence": 48,
       "file": "0048.connection-health-work.sql",
-      "sha256": "3db5b2a56ef4d84dbdc4565c5b5d0e59374fafedfd5d6b2fddaea1c184719b6e",
+      "sha256": "d683b226afed7b3830a858d5abbb54730e930587f10f4e78589cce65c257b6f4",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-connection-health.md"
     }

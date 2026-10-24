@@ -18,11 +18,13 @@
 // untouched), raises one Reconnect item for the steward and the Owner, and nothing resumes by
 // itself; the re-authorisation through the install link clears the item and leaves the stop;
 // C  the read-back (switch on) reconciles a missed scope change and a refused token, records
-// nothing from an unclear answer and nothing for a stale token; R  a reinstall after an
-// uninstall is a new installation with a new token, the old token destroyed in the same
-// transaction, born unlinked and linked only by a person; D  the 48-hour deletion of an
-// installation whose shop/redact never completed runs once with its record, waits for the
-// token, deletes the store's content and identity, keeps a live reinstall's link and never
+// nothing from an unclear answer, a stale token or a read that began before a narrowing
+// delivery, and the cron's reconcile list reaches every open item however many there are;
+// R  a reinstall after an uninstall is a new installation with a new token, the old token
+// destroyed in the same transaction, born unlinked and linked only by a person; D  the
+// 48-hour deletion of an installation whose shop/redact never completed runs once with its
+// record, waits for the token, deletes the store's content and identity, keeps a live
+// reinstall's install link (as a shop/redact for an earlier installation does) and never
 // reaches another tenant; S  stuck deliveries are closed (scope changes) or counted and
 // logged (everything else); K  no other login runs the new definers, the old applier can no
 // longer end an installation on a scope change, and the guard refuses a widening without an
@@ -714,7 +716,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
     T.oracle.state.fault = null;
     const stale = db
       .sql(
-        `SELECT morrow_vault.shopify_check_record(${literal(T.installation)},'9','observed','[]');`,
+        `SELECT morrow_vault.shopify_check_record(${literal(T.installation)},'9','1','observed','[]');`,
         { user: "morrow_vault_broker" },
       )
       .split("\n")
@@ -749,6 +751,45 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
         JSON.stringify(agentStops(H).map((s) => s.reason_code)) === '["shopify_scope_missing"]' &&
         agentStops(T).length === 0,
       { narrowed: lostNarrowing.ok, lostRun, notices: noticesOf(H) },
+    );
+    // PR 5 review finding F2: a read-back that began before a narrowing delivery. The broker
+    // resolves T (its token version and revision) and reads Shopify's answer, both scopes;
+    // then, before the read's record, a scopes_update delivery narrowing T to read_products
+    // is recorded and reconciled. The record is stale: the narrowing, T's agent stop and its
+    // item stand until a read that begins after it (the cron asks again).
+    let vaultSteps = 0;
+    let racedDelivery = null;
+    const racer = createShopifyHealthChecker({
+      async transaction(vault, budgetMs, body) {
+        if (++vaultSteps === 2)
+          racedDelivery = await deliver(T, "app/scopes_update", scopesBody(["read_products"]));
+        return transaction(vault, budgetMs, body);
+      },
+      fetch: shopifyFetch,
+      now: () => Date.now(),
+    });
+    const accessScopesCalls = (s) =>
+      s.oracle.state.calls.filter((c) => c.operation === "AccessScopes").length;
+    const tReadsBefore = accessScopesCalls(T);
+    const raced = await racer
+      .check(brokerEnv, T.installation, 10000)
+      .then(decodeShopifyConnectionCheck)
+      .catch((error) => "error_" + (error?.code ?? "unknown"));
+    const racedRow = racedDelivery ? inboxRow(racedDelivery.webhookId) : null;
+    const tOpen = noticesOf(T).filter((n) => n.cleared_reason === null);
+    check(
+      "C6:a_read_back_begun_before_a_narrowing_delivery_is_stale_and_never_widens_the_scopes_back",
+      vaultSteps === 2 &&
+        racedDelivery?.applied === "applied" &&
+        racedRow?.effects?.scopes === "narrowed" &&
+        accessScopesCalls(T) === tReadsBefore + 1 &&
+        raced === "stale" &&
+        installationOf(T.installation).scopes === "read_products" &&
+        installationOf(T.installation).refused === false &&
+        tOpen.length === 1 &&
+        JSON.stringify(tOpen[0].missing_scopes) === '["write_products"]' &&
+        JSON.stringify(agentStops(T).map((s) => s.reason_code)) === '["shopify_scope_missing"]',
+      { raced, vaultSteps, racedRow, t: installationOf(T.installation), notices: noticesOf(T) },
     );
 
     // -------------------------------------------------------------------------
@@ -1019,6 +1060,50 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
         rInstallations()[1].token_destroyed === true &&
         credentialsOf(newR.id)[0]?.status === "destroyed",
     );
+    // PR 5 review finding F1: shop/redact for an earlier installation while the app's
+    // reinstall is live (a late or retried delivery). R is reinstalled once more and linked
+    // by the Owner; then Shopify's shop/redact arrives and names the installation uninstalled
+    // above. It is redacted and its privacy request completes, and the reinstall keeps its
+    // link and the app's install link (which the shopify_apps guard could never restore).
+    const third = await oauth(R);
+    const thirdLink = await linkAs(A, third.result.continuationToken);
+    const thirdId = rInstallations()[2]?.id ?? "";
+    const earlyRedact = await deliver(R, "shop/redact", {
+      shop_id: Number(R.shopId),
+      shop_domain: R.shop,
+    });
+    const earlyRow = inboxRow(earlyRedact.webhookId);
+    const earlyRequest = ownerRows(
+      `SELECT status,evidence->>'kind' AS kind,evidence->'handlers' AS handlers FROM morrow_identity.privacy_requests WHERE inbox_id=${literal(earlyRow?.id ?? "")}`,
+    )[0];
+    const rAppRow = () =>
+      ownerRows(
+        `SELECT install_url IS NOT NULL AS kept,revision::int FROM morrow_identity.shopify_apps WHERE app_key=${literal(R.appKey)}`,
+      )[0];
+    check(
+      "D8:a_shop_redact_for_an_earlier_installation_keeps_a_live_reinstalls_install_link",
+      third.result.outcome === "installed" &&
+        thirdLink.outcome === "applied" &&
+        earlyRedact.status === 200 &&
+        earlyRedact.applied === "applied" &&
+        earlyRow?.installation === newR.id &&
+        earlyRequest?.status === "completed" &&
+        earlyRequest.kind === "shop_redacted" &&
+        earlyRequest.handlers?.find((h) => h.table === "morrow_identity.shopify_apps")?.rows ===
+          0 &&
+        installationOf(newR.id)?.redacted === true &&
+        installationOf(thirdId)?.status === "linked" &&
+        installationOf(thirdId).redacted === false &&
+        rAppRow()?.kept === true,
+      {
+        third: third.result.outcome,
+        thirdLink,
+        earlyRow,
+        earlyRequest,
+        third_installation: installationOf(thirdId),
+        app: rAppRow(),
+      },
+    );
     // A deletion waits for the token: T is uninstalled with its destruction lost, 49 hours ago.
     faults.destroy = true;
     const tUninstall = await deliver(T, "app/uninstalled", shopBody(T));
@@ -1136,7 +1221,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
           ) &&
           !asUser(
             user,
-            `SELECT morrow_vault.shopify_check_record(${literal(G.installation)},'2','observed','["write_products"]');`,
+            `SELECT morrow_vault.shopify_check_record(${literal(G.installation)},'2','1','observed','["write_products"]');`,
           ) &&
           !asUser(
             user,
@@ -1190,6 +1275,103 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
     );
 
     // -------------------------------------------------------------------------
+    // PR 5 review finding F3: more connections need reconnecting than one cron pass takes
+    // (20). Twenty more linked connections in A's tenant (sim: owner-seeded, each with the
+    // read-back's observation of read_products only recorded and its reconcile lost) join H,
+    // whose system stop is lifted (sim: an operator's lift) while write_products is still
+    // missing. Two passes of the cron's list as the connector's login (connector_notices_due,
+    // then connector_health_reconcile for each id it names, each in its own transaction):
+    // every connection that needs reconnecting has its item, every open item was reconciled,
+    // and H's agent is stopped again.
+    phase("rotation");
+    const extra = Array.from({ length: 20 }, (_, n) => {
+      const appKey = "lab-health-q" + (n + 1);
+      return {
+        owner: A,
+        org: A.org,
+        ws: A.workspace,
+        appKey,
+        shop: appKey + ".myshopify.com",
+        shopId: String(880001 + n),
+        installation: randomUUID(),
+        store: randomUUID(),
+        connection: randomUUID(),
+        credential: randomUUID(),
+      };
+    });
+    db.admin(
+      extra
+        .map(
+          (s) =>
+            storeSql(s) +
+            `\nUPDATE morrow_identity.store_installations SET granted_scopes=ARRAY['read_products'],scopes_observed_at=greatest(${tx},updated_at),revision=revision+1,updated_at=greatest(${tx},updated_at) WHERE id=${literal(s.installation)};`,
+        )
+        .join("\n"),
+    );
+    db.workOwner(
+      `UPDATE morrow_work.stop_controls SET lifted_at=greatest(${tx},created_at),lifted_by_kind='operator',lifted_by_operator_id='operator_lab' WHERE scope='installation' AND target_id=${literal(H.agent)} AND lifted_at IS NULL;`,
+    );
+    const hLifted = agentStops(H).length === 0;
+    const seededAt = workRows(
+      "SELECT to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS at",
+    )[0].at;
+    const cronPass = () => {
+      const listed = db.tryRun("SELECT installation_id FROM morrow_work.connector_notices_due();", {
+        user: "morrow_connector_ingress",
+      });
+      const ids = listed.ok ? listed.stdout.split("\n").filter(Boolean) : [];
+      const reconciled = ids.length
+        ? db.tryRun(
+            ids
+              .map(
+                (id) =>
+                  `SELECT outcome FROM morrow_work.connector_health_reconcile(${literal(id)});`,
+              )
+              .join("\n"),
+            { user: "morrow_connector_ingress" },
+          )
+        : { ok: true, stdout: "" };
+      return {
+        ok: listed.ok && reconciled.ok,
+        ids,
+        outcomes: reconciled.stdout.split("\n").filter(Boolean),
+      };
+    };
+    const firstPass = cronPass();
+    const secondPass = cronPass();
+    const needing = ownerRows(
+      `SELECT i.id::text FROM morrow_identity.store_installations i JOIN morrow_identity.shopify_apps a ON a.app_key=i.app_key WHERE i.status IN ('unlinked','linked') AND i.redacted_at IS NULL AND a.status='active' AND (i.token_refused_at IS NOT NULL OR NOT (string_to_array(a.scopes,',')<@i.granted_scopes))`,
+    ).map((r) => r.id);
+    const openItems = workRows(
+      `SELECT installation_id::text AS installation,reconciled_at>=${literal(seededAt)}::timestamptz AS reconciled FROM morrow_work.connection_notices WHERE cleared_at IS NULL`,
+    );
+    check(
+      "C7:with_more_items_than_one_pass_takes_every_connection_gets_its_item_and_every_item_is_reconciled",
+      hLifted &&
+        firstPass.ok &&
+        secondPass.ok &&
+        firstPass.ids.length === 20 &&
+        secondPass.ids.length === 20 &&
+        firstPass.outcomes.every((o) => o === "reconciled") &&
+        secondPass.outcomes.every((o) => o === "reconciled") &&
+        extra.every((s) => needing.includes(s.installation)) &&
+        needing.includes(H.installation) &&
+        needing.every((id) => openItems.filter((n) => n.installation === id).length === 1) &&
+        openItems.every((n) => n.reconciled === true) &&
+        JSON.stringify(agentStops(H).map((s) => [s.set_by_kind, s.reason_code])) ===
+          '[["system","shopify_scope_missing"]]',
+      {
+        hLifted,
+        first: firstPass.ids.length,
+        second: secondPass.ids.length,
+        needing: needing.length,
+        open: openItems.length,
+        unreconciled: openItems.filter((n) => n.reconciled !== true).length,
+        hStops: agentStops(H),
+      },
+    );
+
+    // -------------------------------------------------------------------------
     // O: logs and outbound.
     phase("observability");
     const logged = consoleLines.join("\n");
@@ -1223,6 +1405,7 @@ writeArtifact("labs/connection-health.json", {
     "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data. Shopify is the synthetic oracle (scripts/fixtures/shopify-oracle.mjs), shaped from Shopify's documentation (AccessScopes answers currentAppInstallation.accessScopes).",
     "The connector, broker and identity handlers run in Node over psql bridges logged in as each login, not in workerd over the Neon transport.",
     "The four linked stores, their Listings agents, run leases, sealed tokens and one product snapshot are owner-seeded; a person's Stop AI work and its lift are owner-seeded (sim). Shapes marked sim: inbox rows, uninstall times and observation times backdated past their windows.",
+    "C6 interleaves the narrowing delivery between the broker's two vault steps through the lab's transaction wrapper. C7's twenty extra connections are owner-seeded with a recorded observation and no reconcile (sim), and its two cron passes call the cron's list and reconcile definers directly as the connector's login rather than through the connector's redrive.",
     "Only the Listings release exists, so every agent needs read_products and write_products; the selectivity of the stop across releases is proven in TypeScript (planReconnect, tests/connection-health.test.mjs) and across stores and tenants here.",
     "Resuming an agent after a scope stop is a person's command on ADR-0024 item 2's document (not in this PR): the stops stay, as the checks show.",
   ],

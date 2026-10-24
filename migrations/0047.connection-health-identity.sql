@@ -24,13 +24,16 @@ BEGIN;
 --     (0036: a scope change no longer ends an installation, so the M2 PR-3 applier's suspension
 --     is refused), work_shopify_launch (0036: an uninstalled latest installation reports
 --     uninstalled, so the connector starts a reinstall; a live one missing a scope, or whose
---     token Shopify refused, reports reconnect) and workspace_connections (0036: an install
---     link is offered unless the app's installation is suspended);
+--     token Shopify refused, reports reconnect), workspace_connections (0036: an install
+--     link is offered unless the app's installation is suspended) and
+--     work_shopify_redact_identity (0036: the app's install link is kept while the app has an
+--     installation that is not uninstalled, so a shop/redact for an earlier installation never
+--     takes the link a reinstall is connected through; the 48-hour deletion runs the same
+--     function, so the two deletions keep one rule; PR 5 review finding F1);
 --   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0048's
 --     connector and vault definers call them): the scope record, the health target, the
 --     reinstall leftovers, the ids-only due lists (checks, reconnects, deletions, stuck inbox
---     rows), the
---     deletion's open, identity redaction and completion.
+--     rows), the deletion's open and completion.
 -- The tenant always comes from a row the broker recorded or the installation itself, never
 -- from a caller (invariant 1). Nothing here deletes a row or reaches the vault.
 DO $$ BEGIN
@@ -42,7 +45,7 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_identity.shop_pseudonym(text)') IS NULL
  OR to_regprocedure('morrow_identity.shopify_scope_list_valid(jsonb)') IS NULL
  OR to_regprocedure('morrow_identity.privacy_evidence_valid(text,jsonb)') IS NULL
- OR to_regprocedure('morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text)') IS NOT NULL
+ OR to_regprocedure('morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text,text)') IS NOT NULL
  OR EXISTS(SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid='morrow_identity.store_installations'::regclass
    AND a.attname IN ('scopes_observed_at','token_refused_at') AND NOT a.attisdropped)
  -- The constraints this file replaces, exactly as 0026 and 0005 wrote them.
@@ -632,6 +635,57 @@ BEGIN
    AND s.principal_id=e.principal_id);
 END $$;
 
+-- shop/redact's identity handlers (0036), same signature, owner and ACL, with one change:
+-- the installation's and its candidate's domain become the pseudonym (ids kept), as before,
+-- and its app's install link is cleared unless that app has an installation that is not
+-- uninstalled. A reinstall connects through that link and its live installation holds the
+-- same shop domain, so a shop/redact for an earlier installation (a late or retried
+-- delivery) or the 48-hour deletion of one (0048's connector_deletion_apply calls this same
+-- function; ADR-0031 owner question 2: the earlier installation's data is deleted anyway)
+-- never leaves the reinstalled store without the link it would need after a later
+-- uninstall (the shopify_apps guard only ever clears it). With no live installation the
+-- link is cleared, as 0036 did. Idempotent; the counts are of the rows now in the redacted
+-- state. Outcomes: applied, ineligible (not uninstalled), not_found, invalid.
+CREATE OR REPLACE FUNCTION morrow_identity.work_shopify_redact_identity(p_org text,p_ws text,p_installation_id text)
+RETURNS TABLE(outcome text,installations integer,candidates integer,apps integer)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+#variable_conflict use_column
+DECLARE i morrow_identity.store_installations%ROWTYPE; v_shop text; v_at timestamptz; v_pseudonym text;
+ n_candidates integer; n_apps integer; v_live boolean;
+BEGIN
+ IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN
+  RETURN QUERY SELECT 'invalid'::text,NULL::integer,NULL::integer,NULL::integer; RETURN;
+ END IF;
+ SELECT x.shop_id INTO v_shop FROM morrow_identity.store_installations x
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=p_installation_id;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::integer,NULL::integer,NULL::integer; RETURN; END IF;
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.shopify_install',v_shop)::text,0));
+ SELECT * INTO i FROM morrow_identity.store_installations x
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=p_installation_id FOR UPDATE;
+ IF i.status<>'uninstalled' THEN RETURN QUERY SELECT 'ineligible'::text,NULL::integer,NULL::integer,NULL::integer; RETURN; END IF;
+ v_at:=greatest(date_trunc('milliseconds',clock_timestamp()),i.updated_at);
+ v_pseudonym:=morrow_identity.shop_pseudonym(i.id::text);
+ IF i.redacted_at IS NULL THEN
+  UPDATE morrow_identity.store_installations x SET shop_domain=v_pseudonym,redacted_at=v_at,revision=x.revision+1,updated_at=v_at
+   WHERE x.organization_id=i.organization_id AND x.workspace_id=i.workspace_id AND x.id=i.id;
+ END IF;
+ UPDATE morrow_identity.linking_candidates c SET shop_domain=v_pseudonym,redacted_at=v_at,proof_revoked_at=COALESCE(c.proof_revoked_at,v_at)
+  WHERE c.installation_id=i.id AND c.redacted_at IS NULL;
+ -- The install (and reinstall) lock above serialises this with a reinstall of the shop.
+ v_live:=EXISTS(SELECT 1 FROM morrow_identity.store_installations x WHERE x.app_key=i.app_key AND x.status<>'uninstalled');
+ IF NOT v_live THEN
+  UPDATE morrow_identity.shopify_apps a SET install_url=NULL,revision=a.revision+1
+   WHERE a.app_key=i.app_key AND a.invited_organization_id=i.organization_id AND a.invited_workspace_id=i.workspace_id
+    AND a.install_url IS NOT NULL;
+ END IF;
+ SELECT count(*)::integer INTO n_candidates FROM morrow_identity.linking_candidates c WHERE c.installation_id=i.id AND c.redacted_at IS NOT NULL;
+ SELECT count(*)::integer INTO n_apps FROM morrow_identity.shopify_apps a
+  WHERE a.app_key=i.app_key AND a.invited_organization_id=i.organization_id AND a.invited_workspace_id=i.workspace_id
+   AND a.install_url IS NULL;
+ RETURN QUERY SELECT 'applied'::text,1,n_candidates,n_apps;
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- The identity bridges of PR 5: definers owned by the identity owner, EXECUTE for
 -- morrow_work_command only. 0048's connector definers (the connector's login) and vault
@@ -674,15 +728,20 @@ END $$;
 --             (deliveries arrive out of order; only an observation or a re-authorisation
 --             adds a scope back);
 --   observed  the broker read the granted scopes back from Shopify with the token of
---             p_credential_version, which must still be the installation's: they are
---             recorded as they are (known scopes only) at this observation, and a refusal
---             is cleared;
---   refused   Shopify refused that token: the refusal is recorded at this observation; the
---             scopes are kept.
+--             p_credential_version, after resolving the installation at p_revision: both
+--             must still be the installation's (no re-authorisation, delivery, link or end
+--             since the read began), and the scopes are then recorded as they are (known
+--             scopes only) at this observation, and a refusal is cleared;
+--   refused   Shopify refused that token (same two conditions): the refusal is recorded at
+--             this observation; the scopes are kept.
+-- A read that began before a narrowing delivery is never recorded after it (PR 5 review
+-- finding F2): the narrowing moves the revision, so the read is stale and the cron asks
+-- again; only a read that began after it may widen the scopes back.
 -- Outcomes: applied (with the scopes before and after), unchanged, ineligible (not unlinked
--- or linked), stale (another token since), not_found, invalid.
+-- or linked), stale (another token or another change since the read began), not_found,
+-- invalid.
 CREATE FUNCTION morrow_identity.work_shopify_scopes_record(p_org text,p_ws text,p_installation_id text,p_mode text,p_scopes text,
- p_credential_version text)
+ p_credential_version text,p_revision text)
 RETURNS TABLE(outcome text,prior_scopes text,granted_scopes text,status text,store_id text,connection_id text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
 #variable_conflict use_column
@@ -693,8 +752,9 @@ BEGIN
   OR p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_mode IS NULL OR p_mode NOT IN ('narrow','observed','refused')
   OR (p_mode='refused')<>(p_scopes IS NULL) OR (p_scopes IS NOT NULL AND (octet_length(p_scopes)>4096 OR NOT pg_input_is_valid(p_scopes,'jsonb')))
-  OR (p_mode='narrow')<>(p_credential_version IS NULL)
-  OR (p_credential_version IS NOT NULL AND p_credential_version !~ '^[1-9][0-9]{0,15}$') THEN
+  OR (p_mode='narrow')<>(p_credential_version IS NULL) OR (p_mode='narrow')<>(p_revision IS NULL)
+  OR (p_credential_version IS NOT NULL AND p_credential_version !~ '^[1-9][0-9]{0,15}$')
+  OR (p_revision IS NOT NULL AND p_revision !~ '^[1-9][0-9]{0,15}$') THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
  IF p_scopes IS NOT NULL THEN
@@ -713,7 +773,7 @@ BEGIN
   RETURN QUERY SELECT 'ineligible'::text,array_to_string(i.granted_scopes,','),array_to_string(i.granted_scopes,','),i.status,
    i.store_id::text,i.connection_id::text; RETURN;
  END IF;
- IF p_mode<>'narrow' AND p_credential_version::bigint<>i.credential_version THEN
+ IF p_mode<>'narrow' AND (p_credential_version::bigint<>i.credential_version OR p_revision::bigint<>i.revision) THEN
   RETURN QUERY SELECT 'stale'::text,array_to_string(i.granted_scopes,','),array_to_string(i.granted_scopes,','),i.status,
    i.store_id::text,i.connection_id::text; RETURN;
  END IF;
@@ -746,24 +806,27 @@ BEGIN
   i.connection_id::text;
 END $$;
 -- The broker's read-back target (0048's vault check): the live installation's tenant, shop
--- domain and credential id and version, only while unlinked or linked and not redacted.
--- Outcomes: found, ineligible, not_found, invalid.
+-- domain, credential id and version, and its revision (the record of the read refuses it as
+-- stale once the installation has changed since), only while unlinked or linked and not
+-- redacted. Outcomes: found, ineligible, not_found, invalid.
 CREATE FUNCTION morrow_identity.work_shopify_check_target(p_installation_id text)
-RETURNS TABLE(outcome text,organization_id text,workspace_id text,shop_domain text,credential_id text,credential_version text)
+RETURNS TABLE(outcome text,organization_id text,workspace_id text,shop_domain text,credential_id text,credential_version text,
+ revision text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
 #variable_conflict use_column
 DECLARE i morrow_identity.store_installations%ROWTYPE;
 BEGIN
  IF p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN
-  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
  SELECT * INTO i FROM morrow_identity.store_installations x WHERE x.id=p_installation_id;
- IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
  IF i.status NOT IN ('unlinked','linked') OR i.redacted_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM morrow_identity.shopify_apps a
    WHERE a.app_key=i.app_key AND a.status='active') THEN
-  RETURN QUERY SELECT 'ineligible'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+  RETURN QUERY SELECT 'ineligible'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
- RETURN QUERY SELECT 'found'::text,i.organization_id::text,i.workspace_id::text,i.shop_domain,i.credential_id::text,i.credential_version::text;
+ RETURN QUERY SELECT 'found'::text,i.organization_id::text,i.workspace_id::text,i.shop_domain,i.credential_id::text,i.credential_version::text,
+  i.revision::text;
 END $$;
 -- The cron's read-back list (ids only, across tenants): live installations of active apps
 -- whose scopes were not observed in the last 24 hours, oldest first, at most 20.
@@ -776,18 +839,21 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,
   AND EXISTS(SELECT 1 FROM morrow_identity.shopify_apps a WHERE a.app_key=i.app_key AND a.status='active')
  ORDER BY i.scopes_observed_at NULLS FIRST,i.created_at,i.id LIMIT 20
 $$;
--- The cron's reconcile list (ids only, across tenants): live installations of active apps
--- that need reconnecting (a requested scope the installation does not record, or a token
--- Shopify refused), least recently changed first, at most 20. 0048's cron reconciles each
--- one, so a recorded narrowing whose reconcile was lost still stops its agents and raises its
--- Reconnect item.
+-- The cron's reconcile list (ids only, across tenants): every live installation of an active
+-- app that needs reconnecting (a requested scope the installation does not record, or a
+-- token Shopify refused). Not capped here: 0048's connector_notices_due (its only caller)
+-- keeps the ones whose connection has no open Reconnect item yet (a recorded narrowing or
+-- refusal whose reconcile was lost) and caps its merged list at 20. A cap here, in an order
+-- the reconcile never changes, would let the same 20 that already have their items hide
+-- every other one for good (PR 5 review finding F3). The set is only the live
+-- installations that need reconnecting now.
 CREATE FUNCTION morrow_identity.work_shopify_reconnect_due()
 RETURNS TABLE(installation_id text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
  SELECT i.id::text FROM morrow_identity.store_installations i JOIN morrow_identity.shopify_apps a ON a.app_key=i.app_key
  WHERE i.status IN ('unlinked','linked') AND i.redacted_at IS NULL AND a.status='active'
   AND (i.token_refused_at IS NOT NULL OR NOT (string_to_array(a.scopes,',')<@i.granted_scopes))
- ORDER BY i.updated_at,i.id LIMIT 20
+ ORDER BY i.id
 $$;
 -- A reinstall's leftovers (0048's vault prepare destroys them first): earlier installations
 -- of this app and shop that are uninstalled and whose token's destruction is not recorded.
@@ -859,51 +925,6 @@ BEGIN
  RETURN QUERY SELECT v_outcome,i.organization_id::text,i.workspace_id::text,i.store_id::text,i.connection_id::text,i.app_key,
   i.credential_destroyed_at IS NOT NULL,i.credential_version::bigint;
 END $$;
--- The 48-hour deletion's identity handlers (0036's shop/redact handlers, with one change):
--- the installation's and its candidate's domain become the pseudonym (ids kept), and its
--- app's install link is cleared unless that app has an installation that is not uninstalled
--- (a reinstall within the 48 hours keeps the link it is connected through; ADR-0031 owner
--- question 2: the earlier installation's data is deleted anyway). Idempotent; counts of
--- rows now in the redacted state. Outcomes: applied, ineligible (not uninstalled),
--- not_found, invalid.
-CREATE FUNCTION morrow_identity.work_shopify_deletion_redact_identity(p_org text,p_ws text,p_installation_id text)
-RETURNS TABLE(outcome text,installations integer,candidates integer,apps integer)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
-#variable_conflict use_column
-DECLARE i morrow_identity.store_installations%ROWTYPE; v_shop text; v_at timestamptz; v_pseudonym text;
- n_candidates integer; n_apps integer; v_live boolean;
-BEGIN
- IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
-  OR p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN
-  RETURN QUERY SELECT 'invalid'::text,NULL::integer,NULL::integer,NULL::integer; RETURN;
- END IF;
- SELECT x.shop_id INTO v_shop FROM morrow_identity.store_installations x
-  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=p_installation_id;
- IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::integer,NULL::integer,NULL::integer; RETURN; END IF;
- PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.shopify_install',v_shop)::text,0));
- SELECT * INTO i FROM morrow_identity.store_installations x
-  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=p_installation_id FOR UPDATE;
- IF i.status<>'uninstalled' THEN RETURN QUERY SELECT 'ineligible'::text,NULL::integer,NULL::integer,NULL::integer; RETURN; END IF;
- v_at:=greatest(date_trunc('milliseconds',clock_timestamp()),i.updated_at);
- v_pseudonym:=morrow_identity.shop_pseudonym(i.id::text);
- IF i.redacted_at IS NULL THEN
-  UPDATE morrow_identity.store_installations x SET shop_domain=v_pseudonym,redacted_at=v_at,revision=x.revision+1,updated_at=v_at
-   WHERE x.organization_id=i.organization_id AND x.workspace_id=i.workspace_id AND x.id=i.id;
- END IF;
- UPDATE morrow_identity.linking_candidates c SET shop_domain=v_pseudonym,redacted_at=v_at,proof_revoked_at=COALESCE(c.proof_revoked_at,v_at)
-  WHERE c.installation_id=i.id AND c.redacted_at IS NULL;
- v_live:=EXISTS(SELECT 1 FROM morrow_identity.store_installations x WHERE x.app_key=i.app_key AND x.status<>'uninstalled');
- IF NOT v_live THEN
-  UPDATE morrow_identity.shopify_apps a SET install_url=NULL,revision=a.revision+1
-   WHERE a.app_key=i.app_key AND a.invited_organization_id=i.organization_id AND a.invited_workspace_id=i.workspace_id
-    AND a.install_url IS NOT NULL;
- END IF;
- SELECT count(*)::integer INTO n_candidates FROM morrow_identity.linking_candidates c WHERE c.installation_id=i.id AND c.redacted_at IS NOT NULL;
- SELECT count(*)::integer INTO n_apps FROM morrow_identity.shopify_apps a
-  WHERE a.app_key=i.app_key AND a.invited_organization_id=i.organization_id AND a.invited_workspace_id=i.workspace_id
-   AND a.install_url IS NULL;
- RETURN QUERY SELECT 'applied'::text,1,n_candidates,n_apps;
-END $$;
 -- Completes the open 48-hour deletion of one installation with its evidence (the CHECK
 -- refuses evidence with anything outstanding). Outcomes: completed, already_completed,
 -- not_found, invalid.
@@ -947,17 +968,17 @@ BEGIN
  RETURN QUERY SELECT n,v_stuck;
 END $$;
 REVOKE ALL ON FUNCTION morrow_identity.work_shopify_health_target(text),
- morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
+ morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
  morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reconnect_due(),
  morrow_identity.work_shopify_reinstall_leftovers(text,text),
  morrow_identity.work_shopify_deletions_due(),morrow_identity.work_shopify_deletion_open(text),
- morrow_identity.work_shopify_deletion_redact_identity(text,text,text),morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
+ morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
  morrow_identity.work_shopify_inbox_stuck() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_identity.work_shopify_health_target(text),
- morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
+ morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
  morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reconnect_due(),
  morrow_identity.work_shopify_reinstall_leftovers(text,text),
  morrow_identity.work_shopify_deletions_due(),morrow_identity.work_shopify_deletion_open(text),
- morrow_identity.work_shopify_deletion_redact_identity(text,text,text),morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
+ morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
  morrow_identity.work_shopify_inbox_stuck() TO morrow_work_command;
 COMMIT;

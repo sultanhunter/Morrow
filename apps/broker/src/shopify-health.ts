@@ -13,8 +13,11 @@
 //      fixed document (AccessScopes) and its bytes dropped. A 401 is token_refused; a
 //      well-formed answer is the scopes; anything else is unavailable and records nothing.
 //   4. One vault transaction records what Shopify answered
-//      (morrow_vault.shopify_check_record), for the token version that was read: a newer
-//      token (a re-authorisation meanwhile) makes it stale, and nothing is recorded. A lost
+//      (morrow_vault.shopify_check_record), for the token version that was read and the
+//      installation's revision the resolution found: a newer token (a re-authorisation
+//      meanwhile) or any change since (a scopes_update delivery's narrowing in between)
+//      makes it stale, and nothing is recorded: an answer read before a narrowing never
+//      undoes it (PR 5 review finding F2); the cron asks again. A lost
 //      COMMIT acknowledgement is unavailable: the record is idempotent and the cron asks
 //      again; nothing is assumed either way.
 // The connector then reconciles the stops and the Reconnect item from the recorded state
@@ -61,6 +64,7 @@ const resolveColumns = [
   "shop_domain",
   "credential_id",
   "credential_version",
+  "revision",
   "kek_version",
   "wrapped_key",
   "sealed_value",
@@ -124,6 +128,7 @@ export function createShopifyHealthChecker(deps: Readonly<ShopifyHealthDependenc
         !exact(idPattern, credential) ||
         !exact(shopifyShopPattern, shop) ||
         !exact(/^[1-9][0-9]{0,15}$/, r.credential_version) ||
+        !exact(/^[1-9][0-9]{0,15}$/, r.revision) ||
         !exact(/^[1-9][0-9]{0,2}$/, r.kek_version) ||
         typeof r.wrapped_key !== "string" ||
         typeof r.sealed_value !== "string"
@@ -184,6 +189,7 @@ export function createShopifyHealthChecker(deps: Readonly<ShopifyHealthDependenc
             const rows = await query(vaultStatements.shopifyCheckRecord, [
               installationId,
               r.credential_version as string,
+              r.revision as string,
               scopes.kind === "scopes" ? "observed" : "refused",
               scopes.kind === "scopes" ? JSON.stringify(scopes.scopes) : "",
             ]);

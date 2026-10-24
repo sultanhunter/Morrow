@@ -198,6 +198,106 @@ test("static: every connector definer clears every connector setting on entry an
   );
 });
 
+// PR 5 review finding F1: shop/redact and the 48-hour deletion run one identity redaction,
+// which keeps the app's install link while the app has a live (reinstalled) installation.
+test("static: one identity redaction for shop/redact and the 48-hour deletion keeps a live reinstall's install link", () => {
+  const redact = functionText(identity.text, "morrow_identity.work_shopify_redact_identity");
+  assert.match(
+    redact,
+    /^CREATE OR REPLACE FUNCTION morrow_identity\.work_shopify_redact_identity\(p_org text,p_ws text,p_installation_id text\)\nRETURNS TABLE\(outcome text,installations integer,candidates integer,apps integer\)/,
+  );
+  // The install link is cleared only when no installation of the app is live.
+  assert.match(
+    redact,
+    /v_live:=EXISTS\(SELECT 1 FROM morrow_identity\.store_installations x WHERE x\.app_key=i\.app_key AND x\.status<>'uninstalled'\);\n IF NOT v_live THEN\n  UPDATE morrow_identity\.shopify_apps a SET install_url=NULL/,
+  );
+  assert.equal(redact.match(/SET install_url=NULL/g)?.length, 1);
+  // 0036's text is pinned, so a missed merge fails the migration's prerequisites.
+  assert.match(
+    identity.text,
+    /to_regprocedure\('morrow_identity\.work_shopify_redact_identity\(text,text,text\)'\)\)\n  IS DISTINCT FROM '07a5f45bf50c3bae986c1de9784d5ba9'/,
+  );
+  // No second copy that could disagree: the 48-hour deletion calls shop/redact's function.
+  assert.doesNotMatch(identity.text + work.text, /work_shopify_deletion_redact_identity/);
+  assert.match(
+    functionText(work.text, "morrow_work.connector_deletion_apply"),
+    /FROM morrow_identity\.work_shopify_redact_identity\(d\.organization_id,d\.workspace_id,p_installation_id\)/,
+  );
+});
+
+// PR 5 review finding F2: a read-back that began before a narrowing delivery is stale.
+test("static: the read-back's record is stale once the installation changed after its resolution", () => {
+  const target = functionText(identity.text, "morrow_identity.work_shopify_check_target");
+  assert.match(target, /credential_version text,\n revision text\)/);
+  assert.match(target, /i\.credential_version::text,\n  i\.revision::text;/);
+  const record = functionText(identity.text, "morrow_identity.work_shopify_scopes_record");
+  assert.match(record, /p_credential_version text,p_revision text\)/);
+  assert.match(record, /\(p_mode='narrow'\)<>\(p_revision IS NULL\)/);
+  assert.match(
+    record,
+    /IF p_mode<>'narrow' AND \(p_credential_version::bigint<>i\.credential_version OR p_revision::bigint<>i\.revision\) THEN\n  RETURN QUERY SELECT 'stale'/,
+  );
+  // The vault definers carry the revision from the resolution to the record.
+  const resolve = functionText(work.text, "morrow_vault.shopify_check_resolve");
+  const columns = /RETURNS TABLE\(([^)]*)\)/
+    .exec(resolve)[1]
+    .split(",")
+    .map((c) => c.trim().split(/\s+/)[0]);
+  assert.deepEqual(
+    columns,
+    /^SELECT (.*) FROM morrow_vault\.shopify_check_resolve\(\$1\)$/
+      .exec(vaultStatements.shopifyCheckResolve)[1]
+      .split(","),
+  );
+  assert.ok(columns.includes("revision"));
+  assert.match(
+    functionText(work.text, "morrow_vault.shopify_check_record"),
+    /work_shopify_scopes_record\(t\.organization_id,t\.workspace_id,p_installation_id,p_result,p_scopes,\n  p_credential_version,p_revision\)/,
+  );
+  assert.equal(
+    vaultStatements.shopifyCheckRecord,
+    "SELECT morrow_vault.shopify_check_record($1,$2,$3,$4,NULLIF($5,'')) AS outcome",
+  );
+  // A delivery's narrowing names no token version and no revision.
+  assert.match(
+    functionText(work.text, "morrow_work.connector_inbox_apply_v2"),
+    /'narrow',\n  \(v_body->'current'\)::text,NULL,NULL\);/,
+  );
+});
+
+// PR 5 review finding F3: the cron's reconcile list rotates through every open item.
+test("static: the cron's reconcile list takes the least recently reconciled first and never hides an item", () => {
+  const due = functionText(work.text, "morrow_work.connector_notices_due");
+  assert.match(due, /SELECT n\.installation_id::text AS id,n\.reconciled_at AS at FROM/);
+  assert.match(
+    due,
+    /FROM morrow_identity\.work_shopify_reconnect_due\(\) d\n    WHERE NOT EXISTS\(SELECT 1 FROM morrow_work\.connection_notices n WHERE n\.cleared_at IS NULL AND n\.installation_id::text=d\.installation_id\)\) u/,
+  );
+  assert.match(due, /ORDER BY min\(u\.at\) NULLS FIRST,u\.id LIMIT 20;/);
+  // The identity list is not cut before that filter.
+  assert.doesNotMatch(
+    functionText(identity.text, "morrow_identity.work_shopify_reconnect_due"),
+    /LIMIT/,
+  );
+  // Every reconcile pass marks reconciled_at, the unchanged pass included.
+  const reconcile = functionText(work.text, "morrow_work.connection_health_reconcile");
+  assert.equal(reconcile.match(/reconciled_at=greatest\(v_at,x\.reconciled_at\)/g)?.length, 4);
+  assert.match(
+    reconcile,
+    /ELSE\n   UPDATE morrow_work\.connection_notices x SET reconciled_at=greatest\(v_at,x\.reconciled_at\)\n[^\n]*\n   v_notice:='unchanged';/,
+  );
+  // The guard admits that mark alone, forward only, without a revision.
+  const guard = functionText(work.text, "morrow_work.connection_notice_guard");
+  assert.match(
+    guard,
+    /OLD\.cleared_at IS NULL AND NEW\.reconciled_at>=OLD\.reconciled_at\n  AND \(to_jsonb\(NEW\)-'reconciled_at'\)=\(to_jsonb\(OLD\)-'reconciled_at'\) THEN/,
+  );
+  assert.match(
+    work.text,
+    /CREATE INDEX connection_notices_open ON morrow_work\.connection_notices \(reconciled_at,id\) WHERE cleared_at IS NULL;/,
+  );
+});
+
 test("twin: the scopes each agent release needs are release_shopify_scopes's", () => {
   const body = functionText(work.text, "morrow_work.release_shopify_scopes");
   const cases = [...body.matchAll(/WHEN '([a-z.]+)' THEN ARRAY\[([^\]]*)\]::text\[\]/g)].map(
@@ -498,7 +598,13 @@ const brokerEnv = () => ({
   MORROW_VAULT_KEK_V1: kek,
 });
 const installationId = "8f1c2e0a-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
-async function checkerHarness({ resolve = "resolved", record = "applied", reply, lost } = {}) {
+async function checkerHarness({
+  resolve = "resolved",
+  record = "applied",
+  reply,
+  lost,
+  revision = "7",
+} = {}) {
   const keyring = await createVaultKeyring("development", new Map([[1, kek]]));
   const token = "shpat_" + randomBytes(16).toString("hex");
   const sealed = await sealVaultRecord(
@@ -530,6 +636,7 @@ async function checkerHarness({ resolve = "resolved", record = "applied", reply,
                 shop_domain: "dev-1.myshopify.com",
                 credential_id: "cred_1",
                 credential_version: "3",
+                revision,
                 kek_version: "1",
                 wrapped_key: vaultBytesHex(sealed.wrappedKey),
                 sealed_value: vaultBytesHex(sealed.sealedValue),
@@ -541,6 +648,7 @@ async function checkerHarness({ resolve = "resolved", record = "applied", reply,
                 shop_domain: null,
                 credential_id: null,
                 credential_version: null,
+                revision: null,
                 kek_version: null,
                 wrapped_key: null,
                 sealed_value: null,
@@ -569,7 +677,9 @@ test("the broker's read-back: closed inputs, the token for one fixed document, t
     ]),
     [
       ["resolve", [installationId]],
-      ["record", [installationId, "3", "observed", '["read_products","write_products"]']],
+      // The record names the token version and the installation's revision that the
+      // resolution read (PR 5 review finding F2: a narrowing in between makes it stale).
+      ["record", [installationId, "3", "7", "observed", '["read_products","write_products"]']],
     ],
   );
   assert.equal(ok.shopify.calls.length, 1);
@@ -580,7 +690,13 @@ test("the broker's read-back: closed inputs, the token for one fixed document, t
     decodeShopifyConnectionCheck(await refused.checker.check(env, installationId, 8000)),
     "token_refused",
   );
-  assert.deepEqual(refused.statements.at(-1)[1], [installationId, "3", "refused", ""]);
+  assert.deepEqual(refused.statements.at(-1)[1], [installationId, "3", "7", "refused", ""]);
+  // A resolution without a well-formed revision is refused before Shopify is asked.
+  for (const revision of [null, "0", "07", "x"]) {
+    const bad = await checkerHarness({ revision });
+    await assert.rejects(bad.checker.check(env, installationId, 8000), /VAULT_RECORD_INVALID/);
+    assert.equal(bad.shopify.calls.length, 0, String(revision));
+  }
   // An unclear answer records nothing.
   const unclear = await checkerHarness({ reply: 500 });
   assert.equal(

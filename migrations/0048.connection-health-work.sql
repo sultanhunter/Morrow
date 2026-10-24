@@ -17,7 +17,9 @@ BEGIN;
 --     stops every agent). The other agents keep running. An installation a person already
 --     stopped keeps the person's stop alone (0020's one open stop per target) and is named
 --     in the notice; if the person lifts it while the scope is still missing, the cron's
---     reconcile stops it again;
+--     reconcile stops it again. Every reconcile marks the notice's reconciled_at, and the
+--     cron's list takes the least recently reconciled first, so every open item is
+--     reconciled again however many there are (PR 5 review finding F3);
 --   * the connector definers (EXECUTE for morrow_connector_ingress only; each overwrites every
 --     connector setting on entry): connector_inbox_apply_v2 (app/scopes_update keeps the
 --     connection and its token: it records the delivery's current scopes, which only narrow,
@@ -33,7 +35,8 @@ BEGIN;
 --     (0027's prepare, and for a reinstall the earlier installations' leftover tokens
 --     destroyed in the same install transaction), shopify_check_resolve and
 --     shopify_check_record (the read-back of the granted scopes with the installation's own
---     token, ADR-0025 item 10, and the record of what Shopify answered);
+--     token, ADR-0025 item 10, and the record of what Shopify answered, refused as stale when
+--     the installation changed after the read began);
 --   * the api's read of the viewer's Reconnect items (connection_notices_open, session only).
 -- No definer here sends a request; nothing deletes outside the 0038 store-content handlers.
 DO $$ BEGIN
@@ -49,7 +52,7 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_vault.shopify_credential_destroy(text,text)') IS NULL
  OR to_regprocedure('morrow_vault.shopify_install_prepare(text,text,text,text)') IS NULL
  OR to_regclass('morrow_work.agent_installations') IS NULL OR to_regclass('morrow_work.stop_controls') IS NULL
- OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_health_target(text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_check_target(text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_checks_due()','EXECUTE')
@@ -57,7 +60,7 @@ DO $$ BEGIN
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_reinstall_leftovers(text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_deletions_due()','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_deletion_open(text)','EXECUTE')
- OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_deletion_redact_identity(text,text,text)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_redact_identity(text,text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_inbox_stuck()','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_inbox_take(text)','EXECUTE')
@@ -99,8 +102,10 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- The Reconnect item of one store connection (ADR-0025 item 10). Born open at revision 1;
--- while open, each reconcile may revise what it names (revision+1); cleared once, then never
--- changed. One open per connection. No delete or truncate.
+-- while open, each reconcile may revise what it names (revision+1), and every reconcile marks
+-- reconciled_at (alone, without a revision, when nothing it names changed: the cron's list
+-- rotates by it); cleared once, then never changed. One open per connection. No delete or
+-- truncate.
 CREATE TABLE morrow_work.connection_notices (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -119,27 +124,37 @@ CREATE TABLE morrow_work.connection_notices (
  updated_at timestamptz NOT NULL CHECK (updated_at=date_trunc('milliseconds',updated_at) AND isfinite(updated_at)),
  cleared_at timestamptz CHECK (cleared_at=date_trunc('milliseconds',cleared_at) AND isfinite(cleared_at)),
  cleared_reason text CHECK (cleared_reason IN ('scopes_restored','connection_ended')),
+ reconciled_at timestamptz NOT NULL CHECK (reconciled_at=date_trunc('milliseconds',reconciled_at) AND isfinite(reconciled_at)),
  PRIMARY KEY (organization_id,workspace_id,id),
  FOREIGN KEY (organization_id,workspace_id) REFERENCES morrow_identity.workspaces(organization_id,id),
  CONSTRAINT connection_notices_clear CHECK ((cleared_at IS NULL)=(cleared_reason IS NULL)),
- CONSTRAINT connection_notices_times CHECK (updated_at>=created_at AND (cleared_at IS NULL OR cleared_at>=created_at))
+ CONSTRAINT connection_notices_times CHECK (updated_at>=created_at AND (cleared_at IS NULL OR cleared_at>=created_at)
+  AND reconciled_at>=created_at)
 );
 CREATE UNIQUE INDEX connection_notices_one_open ON morrow_work.connection_notices (organization_id,workspace_id,connection_id)
  WHERE cleared_at IS NULL;
-CREATE INDEX connection_notices_open ON morrow_work.connection_notices (updated_at,id) WHERE cleared_at IS NULL;
+CREATE INDEX connection_notices_open ON morrow_work.connection_notices (reconciled_at,id) WHERE cleared_at IS NULL;
+CREATE INDEX connection_notices_open_installation ON morrow_work.connection_notices (installation_id) WHERE cleared_at IS NULL;
 -- The notice guard (INVOKER, owned by the owner, granted to nobody).
 CREATE FUNCTION morrow_work.connection_notice_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE v_mutable text[]:=ARRAY['revision','cause','missing_scopes','stopped_installations','recipients','source_inbox_id','updated_at',
- 'cleared_at','cleared_reason'];
+ 'cleared_at','cleared_reason','reconciled_at'];
 BEGIN
  IF TG_OP='INSERT' THEN
-  IF NEW.revision<>1 OR NEW.cleared_at IS NOT NULL OR NEW.updated_at<>NEW.created_at THEN RAISE EXCEPTION 'WORK_NOTICE_INVALID'; END IF;
+  IF NEW.revision<>1 OR NEW.cleared_at IS NOT NULL OR NEW.updated_at<>NEW.created_at OR NEW.reconciled_at<>NEW.created_at THEN
+   RAISE EXCEPTION 'WORK_NOTICE_INVALID';
+  END IF;
   RETURN NEW;
  END IF;
  IF TG_OP='UPDATE' AND OLD.cleared_at IS NULL AND NEW.revision=OLD.revision+1 AND NEW.updated_at>=OLD.updated_at
-  AND (to_jsonb(NEW)-v_mutable)=(to_jsonb(OLD)-v_mutable)
+  AND NEW.reconciled_at>=OLD.reconciled_at AND (to_jsonb(NEW)-v_mutable)=(to_jsonb(OLD)-v_mutable)
   AND (NEW.cleared_at IS NULL OR NEW.cleared_at>=OLD.updated_at) THEN
+  RETURN NEW;
+ END IF;
+ -- A reconcile that changed nothing the item names marks only when it ran.
+ IF TG_OP='UPDATE' AND OLD.cleared_at IS NULL AND NEW.reconciled_at>=OLD.reconciled_at
+  AND (to_jsonb(NEW)-'reconciled_at')=(to_jsonb(OLD)-'reconciled_at') THEN
   RETURN NEW;
  END IF;
  RAISE EXCEPTION 'WORK_NOTICE_IMMUTABLE';
@@ -179,8 +194,8 @@ CREATE POLICY connector_health_sweep ON morrow_work.connection_notices FOR SELEC
  USING (session_user='morrow_connector_ingress' AND cleared_at IS NULL
   AND pg_catalog.current_setting('morrow.connector_sweep',true)='open');
 GRANT SELECT,INSERT ON morrow_work.connection_notices TO morrow_work_command;
-GRANT UPDATE (revision,cause,missing_scopes,stopped_installations,recipients,source_inbox_id,updated_at,cleared_at,cleared_reason)
- ON morrow_work.connection_notices TO morrow_work_command;
+GRANT UPDATE (revision,cause,missing_scopes,stopped_installations,recipients,source_inbox_id,updated_at,cleared_at,cleared_reason,
+ reconciled_at) ON morrow_work.connection_notices TO morrow_work_command;
 -- The store's agent installations, read in the health context.
 CREATE POLICY connector_health_agents ON morrow_work.agent_installations FOR SELECT TO morrow_work_command
  USING (session_user='morrow_connector_ingress'
@@ -223,7 +238,9 @@ CREATE POLICY connector_health_lease_revoke ON morrow_work.work_leases FOR UPDAT
 --   * one open notice per connection names the missing requested scopes and the stopped
 --     agents, for the steward and the Owner; it is revised when either changes, and cleared
 --     (scopes_restored) once nothing is missing and no agent needs a scope. The stops stay:
---     nothing resumes by itself.
+--     nothing resumes by itself;
+--   * every pass marks the notice's reconciled_at, an unchanged one included, so the cron's
+--     list (connector_notices_due) reaches every open item in turn.
 -- Returns {outcome, notice, missing, stopped, newly}.
 CREATE FUNCTION morrow_work.connection_health_reconcile(p_org text,p_ws text,p_installation_id text,p_inbox_id text)
 RETURNS jsonb
@@ -247,7 +264,7 @@ BEGIN
  IF t.status NOT IN ('unlinked','linked') THEN
   IF n.id IS NOT NULL THEN
    UPDATE morrow_work.connection_notices x SET cleared_at=greatest(v_at,x.updated_at),cleared_reason='connection_ended',
-    revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+    revision=x.revision+1,updated_at=greatest(v_at,x.updated_at),reconciled_at=greatest(v_at,x.reconciled_at)
     WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=n.id;
    v_notice:='cleared';
   END IF;
@@ -284,22 +301,25 @@ BEGIN
    WHERE p IS NOT NULL;
   IF n.id IS NULL THEN
    INSERT INTO morrow_work.connection_notices(organization_id,workspace_id,id,revision,kind,cause,store_id,connection_id,installation_id,
-    missing_scopes,stopped_installations,recipients,source_inbox_id,created_at,updated_at,cleared_at,cleared_reason)
+    missing_scopes,stopped_installations,recipients,source_inbox_id,created_at,updated_at,cleared_at,cleared_reason,reconciled_at)
    VALUES (p_org,p_ws,gen_random_uuid()::text,1,'reconnect',v_cause,t.store_id,t.connection_id,p_installation_id,to_jsonb(v_missing),
-    to_jsonb(v_stopped),v_recipients,p_inbox_id,v_at,v_at,NULL,NULL);
+    to_jsonb(v_stopped),v_recipients,p_inbox_id,v_at,v_at,NULL,NULL,v_at);
    v_notice:='raised';
   ELSIF n.missing_scopes IS DISTINCT FROM to_jsonb(v_missing) OR n.stopped_installations IS DISTINCT FROM to_jsonb(v_stopped)
    OR n.cause IS DISTINCT FROM v_cause OR n.recipients IS DISTINCT FROM v_recipients THEN
    UPDATE morrow_work.connection_notices x SET cause=v_cause,missing_scopes=to_jsonb(v_missing),stopped_installations=to_jsonb(v_stopped),
-    recipients=v_recipients,source_inbox_id=COALESCE(p_inbox_id,x.source_inbox_id),revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+    recipients=v_recipients,source_inbox_id=COALESCE(p_inbox_id,x.source_inbox_id),revision=x.revision+1,updated_at=greatest(v_at,x.updated_at),
+    reconciled_at=greatest(v_at,x.reconciled_at)
     WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=n.id;
    v_notice:='revised';
   ELSE
+   UPDATE morrow_work.connection_notices x SET reconciled_at=greatest(v_at,x.reconciled_at)
+    WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=n.id;
    v_notice:='unchanged';
   END IF;
  ELSIF n.id IS NOT NULL THEN
   UPDATE morrow_work.connection_notices x SET cleared_at=greatest(v_at,x.updated_at),cleared_reason='scopes_restored',
-   revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+   revision=x.revision+1,updated_at=greatest(v_at,x.updated_at),reconciled_at=greatest(v_at,x.reconciled_at)
    WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=n.id;
   v_notice:='cleared';
  END IF;
@@ -358,7 +378,7 @@ BEGIN
  END IF;
  v_body:=x.body::jsonb;
  SELECT * INTO s FROM morrow_identity.work_shopify_scopes_record(x.organization_id,x.workspace_id,x.installation_id,'narrow',
-  (v_body->'current')::text,NULL);
+  (v_body->'current')::text,NULL,NULL);
  IF s.outcome IS NULL OR s.outcome NOT IN ('applied','unchanged','ineligible') THEN RAISE EXCEPTION 'CONNECTOR_SCOPES_REFUSED'; END IF;
  IF s.outcome='ineligible' THEN
   IF morrow_identity.work_shopify_inbox_settle(p_inbox_id,'ignored','installation_ended',jsonb_build_object('installation',s.status))
@@ -411,11 +431,14 @@ BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_connector_ingress') THEN RETURN; END IF;
  RETURN QUERY SELECT d.installation_id FROM morrow_identity.work_shopify_checks_due() d;
 END $$;
--- The cron's reconcile list (ids only, across tenants): the store installations of open
--- Reconnect items (cleared once their scopes are back; an agent a person resumed while a
--- scope is missing is stopped again) and the live installations that need reconnecting
--- (work_shopify_reconnect_due: a recorded narrowing or refusal whose reconcile was lost gets
--- its stops and its item), new ones first, then the least recently revised, at most 20.
+-- The cron's reconcile list (ids only, across tenants): the live installations that need
+-- reconnecting and have no open Reconnect item (work_shopify_reconnect_due: a recorded
+-- narrowing or refusal whose reconcile was lost gets its stops and its item) first, then the
+-- store installations of open Reconnect items, least recently reconciled first (cleared once
+-- their scopes are back; an agent a person resumed while a scope is missing is stopped
+-- again), at most 20. Every reconcile marks its item's reconciled_at, so successive runs
+-- reach every open item, and an installation without an item gets one from its first
+-- reconcile and leaves the first group (PR 5 review finding F3).
 CREATE FUNCTION morrow_work.connector_notices_due()
 RETURNS TABLE(installation_id text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -427,8 +450,9 @@ BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_connector_ingress') THEN RETURN; END IF;
  PERFORM pg_catalog.set_config('morrow.connector_sweep','open',true);
  RETURN QUERY SELECT u.id FROM (
-   SELECT n.installation_id::text AS id,n.updated_at AS at FROM morrow_work.connection_notices n WHERE n.cleared_at IS NULL
-   UNION ALL SELECT d.installation_id,NULL::timestamptz FROM morrow_identity.work_shopify_reconnect_due() d) u
+   SELECT n.installation_id::text AS id,n.reconciled_at AS at FROM morrow_work.connection_notices n WHERE n.cleared_at IS NULL
+   UNION ALL SELECT d.installation_id,NULL::timestamptz FROM morrow_identity.work_shopify_reconnect_due() d
+    WHERE NOT EXISTS(SELECT 1 FROM morrow_work.connection_notices n WHERE n.cleared_at IS NULL AND n.installation_id::text=d.installation_id)) u
   GROUP BY u.id ORDER BY min(u.at) NULLS FIRST,u.id LIMIT 20;
  PERFORM pg_catalog.set_config('morrow.connector_sweep','',true);
 END $$;
@@ -448,8 +472,9 @@ END $$;
 -- within the 48 hours does not stop it, because the reinstall is another installation with its
 -- own store). Once per installation, with its record (store_data_deletions): every
 -- store-content handler of its store in the connector's redaction context
--- (store_content_redact, as shop/redact runs it), the identity handlers (the domain becomes
--- the pseudonym; the install link is cleared unless a reinstall is live), the Reconnect item
+-- (store_content_redact, as shop/redact runs it), the identity handlers (shop/redact's own
+-- work_shopify_redact_identity, as 0047 revises it: the domain becomes the pseudonym; the
+-- install link is cleared unless a reinstall is live), the Reconnect item
 -- of the ended connection cleared, and the record completed only when nothing is outstanding,
 -- the token's destruction included: until it is recorded the outcome is pending with the
 -- credential to destroy (reason uninstalled), as shop/redact's. Outcomes: applied, pending,
@@ -484,7 +509,7 @@ BEGIN
  PERFORM pg_catalog.set_config('morrow.connector_redact',d.organization_id||'|'||d.workspace_id||'|'||d.store_id,true);
  v_content:=morrow_work.store_content_redact(d.organization_id,d.workspace_id,d.store_id);
  PERFORM pg_catalog.set_config('morrow.connector_redact','',true);
- SELECT * INTO v_identity FROM morrow_identity.work_shopify_deletion_redact_identity(d.organization_id,d.workspace_id,p_installation_id);
+ SELECT * INTO v_identity FROM morrow_identity.work_shopify_redact_identity(d.organization_id,d.workspace_id,p_installation_id);
  IF v_identity.outcome IS DISTINCT FROM 'applied' THEN RAISE EXCEPTION 'CONNECTOR_IDENTITY_REDACT_REFUSED'; END IF;
  PERFORM morrow_work.connection_health_reconcile(d.organization_id,d.workspace_id,p_installation_id,NULL);
  SELECT COALESCE(jsonb_agg(c-'remaining' ORDER BY c->>'table'),'[]'::jsonb),
@@ -554,39 +579,45 @@ BEGIN
  RETURN QUERY SELECT COALESCE(r.outcome,'state_invalid'),r.organization_id,r.workspace_id,r.installation_id,r.store_id,
   r.connection_id,r.credential_id,r.credential_version;
 END $$;
--- The read-back's resolution (ADR-0025 item 10): a live installation's shop domain and its
--- active credential's envelope (the subject the envelope binds), for one fixed request of the
--- granted scopes. Outcomes: resolved, ineligible, credential_unavailable, not_found, invalid,
--- denied.
+-- The read-back's resolution (ADR-0025 item 10): a live installation's shop domain, its
+-- revision (which the record must find unchanged) and its active credential's envelope (the
+-- subject the envelope binds), for one fixed request of the granted scopes. Outcomes:
+-- resolved, ineligible, credential_unavailable, not_found, invalid, denied.
 CREATE FUNCTION morrow_vault.shopify_check_resolve(p_installation_id text)
 RETURNS TABLE(outcome text,organization_id text,workspace_id text,shop_domain text,credential_id text,credential_version text,
- kek_version text,wrapped_key text,sealed_value text)
+ revision text,kek_version text,wrapped_key text,sealed_value text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
 #variable_conflict use_column
 DECLARE t record; c record;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN
-  RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+  RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
+  RETURN;
  END IF;
  SELECT * INTO t FROM morrow_identity.work_shopify_check_target(p_installation_id);
  IF t.outcome IS DISTINCT FROM 'found' THEN
-  RETURN QUERY SELECT COALESCE(t.outcome,'invalid'),NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
+  RETURN QUERY SELECT COALESCE(t.outcome,'invalid'),NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
+   NULL::text;
   RETURN;
  END IF;
  SELECT x.kek_version::text AS kek_version,encode(x.wrapped_key,'hex') AS wrapped_key,encode(x.sealed_value,'hex') AS sealed_value INTO c
   FROM morrow_vault.credentials x WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.id=t.credential_id
    AND x.version::text=t.credential_version AND x.subject_id=p_installation_id AND x.status='active';
  IF NOT FOUND THEN
-  RETURN QUERY SELECT 'credential_unavailable'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
+  RETURN QUERY SELECT 'credential_unavailable'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
+   NULL::text;
   RETURN;
  END IF;
- RETURN QUERY SELECT 'resolved'::text,t.organization_id,t.workspace_id,t.shop_domain,t.credential_id,t.credential_version,c.kek_version,
-  c.wrapped_key,c.sealed_value;
+ RETURN QUERY SELECT 'resolved'::text,t.organization_id,t.workspace_id,t.shop_domain,t.credential_id,t.credential_version,t.revision,
+  c.kek_version,c.wrapped_key,c.sealed_value;
 END $$;
--- The read-back's record: what Shopify answered for the token of p_credential_version
--- (observed with its granted scopes as a JSON array of names, or refused). Outcomes:
--- applied, unchanged, stale, ineligible, not_found, invalid, denied.
-CREATE FUNCTION morrow_vault.shopify_check_record(p_installation_id text,p_credential_version text,p_result text,p_scopes text)
+-- The read-back's record: what Shopify answered for the token of p_credential_version, read
+-- after the resolution found the installation at p_revision (observed with its granted
+-- scopes as a JSON array of names, or refused); stale when the token or the installation
+-- changed since (a delivery's narrowing in between is never undone by the earlier read).
+-- Outcomes: applied, unchanged, stale, ineligible, not_found, invalid, denied.
+CREATE FUNCTION morrow_vault.shopify_check_record(p_installation_id text,p_credential_version text,p_revision text,p_result text,
+ p_scopes text)
 RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
 DECLARE t record; s record;
@@ -596,7 +627,7 @@ BEGIN
  SELECT * INTO t FROM morrow_identity.work_shopify_check_target(p_installation_id);
  IF t.outcome IS DISTINCT FROM 'found' THEN RETURN COALESCE(t.outcome,'invalid'); END IF;
  SELECT * INTO s FROM morrow_identity.work_shopify_scopes_record(t.organization_id,t.workspace_id,p_installation_id,p_result,p_scopes,
-  p_credential_version);
+  p_credential_version,p_revision);
  RETURN COALESCE(s.outcome,'invalid');
 END $$;
 
@@ -634,14 +665,14 @@ REVOKE ALL ON FUNCTION morrow_work.release_shopify_scopes(text),morrow_work.noti
  morrow_work.connector_notices_due(),morrow_work.connector_deletions_due(),morrow_work.connector_deletion_apply(text),
  morrow_work.connector_inbox_stuck(),morrow_work.connection_notices_open(),
  morrow_vault.shopify_install_prepare_v2(text,text,text,text),morrow_vault.shopify_check_resolve(text),
- morrow_vault.shopify_check_record(text,text,text,text) FROM PUBLIC;
+ morrow_vault.shopify_check_record(text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_work.release_shopify_scopes(text),morrow_work.notice_scopes_valid(jsonb),
  morrow_work.notice_ids_valid(jsonb,integer),morrow_work.connection_health_reconcile(text,text,text,text) TO morrow_work_command;
 GRANT EXECUTE ON FUNCTION morrow_work.connector_inbox_apply_v2(text),morrow_work.connector_health_reconcile(text),
  morrow_work.connector_checks_due(),morrow_work.connector_notices_due(),morrow_work.connector_deletions_due(),
  morrow_work.connector_deletion_apply(text),morrow_work.connector_inbox_stuck() TO morrow_connector_ingress;
 GRANT EXECUTE ON FUNCTION morrow_vault.shopify_install_prepare_v2(text,text,text,text),morrow_vault.shopify_check_resolve(text),
- morrow_vault.shopify_check_record(text,text,text,text) TO morrow_vault_broker;
+ morrow_vault.shopify_check_record(text,text,text,text,text) TO morrow_vault_broker;
 GRANT EXECUTE ON FUNCTION morrow_work.connection_notices_open() TO morrow_work_api;
 GRANT CREATE ON SCHEMA morrow_work,morrow_vault TO morrow_work_command;
 ALTER FUNCTION morrow_work.connector_inbox_apply_v2(text) OWNER TO morrow_work_command;
@@ -654,6 +685,6 @@ ALTER FUNCTION morrow_work.connector_inbox_stuck() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.connection_notices_open() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.shopify_install_prepare_v2(text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.shopify_check_resolve(text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_vault.shopify_check_record(text,text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_vault.shopify_check_record(text,text,text,text,text) OWNER TO morrow_work_command;
 REVOKE CREATE ON SCHEMA morrow_work,morrow_vault FROM morrow_work_command;
 COMMIT;

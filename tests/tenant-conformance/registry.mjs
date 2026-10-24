@@ -863,18 +863,18 @@ export const bridgeFunctions = Object.freeze([
   // broker's vault definer of shopify-live-store-vault (ADR-0035 item 2).
   "work_shopify_live_store(text,text)",
   // v1 PR 5 (connection-health-identity): the health target, the scope record, the read-back
-  // target, the ids-only due lists (read-backs and reconnects), the reinstall leftovers, the 48-hour deletion's open,
-  // identity handlers and completion, and the stuck-delivery close, called only by
-  // connection-health-work's connector and vault definers.
+  // target, the ids-only due lists (read-backs and reconnects), the reinstall leftovers, the
+  // 48-hour deletion's open and completion, and the stuck-delivery close, called only by
+  // connection-health-work's connector and vault definers. The 48-hour deletion's identity
+  // handlers are shop/redact's work_shopify_redact_identity above, which 0047 revises.
   "work_shopify_health_target(text)",
-  "work_shopify_scopes_record(text,text,text,text,text,text)",
+  "work_shopify_scopes_record(text,text,text,text,text,text,text)",
   "work_shopify_check_target(text)",
   "work_shopify_checks_due()",
   "work_shopify_reconnect_due()",
   "work_shopify_reinstall_leftovers(text,text)",
   "work_shopify_deletions_due()",
   "work_shopify_deletion_open(text)",
-  "work_shopify_deletion_redact_identity(text,text,text)",
   "work_shopify_deletion_complete(text,text,text,jsonb)",
   "work_shopify_inbox_stuck()",
 ]);
@@ -1445,7 +1445,10 @@ export const vaultFunctions = Object.freeze({
     grantees: ["morrow_vault_broker"],
   },
   "shopify_check_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
-  "shopify_check_record(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_check_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
   // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
   // and counts only; the broker's login).
   "model_call_begin(text,text,text,text,text,text,text,text)": {
@@ -1616,7 +1619,7 @@ export const executorLogins = Object.freeze({
     // v1 PR 1 (shopify-live-store-vault).
     "morrow_vault.shopify_live_store_admission(text,text)",
     // v1 PR 5 (connection-health-work).
-    "morrow_vault.shopify_check_record(text,text,text,text)",
+    "morrow_vault.shopify_check_record(text,text,text,text,text)",
     "morrow_vault.shopify_check_resolve(text)",
     "morrow_vault.shopify_install_prepare_v2(text,text,text,text)",
     // M3 PR-2 (listings-runs).

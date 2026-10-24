@@ -25,8 +25,11 @@ export const shopifyVaultStatements = Object.freeze({
   shopifyLiveStoreAdmission: "SELECT morrow_vault.shopify_live_store_admission($1,$2) AS outcome",
   // v1 PR 5 (migration connection-health-work; ADR-0025 item 10): the read-back of a live
   // installation's granted scopes, resolved and recorded in two transactions (never held
-  // across the Shopify call). A refusal records no scopes: the empty string becomes NULL.
+  // across the Shopify call). The record names the token version and the installation's
+  // revision the resolution read, so a change in between (a delivery's narrowing) makes it
+  // stale. A refusal records no scopes: the empty string becomes NULL.
   shopifyCheckResolve:
-    "SELECT outcome,organization_id,workspace_id,shop_domain,credential_id,credential_version,kek_version,wrapped_key,sealed_value FROM morrow_vault.shopify_check_resolve($1)",
-  shopifyCheckRecord: "SELECT morrow_vault.shopify_check_record($1,$2,$3,NULLIF($4,'')) AS outcome",
+    "SELECT outcome,organization_id,workspace_id,shop_domain,credential_id,credential_version,revision,kek_version,wrapped_key,sealed_value FROM morrow_vault.shopify_check_resolve($1)",
+  shopifyCheckRecord:
+    "SELECT morrow_vault.shopify_check_record($1,$2,$3,$4,NULLIF($5,'')) AS outcome",
 } as const);
