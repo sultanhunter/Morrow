@@ -22,11 +22,15 @@
 //   Q  a question: one open at a time (a second ask in the turn is refused question_limit);
 //      the run waits durably (its lease released; a wait step replayed after a lost result
 //      finds its wait committed), only the requester's answer opens the resume lease, and
-//      the answer reaches the next turn;
+//      the answer reaches the next turn; the question is on run_turns' clock (90 days after
+//      it is asked, then 90 days after the run ends, with the run's turns);
 //   U  an uncertain turn is booked at its worst case and sent again once; a fence a dead
 //      broker left open is booked at its worst case, and its late close is refused; attempt
 //      2 books an expired fence of attempt 1 first; the broker's own uncertain over a
-//      committed reply is settled against SQL (read back, never resent);
+//      committed reply is settled against SQL (read back, never resent); each attempt's caps
+//      (final, budget) are fixed at its open: a replay with other caps is a conflict, a
+//      final SQL does not derive is invalid, a fence with other caps is turn_state, and a
+//      turn step replayed after its close keeps its recorded caps and reply;
 //   I  a reply calling a tool the run was not given ends the run invalid_output (booked);
 //   C  usage past the hold is overflow, never dropped, and the next turn is not started
 //      (cost_budget); a call over the run's tool-call cap stays refused (never dispatched)
@@ -65,6 +69,7 @@ import { agentRun, AgentRunRetry } from "../packages/work/src/loop/runner.ts";
 import { listAgentPendingStarts, resolveAgentRunLease } from "../packages/work/src/loop/steps.ts";
 import { createToolHandlers, inboxAskHandler } from "../packages/work/src/loop/tools.ts";
 import { routedSystemTextDigest } from "../packages/policy/src/loop-prompts.ts";
+import { modelCallBudgetMs } from "../packages/identity/src/broker-protocol.ts";
 import {
   toolCatalogueDigest,
   toolCatalogueVersion,
@@ -536,7 +541,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   // results cross a JSON boundary and are kept for the L checks.
   const stepResults = [];
   const retries = [];
-  const durable = ({ onWait, after, lose = [] } = {}) => {
+  const durable = ({ onWait, after, lose = [], onLost } = {}) => {
     const names = [];
     const lost = new Set();
     return {
@@ -548,6 +553,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
             // A step whose result is lost once after its body committed (`lose`).
             if (lose.includes(name) && !lost.has(name)) {
               lost.add(name);
+              await onLost?.(name);
               throw new AgentRunRetry("result_lost");
             }
             names.push(name);
@@ -574,8 +580,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     workspaceId: W,
     runId,
   });
-  async function execute(runId, { authority, onWait, after, lose, lease, modelTurn } = {}) {
-    const steps = durable({ onWait, after, lose });
+  async function execute(runId, { authority, onWait, after, lose, onLost, lease, modelTurn } = {}) {
+    const steps = durable({ onWait, after, lose, onLost });
     const result = await within(
       agentRun(portsFor(authority, { lease, modelTurn }), steps, paramsOf(runId)),
       900000,
@@ -693,11 +699,11 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
   const turns = (id) =>
     db.rows(
-      `SELECT turn,attempt,outcome,input::text AS input,output::text AS output,tool_results::text AS results,untrusted,input_tokens::int AS input_tokens,output_tokens::int AS output_tokens FROM morrow_work.run_turns WHERE run_id=${literal(id)} ORDER BY turn,attempt`,
+      `SELECT turn,attempt,outcome,final,budget_ms::int AS budget_ms,input::text AS input,output::text AS output,tool_results::text AS results,untrusted,input_tokens::int AS input_tokens,output_tokens::int AS output_tokens FROM morrow_work.run_turns WHERE run_id=${literal(id)} ORDER BY turn,attempt`,
     );
   const calls = (id) =>
     db.rows(
-      `SELECT turn,attempt,sequence,status,outcome,counted,cost_usd::text AS cost,overflow_usd::text AS overflow,provider_model_id FROM morrow_work.agent_model_calls WHERE run_id=${literal(id)} ORDER BY turn,attempt,sequence`,
+      `SELECT turn,attempt,sequence,status,outcome,counted,final,budget_ms::int AS budget_ms,cost_usd::text AS cost,overflow_usd::text AS overflow,provider_model_id FROM morrow_work.agent_model_calls WHERE run_id=${literal(id)} ORDER BY turn,attempt,sequence`,
     );
   const toolCalls = (id) =>
     db.rows(
@@ -705,8 +711,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
   // The Haiku 5.5 rates (10^-12 USD per token) of catalogue v2, from SQL.
   const rates = one(
-    "SELECT input_usd12_per_token::bigint AS input,output_usd12_per_token::bigint AS output,cache_write_usd12_per_token::bigint AS cw,worst_case_turn_usd::text AS worst FROM morrow_work.loop_catalogue_entries WHERE version=2 AND model_key='claude_haiku_5_5' AND effort_key='low'",
+    "SELECT input_usd12_per_token::bigint AS input,output_usd12_per_token::bigint AS output,cache_write_usd12_per_token::bigint AS cw,worst_case_turn_usd::text AS worst,max_output_tokens::int AS max_output FROM morrow_work.loop_catalogue_entries WHERE version=2 AND model_key='claude_haiku_5_5' AND effort_key='low'",
   );
+  // The entry's whole call budget: every attempt the runner opens is fixed at it (review R1).
+  const callBudget = modelCallBudgetMs(rates.max_output);
   const costOf = (u) => {
     const units =
       BigInt(u.inputTokens) * BigInt(rates.input) +
@@ -1125,7 +1133,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         if (checksAt > 1) return false;
         const r = runRow(R2);
         const question = one(
-          `SELECT id::text AS id,status,question,choices::text AS choices,tool_use_id FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`,
+          `SELECT id::text AS id,status,question,choices::text AS choices,tool_use_id,expires_at BETWEEN created_at+interval '89 days' AND created_at+interval '91 days' AS born_clock FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`,
         );
         seen.waiting = {
           status: r.status,
@@ -1242,6 +1250,28 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     ).id;
     const late = await answer(P.A, qid, "Late");
     check("Q4:an_answer_after_the_end_is_refused", late.outcome === "state_conflict", { late });
+    // Q5 (review R3): the question is on run_turns' clock: born 90 days after it was asked,
+    // then moved by the run's end to the same expiry as every turn of the run, 90 days after
+    // the end; the answer after the end changed nothing.
+    const clock = one(
+      `SELECT (SELECT count(*) FROM morrow_work.agent_run_questions q WHERE q.run_id=a.id AND q.status='answered'
+         AND q.expires_at=(SELECT max(t.expires_at) FROM morrow_work.run_turns t WHERE t.run_id=a.id))::int AS questions,
+       (SELECT count(*) FROM morrow_work.run_turns t WHERE t.run_id=a.id AND t.expires_at=(SELECT max(x.expires_at) FROM morrow_work.run_turns x
+         WHERE x.run_id=a.id))::int AS turns,
+       (SELECT count(*) FROM morrow_work.run_turns t WHERE t.run_id=a.id)::int AS all_turns,
+       (SELECT count(*) FROM morrow_work.agent_run_questions q WHERE q.run_id=a.id AND q.expires_at>=a.ended_at+interval '89 days'
+         AND q.expires_at<=a.ended_at+interval '91 days')::int AS after_end
+       FROM morrow_work.agent_runs a WHERE a.id=${literal(R2)}`,
+    );
+    check(
+      "Q5:the_question_is_on_run_turns_clock_from_its_ask_to_the_runs_end",
+      seen.waiting?.question?.born_clock === true &&
+        clock?.questions === 1 &&
+        clock.turns === clock.all_turns &&
+        clock.all_turns === 2 &&
+        clock.after_end === 1,
+      { born: seen.waiting?.question?.born_clock, clock },
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -1298,19 +1328,42 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         role: "user",
       }),
     );
-    const opened = await lease(ref, async (step) => {
-      await step.loop.start();
-      return step.loop.turnOpen({
+    const open4 = (caps) => (step) =>
+      step.loop.turnOpen({
         turn: 1,
         attempt: 1,
+        final: false,
+        budgetMs: callBudget,
         inputCanonical: JSON.stringify(input),
         inputDigest: digest,
         untrusted: false,
         readTagsCanonical: "[]",
+        ...caps,
       });
+    const opened = await lease(ref, async (step) => {
+      await step.loop.start();
+      return open4({})(step);
     });
+    // Review R1: the attempt's caps are fixed at its open. The same input with other caps is
+    // a conflict; a fence with other caps is turn_state (no call is opened).
+    const reopened = [
+      await lease(ref, open4({ final: true })),
+      await lease(ref, open4({ budgetMs: callBudget + 1000 })),
+      await lease(ref, open4({})),
+    ].map((x) => (x?.entered ? x.value.outcome : "not_entered"));
+    const otherCaps = [
+      ["true", String(callBudget)],
+      ["false", String(callBudget + 1000)],
+    ].map(
+      ([final, budget]) =>
+        db.rows(
+          `SELECT outcome FROM morrow_vault.agent_turn_begin(${literal(ref.leaseId)},'1','1','1','1','${final}','${budget}','',${literal(digest)})`,
+          { user: "morrow_vault_broker" },
+        )[0]?.outcome,
+    );
+    const fencesBefore = calls(R4).length;
     const begun = db.rows(
-      `SELECT outcome,call_id FROM morrow_vault.agent_turn_begin(${literal(ref.leaseId)},'1','1','1','1','false','200000','',${literal(digest)})`,
+      `SELECT outcome,call_id FROM morrow_vault.agent_turn_begin(${literal(ref.leaseId)},'1','1','1','1','false','${callBudget}','',${literal(digest)})`,
       { user: "morrow_vault_broker" },
     )[0];
     replica(
@@ -1327,6 +1380,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       "U2:a_dead_fence_is_booked_at_its_worst_case_and_a_late_close_is_refused",
       opened?.entered === true &&
         opened.value.outcome === "opened" &&
+        JSON.stringify(reopened) === JSON.stringify(["conflict", "conflict", "opened_before"]) &&
+        JSON.stringify(otherCaps) === JSON.stringify(["turn_state", "turn_state"]) &&
+        fencesBefore === 0 &&
         begun?.outcome === "begun" &&
         settled?.entered === true &&
         settled.value.turnOutcome === "uncertain" &&
@@ -1337,7 +1393,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         resumed.result.status === "succeeded" &&
         turns(R4).find((x) => x.turn === 1 && x.attempt === 1)?.output === null &&
         !turns(R4).some((x) => (x.output ?? "").includes("Forged")),
-      { opened, begun, settled, lateClose, c4, resumed: resumed.result },
+      { opened, reopened, otherCaps, begun, settled, lateClose, c4, resumed: resumed.result },
     );
     // U3: attempt 2 is opened only over what SQL recorded: an expired fence of attempt 1
     // (sim: opened by the broker's definer, aged with the triggers off) is booked as
@@ -1355,27 +1411,34 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         role: "user",
       }),
     );
-    const open8 = (attempt) => (step) =>
-      step.loop.turnOpen({
-        turn: 1,
-        attempt,
-        inputCanonical: JSON.stringify(input8),
-        inputDigest: digest8,
-        untrusted: false,
-        readTagsCanonical: "[]",
-      });
+    const open8 =
+      (attempt, final = false) =>
+      (step) =>
+        step.loop.turnOpen({
+          turn: 1,
+          attempt,
+          final,
+          budgetMs: callBudget,
+          inputCanonical: JSON.stringify(input8),
+          inputDigest: digest8,
+          untrusted: false,
+          readTagsCanonical: "[]",
+        });
     const first = await lease(ref8, async (step) => {
       await step.loop.start();
       return open8(1)(step);
     });
     const fence = db.rows(
-      `SELECT outcome,call_id FROM morrow_vault.agent_turn_begin(${literal(ref8.leaseId)},'1','1','1','1','false','200000','',${literal(digest8)})`,
+      `SELECT outcome,call_id FROM morrow_vault.agent_turn_begin(${literal(ref8.leaseId)},'1','1','1','1','false','${callBudget}','',${literal(digest8)})`,
       { user: "morrow_vault_broker" },
     )[0];
     const early = await lease(ref8, open8(2));
     replica(
       `UPDATE morrow_work.agent_model_calls SET started_at=started_at-interval '10 minutes' WHERE id=${literal(fence?.call_id ?? randomUUID())};`,
     );
+    // Review R1: a new attempt's final is SQL's own derivation (the hold left after attempt
+    // 1's booking still covers two worst-case turns, so attempt 2 is not final).
+    const wrongFinal = await lease(ref8, open8(2, true));
     const second = await lease(ref8, open8(2));
     const c8 = calls(R8);
     const done8 = await execute(R8);
@@ -1386,6 +1449,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         fence?.outcome === "begun" &&
         early?.entered === true &&
         early.value.outcome === "invalid" &&
+        wrongFinal?.entered === true &&
+        wrongFinal.value.outcome === "invalid" &&
         second?.entered === true &&
         second.value.outcome === "opened" &&
         c8.length === 1 &&
@@ -1400,7 +1465,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
             [1, 1, "uncertain"],
             [1, 2, "end_turn"],
           ]),
-      { first, fence, early, second, c8, done: done8.result, names: done8.names },
+      { first, fence, early, wrongFinal, second, c8, done: done8.result, names: done8.names },
     );
     // U4: the broker's own uncertain (its close committed but its result was lost) is never
     // SQL's verdict: the step settles against SQL, reads the committed reply back and sends
@@ -1439,6 +1504,51 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         turns(R9)[0].outcome === "end_turn" &&
         runRow(R9).booked === text8(costOf(usage())),
       { done: done9.result, names: done9.names, c9, masked },
+    );
+    // U5 (review R1): a turn step whose result is lost after its close committed is run
+    // again when the run's active time has passed its wall time (sim: moved with the
+    // triggers off in between): the replayed step takes the attempt's recorded caps and
+    // reply, never the caps of the run's state after its own booking. Nothing is sent again
+    // and the run completes.
+    const T10 = await taskOf(P.A, "Count the sale products");
+    scripts.set("Count the sale products", () => reply(say("Five sale products.")));
+    const g = await admit(P.A, T10);
+    const R10 = g.runId;
+    const sendsBefore10 = provider.sends.length;
+    const retriesBefore10 = retries.length;
+    const done10 = await execute(R10, {
+      lose: ["turn-1-1"],
+      onLost: () =>
+        replica(
+          `UPDATE morrow_work.agent_runs SET active_ms=wall_time_ms WHERE id=${literal(R10)};`,
+        ),
+    });
+    const t10 = turns(R10);
+    const c10 = calls(R10);
+    check(
+      "U5:a_turn_step_replayed_after_its_close_keeps_its_recorded_caps_and_reply",
+      done10.result.status === "succeeded" &&
+        done10.result.reason === "completed" &&
+        JSON.stringify(done10.names) === JSON.stringify(["start", "turn-1-1", "finish"]) &&
+        JSON.stringify(retries.slice(retriesBefore10)) ===
+          JSON.stringify(["turn-1-1:result_lost"]) &&
+        provider.sends.length === sendsBefore10 + 1 &&
+        t10.length === 1 &&
+        t10[0].outcome === "end_turn" &&
+        t10[0].final === false &&
+        t10[0].budget_ms === callBudget &&
+        c10.length === 1 &&
+        c10[0].final === false &&
+        c10[0].budget_ms === callBudget &&
+        runRow(R10).ended_reason === "completed" &&
+        runRow(R10).booked === text8(costOf(usage())),
+      {
+        done: done10.result,
+        names: done10.names,
+        turns: t10.map((x) => [x.turn, x.attempt, x.outcome, x.final, x.budget_ms]),
+        calls: c10.map((x) => [x.turn, x.attempt, x.sequence, x.outcome, x.final, x.budget_ms]),
+        callBudget,
+      },
     );
   }
 
@@ -1787,7 +1897,7 @@ async function main() {
       "products.read is a lab handler returning one synthetic product (sim): the real handler is Listings on the runner's (the follow-up), with run_turns' store-content cleanup. The question run's authority allows inbox.ask (sim): no released package declares workspace.question.request yet; every other tool call is the real kernel's decision.",
       "M5's billing records (route, account, operator test entitlement snapshot) are owner-seeded with the triggers off (sim); lab:test-entitlement proves the grant that writes them.",
       "Durable steps are an in-process stand-in for Cloudflare Workflows' step.do and waitForEvent (an AgentRunRetry is retried; results cross a JSON boundary).",
-      "U2's and U3's dead fences are aged past their budgets with the triggers off (sim); C2's run count is set to its cap with the triggers off (sim), and its failed finish transaction is a wrapper that refuses to run it once (sim).",
+      "U2's and U3's dead fences are aged past their budgets with the triggers off (sim); U5's run is moved past its wall time with the triggers off between a lost step result and its retry (sim); C2's run count is set to its cap with the triggers off (sim), and its failed finish transaction is a wrapper that refuses to run it once (sim).",
     ],
   });
   if (result.failures.length) {
