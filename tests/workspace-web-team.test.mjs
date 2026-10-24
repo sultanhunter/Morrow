@@ -122,8 +122,8 @@ test("the fixture: Team as the Owner, with Listings on the workspace model defau
   assert.equal(listings.source, "workspace_default");
   assert.equal(listings.model, models.value.workspaceDefault.model);
   assert.equal(listings.effort, models.value.workspaceDefault.effort);
-  // ADR-0027 item 12's defaults: Morrow Opus 5.5 high, specialists Opus 5.5 medium,
-  // added agents Sonnet 5.5 low.
+  // ADR-0027 item 12's defaults as ADR-0036 amends them: Morrow Opus 5.5 high, specialists
+  // and added agents Opus 5.5 medium.
   assert.deepEqual(
     [view.morrow.thinking.model, view.morrow.thinking.effort],
     ["claude_opus_5_5", "high"],
@@ -134,8 +134,20 @@ test("the fixture: Team as the Owner, with Listings on the workspace model defau
   );
   for (const agent of view.agents.slice(1)) {
     assert.equal(agent.thinking.source, "own");
-    assert.deepEqual([agent.thinking.model, agent.thinking.effort], ["claude_sonnet_5_5", "low"]);
+    assert.deepEqual([agent.thinking.model, agent.thinking.effort], ["claude_opus_5_5", "medium"]);
+    assert.deepEqual(agent.thinking.usual, { model: "claude_opus_5_5", effort: "medium" });
   }
+  // The Listings agent follows catalogue version 3's default, Opus 5.5 at medium.
+  assert.deepEqual(
+    [listings.model, listings.effort, listings.usual.model, listings.usual.effort],
+    ["claude_opus_5_5", "medium", "claude_opus_5_5", "medium"],
+  );
+  assert.equal(models.value.catalogueVersion, 3);
+  assert.equal(models.value.ceiling, 4);
+  // Every agent in Add agents starts on Opus 5.5 at medium.
+  const catalogue = (await port.team.catalogue(ws)).value;
+  for (const entry of catalogue.entries)
+    assert.deepEqual(entry.startsOn, { model: "claude_opus_5_5", effort: "medium" }, entry.name);
   const page = await port.team.agent(ws, "agent-listings");
   assert.equal(page.kind, "ok");
   assert.equal(page.value.permission.grantedBy, "Maya Chen");
@@ -221,7 +233,10 @@ test("thinking: after a real 409, Team's dialog reads the reread setting and sav
   const port = createFixtureAdapter("team_thinking_conflict");
   const target = { kind: "agent", id: "agent-analyst", name: "Business Analyst" };
   const opened = thinkingFor((await port.team.overview(ws)).value, target);
-  assert.deepEqual([opened.model, opened.effort, opened.revision], ["claude_sonnet_5_5", "low", 1]);
+  assert.deepEqual(
+    [opened.model, opened.effort, opened.revision],
+    ["claude_opus_5_5", "medium", 1],
+  );
   const pick = { model: "claude_opus_5_5", effort: "high" };
   // A teammate's change landed first: the server's record moved on.
   const first = await port.team.reviseThinking(

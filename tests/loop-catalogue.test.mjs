@@ -58,8 +58,8 @@ test("version 2 is proposed: nine entries, no xhigh or max, every call within 60
   assert.equal(Object.hasOwn(policy.catalogue.published_digests, "2"), false);
   assert.deepEqual(
     policy.catalogue.active_versions,
-    { per_product: 1, agent_loop: null },
-    "version 1 stays active for listings-run@1; no loop version is active",
+    { per_product: 3, agent_loop: null },
+    "version 3 is active for listings-run@1 (ADR-0036); no loop version is active",
   );
   assert.equal(activeLoopVersion(), null);
   const entries = loopEntries(2);
@@ -84,7 +84,7 @@ test("version 2 is proposed: nine entries, no xhigh or max, every call within 60
   assert.equal(loopEntry(3, "claude_opus_5_5", "high"), null);
 });
 
-test("ADR-0027 item 12: the defaults are Opus high, Opus medium and Sonnet low", () => {
+test("ADR-0027 item 12 as ADR-0036 amends it: Opus high for Morrow, Opus medium for every other kind", () => {
   assert.deepEqual(defaultLoopProfile(2, "coordinator"), {
     model: "claude_opus_5_5",
     effort: "high",
@@ -94,10 +94,15 @@ test("ADR-0027 item 12: the defaults are Opus high, Opus medium and Sonnet low",
     effort: "medium",
   });
   assert.deepEqual(defaultLoopProfile(2, "installed"), {
-    model: "claude_sonnet_5_5",
-    effort: "low",
+    model: "claude_opus_5_5",
+    effort: "medium",
   });
   assert.throws(() => defaultLoopProfile(2, "member"), LoopCatalogueError);
+  // The proposed version carries no unrecovered-cost cap (ADR-0036 item 3).
+  assert.equal(
+    Object.hasOwn(policy.catalogue.versions[1].limits, "workspace_period_unrecovered_cost_cap_usd"),
+    false,
+  );
 });
 
 test("ADR-0027 item 12: worst-case turns of every entry", () => {
@@ -145,14 +150,28 @@ test("ADR-0027 item 12: the table of defaults: turn limits, holds, expected turn
   assert.equal(specialist.expectedFirstTurnUsd12, usd(0.142));
   assert.equal(expectedRunUsd12(specialist, 8), usd(0.7328));
 
-  const installed = entry("sonnet", "low");
-  assert.equal(turnLimit(installed, "routed"), 16);
+  // ADR-0036: an installed agent's default is Opus 5.5 at medium. Its worst-case turn is
+  // US$0.56, so the US$7 backstop lowers its 16-turn limit to 12 and it holds US$6.72; an
+  // expected turn is US$0.084 (US$0.14 first) and six turns about US$0.56.
+  const installed = entry("opus", "medium");
+  assert.deepEqual(
+    [installed.model, installed.effort],
+    [defaultLoopProfile(2, "installed").model, defaultLoopProfile(2, "installed").effort],
+  );
+  assert.equal(turnLimit(installed, "routed"), 12);
   const i = runHold({ entry: installed, kind: "routed", creditCapUsd12: null });
-  assert.equal(i.ok && i.holdUsd12, usd(3.36));
-  // US$0.030 (US$0.058 first) and US$0.21 for 6 turns.
-  assert.equal(installed.expectedTurnUsd12, usd(0.0304));
-  assert.equal(installed.expectedFirstTurnUsd12, usd(0.058));
-  assert.equal(expectedRunUsd12(installed, 6), usd(0.21));
+  assert.equal(i.ok && i.holdUsd12, usd(6.72));
+  assert.equal(i.binding, "turn_limit");
+  assert.equal(expectedRunUsd12(installed, 6), usd(0.564));
+  // Sonnet 5.5 at low, the default before ADR-0036 and still offered: US$3.36 held, US$0.030
+  // (US$0.058 first) and US$0.21 for 6 turns.
+  const sonnet = entry("sonnet", "low");
+  assert.equal(turnLimit(sonnet, "routed"), 16);
+  const s = runHold({ entry: sonnet, kind: "routed", creditCapUsd12: null });
+  assert.equal(s.ok && s.holdUsd12, usd(3.36));
+  assert.equal(sonnet.expectedTurnUsd12, usd(0.0304));
+  assert.equal(sonnet.expectedFirstTurnUsd12, usd(0.058));
+  assert.equal(expectedRunUsd12(sonnet, 6), usd(0.21));
 });
 
 test("other entries' turn limits under the US$7 backstop", () => {
@@ -202,10 +221,19 @@ test("ADR-0026 item 4: a look-for-work pass needs two worst-case turns inside it
     ["opus", "high"],
   ])
     assert.deepEqual(pass(model, effort, "149"), { ok: false, code: "cap_below_turn" });
-  // At US$99 only Haiku fits, so no pass at the default is admitted.
+  // At US$99 only Haiku fits.
   assert.deepEqual(pass("sonnet", "low", "99"), { ok: false, code: "cap_below_turn" });
   for (const effort of ["low", "medium", "high"])
     assert.equal(pass("haiku", effort, "99").ok, true);
+  // ADR-0036: at the installed default, Opus 5.5 at medium (two worst-case turns US$1.12), no
+  // pass is admitted at either price until the owner confirms the cap's value or floor.
+  const { model: m, effort: e } = defaultLoopProfile(2, "installed");
+  for (const price of ["149", "99"])
+    assert.deepEqual(
+      runHold({ entry: loopEntry(2, m, e), kind: "mandate", creditCapUsd12: capAt(price, 100) }),
+      { ok: false, code: "cap_below_turn" },
+      price,
+    );
   // Opus 5.5 at high fits a specialist's two turns at either price.
   for (const price of ["149", "99"])
     assert.equal(
@@ -323,6 +351,16 @@ for (const [name, change, expected] of [
   ],
   ["an unknown run shape", (p) => (v2(p).run_shape = "streaming_loop"), /unknown run shape/],
   [
+    "an unrecovered-cost cap, which ADR-0036 removed",
+    (p) => (v2(p).limits.workspace_period_unrecovered_cost_cap_usd = "4.50"),
+    /model catalogue v2: carries an unrecovered-cost cap, which ADR-0036 removed/,
+  ],
+  [
+    "a missing daily backstop",
+    (p) => delete v2(p).limits.workspace_daily_cost_cap_usd,
+    /model catalogue v2: missing USD caps/,
+  ],
+  [
     "a fallback sent with the loop's requests",
     (p) => p.loop_request.sent.push("fallbacks"),
     /the loop's sent and never-sent fields drifted/,
@@ -362,10 +400,10 @@ for (const [name, change, expected] of [
     "a second active loop version",
     (p) => {
       publishV2(p);
-      const v3 = structuredClone(v2(p));
-      v3.version = 3;
-      p.catalogue.versions.push(v3);
-      p.catalogue.published_digests["3"] = catalogueVersionDigest(v3);
+      const v4 = structuredClone(v2(p));
+      v4.version = 4;
+      p.catalogue.versions.push(v4);
+      p.catalogue.published_digests["4"] = catalogueVersionDigest(v4);
     },
     /agent_loop statuses must run retired, then at most one active, then proposed/,
   ],
@@ -394,18 +432,21 @@ for (const [name, change, expected] of [
 test("the committed policy, with version 2 proposed, passes", () =>
   assert.deepEqual(inspectModelPolicy(policy, registry).errors, []));
 
-// ADR-0027 item 4 and the brief: version 2 publishes while version 1 stays active for
-// listings-run@1. Each shape's generated module takes its own pointer.
-test("publishing loop version 2 keeps version 1 active for listings-run@1", () => {
+// ADR-0027 item 4 and the brief: version 2 publishes while the per-product version (3 since
+// ADR-0036) stays active for listings-run@1. Each shape's generated module takes its own pointer.
+test("publishing loop version 2 keeps version 3 active for listings-run@1", () => {
   const p = structuredClone(policy);
   publishV2(p);
-  assert.equal(p.catalogue.versions[0].status, "active");
+  assert.equal(p.catalogue.versions[2].status, "active");
   assert.deepEqual(inspectModelPolicy(p, registry).errors, []);
   const perProduct = modelCatalogueData(p, registry);
-  assert.equal(perProduct.activeVersion, 1);
+  assert.equal(perProduct.activeVersion, 3);
   assert.deepEqual(
     perProduct.versions.map((v) => [v.version, v.status]),
-    [[1, "active"]],
+    [
+      [1, "retired"],
+      [3, "active"],
+    ],
   );
   const loop = loopCatalogueData(p, registry);
   assert.equal(loop.activeVersion, 2);
@@ -413,8 +454,8 @@ test("publishing loop version 2 keeps version 1 active for listings-run@1", () =
     loop.versions.map((v) => [v.version, v.status]),
     [[2, "active"]],
   );
-  // Retiring version 1 later leaves the loop's pointer alone.
-  p.catalogue.versions[0].status = "retired";
+  // Retiring version 3 later leaves the loop's pointer alone.
+  p.catalogue.versions[2].status = "retired";
   p.catalogue.active_versions.per_product = null;
   assert.deepEqual(inspectModelPolicy(p, registry).errors, []);
   assert.equal(modelCatalogueData(p, registry).activeVersion, null);
@@ -422,11 +463,11 @@ test("publishing loop version 2 keeps version 1 active for listings-run@1", () =
 });
 
 test("the committed modules take each shape's own pointer: the loop's is null", () => {
-  assert.equal(modelCatalogueData(policy, registry).activeVersion, 1);
+  assert.equal(modelCatalogueData(policy, registry).activeVersion, 3);
   const loop = loopCatalogueData(policy, registry);
   assert.equal(loop.activeVersion, null);
   assert.ok(
-    loop.versions.every((v) => v.version !== 1),
-    "version 1 is not a loop version",
+    loop.versions.every((v) => v.version !== 1 && v.version !== 3),
+    "versions 1 and 3 are per-product versions, not loop versions",
   );
 });

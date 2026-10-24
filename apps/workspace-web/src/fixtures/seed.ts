@@ -13,8 +13,8 @@ import type {
 
 export const fixtureWorkspace = { id: "ws-linen", displayName: "Linen & Form", policyRevision: 7 };
 export const fixtureOrganizationName = "Linen & Form (sample)";
-// M3 PR-1: catalogue version 1 as GET /models lists it (docs/decisions/model-policy.json;
-// credits per product and the run product limit). The Listings agent's store is M2 PR-2's
+// M3 PR-1: the active catalogue version as GET /models lists it (docs/decisions/model-policy.json;
+// credits per product and the run product limit): version 3 since ADR-0036, version 1's entries. The Listings agent's store is M2 PR-2's
 // sample store (fixtureStore below).
 export const fixtureCatalogue = [
   { model: "claude_haiku_5_5", effort: "low", creditsPerProduct: 1, runProductLimit: 25 },

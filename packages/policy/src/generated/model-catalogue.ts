@@ -4,11 +4,11 @@
 // model IDs are for the broker (M3 PR-2) and never reach an api response.
 export const generatedModelCatalogue = {
   id: "morrow-model-catalogue",
-  activeVersion: 1,
+  activeVersion: 3,
   versions: [
     {
       version: 1,
-      status: "active",
+      status: "retired",
       digest: "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660",
       effectiveFrom: "2026-10-19",
       defaultSelection: {
@@ -23,7 +23,77 @@ export const generatedModelCatalogue = {
         maxConsecutiveFailedProducts: 3,
         runCostCapUsd8: 700000000,
         workspaceDailyCostCapUsd8: 2500000000,
-        workspacePeriodUnrecoveredCostCapUsd8: 450000000,
+      },
+      efforts: [
+        {
+          key: "low",
+          maxOutputTokens: 5000,
+        },
+        {
+          key: "medium",
+          maxOutputTokens: 12000,
+        },
+        {
+          key: "high",
+          maxOutputTokens: 16000,
+        },
+      ],
+      models: [
+        {
+          key: "claude_haiku_5_5",
+          provider: "anthropic",
+          providerModelId: "claude-haiku-5-5",
+          inputUsd8PerToken: 10,
+          outputUsd8PerToken: 50,
+          creditsPerProduct: {
+            low: 1,
+            medium: 1,
+            high: 1,
+          },
+        },
+        {
+          key: "claude_sonnet_5_5",
+          provider: "anthropic",
+          providerModelId: "claude-sonnet-5-5",
+          inputUsd8PerToken: 200,
+          outputUsd8PerToken: 1000,
+          creditsPerProduct: {
+            low: 1,
+            medium: 2,
+            high: 3,
+          },
+        },
+        {
+          key: "claude_opus_5_5",
+          provider: "anthropic",
+          providerModelId: "claude-opus-5-5",
+          inputUsd8PerToken: 400,
+          outputUsd8PerToken: 2000,
+          creditsPerProduct: {
+            low: 2,
+            medium: 4,
+            high: 6,
+          },
+        },
+      ],
+    },
+    {
+      version: 3,
+      status: "active",
+      digest: "5752f7e350749febd006d8c5a9b484bcb8e62c0cd484b18c544ff5216533b72b",
+      effectiveFrom: "2026-10-25",
+      defaultSelection: {
+        model: "claude_opus_5_5",
+        effort: "medium",
+      },
+      defaultMemberCreditCeiling: 4,
+      limits: {
+        maxInputTokensPerCall: 8000,
+        maxAttemptsPerProduct: 2,
+        maxProductsPerRun: 25,
+        maxConsecutiveFailedProducts: 3,
+        runCostCapUsd8: 700000000,
+        workspaceDailyCostCapUsd8: 2500000000,
       },
       efforts: [
         {

@@ -115,12 +115,13 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   // any helper thinks; an Admin only added agents'; a member none.
   const mayChange = (target: Target) =>
     viewer === "owner" || (viewer === "admin" && target === "agent");
+  // ADR-0036's defaults: Morrow on Opus 5.5 at high, every other helper on Opus 5.5 at medium.
   const own: Record<string, { choice: ThinkingChoice; revision: number }> = {
     morrow: { choice: opusHigh, revision: 1 },
     specialists: { choice: opusMedium, revision: 1 },
-    "agent-analyst": { choice: sonnetLow, revision: 1 },
-    "agent-inventory": { choice: sonnetLow, revision: 1 },
-    "agent-support": { choice: sonnetLow, revision: 1 },
+    "agent-analyst": { choice: opusMedium, revision: 1 },
+    "agent-inventory": { choice: opusMedium, revision: 1 },
+    "agent-support": { choice: opusMedium, revision: 1 },
   };
   const ownThinking = (
     key: string,
@@ -142,7 +143,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       model: d.model,
       effort: d.effort,
       source: "workspace_default",
-      usual: sonnetLow,
+      usual: opusMedium,
       revision: d.revision,
       // models.list's canRevise decides on the page; the fixture's reviser is the Owner.
       canChange: viewer === "owner",
@@ -176,9 +177,9 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 150 to 300 credits a month on Sonnet 5.5 · Low.",
-      defaultMonthlyLimit: 300,
+      startsOn: opusMedium,
+      usualCredits: "Usually 450 to 900 credits a month on Opus 5.5 · Medium.",
+      defaultMonthlyLimit: 900,
       example: null,
       reviewer: null,
     },
@@ -200,9 +201,9 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 100 to 200 credits a month on Sonnet 5.5 · Low.",
-      defaultMonthlyLimit: 200,
+      startsOn: opusMedium,
+      usualCredits: "Usually 300 to 600 credits a month on Opus 5.5 · Medium.",
+      defaultMonthlyLimit: 600,
       example: null,
       reviewer: null,
     },
@@ -224,9 +225,9 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 50 to 100 credits a month on Sonnet 5.5 · Low.",
-      defaultMonthlyLimit: 100,
+      startsOn: opusMedium,
+      usualCredits: "Usually 150 to 300 credits a month on Opus 5.5 · Medium.",
+      defaultMonthlyLimit: 300,
       example: null,
       reviewer: null,
     },
@@ -248,9 +249,9 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 150 to 300 credits a month on Sonnet 5.5 · Low.",
-      defaultMonthlyLimit: 300,
+      startsOn: opusMedium,
+      usualCredits: "Usually 450 to 900 credits a month on Opus 5.5 · Medium.",
+      defaultMonthlyLimit: 900,
       example: null,
       reviewer: null,
     },
@@ -292,9 +293,9 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       shopifyAccess: ["Create and end discount codes, only after you approve"],
       accessNote:
         "Shopify asks you to allow this once. It can’t see customer names, emails or addresses.",
-      startsOn: sonnetLow,
-      usualCredits: "Usually 100 to 200 credits a month on Sonnet 5.5 · Low.",
-      defaultMonthlyLimit: 200,
+      startsOn: opusMedium,
+      usualCredits: "Usually 300 to 600 credits a month on Opus 5.5 · Medium.",
+      defaultMonthlyLimit: 600,
       example: {
         title: "Sample plan: Weekend offer on slow sellers",
         points: [
@@ -356,7 +357,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Morning summary · Sat, Oct 24, 8:00 am"),
         ],
         credits: { used: 118, limit: 200 },
-        thinking: ownThinking("agent-analyst", "agent", sonnetLow, agentDailyLimit),
+        thinking: ownThinking("agent-analyst", "agent", opusMedium, agentDailyLimit),
       },
       {
         agentId: "agent-inventory",
@@ -374,7 +375,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Daily stock check · Mon, Oct 26, 6:00 am"),
         ],
         credits: { used: 58, limit: 100 },
-        thinking: ownThinking("agent-inventory", "agent", sonnetLow, agentDailyLimit),
+        thinking: ownThinking("agent-inventory", "agent", opusMedium, agentDailyLimit),
       },
       {
         agentId: "agent-support",
@@ -389,7 +390,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Drafts a reply when the next customer email comes in."),
         ],
         credits: { used: 196, limit: 300 },
-        thinking: ownThinking("agent-support", "agent", sonnetLow, agentDailyLimit),
+        thinking: ownThinking("agent-support", "agent", opusMedium, agentDailyLimit),
       },
     ];
     // The empty scenario starts with none: its catalogue lists none as added either.

@@ -1,0 +1,47 @@
+# ADR-0036 Model defaults and the AI cost cap: Opus 5.5 by default for every agent, and no unrecovered-cost cap
+
+- Status: Accepted 2026-10-25 (the owner, OD-2026-10-25-1)
+- Date: 2026-10-25
+- Supersedes: none.
+- Amends: ADR-0027 item 12 (the installed agents' default) and item 6 (the unrecovered-cost cap for loop runs); ADR-0022 item 11's failed-products bullet and its verify sentence (the US$4.50 unrecovered-cost cap), item 16's default (Sonnet 5.5 at low for Listings) and default member ceiling, and its owner-confirmed values 2, 6 (the cap) and 7 (the ceiling's default); ADR-0026 item 4's failed-runs bullet and its look-for-work arithmetic at the installed agents' default; ADR-0034's "Does not change" note that the installed agents keep Sonnet 5.5 at low (OD-2026-10-23-8 answer 8); ADR-0023 decision 7 as ADR-0027 item 12 restated it.
+- Does not change: the per-agent choice of ADR-0027 item 12 and who makes it; `governance.model_default.revise` stays `human_only`; the per-run US$7 and per-day US$25 backstops (ADR-0026 item 4); credit holds and reservations; the three-failure breaker; the Anthropic Console monthly limit; every authority rule; catalogue version 2's other values.
+- Unblocks: loop runs at Opus 5.5 before billing (track T4); Listings at the new default.
+
+## Context
+
+ADR-0027 item 12 set the defaults: the Coordinator on Opus 5.5 at high, specialists on Opus 5.5 at medium, the five installed agents on Sonnet 5.5 at low. Listings' per-product runs (`listings-run@1`) default to Sonnet 5.5 at low through catalogue version 1 (ADR-0022 item 16). ADR-0022 item 11 caps each workspace's unrecovered cost, the AI cost of products and runs that earned no credit, at US$4.50 a billing period, and ADR-0027 item 6 counts every loop run toward it before the rate card. One Opus 5.5 hold (US$3.84 to US$6.72) passes that cap, so the cap blocks every Opus run before billing exists. The lead put both points to the owner, who answered on 2026-10-25 (OD-2026-10-25-1); the lead confirmed its reading below to the owner in chat.
+
+## Decision
+
+1. **Defaults.** Morrow, the main agent (the Coordinator), runs Opus 5.5 at `high`. Every other agent kind runs Opus 5.5 at `medium`: specialists, sub-agents and every installed agent (Listings, Business Analyst, Inventory, Marketing and Support). Catalogue version 2's `default_profiles.installed` becomes Opus 5.5 at `medium`. The Owner (an Admin, for installed agents) still picks each agent's model and effort from Haiku, Sonnet and Opus 5.5 at `low`, `medium` and `high`; a stored choice is kept.
+2. **Listings' per-product default: catalogue version 3.** A published version never changes (ADR-0022 item 16), so version 3 publishes on this decision and version 1 retires. Version 3 is version 1 with three changes: the default selection is Opus 5.5 at `medium` (4 credits a product); the default member ceiling is 4, so it admits that default as version 1's ceiling of 1 admitted Sonnet 5.5 at `low` (the ceiling stays exactly the default's credits, and only `governance.model_default.revise` raises a workspace's); and it has no unrecovered-cost cap. A run recorded at version 1 is still booked at version 1. Migration 0047 seeds version 3 in SQL and retires version 1.
+3. **No unrecovered-cost cap.** The US$4.50 cap is removed for Listings and for loop runs. Run admission and the per-product step no longer refuse or stop with `unrecovered_cost_cap`: migration 0047 revises `morrow_billing.unrecovered_allows` to compare with no cap, for every version, and the TypeScript twin `unrecoveredAllows` is removed. The code stays in the closed enums for runs that already ended with it. Failed products still cost no credits, and the ledger (`unrecovered_costs`, `unrecovered_cost_entries`) still records their cost.
+4. **What stays.** The per-run US$7 and per-day US$25 backstops; credit holds and reservations, and the vendor reservation that books every attempt; the run breaker (three consecutive failed products); the member ceiling; ADR-0027's turn limits, `cost_budget` and `cap_below_turn`; the Anthropic Console monthly limit; every authority rule.
+5. **The verify rules** (`scripts/provider-checks.mjs`, run by `npm run verify`):
+   - Per-product versions: "the default selection must exist and cost one credit" becomes "the default selection must be an entry of this version"; "the default member ceiling must admit the default selection" stays, and the ceiling must also equal the default's credits. "Every selection's worst case per product is at most 90% of its credits' net revenue" stays. "The unrecovered-cost cap is at most the rest" applies to version 1 only, which keeps its published, pinned US$4.50 that nothing enforces; any other version that carries an unrecovered-cost cap is refused.
+   - Loop versions: the per-run and per-day caps stay required (the daily cap at least the run cap, two worst-case turns within the run backstop); an unrecovered-cost cap is no longer required, and a loop version that carries one is refused.
+6. **Catalogue version 2 stays `proposed`.** This decision changes only its installed default and removes its unrecovered-cost cap. Its prices, `max_tokens`, turn and tool limits still await the owner's confirmation with its publication (Q-catalogue-v2-values, ADR-0027 item 11).
+
+## Security invariants touched
+
+- **Budget checks in code:** the per-run and per-day backstops and the breaker still refuse (`tests/model-defaults-cost-cap.test.mjs`, `lab:run-credits`, `lab:listings-runs`); `providers.test.mjs` refuses a cap on any version but 1.
+- **Profiles are never authority:** a default changes no tool, capability, grant or cap (`loop-catalogue.test.mjs`, `tool-catalogue.test.mjs`).
+- **Immutable migrations:** 0047 is a forward migration; 0033's helper is replaced only from its pinned body (`migration-history.test.mjs`).
+
+## Consequences
+
+- **Cost per run rises.** An installed agent's worst-case turn is US$0.56 at Opus 5.5 `medium` (US$0.21 at Sonnet 5.5 `low`), its turn limit 12 and its hold US$6.72 (US$3.36); an expected six-turn run is about US$0.56 (US$0.21). A Listings product at the default costs 4 credits (1), about US$0.062 of model use expected (US$0.018) and US$0.544 at worst (US$0.132), and a run at the default drafts at most 12 products (25).
+- **The ceilings.** The per-run US$7 and per-day US$25 backstops and the Anthropic Console monthly limit are now the only limits on AI cost that earns no credit: up to US$25 a workspace a day, more than a month's plan price within a week. The breaker still stops a run after three failed products.
+- **Look-for-work passes.** Two worst-case Opus 5.5 `medium` turns (US$1.12) exceed the 1% look-for-work cap at either price (US$0.61 at US$149, US$0.41 at US$99), so no pass is admitted at the new installed default (`cap_below_turn`) until the owner confirms that cap's value or floor with the price (ADR-0026 item 4) or picks a cheaper profile for that agent.
+- **The grant rule** (ADR-0026 item 5) is measured on staging at these defaults; if the default load passes 50% of the grant, billing proposes lower defaults for the owner's confirmation.
+- **Deployment.** The Workers' generated catalogue and the database name the same active version, so 0047 and the code that names version 3 deploy together; between the two, Listings admission is refused `catalogue_inactive`, never admitted at the wrong version.
+
+## Approval
+
+The owner's statement in chat, verbatim, on 2026-10-25, answering the lead's note on the agent loop's defaults and on the unrecovered-cost cap blocking every Opus run before billing (OD-2026-10-25-1):
+
+> use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost
+
+What it approves: items 1 and 3, and item 2's default and removed cap. The lead's reading, confirmed to the owner in chat: "all type of subagents/specialists" covers every agent kind but the Coordinator, the installed agents and Listings included; the backstops, holds, breaker, monthly limit and authority rules stay; catalogue version 2's other values are not confirmed by this answer.
+
+Written after the answer, to carry it out: item 5's rule changes, and item 2's default member ceiling of 4. The ceiling follows from ADR-0022 item 16's rule that the default ceiling admits the default, but it replaces the 1 the owner confirmed on 2026-10-19 (value 7), so it awaits the owner's confirmation. The alternative is a ceiling of 1, under which a Member without `governance.model_default.revise` cannot run Listings at the default.

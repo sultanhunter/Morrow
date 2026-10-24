@@ -131,17 +131,18 @@
   "catalogue": {
     "id": "morrow-model-catalogue",
     "active_versions": {
-      "per_product": 1,
+      "per_product": 3,
       "agent_loop": null
     },
     "published_digests": {
-      "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660"
+      "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660",
+      "3": "5752f7e350749febd006d8c5a9b484bcb8e62c0cd484b18c544ff5216533b72b"
     },
-    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while version 1 stays active (ADR-0027 item 4).",
+    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while a per-product version stays active (ADR-0027 item 4). ADR-0036 removed the unrecovered-cost cap: version 1 keeps its published workspace_period_unrecovered_cost_cap_usd, which nothing enforces, and no later version carries one.",
     "versions": [
       {
         "version": 1,
-        "status": "active",
+        "status": "retired",
         "proposed_on": "2026-10-19",
         "owner_confirmation": "Owner, 2026-10-19, in chat: asked \"Confirm these model, credit and safety values for the beta?\" (catalogue Haiku/Sonnet/Opus 5.5 at low/medium/high; default Sonnet 5.5 low; weights Haiku 1/1/1, Sonnet 1/2/3, Opus 2/4/6; token caps; 90% worst-case margin; failed products free, stop after 3, US$4.50 unrecovered cap; member ceiling 1), answered \"Confirm all (Recommended)\".",
         "effective_from": "2026-10-19",
@@ -275,7 +276,7 @@
         "status": "proposed",
         "run_shape": "agent_loop",
         "proposed_on": "2026-10-23",
-        "decision": "ADR-0027 items 6 and 12, ADR-0026 item 4 (PR 10 proposes it; it publishes only on the owner's recorded confirmation, ADR-0027 item 11)",
+        "decision": "ADR-0027 items 6 and 12, ADR-0026 item 4, with ADR-0036's installed-agent default and no unrecovered-cost cap (PR 10 proposes it; it publishes only on the owner's recorded confirmation, ADR-0027 item 11)",
         "owner_confirmation": null,
         "effective_from": null,
         "default_profiles": {
@@ -288,8 +289,8 @@
             "effort": "medium"
           },
           "installed": {
-            "model": "claude_sonnet_5_5",
-            "effort": "low"
+            "model": "claude_opus_5_5",
+            "effort": "medium"
           }
         },
         "limits": {
@@ -306,7 +307,6 @@
           "tool_result_max_bytes": 8192,
           "run_cost_cap_usd": "7",
           "workspace_daily_cost_cap_usd": "25",
-          "workspace_period_unrecovered_cost_cap_usd": "4.50",
           "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
         },
         "expected_turn": {
@@ -401,6 +401,137 @@
             "rate_tier_max_input_tokens": null
           }
         ]
+      },
+      {
+        "version": 3,
+        "status": "active",
+        "proposed_on": "2026-10-25",
+        "decision": "ADR-0036 items 2 and 3",
+        "owner_confirmation": "Owner, 2026-10-25, in chat (OD-2026-10-25-1): \"use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost\". It sets the default selection to Opus 5.5 at medium and removes the unrecovered-cost cap; the default member ceiling of 4 admits that default, as version 1's ceiling of 1 admitted its own (ADR-0036 item 2). Every other value is version 1's, confirmed by the owner on 2026-10-19.",
+        "effective_from": "2026-10-25",
+        "default_selection": {
+          "model": "claude_opus_5_5",
+          "effort": "medium"
+        },
+        "default_member_credit_ceiling": 4,
+        "limits": {
+          "max_input_tokens_per_call": 8000,
+          "max_attempts_per_product": 2,
+          "max_products_per_run": 25,
+          "max_consecutive_failed_products": 3,
+          "run_cost_cap_usd": "7",
+          "workspace_daily_cost_cap_usd": "25",
+          "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
+        },
+        "expected_input_tokens": 3000,
+        "efforts": [
+          {
+            "key": "low",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "low"
+              }
+            },
+            "max_output_tokens": 5000,
+            "expected_output_tokens": 1200
+          },
+          {
+            "key": "medium",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "medium"
+              }
+            },
+            "max_output_tokens": 12000,
+            "expected_output_tokens": 2500
+          },
+          {
+            "key": "high",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "high"
+              }
+            },
+            "max_output_tokens": 16000,
+            "expected_output_tokens": 5000
+          }
+        ],
+        "models": [
+          {
+            "key": "claude_haiku_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-haiku-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-10-07",
+            "rates_usd_per_million_tokens": {
+              "input": "0.10",
+              "output": "0.50"
+            },
+            "rate_tier_max_input_tokens": 100000,
+            "credits_per_product": {
+              "low": 1,
+              "medium": 1,
+              "high": 1
+            }
+          },
+          {
+            "key": "claude_sonnet_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-sonnet-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-28",
+            "rates_usd_per_million_tokens": {
+              "input": "2",
+              "output": "10"
+            },
+            "rate_tier_max_input_tokens": null,
+            "credits_per_product": {
+              "low": 1,
+              "medium": 2,
+              "high": 3
+            }
+          },
+          {
+            "key": "claude_opus_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-opus-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-22",
+            "rates_usd_per_million_tokens": {
+              "input": "4",
+              "output": "20"
+            },
+            "rate_tier_max_input_tokens": null,
+            "credits_per_product": {
+              "low": 2,
+              "medium": 4,
+              "high": 6
+            }
+          }
+        ],
+        "economics": {
+          "plan_price_usd": "49",
+          "plan_credits": 300,
+          "card_fee_rate": "0.029",
+          "card_fee_fixed_usd": "0.30",
+          "billing_fee_rate": "0.007",
+          "tax_fee_rate": "0.005",
+          "international_card_fee_rate": "0.015",
+          "max_worst_case_share": "0.90",
+          "rule": "every selection's worst case per product is at most max_worst_case_share of its credits' share of the plan's net revenue after every fee; no unrecovered-cost cap (ADR-0036)"
+        }
       }
     ]
   },

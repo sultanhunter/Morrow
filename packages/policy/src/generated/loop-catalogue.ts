@@ -12,7 +12,7 @@ export const generatedLoopCatalogue = {
     {
       version: 2,
       status: "proposed",
-      digest: "ffbbafa67164cdb0ab6095d9c27f747659606387e0cec08ff3b0930614d3d538",
+      digest: "fc519d878a45eedb3c5d31d6101b663c06d10b540550d5e500ba63ce11b6b648",
       effectiveFrom: null,
       defaultProfiles: {
         coordinator: {
@@ -24,8 +24,8 @@ export const generatedLoopCatalogue = {
           effort: "medium",
         },
         installed: {
-          model: "claude_sonnet_5_5",
-          effort: "low",
+          model: "claude_opus_5_5",
+          effort: "medium",
         },
       },
       limits: {
@@ -42,7 +42,6 @@ export const generatedLoopCatalogue = {
         toolResultMaxBytes: 8192,
         runCostCapUsd12: 7000000000000,
         workspaceDailyCostCapUsd12: 25000000000000,
-        workspacePeriodUnrecoveredCostCapUsd12: 4500000000000,
       },
       expectedTurn: {
         inputTokens: 20000,

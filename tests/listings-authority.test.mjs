@@ -1260,7 +1260,8 @@ test("the model default: revise only, keys of the active catalogue, a ceiling th
     effort: "high",
     maxCreditsPerProduct: 6,
   });
-  assert.deepEqual(tx.sent.at(-1)[1].slice(3), ["1", "claude_opus_5_5", "high", "6", null]);
+  // The active catalogue version (3 since ADR-0036).
+  assert.deepEqual(tx.sent.at(-1)[1].slice(3), ["3", "claude_opus_5_5", "high", "6", null]);
   // A member without governance.model_default.revise is denied before the definer.
   const member = scriptedTx(replies(ownerGrants(owner, { revise: false })));
   await assert.rejects(runAgentCommand(member, g, prepared, "corr"), (e) => e.reason === "denied");
@@ -1350,14 +1351,28 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
     return (await runAgentRead(tx, guarded("GET", "/models", null, {}), "models.list")).body;
   };
   const memberView = await read(ownerGrants(owner, { revise: false }));
-  assert.equal(memberView.catalogueVersion, 1);
-  assert.equal(memberView.ceiling, 1);
+  // Catalogue version 3 (ADR-0036): Opus 5.5 at medium by default, the default ceiling 4.
+  assert.equal(memberView.catalogueVersion, 3);
+  assert.equal(memberView.ceiling, 4);
   assert.equal(memberView.canRevise, false);
-  assert.deepEqual(memberView.workspaceDefault, { model: "claude_sonnet_5_5", effort: "low" });
+  assert.deepEqual(memberView.workspaceDefault, { model: "claude_opus_5_5", effort: "medium" });
   const allowed = memberView.entries
     .filter((e) => e.allowedForMember)
     .map((e) => e.creditsPerProduct);
-  assert.ok(allowed.length > 0 && allowed.every((c) => c <= 1));
+  assert.ok(allowed.includes(4) && allowed.every((c) => c <= 4));
+  // A default stored at version 1 that version 3 also lists is kept, with its ceiling.
+  const stored = await read(ownerGrants(owner, { revise: false }), [
+    {
+      catalogue_version: "1",
+      model_key: "claude_sonnet_5_5",
+      effort_key: "low",
+      max_credits_per_product: "1",
+      revision: "1",
+      updated_at: "2026-10-20T11:00:00.000Z",
+    },
+  ]);
+  assert.deepEqual(stored.workspaceDefault, { model: "claude_sonnet_5_5", effort: "low" });
+  assert.equal(stored.ceiling, 1);
   const text = JSON.stringify(memberView);
   assert.doesNotMatch(text, /claude-|anthropic|usd|price|cost|token/i);
   // The owner may pick every entry; after the ceiling is raised to 6 so may the member.

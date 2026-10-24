@@ -195,10 +195,11 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   // T7 PR 16: who views Team in this scenario. The workspace model default (the Listings
   // agent's choice) is the Owner's to change, as Team shows; Admins and members only see it.
   const teamViewer = teamViewerIn[scenario] ?? "owner";
+  // Catalogue version 3's default and member ceiling (ADR-0036): Opus 5.5 at medium, 4.
   const modelDefault = {
-    model: "claude_sonnet_5_5",
-    effort: "low",
-    ceiling: 1,
+    model: "claude_opus_5_5",
+    effort: "medium",
+    ceiling: 4,
     revision: null as number | null,
     canRevise: teamViewer === "owner",
   };
@@ -928,7 +929,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         reply<ModelCatalogueView>("models.list", () =>
           ws(id)
             ? ok({
-                catalogueVersion: 1,
+                catalogueVersion: 3,
                 entries: fixtureCatalogue.map((e) => ({
                   ...e,
                   allowedForMember:

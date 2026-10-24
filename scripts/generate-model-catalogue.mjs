@@ -94,7 +94,7 @@ export function catalogueVersionData(entry) {
       maxConsecutiveFailedProducts: count(limits.max_consecutive_failed_products),
       runCostCapUsd8: usd8(limits.run_cost_cap_usd),
       workspaceDailyCostCapUsd8: usd8(limits.workspace_daily_cost_cap_usd),
-      workspacePeriodUnrecoveredCostCapUsd8: usd8(limits.workspace_period_unrecovered_cost_cap_usd),
+      // No unrecovered-cost cap (ADR-0036): version 1's published value is not generated.
     },
     efforts,
     models,
@@ -194,9 +194,6 @@ export function loopCatalogueVersionData(entry) {
       toolResultMaxBytes: count(limits.tool_result_max_bytes),
       runCostCapUsd12: usd12(limits.run_cost_cap_usd),
       workspaceDailyCostCapUsd12: usd12(limits.workspace_daily_cost_cap_usd),
-      workspacePeriodUnrecoveredCostCapUsd12: usd12(
-        limits.workspace_period_unrecovered_cost_cap_usd,
-      ),
     },
     expectedTurn: {
       inputTokens: count(entry.expected_turn.input_tokens),

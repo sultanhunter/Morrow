@@ -2524,16 +2524,19 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
     const memberAllowed = models.body.entries
       ?.filter((e) => e.allowedForMember)
       .map((e) => e.creditsPerProduct);
+    // Catalogue version 3 (ADR-0036, migration 0047): Opus 5.5 at medium by default, and the
+    // default member ceiling of 4 that admits it.
     check(
       "M1:catalogue_default_and_member_ceiling",
       models.status === 200 &&
-        models.body.catalogueVersion === 1 &&
-        models.body.ceiling === 1 &&
+        models.body.catalogueVersion === 3 &&
+        models.body.ceiling === 4 &&
         models.body.revision === null &&
         models.body.canRevise === false &&
-        models.body.workspaceDefault?.model === "claude_sonnet_5_5" &&
-        memberAllowed.length > 0 &&
-        memberAllowed.every((c) => c <= 1) &&
+        models.body.workspaceDefault?.model === "claude_opus_5_5" &&
+        models.body.workspaceDefault?.effort === "medium" &&
+        memberAllowed.includes(4) &&
+        memberAllowed.every((c) => c <= 4) &&
         !/claude-|usd|token|anthropic/i.test(JSON.stringify(models.body)),
       models.body,
     );
@@ -2608,13 +2611,14 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
         raised.body.entries.every((e) => e.allowedForMember),
       raised.body,
     );
-    // SQL refuses a key outside the active catalogue or a ceiling below the default.
-    const definer = (model, effort, ceiling) =>
+    // SQL refuses a key outside the active catalogue, a ceiling below the default, or the
+    // retired version 1 (ADR-0036).
+    const definer = (model, effort, ceiling, version = "3") =>
       last(
         db.sql(
           asApi(
             P.A,
-            `SELECT outcome FROM morrow_work.cmd_model_default_revise(${literal(randomUUID())},${literal("b".repeat(64))},'corr','1',${literal(model)},${literal(effort)},${literal(ceiling)},'2');`,
+            `SELECT outcome FROM morrow_work.cmd_model_default_revise(${literal(randomUUID())},${literal("b".repeat(64))},'corr',${literal(version)},${literal(model)},${literal(effort)},${literal(ceiling)},'2');`,
           ),
           { user: "morrow_api_worker" },
         ),
@@ -2623,7 +2627,8 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       "M4:sql_refuses_unknown_keys_and_low_ceilings",
       definer("claude_opus_9", "low", "6") === "invalid" &&
         definer("claude_opus_5_5", "high", "5") === "invalid" &&
-        definer("claude_opus_5_5", "xhigh", "6") === "invalid",
+        definer("claude_opus_5_5", "xhigh", "6") === "invalid" &&
+        definer("claude_sonnet_5_5", "low", "6", "1") === "invalid",
     );
   }
 
