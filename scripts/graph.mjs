@@ -333,7 +333,8 @@ function git(root, args) {
 
 // Merged pull requests come from git: first-parent history of HEAD with the files each
 // commit changed against its first parent, plus every other ancestor (a branch that merged
-// main reaches newer PRs through second parents). A shallow clone skips them.
+// main reaches newer PRs through second parents). A shallow clone skips them. Each commit
+// keeps the first line of its body: GitHub's merge commit puts the PR's title there.
 export function readHistory(root) {
   const head = git(root, ["rev-parse", "--is-shallow-repository", "--show-toplevel"]);
   if (head === null) return { available: false, reason: "no git repository", commits: [] };
@@ -348,25 +349,47 @@ export function readHistory(root) {
     "--diff-merges=first-parent",
     "--name-only",
     "--date=short",
-    "--format=%x1e%H%x1f%ad%x1f%s",
+    "--format=%x1e%H%x1f%ad%x1f%s%x1f%b%x1d",
     "HEAD",
   ]);
-  const all = git(root, ["log", "--date=short", "--format=%H%x1f%ad%x1f%s", "HEAD"]);
+  const all = git(root, ["log", "--date=short", "--format=%H%x1f%ad%x1f%s%x1f%b%x1e", "HEAD"]);
   if (first === null || all === null)
     return { available: false, reason: "no commits", commits: [] };
+  const firstLine = (body) =>
+    (body ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .find(Boolean) ?? "";
   const commits = [];
   const seen = new Set();
   for (const record of first.split("\x1e").slice(1)) {
-    const [header, ...rest] = record.split("\n");
-    const [sha, date, subject] = header.split("\x1f");
-    commits.push({ sha, date, subject, firstParent: true, files: rest.filter(Boolean) });
+    const end = record.indexOf("\x1d");
+    if (end === -1) continue;
+    const [sha, date, subject, body] = record.slice(0, end).split("\x1f");
+    const files = record
+      .slice(end + 1)
+      .split("\n")
+      .filter(Boolean);
+    commits.push({ sha, date, subject, body: firstLine(body), firstParent: true, files });
     seen.add(sha);
   }
-  for (const line of all.split("\n").filter(Boolean)) {
-    const [sha, date, subject] = line.split("\x1f");
-    if (!seen.has(sha)) commits.push({ sha, date, subject, firstParent: false, files: [] });
+  for (const record of all.split("\x1e")) {
+    const [sha, date, subject, body] = record.replace(/^\n/, "").split("\x1f");
+    if (sha && subject !== undefined && !seen.has(sha))
+      commits.push({ sha, date, subject, body: firstLine(body), firstParent: false, files: [] });
   }
   return { available: true, head: commits[0]?.sha ?? null, commits };
+}
+
+// A merged pull request from a commit: a squash subject "Title (#n)", or GitHub's merge
+// commit "Merge pull request #n from owner/branch" with the PR's title as its body's first
+// line. Returns { number, title, branch } or null.
+export function pullRequestOf(commit) {
+  const squash = /^(.*) \(#([1-9]\d*)\)$/.exec(commit?.subject ?? "");
+  if (squash) return { number: squash[2], title: squash[1], branch: null };
+  const merge = /^Merge pull request #([1-9]\d*) from [^/\s]+\/(\S+)$/.exec(commit?.subject ?? "");
+  if (merge) return { number: merge[1], title: commit.body || merge[2], branch: merge[2] };
+  return null;
 }
 
 export function readSources(root = repositoryRoot) {
@@ -939,9 +962,13 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
       addNode({ id, title: c.package ?? c.path, extra: { path: c.path } }, c.path);
   }
 
-  // Merged pull requests: a "(#n)" subject; its task, milestone and component edges.
+  // Merged pull requests: a "(#n)" subject or a GitHub merge commit; its task, milestone and
+  // component edges. The v1 build order's steps are hand-written, so "v1 PR <n>:" titles
+  // are linked once those files are read (below).
   const history = src.history ?? { available: false, reason: "not read", commits: [] };
   const prSubjects = [];
+  const prBranches = [];
+  const prBuildSteps = [];
   if (!history.available)
     report(
       "GRAPH_WARN_NO_HISTORY",
@@ -950,32 +977,36 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
     );
   else
     for (const commit of history.commits) {
-      const m = /^(.*) \(#([1-9]\d*)\)$/.exec(commit.subject ?? "");
-      if (!m || nodes.has(`PR-${m[2]}`)) continue;
-      const id = `PR-${m[2]}`;
+      const pr = pullRequestOf(commit);
+      if (!pr || nodes.has(`PR-${pr.number}`)) continue;
+      const id = `PR-${pr.number}`;
       addNode(
         {
           id,
-          title: m[1],
+          title: pr.title,
           status: "merged",
           fields: { commit: commit.sha.slice(0, 12), date: commit.date },
+          ...(pr.branch ? { extra: { branch: pr.branch } } : {}),
         },
         "git log",
       );
       // The label before the first colon names what the PR implements ("P04.T01i PR-D part
-      // 2:", "M2 PR-1:"); ids later in the subject are mentions.
-      const prefix = m[1].split(": ")[0];
+      // 2:", "M2 PR-1:", "v1 PR 18:"); ids later in the subject are mentions.
+      const prefix = pr.title.split(": ")[0];
       for (const task of planIdsIn(prefix))
         if (nodes.get(task)?.type === "task") derive(id, "implements", task, "git");
       const label = /^M([1-9])(?=[\s:-])/.exec(prefix);
       if (label && nodes.get(`M${label[1]}`)?.type === "milestone")
         derive(id, "implements", `M${label[1]}`, "git");
+      const step = /^v1 PR ([1-9]\d?)(?![\w])/.exec(prefix);
+      if (step) prBuildSteps.push([id, `V1-PR${pad2(step[1])}`]);
+      if (pr.branch) prBranches.push([id, pr.branch]);
       for (const file of commit.files) {
         const c = /^(?:apps|packages)\/([^/]+)\//.exec(file);
         if (c && nodes.get(`C-${c[1]}`)?.type === "component")
           derive(id, "touches", `C-${c[1]}`, "git");
       }
-      prSubjects.push([id, m[1]]);
+      prSubjects.push([id, pr.title]);
     }
 
   // Hand-written nodes under docs/graph/, then headers added in place to other docs.
@@ -1123,6 +1154,17 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
     else edges.push({ ...e, derived: false });
   }
 
+  // A "v1 PR <n>:" title implements that build-order step. A merged PR from a branch that
+  // has a node comes from_branch it and implements what the branch implements.
+  for (const [id, step] of prBuildSteps)
+    if (nodes.get(step)?.type === "milestone") derive(id, "implements", step, "git");
+  for (const [id, branch] of prBranches) {
+    if (nodes.get(branch)?.type !== "branch") continue;
+    derive(id, "from_branch", branch, "git");
+    for (const e of edges.filter((x) => x.from === branch && x.edge === "implements"))
+      derive(id, "implements", e.to, "branch");
+  }
+
   // Mentions: unambiguous ids in body text, [[wiki]] links and doc paths. In a doc with a
   // header an unresolved id is an error; in a doc without one (phase 0), a warning.
   const mentioned = new Set();
@@ -1255,11 +1297,25 @@ export function uncoveredTasks(graph) {
   );
 }
 
+// Recent work on a node, its parts or the build-order steps that deliver it: a PR or live
+// evidence since the date, or a branch node still open (in flight) that implements it.
 function activity(graph, id, since) {
-  const ids = [id, ...typedIn(graph, id, "part_of").map((e) => e.from)];
+  const ids = [
+    id,
+    ...typedIn(graph, id, "part_of").map((e) => e.from),
+    ...typedIn(graph, id, "delivers")
+      .filter((e) => graph.nodes.get(e.from)?.type === "milestone")
+      .map((e) => e.from),
+  ];
   for (const target of ids)
     for (const e of graph.in.get(target) ?? []) {
       const from = graph.nodes.get(e.from);
+      if (
+        e.edge === "implements" &&
+        from?.type === "branch" &&
+        ["open", "built"].includes(from.status)
+      )
+        return true;
       if (
         (e.edge === "implements" && from?.type === "pr") ||
         (e.edge === "verifies" && from?.type === "evidence")
@@ -1599,6 +1655,17 @@ function applyRules(graph, report) {
         );
     }
   }
+  for (const e of edges)
+    if (
+      e.edge === "from_branch" &&
+      nodes.get(e.from)?.status === "merged" &&
+      nodes.get(e.to)?.status !== "merged"
+    )
+      report(
+        "GRAPH_WARN_BRANCH_MERGED",
+        nodes.get(e.to).headerPath ?? e.to,
+        `${e.to} is ${nodes.get(e.to).status ?? "without a status"}, but ${e.from} merged it; set status merged`,
+      );
   for (const task of uncoveredTasks(graph))
     report(
       "GRAPH_WARN_PLAN_UNCOVERED",
@@ -2166,6 +2233,7 @@ export function query(graph, name, args, flags) {
               "refines",
               "authorized_by",
               "answers",
+              "answered_by",
             ].includes(e.edge) &&
             !seen.has(`${id}>${e.to}`)
           ) {
@@ -2432,7 +2500,7 @@ export function statusDrift(graph) {
     .sort((a, b) => Number(b.id.slice(3)) - Number(a.id.slice(3)));
   const findings = [];
   const claimed = /`main` is at `([0-9a-f]{7,40})`/.exec(status)?.[1];
-  const latest = graph.history.commits.find((c) => c.firstParent && /\(#\d+\)$/.test(c.subject));
+  const latest = graph.history.commits.find((c) => c.firstParent && pullRequestOf(c));
   if (claimed && latest && !latest.sha.startsWith(claimed)) {
     const pr = prs.find((p) => latest.sha.startsWith(p.fields.commit));
     findings.push(

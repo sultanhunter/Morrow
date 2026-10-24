@@ -4,7 +4,9 @@ type: track
 title: Project graph
 label: T16
 status: active
+weeks: W0 to W3 (1)
 links:
+  depends_on: [TRK-decisions]
   governed_by: [OD-2026-10-23-1, ADR-0023]
 ---
 
