@@ -5,6 +5,7 @@ import type {
   AnswerView,
   ConnectionsView,
   GoalView,
+  HomeSamplesView,
   Id,
   ListingsAgentView,
   ListingsChangeView,
@@ -34,6 +35,7 @@ import type {
   RepeatingView,
   StopStepsResultView,
 } from "./projects/model";
+import { teamPortMethods, type LibraryPort, type SettingsPort, type TeamPort } from "./team-model";
 
 export type Outcome<T> =
   | { readonly kind: "ok"; readonly value: T; readonly replayed: boolean }
@@ -295,6 +297,16 @@ export interface WorkspacePort {
       c: Command<{ documentDigest: string; nonce: string }>,
     ): Promise<Outcome<PlanStartResultView>>;
   };
+  /** T7 PR 16: Team, agent pages and Add agents; Settings; Shop knowledge and Files. */
+  readonly team: TeamPort;
+  readonly settings: SettingsPort;
+  readonly library: LibraryPort;
+  /**
+   * ADR-0032 Home preview: sample sections with no backend (no contract, no route). The
+   * HTTP build never composes it; the fixture build composes it only in its
+   * `home_preview` scenario. A default-off switch, not a feature.
+   */
+  readonly samples: { home(ws: Id): Promise<Outcome<HomeSamplesView>> };
 }
 
 export const portMethods = [
@@ -351,6 +363,8 @@ export const portMethods = [
   "plans.revise",
   "plans.startDocument",
   "plans.start",
+  ...teamPortMethods,
+  "samples.home",
 ] as const;
 /** T7 PR 19: the project screens' methods, uncomposed over HTTP until T2 and T6 land. */
 export const projectPortMethods = portMethods.filter(

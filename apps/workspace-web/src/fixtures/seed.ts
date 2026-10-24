@@ -4,6 +4,7 @@
 import type {
   ConnectionsView,
   GoalView,
+  HomeSamplesView,
   PersonRef,
   QuestionView,
   StoreConnectionView,
@@ -210,3 +211,145 @@ export function createSeed(): FixtureSeed {
     },
   };
 }
+
+/**
+ * ADR-0032 Home preview: the Sunrise brief's sample day at Linen & Form (a fictional shop),
+ * for the board's sections that have no backend yet. Answered only where the scenario
+ * composes `samples.home` (`home_preview`); synthetic, and labelled as samples on screen.
+ */
+export const fixtureHomeSamples: HomeSamplesView = {
+  viewerName: "Maya",
+  waiting: { review: 3, tasks: 1, alerts: 1 },
+  creditsLeft: "1,240",
+  projects: [
+    {
+      id: "proj-tote-ai",
+      name: "Everyday Tote in AI answers",
+      ends: "Dec 4",
+      summary: "Page facts 11 of 12",
+      health: "on_track",
+    },
+    {
+      id: "proj-autumn",
+      name: "Autumn collection",
+      ends: "Nov 16",
+      summary: "Launch Mon, Nov 2 · 2 of 3 products ready",
+      health: "on_track",
+    },
+    {
+      id: "proj-black-friday",
+      name: "Black Friday sale",
+      ends: "Nov 30",
+      summary: "Sale starts Fri, Nov 27 · Sale plan due today",
+      health: "working",
+    },
+  ],
+  everyday: [
+    {
+      name: "Product pages",
+      summary: "Every product has a complete listing · 94%",
+      health: "on_track",
+    },
+    { name: "Stock", summary: "Best sellers with 2+ weeks of stock · 3 at risk", health: "behind" },
+    {
+      name: "Customer emails",
+      summary: "Replied within a day · 9 of 10 this week",
+      health: "on_track",
+    },
+    {
+      name: "Sales and numbers",
+      summary: "Repeat customers 18% · Goal 25% by Dec 31",
+      health: "on_track",
+    },
+    { name: "Quick tasks", summary: "2 open · One-off jobs that fit nowhere else", health: null },
+  ],
+  team: {
+    agents: [
+      { agent: "listings", installationId: "inst-sample-listings" },
+      { agent: "analyst", installationId: "inst-sample-analyst" },
+      { agent: "inventory", installationId: "inst-sample-inventory" },
+      { agent: "support", installationId: "inst-sample-support" },
+    ],
+    people: [
+      { name: "Maya Chen", presence: "online" },
+      { name: "Leo Martin", presence: "away" },
+    ],
+  },
+  today: [
+    {
+      when: "11:00 am",
+      title: "Size chart check for this week's new products",
+      who: "Listings",
+      agent: "listings",
+      where: "Product pages",
+      status: "done",
+    },
+    {
+      when: "2:00 pm",
+      title: "This week's numbers so far",
+      who: "Business Analyst",
+      agent: "analyst",
+      where: "Sales and numbers",
+      status: "working",
+    },
+    {
+      when: "Due today",
+      title: "Sale plan",
+      who: "Sale planner",
+      agent: "specialist",
+      where: "Black Friday sale",
+      status: "working",
+    },
+    {
+      when: "5:00 pm",
+      title: "Summary of open customer emails",
+      who: "Support",
+      agent: "support",
+      where: "Customer emails",
+      status: "to_do",
+    },
+  ],
+  glance: {
+    source: "From your Shopify orders · updated 8:00 am · Only people who can see orders see this",
+    metrics: [
+      { label: "Sales", value: "$1,284", note: "Up 12% on a usual Thursday" },
+      { label: "Orders", value: "23", note: null },
+      { label: "Average order", value: "$55.83", note: null },
+      { label: "Refunds", value: "2", note: null },
+    ],
+    take: "Linen Shirt sold 9, the most in one day this month. Utility Overshirt has about 11 days of stock left at this pace.",
+  },
+  ideas: [
+    {
+      id: "idea-alt-text",
+      agent: "listings",
+      text: "12 Autumn photos have no description. Listings can write them for you to approve.",
+      helps: "Helps Product pages reach 100% · About 4 credits",
+    },
+    {
+      id: "idea-size-chart",
+      agent: "analyst",
+      text: "Linen Shirt refunds are 3 times higher than usual. A clearer size chart could help.",
+      helps: "Helps Product pages · About 3 credits",
+    },
+    {
+      id: "idea-slow-sellers",
+      agent: "inventory",
+      text: "6 products had no sales in 60 days. Inventory can suggest what to do with each one.",
+      helps: "Helps Stock · About 2 credits",
+    },
+  ],
+  recentAsks: [
+    {
+      asked: "Tell me each month which products stopped selling",
+      when: "Today, 1:40 pm",
+      outcome: "Drafted: repeating task in Stock",
+    },
+    {
+      asked: "I want to rank in AI chat bots for one of my products",
+      when: "Today, 10:30 am",
+      outcome: "Started: Everyday Tote in AI answers",
+    },
+    { asked: "What sold best this week?", when: "Oct 22", outcome: "Answer only" },
+  ],
+};

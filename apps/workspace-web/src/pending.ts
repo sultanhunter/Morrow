@@ -27,6 +27,8 @@ const markerKinds: readonly MarkerKind[] = [
   "run",
   "project",
   "plan",
+  "thinking",
+  "add_agent",
 ];
 export interface StorageLike {
   getItem(key: string): string | null;

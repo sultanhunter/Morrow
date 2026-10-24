@@ -574,6 +574,26 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
     },
     work,
     people: { list: unbuilt },
+    // T7 PR 16: no server routes yet (T2, T4, T11, T13). Uncomposed: nothing is sent.
+    team: {
+      overview: unbuilt,
+      agent: unbuilt,
+      reviseThinking: unbuilt,
+      catalogue: unbuilt,
+      addDocument: unbuilt,
+      addConfirm: unbuilt,
+    },
+    settings: {
+      plan: unbuilt,
+      emailAddresses: unbuilt,
+      notifications: unbuilt,
+      reviseNotifications: unbuilt,
+      activity: unbuilt,
+    },
+    library: { knowledge: unbuilt, files: unbuilt },
+    // ADR-0032 Home preview: no backend, no route and no contract. Never composed over
+    // HTTP, so it answers not_in_build and sends nothing.
+    samples: { home: unbuilt },
     connections: {
       list: gated("connections.list", async (ws: string) => {
         const request = requests.connections(ws);

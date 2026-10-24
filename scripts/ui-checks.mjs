@@ -6,8 +6,12 @@
 // Optional: --only=<a>,<b> runs the cases whose group/name contains any of them.
 // Each state case checks axe (WCAG 2.0/2.1 A and AA, 2.2 AA, plus the ARIA-in-HTML
 // `aria-allowed-role` rule) with zero violations, one visible provisional note, non-text
-// contrast of control borders and focus indicators, reflow, 24 px targets, reduced
-// motion, CSP and console errors; an entry screen's title matches its heading. Keyboard
+// contrast of control borders and focus indicators, reflow, the ADR-0032 item 5 target
+// floors from docs/design/tokens.json (44 px, and 48 px below 760 px; a checkbox or radio
+// is measured by the label that holds it, and on the Sunrise screens under `.sr` so is any
+// control inside its label), link blue only on what can be clicked on the Sunrise screens
+// (ADR-0032 item 2), reduced motion, CSP and console errors; an entry screen's title
+// matches its heading. Keyboard
 // walks run at 1440 and 390. Tracing, HAR and video stay off; screenshots exist only for
 // failed fixture cases. Reports are verdict-only JSON under ui/ in the artifacts directory.
 import { createServer } from "node:net";
@@ -17,6 +21,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { artifactPath, repositoryRoot, writeArtifact } from "./artifacts.mjs";
+import { targetFloors } from "./generate-ui-tokens.mjs";
 
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
@@ -28,6 +33,8 @@ const allWidths = [1440, 768, 390, 320];
 const heights = { 1440: 900, 768: 1024, 390: 844, 320: 640 };
 const ws = "ws-linen";
 const provisional = "Provisional workspace · design under review";
+/** ADR-0032 item 5: 44 px targets, 48 px on a phone (below the 760 px navigation break). */
+export const floors = targetFloors();
 
 /** The `/*` block of apps/workspace-web/public/_headers, as served by Static Assets. */
 export function staticHeaders() {
@@ -146,10 +153,21 @@ const pageChecks = () => {
           'a[href], button, input, select, textarea, [role="tab"], [role="menuitemradio"], [tabindex]:not([tabindex="-1"])',
         ),
       ].filter(visible);
+      const { minimum, phone, phoneBelow } = window.__floors;
+      const floor = window.innerWidth < phoneBelow ? phone : minimum;
       for (const el of targets) {
-        const rect = el.getBoundingClientRect();
-        if (!inSentence(el) && (rect.width < 24 || rect.height < 24))
-          failures.push(`target_size:${el.tagName.toLowerCase()}`);
+        // A checkbox or radio is hit through its label too: measure the label holding it.
+        // On the Sunrise screens under `.sr`, any control inside its label is hit through it.
+        const box =
+          (el.tagName === "INPUT" && (el.type === "checkbox" || el.type === "radio")) ||
+          el.closest(".sr") !== null
+            ? (el.closest("label") ?? el)
+            : el;
+        const rect = box.getBoundingClientRect();
+        if (!inSentence(el) && (rect.width < floor || rect.height < floor))
+          failures.push(
+            `target_size:${el.tagName.toLowerCase()}${el.classList[0] ? "." + el.classList[0] : ""}`,
+          );
         const style = getComputedStyle(el);
         const border = parse(style.borderTopColor);
         const bordered =
@@ -169,6 +187,24 @@ const pageChecks = () => {
           const fill = own && own[3] > 0 ? over(own, behind) : null;
           if (contrast(edge, behind) < 3 && !(fill && contrast(fill, behind) >= 3))
             failures.push(`control_border_contrast:${el.tagName.toLowerCase()}`);
+        }
+      }
+      // ADR-0032 item 2: on a Sunrise screen, text in link blue is always something to click.
+      const sunriseRoot = document.querySelector(".sr");
+      if (sunriseRoot) {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--color-link)";
+        sunriseRoot.append(probe);
+        const linkColour = getComputedStyle(probe).color;
+        probe.remove();
+        const clickable = 'a[href], button, [role="link"], [role="button"], [role="tab"], label';
+        for (const el of document.querySelectorAll(".sr *")) {
+          const ownText = [...el.childNodes].some(
+            (node) => node.nodeType === 3 && node.textContent.trim() !== "",
+          );
+          if (!ownText || !visible(el) || el.closest(clickable)) continue;
+          if (getComputedStyle(el).color === linkColour)
+            failures.push(`link_colour_not_clickable:${el.tagName.toLowerCase()}`);
         }
       }
       for (const el of document.querySelectorAll("body *")) {
@@ -216,6 +252,8 @@ async function signOut(page) {
   await openDrawerIfNarrow(page);
   await page.getByRole("button", { name: "Sign out" }).click();
 }
+// ADR-0032 Home: the heading greets the person; the scope line names the workspace.
+const homeShown = (page, name = "Linen & Form") => page.getByText(`your day at ${name}`).first();
 const morrowKeys = (page) =>
   page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith("morrow.")));
 const intendedRoute = (page) => page.evaluate(() => sessionStorage.getItem("morrow.intended.v1"));
@@ -290,10 +328,11 @@ export const fixtureCases = [
         .waitFor();
     },
   }),
-  fixtureCase("entry", "unavailable_destination", `/w/${ws}/agents`),
+  // T7 PR 16 built Team; the catalog stays a destination this build doesn't have yet.
+  fixtureCase("entry", "unavailable_destination", `/w/${ws}/catalog`),
   // M3 PR-1: the Listings agent card on M2 PR-2's connection screen (the sample store's
   // connection): ready, the review of the server-built document, the stop dialog; and the
-  // model default under Settings > Governance.
+  // model default under Settings (the `billing` section since T7 PR 16).
   fixtureCase("agents", "listings_card", `/w/${ws}/connections/conn-sample-1`),
   fixtureCase("agents", "listings_review", `/w/${ws}/connections/conn-sample-1`, {
     setup: async (page) => {
@@ -310,7 +349,61 @@ export const fixtureCases = [
       await page.getByRole("heading", { name: "Stop AI work for this store" }).waitFor();
     },
   }),
-  fixtureCase("settings", "model_default", `/w/${ws}/settings/governance`),
+  // T7 review F1: every connections read fails once the enable is sent, and its reply is
+  // lost. The connection screen reads once per mount, so the review and its Check again
+  // stay through the command's re-reads; the sidebar keeps its last connection line; and
+  // Check again replays the enable under the same key.
+  fixtureCase("agents", "listings_enable_reread_failed", `/w/${ws}/connections/conn-sample-1`, {
+    scenario: "listings_enable_reread_failed",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Enable Listings agent" }).click();
+      await page.getByRole("button", { name: "Confirm and enable" }).click();
+      const checkAgain = page.getByRole("button", { name: "Check again" });
+      await checkAgain.waitFor();
+      // Time for the re-reads the command's start and settle trigger to answer.
+      await page.waitForTimeout(400);
+      expect(await checkAgain.isVisible(), "check_again_kept");
+      expect(
+        (await page.getByRole("heading", { name: "Review before enabling" }).count()) === 1,
+        "review_kept",
+      );
+      expect(
+        (await page
+          .locator(".sidebar .sidebar-status", { hasText: "Shopify connected" })
+          .count()) === 1,
+        "connection_line_kept",
+      );
+      await checkAgain.click();
+      await page.getByRole("heading", { name: "Review before enabling" }).waitFor({
+        state: "detached",
+      });
+      await page.getByText("Active", { exact: true }).first().waitFor();
+    },
+  }),
+  fixtureCase("settings", "model_default", `/w/${ws}/settings/billing`),
+  // ADR-0032: a settings page inside the shell's Settings frame, whose card lists every
+  // section in the board's order (Activity under Settings, never in the sidebar) and ends
+  // with Stop all AI work, which opens Activity (T7 PR 16).
+  fixtureCase("settings", "section_frame", `/w/${ws}/settings/people`, {
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "People and roles" }).waitFor();
+      const settings = page.getByRole("navigation", { name: "Settings" });
+      expect((await settings.getByRole("link").count()) === 8, "eight_settings_links");
+      expect(
+        (await settings.getByRole("link", { name: "Activity", exact: true }).count()) === 1,
+        "activity_listed",
+      );
+      expect(
+        (await settings.getByRole("link", { name: "Stop all AI work" }).count()) === 1,
+        "stop_listed",
+      );
+      expect(
+        (await page.locator('nav[aria-label="Main"]').getByText("Activity").count()) === 0,
+        "activity_not_in_sidebar",
+      );
+    },
+  }),
   fixtureCase("account", "form", "/", { scenario: "account_form" }),
   fixtureCase("account", "chooser", "/", { scenario: "account_chooser" }),
   fixtureCase("account", "invite", "/", { scenario: "account_invite" }),
@@ -384,7 +477,7 @@ export const fixtureCases = [
     setup: async (page) => {
       await fillSignup(page);
       await page.waitForURL(`**/w/${ws}`);
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   }),
   // P05.T01ab (P04.T01i D5): the api guard's 403 challenge_* is the existing "Couldn't
@@ -429,8 +522,72 @@ export const fixtureCases = [
     },
   }),
   fixtureCase("home", "ready", `/w/${ws}`),
-  fixtureCase("home", "partial_denied", `/w/${ws}`, { scenario: "home_partial_denied" }),
+  // A denied open-questions read is never an all-clear: the scope line stays neutral, no
+  // primary is offered, and the Needs you card carries the denial (the AC26 first-run Home).
+  fixtureCase("home", "partial_denied", `/w/${ws}`, {
+    scenario: "home_partial_denied",
+    setup: async (page) => {
+      await page.locator('[data-card="needs"] .state-denied').waitFor();
+      await homeShown(page).waitFor();
+      expect((await page.getByText("Nothing needs you").count()) === 0, "no_false_all_clear");
+      expect((await page.locator("main .title-row .button-primary").count()) === 0, "no_primary");
+    },
+  }),
   fixtureCase("home", "loading", `/w/${ws}`, { scenario: "loading" }),
+  // T7 review F2: Home opens offline, so neither Home nor the shell shows a count; Retry
+  // on Needs you reads the shell's copy again too, so the Inbox count appears with Home's
+  // "Review N items".
+  fixtureCase("home", "offline_retry", `/w/${ws}`, {
+    scenario: "home_offline_retry",
+    setup: async (page) => {
+      const retry = page.locator('[data-card="needs"]').getByRole("button", { name: "Retry" });
+      await retry.waitFor();
+      expect((await page.locator(".count-pill").count()) === 0, "no_count_while_offline");
+      await retry.click();
+      await page.locator("main .title-row .button-primary", { hasText: /^Review / }).waitFor();
+      await page.locator(".topbar .count-pill").waitFor({ state: "attached" });
+      expect(
+        (await page.locator(".sidebar .count-pill").count()) === 1,
+        "sidebar_count_after_retry",
+      );
+    },
+  }),
+  // ADR-0032 Home: nothing waiting (Ask Morrow is the page's one primary), and the
+  // default-off preview of the board's sample sections, the agent characters among them.
+  fixtureCase("home", "nothing_waiting", `/w/${ws}`, {
+    scenario: "empty",
+    setup: async (page) => {
+      await page.getByText("Nothing needs you right now. Here's your day at").waitFor();
+      expect(
+        (await page.locator("main .button-primary").count()) === 1 &&
+          (await page.locator("main .button-primary").textContent()).includes("Ask Morrow"),
+        "one_primary_ask",
+      );
+    },
+  }),
+  fixtureCase("home", "preview", `/w/${ws}`, {
+    scenario: "home_preview",
+    setup: async (page, width) => {
+      await page.getByRole("heading", { name: "Yesterday at a glance" }).waitFor();
+      expect((await page.locator("main .button-primary").count()) === 1, "one_primary");
+      if (width >= 760) {
+        expect(
+          (await page
+            .getByRole("link", { name: /^Business Analyst\s*, agent\s*, sample data$/ })
+            .count()) === 1,
+          "team_member_named_as_agent_and_sample",
+        );
+        // Sample rows in the sidebar say so on screen: pinned projects, Team, credits.
+        const tags = page.locator(".sidebar .nav-sample-tag", { hasText: "Sample data" });
+        expect((await tags.count()) === 3, "sidebar_samples_labelled");
+        for (let i = 0; i < 3; i++) expect(await tags.nth(i).isVisible(), "sample_tag_visible");
+        expect(
+          (await page.getByRole("link", { name: /credits left\s*,\s*Sample data$/ }).count()) === 1,
+          "credits_named_as_sample",
+        );
+      }
+    },
+  }),
   fixtureCase("task", "brief", `/w/${ws}/work/task-titles`),
   fixtureCase("task", "questions", `/w/${ws}/work/task-titles`, {
     setup: (page) => page.getByRole("tab", { name: "Questions" }).click(),
@@ -745,6 +902,240 @@ fixtureCases.push(
     },
   }),
 );
+// T7 PR 16 (Sunrise): Team, an agent's page, Add agents and its consent, Settings, Shop
+// knowledge and Files, on fixtures (the HTTP build leaves their reads uncomposed).
+const two = [1440, 390];
+fixtureCases.push(
+  fixtureCase("team", "team", `/w/${ws}/agents`),
+  fixtureCase("team", "member", `/w/${ws}/agents`, { widths: two, scenario: "team_member" }),
+  fixtureCase("team", "empty", `/w/${ws}/agents`, { widths: two, scenario: "empty" }),
+  fixtureCase("team", "not_in_build", `/w/${ws}/agents`, {
+    widths: two,
+    scenario: "not_in_build",
+  }),
+  fixtureCase("team", "thinking_dialog", `/w/${ws}/agents`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Change how Business Analyst thinks" }).click();
+      await page.getByRole("dialog", { name: "Change how Business Analyst thinks" }).waitFor();
+    },
+  }),
+  // A real 409 (a teammate's change landed first): the dialog shows the reread choice, and
+  // the next save, of the reread revision, goes through.
+  fixtureCase("team", "thinking_conflict", `/w/${ws}/agents`, {
+    widths: [1440],
+    scenario: "team_thinking_conflict",
+    setup: async (page) => {
+      const name = "Change how Business Analyst thinks";
+      await page.getByRole("button", { name }).click();
+      const dialog = page.getByRole("dialog", { name });
+      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await dialog.getByText("This changed since you opened it.").waitFor();
+      expect(await dialog.getByRole("radio", { name: /Haiku 5\.5/ }).isChecked(), "reread_model");
+      expect(await dialog.getByRole("radio", { name: /^Medium/ }).isChecked(), "reread_effort");
+      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await dialog.waitFor({ state: "hidden" });
+      await page.getByText("Saved. From its next job, Business Analyst uses").waitFor();
+    },
+  }),
+  // An unknown outcome doesn't trap the dialog: Escape closes it, and the shell says the
+  // change may have been saved.
+  fixtureCase("team", "thinking_uncertain_closed", `/w/${ws}/agents`, {
+    widths: [1440],
+    scenario: "team_thinking_uncertain",
+    setup: async (page) => {
+      const name = "Change how Business Analyst thinks";
+      await page.getByRole("button", { name }).click();
+      const dialog = page.getByRole("dialog", { name });
+      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await dialog.getByRole("button", { name: "Check again" }).waitFor();
+      await page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
+      await page.getByText("(a change to how a helper thinks) may have been saved").waitFor();
+    },
+  }),
+  fixtureCase("team", "agent", `/w/${ws}/agents/agent-listings`),
+  // A member sees the Listings agent's setting (the workspace default) and who may change it.
+  fixtureCase("team", "agent_listings_member", `/w/${ws}/agents/agent-listings`, {
+    widths: [1440],
+    scenario: "team_member",
+    setup: async (page) => {
+      await page.getByText("can change this.").first().waitFor();
+      expect((await page.getByRole("radio").count()) === 0, "no_controls");
+      expect((await page.getByRole("button", { name: "Save" }).count()) === 0, "no_save");
+    },
+  }),
+  // The Listings agent's choice is the workspace default: above the member ceiling it
+  // can't be saved here.
+  fixtureCase("team", "agent_over_limit", `/w/${ws}/agents/agent-listings`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await page.getByText("doesn’t fit the spending limit").waitFor();
+      expect(await page.getByRole("button", { name: "Save" }).isDisabled(), "save_held");
+    },
+  }),
+  fixtureCase("team", "agent_member", `/w/${ws}/agents/agent-analyst`, {
+    widths: two,
+    scenario: "team_member",
+    setup: async (page) => {
+      await page.getByText("Only Maya Chen, the Owner, or an Admin can change this.").waitFor();
+      expect((await page.getByRole("radio").count()) === 0, "no_controls");
+    },
+  }),
+  fixtureCase("team", "add_agents", `/w/${ws}/agent-store`),
+  fixtureCase("team", "add_consent", `/w/${ws}/agent-store/release-marketing`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("dialog", { name: "Add Marketing to Linen & Form?" }).waitFor();
+    },
+  }),
+  fixtureCase("team", "add_sent", `/w/${ws}/agent-store/release-marketing`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("button", { name: "Send to Leo Martin to review" }).click();
+      await page.getByText("Marketing was sent to Leo Martin to review").waitFor();
+    },
+  }),
+  fixtureCase("team", "add_uncertain", `/w/${ws}/agent-store/release-marketing`, {
+    widths: two,
+    scenario: "team_add_uncertain",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("button", { name: "Send to Leo Martin to review" }).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+  fixtureCase("team", "add_uncertain_closed", `/w/${ws}/agent-store/release-marketing`, {
+    widths: [1440],
+    scenario: "team_add_uncertain",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).click();
+      await page.getByRole("button", { name: "Send to Leo Martin to review" }).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+      await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page.getByText("(adding an agent) may have been saved").waitFor();
+    },
+  }),
+  fixtureCase("settings", "home", `/w/${ws}/settings`, { widths: two }),
+  fixtureCase("settings", "plan", `/w/${ws}/settings/usage`),
+  fixtureCase("settings", "plan_by_helper", `/w/${ws}/settings/usage`, {
+    widths: two,
+    setup: (page) => page.getByRole("tab", { name: "By helper" }).click(),
+  }),
+  fixtureCase("settings", "email", `/w/${ws}/settings/stores`),
+  fixtureCase("settings", "email_member", `/w/${ws}/settings/stores`, {
+    widths: two,
+    scenario: "team_member",
+  }),
+  fixtureCase("settings", "notifications", `/w/${ws}/settings/notifications`),
+  // A change shows the save bar; the time zone is the Owner's alone.
+  fixtureCase("settings", "notifications_unsaved", `/w/${ws}/settings/notifications`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("switch", { name: "Email me each Monday project update" }).click();
+      await page.getByText("You have unsaved changes").waitFor();
+    },
+  }),
+  // After a save nothing is unsaved: the bar's landmark name doesn't say otherwise.
+  fixtureCase("settings", "notifications_saved", `/w/${ws}/settings/notifications`, {
+    widths: [1440],
+    setup: async (page) => {
+      await page.getByRole("switch", { name: "Email me each Monday project update" }).click();
+      await page.getByRole("button", { name: "Save" }).click();
+      await page.getByText("Notifications saved.").waitFor();
+      expect(
+        (await page.getByRole("region", { name: "You have unsaved changes" }).count()) === 0,
+        "no_unsaved_landmark",
+      );
+      expect(
+        (await page.getByRole("region", { name: "Save notifications" }).count()) === 1,
+        "save_bar_named",
+      );
+    },
+  }),
+  // A save the record moved past (saved from another tab first): the real 409's reread
+  // replaces the draft, so the screen shows what the server has, with nothing unsaved.
+  fixtureCase("settings", "notifications_conflict", `/w/${ws}/settings/notifications`, {
+    widths: two,
+    scenario: "notifications_conflict",
+    setup: async (page) => {
+      const monday = page.getByRole("switch", { name: "Email me each Monday project update" });
+      await monday.click();
+      await page.getByRole("button", { name: "Save" }).click();
+      await page.getByText("These settings changed since you opened them.").waitFor();
+      expect((await monday.getAttribute("aria-checked")) === "true", "draft_replaced");
+      expect(
+        (await page.getByRole("region", { name: "You have unsaved changes" }).count()) === 0,
+        "nothing_unsaved",
+      );
+    },
+  }),
+  fixtureCase("settings", "notifications_member", `/w/${ws}/settings/notifications`, {
+    widths: two,
+    scenario: "team_member",
+    setup: async (page) => {
+      await page.getByText("Only Maya Chen (Owner) can change the time zone.").waitFor();
+      expect(await page.getByLabel("Linen & Form’s time zone").isDisabled(), "zone_held");
+    },
+  }),
+  // Activity: Stop all AI work on top, wired to the Listings agent's own stop.
+  fixtureCase("settings", "activity", `/w/${ws}/settings/governance`),
+  fixtureCase("settings", "activity_on", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all",
+  }),
+  fixtureCase("settings", "stop_dialog", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Stop all AI work" }).click();
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.waitFor();
+      const confirm = dialog.getByRole("button", { name: "Stop all AI work" });
+      expect(await confirm.isDisabled(), "confirm_held_until_typed");
+      await dialog.getByLabel("To confirm, type: stop").fill("stop");
+      expect(!(await confirm.isDisabled()), "confirm_after_typed");
+    },
+  }),
+  fixtureCase("settings", "stopped", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Stop all AI work" }).click();
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.getByLabel("To confirm, type: stop").fill("stop");
+      await dialog.getByRole("button", { name: "Stop all AI work" }).click();
+      await page.getByRole("heading", { name: "Listings is stopped on 1 store" }).waitFor();
+    },
+  }),
+  // A lost reply is "not confirmed" with Check again (the same key), never "stopped".
+  fixtureCase("settings", "stop_uncertain", `/w/${ws}/settings/governance`, {
+    widths: two,
+    scenario: "stop_all_uncertain",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Stop all AI work" }).click();
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.getByLabel("To confirm, type: stop").fill("stop");
+      await dialog.getByRole("button", { name: "Stop all AI work" }).click();
+      await dialog.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+  fixtureCase("settings", "people", `/w/${ws}/settings/people`, { widths: two }),
+  fixtureCase("library", "knowledge", `/w/${ws}/knowledge`),
+  fixtureCase("library", "knowledge_lessons", `/w/${ws}/knowledge`, {
+    widths: two,
+    setup: (page) => page.getByRole("tab", { name: /Lessons/ }).click(),
+  }),
+  fixtureCase("library", "files", `/w/${ws}/assets`),
+  fixtureCase("library", "files_empty", `/w/${ws}/assets`, { widths: two, scenario: "empty" }),
+);
 export const edgeCases = [
   fixtureCase("edge", "landing", "/"),
   fixtureCase("edge", "sign_in", "/w/ws-edge-lab"),
@@ -780,6 +1171,101 @@ const expect = (condition, code) => {
   if (!condition) throw Error(code);
 };
 export const keyboardWalks = [
+  // T7 PR 16: "Change" on Team keeps focus in its dialog and returns it on Escape; adding
+  // an agent by keyboard reaches the server-built document and confirms it.
+  {
+    name: "thinking_dialog",
+    path: `/w/${ws}/agents`,
+    run: async (page) => {
+      const change = "Change how Business Analyst thinks";
+      await page.getByRole("button", { name: change }).waitFor();
+      await tabTo(page, (a) => a.text === change, 80);
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog", { name: change }).waitFor();
+      for (let i = 0; i < 12; i++) {
+        await page.keyboard.press("Tab");
+        expect((await active(page)).inDialog, "focus_left_dialog");
+      }
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      expect((await active(page)).text === change, "dialog_focus_restore");
+    },
+  },
+  // Stop all AI work by keyboard: the dialog opens on the typed confirmation, Escape
+  // closes it with nothing sent and focus back on the opener; typing "stop" and Enter stops.
+  {
+    name: "stop_all",
+    path: `/w/${ws}/settings/governance`,
+    scenario: "stop_all",
+    run: async (page) => {
+      const open = "Stop all AI work";
+      await page.getByRole("button", { name: open }).waitFor();
+      await tabTo(page, (a) => a.tag === "BUTTON" && a.text === open, 80);
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.waitFor();
+      expect((await active(page)).tag === "INPUT", "focus_on_confirmation");
+      await page.keyboard.press("Escape");
+      await dialog.waitFor({ state: "hidden" });
+      expect((await active(page)).text === open, "dialog_focus_restore");
+      await page.keyboard.press("Enter");
+      await dialog.waitFor();
+      await page.keyboard.type("stop");
+      await page.keyboard.press("Enter");
+      await page.getByRole("heading", { name: "Listings is stopped on 1 store" }).waitFor();
+      await dialog.waitFor({ state: "hidden" });
+      // The opener is gone after the stop: focus is on the result, not the page body.
+      await page.waitForFunction(() => document.activeElement?.tagName === "H3");
+      expect((await active(page)).text === "Listings is stopped on 1 store", "focus_on_result");
+    },
+  },
+  // A stop whose reply is lost: the dialog stays, and once the typed word is gone focus is on
+  // each store's outcome inside it, then on Check again; after that reply it stays inside.
+  {
+    name: "stop_all_uncertain",
+    path: `/w/${ws}/settings/governance`,
+    scenario: "stop_all_uncertain",
+    run: async (page) => {
+      const open = "Stop all AI work";
+      await page.getByRole("button", { name: open }).waitFor();
+      await tabTo(page, (a) => a.tag === "BUTTON" && a.text === open, 80);
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Stop all AI work?" });
+      await dialog.waitFor();
+      await page.keyboard.type("stop");
+      await page.keyboard.press("Enter");
+      const checkAgain = dialog.getByRole("button", { name: "Check again" });
+      await checkAgain.waitFor();
+      const after = await active(page);
+      expect(after.inDialog, "focus_left_dialog");
+      expect(after.role === "group", "focus_on_outcome");
+      await tabTo(page, (a) => a.tag === "BUTTON" && a.text === "Check again", 10);
+      await page.keyboard.press("Enter");
+      await checkAgain.waitFor({ state: "detached" });
+      await dialog.getByText("Listings is stopped on 1 store.").waitFor();
+      expect((await active(page)).inDialog, "focus_left_dialog_after_check");
+    },
+  },
+  {
+    name: "add_agent",
+    path: `/w/${ws}/agent-store/release-marketing`,
+    run: async (page) => {
+      await page.getByRole("button", { name: "Add Marketing" }).waitFor();
+      await tabTo(page, (a) => a.text === "Add Marketing");
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog", { name: "Add Marketing to Linen & Form?" }).waitFor();
+      await tabTo(page, (a) => a.text === "Send to Leo Martin to review");
+      await page.keyboard.press("Enter");
+      await page.getByText("Marketing was sent to Leo Martin to review").waitFor();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      // The add button is gone once the agent waits for review: focus is on the result.
+      await page.getByRole("button", { name: "Add Marketing" }).waitFor({ state: "detached" });
+      expect(
+        (await active(page)).text.startsWith("Marketing was sent to Leo Martin to review"),
+        "focus_on_result",
+      );
+    },
+  },
   {
     name: "skip_link_first",
     path: `/w/${ws}`,
@@ -830,7 +1316,7 @@ export const keyboardWalks = [
         expect(back.text === "Open navigation", "escape_focus_restore");
         await page.keyboard.press("Enter");
       }
-      await tabTo(page, (a) => a.tag === "A" && a.text === "Work");
+      await tabTo(page, (a) => a.tag === "A" && a.text === "Projects");
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}/work`);
       if (width < 760) {
@@ -839,7 +1325,7 @@ export const keyboardWalks = [
       const current = await page
         .locator('nav[aria-label="Main"] [aria-current="page"]')
         .textContent();
-      expect(current.trim() === "Work", "aria_current");
+      expect(current.trim() === "Projects", "aria_current");
     },
   },
   {
@@ -994,15 +1480,47 @@ export const keyboardWalks = [
     },
   },
   {
+    // ADR-0032 Home preview: Dismiss moves focus to the next idea's Dismiss, then to the
+    // Ideas heading once none are left; focus never drops to the page body.
+    name: "dismiss_ideas",
+    path: `/w/${ws}`,
+    scenario: "home_preview",
+    run: async (page) => {
+      await page.getByRole("button", { name: "Dismiss the idea from Listings" }).focus();
+      await page.keyboard.press("Enter");
+      expect((await active(page)).text === "Dismiss the idea from Business Analyst", "next_idea");
+      await page.keyboard.press("Enter");
+      expect((await active(page)).text === "Dismiss the idea from Inventory", "last_idea");
+      await page.keyboard.press("Enter");
+      expect((await active(page)).id === "home-ideas-title", "heading_when_none_left");
+      const indicator = await page.evaluate(() => window.__morrowUi.focusIndicator());
+      expect(indicator.ok, "focus_indicator:" + indicator.reason);
+      await page.getByText("No more ideas for now.").waitFor();
+    },
+  },
+  {
     name: "answer_question",
     path: `/w/${ws}/inbox/questions/q-source`,
     run: async (page) => {
+      // The shell's Inbox counts (sidebar and top bar) follow the answer without a reload.
+      const counts = (n) =>
+        Promise.all(
+          ['nav[aria-label="Main"]', "header.topbar"].map((at) =>
+            page
+              .locator(`${at} a[href="/w/${ws}/inbox"] .count-pill`, {
+                hasText: new RegExp(`^${n}$`),
+              })
+              .waitFor({ state: "attached" }),
+          ),
+        );
+      await counts(2);
       await tabTo(page, (a) => a.tag === "TEXTAREA");
       await page.keyboard.type("Cite the supplier certificate.");
       await tabTo(page, (a) => a.text === "Send answer");
       await page.keyboard.press("Enter");
       await page.getByText("Answer sent.").waitFor();
       await page.getByText("Cite the supplier certificate.").waitFor();
+      await counts(1);
     },
   },
   {
@@ -1014,7 +1532,7 @@ export const keyboardWalks = [
       await page.keyboard.press("Enter");
       // The fixture sign-in returns to `/`, which restores the stored intended route.
       await page.waitForURL(`**/w/${ws}`, { timeout: 15000 });
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -1102,7 +1620,7 @@ export const keyboardWalks = [
       await page.getByRole("button", { name: "Check again" }).focus();
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}`);
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -1123,7 +1641,7 @@ export const keyboardWalks = [
       await page.getByRole("button", { name: "Try again" }).focus();
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}`);
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -1181,7 +1699,8 @@ export const keyboardWalks = [
       expect((await active(page)).text.endsWith("Hide tasks"), "expanded");
       await tabTo(
         page,
-        (a) => a.tag === "A" && a.text.length > 0 && !["Work", "Home", "Inbox"].includes(a.text),
+        (a) =>
+          a.tag === "A" && a.text.length > 0 && !["Projects", "Home", "Inbox"].includes(a.text),
       );
     },
   },
@@ -1204,7 +1723,7 @@ export const keyboardWalks = [
         await tabTo(page, (a) => a.tag === "A" && a.text === "Go to your workspaces");
         await page.keyboard.press("Enter");
         await loaded;
-        await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+        await homeShown(page).waitFor();
         expect(await page.evaluate(() => window.__sameDocument !== true), "document_load:" + from);
       }
     },
@@ -1248,7 +1767,7 @@ export const keyboardWalks = [
       await page.getByRole("heading", { name: "This workspace couldn't load" }).waitFor();
       await tabTo(page, (a) => a.text === "Retry");
       await page.keyboard.press("Enter");
-      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+      await homeShown(page).waitFor();
     },
   },
   {
@@ -1263,7 +1782,7 @@ export const keyboardWalks = [
       await signOut(page);
       await page.getByText("Sign-out didn't complete. You're still signed in.").waitFor();
       if (width < 760) await page.getByRole("button", { name: "Close navigation" }).click();
-      expect(await page.getByRole("heading", { name: "Linen & Form" }).isVisible(), "kept_dom");
+      expect(await homeShown(page).isVisible(), "kept_dom");
       expect((await morrowKeys(page)).length === 1, "kept_storage");
       await tabTo(page, (a) => a.text === "Try again");
       await page.keyboard.press("Enter");
@@ -1339,9 +1858,10 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
     serviceWorkers: "block",
   });
   await context.addInitScript(
-    ({ note }) => {
+    ({ note, targetFloors }) => {
       window.__csp = [];
       window.__provisional = note;
+      window.__floors = targetFloors;
       document.addEventListener("securitypolicyviolation", (event) =>
         window.__csp.push(event.violatedDirective),
       );
@@ -1359,7 +1879,7 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
         return remove.call(this, type, listener, options);
       };
     },
-    { note: provisional },
+    { note: provisional, targetFloors: floors },
   );
   // Measurement helpers load with every document, through CDP (not page script).
   await context.addInitScript({ content: `(${pageChecks.toString()})()` });

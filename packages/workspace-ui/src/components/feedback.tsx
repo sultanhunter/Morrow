@@ -5,6 +5,7 @@ import { copy } from "../copy";
 import type { Outcome } from "../port";
 import type { Marker } from "../services";
 import { Button } from "./controls";
+import { BadgeGlyph } from "./display";
 
 /** Polite live region for confirmations; it says nothing until a confirmed reply. */
 export function StatusRegion({ message }: { readonly message: string | null }) {
@@ -61,6 +62,35 @@ export function ReentryNotice({
     <section className="notice notice-warning" aria-label={copy.reentry.label}>
       <p>{copy.reentry.body(copy.reentry.kinds[marker.kind])}</p>
       <Button onClick={onDismiss}>{copy.reentry.dismiss}</Button>
+    </section>
+  );
+}
+
+/**
+ * A Sunrise banner (at most one per page, one idea): a tinted head with a glyph and the
+ * title in the tone's text colour, then the body on white. The glyph is a word's partner,
+ * never the only signal: the title says it.
+ */
+export function Banner({
+  tone,
+  title,
+  children,
+  headingLevel = 2,
+}: {
+  readonly tone: "info" | "warning" | "success" | "critical";
+  readonly title: string;
+  readonly children: ReactNode;
+  readonly headingLevel?: 2 | 3;
+}) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
+  const glyph = { info: "half", warning: "alert", success: "check", critical: "triangle" } as const;
+  return (
+    <section className={`banner banner-${tone}`} aria-label={title}>
+      <div className="banner-head">
+        <BadgeGlyph glyph={glyph[tone]} />
+        <Heading className="banner-title">{title}</Heading>
+      </div>
+      <div className="banner-body">{children}</div>
     </section>
   );
 }

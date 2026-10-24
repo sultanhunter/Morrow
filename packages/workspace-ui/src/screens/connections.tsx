@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { copy } from "../copy";
 import type {
-  ConnectionsView,
   Id,
   InstallLinkView,
   StoreConnectionView,
@@ -17,7 +16,8 @@ import type {
   WorkspaceView,
 } from "../model";
 import type { Command, Outcome, StoreLinkHandoff } from "../port";
-import { useRead, useServices } from "../services";
+import { useServices } from "../services";
+import { useConnections } from "../workspace-data";
 import { Button, RouteLink } from "../components/controls";
 import { RecordText, StatusTag, Time } from "../components/display";
 import { OutcomeNotice, StateView, StatusRegion, outcomeState } from "../components/feedback";
@@ -27,14 +27,8 @@ import { ListingsAgentCard } from "./agents";
 // decoder checks the same shape; this is the last check before an href is rendered.
 const installUrlPattern =
   /^https:\/\/(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)\/[!-~]+$/;
-const connectionsKey = (ws: Id) => `${ws}|connections`;
 const scopeLabel = (scope: string) =>
   Object.hasOwn(copy.connections.scopeLabels, scope) ? copy.connections.scopeLabels[scope]! : scope;
-
-function useConnections(ws: Id) {
-  const services = useServices();
-  return useRead<ConnectionsView>(connectionsKey(ws), () => services.port.connections.list(ws));
-}
 
 type LinkResult =
   | "linked"
@@ -338,7 +332,9 @@ export function ConnectionsScreen({
 }) {
   const ws = workspace.id;
   const titleId = useId();
-  const [list, reload] = useConnections(ws);
+  // Read once per mount and on Retry or a link: a background re-read that failed would
+  // drop the shop name from the link step's confirm line while its outcome is unknown.
+  const [list, reload] = useConnections(ws, "mount");
   // Held for this screen's life, so the link step's result stays shown after the app
   // forgets the continuation.
   const [linking] = useState(handoff);
@@ -408,7 +404,9 @@ export function ConnectionScreen({
   readonly connectionId: Id;
 }) {
   const ws = workspace.id;
-  const [list, reload] = useConnections(ws);
+  // Read once per mount and on Retry: a background re-read that failed would unmount the
+  // Listings card, and an enable's in-flight or unknown outcome (and Check again) with it.
+  const [list, reload] = useConnections(ws, "mount");
   const installation =
     list.kind === "ok"
       ? (list.value.installations.find((i) => i.connectionId === connectionId) ?? null)

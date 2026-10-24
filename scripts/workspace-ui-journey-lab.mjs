@@ -226,8 +226,10 @@ export async function workspaceUiJourney(engine, createService) {
           );
           const entered = await enteredBootstrap;
           const view = await entered.json();
+          // ADR-0032 Home: the scope line names the workspace under the greeting.
           await page
-            .getByRole("heading", { name: view.workspace.displayName })
+            .getByText(`your day at ${view.workspace.displayName}`)
+            .first()
             .waitFor({ timeout: 15000 });
           h.check("AC20:bootstrap_shows_name", view.workspace.id === h.f.workspace);
           h.check("AC20:intended_route_restored", new URL(page.url()).pathname === workspacePath);

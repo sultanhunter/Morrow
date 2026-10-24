@@ -12,10 +12,16 @@
 import {
   portMethods,
   projectPortMethods,
+  teamPortMethods,
   type Composed,
   type PortMethod,
 } from "@morrow/workspace-ui";
 
+// ADR-0032: `samples.home` is the Home preview's default-off switch. It has no backend
+// (ADR-0033 and ADR-0034 are accepted, 2026-10-24, but their contracts and backend land
+// in their own PRs), so this build never composes it.
+// T7 PR 16: Team, agent pages, Add agents, Settings, Shop knowledge and Files have no
+// server routes yet; their screens show "not built yet" in this build (a default-off switch).
 // T7 PR 19: the project screens' `projects.*` and `plans.*` methods are a default-off
 // switch. Their routes don't exist yet (T2 and T6), so this build leaves them uncomposed
 // and `work`, `project` and `ask_conversation` render what they rendered before.
@@ -23,6 +29,8 @@ const uncomposed: readonly PortMethod[] = [
   "session.keepAlive",
   "people.list",
   ...projectPortMethods,
+  ...teamPortMethods,
+  "samples.home",
 ];
 export const composed: Composed = Object.freeze(
   Object.fromEntries(portMethods.map((method) => [method, !uncomposed.includes(method)])) as Record<

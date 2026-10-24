@@ -1,7 +1,8 @@
 // Scripted outcomes per scenario (P14.T01a §4.11). A script maps a port method and its
-// call index to a reply; `null` keeps the seed behaviour. Scripted, not simulated: there
+// call index (and, where a reply depends on it, how often another method was called) to
+// a reply; `null` keeps the seed behaviour. Scripted, not simulated: there
 // are no permissions, digests or caps here; PR-2 proves those over HTTP.
-import type { Outcome, PortMethod } from "@morrow/workspace-ui";
+import type { Outcome, PersonRole, PortMethod } from "@morrow/workspace-ui";
 
 export const scenarioNames = [
   "ready",
@@ -55,6 +56,18 @@ export const scenarioNames = [
   "projects_start_denied",
   "projects_changed_meanwhile",
   "projects_revise_stale",
+  "team_member",
+  "team_admin",
+  "team_add_uncertain",
+  "team_thinking_conflict",
+  "team_thinking_uncertain",
+  "team_solo",
+  "stop_all",
+  "stop_all_uncertain",
+  "notifications_conflict",
+  "home_preview",
+  "listings_enable_reread_failed",
+  "home_offline_retry",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -64,7 +77,9 @@ export type Reply =
   // A reply after `delayMs`; a null outcome is the seed behaviour, applied then.
   | { readonly delayMs: number; readonly outcome: Outcome<unknown> | null }
   | null;
-export type Script = Partial<Record<PortMethod, (call: number) => Reply>>;
+export type Script = Partial<
+  Record<PortMethod, (call: number, calls: (method: PortMethod) => number) => Reply>
+>;
 
 const reads: readonly PortMethod[] = [
   "work.listGoals",
@@ -75,6 +90,16 @@ const reads: readonly PortMethod[] = [
   "work.listMyOpenQuestions",
   "work.getQuestion",
   "work.getAnswer",
+  // T7 PR 16.
+  "team.overview",
+  "team.agent",
+  "team.catalogue",
+  "settings.plan",
+  "settings.emailAddresses",
+  "settings.notifications",
+  "settings.activity",
+  "library.knowledge",
+  "library.files",
 ];
 const creates: readonly PortMethod[] = [
   "work.createGoal",
@@ -342,6 +367,52 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "plans.revise": (call) =>
       call === 0 ? { kind: "conflict", recheck: true, message: "" } : null,
   },
+  // T7 PR 16: Team as a member (no change controls) and as an Admin (added agents only),
+  // the add confirmation's lost reply (Check again replays it), and a thinking change
+  // whose record moved on (the server's 409: reread).
+  team_member: {},
+  team_admin: {},
+  team_add_uncertain: {
+    "team.addConfirm": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // A one-person shop: adding an agent needs no teammate's review.
+  team_solo: {},
+  // Stop all AI work: the Listings agent is on; in the second, the first stop's reply is
+  // lost and Check again replays the same key.
+  stop_all: {},
+  stop_all_uncertain: {
+    "agents.listingsStop": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // The viewer's notifications are saved from another tab just before their first save
+  // here: the record moves on (the team fixture does it), so the save meets a real 409 and
+  // the reread shows the new choices.
+  notifications_conflict: {},
+  // A teammate changes how a helper thinks just before the viewer's first save: the record
+  // moves on (a new choice and revision; the team fixture does it), so the save meets a real
+  // 409 and only a save of the reread revision goes through.
+  team_thinking_conflict: {},
+  // A thinking change whose reply is lost: the dialog may close, and its marker stays.
+  team_thinking_uncertain: {
+    "team.reviseThinking": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // ADR-0032: the Home board's sample sections, shown only where `samples.home` is
+  // composed (here alone; see `samplesComposedIn`).
+  home_preview: {},
+  // T7 review F1: the Listings enable is applied but its reply is lost, and from the
+  // moment it is sent every connections read fails. The connection screen reads once per
+  // mount, so the card, its review and Check again stay; the sidebar's connection line
+  // keeps its last reply. Check again replays the enable.
+  listings_enable_reread_failed: {
+    "agents.listingsEnable": (call) => (call === 0 ? { kind: "uncertain" } : null),
+    "connections.list": (_call, calls) =>
+      calls("agents.listingsEnable") > 0 ? { kind: "unavailable", offline: false } : null,
+  },
+  // T7 review F2: Home opens offline (the shell and Home share the first open-questions
+  // read); Retry reads the shell's copy again too, so the Inbox count appears with Home's.
+  home_offline_retry: {
+    "work.listMyOpenQuestions": (call) =>
+      call === 0 ? { kind: "unavailable", offline: true } : null,
+  },
 };
 /**
  * T7 PR 19: the default-off project screens' switch. `projects.*` and `plans.*` are
@@ -361,6 +432,18 @@ export const projectsComposedIn: readonly ScenarioName[] = [
 export const teammateIn: readonly ScenarioName[] = ["projects_teammate"];
 /** The first read of each project shows the revision before a teammate's change. */
 export const changedMeanwhileIn: readonly ScenarioName[] = ["projects_changed_meanwhile"];
+/** T7 PR 16: these scenarios start with the Listings agent on (Stop all AI work has a target). */
+export const listingsOnIn: readonly ScenarioName[] = ["stop_all", "stop_all_uncertain"];
+/** T7 PR 16: who views Team in each scenario (the Owner unless named). */
+export const teamViewerIn: Readonly<Partial<Record<ScenarioName, PersonRole>>> = {
+  team_member: "member",
+  team_admin: "admin",
+};
+/**
+ * The default-off Home preview switch: `samples.home` is composed only in these
+ * scenarios. Every other scenario, like the HTTP build, leaves it uncomposed.
+ */
+export const samplesComposedIn: readonly ScenarioName[] = ["home_preview"];
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [
   "connections_unlinked",
