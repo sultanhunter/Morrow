@@ -9,6 +9,7 @@ import {
 } from "../approvals/index.js";
 import { readContext, readProposalRow } from "../approvals/family.js";
 import { beginApprovalCommand } from "../approvals/outcomes.js";
+import { viewerRole } from "../approvals/reads.js";
 import type { WorkTx } from "../connection.js";
 import { WorkContextUnavailable, type WorkAuthority } from "../context.js";
 import { canonicalJson, sha256Hex, workRequestDigest } from "../digest.js";
@@ -264,6 +265,9 @@ export async function decideBatch(
   correlationId: string,
 ): Promise<BatchDecided> {
   const ws = a.resource.workspaceId;
+  // A proposal this person cannot read is not found, like an absent one.
+  const anchor = await readProposalRow(tx, a, proposalId);
+  if (!anchor || (await viewerRole(a, anchor)) === null) throw new BatchReject("not_found");
   const named = body.items.map((i) => ({ ...i, targetCount: 0, expiresAt: "" }));
   if ((await batchDigest(ws, a, sessionDigest, body.issuedAt, named)) !== body.documentDigest)
     throw new BatchReject("batch_changed");

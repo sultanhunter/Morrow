@@ -318,6 +318,8 @@ export interface ReviewView {
   readonly confirmation: { readonly required: boolean; readonly phrase: string };
   readonly products: readonly ProductReviewView[];
   readonly claim: { readonly mine: boolean; readonly operations: readonly OperationView[] } | null;
+  /** v1 PR 4: set when this proposal undoes an applied change. */
+  readonly undoOf: UndoOfView | null;
 }
 export interface ReviewDecisionBody {
   readonly decision: "approve" | "reject";
@@ -344,6 +346,93 @@ export interface PendingApprovalView {
   readonly targetCount: number;
   readonly expiresAt: string;
   readonly viewerRole: string;
+}
+// v1 PR 4: Undo, the history's undo state and "Approve several at once". The server decides
+// every one of them; the screens only show what it says.
+/**
+ * none (not confirmed in Shopify: an unknown outcome is never undone), available (until
+ * `availableUntil`), requested (an undo is waiting or running: `undoProposalId`), undone,
+ * changed (Morrow changed the product again since) or unavailable (90 days passed, or the
+ * shop's data was deleted).
+ */
+export type UndoStateName =
+  | "none"
+  | "available"
+  | "requested"
+  | "undone"
+  | "changed"
+  | "unavailable";
+export interface UndoStateView {
+  readonly state: UndoStateName;
+  readonly availableUntil: string | null;
+  readonly undoProposalId: Id | null;
+  /** This change is itself an undo of that change. */
+  readonly undoOfOperationId: Id | null;
+}
+/** One change in the task's history, with its undo state. */
+export interface HistoryOperationView extends OperationView {
+  readonly undo: UndoStateView;
+}
+/** POST /work/operations/:id/undo: the new change Morrow built, waiting for approval. */
+export interface UndoRequestedView {
+  readonly proposalId: Id;
+  readonly approvalId: Id;
+  readonly status: string;
+  readonly expiresAt: string;
+  readonly operationId: Id;
+}
+/** On the review screen: this proposal undoes that applied change. */
+export interface UndoOfView {
+  readonly operationId: Id;
+  readonly proposalId: Id;
+  readonly productId: string;
+  readonly appliedAt: string | null;
+}
+export interface BatchItemView {
+  readonly proposalId: Id;
+  readonly digest: string;
+  readonly approvalId: Id;
+  readonly revision: number;
+  readonly targetCount: number;
+  readonly expiresAt: string;
+}
+/** The server-built document of the changes waiting on one task (5 minutes, this session). */
+export interface BatchDocumentView {
+  readonly proposalId: Id;
+  readonly taskId: Id;
+  readonly items: readonly BatchItemView[];
+  /** too_few or confirmation_required when no batch is offered. */
+  readonly unavailable: string | null;
+  readonly issuedAt: string;
+  readonly expiresAt: string;
+  readonly documentDigest: string;
+}
+export interface BatchDecisionBody {
+  readonly documentDigest: string;
+  readonly issuedAt: string;
+  readonly items: readonly {
+    readonly proposalId: Id;
+    readonly digest: string;
+    readonly approvalId: Id;
+    readonly revision: number;
+  }[];
+}
+export interface BatchDecidedView {
+  readonly decided: readonly ReviewDecidedView[];
+}
+// v1 PR 4: the product picker on Ask (the catalogue routes of M2 PR-3): ids and titles only.
+export interface CatalogProductView {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+}
+export interface CatalogPageView<T> {
+  readonly items: readonly T[];
+  readonly nextCursor: string | null;
+}
+export interface CatalogCollectionView {
+  readonly id: string;
+  readonly title: string;
 }
 export interface Page<T> {
   readonly items: readonly T[];
