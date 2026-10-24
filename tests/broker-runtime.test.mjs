@@ -1260,6 +1260,175 @@ test("PR 8: a broken reply whose hold write fails is never settled killed; a hol
   assert.deepEqual([next.outcome, next.code], ["refused", "runtime_held"]);
 });
 
+test("PR 8 review R1: a create whose hold write fails still holds; the sweep holds before it settles a kill", async () => {
+  // The create reaches E2B and makes the sandbox, then answers `answer`.
+  const madeThen = (answer) => (fake, events) => {
+    const adapter = recorded(fake, events);
+    return { ...adapter, create: async (...args) => (await adapter.create(...args), answer) };
+  };
+  const brokenCreate = madeThen({ outcome: "unknown_effect", broken: true });
+  const swept = (counts) => ({
+    schemaVersion: 1,
+    examined: 1,
+    killed: 0,
+    absentVerified: 0,
+    unknown: 0,
+    skipped: 0,
+    ...counts,
+  });
+  const refusedNext = async (w, callKey) => {
+    const next = JSON.parse(await w.execute(job({ callKey })));
+    assert.deepEqual([next.outcome, next.code], ["refused", "runtime_held"], callKey);
+  };
+  // One failed write: the create's hold is retried once and commits, whatever the reason.
+  for (const [setup, reason] of [
+    [{ adapter: brokenCreate }, "reply_invalid"],
+    [{ fault: { op: "create", outcome: "unknown_effect", created: true } }, "create_unknown"],
+    [{ fault: { op: "create", outcome: "quota_exhausted" } }, "quota_exhausted"],
+    [{ fault: { op: "create", outcome: "billing_blocked" } }, "billing_blocked"],
+  ]) {
+    const w = world({ ledger: { failUnknown: 1 }, adapter: setup.adapter });
+    if (setup.fault) w.fake.fault(setup.fault);
+    const r = JSON.parse(await w.execute(job()));
+    assert.deepEqual([r.outcome, r.code], ["unknown", reason]);
+    assert.deepEqual(w.events, [
+      ["ledger.begin", "step-1"],
+      ["adapter.create", [...w.ledger.ops.keys()][0]],
+      ["ledger.unknown", reason],
+      ["ledger.unknown", reason],
+    ]);
+    assert.deepEqual(
+      w.ledger.holds.map((h) => h.reason),
+      [reason],
+    );
+    await refusedNext(w, "after-" + reason);
+  }
+  // Neither write commits: the operation stays `sending` with E2B's sandbox running. The
+  // stale sweep records it create_unknown before the kill, so the hold follows.
+  const lost = async (failUnknown) => {
+    const w = world({ ledger: { failUnknown }, adapter: brokenCreate });
+    const r = JSON.parse(await w.execute(job()));
+    assert.deepEqual([r.outcome, r.code], ["unknown", "reply_invalid"]);
+    const [id] = [...w.ledger.ops.keys()];
+    assert.equal(w.ledger.ops.get(id).status, "sending");
+    assert.equal(w.ledger.holds.length, 0);
+    assert.equal(w.fake.alive().length, 1);
+    return { w, id };
+  };
+  const a = await lost(2);
+  // Not stale yet: left alone, its create could still be in flight.
+  assert.deepEqual(JSON.parse(await a.w.sweep()), swept({ examined: 0, skipped: 1 }));
+  a.w.ledger.ops.get(a.id).stale = true;
+  let from = a.w.events.length;
+  assert.deepEqual(JSON.parse(await a.w.sweep()), swept({ killed: 1 }));
+  assert.deepEqual(a.w.events.slice(from + 1), [
+    ["adapter.status", null],
+    ["ledger.unknown", "create_unknown"],
+    ["adapter.kill", null],
+    ["ledger.settle", "killed"],
+  ]);
+  assert.equal(a.w.ledger.ops.get(a.id).status, "killed");
+  assert.deepEqual(a.w.fake.alive(), []);
+  assert.deepEqual(
+    a.w.ledger.holds.map((h) => [h.reason, h.lifted]),
+    [["create_unknown", false]],
+  );
+  await refusedNext(a.w, "after-sweep");
+  // The sweep's own write fails once: retried after the kill, then settled.
+  const b = await lost(3);
+  b.w.ledger.ops.get(b.id).stale = true;
+  from = b.w.events.length;
+  assert.deepEqual(JSON.parse(await b.w.sweep()), swept({ killed: 1 }));
+  assert.deepEqual(names(b.w.events.slice(from + 1)), [
+    "adapter.status",
+    "ledger.unknown",
+    "adapter.kill",
+    "ledger.unknown",
+    "ledger.settle",
+  ]);
+  assert.equal(b.w.ledger.holds.length, 1);
+  await refusedNext(b.w, "after-retried-sweep");
+  // Both of the sweep's writes fail: the sandbox is killed but the operation never settles;
+  // the next pass finds no sandbox and records it not_found_unverified, which holds.
+  const c = await lost(4);
+  c.w.ledger.ops.get(c.id).stale = true;
+  from = c.w.events.length;
+  assert.deepEqual(JSON.parse(await c.w.sweep()), swept({ unknown: 1 }));
+  assert.deepEqual(names(c.w.events.slice(from + 1)), [
+    "adapter.status",
+    "ledger.unknown",
+    "adapter.kill",
+    "ledger.unknown",
+  ]);
+  assert.equal(c.w.ledger.ops.get(c.id).status, "sending");
+  assert.deepEqual(c.w.fake.alive(), []);
+  assert.equal(c.w.ledger.holds.length, 0);
+  assert.deepEqual(JSON.parse(await c.w.sweep()), swept({ unknown: 1 }));
+  assert.equal(c.w.ledger.ops.get(c.id).reason, "not_found_unverified");
+  assert.equal(c.w.ledger.holds.length, 1);
+  await refusedNext(c.w, "after-second-pass");
+  // A stopped operation that is not stale yet never gets create_unknown (its create may still
+  // be in flight): its sandbox is killed and settled, with no ledger write before the kill.
+  const d = await lost(2);
+  d.w.ledger.ops.get(d.id).stopped = true;
+  from = d.w.events.length;
+  assert.deepEqual(JSON.parse(await d.w.sweep()), swept({ killed: 1 }));
+  assert.deepEqual(names(d.w.events.slice(from + 1)), [
+    "adapter.status",
+    "adapter.kill",
+    "ledger.settle",
+  ]);
+  assert.equal(d.w.ledger.holds.length, 0);
+  // A paused sandbox owes its paused_found hold the same way. A lost worker left this
+  // operation `created` with its sandbox running; the sweep finds it paused.
+  const paused = async (failUnknown) => {
+    const w = world({ ledger: { failUnknown } });
+    const begun = await w.ledger.begin({
+      leaseId: "00000000-0000-4000-8000-0000000000aa",
+      generation: 1,
+      callKey: "lost-worker",
+      jobDigest: "0".repeat(64),
+      provider: w.fake.provider,
+    });
+    const id = begun.operationId;
+    const made = await w.fake.create(
+      {
+        operationId: id,
+        template: "morrow-computer-fake-v1",
+        timeoutSeconds: computerProfile.sandboxTimeoutSeconds,
+        internet: false,
+        metadata: { operation: id },
+      },
+      w.key,
+    );
+    assert.equal(await w.ledger.created(id, made.sandboxRef), true);
+    w.ledger.ops.get(id).stale = true;
+    w.fake.fault({ op: "status", outcome: "paused" });
+    return { w, id, from: w.events.length };
+  };
+  const e = await paused(1);
+  assert.deepEqual(JSON.parse(await e.w.sweep()), swept({ killed: 1 }));
+  assert.deepEqual(e.w.events.slice(e.from + 1), [
+    ["adapter.status", null],
+    ["ledger.unknown", "paused_found"],
+    ["adapter.kill", null],
+    ["ledger.unknown", "paused_found"],
+    ["ledger.settle", "killed"],
+  ]);
+  assert.deepEqual(
+    e.w.ledger.holds.map((h) => h.reason),
+    ["paused_found"],
+  );
+  const f = await paused(2);
+  assert.deepEqual(JSON.parse(await f.w.sweep()), swept({ unknown: 1 }));
+  assert.ok(!names(f.w.events.slice(f.from)).includes("ledger.settle"));
+  assert.equal(f.w.ledger.ops.get(f.id).status, "created");
+  assert.deepEqual(f.w.fake.alive(), []);
+  assert.deepEqual(JSON.parse(await f.w.sweep()), swept({ unknown: 1 }));
+  assert.equal(f.w.ledger.ops.get(f.id).reason, "not_found_unverified");
+  await refusedNext(f.w, "after-paused");
+});
+
 test("PR 8: stops kill their scope's sandboxes at once; a stopped operation is never recorded unknown early", async () => {
   // A sandbox left by a lost create, then a stop: killed now, not after the staleness.
   const w = world();

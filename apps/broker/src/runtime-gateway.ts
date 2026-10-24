@@ -68,7 +68,11 @@ import {
 //     records the operation `unknown_effect` with reason reply_invalid before the kill, so a
 //     runtime hold stays until a person lifts it, even when the kill then succeeds. Until
 //     that write commits (it is retried once after the kill) the operation is never settled
-//     `killed`: it stays open for the stale sweep, which records it unknown.
+//     `killed`: it stays open for the stale sweep, which records it unknown. A create's hold
+//     write is retried once too; if neither commits the operation stays `sending`, and the
+//     stale sweep records a `sending` operation create_unknown before it kills its sandbox
+//     (paused_found likewise for a paused one), never settling it `killed` before that hold
+//     has committed.
 //   * Stops: the sweep's list also carries operations a stop (platform, connection or
 //     installation), an ended lease or an expired one has cut off (`stopped`), stale or not.
 //     The sweep kills such a sandbox at once (its settlement destroys the token, so a job still
@@ -203,6 +207,17 @@ async function safely<T>(call: () => Promise<T>, unknown: T): Promise<T> {
   } catch {
     return unknown;
   }
+}
+/** Records each hold in turn; answers the reasons whose write did not commit. */
+async function recordHolds(
+  ledger: RuntimeLedger,
+  operationId: string,
+  reasons: readonly RuntimeUnknownReason[],
+): Promise<RuntimeUnknownReason[]> {
+  const unrecorded: RuntimeUnknownReason[] = [];
+  for (const reason of reasons)
+    if (!(await ledger.unknown(operationId, reason))) unrecorded.push(reason);
+  return unrecorded;
 }
 
 interface ResultOutput {
@@ -343,7 +358,10 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
                 (created.outcome === "unknown_effect" && created.broken === true)
               ? "reply_invalid"
               : "create_unknown";
-      await ledger.unknown(operationId, reason);
+      // The hold is retried once (review PR8-R1). If neither write commits, nothing settles
+      // the operation: it stays `sending`, and the stale sweep records it unknown before it
+      // kills a sandbox it finds (create_unknown), or when it finds none (not_found_unverified).
+      if (!(await ledger.unknown(operationId, reason))) await ledger.unknown(operationId, reason);
       return runtimeResult({ outcome: "unknown", code: reason, operationId });
     }
     const sandboxRef = created.sandboxRef;
@@ -579,18 +597,39 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
         continue;
       }
       if (found.outcome === "running" || found.outcome === "paused") {
-        if (found.outcome === "paused") await ledger.unknown(op.operationId, "paused_found");
+        // The holds this operation owes before it may settle `killed` (review PR8-R1), each
+        // written before the kill and retried once after it:
+        //   * create_unknown: a stale operation still `sending` has a sandbox but no recorded
+        //     create (a lost worker, or an unknown, broken, quota or billing create whose hold
+        //     write did not commit). A stopped operation that is not stale yet never owes it:
+        //     its create may still be in flight.
+        //   * paused_found: a paused sandbox breaks the profile.
+        // Until every one has committed it is never settled `killed` (which would end it with
+        // no hold): it stays open, and a later pass, finding no sandbox, records it unknown.
+        const owed: RuntimeUnknownReason[] = [];
+        if (op.stale && op.status === "sending") owed.push("create_unknown");
+        if (found.outcome === "paused") owed.push("paused_found");
+        let unrecorded = await recordHolds(ledger, op.operationId, owed);
         const killed: RuntimeKillResult = await safely(
           () => adapter.kill(found.sandboxRef, runtime.apiKey, runtimeTiming.statusMaxMs),
           { outcome: "unknown" },
         );
-        if (killed.outcome === "killed" && (await ledger.settle(op.operationId, "killed")))
+        if (killed.outcome === "killed" && unrecorded.length > 0)
+          unrecorded = await recordHolds(ledger, op.operationId, unrecorded);
+        if (
+          killed.outcome === "killed" &&
+          unrecorded.length === 0 &&
+          (await ledger.settle(op.operationId, "killed"))
+        )
           counts.killed++;
         else {
-          await ledger.unknown(
-            op.operationId,
-            killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
-          );
+          // A confirmed kill whose owed hold still did not commit gets no other record: the
+          // kill's reason would be wrong, and the next pass finds no sandbox.
+          if (killed.outcome !== "killed" || unrecorded.length === 0)
+            await ledger.unknown(
+              op.operationId,
+              killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
+            );
           counts.unknown++;
         }
       } else if (found.outcome === "not_found") {
