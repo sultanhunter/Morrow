@@ -387,6 +387,10 @@ test("P05.T01ab: hosted health needs the challenge capability; development does 
       // MORROW_MODEL_PROVIDER, the reviewed record is committed off).
       model: false,
       modelMode: "off",
+      // Build order PR 7: the computer needs the vault, the runtime switch and the E2B key;
+      // off here (no MORROW_RUNTIME_SWITCH, docs/decisions/runtime-staging.json is off).
+      computer: false,
+      computerMode: "off",
       // v1 PR 3: the apply switch needs the vault and MORROW_SHOPIFY_WRITE "on"; off here
       // (the reviewed record is committed off).
       shopifyWrite: "off",

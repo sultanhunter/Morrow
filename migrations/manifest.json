@@ -320,6 +320,27 @@
       "reviewRef": "docs/briefs/v1-connect-store.md"
     },
     {
+      "sequence": 41,
+      "file": "0041.disconnect-store-identity.sql",
+      "sha256": "9dc8c7035a62432ecb000a62a1d32aaf10720fbbd9a7d8424a550f7f9211d01c",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
+    },
+    {
+      "sequence": 42,
+      "file": "0042.disconnect-store-work.sql",
+      "sha256": "ae346a7bd5d2b6062f6ee718f98dd70a7fa47d46a917ea9eb41e31fd5f556e13",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-disconnect-store.md"
+    },
+    {
+      "sequence": 43,
+      "file": "0043.runtime-operations.sql",
+      "sha256": "5d9a6d7ef59acc0198c1a64ea2b3be78e89f3a8c501439e152aae7cb9573f153",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/runtime-computer-foundation.md"
+    },
+    {
       "sequence": 44,
       "file": "0044.catalog-review.sql",
       "sha256": "2a8bf9895ea51a7a5a5b42726ccf654b6b43aed5ad1f0b414b4378b9ad1fd5b0",

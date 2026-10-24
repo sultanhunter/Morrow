@@ -88,6 +88,27 @@ export interface ConnectionsView {
   readonly installations: readonly StoreConnectionView[];
   readonly installLink: InstallLinkView;
 }
+// "Disconnect store": GET /workspace/:ws/connections/:connectionId/disconnect (ids and codes
+// only; never the person's reason, a credential or a token).
+export interface ConnectionDisconnectView {
+  readonly connectionId: Id;
+  readonly storeId: Id;
+  readonly installationStatus: "linked" | "suspended" | "uninstalled";
+  /** The open stop on the connection: a person's disconnect, or an uninstall or scope change. */
+  readonly stop: {
+    readonly setBy: "human" | "system" | "operator";
+    readonly reasonCode: string;
+    readonly createdAt: string;
+  } | null;
+  /** What this person may do now (the server's kernel decided). */
+  readonly actions: { readonly disconnect: boolean };
+}
+/** POST .../disconnect: what the disconnect found, and whether the token is erased yet. */
+export interface DisconnectResultView {
+  readonly priorStateObserved: "active" | "already_stopped";
+  /** "pending": the store is disconnected; Morrow finishes erasing its token on its own. */
+  readonly credential: "destroyed" | "pending";
+}
 /** The store-link preview: the installation it links and the CSRF value apply sends back. */
 export interface StoreLinkPreviewView {
   readonly installationId: Id;

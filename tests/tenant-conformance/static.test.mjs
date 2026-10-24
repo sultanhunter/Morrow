@@ -136,6 +136,14 @@ const extraPolicies = {
     "(SESSION_USER = 'morrow_vault_broker'::name)",
     "(SESSION_USER = 'morrow_vault_broker'::name)",
   ],
+  // Build order PR 7 (0043): the runtime ledger, the broker's own login through its four
+  // vault definers only.
+  broker_runtime: [
+    "ALL",
+    "{morrow_work_command}",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+  ],
   broker_stripe: [
     "ALL",
     "{morrow_work_command}",

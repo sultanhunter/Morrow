@@ -713,8 +713,14 @@ test("AC04: gate 4 holds the Stripe vars to the switch; gate 6 its secrets; a mi
       mismatch.planted.cleanup();
     }
   }
-  // The committed state (off, fourteen names) and the switch on (sixteen) both deploy.
-  for (const options of [{}, { stripe: "on" }]) {
+  // The committed state (off, fourteen names) and the switch on (sixteen) both deploy, and so
+  // does (build order PR 7) a broker holding the E2B key the owner placed ahead of the runtime
+  // switch (`put-secret E2B_API_KEY --while-runtime-off`): it is optional while off.
+  for (const options of [
+    {},
+    { stripe: "on" },
+    { wrangler: { secrets: { broker: [...constants.brokerSecrets, "E2B_API_KEY"] } } },
+  ]) {
     const ok = await world({ ...options, environment: ciEnvironment() });
     try {
       const { result } = await ok.run(["deploy", "--ci"]);
@@ -723,6 +729,23 @@ test("AC04: gate 4 holds the Stripe vars to the switch; gate 6 its secrets; a mi
       assert.equal(result.outcome, "deployed");
     } finally {
       ok.planted.cleanup();
+    }
+  }
+  // An optional name never hides a missing or stray one.
+  for (const broker of [
+    [...constants.brokerSecrets.slice(1), "E2B_API_KEY"],
+    [...constants.brokerSecrets, "E2B_API_KEY", "STRAY_SECRET"],
+  ]) {
+    const mismatch = await world({
+      environment: ciEnvironment(),
+      wrangler: { secrets: { broker } },
+    });
+    try {
+      const { result } = await mismatch.run(["deploy", "--ci"]);
+      assert.equal(result.gates.brokerSecrets, "mismatch");
+      assert.deepEqual(deploys(mismatch), []);
+    } finally {
+      mismatch.planted.cleanup();
     }
   }
 });

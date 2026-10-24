@@ -17,7 +17,9 @@ export const workRoles = Object.freeze({
 // no api grants), tenant_or_platform (tenant rows, plus platform rows whose tenant keys
 // are both null; readable like tenant_readable, platform rows visible to every tenant).
 // `lease: true` adds the lease-context twin of the command policy (tenant_lease, through
-// current_lease()); `policies` names a table's extra, exactly-checked policies.
+// current_lease()); `commandRead: true` (build order PR 7, as in the S7 spec below) makes
+// tenant_command FOR SELECT, so no session definer writes the table; `policies` names a
+// table's extra, exactly-checked policies.
 // `content` classifies what a row may hold (P09.T05a, spine §11): "none" (ids, digests,
 // codes and times only), "workspace" (text people write, members in their workspace or
 // the operator in platform audit rows; never a store's content) or "store" (a store's
@@ -197,7 +199,7 @@ export const workTables = Object.freeze({
     lease: true,
     content: "none",
   },
-  // The owner's reason for "Stop AI work" is text a person writes.
+  // The owner's reason for "Stop AI work" and "Disconnect store" is text a person writes.
   kill_switch_records: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
@@ -290,6 +292,28 @@ export const workTables = Object.freeze({
     ],
     commandDelete: "connector_redact",
     content: "store",
+  },
+  // Build order PR 7 (0043 runtime-operations): the computer's operation ledger (one row per
+  // sandbox, tenant-keyed, its run a composite parent), the runtime holds and the platform's
+  // caps in use. Ids, digests, codes and times only. They live here, beside run_model_calls,
+  // not in morrow_vault, which holds sealed secrets only (lab:spine-foundation V3). The
+  // broker's login reaches them only through its four vault definers (broker_runtime: the
+  // broker's session user); the operations' session template is read-only
+  // (`commandRead: true`, tenant_command FOR SELECT, as on 0029's ledger), so no session
+  // definer writes them; only the owner's operator function lifts a hold.
+  runtime_operations: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces", "runs"],
+    policies: ["broker_runtime"],
+    commandRead: true,
+    content: "none",
+  },
+  runtime_holds: { class: "platform", parents: [], policies: ["broker_runtime"], content: "none" },
+  runtime_capacity: {
+    class: "platform",
+    parents: [],
+    policies: ["broker_runtime"],
+    content: "none",
   },
 });
 
@@ -557,6 +581,15 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_work_api"],
     command: "model_default.revise",
   },
+  // v1 PR 2, "Disconnect store" (disconnect-store-work): the connection commands' replay
+  // check, the session tenant's connection target (ids and status) and the disconnect.
+  "begin_connection_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "connection_target(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_store_disconnect(text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "connection.disconnect",
+  },
   // The agent kernel's facts under a run lease (ids and grant payloads; the kernel decides).
   "delegation_facts(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   // M3 PR-2 listings runs. Pure functions of the CHECKs.
@@ -611,6 +644,11 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_runtime_executor"],
   },
   "run_finish(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  // Build order PR 7 (0043 runtime-operations): the ledger's guard, the caps in code (the
+  // command role, inside the broker's vault definers) and the operator's hold lift (nobody).
+  "runtime_guard()": { kind: "trigger", grantees: [] },
+  "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "runtime_hold_lift(text,text,text)": { kind: "operator", grantees: [] },
   // v1 PR 3 (catalog-review, catalog-apply): the review screen's two reads, the claim and
   // the per-product dispatch check (the api), the pure helpers over a stored proposal and
   // its claimed parameters, and the read-back verdicts' CHECK.
@@ -1257,6 +1295,16 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // Build order PR 7 (0043 runtime-operations): the runtime ledger's send mark, create record,
+  // settlement and the sweep's ids-only list (the broker's login). The ledger's tables, guard,
+  // caps and hold lift are morrow_work's (workTables, workFunctions).
+  "runtime_operation_begin(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // v1 PR 3 (catalog-apply): the gateway's apply (resolve, fence, close) and read-back
   // (resolve, record), keyed by one operation id, and their revisable INVOKER helpers (the
   // context settings and the send refusal), which only the definers above call.
@@ -1398,6 +1446,11 @@ export const executorLogins = Object.freeze({
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",
+    // Build order PR 7 (0043 runtime-operations).
+    "morrow_vault.runtime_operation_begin(text,text,text,text,text)",
+    "morrow_vault.runtime_operation_created(text,text)",
+    "morrow_vault.runtime_operation_settle(text,text,text)",
+    "morrow_vault.runtime_operations_open(text)",
     // v1 PR 3 (catalog-apply).
     "morrow_vault.catalog_reconcile_record(text,text,text,text,text)",
     "morrow_vault.catalog_reconcile_resolve(text)",

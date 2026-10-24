@@ -12,10 +12,12 @@
 // M2 PR-1 adds the trust model v1 entrypoints (ConnectorBroker, RuntimeBroker): each
 // serves only its own role lease and health, and a bad vault KEK disables the vault only.
 // M2 PR-2 binds the connector bundle to the broker's ConnectorBroker: unconfigured it is
-// deny-all; configured, syntactic refusals reach no database, the Shopify methods exist on
-// ConnectorBroker only, and an unreachable vault login fails closed. The PR-2 review adds
-// the connector's committed per-address ingress limits: no address fails closed and the
-// limit's next request is 429 with no broker call.
+// deny-all; configured, syntactic refusals reach no database, the Shopify install methods
+// exist on ConnectorBroker only, and an unreachable vault login fails closed. The PR-2 review
+// adds the connector's committed per-address ingress limits: no address fails closed and the
+// limit's next request is 429 with no broker call. v1 PR 2 ("Disconnect store") gives
+// ApiBroker the token's destruction with its reason fixed: the installation alone, any other
+// shape held before the vault, an unreachable vault login fails closed; never RuntimeBroker.
 // M5 PR-1 adds the four ApiBroker Stripe methods (held without the capability; with it,
 // an unreachable vault login holds every write before any Stripe request) and the unbound
 // api's billing and webhook paths. The Stripe switch (owner decision (c), 2026-10-21): with
@@ -1429,7 +1431,7 @@ await instance(
         MORROW_DATABASE_BINDING_JSON: JSON.stringify(databaseBinding),
       }),
     },
-    async ({ mf, observed, probe }) => {
+    async ({ mf, observed, probe, events }) => {
       const health = await connectorFetch(mf, "/healthz");
       check(
         "M2PR2:configured_healthz_ready",
@@ -1535,21 +1537,69 @@ await instance(
           json(refused.value)?.verdict === "refused" &&
           json(refused.value).shop === null,
       );
+      // The launch, install and webhook methods are the connector's alone; the orchestrator
+      // has none of the four, the token's destruction included.
       const others = [];
-      for (const binding of ["BROKER", "BROKER_RUNTIME"])
-        for (const op of [
-          "shopifyLaunchVerify",
-          "shopifyInstallComplete",
-          "shopifyWebhookVerify",
-          "shopifyCredentialDestroy",
-        ])
-          others.push((await probe({ op, binding, args: [] }))[0]);
+      for (const [binding, ops] of [
+        ["BROKER", ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"]],
+        [
+          "BROKER_RUNTIME",
+          [
+            "shopifyLaunchVerify",
+            "shopifyInstallComplete",
+            "shopifyWebhookVerify",
+            "shopifyCredentialDestroy",
+          ],
+        ],
+      ])
+        for (const op of ops) others.push((await probe({ op, binding, args: [] }))[0]);
       check(
-        "M2PR2:api_and_runtime_entrypoints_have_no_shopify_method",
-        others.every((r) => r.ok === false && r.name === "TypeError"),
+        "M2PR2:api_and_runtime_entrypoints_have_no_shopify_install_method",
+        others.length === 7 && others.every((r) => r.ok === false && r.name === "TypeError"),
+        { others },
+      );
+      // v1 PR 2 ("Disconnect store", ADR-0022 items 7 and 13): ApiBroker gains the api's half
+      // of the token's destruction over the real RPC binding. It takes the installation alone
+      // (the broker fixes the reason `disconnected`): no argument, a reason in the connector's
+      // shape or a malformed id is held as INPUT_INVALID before the vault, and a well-formed
+      // id meets the unreachable vault login (the lab answers it 503) and fails closed.
+      const destroyLogs = () =>
+        events("morrow_broker").filter(
+          (row) => row.entrypoint === "ApiBroker" && row.method === "shopifyCredentialDestroy",
+        );
+      const beforeApiDestroy = observed.brokerNeon;
+      const apiRefused = [];
+      for (const args of [[], ["lab-installation-1", "uninstalled"], ["bad id"]])
+        apiRefused.push(
+          (await probe({ op: "shopifyCredentialDestroy", binding: "BROKER", args }))[0],
+        );
+      const afterApiRefused = observed.brokerNeon;
+      const [apiDestroy] = await probe({
+        op: "shopifyCredentialDestroy",
+        binding: "BROKER",
+        args: ["lab-installation-1"],
+      });
+      const apiCodes = destroyLogs().map((row) => row.code);
+      check(
+        "V1PR2:api_destroy_takes_the_installation_alone_and_fails_closed",
+        apiRefused.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
+          afterApiRefused === beforeApiDestroy &&
+          apiDestroy.ok === false &&
+          apiDestroy.message === "BROKER_HELD" &&
+          observed.brokerNeon > afterApiRefused &&
+          JSON.stringify(apiCodes) ===
+            JSON.stringify([
+              "INPUT_INVALID",
+              "INPUT_INVALID",
+              "INPUT_INVALID",
+              "CAPABILITY_UNAVAILABLE",
+            ]) &&
+          observed.connectorOutbound === 0,
+        { apiRefused, apiDestroy, apiCodes },
       );
       // M2 PR-3: shopifyRead on ApiBroker and RuntimeBroker only (a malformed lease is held
-      // before any vault read); the token's destruction on ConnectorBroker only.
+      // before any vault read); the connector's token destruction (any recorded end) holds a
+      // malformed id. The api's fixed-reason half is V1PR2's check above.
       const reads = [];
       for (const binding of ["BROKER", "BROKER_RUNTIME"])
         reads.push(
@@ -1572,7 +1622,7 @@ await instance(
         args: ["bad id", "uninstalled"],
       });
       check(
-        "M2PR3:shopify_read_on_api_and_runtime_only_and_destroy_on_the_connector_only",
+        "M2PR3:shopify_read_on_api_and_runtime_only_and_destroy_on_the_connector",
         reads.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
           connectorRead.ok === false &&
           connectorRead.name === "TypeError" &&

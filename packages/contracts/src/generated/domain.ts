@@ -338,7 +338,8 @@ export type CoreV1_1_HumanActorRef = { "kind": "human"; "principalId": Core_Id; 
 export type CoreV1_1_KillSwitchControl = { "reason": string; "sourceProposalRef": (Core_ProposalRef | null); };
 export type CoreV1_1_CampaignRef = { "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "connectionId": Core_Id; "kind": "campaign"; "id": Core_Id; };
 export type CoreV1_1_CampaignRefs = Array<CoreV1_1_CampaignRef>;
-export type CoreV1_1_KillSwitchRecord = { "schemaVersion": 1; "id": Core_Id; "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "revision": 1; "createdAt": Core_UtcTime; "capabilityId": "ads.campaign.pause" | "agents.installation.disable" | "governance.membership.revoke" | "governance.connection.disconnect" | "agents.release.revoke"; "actor": CoreV1_1_HumanActorRef; "control": CoreV1_1_KillSwitchControl; "targets": Array<Core_ResourceRef>; "commandId": Core_Id; "requestDigest": Core_Digest; "priorStateObserved": "active" | "already_stopped"; };
+export type CoreV1_1_KillSwitchConnectionTarget = { "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": Core_Id; "connectionId": Core_Id; "kind": "connection"; "id": Core_Id; };
+export type CoreV1_1_KillSwitchRecord = { "schemaVersion": 1; "id": Core_Id; "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "revision": 1; "createdAt": Core_UtcTime; "capabilityId": "ads.campaign.pause" | "agents.installation.disable" | "governance.membership.revoke" | "governance.connection.disconnect" | "agents.release.revoke"; "actor": CoreV1_1_HumanActorRef; "control": CoreV1_1_KillSwitchControl; "targets": Array<(Core_ResourceRef | CoreV1_1_KillSwitchConnectionTarget)>; "commandId": Core_Id; "requestDigest": Core_Digest; "priorStateObserved": "active" | "already_stopped"; };
 export type CoreV1_1_NonNegativeDecimal = string;
 export type CoreV1_1_NonNegativeMoney = { "amount": CoreV1_1_NonNegativeDecimal; "currency": Core_Currency; };
 export type CoreV1_1_RiskClass = "internal" | "external" | "communication" | "financial" | "access_change";
@@ -634,6 +635,8 @@ export type CapabilityV1_1_governance_mail_identity_revise_input = (unknown & un
 export type CapabilityV1_1_governance_mail_identity_revise_output = { "revision": Core_Revision; };
 export type CapabilityV1_1_workspace_routine_revoke_input = { "installationId": Core_Id; "mandateId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_workspace_routine_revoke_output = { "revokedAt": Core_UtcTime; "pendingOperations": Core_IdList; };
+export type CapabilityV1_1_runtime_execution_use_input = { "runId": Core_Id; "inputs": Core_ArtifactList; };
+export type CapabilityV1_1_runtime_execution_use_output = { "operationId": Core_Id; "outputs": Core_ArtifactList; "costReceipt": Core_EvidenceRef; };
 export type BillingV1_1_BillingRoute = "morrow_direct" | "shopify_app_pricing";
 export type BillingV1_1_PaymentMode = "live" | "test";
 export type BillingV1_1_StripePaymentKey = string;
@@ -791,6 +794,7 @@ export interface CurrentDefinitions {
   "InstallLinkOffer": CoreV1_1_InstallLinkOffer;
   "InstallationStatus": Core_InstallationStatus;
   "InventoryList": Core_InventoryList;
+  "KillSwitchConnectionTarget": CoreV1_1_KillSwitchConnectionTarget;
   "KillSwitchControl": CoreV1_1_KillSwitchControl;
   "KillSwitchExecutedPayload": CoreV1_1_KillSwitchExecutedPayload;
   "KillSwitchRecord": CoreV1_1_KillSwitchRecord;
@@ -1168,6 +1172,7 @@ export type Current_InboxSubject = CoreV1_1_InboxSubject;
 export type Current_InstallLinkOffer = CoreV1_1_InstallLinkOffer;
 export type Current_InstallationStatus = Core_InstallationStatus;
 export type Current_InventoryList = Core_InventoryList;
+export type Current_KillSwitchConnectionTarget = CoreV1_1_KillSwitchConnectionTarget;
 export type Current_KillSwitchControl = CoreV1_1_KillSwitchControl;
 export type Current_KillSwitchExecutedPayload = CoreV1_1_KillSwitchExecutedPayload;
 export type Current_KillSwitchRecord = CoreV1_1_KillSwitchRecord;
@@ -1606,6 +1611,7 @@ export interface CapabilityBodies {
   "agents.release.evaluate": { input: Capability_agents_release_evaluate_input; output: Capability_agents_release_evaluate_output; };
   "agents.release.publish": { input: Capability_agents_release_publish_input; output: Capability_agents_release_publish_output; };
   "agents.release.revoke": { input: CapabilityV1_1_agents_release_revoke_input; output: Capability_agents_release_revoke_output; };
+  "runtime.execution.use": { input: CapabilityV1_1_runtime_execution_use_input; output: CapabilityV1_1_runtime_execution_use_output; };
 }
 export type CapabilityId = keyof CapabilityBodies;
 export type CapabilityInput<K extends CapabilityId> = CapabilityBodies[K]["input"];

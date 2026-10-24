@@ -423,7 +423,7 @@ test("AC29: 20 concurrent first calls share one initialisation; a failure stays 
   for (const value of [undefined, null, "env"]) assert.equal(await brokerHealth(value), false);
 });
 
-test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 404 default", async (t) => {
+test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 404 default", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "morrow-broker-entry-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bundled = await build({
@@ -452,13 +452,15 @@ test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 4
   writeFileSync(file, bundled.outputFiles[0].text);
   const module = await import(pathToFileURL(file).href);
   // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods; M2
-  // PR-3 shopifyRead (the catalogue routes' reads under a read lease); v1 PR 3 the gateway's
-  // apply and read-back of one operation.
+  // PR-3 shopifyRead (the catalogue routes' reads under a read lease); "Disconnect store"
+  // shopifyCredentialDestroy (one argument: the reason is fixed to `disconnected`); v1 PR 3
+  // the gateway's apply and read-back of one operation.
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
     "challengeVerify",
     "constructor",
     "health",
     "neonLease",
+    "shopifyCredentialDestroy",
     "shopifyProductApply",
     "shopifyProductReconcile",
     "shopifyRead",
@@ -470,7 +472,9 @@ test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 4
   ]);
   // Trust model v1: one class per caller, exactly its own methods. M2 PR-2 gives the
   // connector its three Shopify methods and M2 PR-3 the token's destruction; M2 PR-3 gives
-  // the orchestrator shopifyRead (one product under a run lease) and M3 PR-2 modelRespond.
+  // the orchestrator shopifyRead (one product under a run lease) and M3 PR-2 modelRespond;
+  // build order PR 7 the computer's runtimeExecute and runtimeSweep (held while the runtime
+  // switch is off, tests/broker-runtime.test.mjs).
   assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
     "constructor",
     "health",
@@ -485,6 +489,8 @@ test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 4
     "health",
     "modelRespond",
     "neonLease",
+    "runtimeExecute",
+    "runtimeSweep",
     "shopifyRead",
   ]);
   assert.deepEqual(Object.keys(module).sort(), [
@@ -518,6 +524,10 @@ test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 4
   const readLease = "00000000-0000-4000-8000-000000000002";
   await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}"));
   await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}", 1000, 1));
+  // "Disconnect store": the api's token destruction takes the installation alone; a reason
+  // (the connector's shape) is refused, so the api can never name another end.
+  await failure(entry.shopifyCredentialDestroy());
+  await failure(entry.shopifyCredentialDestroy("installation_1", "uninstalled"));
   // v1 PR 3: the apply and the read-back take exactly an operation id and a budget.
   await failure(entry.shopifyProductApply(operation));
   await failure(entry.shopifyProductApply(operation, 1000, 1));
@@ -525,7 +535,7 @@ test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 4
   await failure(entry.shopifyProductReconcile(operation, 1000, 1));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    Array(16).fill("INPUT_INVALID"),
+    Array(18).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
@@ -569,15 +579,13 @@ test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 4
     logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
     Array(7).fill(["ConnectorBroker", "INPUT_INVALID"]),
   );
-  for (const name of [
-    "shopifyLaunchVerify",
-    "shopifyInstallComplete",
-    "shopifyWebhookVerify",
-    "shopifyCredentialDestroy",
-  ]) {
+  for (const name of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"]) {
     assert.equal(typeof new module.ApiBroker({}, env)[name], "undefined");
     assert.equal(typeof new module.RuntimeBroker({}, env)[name], "undefined");
   }
+  // The token's destruction is the connector's (any recorded end) and the api's (a person's
+  // disconnect only); never the orchestrator's.
+  assert.equal(typeof new module.RuntimeBroker({}, env).shopifyCredentialDestroy, "undefined");
   // shopifyRead is the api's and the orchestrator's, each with its own queries, never the
   // connector's; the orchestrator's checks its arity and refuses the api's queries.
   assert.equal(typeof connector.shopifyRead, "undefined");
@@ -614,6 +622,31 @@ test("AC10: ApiBroker has exactly eleven prototype methods, arity checks and a 4
       ["RuntimeBroker", "shopifyRead", "INPUT_INVALID"],
       ["RuntimeBroker", "shopifyRead", "INPUT_INVALID"],
       ["ApiBroker", "shopifyRead", "INPUT_INVALID"],
+    ],
+  );
+  // Build order PR 7: the computer's two methods are the orchestrator's alone, each with its
+  // exact arity; with the runtime switch off (this env carries no MORROW_RUNTIME_SWITCH) a
+  // well-formed call holds RUNTIME_UNAVAILABLE.
+  for (const name of ["runtimeExecute", "runtimeSweep"]) {
+    assert.equal(typeof entry[name], "undefined", name);
+    assert.equal(typeof connector[name], "undefined", name);
+  }
+  logs.length = 0;
+  await failure(runtime.runtimeExecute(readLease, 1, "{}"));
+  await failure(runtime.runtimeExecute(readLease, 1, "{}", 60000, 1));
+  await failure(runtime.runtimeSweep());
+  await failure(runtime.runtimeSweep(30000, 1));
+  await failure(runtime.runtimeExecute(readLease, 1, "{}", 60000));
+  await failure(runtime.runtimeSweep(30000));
+  assert.deepEqual(
+    logs.map((line) => [JSON.parse(line).method, JSON.parse(line).code]),
+    [
+      ["runtimeExecute", "INPUT_INVALID"],
+      ["runtimeExecute", "INPUT_INVALID"],
+      ["runtimeSweep", "INPUT_INVALID"],
+      ["runtimeSweep", "INPUT_INVALID"],
+      ["runtimeExecute", "RUNTIME_UNAVAILABLE"],
+      ["runtimeSweep", "RUNTIME_UNAVAILABLE"],
     ],
   );
   await failure(entry.neonLease(neonLeaseNamespace(parsed, "morrow_runtime_executor")));

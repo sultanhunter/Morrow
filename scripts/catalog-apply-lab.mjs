@@ -24,6 +24,9 @@
 //      nothing; a person who lost the execute grant writes nothing;
 //   S  stops: "Stop AI work" before the apply refuses the claim and writes nothing; a stop or
 //      a disconnect between the claim and the write closes the operation with nothing sent;
+//      and, last, v1 PR 2's real "Disconnect store" (its connections handler and the
+//      broker's token destruction) between the claim and the write: nothing is sent, a later
+//      approved proposal is refused at its claim, and the token is erased (S4-S6);
 //   C  a product changed in Shopify since the draft is refused (source_changed), nothing is
 //      written and the other products still apply;
 //   O  Shopify's answers: userErrors (failed, nothing applied), THROTTLED then success (one
@@ -45,16 +48,20 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
+import { disconnectFields } from "../packages/policy/src/store-link-template.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 import { createAgentsApiHandler } from "../packages/work/src/agents/http.ts";
 import { createWorkApiHandler } from "../packages/work/src/http.ts";
 import { createRunsApiHandler } from "../packages/work/src/runs/http.ts";
 import { createReviewApiHandler } from "../packages/work/src/review/http.ts";
+import { createConnectionsApiHandler } from "../packages/work/src/connections/http.ts";
 import { listingsRun, RunStepRetry } from "../packages/work/src/runs/workflow.ts";
 import { createRuntimeAttempt, runLeaseStep } from "../packages/work/src/runtime/leases.ts";
+import { createBrokerCredentialDestroyer } from "../apps/api/src/broker-client.ts";
 import { brokerCapabilities } from "../apps/broker/src/capabilities.ts";
 import { createClaudeAdapter } from "../apps/broker/src/claude-adapter.ts";
 import { createModelGateway } from "../apps/broker/src/model-gateway.ts";
+import { createShopifyBroker } from "../apps/broker/src/shopify-install.ts";
 import { createShopifyWriter } from "../apps/broker/src/shopify-write.ts";
 import { runVaultTransactionWithDriver } from "../apps/broker/src/vault-database.ts";
 import { sealVaultRecord, vaultBytesHex } from "../apps/broker/src/vault.ts";
@@ -1807,6 +1814,136 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
       reread.body,
     );
   }
+
+  // ---------------------------------------------------------------------------
+  phase("disconnect_store");
+  {
+    // v1 PR 2's "Disconnect store" (#53) through its own handler as the api login, with the
+    // broker's destruction of the token over the vault login (the ApiBroker binding as
+    // createBrokerCredentialDestroyer sees it). It runs last: nothing lifts a person's
+    // connection stop, so no later phase could use this store. The founder holds store-link
+    // template v2's disconnect grant on S (sim: owner-seeded as the link would issue it).
+    db.admin(
+      storeGrant(P.A, "governance.connection.disconnect", ["execute"], [...disconnectFields]),
+    );
+    const shopifyBroker = createShopifyBroker({
+      transaction,
+      fetch: (url, init) => shop.fetch(url, init),
+      now: () => Date.now(),
+    });
+    const destroyCalls = [];
+    const connections = createConnectionsApiHandler({
+      origin: workFixtureOrigin,
+      connector: db.connector(),
+      now: () => Date.now(),
+      credentials: createBrokerCredentialDestroyer({
+        async shopifyCredentialDestroy(installationId) {
+          destroyCalls.push(installationId);
+          return quiet(() =>
+            shopifyBroker.credentialDestroy(brokerEnv, installationId, "disconnected"),
+          );
+        },
+      }),
+    });
+    const disconnect = async () => {
+      console.log = () => {};
+      try {
+        const response = await connections.fetch(
+          new Request(`${workFixtureOrigin}/workspace/${W}/connections/${C}/disconnect`, {
+            method: "POST",
+            headers: {
+              Cookie: "__Host-morrow_session=" + P.A.secret,
+              "Sec-Fetch-Site": "same-origin",
+              "Sec-Fetch-Mode": "cors",
+              "Sec-Fetch-Dest": "empty",
+              Origin: workFixtureOrigin,
+              "Content-Type": "application/json",
+              "X-Morrow-Request": "1",
+              "Idempotency-Key": randomUUID(),
+            },
+            body: JSON.stringify({
+              control: { reason: "The store is moving to a new owner", sourceProposalRef: null },
+            }),
+          }),
+          {},
+          ctx,
+        );
+        return { status: response.status, body: await response.json() };
+      } finally {
+        console.log = print;
+      }
+    };
+    // Two approved proposals, drafted and decided while the store is still connected.
+    const pD1 = [newProduct(), newProduct()];
+    const XD1 = await draft(pD1, ["title"]);
+    const refsD1 = await approveAll(XD1);
+    const pD2 = [newProduct()];
+    const XD2 = await draft(pD2, ["title"]);
+    const refsD2 = await approveAll(XD2);
+    // S4: the person disconnects the store between the claim and the first write.
+    let disconnected = null;
+    hooks.beforeApply = async () => {
+      hooks.beforeApply = null;
+      disconnected = await disconnect();
+    };
+    const mid = await apply(P.A, XD1, refsD1);
+    const rowsD1 = ops(XD1);
+    check(
+      "S4:a_persons_disconnect_between_the_claim_and_the_write_sends_nothing",
+      disconnected?.status === 200 &&
+        disconnected.body?.status === "disconnected" &&
+        disconnected.body.connectionId === C &&
+        disconnected.body.installationId === INSTALLATION &&
+        disconnected.body.endReason === "disconnected" &&
+        mid.status === 200 &&
+        rowsD1.length === 2 &&
+        rowsD1[0].status === "failed" &&
+        rowsD1[0].reason === "stopped" &&
+        rowsD1[0].attempt === 0 &&
+        rowsD1[1].status !== "verified" &&
+        rowsD1[1].status !== "uncertain" &&
+        pD1.every((n) => shop.updates(String(n)) === 0),
+      { disconnected, mid: mid.body, rowsD1 },
+    );
+    // S5: another approved proposal on the disconnected store is refused at its claim and
+    // records nothing.
+    const before = footprint();
+    const callsBefore = shop.calls.length;
+    const refused = await apply(P.A, XD2, refsD2);
+    check(
+      "S5:after_a_disconnect_an_approved_proposal_is_refused_at_its_claim",
+      refused.status === 409 &&
+        refused.body.code === "conflict" &&
+        footprint() === before &&
+        shop.calls.length === callsBefore &&
+        shop.updates(String(pD2[0])) === 0,
+      { refused: refused.body },
+    );
+    // S6: the installation ended as a person's disconnect, the person's connection stop
+    // stands, and the broker erased the token, so no later send can find one.
+    const installationRow = one(
+      `SELECT status,suspended_reason FROM morrow_identity.store_installations WHERE id=${literal(INSTALLATION)}`,
+    );
+    const credentialRow = one(
+      `SELECT status,wrapped_key IS NULL AND sealed_value IS NULL AS erased,destroy_reason FROM morrow_vault.credentials WHERE subject_id=${literal(INSTALLATION)} ORDER BY version DESC LIMIT 1`,
+    );
+    const stopRow = one(
+      `SELECT set_by_kind,reason_code,lifted_at IS NULL AS active FROM morrow_work.stop_controls WHERE scope='connection' AND target_id=${literal(C)} AND set_by_kind='human'`,
+    );
+    check(
+      "S6:the_disconnect_ends_the_installation_and_erases_the_token",
+      installationRow?.status === "suspended" &&
+        installationRow.suspended_reason === "disconnected" &&
+        credentialRow?.status === "destroyed" &&
+        credentialRow.erased === true &&
+        credentialRow.destroy_reason === "disconnected" &&
+        stopRow?.reason_code === "human_disconnect" &&
+        stopRow.active === true &&
+        destroyCalls.length === 1 &&
+        destroyCalls[0] === INSTALLATION,
+      { installationRow, credentialRow, stopRow, destroyCalls },
+    );
+  }
   return { checks, failures, retries };
 }
 
@@ -1947,7 +2084,7 @@ async function main() {
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The review handler and the broker's writer run in Node over psql connectors (morrow_api_worker, morrow_runtime_executor, morrow_vault_broker), not in workerd over the Neon transport; the ApiBroker RPC is a direct call.",
       "Shopify is an in-process stand-in shaped from Shopify's documentation (productUpdate, the product read-back, THROTTLED and userErrors); its reformatting of tags and HTML is a stand-in for the live shapes, which the owner's first applies check.",
-      "M5's billing records, the store's sealed token and the disconnect's system connection stop are owner-seeded with the triggers off (sim).",
+      "M5's billing records, the store's sealed token and S3's system connection stop are owner-seeded with the triggers off (sim); S4-S6 disconnect through v1 PR 2's real handler and the broker's vault definer, with the founder's disconnect grant owner-seeded as store-link template v2 would issue it.",
     ],
   });
   if (result.failures.length) {

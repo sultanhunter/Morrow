@@ -20,6 +20,7 @@ import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
 import {
   createBrokerApplyPort,
   createBrokerChallengeVerifier,
+  createBrokerCredentialDestroyer,
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
   createBrokerSessionPageReader,
@@ -27,6 +28,7 @@ import {
   createBrokerStripe,
 } from "./broker-client.js";
 import type { CatalogApiDependencies } from "../../../packages/work/src/catalog/http.js";
+import type { ConnectionsApiDependencies } from "../../../packages/work/src/connections/http.js";
 import {
   mapApiEnvironment,
   type ApiApplyMode,
@@ -156,6 +158,13 @@ export function composeApiDependencies(
     applyOpen: applyMode === "on",
     broker: createBrokerApplyPort(broker),
   });
+  // "Disconnect store": the connection routes on the same origin and work login, with the
+  // broker's destruction of the disconnected installation's token behind the ApiBroker
+  // binding. No switch: a stop is always available (ADR-0005), whatever else is off.
+  const connections: ConnectionsApiDependencies = Object.freeze({
+    ...work,
+    credentials: createBrokerCredentialDestroyer(broker),
+  });
   return Object.freeze({
     dependencies,
     work,
@@ -164,6 +173,7 @@ export function composeApiDependencies(
     catalog,
     runs,
     review,
+    connections,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -204,6 +214,7 @@ function select(env: unknown): Selected {
           composed.catalog,
           composed.runs,
           composed.review,
+          composed.connections,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         session: createSessionLimit(mapped.guard.limiters?.session ?? null),

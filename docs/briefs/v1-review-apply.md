@@ -47,6 +47,7 @@ Non-goals: Undo and "approve several at once" (PR 4); a product picker; the Sunr
 - [x] Digest binding, edits void approvals, a derived approval applies only its selection (`lab:catalog-apply` D1–D6; `catalog-apply.test.mjs`).
 - [x] A product changed since the draft is not written (C1); the source digest equals the draft's (unit).
 - [x] Stop AI work before the apply, a stop and a disconnect between the claim and the write (S1–S3).
+- [x] After the merge with #53: v1 PR 2's real "Disconnect store" (its connections handler and the broker's token destruction) between the claim and the write sends nothing, a later approved proposal is refused at its claim, and the token is erased (`lab:catalog-apply` S4–S6, local 2026-10-24).
 - [x] Shopify's answers: userErrors, THROTTLED then success, 401, a 5xx and a lost reply after applying, an edit at the same moment, reformatting, a lost reply that never applied (O1–O9, N1; unit classification table).
 - [x] A replay, a second tab and another claimant write nothing more; lost execute writes nothing (A5–A7).
 - [x] Tenant isolation of review records and operations (V3, A5, O9; the tenant-conformance registry, S1–S8, P1).

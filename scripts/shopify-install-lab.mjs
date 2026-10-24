@@ -914,7 +914,10 @@ ROLLBACK;`,
         linked.status === "linked" &&
         linked.has_link &&
         linked.has_time &&
-        linkGrants.length === 4 &&
+        // Store-link template v2: five rows ("Disconnect store", the ADR-0022 item 3
+        // amendment of 2026-10-22).
+        linkGrants.length === storeLinkGrantTemplate.length &&
+        storeLinkGrantTemplate.length === 5 &&
         linkGrants.every(
           (g) =>
             validateCurrentDefinition("Grant", g) &&
@@ -986,7 +989,7 @@ ROLLBACK;`,
         db.rows(
           `SELECT count(*)::int AS n FROM morrow_identity.grants WHERE payload->'issuedBy'->>'principalId'='morrow.linking'`,
           { role: "morrow_identity_owner" },
-        )[0].n === 4,
+        )[0].n === storeLinkGrantTemplate.length,
     );
     // The workspace's shared read bridge: ids and states only.
     const bridge = db.rows(
@@ -1106,7 +1109,7 @@ VALUES(${literal("hand_" + suffix)},${literal(p.org)},${literal(ws)},${literal(p
         db.rows(
           `SELECT count(*)::int AS n FROM morrow_identity.grants WHERE payload->'issuedBy'->>'principalId'='morrow.linking'`,
           { role: "morrow_identity_owner" },
-        )[0].n === 4,
+        )[0].n === storeLinkGrantTemplate.length,
     );
     const neverBound = db.rows(
       `SELECT shopify_bound_at IS NULL AS unbound FROM morrow_billing.workspace_billing_routes`,
@@ -1412,7 +1415,8 @@ UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='t
         liveLink.status === 200 &&
         liveApplied?.outcome === "applied" &&
         liveInstallations()[0].status === "linked" &&
-        liveGrants === 4 &&
+        // Store-link template v2 ("Disconnect store"): the live link issues its five rows.
+        liveGrants === storeLinkGrantTemplate.length &&
         foreignLive.status === 401,
       {
         offer: liveOffer.body.installLink,

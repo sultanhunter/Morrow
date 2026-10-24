@@ -4,7 +4,9 @@ import type {
   AccountOverviewView,
   AnswerView,
   ApplyResultView,
+  ConnectionDisconnectView,
   ConnectionsView,
+  DisconnectResultView,
   GoalView,
   Id,
   ListingsAgentView,
@@ -133,7 +135,17 @@ export interface WorkspacePort {
   };
   readonly people: { list(ws: Id): Promise<Outcome<readonly PersonRef[]>> }; // not_in_build (§4.14)
   // M2 PR-2: the workspace's store connections and the install-link offer.
-  readonly connections: { list(ws: Id): Promise<Outcome<ConnectionsView>> };
+  readonly connections: {
+    list(ws: Id): Promise<Outcome<ConnectionsView>>;
+    /** "Disconnect store": the connection's state and whether this person may disconnect. */
+    disconnectStatus(ws: Id, connectionId: Id): Promise<Outcome<ConnectionDisconnectView>>;
+    /** "Disconnect store": a person's kill switch on the whole store, with their reason. */
+    disconnect(
+      ws: Id,
+      connectionId: Id,
+      c: Command<{ reason: string }>,
+    ): Promise<Outcome<DisconnectResultView>>;
+  };
   // M2 PR-2 (P05.T03b routes, the P09.T02a issuer behind preview): link the store an install
   // continuation names. The handoff token is the fragment the connector redirect carried;
   // it lives in memory only. All three reuse the handoff's one command key; apply also
@@ -264,6 +276,8 @@ export const portMethods = [
   "work.getAnswer",
   "people.list",
   "connections.list",
+  "connections.disconnectStatus",
+  "connections.disconnect",
   "storeLinks.preview",
   "storeLinks.apply",
   "storeLinks.status",

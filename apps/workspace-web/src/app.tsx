@@ -661,7 +661,11 @@ export function guardPort(
     },
     work,
     people: { list: watch(port.people.list.bind(port.people), first) },
-    connections: { list: watch(port.connections.list.bind(port.connections), first) },
+    connections: {
+      list: watch(port.connections.list.bind(port.connections), first),
+      disconnectStatus: watch(port.connections.disconnectStatus.bind(port.connections), first),
+      disconnect: watch(port.connections.disconnect.bind(port.connections), first),
+    },
     storeLinks: {
       preview: watch(port.storeLinks.preview.bind(port.storeLinks), first),
       apply: watch(port.storeLinks.apply.bind(port.storeLinks), first),

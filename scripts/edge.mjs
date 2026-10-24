@@ -26,6 +26,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -625,9 +626,17 @@ export function edgePlacementRegion(regionId) {
 // M5: while the staging Stripe switch is on, the staging api and broker also carry its vars
 // (edgeStripeVarNames); while it is off, neither has them. M3 PR-2: likewise the
 // model-provider switch's vars (edgeModelVarNames) on the staging api, broker and
-// orchestrator. v1 PR 3: likewise the apply switch's var (edgeApplyVarNames) on the staging
-// api and broker.
-export function edgeVarNames(worker, environment, stripe = "off", model = "off", apply = "off") {
+// orchestrator. Build order PR 7: the runtime switch's var (edgeRuntimeVarNames) on the
+// staging broker while it is on or cleanup-only. v1 PR 3: the apply switch's var
+// (edgeApplyVarNames) on the staging api and broker.
+export function edgeVarNames(
+  worker,
+  environment,
+  stripe = "off",
+  model = "off",
+  runtime = "off",
+  apply = "off",
+) {
   const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
   if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
   if (environment !== "staging") return ["MORROW_ENVIRONMENT"];
@@ -639,6 +648,7 @@ export function edgeVarNames(worker, environment, stripe = "off", model = "off",
     ...(stripe === "on" ? edgeStripeVarNames(worker, environment) : []),
     ...(apply === "on" ? edgeApplyVarNames(worker, environment) : []),
   ];
+  const runtimeVars = runtime !== "off" ? edgeRuntimeVarNames(worker, environment) : [];
   return worker === "api"
     ? [
         "MORROW_ENVIRONMENT",
@@ -657,6 +667,7 @@ export function edgeVarNames(worker, environment, stripe = "off", model = "off",
         "TURNSTILE_CONFIGURATION_JSON",
         ...stripeVars,
         ...modelVars,
+        ...runtimeVars,
       ];
 }
 // M3 PR-2, the model-provider switch (ADR-0022 items 7 and 10; committed off): its runtime
@@ -739,6 +750,73 @@ export function reviewedApplyRecord(record) {
   )
     throw Error("EDGE_STAGING_APPLY_RECORD");
   return Object.freeze({ switch: record.switch });
+}
+// Build order PR 7, the runtime switch (ADR-0029 item 10; ADR-0035 item 6; committed off):
+// its runtime image is the staging broker's var MORROW_RUNTIME_SWITCH (exactly "on" or
+// "cleanup_only") and E2B_API_KEY in its secrets.required (brokerRequiredSecretsFor("staging",
+// stripe, model, runtime)), both only while the switch is not off. No other Worker ever carries
+// either (E2B_ is a broker-only credential prefix), development's committed config never does,
+// and production has no switch.
+export const edgeRuntimeSwitchVar = "MORROW_RUNTIME_SWITCH";
+export const edgeRuntimeSwitchValues = Object.freeze(["on", "cleanup_only"]);
+export const edgeRuntimeSecretNames = Object.freeze(["E2B_API_KEY"]);
+export function edgeRuntimeVarNames(worker, environment) {
+  return environment === "staging" && worker === "broker" ? [edgeRuntimeSwitchVar] : [];
+}
+// The runtime names a Worker's resolved configuration must carry: the broker's var and key
+// while the switch is on or cleanup-only in staging, none otherwise.
+export function edgeRuntimeNamesRequired(worker, environment, runtime) {
+  if (runtime === "off") return [];
+  const names = edgeRuntimeVarNames(worker, environment);
+  return names.length ? [...names, ...edgeRuntimeSecretNames] : [];
+}
+const edgeRuntimeNames = Object.freeze([edgeRuntimeSwitchVar, ...edgeRuntimeSecretNames]);
+// The reviewed staging runtime record (build order PR 7; committed off): provider e2b, the
+// profile morrow.computer@1, `switch` off, cleanup_only or on, `admission` synthetic_only or
+// merchant, the code's monthly runtime budget below the provider project's usage limit (both
+// decimal USD strings), and the qualification (ADR-0029 item 11): the date and its
+// docs/evidence/live/ record, both or neither, and the record a committed file under
+// `evidenceRoot` (the repository root unless a test names another), so "on" never stands on a
+// name alone. On needs qualification; merchant admission needs on. Returns {switch,
+// admission}, or throws.
+const usd = /^(0|[1-9][0-9]{0,5})\.[0-9]{2}$/;
+const evidenceFile = (evidenceRoot, path) =>
+  statSync(join(evidenceRoot, path), { throwIfNoEntry: false })?.isFile() === true;
+export function reviewedRuntimeRecord(record, evidenceRoot = repositoryRoot) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "admission,environment_kind,monthly_budget_usd,profile,provider,provider_usage_limit_usd,qualification_record,qualified_on,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.provider !== "e2b" ||
+    record.profile !== "morrow.computer@1" ||
+    !["off", "cleanup_only", "on"].includes(record.switch) ||
+    !["synthetic_only", "merchant"].includes(record.admission) ||
+    typeof record.scope !== "string" ||
+    typeof record.monthly_budget_usd !== "string" ||
+    !usd.test(record.monthly_budget_usd) ||
+    typeof record.provider_usage_limit_usd !== "string" ||
+    !usd.test(record.provider_usage_limit_usd) ||
+    !(Number(record.monthly_budget_usd) > 0) ||
+    !(Number(record.monthly_budget_usd) < Number(record.provider_usage_limit_usd)) ||
+    (record.qualified_on === null) !== (record.qualification_record === null) ||
+    (record.qualified_on !== null &&
+      (typeof record.qualified_on !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.qualified_on) ||
+        typeof record.qualification_record !== "string" ||
+        !/^docs\/evidence\/live\/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}\.md$/.test(
+          record.qualification_record,
+        ) ||
+        !evidenceFile(evidenceRoot, record.qualification_record))) ||
+    // Qualification comes before on, and the owner's data only with on.
+    (record.switch === "on" && record.qualified_on === null) ||
+    (record.admission === "merchant" && record.switch !== "on")
+  )
+    throw Error("EDGE_STAGING_RUNTIME_RECORD");
+  return Object.freeze({ switch: record.switch, admission: record.admission });
 }
 // M5, the Stripe switch (owner decision (c), 2026-10-21): its runtime image is the var
 // MORROW_STRIPE_MODE ("test") on the staging api and broker, and on the broker also the
@@ -1109,6 +1187,8 @@ export async function verifyEdgeConfig({
   workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
   stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
   modelPath = join(repositoryRoot, "docs/decisions/model-provider-staging.json"),
+  runtimePath = join(repositoryRoot, "docs/decisions/runtime-staging.json"),
+  evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
@@ -1125,6 +1205,9 @@ export async function verifyEdgeConfig({
     brokerModelSecrets,
     modelProviderVar,
     modelProviderAnthropic,
+    brokerRuntimeSecrets,
+    runtimeSwitchVar,
+    runtimeSwitchValues,
     shopifyWriteVar,
     shopifyWriteOn,
   } = await tsImport("../packages/identity/src/broker-protocol.ts", here);
@@ -1185,6 +1268,24 @@ export async function verifyEdgeConfig({
     !same([...brokerModelSecrets], [...edgeModelSecretNames])
   )
     problem("EDGE_MODEL_SWITCH_NAMES", "broker-protocol");
+  // Build order PR 7, the runtime switch: the same protocol, on the broker alone.
+  const runtimeRecord = readJson(runtimePath);
+  let runtime = null;
+  if (runtimeRecord === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "runtime-staging.json");
+  else
+    try {
+      runtime = reviewedRuntimeRecord(runtimeRecord, evidenceRoot);
+    } catch {
+      problem("EDGE_STAGING_RUNTIME_RECORD", "runtime-staging.json");
+    }
+  const runtimeSwitch = (environment) =>
+    environment === "staging" && runtime !== null ? runtime.switch : "off";
+  if (
+    runtimeSwitchVar !== edgeRuntimeSwitchVar ||
+    !same([...runtimeSwitchValues], [...edgeRuntimeSwitchValues]) ||
+    !same([...brokerRuntimeSecrets], [...edgeRuntimeSecretNames])
+  )
+    problem("EDGE_RUNTIME_SWITCH_NAMES", "broker-protocol");
   // The names checked here are the ones the api and the broker read.
   if (
     stripeModeVar !== edgeStripeModeVar ||
@@ -1268,12 +1369,14 @@ export async function verifyEdgeConfig({
       // switch's one mode.
       const switched = stripeSwitch(environment);
       const modelSwitched = modelSwitch(environment);
+      const runtimeSwitched = runtimeSwitch(environment);
       const applySwitched = applySwitch(environment);
       const varNames = edgeVarNames(
         worker.key,
         environment,
         switched,
         modelSwitched,
+        runtimeSwitched,
         applySwitched,
       );
       if (
@@ -1285,9 +1388,26 @@ export async function verifyEdgeConfig({
         (varNames.includes(edgeStripeModeVar) && vars[edgeStripeModeVar] !== edgeStripeModeTest) ||
         (varNames.includes(edgeModelProviderVar) &&
           vars[edgeModelProviderVar] !== edgeModelProviderValue) ||
+        // The broker's runtime var is exactly the reviewed switch (on or cleanup_only).
+        (varNames.includes(edgeRuntimeSwitchVar) &&
+          vars[edgeRuntimeSwitchVar] !== runtimeSwitched) ||
         (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue)
       )
         problem("EDGE_VARS", where);
+      // Build order PR 7: no mixed runtime state. While off no Worker carries the runtime var
+      // or E2B_API_KEY; while on or cleanup-only the staging broker carries both.
+      const runtimeCarried = edgeRuntimeNames.filter(
+        (name) =>
+          (vars !== null && typeof vars === "object" && Object.hasOwn(vars, name)) ||
+          (Array.isArray(required) && required.includes(name)),
+      );
+      if (
+        !same(
+          runtimeCarried.sort(),
+          [...edgeRuntimeNamesRequired(worker.key, environment, runtimeSwitched)].sort(),
+        )
+      )
+        problem("EDGE_RUNTIME_SWITCH_MIXED", where);
       // v1 PR 3: no mixed apply state: while the switch is off no Worker carries its var;
       // while it is on, exactly the staging api and broker do.
       const applyCarried =
@@ -1340,6 +1460,7 @@ export async function verifyEdgeConfig({
                 environment,
                 stripeSwitch(environment),
                 modelSwitch(environment),
+                runtimeSwitch(environment),
               ),
             ].sort(),
           )
@@ -1481,6 +1602,7 @@ export async function verifyEdgeConfig({
     reservedWorkerPaths: [...reservedWorkerPaths],
     stripeSwitch: stripeSwitch("staging"),
     modelSwitch: modelSwitch("staging"),
+    runtimeSwitch: runtimeSwitch("staging"),
     applySwitch: applySwitch("staging"),
   };
 }

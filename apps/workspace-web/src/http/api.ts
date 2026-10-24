@@ -25,6 +25,7 @@ import {
   decodeStoreLinkPreview,
   decodeStoreLinkResult,
 } from "./connection-decoders";
+import { decodeDisconnectResult, decodeDisconnectStatus } from "./disconnect-decoders";
 import { handoffTokenPattern } from "../handoff";
 import {
   decodeAccountOverview,
@@ -327,6 +328,19 @@ export const requests = {
   // M2 PR-2: the connections read and the store-link routes. The body is exactly
   // {handoffToken} (the guard's closed shape); the key is the handoff's one command key.
   connections: (ws: string) => (ids(ws) ? get(`/workspace/${ws}/connections`) : null),
+  // "Disconnect store": the status read and the person's kill switch, beside the
+  // connections read (the work API's envelope, the connection id unencoded in the path).
+  disconnectStatus: (ws: string, connectionId: string) =>
+    ids(ws, connectionId) ? get(`/workspace/${ws}/connections/${connectionId}/disconnect`) : null,
+  disconnect(ws: string, connectionId: string, c: Command<{ reason: string }>) {
+    if (!ids(ws, connectionId) || !stopReason(c.body.reason)) return null;
+    return post(
+      `/workspace/${ws}/connections/${connectionId}/disconnect`,
+      { control: { reason: c.body.reason, sourceProposalRef: null } },
+      c.key,
+      byteLimits.work,
+    );
+  },
   storeLink(
     route: "preview" | "apply" | "status",
     ws: string,
@@ -711,6 +725,18 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         const request = requests.connections(ws);
         return request ? decodeConnections(await send(request), ws) : unknownRecord;
       }),
+      disconnectStatus: gated("connections.disconnectStatus", (ws: string, connectionId: string) =>
+        read(requests.disconnectStatus(ws, connectionId), (b) =>
+          decodeDisconnectStatus(b, connectionId),
+        ),
+      ),
+      disconnect: gated(
+        "connections.disconnect",
+        (ws: string, connectionId: string, c: Command<{ reason: string }>) =>
+          command(requests.disconnect(ws, connectionId, c), (b) =>
+            decodeDisconnectResult(b, connectionId),
+          ),
+      ),
     },
     storeLinks: {
       preview: gated(

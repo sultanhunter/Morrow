@@ -1253,8 +1253,17 @@ test("the apply switch is committed off and appears only on the staging api and 
     ["broker", "production"],
   ])
     assert.deepEqual(edgeApplyVarNames(worker, environment), [], worker + " " + environment);
-  assert.ok(edgeVarNames("api", "staging", "off", "off", "on").includes("MORROW_SHOPIFY_WRITE"));
-  assert.ok(!edgeVarNames("api", "staging", "off", "off", "off").includes("MORROW_SHOPIFY_WRITE"));
+  // The apply switch is edgeVarNames' sixth argument (after build order PR 7's runtime switch).
+  assert.ok(
+    edgeVarNames("api", "staging", "off", "off", "off", "on").includes("MORROW_SHOPIFY_WRITE"),
+  );
+  assert.ok(
+    !edgeVarNames("api", "staging", "off", "off", "off", "off").includes("MORROW_SHOPIFY_WRITE"),
+  );
+  // The runtime switch alone never brings it.
+  assert.ok(
+    !edgeVarNames("broker", "staging", "off", "off", "on", "off").includes("MORROW_SHOPIFY_WRITE"),
+  );
   // No wrangler configuration carries the var while the record is off.
   for (const worker of ["api", "broker", "workers", "shopify-connector"])
     assert.ok(
