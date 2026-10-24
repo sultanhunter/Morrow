@@ -24,6 +24,7 @@ import {
   goalProgress,
   grantSummaryDigest,
   holdsCustomerGoal,
+  keptOnPlanChange,
   planDraftValid,
   planStepRuns,
   startChecks,
@@ -328,6 +329,20 @@ async function goalOf(tx: WorkTx, goalId: string): Promise<GoalRow | null> {
 // ---------------------------------------------------------------------------
 // Read tags per viewer (ADR-0031 item 6): the kernel's view on each (store, read
 // capability), decided once; a store with no current association is never viewable.
+// The kernel needs the fields a request names (at least one), and a read tag names none of
+// its own: each distinct field list a view grant of the viewer on that capability holds is
+// asked in turn, and the tag is viewable when the kernel allows one of them on the store
+// resource (so every live-grant, scope, expiry and membership rule still decides). With no
+// such grant nothing is viewable.
+function viewFieldLists(a: WorkAuthority, capabilityId: CapabilityId): readonly string[][] {
+  const lists = new Map<string, string[]>();
+  for (const g of a.grants)
+    if (g.capabilityId === capabilityId && g.verbs.includes("view") && g.scope.fields.length > 0) {
+      const fields = [...new Set(g.scope.fields)].sort();
+      lists.set(JSON.stringify(fields), fields);
+    }
+  return [...lists.values()];
+}
 const readCapabilities: readonly ReadCapability[] = Object.freeze([
   "catalog.products.read",
   "inventory.levels.read",
@@ -362,11 +377,16 @@ export async function storeViewer(
             storeId,
             text(row, "connection_id"),
           );
-    for (const capabilityId of capabilities)
-      decisions.set(
-        storeId + "|" + capabilityId,
-        resource !== null && (await decideOn(a, resource, capabilityId, "view", [])).allowed,
-      );
+    for (const capabilityId of capabilities) {
+      let allowed = false;
+      if (resource !== null)
+        for (const fields of viewFieldLists(a, capabilityId))
+          if ((await decideOn(a, resource, capabilityId, "view", fields)).allowed) {
+            allowed = true;
+            break;
+          }
+      decisions.set(storeId + "|" + capabilityId, allowed);
+    }
   }
   return {
     viewer: Object.freeze({
@@ -579,11 +599,28 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
   let currentDueAt: string | null = null;
   let targetOwner: "own" | "other" | null = null;
   let targetAreaTemplateId: Current_AreaTemplateId | null = null;
+  let keptCriteria: Current_CriteriaList | undefined;
   const d = draft as Current_PlanDraft;
   if (d.target.kind === "existing_project") {
+    // The target's goal record as the actor may see it (the goal reads' and revise's rule):
+    // without goal view, or with every goal hidden from this viewer, the same 404.
+    if (!(await goalView(a)).allowed) throw new WorkReject("not_found");
     const target = one(await tx.run("projectTarget", [d.target.projectId]));
-    if (!target || integer(text(target, "revision")) !== d.target.goalRevision)
+    if (!target) throw new ProjectReject("stale");
+    const goal = await viewableGoal(tx, a, text(target, "goal_id"));
+    if (
+      integer(text(target, "revision")) !== d.target.goalRevision ||
+      goal.revision !== d.target.goalRevision
+    )
       throw new ProjectReject("stale");
+    if (d.kind === "plan_change" && d.goals.length > 0) {
+      // A plan change applies as workspace.goal.revise (ADR-0034 item 5), which replaces
+      // every goal: a person who may not see one of them (a customer-class goal) may not
+      // change the record's goals, as revise answers. The goals Morrow's card cannot see
+      // are kept, unchanged, after the card's.
+      if (goal.hidden) throw new WorkReject("denied");
+      keptCriteria = keptOnPlanChange(goal.successCriteria) as Current_CriteriaList;
+    }
     currentDueAt = optional(target, "due_at");
     targetOwner =
       text(target, "owner_principal_id") === a.actor.principalId &&
@@ -603,9 +640,13 @@ async function cardOf(tx: WorkTx, a: WorkAuthority, body: StartDocumentBody): Pr
     currentDueAt,
     targetOwner,
     targetAreaTemplateId,
+    ...(keptCriteria === undefined ? {} : { keptCriteria }),
   };
-  // Quick tasks is never revised (ADR-0033 item 7): no plan change aims at it.
-  if (changesQuickTasks(card)) throw new WorkReject("state_conflict");
+  // Quick tasks is never revised (ADR-0033 item 7): no plan change aims at it. A plan
+  // change whose kept goals do not fit (a key the card also names, or a 4th measured goal)
+  // is refused the same way: the person revises the record by hand.
+  if (changesQuickTasks(card) || startRecords(card) === null)
+    throw new WorkReject("state_conflict");
   return card;
 }
 /**

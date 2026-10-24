@@ -12,7 +12,9 @@ import {
   checkStartAttempt,
   decideStartPieces,
   grantSummaryDigest,
+  keptOnPlanChange,
   nonceDigest,
+  planChangeCriteria,
   planDraftDigest,
   planStartWindowMs,
   planStepRuns,
@@ -283,6 +285,58 @@ test("a plan change never revises Quick tasks", () => {
   });
   assert.equal(changesQuickTasks(task), false);
   assert.equal(changesQuickTasks({ kind: "quick_tasks" }), false);
+});
+
+test("a plan change keeps the record's customer-class goals, which no card can see", () => {
+  const replied = {
+    description: "Replied within a day",
+    verificationCapabilityId: null,
+    evidenceRequired: false,
+    key: "replied_in_a_day",
+    measure: {
+      kind: "metric",
+      metricId: "replied_within_a_day",
+      target: 95,
+      dueAt: null,
+      startRef: null,
+    },
+  };
+  const pages = {
+    description: "Page complete",
+    verificationCapabilityId: null,
+    evidenceRequired: false,
+    key: "facts",
+    measure: checklist,
+  };
+  // Only a customer-class goal is kept; an unmeasured or a work goal is the card's to change.
+  assert.deepEqual(keptOnPlanChange([pages, replied]), [replied]);
+  assert.deepEqual(keptOnPlanChange([{ ...pages, key: "open", measure: null }]), []);
+  const change = {
+    ...draft,
+    kind: "plan_change",
+    steps: draft.steps.filter((s) => s.repeat === null),
+    target: { kind: "existing_project", projectId: "project_emails", goalRevision: 3 },
+  };
+  const changeCard = (goals, keptCriteria) => {
+    const d = { ...change, goals };
+    return card({ draft: d, digest: planDraftDigest(d), keptCriteria, targetOwner: "own" });
+  };
+  const records = startRecords(changeCard(draft.goals, [replied]));
+  assert.ok(validateCurrentDefinition("PlanStartRecords", records));
+  assert.deepEqual(
+    records.goal.successCriteria.map((c) => c.key),
+    ["facts", "replied_in_a_day"],
+  );
+  assert.deepEqual(records.goal.successCriteria[1], replied);
+  // A card that changes only the steps leaves every goal as it is: nothing to keep.
+  assert.equal(startRecords(changeCard([], [replied])).goal, null);
+  // A kept key the card also names, or a 4th measured goal: no records (409 at the route).
+  const fact = (key) => ({ key, description: "Page complete", measure: checklist });
+  assert.equal(startRecords(changeCard([fact("replied_in_a_day")], [replied])), null);
+  assert.equal(startRecords(changeCard([fact("a"), fact("b"), fact("c")], [replied])), null);
+  assert.notEqual(startRecords(changeCard([fact("a"), fact("b")], [replied])), null);
+  assert.equal(planChangeCriteria([pages], [{ ...replied, key: undefined }]), null);
+  assert.deepEqual(planChangeCriteria([pages]), [pages]);
 });
 
 test("the records code computes, and one kernel check per piece", () => {

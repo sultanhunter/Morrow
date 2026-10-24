@@ -40,8 +40,11 @@ BEGIN;
 --     assignee under lock and creates every record as the actor's own; any refusal rolls
 --     everything back). Only the Owner (ADR-0024; work_ownership_facts) gets and confirms a
 --     Quick tasks document, checked again under lock. A plan change never revises Quick
---     tasks. The commands CHECKs are widened by goal.revise, goal.check,
---     plan.start_document and plan.start (each CHECK the union of every value at this head).
+--     tasks, and never drops a customer-class goal (the Worker keeps each by key). The
+--     commands CHECKs are widened by goal.revise, goal.check, plan.start_document and
+--     plan.start, and the outbox's by goal.revised, which every goal revision appends (so a
+--     goal's aggregate revisions stay contiguous); each CHECK the union of every value at
+--     this head.
 -- The work API's start routes answer 503 before any of these definers while
 -- docs/decisions/plan-drafts-staging.json holds them (`start_routes` held).
 DO $$ BEGIN
@@ -66,6 +69,10 @@ DO $$ BEGIN
   IS DISTINCT FROM 'ca4b097af5cd5ddf3e97bf48b214bc56'
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.commands'::regclass AND c.conname='commands_check')
   IS DISTINCT FROM 'a517388dfd7a53b7eac1151d9cbccab6'
+ OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.outbox_events'::regclass AND c.conname='outbox_events_event_type_check')
+  IS DISTINCT FROM 'c337a4779f7b9e92957152eb064b1962'
+ OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.outbox_events'::regclass AND c.conname='outbox_events_check3')
+  IS DISTINCT FROM '68b51a30e4eaacda103a293e5d454092'
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_work.goals'::regclass AND c.conname='goals_valid_criteria')
   IS DISTINCT FROM '7b379acd1b3d8b09974806ff58729cf1'
  OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure('morrow_work.enforce_status()'))
@@ -391,6 +398,46 @@ ALTER TABLE morrow_work.commands DROP CONSTRAINT commands_command_type_check, DR
   'goal.revise','goal.check','plan.start_document','plan.start')),
  ADD CONSTRAINT commands_check CHECK (aggregate_type IN ('goal','task','question','proposal','approval','installation','model_default','run','plan')
   AND aggregate_type=split_part(command_type,'.',1));
+-- goal.revised (registered in docs/contracts/event-registry.json, EmptyEventPayload): every
+-- goal revision a person makes (cmd_goal_revise, or a plan change through the start) appends
+-- one, so a goal's aggregate revisions stay contiguous on the stream. The envelope carries the
+-- goal's id and revision; the payload is empty (objectives and criteria never enter the outbox).
+ALTER TABLE morrow_work.outbox_events DROP CONSTRAINT outbox_events_event_type_check, DROP CONSTRAINT outbox_events_check3,
+ ADD CONSTRAINT outbox_events_event_type_check CHECK (event_type IN ('goal.created','goal.status_changed','task.created','task.status_changed','task.assigned',
+  'question.requested','question.answered','question.cancelled','proposal.submitted','proposal.derived','approval.decided','approval.status_changed',
+  'approval.claimed','kill_switch.executed','run.admitted','run.status_changed','goal.revised')),
+ ADD CONSTRAINT outbox_events_check3 CHECK (CASE WHEN jsonb_typeof(payload)<>'object' THEN false
+  WHEN event_type='goal.created' THEN payload ? 'status' AND payload-'status'='{}'::jsonb AND jsonb_typeof(payload->'status')='string'
+  WHEN event_type IN ('goal.status_changed','task.status_changed') THEN payload ?& ARRAY['from','to'] AND payload-ARRAY['from','to']='{}'::jsonb
+   AND jsonb_typeof(payload->'from')='string' AND jsonb_typeof(payload->'to')='string'
+  WHEN event_type='task.created' THEN payload ?& ARRAY['goalId','status'] AND payload-ARRAY['goalId','status']='{}'::jsonb
+   AND jsonb_typeof(payload->'goalId')='string' AND jsonb_typeof(payload->'status')='string'
+  WHEN event_type='task.assigned' THEN payload ?& ARRAY['assignmentId','ownerPrincipalId'] AND payload-ARRAY['assignmentId','ownerPrincipalId']='{}'::jsonb
+   AND jsonb_typeof(payload->'assignmentId')='string' AND jsonb_typeof(payload->'ownerPrincipalId')='string'
+  WHEN event_type='question.requested' THEN payload ? 'respondentPrincipalId' AND payload-'respondentPrincipalId'='{}'::jsonb
+   AND jsonb_typeof(payload->'respondentPrincipalId')='string'
+  WHEN event_type='question.answered' THEN payload ? 'answerId' AND payload-'answerId'='{}'::jsonb AND jsonb_typeof(payload->'answerId')='string'
+  WHEN event_type='question.cancelled' THEN payload='{}'::jsonb
+  WHEN event_type='proposal.submitted' THEN payload ?& ARRAY['approvalId','risk','targetCount'] AND payload-ARRAY['approvalId','risk','targetCount']='{}'::jsonb
+   AND jsonb_typeof(payload->'approvalId')='string' AND jsonb_typeof(payload->'risk')='string' AND jsonb_typeof(payload->'targetCount')='number'
+  WHEN event_type='proposal.derived' THEN payload ? 'parentId' AND payload-'parentId'='{}'::jsonb AND jsonb_typeof(payload->'parentId')='string'
+  WHEN event_type='approval.decided' THEN payload ?& ARRAY['decision','status'] AND payload-ARRAY['decision','status']='{}'::jsonb
+   AND jsonb_typeof(payload->'decision')='string' AND jsonb_typeof(payload->'status')='string'
+  WHEN event_type='approval.status_changed' THEN payload ?& ARRAY['from','to','reason'] AND payload-ARRAY['from','to','reason']='{}'::jsonb
+   AND jsonb_typeof(payload->'from')='string' AND jsonb_typeof(payload->'to')='string' AND jsonb_typeof(payload->'reason')='string'
+   AND (payload->>'reason') IN ('quorum_met','solo_owner_confirmed','rejected','cancelled_before_effective','withdrawn','superseded_by_partial_approval','family_closed')
+  WHEN event_type='approval.claimed' THEN payload ? 'consumer' AND payload-'consumer'='{}'::jsonb AND jsonb_typeof(payload->'consumer')='string'
+  WHEN event_type='kill_switch.executed' THEN payload ?& ARRAY['capabilityId','sourceProposalId'] AND payload-ARRAY['capabilityId','sourceProposalId']='{}'::jsonb
+   AND (payload->>'capabilityId') IN ('ads.campaign.pause','agents.installation.disable','governance.membership.revoke','governance.connection.disconnect','agents.release.revoke')
+   AND (payload->'sourceProposalId'='null'::jsonb OR (jsonb_typeof(payload->'sourceProposalId')='string'
+    AND (payload->>'sourceProposalId') ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'))
+  WHEN event_type='run.admitted' THEN payload ?& ARRAY['childTaskId','productCount'] AND payload-ARRAY['childTaskId','productCount']='{}'::jsonb
+   AND jsonb_typeof(payload->'childTaskId')='string' AND jsonb_typeof(payload->'productCount')='number'
+  WHEN event_type='run.status_changed' THEN payload ?& ARRAY['from','to','reason'] AND payload-ARRAY['from','to','reason']='{}'::jsonb
+   AND jsonb_typeof(payload->'from')='string' AND jsonb_typeof(payload->'to')='string'
+   AND (payload->'reason'='null'::jsonb OR (jsonb_typeof(payload->'reason')='string' AND (payload->>'reason') ~ '^[a-z_]{1,32}$'))
+  WHEN event_type='goal.revised' THEN payload='{}'::jsonb
+  ELSE false END);
 
 -- ---------------------------------------------------------------------------
 -- Row security. Every table: ENABLE + FORCE and the maintenance-only owner policy.
@@ -658,6 +705,8 @@ BEGIN
  UPDATE morrow_work.goals x SET objective=p_objective,due_at=v_due,success_criteria=v_criteria,revision=v_revision,
   updated_at=greatest(v_at,x.updated_at)
   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.id=p_goal_id;
+ PERFORM morrow_work.append_event(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,'goal.revised','goal',p_goal_id,v_revision,NULL,
+  '{}'::jsonb,p_correlation_id,v_at);
  v_result:=jsonb_build_object('revision',v_revision);
  PERFORM morrow_work.record_command(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,p_command_id,p_request_digest,
   'goal.revise',p_goal_id,v_revision,v_result,p_correlation_id,v_at);
@@ -941,7 +990,7 @@ BEGIN
  END LOOP;
  -- (c) The goal record: a new one (made active), or a plan change of the target's.
  IF doc.target_kind='existing_project' THEN
-  SELECT x.id::text AS id,x.revision::bigint AS revision,x.status,x.due_at,x.area_template_id INTO g
+  SELECT x.id::text AS id,x.revision::bigint AS revision,x.status,x.due_at,x.area_template_id,x.success_criteria INTO g
    FROM morrow_work.goals x JOIN morrow_work.projects j ON j.organization_id=x.organization_id AND j.workspace_id=x.workspace_id
    AND j.goal_id=x.id WHERE j.organization_id=p.organization_id AND j.workspace_id=p.workspace_id AND j.id=doc.target_id FOR UPDATE OF x;
   IF NOT FOUND OR g.revision<>doc.target_revision THEN RETURN QUERY SELECT 'stale'::text,NULL::text; RETURN; END IF;
@@ -955,6 +1004,14 @@ BEGIN
     OR NOT morrow_work.valid_project_criteria(v_records#>'{goal,successCriteria}',v_due,g.area_template_id)
     OR jsonb_typeof(v_records#>'{goal,objective}')<>'string' OR char_length(v_records#>>'{goal,objective}') NOT BETWEEN 1 AND 8192 THEN
     RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+   END IF;
+   -- A plan change never drops a customer-class goal (ADR-0033 Consequences; the one
+   -- customer-class metric, measures.ts): Morrow's card never sees one, so the Worker keeps
+   -- each, unchanged, after the card's goals. Any other list is refused here, under lock.
+   IF EXISTS(SELECT 1 FROM jsonb_array_elements(g.success_criteria) e WHERE e#>>'{measure,kind}'='metric'
+     AND e#>>'{measure,metricId}'='replied_within_a_day'
+     AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(v_records#>'{goal,successCriteria}') n WHERE n=e)) THEN
+    RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN;
    END IF;
   END IF;
  ELSIF doc.target_kind IN ('area','quick_tasks') AND v_records->'goal'='null'::jsonb THEN
@@ -1013,6 +1070,8 @@ BEGIN
   UPDATE morrow_work.goals x SET objective=v_records#>>'{goal,objective}',due_at=v_due,success_criteria=v_records#>'{goal,successCriteria}',
    revision=v_revision,updated_at=greatest(v_now,x.updated_at)
    WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.id=v_goal_id;
+  PERFORM morrow_work.append_event(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,'goal.revised','goal',v_goal_id,v_revision,NULL,
+   '{}'::jsonb,p_correlation_id,v_now);
  END IF;
  -- The project and its pin (human_only: this actor's own act).
  IF jsonb_typeof(v_records->'project')='object' THEN

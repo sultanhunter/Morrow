@@ -3,6 +3,7 @@ import type {
   CapabilityId,
   Current_AreaTemplateId,
   Current_ContextTaint,
+  Current_CriteriaList,
   Current_Grant,
   Current_HumanActorRef,
   Current_PlanDraft,
@@ -13,6 +14,7 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { areaStartRecords, quickTasksStartRecords, type AreaId } from "./area-templates";
+import { isCustomerMeasure } from "./measures";
 import { planDraftsRecord, planDraftValid } from "./plan-draft";
 
 // The plan start (ADR-0034 items 5 and 6). On Start the server builds PlanStartDocument@1
@@ -61,6 +63,12 @@ export type StartCard =
        * for a dated project. Quick tasks is never revised, so no plan change aims at it.
        */
       readonly targetAreaTemplateId?: Current_AreaTemplateId | null;
+      /**
+       * For a plan change: the target record's goals the card cannot see, which it keeps
+       * (`keptOnPlanChange`). A plan change replaces the record's goals, and Morrow's card
+       * never sees a customer-class goal, so each is kept, unchanged, after the card's goals.
+       */
+      readonly keptCriteria?: Current_CriteriaList;
     }
   | { readonly kind: "area"; readonly areaTemplateId: AreaId }
   | { readonly kind: "quick_tasks" };
@@ -125,9 +133,36 @@ export function startEligible(
   return "ok";
 }
 
+type Criterion = Current_CriteriaList[number];
 /**
- * The records a card creates, computed by code from the card alone; null for an invalid
- * draft or a plan change of Quick tasks.
+ * The goals of a record a plan change keeps (ADR-0034 item 5 applies it as
+ * workspace.goal.revise, which replaces every goal): its customer-class goals, which the
+ * Coordinator's audience never sees (ADR-0033 Consequences), so no card can name them.
+ */
+export const keptOnPlanChange = (criteria: Current_CriteriaList): Criterion[] =>
+  criteria.filter(
+    (c) => c.measure !== undefined && c.measure !== null && isCustomerMeasure(c.measure),
+  );
+/**
+ * A plan change's goals: the card's, then the kept ones by key. Null when a kept goal's key
+ * is one of the card's or more than 3 would be measured: the start is then refused
+ * (`state_conflict`), and the person revises the record by hand.
+ */
+export function planChangeCriteria(
+  cardCriteria: readonly Criterion[],
+  kept: readonly Criterion[] = [],
+): Criterion[] | null {
+  const keys = new Set(cardCriteria.map((c) => c.key));
+  if (kept.some((c) => c.key === undefined || keys.has(c.key))) return null;
+  const merged = [...cardCriteria, ...kept];
+  if (merged.filter((c) => c.measure !== undefined && c.measure !== null).length > 3) return null;
+  return merged;
+}
+
+/**
+ * The records a card creates, computed by code from the card (and, for a plan change, the
+ * goals it keeps); null for an invalid draft, a plan change of Quick tasks, or a plan change
+ * whose kept goals do not fit (`planChangeCriteria`).
  */
 export function startRecords(card: StartCard): Current_PlanStartRecords | null {
   if (card.kind === "area") return areaStartRecords(card.areaTemplateId);
@@ -146,7 +181,7 @@ export function startRecords(card: StartCard): Current_PlanStartRecords | null {
       goalKey: s.repeat!.goalKey,
       agent: s.assignee.kind === "agent",
     }));
-  const criteria = d.goals.map((g) => ({
+  const criteria: Criterion[] = d.goals.map((g) => ({
     description: g.description,
     verificationCapabilityId: null,
     evidenceRequired: false,
@@ -165,21 +200,22 @@ export function startRecords(card: StartCard): Current_PlanStartRecords | null {
       tasks,
       repeating,
     };
-  if (d.kind === "plan_change")
+  if (d.kind === "plan_change") {
+    if (criteria.length === 0) return { goal: null, project: null, tasks, repeating };
+    const changed = planChangeCriteria(criteria, card.keptCriteria);
+    if (changed === null) return null;
     return {
-      goal:
-        criteria.length === 0
-          ? null
-          : {
-              objective: d.doneWhen,
-              dueAt: card.currentDueAt,
-              areaTemplateId: null,
-              successCriteria: criteria,
-            },
+      goal: {
+        objective: d.doneWhen,
+        dueAt: card.currentDueAt,
+        areaTemplateId: null,
+        successCriteria: changed as Current_CriteriaList,
+      },
       project: null,
       tasks,
       repeating,
     };
+  }
   return { goal: null, project: null, tasks, repeating };
 }
 

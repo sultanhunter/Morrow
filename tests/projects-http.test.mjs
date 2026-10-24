@@ -752,9 +752,18 @@ test("a plan change aimed at the Quick tasks project is refused before any kerne
     target: { kind: "existing_project", projectId: "project_quick", goalRevision: 2 },
   };
   assert.ok(validateCurrentDefinition("PlanDraft", change));
+  // Goal view (status among its fields) reads the target's goal record first.
+  const viewer = [
+    grant(
+      "workspace.goal.create",
+      ["view", "execute"],
+      ["objective", "status", "storeIds", "successCriteria"],
+    ),
+    ...startGrants().slice(1),
+  ];
   const run = async (area) => {
     const s = scripted({
-      enterContext: () => contextRow(),
+      enterContext: () => contextRow(viewer),
       beginProjectCommand: [{ outcome: "new" }],
       planDraftLatest: [
         {
@@ -779,6 +788,17 @@ test("a plan change aimed at the Quick tasks project is refused before any kerne
           owner_membership_id: "membership_a",
         },
       ],
+      projectGoal: [
+        goalRow({
+          id: "goal_quick",
+          area_template_id: area,
+          success_criteria: JSON.stringify(
+            area === "quick_tasks"
+              ? [{ ...criteria[0], key: "quick_tasks", measure: null }]
+              : criteria,
+          ),
+        }),
+      ],
     });
     const { result } = await quiet(t, () =>
       handlerWith(on, s.connector).fetch(request("POST", startDocument, draftCard), {}, ctx),
@@ -792,4 +812,258 @@ test("a plan change aimed at the Quick tasks project is refused before any kerne
   // The same card aimed at an area goes on to the kernel (here refused for want of grants).
   const area = await run("product_pages");
   assert.notEqual(area.result.status, 409);
+});
+
+// The target's goal record as projectGoal reads it (a dated record of person_a's own).
+function goalRow(over = {}) {
+  return {
+    id: "goal_target",
+    revision: "2",
+    status: "active",
+    success_criteria: JSON.stringify(criteria),
+    owner_principal_id: "person_a",
+    owner_membership_id: "membership_a",
+    created_at: "2026-10-01T00:00:00.000Z",
+    due_at: null,
+    area_template_id: null,
+    ...over,
+  };
+}
+
+test("a plan change: goal view and hidden goals as revise answers; customer-class goals are kept", async (t) => {
+  const on = { planDrafts: { switch: "on", start_routes: "ready" } };
+  const due = "2026-12-01T00:00:00.000Z";
+  const replied = {
+    description: "Replied within a day",
+    verificationCapabilityId: null,
+    evidenceRequired: false,
+    key: "replied_in_a_day",
+    measure: {
+      kind: "metric",
+      metricId: "replied_within_a_day",
+      target: 95,
+      dueAt: null,
+      startRef: null,
+    },
+  };
+  const facts = (key) => ({
+    key,
+    description: "Page complete",
+    measure: {
+      kind: "checklist",
+      checklistId: "product_facts_complete",
+      productIds: ["product:1"],
+      target: 12,
+      dueAt: null,
+      startRef: null,
+    },
+  });
+  const change = (goals) => ({
+    schemaVersion: 1,
+    kind: "plan_change",
+    title: "Tighten the pages",
+    why: "The tote's page is thin.",
+    doneWhen: "Twelve facts on the tote.",
+    goals,
+    steps: [
+      {
+        key: "facts",
+        title: "Add the tote's facts",
+        assignee: { kind: "person", principalId: "person_a" },
+        dependsOn: [],
+        repeat: null,
+      },
+    ],
+    target: { kind: "existing_project", projectId: "project_target", goalRevision: 2 },
+  });
+  const S = "store_s";
+  const C = "connection_c";
+  const storeRef = {
+    organizationId: "org_o",
+    workspaceId: "ws_w",
+    storeId: S,
+    connectionId: C,
+    kind: "store",
+    id: S,
+  };
+  const goalGrants = [
+    grant(
+      "workspace.goal.create",
+      ["view", "execute"],
+      ["objective", "status", "storeIds", "successCriteria"],
+    ),
+    grant(
+      "workspace.goal.revise",
+      ["execute"],
+      ["dueAt", "expectedRevision", "goalId", "objective", "successCriteria"],
+    ),
+    grant("workspace.task.create", ["execute"], ["allowedResources", "goalId", "objective"]),
+  ];
+  // A support.case.read view grant on the store (its fields are the grant's own: a read tag
+  // names none, so the kernel is asked with the fields the grant holds).
+  const customerReader = grant("support.case.read", ["view"], [], {
+    scope: {
+      organizationId: "org_o",
+      workspaceId: "ws_w",
+      storeIds: [S],
+      accountIds: [],
+      resources: [storeRef],
+      fields: ["transcript"],
+    },
+  });
+  let stored = null;
+  const run = async ({ goals, record, grants = goalGrants }) => {
+    stored = null;
+    const s = scripted({
+      enterContext: () => contextRow(grants),
+      beginProjectCommand: [{ outcome: "new" }],
+      planDraftLatest: [
+        {
+          message_id: "message_1",
+          revision: "1",
+          kind: "plan_change",
+          canonical: JSON.stringify(change(goals)),
+          digest: "d".repeat(64),
+          asker_principal_id: "person_a",
+          asker_membership_id: "membership_a",
+          context_taint: "none",
+        },
+      ],
+      projectTarget: [
+        {
+          id: "project_target",
+          goal_id: "goal_target",
+          revision: "2",
+          due_at: record.due_at ?? null,
+          area_template_id: record.area_template_id ?? null,
+          owner_principal_id: "person_a",
+          owner_membership_id: "membership_a",
+        },
+      ],
+      projectGoal: [goalRow(record)],
+      workspaceStores: [{ store_id: S }],
+      storeAssociation: [{ store_id: S, connection_id: C, database_now: "x" }],
+      cmdPlanStartDocument: (values) => {
+        stored = values;
+        return [
+          {
+            outcome: "applied",
+            result: JSON.stringify({
+              documentId: values[3],
+              documentDigest: values[5],
+              expiresAt: JSON.parse(values[4]).expiresAt,
+            }),
+          },
+        ];
+      },
+    });
+    const { result } = await quiet(t, () =>
+      handlerWith(on, s.connector).fetch(request("POST", startDocument, draftCard), {}, ctx),
+    );
+    return { result, calls: s.calls.map((c) => c.name) };
+  };
+  const mixed = {
+    due_at: due,
+    success_criteria: JSON.stringify([criteria[0], replied]),
+  };
+  const emails = {
+    area_template_id: "customer_emails",
+    success_criteria: JSON.stringify([replied]),
+  };
+
+  // Without goal view: 404 before the target is read (the goal reads' rule).
+  const blind = await run({
+    goals: [facts("facts")],
+    record: mixed,
+    grants: goalGrants.slice(1),
+  });
+  await envelope(blind.result, 404, "denied", "no goal view");
+  assert.ok(!blind.calls.includes("projectTarget"));
+  assert.equal(blind.calls.at(-1), "rollback");
+  // A record holding only a goal this viewer may not see reads as absent: 404 for any card.
+  for (const goals of [[facts("facts")], []]) {
+    const absent = await run({ goals, record: emails });
+    await envelope(absent.result, 404, "denied", "only a customer goal");
+    assert.ok(!absent.calls.includes("cmdPlanStartDocument"));
+  }
+  // A goal-changing plan change of a record with a goal this person may not see would
+  // replace it: 403, as revise answers. A card that changes only the steps goes on.
+  const hidden = await run({ goals: [facts("facts")], record: mixed });
+  await envelope(hidden.result, 403, "denied", "a hidden goal");
+  assert.ok(!hidden.calls.includes("cmdPlanStartDocument"));
+  const steps = await run({ goals: [], record: mixed });
+  assert.equal(steps.result.status, 201, JSON.stringify(await steps.result.clone().json()));
+  assert.equal(JSON.parse(stored[4]).records.goal, null);
+
+  // A person who may read customer data: the card's goals, then the customer-class goal
+  // kept unchanged (Morrow's card never sees it), so the plan change never drops it.
+  const reader = [...goalGrants, customerReader];
+  const kept = await run({ goals: [facts("facts")], record: mixed, grants: reader });
+  assert.equal(kept.result.status, 201, JSON.stringify(await kept.result.clone().json()));
+  const document = (await kept.result.json()).document;
+  assert.ok(validateCurrentDefinition("PlanStartDocument", document));
+  assert.deepEqual(
+    document.records.goal.successCriteria.map((c) => c.key),
+    ["facts", "replied_in_a_day"],
+  );
+  assert.deepEqual(document.records.goal.successCriteria[1], replied);
+  assert.equal(document.records.goal.dueAt, due);
+  assert.equal(JSON.parse(stored[4]).records.goal.successCriteria[1].key, "replied_in_a_day");
+  // A support.case.read grant on the workspace, not the store, is no view of the store's tag.
+  const workspaceReader = grant("support.case.read", ["view"], ["transcript"]);
+  const elsewhere = await run({
+    goals: [facts("facts")],
+    record: mixed,
+    grants: [...goalGrants, workspaceReader],
+  });
+  await envelope(elsewhere.result, 403, "denied", "a grant off the store");
+
+  // The progress read decides the same tags (it once asked the kernel with no fields, which
+  // the kernel refuses as invalid input: 503 as soon as the workspace had a store).
+  // The checklist goal's tag is the store's catalogue: a catalogue view grant shows it.
+  const catalogReader = grant("catalog.products.read", ["view"], [], {
+    scope: { ...customerReader.scope, fields: ["descriptionHtml", "title"] },
+  });
+  for (const [grants, keys] of [
+    [goalGrants, []],
+    [[...goalGrants, catalogReader], ["pages_complete"]],
+    [
+      [...reader, catalogReader],
+      ["pages_complete", "replied_in_a_day"],
+    ],
+  ]) {
+    const s = scripted({
+      enterContext: () => contextRow(grants),
+      projectGoal: [goalRow(mixed)],
+      workspaceStores: [{ store_id: S }],
+      storeAssociation: [{ store_id: S, connection_id: C, database_now: "x" }],
+      goalValues: [],
+      goalFinish: [],
+      goalWaitingOn: [{ waiting: "0" }],
+    });
+    const { result } = await quiet(t, () =>
+      handlerWith({ goals: true }, s.connector).fetch(
+        request("GET", base + "/goals/goal_target/progress"),
+        {},
+        ctx,
+      ),
+    );
+    const body = await result.json();
+    assert.equal(result.status, 200, JSON.stringify(body));
+    assert.ok(validateCurrentDefinition("GoalProgress", body.progress));
+    assert.deepEqual(
+      body.progress.goals.map((g) => g.key),
+      keys,
+    );
+  }
+
+  // A kept key the card also names, or a 4th measured goal: 409, nothing issued.
+  for (const goals of [
+    [{ ...facts("replied_in_a_day") }],
+    [facts("one"), facts("two"), facts("three")],
+  ]) {
+    const refused = await run({ goals, record: mixed, grants: reader });
+    await envelope(refused.result, 409, "conflict", "kept goals do not fit");
+    assert.ok(!refused.calls.includes("cmdPlanStartDocument"));
+  }
 });
