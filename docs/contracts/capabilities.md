@@ -300,6 +300,18 @@ Retention: R02. Verification: Marking read never changes a decision. Failure: De
 
 Trace: J01; P07.T03; P01.A01, P07.A03. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
+### workspace.routine.revoke
+
+Revoke an installed agent's standing mandate. Owner: Morrow platform owner. Effect: control. Provider: morrow (D01, Design recorded).
+
+Input: installationId: Id; mandateId: Id; control: KillSwitchControl. Output: revokedAt: UtcTime; pendingOperations: IdList.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.routine.revoke. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: mandate state, pending mandate approvals. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: The mandate admits no run after revocation, unclaimed approvals of its proposals are void and its running run ends; a claimed operation still finishes and reconciles. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P05.T04, P12.T04; P01.A01, P05.A03. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
 ## Catalog
 
 ### catalog.products.read
@@ -776,7 +788,7 @@ Draft a grounded reply for review. Owner: Morrow platform owner. Effect: interna
 
 Input: caseId: Id; caseEvidence: EvidenceList; policyEvidence: EvidenceList. Output: proposalRef: ProposalRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant support.reply.propose. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: reply body, recipient, channel. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant support.reply.propose. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: reply body, recipient, channel, sender identity. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
 
 Retention: R03. Verification: Reply cites policy and authorized order facts without invented promises. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -788,7 +800,7 @@ Send an exact approved customer reply. Owner: Morrow platform owner. Effect: com
 
 Input: proposalRef: ProposalRef; approvalRef: ApprovalRef. Output: operationId: Id; deliveryReceipt: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant support.reply.send. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: recipient, channel, reply body. Executor: agent_after_approval; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant support.reply.send. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: recipient, channel, reply body, sender identity. Executor: agent_after_approval; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R03. Verification: Provider message identity verifies the exact approved recipient and body. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -1271,6 +1283,18 @@ Authority: human_or_bounded_installation_with_explicit_capability_grant; explici
 Retention: R02. Verification: Only keys of the active catalogue version are accepted, and the ceiling binds members without this grant. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
 Trace: J13; P12.T01; P01.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### governance.mail_identity.revise
+
+Manage the workspace's sending addresses. Owner: Morrow platform owner. Effect: control. Provider: morrow (D01, Design recorded).
+
+Input: action: MailIdentityAction; senderIdentityId: NullableId; displayName: NullableSenderDisplayName; supportAddress: NullableEmailAddress; expectedRevision: NullableRevision. Output: revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.mail_identity.revise. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: default sender identity, sender display name, sender status, support address. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: The default is always active, a new default never changes an existing proposal's sender, and a change voids unclaimed approvals of pending proposals whose sender, From, Reply-To or Bcc it changes. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J13; P17.T02; P01.A01, P17.A04. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
 ## Custom agents
 

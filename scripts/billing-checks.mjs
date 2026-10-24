@@ -820,6 +820,11 @@ export function inspectPaidWork(table, catalogue, templates) {
     catalogue.capabilities.some((c) => c.kill_switch && permissionVerbs.some((v) => paid(c.id, v)))
   )
     fail("PW2");
+  // PW2b: revoking a mandate is never paid for any verb (ADR-0026 item 5 and ADR-0024 item 4
+  // extend ADR-0011 Q8 to workspace.routine.revoke): it stays a control capability.
+  const revoke = catalogue.capabilities.find((c) => c.id === "workspace.routine.revoke");
+  if (!revoke || revoke.effect !== "control" || permissionVerbs.some((v) => paid(revoke.id, v)))
+    fail("PW2b");
   // PW3: every capability whose execute carries budget_reservation is paid.
   if (
     catalogue.capabilities.some(
