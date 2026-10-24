@@ -115,8 +115,20 @@ const stripeFileSpecs = Object.freeze({
     format: (v) => /^whsec_[A-Za-z0-9+/=_-]{16,256}$/.test(v),
   },
 });
+// Build order PR 7 (ADR-0029 item 3; ADR-0035 item 6): the E2B API key, placed by the owner
+// with morrow_put. Required while the runtime switch is on or cleanup-only (E2B_API_KEY among
+// the broker's names); while it is off an optional file (E2B_API_KEY among the optional
+// names): not required, not transient, read only by `put-secret E2B_API_KEY
+// --while-runtime-off`, and checked for format when present. The format is
+// packages/identity/src/broker-protocol.ts e2bKeyPattern (drift-tested).
+export const e2bKeyFormat = /^e2b_[A-Za-z0-9]{20,128}$/;
+const runtimeFileSpec = (required) => ({
+  required,
+  secret: "E2B_API_KEY",
+  format: (v) => e2bKeyFormat.test(v),
+});
 export const shopifyAppSecretFile = "shopify-app-secret";
-export function stagingFileSpecs({ brokerSecretNames }) {
+export function stagingFileSpecs({ brokerSecretNames, optionalSecretNames = [] }) {
   return Object.freeze({
     "workos-api-key": {
       required: true,
@@ -131,6 +143,11 @@ export function stagingFileSpecs({ brokerSecretNames }) {
     ...Object.fromEntries(
       Object.entries(stripeFileSpecs).filter(([, spec]) => brokerSecretNames.includes(spec.secret)),
     ),
+    ...(brokerSecretNames.includes("E2B_API_KEY")
+      ? { "e2b-api-key": runtimeFileSpec(true) }
+      : optionalSecretNames.includes("E2B_API_KEY")
+        ? { "e2b-api-key": runtimeFileSpec(false) }
+        : {}),
     ...Object.fromEntries(
       brokerSecretNames
         .filter((name) => vaultKekFile(name) !== null)

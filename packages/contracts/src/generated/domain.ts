@@ -635,6 +635,8 @@ export type CapabilityV1_1_governance_mail_identity_revise_input = (unknown & un
 export type CapabilityV1_1_governance_mail_identity_revise_output = { "revision": Core_Revision; };
 export type CapabilityV1_1_workspace_routine_revoke_input = { "installationId": Core_Id; "mandateId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_workspace_routine_revoke_output = { "revokedAt": Core_UtcTime; "pendingOperations": Core_IdList; };
+export type CapabilityV1_1_runtime_execution_use_input = { "runId": Core_Id; "inputs": Core_ArtifactList; };
+export type CapabilityV1_1_runtime_execution_use_output = { "operationId": Core_Id; "outputs": Core_ArtifactList; "costReceipt": Core_EvidenceRef; };
 export type BillingV1_1_BillingRoute = "morrow_direct" | "shopify_app_pricing";
 export type BillingV1_1_PaymentMode = "live" | "test";
 export type BillingV1_1_StripePaymentKey = string;
@@ -1609,6 +1611,7 @@ export interface CapabilityBodies {
   "agents.release.evaluate": { input: Capability_agents_release_evaluate_input; output: Capability_agents_release_evaluate_output; };
   "agents.release.publish": { input: Capability_agents_release_publish_input; output: Capability_agents_release_publish_output; };
   "agents.release.revoke": { input: CapabilityV1_1_agents_release_revoke_input; output: Capability_agents_release_revoke_output; };
+  "runtime.execution.use": { input: CapabilityV1_1_runtime_execution_use_input; output: CapabilityV1_1_runtime_execution_use_output; };
 }
 export type CapabilityId = keyof CapabilityBodies;
 export type CapabilityInput<K extends CapabilityId> = CapabilityBodies[K]["input"];

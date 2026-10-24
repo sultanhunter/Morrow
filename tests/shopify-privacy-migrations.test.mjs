@@ -43,7 +43,8 @@ test("manifest: two contiguous rows after M3 PR-1 and the test entitlement, owne
   assert.equal(rows[1].sequence, rows[0].sequence + 1);
   // M3 PR-2's listings-runs is the next migration after the pair (it revises 0037's
   // helpers); v1 PR 1's two live-store migrations follow it, then "Disconnect store", whose
-  // work definer ends an installation through 0036's bridge.
+  // work definer ends an installation through 0036's bridge; later links (build order PR 7's
+  // runtime-operations onwards) append after it, never between.
   assert.deepEqual(
     manifest.migrations
       .slice(rows[1].sequence, rows[1].sequence + 1)

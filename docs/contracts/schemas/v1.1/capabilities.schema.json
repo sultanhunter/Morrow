@@ -691,6 +691,44 @@
       "required": [
         "revokedAt",
         "pendingOperations"
+        ],
+        "additionalProperties": false
+      },
+    "runtime.execution.use.input": {
+      "description": "Build order PR 7 (ADR-0029 item 7): the grant-level request of one computer job under a run. The job itself is RuntimeJob@1, checked by hand in the broker (no command, template, network, environment or limit); its inputs are minimised extracts with fixed column allowlists.",
+      "type": "object",
+      "properties": {
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "inputs": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ArtifactList"
+        }
+      },
+      "required": [
+        "runId",
+        "inputs"
+      ],
+      "additionalProperties": false
+    },
+    "runtime.execution.use.output": {
+      "description": "Build order PR 7: the job's runtime operation, its checked PNG, CSV and XLSX outputs as untrusted downloads, and the receipt of its worst-case booking.",
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "outputs": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ArtifactList"
+        },
+        "costReceipt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/EvidenceRef"
+        }
+      },
+      "required": [
+        "operationId",
+        "outputs",
+        "costReceipt"
       ],
       "additionalProperties": false
     }

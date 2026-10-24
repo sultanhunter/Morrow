@@ -332,6 +332,13 @@
       "sha256": "ae346a7bd5d2b6062f6ee718f98dd70a7fa47d46a917ea9eb41e31fd5f556e13",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-disconnect-store.md"
+    },
+    {
+      "sequence": 43,
+      "file": "0043.runtime-operations.sql",
+      "sha256": "5d9a6d7ef59acc0198c1a64ea2b3be78e89f3a8c501439e152aae7cb9573f153",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/runtime-computer-foundation.md"
     }
   ]
 }

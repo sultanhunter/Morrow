@@ -8322,6 +8322,81 @@
         "P16.A01"
       ],
       "activation": "blocked_until_contract_and_provider_qualified"
+    },
+    {
+      "id": "runtime.execution.use",
+      "name": "Run one bounded job in a fresh isolated computer",
+      "domain": "Custom agents",
+      "contract_version": "0.1.0-draft",
+      "status": "Proposed",
+      "owner": "Morrow platform owner",
+      "effect": "billable_job",
+      "provider_dependency": "D17",
+      "input": {
+        "envelope": "ScopedRequestV1",
+        "fields": {
+          "runId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "inputs": {
+            "type": "ArtifactList",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "output": {
+        "envelope": "EvidenceResultV1",
+        "fields": {
+          "operationId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "outputs": {
+            "type": "ArtifactList",
+            "required": true,
+            "nullable": false
+          },
+          "costReceipt": {
+            "type": "EvidenceRef",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "eligible_principal": "human_or_bounded_installation_with_explicit_capability_grant",
+      "grant": "runtime.execution.use",
+      "resource_scope": "Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable.",
+      "field_scope": [
+        "minimised extracts",
+        "declared outputs"
+      ],
+      "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
+      "retention_class": "R02",
+      "review_required": false,
+      "executor": "agent_direct_write",
+      "kill_switch": false,
+      "irreversible": false,
+      "verification": "One fresh sandbox per job with no internet or credential; its worst case is reserved before the create, an unknown outcome is reconciled before any retry, and only checked PNG, CSV and XLSX outputs return",
+      "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
+      "journey": "J14",
+      "hosts": [
+        "standalone"
+      ],
+      "layout": "Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.",
+      "implementation_tasks": [
+        "P12.T01",
+        "P12.T02"
+      ],
+      "acceptance_cases": [
+        "P01.A01",
+        "P12.A01",
+        "P12.A04"
+      ],
+      "activation": "blocked_until_contract_and_provider_qualified"
     }
   ]
 }

@@ -31,6 +31,8 @@ import {
   edgeStripeVarNames,
   edgeModelNamesRequired,
   edgeModelVarNames,
+  edgeRuntimeNamesRequired,
+  edgeRuntimeVarNames,
   edgePublicWorkers,
   edgeVarNames,
   edgeWorkers,
@@ -38,6 +40,7 @@ import {
   orchestratorPackageAllowlist,
   resolvedEdgeConfig,
   reviewedModelRecord,
+  reviewedRuntimeRecord,
   reviewedStripeRecord,
   runWrangler,
   verifyEdgeConfig,
@@ -702,6 +705,7 @@ const committedStripe = JSON.parse(readFileSync("docs/decisions/stripe-staging.j
 const committedModel = JSON.parse(
   readFileSync("docs/decisions/model-provider-staging.json", "utf8"),
 );
+const committedRuntime = JSON.parse(readFileSync("docs/decisions/runtime-staging.json", "utf8"));
 const stagingOrigin = committedStaging.cloudflare.origin;
 const reviewedClient = committedWorkos.client_id;
 // Rewrites one JSON var: `patch` replaces members, keeping the others in place.
@@ -718,7 +722,9 @@ const both = (edit) => ({
   api: (c) => edit(c.env.staging.vars),
   broker: (c) => edit(c.env.staging.vars),
 });
-const records = (patch = {}) => {
+// The record files, each patched; `evidence: false` leaves out the runtime record's
+// qualification file, which is otherwise written under the returned evidenceRoot.
+const records = (patch = {}, { evidence = true } = {}) => {
   const path = join(scratch, "records-" + ++copies);
   mkdirSync(path);
   const staging = structuredClone(committedStaging);
@@ -729,15 +735,24 @@ const records = (patch = {}) => {
   patch.stripe?.(stripe);
   const model = structuredClone(committedModel);
   patch.model?.(model);
+  const runtime = structuredClone(committedRuntime);
+  patch.runtime?.(runtime);
   writeFileSync(join(path, "staging.json"), JSON.stringify(staging));
   writeFileSync(join(path, "workos-staging.json"), JSON.stringify(workos));
   writeFileSync(join(path, "stripe-staging.json"), JSON.stringify(stripe));
   writeFileSync(join(path, "model-provider-staging.json"), JSON.stringify(model));
+  writeFileSync(join(path, "runtime-staging.json"), JSON.stringify(runtime));
+  if (evidence && typeof runtime.qualification_record === "string") {
+    mkdirSync(join(path, "docs/evidence/live"), { recursive: true });
+    writeFileSync(join(path, runtime.qualification_record), "# Runtime qualification\n");
+  }
   return {
+    evidenceRoot: path,
     stagingPath: join(path, "staging.json"),
     workosPath: join(path, "workos-staging.json"),
     stripePath: join(path, "stripe-staging.json"),
     modelPath: join(path, "model-provider-staging.json"),
+    runtimePath: join(path, "runtime-staging.json"),
   };
 };
 
@@ -2055,5 +2070,235 @@ test("M3 PR-2: switched on, the full model set is required and the orchestrator 
     const found = codes(await verify(tree(mutate), undefined, on));
     for (const code of expected)
       assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Build order PR 7 (ADR-0029 item 10; ADR-0035 item 6): the runtime switch, committed off.
+const runtimeQualified = (r) => {
+  r.qualified_on = "2026-10-30";
+  r.qualification_record = "docs/evidence/live/2026-10-30-e2b-qualification.md";
+};
+const runtimeOn = (r) => {
+  runtimeQualified(r);
+  r.switch = "on";
+};
+// A root holding the qualification record runtimeQualified names, and one without it.
+const runtimeEvidence = join(scratch, "runtime-evidence");
+mkdirSync(join(runtimeEvidence, "docs/evidence/live"), { recursive: true });
+writeFileSync(
+  join(runtimeEvidence, "docs/evidence/live/2026-10-30-e2b-qualification.md"),
+  "# Runtime qualification\n",
+);
+const runtimeNoEvidence = join(scratch, "runtime-no-evidence");
+mkdirSync(join(runtimeNoEvidence, "docs/evidence/live/2026-10-30-e2b-qualification.md"), {
+  recursive: true,
+});
+const runtimeTurnedOn = (value = "on", { broker } = {}) => ({
+  broker: (c) => {
+    c.env.staging.vars.MORROW_RUNTIME_SWITCH = value;
+    c.env.staging.secrets.required.push("E2B_API_KEY");
+    broker?.(c);
+  },
+});
+
+test("PR 7: the committed runtime record is off, and the record rule", async () => {
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(committedRuntime).filter(([key]) => key !== "scope")),
+    {
+      schema_version: 1,
+      environment_kind: "staging",
+      provider: "e2b",
+      profile: "morrow.computer@1",
+      switch: "off",
+      admission: "synthetic_only",
+      monthly_budget_usd: "10.00",
+      provider_usage_limit_usd: "20.00",
+      qualified_on: null,
+      qualification_record: null,
+    },
+  );
+  assert.deepEqual(
+    { ...reviewedRuntimeRecord(committedRuntime) },
+    { switch: "off", admission: "synthetic_only" },
+  );
+  // The record's budget is the code's (and migration 0043's), below the provider's limit.
+  const { runtimeCaps } = await import("../packages/policy/src/runtime-computer.ts");
+  assert.equal(committedRuntime.monthly_budget_usd, runtimeCaps.monthlyBudgetUsd);
+  assert.equal(committedRuntime.provider_usage_limit_usd, runtimeCaps.providerUsageLimitUsd);
+  // The staging tools' owner-file format is the broker's key shape.
+  const { e2bKeyPattern } = await import("../packages/identity/src/broker-protocol.ts");
+  const { e2bKeyFormat } = await import("../scripts/staging-files.mjs");
+  assert.equal(e2bKeyFormat.source, e2bKeyPattern.source);
+  // cleanup_only needs no qualification; on needs it; merchant needs on.
+  const cleanup = { ...structuredClone(committedRuntime), switch: "cleanup_only" };
+  assert.deepEqual(
+    { ...reviewedRuntimeRecord(cleanup) },
+    { switch: "cleanup_only", admission: "synthetic_only" },
+  );
+  const on = structuredClone(committedRuntime);
+  runtimeOn(on);
+  assert.deepEqual(
+    { ...reviewedRuntimeRecord(on, runtimeEvidence) },
+    { switch: "on", admission: "synthetic_only" },
+  );
+  on.admission = "merchant";
+  assert.deepEqual(
+    { ...reviewedRuntimeRecord(on, runtimeEvidence) },
+    { switch: "on", admission: "merchant" },
+  );
+  // The qualification record must be a committed file, not a name: none in the repository
+  // (the default root), none under another root, or a directory in its place, refuses it,
+  // whether the switch is on or the record is only qualified.
+  const qualified = structuredClone(committedRuntime);
+  runtimeQualified(qualified);
+  assert.deepEqual(
+    { ...reviewedRuntimeRecord(qualified, runtimeEvidence) },
+    { switch: "off", admission: "synthetic_only" },
+  );
+  for (const record of [on, qualified]) {
+    assert.throws(() => reviewedRuntimeRecord(record), /EDGE_STAGING_RUNTIME_RECORD/);
+    assert.throws(
+      () => reviewedRuntimeRecord(record, runtimeNoEvidence),
+      /EDGE_STAGING_RUNTIME_RECORD/,
+    );
+    assert.throws(
+      () => reviewedRuntimeRecord(record, join(scratch, "runtime-absent")),
+      /EDGE_STAGING_RUNTIME_RECORD/,
+    );
+  }
+  for (const edit of [
+    (r) => (r.switch = "on"),
+    (r) => ((r.switch = "cleanup_only"), (r.admission = "merchant")),
+    (r) => (r.admission = "merchant"),
+    (r) => (r.switch = true),
+    (r) => (r.switch = "paused"),
+    (r) => (r.provider = "daytona"),
+    (r) => (r.profile = "morrow.computer@2"),
+    (r) => delete r.switch,
+    (r) => (r.extra = 1),
+    (r) => (r.monthly_budget_usd = "20.00"),
+    (r) => (r.monthly_budget_usd = "25.00"),
+    (r) => (r.monthly_budget_usd = "0.00"),
+    (r) => (r.monthly_budget_usd = 10),
+    (r) => (r.qualified_on = "2026-10-30"),
+    (r) => (r.qualification_record = "docs/evidence/live/2026-10-30-e2b.md"),
+    (r) => (
+      (r.qualified_on = "soon"),
+      (r.qualification_record = "docs/evidence/live/2026-10-30-e2b.md")
+    ),
+    (r) => (
+      (r.qualified_on = "2026-10-30"),
+      (r.qualification_record = "https://example.test/x.md")
+    ),
+    (r) => (r.environment_kind = "production"),
+  ]) {
+    const record = structuredClone(committedRuntime);
+    edit(record);
+    assert.throws(
+      () => reviewedRuntimeRecord(record, runtimeEvidence),
+      /EDGE_STAGING_RUNTIME_RECORD/,
+    );
+  }
+  // Only the staging broker carries runtime names, and only while the switch is not off.
+  assert.deepEqual(edgeRuntimeVarNames("broker", "staging"), ["MORROW_RUNTIME_SWITCH"]);
+  for (const runtime of ["on", "cleanup_only"])
+    assert.deepEqual(edgeRuntimeNamesRequired("broker", "staging", runtime), [
+      "MORROW_RUNTIME_SWITCH",
+      "E2B_API_KEY",
+    ]);
+  for (const worker of ["api", "broker", "connector", "orchestrator"]) {
+    assert.deepEqual(edgeRuntimeNamesRequired(worker, "staging", "off"), [], worker);
+    for (const environment of ["development", "production"])
+      assert.deepEqual(edgeRuntimeNamesRequired(worker, environment, "on"), [], worker);
+  }
+  for (const worker of ["api", "connector", "orchestrator"])
+    assert.deepEqual(edgeRuntimeNamesRequired(worker, "staging", "on"), [], worker);
+  assert.deepEqual(edgeVarNames("broker", "staging", "off", "off", "on"), [
+    ...edgeVarNames("broker", "staging"),
+    "MORROW_RUNTIME_SWITCH",
+  ]);
+});
+
+test("PR 7: switched off, the runtime var or the E2B key anywhere is a mixed state", async () => {
+  const verdict = await verify(tree());
+  assert.equal(verdict.runtimeSwitch, "off");
+  assert.deepEqual(verdict.problems, []);
+  for (const [index, [mutate, expected]] of [
+    [runtimeTurnedOn(), ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_VARS", "EDGE_BROKER_SECRETS"]],
+    [
+      { broker: (c) => c.env.staging.secrets.required.push("E2B_API_KEY") },
+      ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_BROKER_SECRETS"],
+    ],
+    [
+      { broker: (c) => (c.env.staging.vars.MORROW_RUNTIME_SWITCH = "on") },
+      ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      { api: (c) => (c.env.staging.vars.MORROW_RUNTIME_SWITCH = "on") },
+      ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      { orchestrator: (c) => (c.env.staging.vars.MORROW_RUNTIME_SWITCH = "on") },
+      ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      { orchestrator: (c) => c.env.staging.secrets.required.push("E2B_API_KEY") },
+      ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER"],
+    ],
+    [
+      { connector: (c) => (c.vars.MORROW_RUNTIME_SWITCH = "on") },
+      ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+  ].entries()) {
+    const found = codes(await verify(tree(mutate)));
+    for (const code of expected)
+      assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
+  }
+  // An invalid record is a problem and counts as off.
+  const invalid = await verify(tree(), undefined, records({ runtime: (r) => (r.switch = "on") }));
+  assert.ok(codes(invalid).includes("EDGE_STAGING_RUNTIME_RECORD"));
+  assert.equal(invalid.runtimeSwitch, "off");
+  // So is "on" naming a qualification record that was never committed (review R3), even with
+  // the broker's files switched on to match.
+  const unrecorded = await verify(
+    tree(runtimeTurnedOn()),
+    undefined,
+    records({ runtime: runtimeOn }, { evidence: false }),
+  );
+  assert.ok(codes(unrecorded).includes("EDGE_STAGING_RUNTIME_RECORD"));
+  assert.equal(unrecorded.runtimeSwitch, "off");
+});
+
+test("PR 7: switched on or cleanup-only, the staging broker carries exactly its var and the key", async () => {
+  for (const [value, patch] of [
+    ["on", runtimeOn],
+    ["cleanup_only", (r) => (r.switch = "cleanup_only")],
+  ]) {
+    const record = records({ runtime: patch });
+    const verdict = await verify(tree(runtimeTurnedOn(value)), undefined, record);
+    assert.deepEqual(verdict.problems, [], value);
+    assert.equal(verdict.runtimeSwitch, value);
+    assert.ok(verdict.resolved["broker:staging"].bindings.includes("E2B_API_KEY"));
+    assert.ok(verdict.resolved["broker:staging"].bindings.includes("MORROW_RUNTIME_SWITCH"));
+    for (const environment of ["development", "production"])
+      assert.ok(!verdict.resolved["broker:" + environment].bindings.includes("E2B_API_KEY"));
+    // The files off with the record on (or the other way round) is mixed.
+    assert.ok(codes(await verify(tree(), undefined, record)).includes("EDGE_RUNTIME_SWITCH_MIXED"));
+    for (const [index, [mutate, expected]] of [
+      [
+        runtimeTurnedOn(value, { broker: (c) => c.env.staging.secrets.required.pop() }),
+        ["EDGE_RUNTIME_SWITCH_MIXED", "EDGE_BROKER_SECRETS"],
+      ],
+      [runtimeTurnedOn(value === "on" ? "cleanup_only" : "on"), ["EDGE_VARS"]],
+      [runtimeTurnedOn("true"), ["EDGE_VARS"]],
+    ].entries()) {
+      const found = codes(await verify(tree(mutate), undefined, record));
+      for (const code of expected)
+        assert.ok(
+          found.includes(code),
+          value + " " + index + ": " + code + " not in " + found.join(","),
+        );
+    }
   }
 });
