@@ -702,7 +702,7 @@ async function vaultFake(options = {}) {
     [vaultStatements.shopifyWebhookTarget]: ([id]) => {
       events.push("target:" + id);
       const i = installations.find((x) => x.id === id);
-      const none = (outcome) => [
+      const none = (outcome, version = null) => [
         {
           outcome,
           organization_id: null,
@@ -710,14 +710,14 @@ async function vaultFake(options = {}) {
           app_key: null,
           shop_domain: null,
           credential_id: null,
-          credential_version: null,
+          credential_version: version,
           kek_version: null,
           wrapped_key: null,
           sealed_value: null,
         },
       ];
       if (!i || i.target === "not_found") return none("not_found");
-      if (i.target === "credential_unavailable") return none("credential_unavailable");
+      if (i.target === "credential_unavailable") return none("credential_unavailable", i.version);
       const e = envelopes.get(id);
       return [
         {
@@ -857,10 +857,10 @@ test("sync: each installation's own app path, failed, unauthorized and skipped o
   assert.deepEqual(counts, {
     checked: 5,
     registered: 2,
-    failed: 0,
+    failed: 2,
     unknown: 0,
     unauthorized: 0,
-    skipped: 3,
+    skipped: 1,
   });
   const urls = h.shopify.state.requests
     .filter((r) => r.body.variables)
@@ -871,13 +871,17 @@ test("sync: each installation's own app path, failed, unauthorized and skipped o
     [other, `${origin}/shopify/a/app-b/webhooks`],
     [other, `${origin}/shopify/a/app-b/webhooks`],
   ]);
-  // A target that is gone, has no active credential or whose envelope does not open for
-  // this installation sends nothing and records nothing.
+  // A target that is gone sends nothing and records nothing. One with no active envelope
+  // for its current version, or whose envelope does not open for this installation, sends
+  // nothing and is recorded failed for that version (it waits for its backoff instead of
+  // heading every pending list).
   assert.deepEqual(
-    h.records.map((r) => [r[0], r[1], r[2]]),
+    h.records.map((r) => [r[0], r[1], r[2], r[3], r[4]]),
     [
-      ["installation_a", "1", "registered"],
-      ["installation_b", "3", "registered"],
+      ["installation_a", "1", "registered", "9001", "9002"],
+      ["installation_b", "3", "registered", "9003", "9004"],
+      ["installation_wrong", "1", "failed", "", ""],
+      ["installation_nocred", "1", "failed", "", ""],
     ],
   );
   // Unauthorized and failed are recorded with no ids (the empty string, NULL in SQL).

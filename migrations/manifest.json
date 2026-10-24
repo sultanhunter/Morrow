@@ -371,7 +371,7 @@
     {
       "sequence": 48,
       "file": "0048.shopify-webhook-registrations-vault.sql",
-      "sha256": "953f0a45ea94d9414669838f4d8fd2477d8844c2b6a01bac08e4c8a1740a0324",
+      "sha256": "5b0a1c72e78d86a63d02a9db7700a873410a2222b7845a67e7927e4a76a6211b",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
     }

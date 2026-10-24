@@ -15,7 +15,10 @@
 //   2. Per installation, while the budget allows:
 //      a. one vault transaction: its tenant, app key, shop domain and the active envelope of
 //         its current credential version, opened with the KEK (the additional data binds the
-//         tenant, the credential, the installation and the version);
+//         tenant, the credential, the installation and the version). An installation that
+//         ended meanwhile is skipped; one whose token cannot be used here (no active envelope
+//         for its version, a malformed row, an envelope that does not open) sends nothing
+//         and is recorded failed for that version;
 //      b. the callback URL, built here from the connector's own reviewed origin and the app
 //         key: `<origin>/shopify/a/<appKey>/webhooks`, never from a caller or the database;
 //      c. one fixed list (WebhookSubscriptions: both topics, at most 25 nodes, each node's
@@ -321,6 +324,37 @@ export function createShopifyWebhookSync(deps: Readonly<ShopifyWebhookDependenci
     );
   }
 
+  // e. The record of one outcome for the credential version used, in its own transaction.
+  // Anything but "recorded" (stale: a newer token, or the installation ended) is skipped.
+  async function record(
+    vault: Readonly<BrokerVault>,
+    installationId: string,
+    version: string,
+    registration: ShopifyWebhookRegistration,
+    deadline: number,
+  ): Promise<InstallationOutcome> {
+    try {
+      const recorded = await deps.transaction(
+        vault,
+        Math.max(1, Math.min(vaultBudgetMs, deadline - deps.now())),
+        async (query) =>
+          columns(
+            await query(vaultStatements.shopifyWebhookRegistrationRecord, [
+              installationId,
+              version,
+              registration.status,
+              registration.status === "registered" ? registration.uninstalledId : "",
+              registration.status === "registered" ? registration.scopesUpdateId : "",
+            ]),
+            ["outcome"],
+          ).outcome,
+      );
+      return recorded === "recorded" ? registration.status : "skipped";
+    } catch {
+      return "skipped";
+    }
+  }
+
   async function installation(
     vault: Readonly<BrokerVault>,
     origin: string,
@@ -342,19 +376,26 @@ export function createShopifyWebhookSync(deps: Readonly<ShopifyWebhookDependenci
     } catch {
       return "skipped";
     }
-    if (target.outcome !== "found") return "skipped";
     const { organization_id: org, workspace_id: ws, credential_id: credential } = target;
     const { app_key: appKey, shop_domain: shop, credential_version: version } = target;
+    // An installation that ended meanwhile (not_found) is no longer pending. An active one
+    // whose current token cannot be used here (no active envelope for its version, a
+    // malformed row, an envelope that does not open) is recorded failed for that version,
+    // so it waits for its backoff instead of heading every pending list; nothing is sent.
+    if (!exact(/^[1-9][0-9]{0,15}$/, version)) return "skipped";
+    const failed = Object.freeze({ status: "failed" as const });
+    if (target.outcome === "credential_unavailable")
+      return record(vault, installationId, version, failed, deadline);
+    if (target.outcome !== "found") return "skipped";
     if (
       !exact(idPattern, org) ||
       !exact(idPattern, ws) ||
       !exact(idPattern, credential) ||
       !exact(shopifyAppKeyPattern, appKey) ||
       !exact(shopifyShopPattern, shop) ||
-      !exact(/^[1-9][0-9]{0,15}$/, version) ||
       !exact(/^[1-9][0-9]{0,2}$/, target.kek_version)
     )
-      return "skipped";
+      return record(vault, installationId, version, failed, deadline);
     // b. The callback URL: the connector's own origin and the app key, nothing else.
     const callbackUrl = shopifyWebhookCallbackUrl(origin, appKey);
     let token: string;
@@ -390,7 +431,7 @@ export function createShopifyWebhookSync(deps: Readonly<ShopifyWebhookDependenci
         plaintext.fill(0);
       }
     } catch {
-      return "skipped";
+      return record(vault, installationId, version, failed, deadline);
     }
     // c and d. Shopify, within the budget less the record's reserve.
     let registration: ShopifyWebhookRegistration;
@@ -406,26 +447,7 @@ export function createShopifyWebhookSync(deps: Readonly<ShopifyWebhookDependenci
       token = "";
     }
     // e. The record, for the version used.
-    try {
-      const recorded = await deps.transaction(
-        vault,
-        Math.max(1, Math.min(vaultBudgetMs, deadline - deps.now())),
-        async (query) =>
-          columns(
-            await query(vaultStatements.shopifyWebhookRegistrationRecord, [
-              installationId,
-              version,
-              registration.status,
-              registration.status === "registered" ? registration.uninstalledId : "",
-              registration.status === "registered" ? registration.scopesUpdateId : "",
-            ]),
-            ["outcome"],
-          ).outcome,
-      );
-      return recorded === "recorded" ? registration.status : "skipped";
-    } catch {
-      return "skipped";
-    }
+    return record(vault, installationId, version, registration, deadline);
   }
 
   async function sync(env: unknown, budgetMs: unknown): Promise<string> {

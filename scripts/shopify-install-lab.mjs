@@ -13,7 +13,13 @@
 // live store installs and links into the owner's workspace; another live store using its
 // install link stores nothing; a second marked app is refused; every unmarked app still
 // refuses live stores, in the broker and in the database; its end states (uninstall, the
-// credential's destruction, shop/redact) still pass.
+// credential's destruction, shop/redact) still pass. The shop-specific webhook subscriptions
+// (docs/briefs/shopify-shop-specific-webhooks.md) add the H cases: the broker's vault login
+// alone lists the active installations whose subscriptions are not registered (ids only),
+// reads one target with its envelope and records one outcome for the version it used; the
+// real sync registers both stores' app/uninstalled and app/scopes_update to the connector's
+// path against the synthetic Shopify, idempotently, through a failure's backoff and a
+// re-authorisation's new version; an ended installation is never pending.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import canonicalize from "canonicalize";
@@ -21,9 +27,11 @@ import { createShopifyBroker } from "../apps/broker/src/shopify-install.ts";
 import { brokerCapabilities } from "../apps/broker/src/capabilities.ts";
 import { sealVaultRecord, createVaultKeyring, vaultBytesHex } from "../apps/broker/src/vault.ts";
 import { runVaultTransactionWithDriver } from "../apps/broker/src/vault-database.ts";
+import { createShopifyWebhookSync } from "../apps/broker/src/shopify-webhooks.ts";
 import {
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
+  decodeShopifyWebhookSyncResult,
 } from "../packages/identity/src/broker-protocol.ts";
 import { createControlledWorkspaceStoreLinking } from "../packages/identity/src/workspace-store-linking-control.ts";
 import {
@@ -71,6 +79,8 @@ const slugs = [
   ".shopify-vault-install.sql",
   ".shopify-live-store-identity.sql",
   ".shopify-live-store-vault.sql",
+  ".shopify-webhook-registrations-identity.sql",
+  ".shopify-webhook-registrations-vault.sql",
 ];
 const files = slugs.map((slug) => manifest.migrations.find((m) => m.file.endsWith(slug))?.file);
 if (files.some((f) => !f)) throw Error("SHOPIFY_INSTALL_LAB_MIGRATIONS_REQUIRED");
@@ -79,6 +89,7 @@ const sourceDigests = Object.fromEntries(
     "scripts/shopify-install-lab.mjs",
     "scripts/fixtures/shopify-oracle.mjs",
     "apps/broker/src/shopify-install.ts",
+    "apps/broker/src/shopify-webhooks.ts",
     "apps/broker/src/shopify.ts",
     "apps/broker/src/vault-database.ts",
     "packages/identity/src/shopify-link-issuer.ts",
@@ -1446,6 +1457,282 @@ ROLLBACK;`,
         ended.stdout.split("\n").includes("uninstalled|false|true|true|true") &&
         liveInstallations()[0].status === "linked",
       { ok: ended.ok, stdout: ended.stdout, stderr: ended.stderr?.slice(0, 300) },
+    );
+
+    // -------------------------------------------------------------------------
+    // H: the shop-specific webhook subscriptions (migrations shopify-webhook-registrations-
+    // identity and -vault; apps/broker/src/shopify-webhooks.ts). Both stores (the development
+    // app's and the marked live app's) are active and linked here.
+    phase("subscriptions");
+    const hookOrigin = "https://connector.lab.example.test";
+    const hookEnv = {
+      ...brokerEnv,
+      CONNECTOR_CONFIGURATION_JSON: JSON.stringify({
+        schemaVersion: 1,
+        origin: hookOrigin,
+        apiOrigin: "https://workspace.lab.example.test",
+      }),
+    };
+    const hookPath = (key) => `${hookOrigin}/shopify/a/${key}/webhooks`;
+    const devId = installation.id;
+    const liveId = liveInstallations()[0].id;
+    const asBroker = (sql) => db.rows(sql, { user: "morrow_vault_broker" });
+    const pendingIds = () =>
+      asBroker("SELECT installation_id FROM morrow_vault.shopify_webhook_registrations_pending()")
+        .map((r) => r.installation_id)
+        .sort();
+    const registrationRows = () =>
+      db.rows(
+        `SELECT organization_id::text AS org,workspace_id::text AS ws,installation_id::text AS installation,credential_version::int AS version,status,uninstalled_subscription_id AS uninstalled,scopes_update_subscription_id AS scopes,attempts,revision::int AS revision FROM morrow_identity.shopify_webhook_registrations ORDER BY installation_id`,
+        { role: "morrow_identity_owner" },
+      );
+    const tenantOf = (id) =>
+      db.rows(
+        `SELECT organization_id::text AS org,workspace_id::text AS ws,credential_version::int AS version FROM morrow_identity.store_installations WHERE id=${literal(id)}`,
+        { role: "morrow_identity_owner" },
+      )[0];
+    const deniedToOthers = (sql) =>
+      ["morrow_connector_ingress", "morrow_api_worker", "morrow_identity_linking"].every(
+        (user) => !db.tryRun(sql, { user }).ok,
+      );
+    const pendingRows = asBroker(
+      "SELECT * FROM morrow_vault.shopify_webhook_registrations_pending()",
+    );
+    check(
+      "H1:only_the_broker_lists_the_active_installations_without_subscriptions_ids_only",
+      JSON.stringify(pendingIds()) === JSON.stringify([devId, liveId].sort()) &&
+        pendingRows.every((r) => Object.keys(r).join(",") === "installation_id") &&
+        deniedToOthers("SELECT * FROM morrow_vault.shopify_webhook_registrations_pending();") &&
+        deniedToOthers(`SELECT * FROM morrow_vault.shopify_webhook_target(${literal(devId)});`) &&
+        deniedToOthers(
+          `SELECT morrow_vault.shopify_webhook_registration_record(${literal(devId)},'2','failed',NULL,NULL);`,
+        ) &&
+        deniedToOthers("SELECT count(*) FROM morrow_identity.shopify_webhook_registrations;") &&
+        deniedToOthers(
+          "SELECT * FROM morrow_identity.work_shopify_webhook_registrations_pending();",
+        ),
+      { pending: pendingIds(), devId, liveId },
+    );
+    const target = (id) =>
+      asBroker(
+        `SELECT outcome,organization_id,workspace_id,app_key,shop_domain,credential_version,kek_version,length(wrapped_key)::int AS wrapped,length(sealed_value)::int AS sealed FROM morrow_vault.shopify_webhook_target(${literal(id)})`,
+      )[0];
+    const devTarget = target(devId);
+    const liveTarget = target(liveId);
+    check(
+      "H2:the_target_is_the_installations_own_tenant_app_shop_and_current_envelope",
+      devTarget?.outcome === "found" &&
+        devTarget.organization_id === ids.org &&
+        devTarget.workspace_id === ids.ws &&
+        devTarget.app_key === appKey &&
+        devTarget.shop_domain === shop &&
+        Number(devTarget.credential_version) === tenantOf(devId).version &&
+        devTarget.kek_version === "1" &&
+        devTarget.wrapped > 0 &&
+        devTarget.sealed > 0 &&
+        liveTarget?.outcome === "found" &&
+        liveTarget.organization_id === ids.orgL &&
+        liveTarget.app_key === liveKey &&
+        target(randomUUID())?.outcome === "not_found" &&
+        target("bad id!")?.outcome === "invalid",
+      {
+        dev: devTarget && { ...devTarget, wrapped: undefined, sealed: undefined },
+        live: liveTarget?.outcome,
+      },
+    );
+    // The real sync over the vault login, against both synthetic stores. The development
+    // store already carries another app path's subscription.
+    const foreignSubscription = {
+      id: "6001",
+      topic: "APP_UNINSTALLED",
+      uri: "https://elsewhere.example.test/shopify/webhooks",
+    };
+    oracle.state.subscriptions.push({ ...foreignSubscription });
+    const hooks = createShopifyWebhookSync({
+      transaction: (vault, budgetMs, body) =>
+        runVaultTransactionWithDriver(
+          vaultDriver,
+          vault,
+          Math.min(10000, budgetMs * 3),
+          body,
+          Date.now,
+          class {
+            close() {}
+          },
+        ),
+      fetch: (url, init) => (new URL(url).host === liveShop ? liveOracle : oracle).fetch(url, init),
+      now: () => Date.now(),
+    });
+    // Loaded hosts: a sync may run out of budget before both stores; it is run again until
+    // nothing is pending (at most three times), as the cron would.
+    const syncUntilDone = async () => {
+      const totals = [];
+      for (let i = 0; i < 3; i++) {
+        totals.push(decodeShopifyWebhookSyncResult(await hooks.sync(hookEnv, 25000)));
+        if (pendingIds().length === 0) break;
+      }
+      return totals;
+    };
+    const firstSync = await syncUntilDone();
+    const ours = (o, key) => o.state.subscriptions.filter((w) => w.uri === hookPath(key));
+    const rowsAfter = registrationRows();
+    const rowOf = (id) => rowsAfter.find((r) => r.installation === id);
+    const matches = (id, o, key, org, ws) => {
+      const row = rowOf(id);
+      const subs = ours(o, key);
+      return (
+        row?.status === "registered" &&
+        row.org === org &&
+        row.ws === ws &&
+        row.version === tenantOf(id).version &&
+        row.attempts === 0 &&
+        JSON.stringify(subs.map((w) => w.topic)) === '["APP_UNINSTALLED","APP_SCOPES_UPDATE"]' &&
+        row.uninstalled === subs[0].id &&
+        row.scopes === subs[1].id
+      );
+    };
+    check(
+      "H3:the_sync_registers_both_stores_subscriptions_to_the_connectors_path_and_records_them",
+      firstSync.reduce((n, t) => n + t.registered, 0) === 2 &&
+        firstSync.every((t) => t.failed + t.unknown + t.unauthorized + t.skipped === 0) &&
+        pendingIds().length === 0 &&
+        rowsAfter.length === 2 &&
+        matches(devId, oracle, appKey, ids.org, ids.ws) &&
+        matches(liveId, liveOracle, liveKey, ids.orgL, ids.wsL) &&
+        JSON.stringify(oracle.state.subscriptions[0]) === JSON.stringify(foreignSubscription) &&
+        oracle.state.subscriptions.length === 3 &&
+        liveOracle.state.subscriptions.length === 2,
+      {
+        firstSync,
+        rowsAfter,
+        dev: oracle.state.subscriptions,
+        live: liveOracle.state.subscriptions,
+      },
+    );
+    const webhookCalls = () =>
+      [...oracle.state.calls, ...liveOracle.state.calls].filter((c) =>
+        /^WebhookSubscription/.test(c.operation ?? ""),
+      ).length;
+    const callsBefore = webhookCalls();
+    const idle = decodeShopifyWebhookSyncResult(await hooks.sync(hookEnv, 25000));
+    check(
+      "H4:a_second_sync_finds_nothing_pending_and_calls_shopify_for_nothing",
+      idle.checked === 0 && webhookCalls() === callsBefore,
+      { idle },
+    );
+    // The record's own rules, as the broker's login: closed inputs, the current version only,
+    // the tenant from the installation row.
+    const record = (id, version, status, a = "NULL", b = "NULL") =>
+      asBroker(
+        `SELECT morrow_vault.shopify_webhook_registration_record(${literal(id)},${literal(version)},${literal(status)},${a},${b}) AS outcome`,
+      )[0]?.outcome;
+    const devVersion = String(tenantOf(devId).version);
+    const rules = {
+      stale: record(devId, String(Number(devVersion) - 1), "failed"),
+      newer: record(devId, String(Number(devVersion) + 1), "failed"),
+      registeredWithoutIds: record(devId, devVersion, "registered"),
+      failedWithIds: record(devId, devVersion, "failed", "'1'", "'2'"),
+      sameIds: record(devId, devVersion, "registered", "'5'", "'5'"),
+      badStatus: record(devId, devVersion, "deleted"),
+      badId: record(devId, devVersion, "registered", "'gid://x'", "'2'"),
+      unknownInstallation: record(randomUUID(), "1", "failed"),
+    };
+    check(
+      "H5:the_record_takes_closed_inputs_for_the_current_version_only",
+      rules.stale === "stale" &&
+        rules.newer === "stale" &&
+        rules.registeredWithoutIds === "invalid" &&
+        rules.failedWithIds === "invalid" &&
+        rules.sameIds === "invalid" &&
+        rules.badStatus === "invalid" &&
+        rules.badId === "invalid" &&
+        rules.unknownInstallation === "not_found" &&
+        JSON.stringify(registrationRows()) === JSON.stringify(rowsAfter),
+      rules,
+    );
+    // A failed outcome waits for its backoff (4 minutes per attempt), then the next sync
+    // lists, finds both subscriptions and records registered again without creating.
+    const failedRecord = record(devId, devVersion, "failed");
+    const failedRow = registrationRows().find((r) => r.installation === devId);
+    const pendingInBackoff = pendingIds();
+    db.sql(
+      `SET session_replication_role=replica; UPDATE morrow_identity.shopify_webhook_registrations SET updated_at=updated_at-interval '5 minutes',created_at=created_at-interval '5 minutes' WHERE installation_id=${literal(devId)}; SET session_replication_role=origin;`,
+    );
+    const pendingAfterBackoff = pendingIds();
+    const createsBefore = oracle.state.calls.filter(
+      (c) => c.operation === "WebhookSubscriptionCreate",
+    ).length;
+    const retried = decodeShopifyWebhookSyncResult(await hooks.sync(hookEnv, 25000));
+    const retriedRow = registrationRows().find((r) => r.installation === devId);
+    check(
+      "H6:a_failed_outcome_backs_off_then_is_registered_again_without_a_create",
+      failedRecord === "recorded" &&
+        failedRow.status === "failed" &&
+        failedRow.attempts === 1 &&
+        failedRow.uninstalled === null &&
+        failedRow.revision === rowOf(devId).revision + 1 &&
+        pendingInBackoff.length === 0 &&
+        JSON.stringify(pendingAfterBackoff) === JSON.stringify([devId]) &&
+        retried.checked === 1 &&
+        retried.registered === 1 &&
+        retriedRow.status === "registered" &&
+        retriedRow.attempts === 0 &&
+        retriedRow.uninstalled === rowOf(devId).uninstalled &&
+        oracle.state.calls.filter((c) => c.operation === "WebhookSubscriptionCreate").length ===
+          createsBefore,
+      { failedRecord, failedRow, pendingInBackoff, pendingAfterBackoff, retried, retriedRow },
+    );
+    // A re-authorisation adds a credential version: the installation is pending again, the
+    // sync lists with the new token, creates nothing and records the new version; an outcome
+    // for the old version is stale.
+    const liveBefore = registrationRows().find((r) => r.installation === liveId);
+    const liveReauthorised = await liveInstall();
+    const pendingAfterReauthorise = pendingIds();
+    const liveCreates = () =>
+      liveOracle.state.calls.filter((c) => c.operation === "WebhookSubscriptionCreate").length;
+    const liveCreatesBefore = liveCreates();
+    const reSynced = decodeShopifyWebhookSyncResult(await hooks.sync(hookEnv, 25000));
+    const liveAfter = registrationRows().find((r) => r.installation === liveId);
+    check(
+      "H7:a_reauthorisation_is_pending_again_and_records_the_new_version_without_a_create",
+      liveReauthorised.result.outcome === "reauthorised" &&
+        JSON.stringify(pendingAfterReauthorise) === JSON.stringify([liveId]) &&
+        reSynced.registered === 1 &&
+        liveCreates() === liveCreatesBefore &&
+        liveAfter.version === liveBefore.version + 1 &&
+        liveAfter.version === tenantOf(liveId).version &&
+        liveAfter.revision === liveBefore.revision + 1 &&
+        liveAfter.uninstalled === liveBefore.uninstalled &&
+        record(liveId, String(liveBefore.version), "failed") === "stale",
+      {
+        outcome: liveReauthorised.result.outcome,
+        pendingAfterReauthorise,
+        reSynced,
+        liveBefore,
+        liveAfter,
+      },
+    );
+    // An ended installation is never pending and has no target (sim, rolled back: the
+    // uninstall's own update, then the identity bridges as their executor).
+    const endedPending = db.tryRun(
+      `BEGIN; SET LOCAL ROLE morrow_identity_owner;
+UPDATE morrow_identity.store_installations x SET status='uninstalled',uninstalled_at=${at},revision=x.revision+1,updated_at=${at} WHERE x.id=${literal(devId)};
+SET LOCAL ROLE morrow_work_command;
+SELECT 'pending:'||count(*) FROM morrow_identity.work_shopify_webhook_registrations_pending() p WHERE p.installation_id=${literal(devId)};
+SELECT 'target:'||outcome FROM morrow_identity.work_shopify_webhook_target(${literal(devId)});
+SELECT 'record:'||morrow_identity.work_shopify_webhook_registration_record(${literal(devId)},${literal(String(tenantOf(devId).version))},'failed',NULL,NULL);
+ROLLBACK;`,
+    );
+    const endedLines = endedPending.stdout
+      .split("\n")
+      .filter((line) => /^(pending|target|record):/.test(line));
+    check(
+      "H8:an_ended_installation_is_never_pending_has_no_target_and_records_nothing",
+      endedPending.ok &&
+        JSON.stringify(endedLines) ===
+          JSON.stringify(["pending:0", "target:not_found", "record:stale"]) &&
+        tenantOf(devId) !== undefined,
+      { ok: endedPending.ok, endedLines, stderr: endedPending.stderr?.slice(0, 300) },
     );
   },
   { administrator: "createrole" },

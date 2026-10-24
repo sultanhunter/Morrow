@@ -40,7 +40,8 @@ BEGIN
 END $$;
 -- The target and its token's envelope. Outcomes: found, not_found (an unknown or ended
 -- installation, a retired app), credential_unavailable (no active version of the current
--- credential whose subject is the installation), invalid, denied.
+-- credential whose subject is the installation; only the current version is returned, so the
+-- broker records that version failed and it waits for its backoff), invalid, denied.
 CREATE FUNCTION morrow_vault.shopify_webhook_target(p_installation_id text)
 RETURNS TABLE(outcome text,organization_id text,workspace_id text,app_key text,shop_domain text,credential_id text,
  credential_version text,kek_version text,wrapped_key text,sealed_value text)
@@ -64,7 +65,7 @@ BEGIN
    AND x.version::text=t.credential_version AND x.subject_id=p_installation_id AND x.status='active'
    AND x.provider='shopify' AND x.kind='shopify_offline_token';
  IF NOT FOUND THEN
-  RETURN QUERY SELECT 'credential_unavailable'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
+  RETURN QUERY SELECT 'credential_unavailable'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,t.credential_version,NULL::text,
    NULL::text,NULL::text;
   RETURN;
  END IF;
