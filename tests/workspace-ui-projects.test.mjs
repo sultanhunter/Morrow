@@ -453,7 +453,7 @@ test("the page says what a dialog did and keeps its dialogs mounted through a re
   // opener unmount once the actions flip), and focus moves to the page title.
   const screen = readFileSync("packages/workspace-ui/src/projects/project-screen.tsx", "utf8");
   assert.match(screen, /<StatusRegion message=\{done\} \/>/);
-  assert.match(screen, /<h1 className="pj-title" ref=\{title\} tabIndex=\{-1\}>/);
+  assert.match(screen, /<h1 ref=\{title\} tabIndex=\{-1\} dir="auto">/);
   for (const dialog of ["StopStepsDialog", "FinishDialog", "ExtendDialog"]) {
     const at = screen.indexOf(`<${dialog}`);
     assert.ok(at > 0, dialog);
@@ -463,6 +463,23 @@ test("the page says what a dialog did and keeps its dialogs mounted through a re
   }
   const actions = readFileSync("packages/workspace-ui/src/projects/project-actions.tsx", "utf8");
   assert.doesNotMatch(actions, /StatusRegion/, "no dialog keeps its own confirmation");
+});
+
+test("the page heading names the project alone; its health badge sits beside it", () => {
+  // Review F8: a status word inside the H1 changes the heading's accessible name over time.
+  const screen = readFileSync("packages/workspace-ui/src/projects/project-screen.tsx", "utf8");
+  const start = screen.indexOf('<div className="pj-title">');
+  assert.ok(start > 0, "the title row");
+  const row = screen.slice(start, screen.indexOf("</div>", start));
+  const heading = row.slice(row.indexOf("<h1"), row.indexOf("</h1>") + "</h1>".length);
+  assert.match(
+    heading,
+    /^<h1 ref=\{title\} tabIndex=\{-1\} dir="auto">\s*\{view\.title\}\s*<\/h1>$/,
+  );
+  assert.match(row.slice(row.indexOf("</h1>")), /<HealthWord health=\{view\.health\} \/>/);
+  assert.doesNotMatch(screen, /<h1[^>]*>[^]*?<HealthWord[^]*?<\/h1>/);
+  const css = readFileSync("packages/workspace-ui/src/styles/projects.css", "utf8");
+  assert.match(css, /\.pj-title \{\s*display: flex;\s*flex-wrap: wrap;\s*align-items: center;/);
 });
 
 test("a teammate's actions are off as the server says, and creating is refused", async () => {

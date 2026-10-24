@@ -606,7 +606,14 @@ fixtureCases.push(
       await page.getByRole("button", { name: "Set it up yourself" }).click();
     },
   }),
-  fixtureCase("projects", "project", `/w/${ws}/projects/project-tote`, { scenario: preview }),
+  fixtureCase("projects", "project", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    // Review F8: the page heading's name is the title alone; the health badge sits beside it.
+    setup: (page) =>
+      page
+        .getByRole("heading", { level: 1, name: "Everyday Tote in AI answers", exact: true })
+        .waitFor({ timeout: 5000 }),
+  }),
   fixtureCase("projects", "project_ended", `/w/${ws}/projects/project-summer`, {
     scenario: preview,
   }),
@@ -930,7 +937,7 @@ export const keyboardWalks = [
         .count();
       expect(said === 1, "stop_confirmation_not_said");
       const now = await active(page);
-      expect(now.tag === "H1" && now.text.startsWith("Everyday Tote"), "focus_after_stop");
+      expect(now.tag === "H1" && now.text === "Everyday Tote in AI answers", "focus_after_stop");
     },
   },
   {

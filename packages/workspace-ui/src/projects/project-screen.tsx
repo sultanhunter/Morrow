@@ -220,9 +220,14 @@ export function ProjectScreen({
       ) : null}
       <header className="page-header pj-header">
         <div className="pj-title-block">
-          <h1 className="pj-title" ref={title} tabIndex={-1}>
-            <span dir="auto">{view.title}</span> <HealthWord health={view.health} />
-          </h1>
+          {/* The health badge sits beside the heading, never in it: the heading's name is
+              the title alone (review F8). */}
+          <div className="pj-title">
+            <h1 ref={title} tabIndex={-1} dir="auto">
+              {view.title}
+            </h1>
+            <HealthWord health={view.health} />
+          </div>
           {view.scope.length ? (
             <p className="pj-scope" dir="auto">
               {view.scope.join(" · ")}
