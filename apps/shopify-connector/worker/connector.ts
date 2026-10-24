@@ -37,8 +37,9 @@
 //             raises the Reconnect item; with the clean-up switch on it then asks the broker
 //             to read the granted scopes back (deliveries can arrive out of order) and
 //             reconciles again from what Shopify answered.
-//   cron      always: the open Reconnect items reconciled again (cleared once the scopes are
-//             back; an agent a person resumed while a scope is missing is stopped again).
+//   cron      always: the open Reconnect items, and every live connection that needs
+//             reconnecting without one, reconciled again (cleared once the scopes are back;
+//             an agent a person resumed while a scope is missing is stopped again).
 //             With the connection clean-up switch on (MORROW_CONNECTION_CLEANUP, committed
 //             off): the daily read-back of every live installation (a missed scope change, or
 //             a token Shopify refused: a missed uninstall is reconciled into a Reconnect
@@ -521,7 +522,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       counts.unavailable++;
       log("morrow_connector_privacy", { code: "PRIVACY_CHECK_UNAVAILABLE" });
     }
-    // v1 PR 5: the open Reconnect items, reconciled again from each installation's state.
+    // v1 PR 5: the open Reconnect items and the live connections that need reconnecting,
+    // reconciled again from each installation's state.
     let notices: readonly string[] = [];
     try {
       notices = await database.noticesDue(connectorBudgets.pendingMs);
