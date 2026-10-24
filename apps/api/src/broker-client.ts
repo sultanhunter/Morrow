@@ -333,9 +333,9 @@ export function createBrokerShopifyReader(broker: ApiBrokerRpc): CatalogReader {
 
 // v1 PR 3: the gateway's ApiBroker.shopifyProductApply and shopifyProductReconcile (and v1
 // PR 4's shopifyProductUndoCheck), one operation id and a budget each, raced against the
-// caller's signal and the budget plus a small RPC allowance, never retried here (the review route decides what follows: an apply
-// whose reply is lost is read back, never sent again). The result is returned as text for the
-// route's closed decoder.
+// caller's signal and the budget plus a small RPC allowance, never retried here (the review
+// route decides what follows: an apply whose reply is lost is read back, never sent again).
+// The result is returned as text for the route's closed decoder.
 export function createBrokerApplyPort(broker: ApiBrokerRpc): ApplyBrokerPort {
   const call = async (
     method: "shopifyProductApply" | "shopifyProductReconcile" | "shopifyProductUndoCheck",
