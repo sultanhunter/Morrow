@@ -123,7 +123,10 @@ export function decodeReconnectNotices(
 
 /** The narrow port the Inbox reads through (a WorkTx in the api; the fake below elsewhere). */
 export interface ReconnectNoticeSource {
-  run(name: "connectionNoticesOpen", values: readonly []): Promise<readonly Record<string, unknown>[]>;
+  run(
+    name: "connectionNoticesOpen",
+    values: readonly [],
+  ): Promise<readonly Record<string, unknown>[]>;
 }
 /** The session viewer's open Reconnect items, newest first. */
 export async function readReconnectNotices(

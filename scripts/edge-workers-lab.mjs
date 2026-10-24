@@ -1630,6 +1630,26 @@ await instance(
           destroy.message === "BROKER_HELD",
         { reads, connectorRead, destroy },
       );
+      // v1 PR 5 (ADR-0025 item 10): the read-back of an installation's granted scopes is the
+      // connector's alone over the real RPC bindings; a malformed id or budget is held before
+      // the vault.
+      const scopeChecks = [];
+      for (const binding of ["BROKER", "BROKER_RUNTIME"])
+        scopeChecks.push((await probe({ op: "shopifyConnectionCheck", binding, args: [] }))[0]);
+      const beforeScopeCheck = observed.brokerNeon;
+      const badScopeChecks = [];
+      for (const args of [["bad id", 1000], ["lab-installation-1", 0], ["lab-installation-1"]])
+        badScopeChecks.push(
+          (await probe({ op: "shopifyConnectionCheck", binding: "BROKER_CONNECTOR", args }))[0],
+        );
+      check(
+        "V1PR5:the_scopes_read_back_is_the_connectors_alone_and_holds_bad_input",
+        scopeChecks.every((r) => r.ok === false && r.name === "TypeError") &&
+          badScopeChecks.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
+          observed.brokerNeon === beforeScopeCheck &&
+          observed.connectorOutbound === 0,
+        { scopeChecks, badScopeChecks },
+      );
       check("M2PR2:no_unexpected_outbound", observed.unexpected === 0);
     },
   );

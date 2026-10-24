@@ -28,6 +28,5 @@ export const shopifyVaultStatements = Object.freeze({
   // across the Shopify call). A refusal records no scopes: the empty string becomes NULL.
   shopifyCheckResolve:
     "SELECT outcome,organization_id,workspace_id,shop_domain,credential_id,credential_version,kek_version,wrapped_key,sealed_value FROM morrow_vault.shopify_check_resolve($1)",
-  shopifyCheckRecord:
-    "SELECT morrow_vault.shopify_check_record($1,$2,$3,NULLIF($4,'')) AS outcome",
+  shopifyCheckRecord: "SELECT morrow_vault.shopify_check_record($1,$2,$3,NULLIF($4,'')) AS outcome",
 } as const);

@@ -138,7 +138,13 @@ export type DeletionApplyResult = Readonly<{
 }>;
 /** v1 PR 5: stuck scope-change deliveries closed, and every delivery still stuck. */
 export type InboxStuck = Readonly<{ closed: number; stuck: number }>;
-const reconcileOutcomes: readonly string[] = ["reconciled", "ended", "not_found", "invalid", "denied"];
+const reconcileOutcomes: readonly string[] = [
+  "reconciled",
+  "ended",
+  "not_found",
+  "invalid",
+  "denied",
+];
 const noticeActions: readonly string[] = ["raised", "revised", "unchanged", "cleared", "none"];
 const deletionOutcomes: readonly string[] = [
   "applied",
