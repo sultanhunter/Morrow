@@ -11,13 +11,14 @@ export const runtimeVaultStatements = Object.freeze({
     "SELECT outcome,status FROM morrow_vault.runtime_operation_created($1,$2)",
   runtimeOperationSettle:
     "SELECT outcome,status FROM morrow_vault.runtime_operation_settle($1,$2,NULLIF($3,''))",
-  // Build order PR 8 (migration 0047): the sweep's list also says which open operations a
-  // stop, an ended lease or an expired one has cut off (`stopped`), so the sweep kills their
-  // sandboxes at once; and the sandbox's envd token as a vault record, stored once while the
-  // operation is `created` and opened for each call to the sandbox (the operation's
-  // settlement destroys it).
-  runtimeOperationsOpen:
-    "SELECT operation_id,provider,sandbox_ref,status,deadline_at,stale::text AS stale,past_grace::text AS past_grace,stopped::text AS stopped FROM morrow_vault.runtime_operations_open($1)",
+  // Build order PR 8 (migration 0047): the sweep's list now comes from
+  // runtime_operations_sweep, which also says which open operations a stop, an ended lease or
+  // an expired one has cut off (`stopped`), so the sweep kills their sandboxes at once (0043's
+  // runtime_operations_open is no longer sent); and the sandbox's envd token as a vault
+  // record, stored once while the operation is `created` and opened for each call to the
+  // sandbox (any settlement destroys it).
+  runtimeOperationsSweep:
+    "SELECT operation_id,provider,sandbox_ref,status,deadline_at,stale::text AS stale,past_grace::text AS past_grace,stopped::text AS stopped FROM morrow_vault.runtime_operations_sweep($1)",
   runtimeTokenPut: "SELECT outcome FROM morrow_vault.runtime_token_put($1,$2,$3,$4)",
   runtimeTokenGet:
     "SELECT outcome,kek_version,wrapped_key,sealed_value FROM morrow_vault.runtime_token_get($1)",

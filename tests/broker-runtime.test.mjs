@@ -836,6 +836,17 @@ test("the vault ledger: registered statements only, rows read strictly, failures
     ),
     [true, true, true, true, true, true],
   );
+  assert.deepEqual(
+    Object.keys(runtimeVaultStatements).sort(),
+    [
+      "runtimeOperationBegin",
+      "runtimeOperationCreated",
+      "runtimeOperationSettle",
+      "runtimeOperationsSweep",
+      "runtimeTokenGet",
+      "runtimeTokenPut",
+    ],
+  );
   const sent = [];
   let reply = [];
   const transaction = async (_vault, budgetMs, body) => {
@@ -997,7 +1008,7 @@ test("the vault ledger: registered statements only, rows read strictly, failures
       stopped: false,
     },
   ]);
-  assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeOperationsOpen, ["25"]]);
+  assert.deepEqual(sent.at(-1), [runtimeVaultStatements.runtimeOperationsSweep, ["25"]]);
   // PR 8: a row without `stopped` (0043's shape) is skipped, never guessed.
   reply = [
     {

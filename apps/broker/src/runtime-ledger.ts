@@ -140,7 +140,7 @@ export function createVaultRuntimeLedger(
     async open(limit) {
       return run(
         async (query) => {
-          const rows = await query(vaultStatements.runtimeOperationsOpen, [String(limit)]);
+          const rows = await query(vaultStatements.runtimeOperationsSweep, [String(limit)]);
           const names =
             "deadline_at,operation_id,past_grace,provider,sandbox_ref,stale,status,stopped";
           const open: RuntimeOpenOperation[] = [];

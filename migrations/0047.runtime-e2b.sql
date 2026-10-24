@@ -13,16 +13,18 @@ BEGIN;
 --     while the operation is `created`, and opens it for each call to the sandbox while the
 --     operation is still `created`. No definer returns a token in the clear; the envelope's
 --     additional data binds the operation id (apps/broker/src/vault.ts).
---   * runtime_operation_settle (0043), revised: every settlement, terminal or unknown_effect,
---     destroys the operation's active envd token in the same transaction. The rest is 0043's,
---     unchanged. So no token outlives its sandbox's last known state, and a stop's sweep that
---     kills a sandbox also cuts off a job still running there at its next call.
---   * runtime_operations_open (0043), replaced (its result gains `stopped`): the sweep's
---     ids-only list now also carries open operations that a stop (platform, connection or
---     installation: morrow_work.stop_active), an ended lease or an expired one has cut off,
---     stale or not, so stops kill their scope's sandboxes at once (ADR-0029 item 9). Each row's
---     lease and stops are read through resolve_call's own broker policies (0031), with the
---     settings written before the read and cleared after; still ids only, never a tenant key.
+--   * morrow_work.runtime_token_end, a trigger on the operations: every settlement, terminal or
+--     unknown_effect, destroys the operation's active envd token in the same statement, by
+--     whichever definer settles it (0043's runtime_operation_settle is unchanged). So no token
+--     outlives its sandbox's last known state, and a stop's sweep that kills a sandbox also
+--     cuts off a job still running there at its next call.
+--   * runtime_operations_sweep, beside 0043's runtime_operations_open (which the broker's
+--     statement registry no longer sends): the same ids-only list plus `stopped`, the open
+--     operations a stop (platform, connection or installation: morrow_work.stop_active), an
+--     ended lease or an expired one has cut off, stale or not, so stops kill their scope's
+--     sandboxes at once (ADR-0029 item 9). Each row's lease and stops are read through
+--     resolve_call's own broker policies (0031), with the settings written before the read and
+--     cleared after; never a tenant key, a run or content.
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR NOT morrow_identity.morrow_memberships_closed()
@@ -30,12 +32,11 @@ DO $$ BEGIN
    AND morrow_identity.memberships_closed(r.rolname))<>3
  OR to_regclass('morrow_work.runtime_operations') IS NULL OR to_regclass('morrow_vault.credentials') IS NULL
  OR to_regprocedure('morrow_work.stop_active(text,text,text,text,text)') IS NULL
+ OR to_regprocedure('morrow_vault.runtime_operation_settle(text,text,text)') IS NULL
  OR to_regprocedure('morrow_vault.runtime_token_put(text,text,text,text)') IS NOT NULL
  OR to_regprocedure('morrow_vault.runtime_token_get(text)') IS NOT NULL
- OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure('morrow_vault.runtime_operation_settle(text,text,text)'))
-  IS DISTINCT FROM 'c4099df3322adf0588eeb916a085d98c'
- OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure('morrow_vault.runtime_operations_open(text)'))
-  IS DISTINCT FROM '8424301dd92b6a778c3fd0b0589800ae'
+ OR to_regprocedure('morrow_vault.runtime_operations_sweep(text)') IS NOT NULL
+ OR to_regprocedure('morrow_work.runtime_token_end()') IS NOT NULL
  OR (SELECT pg_catalog.pg_get_constraintdef(c.oid) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_vault.credentials'::regclass
    AND c.conname='credentials_provider_check') IS DISTINCT FROM 'CHECK ((provider = ''shopify''::text))'
  OR (SELECT pg_catalog.pg_get_constraintdef(c.oid) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_vault.credentials'::regclass
@@ -44,6 +45,7 @@ DO $$ BEGIN
    AND c.conname='credentials_destroy_reason_check')
   IS DISTINCT FROM 'CHECK ((destroy_reason = ANY (ARRAY[''uninstalled''::text, ''disconnected''::text, ''reauthorised''::text, ''scopes_changed''::text])))'
  OR NOT pg_catalog.has_table_privilege('morrow_work_command','morrow_vault.credentials','INSERT')
+ OR NOT pg_catalog.has_column_privilege('morrow_work_command','morrow_vault.credentials','destroy_reason','UPDATE')
  THEN RAISE EXCEPTION 'RUNTIME_E2B_PREREQUISITES_INVALID'; END IF;
 END $$;
 
@@ -63,6 +65,27 @@ ALTER TABLE morrow_vault.credentials DROP CONSTRAINT credentials_provider_check,
   AND (destroy_reason IS NULL OR destroy_reason IN ('sandbox_killed','sandbox_absent','sandbox_unknown')))),
  ADD CONSTRAINT credentials_shopify_reason CHECK (kind<>'shopify_offline_token' OR destroy_reason IS NULL
   OR destroy_reason IN ('uninstalled','disconnected','reauthorised','scopes_changed'));
+
+-- ---------------------------------------------------------------------------
+-- The token's end: any settlement of its operation destroys it (vault_guard's one update: the
+-- key material erased, the row kept as metadata). INVOKER, owned by the owner, granted to
+-- nobody; it runs as the role that settles (the command role inside the broker's definers,
+-- where the vault_broker policy admits the broker's session), in the settlement's own
+-- statement. sandbox_killed for killed, sandbox_absent for absent_verified, sandbox_unknown
+-- for an unknown effect (not_created never had one).
+CREATE FUNCTION morrow_work.runtime_token_end() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+BEGIN
+ UPDATE morrow_vault.credentials c SET status='destroyed',wrapped_key=NULL,sealed_value=NULL,
+  destroyed_at=greatest(date_trunc('milliseconds',clock_timestamp()),c.created_at),
+  destroy_reason=CASE NEW.status WHEN 'killed' THEN 'sandbox_killed' WHEN 'absent_verified' THEN 'sandbox_absent' ELSE 'sandbox_unknown' END
+  WHERE c.organization_id=NEW.organization_id AND c.workspace_id=NEW.workspace_id AND c.id=NEW.id
+   AND c.provider='e2b' AND c.kind='e2b_envd_token' AND c.status='active';
+ RETURN NULL;
+END $$;
+REVOKE ALL ON FUNCTION morrow_work.runtime_token_end() FROM PUBLIC;
+CREATE TRIGGER runtime_token_end AFTER UPDATE OF status ON morrow_work.runtime_operations FOR EACH ROW
+ WHEN (NEW.status IN ('unknown_effect','killed','absent_verified','not_created')) EXECUTE FUNCTION morrow_work.runtime_token_end();
 
 -- ---------------------------------------------------------------------------
 -- The broker's definers: SECURITY DEFINER, owned by the command role, EXECUTE for
@@ -127,73 +150,14 @@ BEGIN
  RETURN QUERY SELECT 'active'::text,c.kek_version,c.wrapped_key,c.sealed_value;
 END $$;
 
--- Settles one operation, under the capacity lock (0043's rules, unchanged), and destroys its
--- active envd token in the same transaction: sandbox_killed, sandbox_absent, or
--- sandbox_unknown for an unknown effect. Outcomes: settled, already_unknown, already_settled,
--- too_early, refused, not_found, denied, invalid.
-CREATE OR REPLACE FUNCTION morrow_vault.runtime_operation_settle(p_operation_id text,p_status text,p_reason text)
-RETURNS TABLE(outcome text,status text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
-#variable_conflict use_column
-DECLARE k record; o record; v_now timestamptz; v_class text; n integer;
-BEGIN
- IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
- IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
-  OR p_status IS NULL OR p_status NOT IN ('killed','absent_verified','not_created','unknown_effect')
-  OR (p_status='unknown_effect')<>(p_reason IS NOT NULL)
-  OR (p_reason IS NOT NULL AND p_reason NOT IN ('create_unknown','quota_exhausted','billing_blocked','reply_invalid','kill_unknown',
-   'kill_not_found','status_unknown','not_found_unverified','paused_found')) THEN
-  RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
- END IF;
- SELECT * INTO k FROM morrow_work.runtime_caps();
- PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.runtime_capacity')::text,0));
- SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.status,x.deadline_at INTO o
-  FROM morrow_work.runtime_operations x WHERE x.id=p_operation_id FOR UPDATE;
- IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
- IF o.status IN ('killed','absent_verified','not_created') THEN RETURN QUERY SELECT 'already_settled'::text,o.status; RETURN; END IF;
- v_now:=date_trunc('milliseconds',clock_timestamp());
- IF p_status='unknown_effect' THEN
-  UPDATE morrow_work.runtime_operations x SET status='unknown_effect',unknown_reason=p_reason,reconciled_at=greatest(v_now,x.send_started_at),
-   revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
-   WHERE x.organization_id=o.organization_id AND x.workspace_id=o.workspace_id AND x.id=p_operation_id;
-  v_class:=CASE p_reason WHEN 'quota_exhausted' THEN 'quota_exhausted' WHEN 'billing_blocked' THEN 'billing_blocked'
-   WHEN 'paused_found' THEN 'profile_violation' ELSE 'unknown_effect' END;
-  INSERT INTO morrow_work.runtime_holds(id,reason,operation_id,created_at,lifted_at,lifted_by_operator_id,lift_reason)
-  VALUES (gen_random_uuid()::text,v_class,p_operation_id,v_now,NULL,NULL,NULL) ON CONFLICT (operation_id,reason) DO NOTHING;
-  -- The envd token goes with any settlement (vault_guard's one update: the material erased).
-  UPDATE morrow_vault.credentials c SET status='destroyed',wrapped_key=NULL,sealed_value=NULL,destroyed_at=greatest(v_now,c.created_at),
-   destroy_reason='sandbox_unknown'
-   WHERE c.organization_id=o.organization_id AND c.workspace_id=o.workspace_id AND c.id=p_operation_id AND c.provider='e2b'
-    AND c.kind='e2b_envd_token' AND c.status='active';
-  RETURN QUERY SELECT CASE WHEN o.status='unknown_effect' THEN 'already_unknown' ELSE 'settled' END::text,'unknown_effect'::text; RETURN;
- END IF;
- IF p_status='not_created' AND o.status<>'sending' THEN RETURN QUERY SELECT 'refused'::text,o.status; RETURN; END IF;
- IF p_status='absent_verified' AND v_now<o.deadline_at+make_interval(secs=>k.absent_grace_seconds) THEN
-  RETURN QUERY SELECT 'too_early'::text,o.status; RETURN;
- END IF;
- UPDATE morrow_work.runtime_operations x SET status=p_status,settled_at=greatest(v_now,x.send_started_at),
-  reconciled_at=CASE WHEN p_status='not_created' THEN x.reconciled_at ELSE greatest(v_now,x.send_started_at) END,
-  revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
-  WHERE x.organization_id=o.organization_id AND x.workspace_id=o.workspace_id AND x.id=p_operation_id;
- UPDATE morrow_work.runtime_capacity x SET open_operations=x.open_operations-1,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
-  WHERE x.scope='platform';
- GET DIAGNOSTICS n=ROW_COUNT;
- IF n<>1 THEN RAISE EXCEPTION 'RUNTIME_CAPACITY_MISSING'; END IF;
- UPDATE morrow_vault.credentials c SET status='destroyed',wrapped_key=NULL,sealed_value=NULL,destroyed_at=greatest(v_now,c.created_at),
-  destroy_reason=CASE p_status WHEN 'killed' THEN 'sandbox_killed' ELSE 'sandbox_absent' END
-  WHERE c.organization_id=o.organization_id AND c.workspace_id=o.workspace_id AND c.id=p_operation_id AND c.provider='e2b'
-   AND c.kind='e2b_envd_token' AND c.status='active';
- RETURN QUERY SELECT 'settled'::text,p_status;
-END $$;
--- The sweep's list (0043's, replaced): open operations, least recently reconciled first, across
--- tenants, ids only, that are stale (past the longest execute) or stopped (a stop covers the
--- run, or its lease is no longer active or has expired). `stale`, `past_grace` and `stopped`
--- say which. Each row's lease and stops are read through resolve_call's broker policies (0031:
--- the lease by morrow.vault_resolve_lease, the tenant's stops by morrow.vault_resolve_tenant,
--- the platform's always), written before the read and cleared after. Outcomes are rows (none
--- when denied).
-DROP FUNCTION morrow_vault.runtime_operations_open(text);
-CREATE FUNCTION morrow_vault.runtime_operations_open(p_limit text)
+-- The sweep's list (0043's runtime_operations_open, with stops): open operations, least
+-- recently reconciled first, across tenants, ids only, that are stale (past the longest
+-- execute) or stopped (a stop covers the run, or its lease is no longer active or has expired).
+-- `stale`, `past_grace` and `stopped` say which. Each row's lease and stops are read through
+-- resolve_call's broker policies (0031: the lease by morrow.vault_resolve_lease, the tenant's
+-- stops by morrow.vault_resolve_tenant, the platform's always), written before the read and
+-- cleared after. Outcomes are rows (none when denied).
+CREATE FUNCTION morrow_vault.runtime_operations_sweep(p_limit text)
 RETURNS TABLE(operation_id text,provider text,sandbox_ref text,status text,deadline_at text,stale boolean,past_grace boolean,stopped boolean)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
 #variable_conflict use_column
@@ -225,16 +189,15 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- Explicit ACLs per function (S7 reads proacl), then the ownership transfer. The settle
--- definer keeps 0043's owner and grant (CREATE OR REPLACE changes neither).
+-- Explicit ACLs per function (S7 reads proacl), then the ownership transfer.
 REVOKE ALL ON FUNCTION morrow_vault.runtime_token_put(text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_vault.runtime_token_get(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION morrow_vault.runtime_operations_open(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_vault.runtime_operations_sweep(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_vault.runtime_token_put(text,text,text,text),morrow_vault.runtime_token_get(text),
- morrow_vault.runtime_operations_open(text) TO morrow_vault_broker;
+ morrow_vault.runtime_operations_sweep(text) TO morrow_vault_broker;
 GRANT CREATE ON SCHEMA morrow_vault TO morrow_work_command;
 ALTER FUNCTION morrow_vault.runtime_token_put(text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.runtime_token_get(text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_vault.runtime_operations_open(text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_vault.runtime_operations_sweep(text) OWNER TO morrow_work_command;
 REVOKE CREATE ON SCHEMA morrow_vault FROM morrow_work_command;
 COMMIT;

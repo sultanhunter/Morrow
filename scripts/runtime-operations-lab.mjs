@@ -31,6 +31,15 @@
 //      sweep's list is ids only, and the settle definer's edges hold; the ledger's tables are
 //      morrow_work's, so the vault keeps its two sealed-secret tables only, and the ledger's
 //      ACL is exactly the command role's.
+// Build order PR 8 (migration 0047, runtime-e2b) adds:
+//   J5 the sandbox's envd token is a sealed vault record while the job runs (never the
+//      plaintext) and the kill's settlement destroys it;
+//   T  the token definers: stored once, only while `created`; opened only then; any
+//      settlement destroys it (sandbox_killed, sandbox_absent, sandbox_unknown); only the
+//      broker's login executes them; the credentials constraints keep E2B and Shopify rows
+//      apart;
+//   L2 (revised) a stop makes its run's open operations `stopped` in the sweep's list, stale or
+//      not, and the very next sweep kills their sandboxes and destroys their tokens.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
 // marked sim stand in for states no API path reaches yet. CI pg-work group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -411,10 +420,24 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       },
     );
   const fake = createFakeRuntime({ credential: e2bKey, now: () => Date.now() });
+  // PR 8: the fake as the gateway sees it, with a look at the vault while each command runs.
+  let duringExec = null;
+  const watched = Object.freeze({
+    provider: fake.provider,
+    create: (...a) => fake.create(...a),
+    status: (...a) => fake.status(...a),
+    writeFile: (...a) => fake.writeFile(...a),
+    readFile: (...a) => fake.readFile(...a),
+    kill: (...a) => fake.kill(...a),
+    exec: async (sandbox, ...rest) => {
+      if (duringExec) duringExec(sandbox);
+      return fake.exec(sandbox, ...rest);
+    },
+  });
   const gatewayOf = (qualified) =>
     createRuntimeGateway({
       ledger: (vault) => createVaultRuntimeLedger(vault, transaction),
-      providers: Object.freeze({ e2b: fake }),
+      providers: Object.freeze({ e2b: watched }),
       now: () => Date.now(),
       template: "morrow-computer-fake-v1",
       qualified,
@@ -531,6 +554,21 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       `SELECT booked_cost_usd::text AS booked,maximum_cost_usd::text AS maximum FROM morrow_billing.vendor_cost_reservations WHERE root_run_id=${literal(runId)}`,
     );
   const broker = (text) => last(db.sql(text, { user: "morrow_vault_broker" }));
+  // PR 8: an operation's envd token row in the vault (metadata only, and whether the plaintext
+  // token appears anywhere in its sealed bytes).
+  const tokenRow = (id, plaintext = "") =>
+    one(
+      `SELECT provider,kind,version::text AS version,subject_id::text AS subject,status,destroy_reason AS reason,(wrapped_key IS NOT NULL AND sealed_value IS NOT NULL) AS material,(sealed_value IS NOT NULL AND ${literal(plaintext)}<>'' AND position(convert_to(${literal(plaintext)},'UTF8') IN sealed_value)>0) AS clear FROM morrow_vault.credentials WHERE id=${literal(id)}`,
+    );
+  const hex = (bytes) => randomBytes(bytes).toString("hex");
+  const tokenPut = (id, wrapped = hex(60), sealed = hex(48)) =>
+    broker(
+      `SELECT outcome FROM morrow_vault.runtime_token_put(${literal(id)},'1',${literal(wrapped)},${literal(sealed)});`,
+    );
+  const tokenGet = (id) =>
+    broker(
+      `SELECT outcome||'|'||coalesce(wrapped_key,'')||'|'||coalesce(sealed_value,'') FROM morrow_vault.runtime_token_get(${literal(id)});`,
+    ).split("|");
   const as = (user, text) => db.tryRun(text, { user });
   const begin = (callKey, ref = main.ref, provider = "fake") =>
     broker(
@@ -602,7 +640,13 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   {
     const vendorBefore = vendor();
     const theJob = job("chart-1");
+    let seenActive = null;
+    duringExec = (sandbox) => {
+      const [current] = ops().filter((o) => o.status === "created");
+      seenActive = current ? tokenRow(current.id, sandbox.accessToken ?? "") : null;
+    };
     const result = await execute(theJob);
+    duringExec = null;
     const [row] = ops();
     const [booking] = bookings();
     const cap = capacity();
@@ -658,6 +702,21 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
           fake.guest.files.map((f) => Buffer.from(f.bytes).toString("utf8")),
         ).includes(e2bKey),
       { text: text.slice(0, 400) },
+    );
+    const token = tokenRow(row?.id ?? "");
+    check(
+      "J5:the_envd_token_was_a_sealed_vault_record_destroyed_with_the_kill",
+      seenActive?.status === "active" &&
+        seenActive.material === true &&
+        seenActive.clear === false &&
+        seenActive.provider === "e2b" &&
+        seenActive.kind === "e2b_envd_token" &&
+        token?.status === "destroyed" &&
+        token.reason === "sandbox_killed" &&
+        token.material === false &&
+        token.version === "1" &&
+        token.subject === row.id,
+      { seenActive, token },
     );
     const replay = await execute(theJob);
     check(
@@ -1014,6 +1073,150 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   }
 
   // ---------------------------------------------------------------------------
+  phase("token");
+  {
+    // T1: stored once, only while `created`; opened only then; settlement destroys it.
+    const [, id] = begin("token-1");
+    const whileSending = tokenPut(id);
+    broker(
+      `SELECT outcome FROM morrow_vault.runtime_operation_created(${literal(id)},'sbx_token_1');`,
+    );
+    const wrapped = hex(60),
+      sealed = hex(48);
+    const stored = tokenPut(id, wrapped, sealed);
+    const again = tokenPut(id);
+    const opened = tokenGet(id);
+    const invalid = [
+      tokenPut(id, "zz", sealed),
+      tokenPut(id, wrapped, "ab"),
+      tokenPut("not-an-id"),
+      broker(
+        `SELECT outcome FROM morrow_vault.runtime_token_put(${literal(id)},'0',${literal(wrapped)},${literal(sealed)});`,
+      ),
+    ];
+    const absent = tokenPut(randomUUID());
+    const killed = settle(id, "killed");
+    const afterKill = tokenGet(id);
+    const row = tokenRow(id);
+    const putAfter = tokenPut(id);
+    // An unknown effect destroys it too; an absent one (past the grace) as well.
+    const [, id2] = begin("token-2");
+    broker(
+      `SELECT outcome FROM morrow_vault.runtime_operation_created(${literal(id2)},'sbx_token_2');`,
+    );
+    tokenPut(id2);
+    const unknown = settle(id2, "unknown_effect", "kill_unknown");
+    const row2 = tokenRow(id2);
+    const openedUnknown = tokenGet(id2);
+    age(id2, 1700);
+    const absentSettle = settle(id2, "absent_verified");
+    liftAll();
+    check(
+      "T1:the_token_is_stored_once_while_created_and_dies_with_any_settlement",
+      whileSending === "refused" &&
+        stored === "stored" &&
+        again === "refused" &&
+        opened.join("|") === "active|" + wrapped + "|" + sealed &&
+        invalid.every((o) => o === "invalid") &&
+        absent === "not_found" &&
+        killed.join("|") === "settled|killed" &&
+        afterKill[0] === "unavailable" &&
+        row?.status === "destroyed" &&
+        row.reason === "sandbox_killed" &&
+        row.material === false &&
+        putAfter === "refused" &&
+        unknown.join("|") === "settled|unknown_effect" &&
+        row2?.status === "destroyed" &&
+        row2.reason === "sandbox_unknown" &&
+        openedUnknown[0] === "unavailable" &&
+        absentSettle.join("|") === "settled|absent_verified" &&
+        capacity().open === 0,
+      {
+        whileSending,
+        stored,
+        again,
+        invalid,
+        absent,
+        killed,
+        afterKill,
+        row,
+        putAfter,
+        unknown,
+        row2,
+        openedUnknown,
+        absentSettle,
+      },
+    );
+    // T2: only the broker's login executes the token definers; it reads no vault table.
+    const others = [
+      "morrow_api_worker",
+      "morrow_runtime_executor",
+      "morrow_connector_ingress",
+    ].flatMap((user) => [
+      as(user, `SELECT outcome FROM morrow_vault.runtime_token_get(${literal(id)});`),
+      as(
+        user,
+        `SELECT outcome FROM morrow_vault.runtime_token_put(${literal(id)},'1',${literal(wrapped)},${literal(sealed)});`,
+      ),
+    ]);
+    const direct = as("morrow_vault_broker", "SELECT count(*) FROM morrow_vault.credentials;");
+    const acl = db
+      .rows(
+        "SELECT p.proname::text||':'||coalesce((SELECT string_agg(a.grantee::regrole::text,',' ORDER BY a.grantee::regrole::text) FROM aclexplode(p.proacl) a WHERE a.grantee<>p.proowner),'') AS x FROM pg_catalog.pg_proc p WHERE p.pronamespace='morrow_vault'::regnamespace AND p.proname IN ('runtime_token_put','runtime_token_get','runtime_operations_sweep','runtime_operations_open','runtime_operation_settle')",
+      )
+      .map((r) => r.x)
+      .sort()
+      .join(";");
+    check(
+      "T2:only_the_brokers_login_executes_the_token_definers",
+      others.every((r) => !r.ok) &&
+        !direct.ok &&
+        acl ===
+          [
+            "runtime_operation_settle:morrow_vault_broker",
+            "runtime_operations_open:morrow_vault_broker",
+            "runtime_operations_sweep:morrow_vault_broker",
+            "runtime_token_get:morrow_vault_broker",
+            "runtime_token_put:morrow_vault_broker",
+          ].join(";"),
+      { others: others.map((r) => r.ok), direct: direct.ok, acl },
+    );
+    // T3: the constraints keep the two kinds apart (owner-run, as maintenance would be).
+    const insert = (over) => {
+      const v = {
+        id: randomUUID(),
+        provider: "e2b",
+        kind: "e2b_envd_token",
+        version: 1,
+        subject: null,
+        ...over,
+      };
+      return db.tryRun(
+        `SET ROLE morrow_work_owner; INSERT INTO morrow_vault.credentials(organization_id,workspace_id,id,version,provider,kind,subject_id,status,kek_version,wrapped_key,sealed_value,created_at,destroyed_at,destroy_reason) VALUES(${literal(O)},${literal(W)},${literal(v.id)},${v.version},${literal(v.provider)},${literal(v.kind)},${literal(v.subject ?? v.id)},'active',1,decode(${literal(hex(60))},'hex'),decode(${literal(hex(48))},'hex'),${ms},NULL,NULL);`,
+      );
+    };
+    const valid = randomUUID();
+    const ok = insert({ id: valid });
+    const refused = [
+      insert({ kind: "shopify_offline_token" }),
+      insert({ provider: "shopify" }),
+      insert({ subject: randomUUID() }),
+      insert({ id: "not_a_uuid", subject: "not_a_uuid" }),
+    ];
+    const wrongReason = db.tryRun(
+      `SET ROLE morrow_work_owner; UPDATE morrow_vault.credentials SET status='destroyed',wrapped_key=NULL,sealed_value=NULL,destroyed_at=${ms},destroy_reason='uninstalled' WHERE id=${literal(valid)};`,
+    );
+    const rightReason = db.tryRun(
+      `SET ROLE morrow_work_owner; UPDATE morrow_vault.credentials SET status='destroyed',wrapped_key=NULL,sealed_value=NULL,destroyed_at=${ms},destroy_reason='sandbox_unknown' WHERE id=${literal(valid)};`,
+    );
+    check(
+      "T3:the_credentials_constraints_keep_e2b_tokens_and_shopify_tokens_apart",
+      ok.ok && refused.every((r) => !r.ok) && !wrongReason.ok && rightReason.ok,
+      { ok: ok.ok, refused: refused.map((r) => r.ok), wrongReason: wrongReason.ok },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   phase("lease");
   {
     const wrongGeneration = await execute(job("lease-gen"), {
@@ -1034,6 +1237,24 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         !ops().some((o) => o.call_key.startsWith("lease-")),
       { wrongGeneration, sqlGeneration, inactive },
     );
+    // PR 8: an operation whose sandbox is up and whose envd token is in the vault (its job
+    // between two calls), marked through the definers as the gateway would.
+    const [, runningId] = begin("running-at-stop");
+    const runningBox = await fake.create(
+      {
+        operationId: runningId,
+        template: "morrow-computer-fake-v1",
+        timeoutSeconds: computerProfile.sandboxTimeoutSeconds,
+        internet: false,
+        metadata: { operation: runningId },
+      },
+      e2bKey,
+      10000,
+    );
+    broker(
+      `SELECT outcome FROM morrow_vault.runtime_operation_created(${literal(runningId)},${literal(runningBox.sandboxRef)});`,
+    );
+    const runningToken = tokenPut(runningId);
     // A sandbox lost before "Stop AI work": the stop refuses every send mark of the run, and
     // the sweep (which no stop or hold blocks) still finds and kills the sandbox.
     fake.fault({ op: "create", outcome: "unknown_effect", created: true });
@@ -1049,22 +1270,45 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     });
     const stopped = await execute(job("after-stop"));
     const stoppedSql = begin("after-stop-sql");
-    age(lostOp.id, 700);
+    // PR 8: no aging. The stop alone puts both operations on the sweep's list (stale false,
+    // stopped true), and the next sweep kills both sandboxes and destroys the token.
+    const listed = db
+      .rows(
+        "SELECT operation_id,stale::text AS stale,stopped::text AS stopped FROM morrow_vault.runtime_operations_sweep('25')",
+        { user: "morrow_vault_broker" },
+      )
+      .filter((r) => r.operation_id === lostOp.id || r.operation_id === runningId)
+      .map((r) => r.stale + "|" + r.stopped);
     const swept = await sweep();
+    const runningRow = tokenRow(runningId);
     check(
-      "L2:a_stop_refuses_the_send_mark_and_never_blocks_cleanup",
+      "L2:a_stop_refuses_the_send_mark_kills_its_runs_sandboxes_at_once_and_never_blocks_cleanup",
       lostBefore.code === "create_unknown" &&
+        runningToken === "stored" &&
         stop.status === 200 &&
         stopped.held === "STATE_INVALID" &&
         // The stop revokes the run's lease, so the send mark finds it ended (a stop committed
         // while the lease is still active answers stopped).
         ["stopped", "ended"].includes(stoppedSql[0]) &&
         !ops().some((o) => o.call_key.startsWith("after-stop")) &&
-        swept.killed === 1 &&
+        JSON.stringify(listed) === '["false|true","false|true"]' &&
+        swept.killed === 2 &&
         op(lostOp.id).status === "killed" &&
+        op(runningId).status === "killed" &&
+        runningRow?.status === "destroyed" &&
+        runningRow.reason === "sandbox_killed" &&
         fake.alive().length === 0 &&
         capacity().open === 0,
-      { lostBefore, stop: stop.status, stopped, stoppedSql, swept },
+      {
+        lostBefore,
+        runningToken,
+        stop: stop.status,
+        stopped,
+        stoppedSql,
+        listed,
+        swept,
+        runningRow,
+      },
     );
   }
   return { checks, failures };
@@ -1088,7 +1332,7 @@ async function main() {
   }
   phase("report");
   writeArtifact("labs/runtime-operations.json", {
-    task: "Build order PR 7",
+    task: "Build order PR 7 and PR 8",
     qualification: "local_postgresql17_network_none_runtime_operations",
     observedAt: new Date().toISOString(),
     durationMs: Date.now() - started,
@@ -1106,7 +1350,7 @@ async function main() {
   if (result.failures.length) {
     print("FAILED: " + result.failures.join(", "));
     process.exitCode = 1;
-  } else print(`PASS: ${result.checks.length} build order PR 7 runtime operation checks.`);
+  } else print(`PASS: ${result.checks.length} build order PR 7 and PR 8 runtime operation checks.`);
 }
 
 await main();
