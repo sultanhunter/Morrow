@@ -7,12 +7,25 @@ import type {
   RuntimeUnknownReason,
 } from "./runtime-gateway.js";
 import { sandboxRefPattern } from "./runtime-provider.js";
-import { vaultStatements, type VaultQuery } from "./vault.js";
+import {
+  openVaultRecord,
+  sealVaultRecord,
+  vaultBytesHex,
+  vaultHexBytes,
+  vaultLimits,
+  vaultStatements,
+  type VaultQuery,
+  type VaultRecordRef,
+} from "./vault.js";
 
 // The runtime operation ledger on the vault login (build order PR 7; migration 0043). Each
 // method is one transaction of its own through the vault transport, so begin's send mark is
 // committed before the gateway lets any create leave the broker. Rows are checked column by
 // column: anything unexpected is a refusal (begin) or false (the writes), never a guess.
+// Build order PR 8 (migration 0047): the sandbox's envd token as a sealed vault record
+// (tokenPut seals it with the vault's keyring and stores it once while the operation is
+// `created`; tokenGet opens it for one call; any settlement destroys it in SQL), and the
+// sweep's `stopped` column.
 
 export type VaultTransaction = <T>(
   vault: Readonly<BrokerVault>,
@@ -41,6 +54,9 @@ const one = (
     ? rows[0]
     : null;
 const ledgerBudgetMs = 10_000;
+const tokenRef = (operationId: string): VaultRecordRef =>
+  Object.freeze({ kind: "e2b_envd_token", operationId, provider: "e2b", version: 1 });
+const tokenPattern = /^[\x21-\x7e]{16,1024}$/;
 
 export function createVaultRuntimeLedger(
   vault: Readonly<BrokerVault>,
@@ -125,7 +141,8 @@ export function createVaultRuntimeLedger(
       return run(
         async (query) => {
           const rows = await query(vaultStatements.runtimeOperationsOpen, [String(limit)]);
-          const names = "deadline_at,operation_id,past_grace,provider,sandbox_ref,stale,status";
+          const names =
+            "deadline_at,operation_id,past_grace,provider,sandbox_ref,stale,status,stopped";
           const open: RuntimeOpenOperation[] = [];
           for (const row of Array.isArray(rows) ? rows : []) {
             const r = one([row], names);
@@ -147,7 +164,8 @@ export function createVaultRuntimeLedger(
               typeof r.deadline_at !== "string" ||
               !instant.test(r.deadline_at) ||
               !(r.stale === "true" || r.stale === "false") ||
-              !(r.past_grace === "true" || r.past_grace === "false")
+              !(r.past_grace === "true" || r.past_grace === "false") ||
+              !(r.stopped === "true" || r.stopped === "false")
             )
               continue;
             open.push(
@@ -159,6 +177,7 @@ export function createVaultRuntimeLedger(
                 deadlineAtMs: Date.parse(r.deadline_at),
                 stale: r.stale === "true",
                 pastGrace: r.past_grace === "true",
+                stopped: r.stopped === "true",
               }),
             );
           }
@@ -166,6 +185,68 @@ export function createVaultRuntimeLedger(
         },
         Object.freeze([]) as readonly RuntimeOpenOperation[],
       );
+    },
+    async tokenPut(operationId, token) {
+      if (!uuid.test(operationId) || typeof token !== "string" || !tokenPattern.test(token))
+        return false;
+      let wrapped: string;
+      let sealed: string;
+      let kek: number;
+      try {
+        const envelope = await sealVaultRecord(
+          vault.keyring,
+          tokenRef(operationId),
+          new TextEncoder().encode(token),
+        );
+        kek = envelope.kekVersion;
+        wrapped = vaultBytesHex(envelope.wrappedKey);
+        sealed = vaultBytesHex(envelope.sealedValue);
+      } catch {
+        return false;
+      }
+      return run(async (query) => {
+        const r = one(
+          await query(vaultStatements.runtimeTokenPut, [operationId, String(kek), wrapped, sealed]),
+          "outcome",
+        );
+        return r !== null && r.outcome === "stored";
+      }, false);
+    },
+    async tokenGet(operationId) {
+      if (!uuid.test(operationId)) return null;
+      const envelope = await run(async (query) => {
+        const r = one(
+          await query(vaultStatements.runtimeTokenGet, [operationId]),
+          "kek_version,outcome,sealed_value,wrapped_key",
+        );
+        if (r === null || r.outcome !== "active") return null;
+        if (typeof r.kek_version !== "string" || !/^[1-9][0-9]{0,2}$/.test(r.kek_version))
+          return null;
+        return {
+          kekVersion: Number(r.kek_version),
+          wrappedKey: vaultHexBytes(
+            r.wrapped_key,
+            vaultLimits.wrappedKeyBytes,
+            vaultLimits.wrappedKeyBytes,
+          ),
+          sealedValue: vaultHexBytes(
+            r.sealed_value,
+            vaultLimits.sealedMinBytes,
+            vaultLimits.sealedMaxBytes,
+          ),
+        };
+      }, null);
+      if (envelope === null) return null;
+      let plaintext: Uint8Array | null = null;
+      try {
+        plaintext = await openVaultRecord(vault.keyring, tokenRef(operationId), envelope);
+        const token = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(plaintext);
+        return tokenPattern.test(token) ? token : null;
+      } catch {
+        return null;
+      } finally {
+        plaintext?.fill(0);
+      }
     },
   };
   return Object.freeze(ledger);
