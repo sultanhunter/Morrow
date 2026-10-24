@@ -85,7 +85,12 @@ export interface AgentRunPorts {
     runId: string,
   ): Promise<LeaseRef | null | "failed">;
   /** RuntimeBroker.modelTurn: a ModelResult@2 string, or a thrown BROKER_HELD. */
-  modelTurn(leaseId: string, generation: number, callJson: string, budgetMs: number): Promise<string>;
+  modelTurn(
+    leaseId: string,
+    generation: number,
+    callJson: string,
+    budgetMs: number,
+  ): Promise<string>;
   readonly tools: ToolHandlers;
   readonly authority: ToolAuthority;
   readonly now: () => number;
@@ -184,7 +189,9 @@ function entryOf(run: AgentRunState): LoopEntry {
 export function turnCaps(
   run: AgentRunState,
   turn: number,
-): { readonly start: true; readonly final: boolean; readonly budgetMs: number } | ReturnType<typeof end> {
+):
+  | { readonly start: true; readonly final: boolean; readonly budgetMs: number }
+  | ReturnType<typeof end> {
   const entry = entryOf(run);
   const holdLeft = usd12(run.holdUsd) - usd12(run.bookedUsd);
   if (usd12(run.overflowUsd) > 0n || holdLeft < 0n) return end("cost_budget");
@@ -243,7 +250,9 @@ function parseTurnResult(text: unknown): Current_ModelResultV2 | null {
   } catch {
     return null;
   }
-  return validateCurrentDefinition("ModelResultV2", value) ? (value as Current_ModelResultV2) : null;
+  return validateCurrentDefinition("ModelResultV2", value)
+    ? (value as Current_ModelResultV2)
+    : null;
 }
 const endOf: Readonly<Partial<Record<RecordedTurnOutcome, AgentRunEndReason>>> = Object.freeze({
   refusal: "refusal",
@@ -319,15 +328,18 @@ export async function runTurn(
     | { readonly kind: "send"; readonly sequence: number }
     | ReturnType<typeof interrupted>
   > => {
-    const waits = Math.ceil((budgetMs + agentRunTimings.fenceGraceMs) / agentRunTimings.openCallPollMs) + 1;
+    const waits =
+      Math.ceil((budgetMs + agentRunTimings.fenceGraceMs) / agentRunTimings.openCallPollMs) + 1;
     for (let wait = 0; wait <= waits; wait++) {
       const s = await under(ports, ref, (step) => step.loop.turnSettle(turn, attempt));
       if (!s.entered) return interrupted(s.refusal);
       const v = s.value;
       if (v.outcome === "run_inactive" || v.outcome === "denied") return interrupted(v.outcome);
       if (v.outcome !== "found") throw retry("settle");
-      if (v.turnOutcome !== null) return Object.freeze({ kind: "recorded" as const, outcome: v.turnOutcome });
-      if (v.openCall === "none") return Object.freeze({ kind: "send" as const, sequence: v.lastSequence + 1 });
+      if (v.turnOutcome !== null)
+        return Object.freeze({ kind: "recorded" as const, outcome: v.turnOutcome });
+      if (v.openCall === "none")
+        return Object.freeze({ kind: "send" as const, sequence: v.lastSequence + 1 });
       await ports.sleep(agentRunTimings.openCallPollMs);
     }
     throw retry("call_open");
@@ -393,7 +405,8 @@ export async function runTurn(
     if (!uses) return end("invalid_output");
     return Object.freeze({ kind: "reply" as const, outcome, toolUses: uses });
   }
-  if (outcome === "uncertain") return attempt === 1 ? Object.freeze({ kind: "resend" as const }) : end("provider_error");
+  if (outcome === "uncertain")
+    return attempt === 1 ? Object.freeze({ kind: "resend" as const }) : end("provider_error");
   return end(endOf[outcome] ?? "provider_error");
 }
 
@@ -452,7 +465,10 @@ export async function runToolCall(
           asked: use.name === "inbox.ask" && begun.recordedOutcome === "ok",
         }),
       };
-    const refuse = (outcome: Exclude<ToolCallOutcome, "ok">, refusal: ToolRefusal | null): Prepared => ({
+    const refuse = (
+      outcome: Exclude<ToolCallOutcome, "ok">,
+      refusal: ToolRefusal | null,
+    ): Prepared => ({
       kind: "finish",
       tool: use.name,
       toolUseId: use.id,
@@ -579,8 +595,13 @@ async function startRun(
   if (!r.entered) return interrupted(r.refusal);
   if (r.value.outcome === "denied" || r.value.outcome === "waiting")
     return interrupted(r.value.outcome);
-  if (r.value.outcome === "ended") return Object.freeze({ kind: "ended" as const, status: r.value.status });
-  return Object.freeze({ kind: "started" as const, leaseId: ref.leaseId, generation: ref.generation });
+  if (r.value.outcome === "ended")
+    return Object.freeze({ kind: "ended" as const, status: r.value.status });
+  return Object.freeze({
+    kind: "started" as const,
+    leaseId: ref.leaseId,
+    generation: ref.generation,
+  });
 }
 
 /**
@@ -602,7 +623,9 @@ export async function agentRun(
   let turn = 1;
   let attempt = 1;
   while (reason === null) {
-    const t = await steps.do("turn-" + turn + "-" + attempt, () => runTurn(ports, ref, turn, attempt));
+    const t = await steps.do("turn-" + turn + "-" + attempt, () =>
+      runTurn(ports, ref, turn, attempt),
+    );
     if (t.kind === "interrupted") return t;
     if (t.kind === "end") {
       reason = t.reason;
@@ -677,7 +700,11 @@ async function tryResume(
   if (!r.entered) return Object.freeze({ kind: "still_waiting" as const });
   const v = r.value;
   if (v.outcome === "resumed" || v.outcome === "running" || v.outcome === "started")
-    return Object.freeze({ kind: "resumed" as const, leaseId: ref.leaseId, generation: ref.generation });
+    return Object.freeze({
+      kind: "resumed" as const,
+      leaseId: ref.leaseId,
+      generation: ref.generation,
+    });
   if (v.outcome === "ended") return Object.freeze({ kind: "ended" as const, status: v.status });
   return Object.freeze({ kind: "still_waiting" as const });
 }
@@ -702,5 +729,7 @@ async function finishRun(
 }
 /** AgentRunParams@1, or null (the Workflow's payload is ids only). */
 export function parseAgentRunParams(value: unknown): Current_AgentRunParams | null {
-  return validateCurrentDefinition("AgentRunParams", value) ? (value as Current_AgentRunParams) : null;
+  return validateCurrentDefinition("AgentRunParams", value)
+    ? (value as Current_AgentRunParams)
+    : null;
 }

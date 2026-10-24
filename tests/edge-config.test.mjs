@@ -2204,7 +2204,10 @@ const loopTurnedOn = (model = modelTurnedOn) =>
 test("PR 11: the committed agent-loop record is off with no prerequisite recorded, and the record rule", () => {
   assert.deepEqual({ ...reviewedAgentLoopRecord(committedLoop) }, { switch: "off" });
   assert.equal(committedLoop.switch, "off");
-  assert.deepEqual(Object.keys(committedLoop.prerequisites).sort(), [...edgeAgentLoopPrerequisites].sort());
+  assert.deepEqual(
+    Object.keys(committedLoop.prerequisites).sort(),
+    [...edgeAgentLoopPrerequisites].sort(),
+  );
   assert.deepEqual([...edgeAgentLoopPrerequisites], [...agentLoopPrerequisites]);
   assert.ok(Object.values(committedLoop.prerequisites).every((p) => p === null));
   // On before every prerequisite is recorded is refused; one missing is enough.
@@ -2228,7 +2231,11 @@ test("PR 11: the committed agent-loop record is off with no prerequisite recorde
       }),
     (r) => (r.prerequisites.lab_agent_loop = { recorded_on: "2026-11-02" }),
     (r) => (r.prerequisites.lab_agent_loop = { ...r.prerequisites.lab_agent_loop, by: "x" }),
-    (r) => (r.prerequisites.lab_agent_loop = { recorded_on: "2026-11-02", evidence: "docs/evidence/../x.md" }),
+    (r) =>
+      (r.prerequisites.lab_agent_loop = {
+        recorded_on: "2026-11-02",
+        evidence: "docs/evidence/../x.md",
+      }),
     (r) => (r.prerequisites.extra = null),
     (r) => delete r.prerequisites.gateway_reservations_stops,
     (r) => (r.switch = true),
@@ -2239,7 +2246,10 @@ test("PR 11: the committed agent-loop record is off with no prerequisite recorde
   ]) {
     const record = structuredClone(on);
     edit(record);
-    assert.throws(() => reviewedAgentLoopRecord(record, evidenceRoot), /EDGE_STAGING_AGENT_LOOP_RECORD/);
+    assert.throws(
+      () => reviewedAgentLoopRecord(record, evidenceRoot),
+      /EDGE_STAGING_AGENT_LOOP_RECORD/,
+    );
   }
   // The names: only the staging api, broker and orchestrator, never development or production.
   for (const worker of ["api", "broker", "orchestrator"])

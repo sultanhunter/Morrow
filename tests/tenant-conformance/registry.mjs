@@ -381,7 +381,12 @@ export const workTables = Object.freeze({
     policies: ["broker_agent_turn"],
     content: "workspace",
   },
-  run_tool_calls: { class: "tenant_internal", parents: ["agent_runs"], lease: true, content: "none" },
+  run_tool_calls: {
+    class: "tenant_internal",
+    parents: ["agent_runs"],
+    lease: true,
+    content: "none",
+  },
   agent_model_calls: {
     class: "tenant_internal",
     parents: ["run_turns"],

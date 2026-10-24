@@ -95,7 +95,11 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step un
   // orchestrator exports its entrypoints and nothing else (build order PR 11 adds
   // AgentRunWorkflow). The product read's reviewed constant stays the protocol's (true since
   // M2 PR-3 and M3 PR-2 were integrated).
-  assert.deepEqual(Object.keys(module).sort(), ["AgentRunWorkflow", "ListingsRunWorkflow", "default"]);
+  assert.deepEqual(Object.keys(module).sort(), [
+    "AgentRunWorkflow",
+    "ListingsRunWorkflow",
+    "default",
+  ]);
   assert.ok(
     Object.values(module).every(
       (value) => typeof value === "function" || (typeof value === "object" && value !== null),
@@ -316,8 +320,11 @@ test("the orchestrator's environment is deny-all: no credential, no production, 
   assert.equal(mapOrchestratorEnvironment(full).agentRuns, null);
   for (const value of ["yes", "ON", "true", 1])
     assert.equal(
-      mapOrchestratorEnvironment({ ...full, MORROW_AGENT_LOOP: value, AGENT_RUN: { create() {}, get() {} } })
-        .agentRuns,
+      mapOrchestratorEnvironment({
+        ...full,
+        MORROW_AGENT_LOOP: value,
+        AGENT_RUN: { create() {}, get() {} },
+      }).agentRuns,
       null,
     );
   const agentRun = { create() {}, get() {} };
@@ -351,7 +358,11 @@ test("the agent Workflow's body: ids-only payload, the reviewed step options and
       return body();
     },
   };
-  const event = (p = params, instanceId = runId) => ({ payload: p, instanceId, timestamp: new Date() });
+  const event = (p = params, instanceId = runId) => ({
+    payload: p,
+    instanceId,
+    timestamp: new Date(),
+  });
   // The run's lease is gone (resolveLease finds none): interrupted at the start step.
   const ports = (resolveLease) => ({
     lease: async () => {
@@ -366,7 +377,14 @@ test("the agent Workflow's body: ids-only payload, the reviewed step options and
     now: () => Date.now(),
     sleep: async () => {},
   });
-  assert.equal(await module.runAgentWorkflow(ports(async () => null), event(), step), "interrupted");
+  assert.equal(
+    await module.runAgentWorkflow(
+      ports(async () => null),
+      event(),
+      step,
+    ),
+    "interrupted",
+  );
   assert.deepEqual(configs, [
     [
       "start",
@@ -377,7 +395,11 @@ test("the agent Workflow's body: ids-only payload, the reviewed step options and
   // A failed lookup transaction is AgentRunRetry (the Workflow retries the step); any other
   // fault is NonRetryableError(step_fault).
   await assert.rejects(
-    module.runAgentWorkflow(ports(async () => "failed"), event(), step),
+    module.runAgentWorkflow(
+      ports(async () => "failed"),
+      event(),
+      step,
+    ),
     (error) => error.name === "AgentRunRetry" && error.code === "resolve",
   );
   await assert.rejects(
@@ -403,7 +425,11 @@ test("the agent Workflow's body: ids-only payload, the reviewed step options and
     [params, "00000000-0000-4000-8000-0000000000bb"],
   ])
     await assert.rejects(
-      module.runAgentWorkflow(ports(async () => null), event(p, id), step),
+      module.runAgentWorkflow(
+        ports(async () => null),
+        event(p, id),
+        step,
+      ),
       (error) => error.message === "payload_invalid",
     );
   assert.equal(configs.length, before);

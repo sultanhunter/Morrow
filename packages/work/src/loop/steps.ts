@@ -322,7 +322,9 @@ export interface AgentRunSteps {
     | { readonly outcome: "waiting"; readonly questionId: string }
     | { readonly outcome: "call_open" | "run_inactive" | "invalid" | "denied" }
   >;
-  finish(reason: AgentRunEndReason): Promise<
+  finish(
+    reason: AgentRunEndReason,
+  ): Promise<
     | { readonly outcome: "ended"; readonly status: "succeeded" | "failed" | "cancelled" }
     | { readonly outcome: "call_open" | "invalid" | "denied" }
   >;
@@ -617,14 +619,9 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
       }
       if (
         r.reason !== null ||
-        ![
-          "opened",
-          "opened_before",
-          "conflict",
-          "run_inactive",
-          "invalid",
-          "denied",
-        ].includes(r.outcome as string)
+        !["opened", "opened_before", "conflict", "run_inactive", "invalid", "denied"].includes(
+          r.outcome as string,
+        )
       )
         throw held();
       return Object.freeze({ outcome: r.outcome }) as TurnOpen;
@@ -651,7 +648,10 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
           lastSequence: integer(r.last_sequence, 0, 8),
         });
       }
-      if (!["run_inactive", "invalid", "denied"].includes(r.outcome as string) || !allNull(r, ["outcome"]))
+      if (
+        !["run_inactive", "invalid", "denied"].includes(r.outcome as string) ||
+        !allNull(r, ["outcome"])
+      )
         throw held();
       return Object.freeze({ outcome: r.outcome as "run_inactive" | "invalid" | "denied" });
     },
@@ -707,13 +707,9 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
       };
       if (r.outcome === "begun" || r.outcome === "resumed") {
         if (
-          ![
-            r.refusal,
-            r.recorded_outcome,
-            r.recorded_refusal,
-            r.record_kind,
-            r.record_id,
-          ].every((v) => v === null) ||
+          ![r.refusal, r.recorded_outcome, r.recorded_refusal, r.record_kind, r.record_id].every(
+            (v) => v === null,
+          ) ||
           (r.outcome === "begun" && r.result_digest !== null) ||
           (r.outcome === "resumed" && r.result_digest !== null)
         )
@@ -732,7 +728,8 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         if (
           r.refusal !== null ||
           !toolCallOutcomes.includes(r.recorded_outcome as ToolCallOutcome) ||
-          (r.recorded_refusal !== null && !toolRefusals.includes(r.recorded_refusal as ToolRefusal)) ||
+          (r.recorded_refusal !== null &&
+            !toolRefusals.includes(r.recorded_refusal as ToolRefusal)) ||
           (r.record_kind === null) !== (r.record_id === null) ||
           (r.record_kind !== null &&
             (!recordKinds.includes(r.record_kind as string) || !exact(recordId, r.record_id))) ||
@@ -784,7 +781,13 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         )
       )
         throw held();
-      return r.outcome as "finished" | "replay" | "conflict" | "run_inactive" | "invalid" | "denied";
+      return r.outcome as
+        | "finished"
+        | "replay"
+        | "conflict"
+        | "run_inactive"
+        | "invalid"
+        | "denied";
     },
     async questionAsk(toolUse, question, choicesCanonical) {
       if (

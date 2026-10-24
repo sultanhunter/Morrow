@@ -8,7 +8,12 @@ import {
 import { generatedLoopCatalogue } from "../../../packages/policy/src/generated/loop-catalogue.js";
 import { generatedToolCatalogue } from "../../../packages/policy/src/generated/tool-catalogue.js";
 import { loopSystemTexts } from "../../../packages/policy/src/loop-prompts.js";
-import { BrokerHold, brokerCapabilities, invokeBrokerMethod, type BrokerVault } from "./capabilities.js";
+import {
+  BrokerHold,
+  brokerCapabilities,
+  invokeBrokerMethod,
+  type BrokerVault,
+} from "./capabilities.js";
 import type { ResolvedTurnCall, TurnAdapterResult, TurnProvider } from "./claude-turn-adapter.js";
 import { jcs, sha256 } from "./model-gateway.js";
 import { vaultStatements, type VaultQuery } from "./vault.js";
@@ -91,7 +96,13 @@ const sources = [
   "tool_result",
   "message",
 ];
-const toolOutcomes = ["ok", "refused", "invalid_input", "tool_outcome_unknown", "computer_unavailable"];
+const toolOutcomes = [
+  "ok",
+  "refused",
+  "invalid_input",
+  "tool_outcome_unknown",
+  "computer_unavailable",
+];
 const recordId = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const toolUseId = /^[A-Za-z0-9_-]{1,64}$/;
 const continuity = /^[A-Za-z0-9+/=_-]*$/;
@@ -162,7 +173,8 @@ export interface ModelCallV2 {
 }
 /** ModelCall@2, checked by hand (the contract's closed shape, bounds and conversation order). */
 export function parseModelCallV2(text: unknown): ModelCallV2 | null {
-  if (typeof text !== "string" || encoder.encode(text).length > modelTurnLimits.callMaxBytes) return null;
+  if (typeof text !== "string" || encoder.encode(text).length > modelTurnLimits.callMaxBytes)
+    return null;
   let v: unknown;
   try {
     v = JSON.parse(text);
@@ -171,14 +183,26 @@ export function parseModelCallV2(text: unknown): ModelCallV2 | null {
   }
   if (
     !isObject(v) ||
-    !keysExactly(v, ["schemaVersion", "purpose", "turn", "attempt", "sequence", "final", "prefixDigest", "messages"]) ||
+    !keysExactly(v, [
+      "schemaVersion",
+      "purpose",
+      "turn",
+      "attempt",
+      "sequence",
+      "final",
+      "prefixDigest",
+      "messages",
+    ]) ||
     v.schemaVersion !== 2 ||
     v.purpose !== "agent_turn" ||
     !int(v.turn, 1, 16) ||
     !int(v.attempt, 1, 2) ||
     !int(v.sequence, 1, 8) ||
     typeof v.final !== "boolean" ||
-    !(v.prefixDigest === null || (typeof v.prefixDigest === "string" && digest.test(v.prefixDigest))) ||
+    !(
+      v.prefixDigest === null ||
+      (typeof v.prefixDigest === "string" && digest.test(v.prefixDigest))
+    ) ||
     !Array.isArray(v.messages) ||
     v.messages.length !== 2 * (v.turn as number) - 1 ||
     (v.turn === 1) !== (v.prefixDigest === null)
@@ -216,7 +240,8 @@ export function parseModelCallV2(text: unknown): ModelCallV2 | null {
         after.some((b) => b.type !== "text")
       )
         return null;
-    } else if ((m.content as Record<string, unknown>[]).some((b) => b.type === "tool_result")) return null;
+    } else if ((m.content as Record<string, unknown>[]).some((b) => b.type === "tool_result"))
+      return null;
   }
   return v as unknown as ModelCallV2;
 }
@@ -226,7 +251,11 @@ function entryOf(version: number, model: string, effort: string) {
     readonly version: number;
     readonly limits: { readonly maxInputTokensPerTurn: number };
     readonly efforts: readonly { readonly key: string; readonly maxOutputTokens: number }[];
-    readonly models: readonly { readonly key: string; readonly provider: string; readonly providerModelId: string }[];
+    readonly models: readonly {
+      readonly key: string;
+      readonly provider: string;
+      readonly providerModelId: string;
+    }[];
   }[] = generatedLoopCatalogue.versions;
   const v = versions.find((x) => x.version === version);
   const m = v?.models.find((x) => x.key === model);
@@ -259,8 +288,15 @@ type Replay = {
 };
 const beginNames =
   "call_id,effort_key,max_input_tokens,max_output_tokens,model_key,outcome,provider_model_id,recorded_outcome,recorded_output,recorded_prefix_after,recorded_usage,system_text_digest,tools";
-function decodeBegin(rows: readonly Record<string, unknown>[]): { begun: Begun } | { replay: Replay } | string {
-  if (!Array.isArray(rows) || rows.length !== 1 || !rows[0] || Object.keys(rows[0]).sort().join(",") !== beginNames)
+function decodeBegin(
+  rows: readonly Record<string, unknown>[],
+): { begun: Begun } | { replay: Replay } | string {
+  if (
+    !Array.isArray(rows) ||
+    rows.length !== 1 ||
+    !rows[0] ||
+    Object.keys(rows[0]).sort().join(",") !== beginNames
+  )
     throw hold("STATE_INVALID");
   const r = rows[0];
   if (r.outcome === "replay") {
@@ -269,7 +305,8 @@ function decodeBegin(rows: readonly Record<string, unknown>[]): { begun: Begun }
       !uuid.test(r.call_id) ||
       typeof r.recorded_outcome !== "string" ||
       (r.recorded_output !== null && typeof r.recorded_output !== "string") ||
-      (r.recorded_prefix_after !== null && (typeof r.recorded_prefix_after !== "string" || !digest.test(r.recorded_prefix_after))) ||
+      (r.recorded_prefix_after !== null &&
+        (typeof r.recorded_prefix_after !== "string" || !digest.test(r.recorded_prefix_after))) ||
       (r.recorded_usage !== null && typeof r.recorded_usage !== "string")
     )
       throw hold("STATE_INVALID");
@@ -357,7 +394,12 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
     const capabilities = await brokerCapabilities(env);
     const model = capabilities.model;
     const vault = capabilities.vault;
-    if (capabilities.modelMode !== "anthropic" || capabilities.agentLoop !== "on" || model === null || vault === null)
+    if (
+      capabilities.modelMode !== "anthropic" ||
+      capabilities.agentLoop !== "on" ||
+      model === null ||
+      vault === null
+    )
       throw hold("MODEL_UNAVAILABLE");
     // 2. The closed inputs.
     if (
@@ -384,21 +426,25 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
     const left = () => deadline - seams.now();
     // 4. The fence.
     const begun = decodeBegin(
-      await seams.transaction(vault, Math.min(modelSendTiming.fenceMaxMs, Math.max(1_000, left())), (query) =>
-        query(vaultStatements.agentTurnBegin, [
-          leaseId,
-          String(generation),
-          String(call.turn),
-          String(call.attempt),
-          String(call.sequence),
-          String(call.final),
-          String(budgetMs),
-          call.prefixDigest ?? "",
-          inputDigest,
-        ]),
+      await seams.transaction(
+        vault,
+        Math.min(modelSendTiming.fenceMaxMs, Math.max(1_000, left())),
+        (query) =>
+          query(vaultStatements.agentTurnBegin, [
+            leaseId,
+            String(generation),
+            String(call.turn),
+            String(call.attempt),
+            String(call.sequence),
+            String(call.final),
+            String(budgetMs),
+            call.prefixDigest ?? "",
+            inputDigest,
+          ]),
       ),
     );
-    if (begun === "prefix_mismatch") return turnResult("prefix_mismatch", null, null, null, null, null);
+    if (begun === "prefix_mismatch")
+      return turnResult("prefix_mismatch", null, null, null, null, null);
     if (typeof begun === "string") throw hold("STATE_INVALID");
     if ("replay" in begun) {
       // A fence already closed (or booked as uncertain): its recorded outcome, never a send.
@@ -411,9 +457,16 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
       } catch {
         throw hold("STATE_INVALID");
       }
-      const replied = (r.outcome === "end_turn" || r.outcome === "tool_use") && message !== null && r.prefixAfter !== null;
+      const replied =
+        (r.outcome === "end_turn" || r.outcome === "tool_use") &&
+        message !== null &&
+        r.prefixAfter !== null;
       return turnResult(
-        replied ? r.outcome : r.outcome === "end_turn" || r.outcome === "tool_use" ? "uncertain" : r.outcome,
+        replied
+          ? r.outcome
+          : r.outcome === "end_turn" || r.outcome === "tool_use"
+            ? "uncertain"
+            : r.outcome,
         message,
         usage,
         r.prefixAfter,
@@ -422,26 +475,39 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
       );
     }
     const b = begun.begun;
-    const close = async (outcome: string, a: TurnAdapterResult | null, counted: number | null, reply: unknown, prefixAfter: string | null): Promise<string | null> => {
+    const close = async (
+      outcome: string,
+      a: TurnAdapterResult | null,
+      counted: number | null,
+      reply: unknown,
+      prefixAfter: string | null,
+    ): Promise<string | null> => {
       try {
-        const rows = await seams.transaction(vault, Math.min(10_000, Math.max(1_000, left() + 5_000)), (query) =>
-          query(vaultStatements.agentTurnEnd, [
-            b.callId,
-            outcome,
-            a?.rawStopReason ?? "",
-            a?.providerRequestId ?? "",
-            a?.providerModelId ?? "",
-            counted === null ? "" : String(counted),
-            a?.usage ? String(a.usage.inputTokens) : "",
-            a?.usage ? String(a.usage.cacheWriteTokens) : "",
-            a?.usage ? String(a.usage.cacheReadTokens) : "",
-            a?.usage ? String(a.usage.outputTokens) : "",
-            reply === null ? "" : JSON.stringify(reply),
-            prefixAfter ?? "",
-          ]),
+        const rows = await seams.transaction(
+          vault,
+          Math.min(10_000, Math.max(1_000, left() + 5_000)),
+          (query) =>
+            query(vaultStatements.agentTurnEnd, [
+              b.callId,
+              outcome,
+              a?.rawStopReason ?? "",
+              a?.providerRequestId ?? "",
+              a?.providerModelId ?? "",
+              counted === null ? "" : String(counted),
+              a?.usage ? String(a.usage.inputTokens) : "",
+              a?.usage ? String(a.usage.cacheWriteTokens) : "",
+              a?.usage ? String(a.usage.cacheReadTokens) : "",
+              a?.usage ? String(a.usage.outputTokens) : "",
+              reply === null ? "" : JSON.stringify(reply),
+              prefixAfter ?? "",
+            ]),
         );
         const r = rows.length === 1 ? rows[0] : undefined;
-        if (!r || (r.outcome !== "closed" && r.outcome !== "already_closed") || typeof r.recorded_outcome !== "string")
+        if (
+          !r ||
+          (r.outcome !== "closed" && r.outcome !== "already_closed") ||
+          typeof r.recorded_outcome !== "string"
+        )
           return null;
         return r.outcome === "already_closed" ? null : r.recorded_outcome;
       } catch {
@@ -455,7 +521,9 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
     const system = loopSystemTexts[b.systemTextDigest];
     const named = call.messages.flatMap((m) =>
       m.role === "assistant"
-        ? (m.content as Record<string, unknown>[]).filter((x) => x.type === "tool_use").map((x) => x.name as string)
+        ? (m.content as Record<string, unknown>[])
+            .filter((x) => x.type === "tool_use")
+            .map((x) => x.name as string)
         : [],
     );
     if (
@@ -494,11 +562,19 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
     if (counted.outcome !== "counted") {
       const outcome = counted.outcome === "throttled" ? "not_sent" : counted.outcome;
       const recorded = (await close(outcome, null, null, null, null)) ?? "uncertain";
-      return turnResult(recorded, null, null, null, b.callId, counted.outcome === "throttled" ? counted.retryAfterMs : null);
+      return turnResult(
+        recorded,
+        null,
+        null,
+        null,
+        b.callId,
+        counted.outcome === "throttled" ? counted.retryAfterMs : null,
+      );
     }
     const cap = Math.min(entry.maxInput, b.maxInputTokens);
     if (counted.inputTokens > cap - Math.ceil(cap / 10)) {
-      const recorded = (await close("input_over_cap", null, counted.inputTokens, null, null)) ?? "uncertain";
+      const recorded =
+        (await close("input_over_cap", null, counted.inputTokens, null, null)) ?? "uncertain";
       return turnResult(recorded, null, null, null, b.callId, null);
     }
     // 7. One send, the reply checked against the run, then the close.
@@ -510,19 +586,38 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
     let outcome: string = reply.outcome === "throttled" ? "not_sent" : reply.outcome;
     let message: unknown = null;
     if (outcome === "end_turn" || outcome === "tool_use") {
-      const uses = (reply.message?.content ?? []).filter((x) => (x as { type: string }).type === "tool_use") as {
+      const uses = (reply.message?.content ?? []).filter(
+        (x) => (x as { type: string }).type === "tool_use",
+      ) as {
         name: string;
       }[];
-      if (reply.message === null || uses.length > 4 || (call.final && uses.length > 0) || uses.some((u) => !b.tools.includes(u.name)))
+      if (
+        reply.message === null ||
+        uses.length > 4 ||
+        (call.final && uses.length > 0) ||
+        uses.some((u) => !b.tools.includes(u.name))
+      )
         outcome = "invalid_output";
       else message = reply.message;
     }
-    const usage = outcome === "uncertain" || outcome === "not_sent" || outcome === "spend_limit" ? null : reply.usage;
-    if (["end_turn", "tool_use", "incomplete", "refusal", "invalid_output"].includes(outcome) && usage === null)
+    const usage =
+      outcome === "uncertain" || outcome === "not_sent" || outcome === "spend_limit"
+        ? null
+        : reply.usage;
+    if (
+      ["end_turn", "tool_use", "incomplete", "refusal", "invalid_output"].includes(outcome) &&
+      usage === null
+    )
       outcome = "uncertain";
     if (outcome === "uncertain") message = null;
     const prefixAfter = message === null ? null : await sha256(jcs([...call.messages, message]));
-    const recorded = await close(outcome, { ...reply, usage }, counted.inputTokens, message, prefixAfter);
+    const recorded = await close(
+      outcome,
+      { ...reply, usage },
+      counted.inputTokens,
+      message,
+      prefixAfter,
+    );
     if (recorded === null) return turnResult("uncertain", null, null, null, b.callId, null);
     return turnResult(
       recorded,
@@ -534,8 +629,18 @@ export function createAgentTurnGateway(seams: Readonly<AgentTurnGatewaySeams>) {
     );
   }
   return Object.freeze({
-    modelTurn(env: unknown, leaseId: unknown, generation: unknown, callJson: unknown, budgetMs: unknown): Promise<string> {
-      return invokeBrokerMethod("modelTurn", () => turn(env, leaseId, generation, callJson, budgetMs), "RuntimeBroker");
+    modelTurn(
+      env: unknown,
+      leaseId: unknown,
+      generation: unknown,
+      callJson: unknown,
+      budgetMs: unknown,
+    ): Promise<string> {
+      return invokeBrokerMethod(
+        "modelTurn",
+        () => turn(env, leaseId, generation, callJson, budgetMs),
+        "RuntimeBroker",
+      );
     },
   });
 }

@@ -820,7 +820,8 @@ export function reviewedAgentLoopRecord(record, evidenceRoot = repositoryRoot) {
     (record.switch !== "off" && record.switch !== "on") ||
     typeof record.scope !== "string" ||
     (record.observed_on !== null &&
-      (typeof record.observed_on !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
+      (typeof record.observed_on !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
     !prerequisites ||
     typeof prerequisites !== "object" ||
     Array.isArray(prerequisites) ||

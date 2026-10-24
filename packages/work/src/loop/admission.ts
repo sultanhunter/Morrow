@@ -1,7 +1,4 @@
-import type {
-  Current_AgentRunManifest,
-  Current_PlanStepRun,
-} from "@morrow/contracts";
+import type { Current_AgentRunManifest, Current_PlanStepRun } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { defaultLoopProfile, loopEntry, type LoopEntry } from "@morrow/policy/loop-catalogue";
 import { routedSystemTextDigest } from "@morrow/policy/loop-prompts";
@@ -104,7 +101,11 @@ export interface RoutedManifestInput {
   readonly release: { readonly id: string; readonly revision: number; readonly digest: string };
   readonly tools: readonly string[];
   /** ModelProfile@1: an installation's model and effort (its kind's default until PR 12). */
-  readonly profile: { readonly model: string; readonly effort: string; readonly catalogueVersion: number };
+  readonly profile: {
+    readonly model: string;
+    readonly effort: string;
+    readonly catalogueVersion: number;
+  };
   /** The database time admission reads first (ms precision). */
   readonly admittedAt: string;
 }
@@ -116,13 +117,26 @@ export interface RoutedManifestInput {
 export function routedManifest(
   input: RoutedManifestInput,
 ):
-  | { readonly ok: true; readonly manifest: Current_AgentRunManifest; readonly canonical: string; readonly caps: RoutedRunCaps }
-  | { readonly ok: false; readonly code: "entry_not_offered" | "cap_below_turn" | "no_tools" | "invalid" } {
-  const entry = loopEntry(input.profile.catalogueVersion, input.profile.model, input.profile.effort);
+  | {
+      readonly ok: true;
+      readonly manifest: Current_AgentRunManifest;
+      readonly canonical: string;
+      readonly caps: RoutedRunCaps;
+    }
+  | {
+      readonly ok: false;
+      readonly code: "entry_not_offered" | "cap_below_turn" | "no_tools" | "invalid";
+    } {
+  const entry = loopEntry(
+    input.profile.catalogueVersion,
+    input.profile.model,
+    input.profile.effort,
+  );
   if (!entry) return Object.freeze({ ok: false as const, code: "entry_not_offered" as const });
   const caps = routedRunCaps(entry);
   if (caps === "cap_below_turn") return Object.freeze({ ok: false as const, code: caps });
-  if (input.tools.length === 0) return Object.freeze({ ok: false as const, code: "no_tools" as const });
+  if (input.tools.length === 0)
+    return Object.freeze({ ok: false as const, code: "no_tools" as const });
   const manifest = {
     schemaVersion: 1,
     workflow: "agent-run@1",
@@ -197,7 +211,11 @@ export const planStepAdmitterOff: PlanStepAdmitter = Object.freeze({
   async admit(intents: readonly StepRunIntent[]): Promise<readonly Current_PlanStepRun[]> {
     return Object.freeze(
       intents.map((i) =>
-        Object.freeze({ stepKey: i.stepKey, status: "not_started" as const, reason: "agent_loop_off" }),
+        Object.freeze({
+          stepKey: i.stepKey,
+          status: "not_started" as const,
+          reason: "agent_loop_off",
+        }),
       ),
     );
   },

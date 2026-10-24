@@ -344,7 +344,12 @@ const extraPolicies = {
 // login's cron and lease lookup read queued and running runs only.
 const brokerAgentRun = (column) =>
   `((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (${column})::text) = current_setting('morrow.vault_agent_run'::text, true)))`;
-extraPolicies.broker_agent_run = ["ALL", "{morrow_work_command}", brokerAgentRun("id"), brokerAgentRun("id")];
+extraPolicies.broker_agent_run = [
+  "ALL",
+  "{morrow_work_command}",
+  brokerAgentRun("id"),
+  brokerAgentRun("id"),
+];
 extraPolicies.broker_agent_turn = [
   "ALL",
   "{morrow_work_command}",

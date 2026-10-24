@@ -64,8 +64,7 @@ export function toolOperation(
 /** The ids a tool's input names must be the run's own (ADR-0027 item 2: ids in scope). */
 export function idsInScope(tool: string, input: unknown, run: AgentRunState): boolean {
   const v = input as Record<string, unknown>;
-  if (tool === "work.read")
-    return v.id === null || v.id === run.taskId || v.id === run.childTaskId;
+  if (tool === "work.read") return v.id === null || v.id === run.taskId || v.id === run.childTaskId;
   // Product ids are checked by the store read itself (only the run's store is reachable);
   // every other tool names no id, or names only codes and text.
   return true;
