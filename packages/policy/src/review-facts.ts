@@ -49,9 +49,10 @@ export function isWorkspaceOwnershipFacts(value: unknown): value is WorkspaceOwn
  * → `campaign`, `agents.installation.disable` → `installation`,
  * `governance.membership.revoke` → `member`, `agents.release.revoke` →
  * `release`. The exception is `connection`: v1 `ResourceRef` has no kind for a
- * store connection, so how a `governance.connection.disconnect` record names its
- * target is open. P05.T01z settles it with a deliberate v1.1 edit before the
- * Tier 3 sign-off freezes v1.1.
+ * store connection, so a `governance.connection.disconnect` record names its
+ * target with core v1.1 `KillSwitchConnectionTarget` ({kind: connection, id:
+ * connectionId, storeId, connectionId}; ADR-0022 item 2 as amended 2026-10-22),
+ * never a grant or scope resource.
  */
 export type KillSwitchTargetKind =
   | "campaign"

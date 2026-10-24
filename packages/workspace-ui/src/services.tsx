@@ -31,7 +31,8 @@ export type MarkerKind =
   | "cancel"
   | "agent"
   | "model_default"
-  | "run";
+  | "run"
+  | "disconnect";
 export interface Marker {
   readonly workspaceId: Id;
   readonly kind: MarkerKind;

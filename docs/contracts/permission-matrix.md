@@ -42,6 +42,7 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | workspace.project.pin | human_or_bounded_installation_with_explicit_capability_grant | pin, order | Grant checks | human_only | No |
 | workspace.inbox.read | human_or_bounded_installation_with_explicit_capability_grant | kind, subject, decision state, read state | Grant checks | human_only | No |
 | workspace.inbox.mark | human_or_bounded_installation_with_explicit_capability_grant | read state | Grant checks | human_only | No |
+| workspace.routine.revoke | human_or_bounded_installation_with_explicit_capability_grant | mandate state, pending mandate approvals | Grant checks | human_only | No |
 | catalog.products.read | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO, variants, media, tags | Grant checks | agent_direct_read | No |
 | catalog.audit.create | human_or_bounded_installation_with_explicit_capability_grant | catalog facts, approved claims | Grant checks | agent_direct_write | No |
 | catalog.content.propose | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description, tags | Grant checks | agent_direct_write | No |
@@ -80,8 +81,8 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | lifecycle.campaign.send | human_or_bounded_installation_with_explicit_capability_grant | channel, recipients, content, schedule | Required | agent_after_approval | No |
 | lifecycle.performance.read | human_or_bounded_installation_with_explicit_capability_grant | aggregate delivery, click, conversion data | Grant checks | agent_direct_read | No |
 | support.case.read | human_or_bounded_installation_with_explicit_capability_grant | case transcript, permitted customer and order fields | Grant checks | agent_direct_read | No |
-| support.reply.propose | human_or_bounded_installation_with_explicit_capability_grant | reply body, recipient, channel | Grant checks | agent_direct_write | No |
-| support.reply.send | human_or_bounded_installation_with_explicit_capability_grant | recipient, channel, reply body | Required | agent_after_approval | No |
+| support.reply.propose | human_or_bounded_installation_with_explicit_capability_grant | reply body, recipient, channel, sender identity | Grant checks | agent_direct_write | No |
+| support.reply.send | human_or_bounded_installation_with_explicit_capability_grant | recipient, channel, reply body, sender identity | Required | agent_after_approval | No |
 | support.case.escalate | human_or_bounded_installation_with_explicit_capability_grant | assignee, priority, escalation reason | Required | agent_after_approval | No |
 | support.case.close | human_or_bounded_installation_with_explicit_capability_grant | case status | Required | agent_after_approval | No |
 | orders.read | human_or_bounded_installation_with_explicit_capability_grant | allowed order, fulfillment, return fields | Grant checks | agent_direct_read | No |
@@ -121,6 +122,7 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | governance.access.request | human_or_bounded_installation_with_explicit_capability_grant | capability, resource, field, reason | Grant checks | human_only | No |
 | governance.billing.manage | human_or_bounded_installation_with_explicit_capability_grant | purchase action, plan price | Grant checks | human_only | No |
 | governance.model_default.revise | human_or_bounded_installation_with_explicit_capability_grant | default model, default effort, member credit ceiling | Grant checks | human_only | No |
+| governance.mail_identity.revise | human_or_bounded_installation_with_explicit_capability_grant | default sender identity, sender display name, sender status, support address | Grant checks | human_only | No |
 | agents.listing.read | human_or_bounded_installation_with_explicit_capability_grant | public listing and authorized readiness fields | Grant checks | agent_direct_read | No |
 | agents.builder.describe | human_or_bounded_installation_with_explicit_capability_grant | purpose, proposed skills, inputs, outputs, capabilities | Grant checks | agent_direct_write | No |
 | agents.installation.stage | human_or_bounded_installation_with_explicit_capability_grant | release lockfile, configuration, proposed grants | Grant checks | agent_direct_write | No |

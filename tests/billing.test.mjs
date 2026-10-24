@@ -712,6 +712,18 @@ test("AC01: kill switches are never paid (PW2); a spending kill switch is caught
   c.capabilities.find((x) => x.id === "governance.membership.revoke").effect = "spend";
   assert.deepEqual(inspectPaidWork(paidWork, c, templates), ["PAID_WORK_TABLE_INVALID:PW3"]);
 });
+// PR 10 (ADR-0026 item 5, ADR-0024 item 4): PW2's sibling. Revoking a mandate is never paid
+// or entitlement-gated, so it must stay in the catalogue as an unpaid control capability.
+test("PW2b: workspace.routine.revoke is never paid, and its absence or a paid effect fails", () => {
+  for (const verb of permissionVerbs)
+    assert.equal(isPaidWork("workspace.routine.revoke", verb), false, verb);
+  const spend = structuredClone(catalogue);
+  spend.capabilities.find((x) => x.id === "workspace.routine.revoke").effect = "spend";
+  assert.ok(inspectPaidWork(paidWork, spend, templates).includes("PAID_WORK_TABLE_INVALID:PW2b"));
+  const missing = structuredClone(catalogue);
+  missing.capabilities = missing.capabilities.filter((x) => x.id !== "workspace.routine.revoke");
+  assert.deepEqual(inspectPaidWork(paidWork, missing, templates), ["PAID_WORK_TABLE_INVALID:PW2b"]);
+});
 for (const id of ["owner-bootstrap-v1", "workspace-member-v1", "workspace-admin-v1"])
   test("AC01: a paid row added to " + id + " fails PW5", () => {
     const t = structuredClone(templates);

@@ -423,7 +423,7 @@ test("AC29: 20 concurrent first calls share one initialisation; a failure stays 
   for (const value of [undefined, null, "env"]) assert.equal(await brokerHealth(value), false);
 });
 
-test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404 default", async (t) => {
+test("AC10: ApiBroker has exactly ten prototype methods, arity checks and a 404 default", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "morrow-broker-entry-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bundled = await build({
@@ -452,12 +452,14 @@ test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404
   writeFileSync(file, bundled.outputFiles[0].text);
   const module = await import(pathToFileURL(file).href);
   // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods; M2
-  // PR-3 shopifyRead (the catalogue routes' reads under a read lease).
+  // PR-3 shopifyRead (the catalogue routes' reads under a read lease); "Disconnect store"
+  // shopifyCredentialDestroy (one argument: the reason is fixed to `disconnected`).
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
     "challengeVerify",
     "constructor",
     "health",
     "neonLease",
+    "shopifyCredentialDestroy",
     "shopifyRead",
     "stripeCheckoutCreate",
     "stripeCustomerEnsure",
@@ -519,9 +521,13 @@ test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404
   const readLease = "00000000-0000-4000-8000-000000000002";
   await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}"));
   await failure(entry.shopifyRead(readLease, 1, "subject_1", "shopIdentity", "{}", 1000, 1));
+  // "Disconnect store": the api's token destruction takes the installation alone; a reason
+  // (the connector's shape) is refused, so the api can never name another end.
+  await failure(entry.shopifyCredentialDestroy());
+  await failure(entry.shopifyCredentialDestroy("installation_1", "uninstalled"));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    Array(12).fill("INPUT_INVALID"),
+    Array(14).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
@@ -565,15 +571,13 @@ test("AC10: ApiBroker has exactly nine prototype methods, arity checks and a 404
     logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
     Array(7).fill(["ConnectorBroker", "INPUT_INVALID"]),
   );
-  for (const name of [
-    "shopifyLaunchVerify",
-    "shopifyInstallComplete",
-    "shopifyWebhookVerify",
-    "shopifyCredentialDestroy",
-  ]) {
+  for (const name of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"]) {
     assert.equal(typeof new module.ApiBroker({}, env)[name], "undefined");
     assert.equal(typeof new module.RuntimeBroker({}, env)[name], "undefined");
   }
+  // The token's destruction is the connector's (any recorded end) and the api's (a person's
+  // disconnect only); never the orchestrator's.
+  assert.equal(typeof new module.RuntimeBroker({}, env).shopifyCredentialDestroy, "undefined");
   // shopifyRead is the api's and the orchestrator's, each with its own queries, never the
   // connector's; the orchestrator's checks its arity and refuses the api's queries.
   assert.equal(typeof connector.shopifyRead, "undefined");

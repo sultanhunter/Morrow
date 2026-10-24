@@ -6,6 +6,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./agent-authority": "./src/agent-authority.ts",
+    "./agent-package": "./src/agent-package.ts",
+    "./agent-platform-fakes": "./src/agent-platform-fakes.ts",
+    "./fake-model-gateway": "./src/fake-model-gateway.ts",
+    "./loop-catalogue": "./src/loop-catalogue.ts",
+    "./tool-catalogue": "./src/tool-catalogue.ts",
     "./billing-state": "./src/billing-state.ts",
     "./connection-authority": "./src/connection-authority.ts",
     "./kill-switch": "./src/kill-switch.ts",

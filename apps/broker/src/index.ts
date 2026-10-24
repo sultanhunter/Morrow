@@ -10,6 +10,7 @@ import { brokerChallengeVerify } from "./challenge.js";
 import { brokerNeonLease } from "./neon-lease.js";
 import {
   brokerShopifyCredentialDestroy,
+  brokerShopifyDisconnectDestroy,
   brokerShopifyInstallComplete,
   brokerShopifyLaunchVerify,
   brokerShopifyWebhookVerify,
@@ -52,10 +53,11 @@ const runtimeGateway = createRuntimeGateway({
 // Each method checks its arity and forwards to a module-scope handler. Results are
 // strings or booleans only.
 
-// The api Worker's entrypoint: exactly nine prototype methods (v0's four, ADR-0019 item 6
+// The api Worker's entrypoint: exactly ten prototype methods (v0's four, ADR-0019 item 6
 // added challengeVerify; M5 PR-1 adds the four Stripe methods, which take ids, strings and
 // budgets only, as v1 requires: the broker loads every Stripe parameter itself; M2 PR-3 adds
-// shopifyRead under a read lease).
+// shopifyRead under a read lease; "Disconnect store" adds shopifyCredentialDestroy, the
+// disconnected installation's token, with its reason fixed).
 export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0 ? brokerHealth(this.env) : brokerInputInvalid("health");
@@ -123,6 +125,11 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
           budgetMs,
         )
       : brokerInputInvalid("shopifyRead");
+  }
+  shopifyCredentialDestroy(installationId: string): Promise<string> {
+    return arguments.length === 1
+      ? brokerShopifyDisconnectDestroy(this.env, installationId)
+      : brokerInputInvalid("shopifyCredentialDestroy");
   }
 }
 

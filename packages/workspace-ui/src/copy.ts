@@ -232,17 +232,45 @@ export const copy = {
     back: "Back to Connections",
     shop: "Store",
     status: "Status",
-    // M2 PR-3 review: an uninstall or a scope change ends the store's connection for good in
-    // this build (no reinstall under the same app); reconnecting needs a new app from Morrow.
+    // M2 PR-3 review: an uninstall, a scope change or a disconnect ends the store's
+    // connection for good in this build (no reinstall under the same app); reconnecting needs
+    // a new install from Morrow.
     statusHelp: {
       unlinked: "Installed on Shopify, not linked to this workspace yet.",
       linked: "Linked to this workspace.",
       suspended:
-        "Disconnected. Morrow no longer uses this store. Reconnecting isn't available in this build; contact Morrow support to connect it again.",
+        "Disconnected. Morrow no longer reads or changes this store, and its access to the store is erased.",
       uninstalled:
         "The app was uninstalled from Shopify, so Morrow no longer uses this store. Reconnecting isn't available in this build; contact Morrow support to connect it again.",
     } as Readonly<Record<string, string>>,
-    disconnectLater: "Disconnecting a store isn't available in this build.",
+    // "Disconnect store" (ADR-0022 item 15): the person's kill switch for the whole store.
+    disconnect: {
+      title: "Disconnect store",
+      intro:
+        "Stops all AI work on this store at once and ends Morrow's access to it. Running jobs stop at their next step.",
+      button: "Disconnect store",
+      dialogTitle: "Disconnect this store from Morrow?",
+      dialogBody: [
+        "Every agent stops working on this store, and Morrow no longer reads or changes it.",
+        "Morrow erases its access token for the store. Drafts already in Morrow stay for you to review.",
+        "The Morrow app stays installed in your Shopify admin until you uninstall it there.",
+      ],
+      reconnectNote:
+        "Reconnecting needs a new install: uninstall the Morrow app in your Shopify admin, then ask Morrow support for a new install link. You can't undo a disconnect here.",
+      reason: "Reason",
+      reasonHint: "Required. Up to 1,024 characters. Recorded with the disconnect.",
+      confirm: "Disconnect store",
+      cancel: "Cancel",
+      done: "Store disconnected. No AI work runs on it, and Morrow no longer reads or changes it.",
+      credential: {
+        destroyed: "Morrow's access token for this store is erased.",
+        pending:
+          "Morrow is still erasing its access token for this store. That finishes on its own within a few minutes; the store is already disconnected.",
+      } as Readonly<Record<string, string>>,
+      byPerson: "Disconnected in Morrow.",
+      bySystem: "Stopped because the app was uninstalled or its access changed in Shopify.",
+      notPermitted: "Only the workspace owner can disconnect this store.",
+    },
   },
   outcome: {
     uncertain:
@@ -270,6 +298,7 @@ export const copy = {
       agent: "a change to the Listings agent",
       model_default: "the default model",
       run: "a Listings run",
+      disconnect: "disconnecting a store",
     },
     body: (kind: string) =>
       `A change you started earlier (${kind}) may have been saved. Check Work before creating it again.`,

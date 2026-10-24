@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "release": "morrow.specialist",
+  "decision": "ADR-0028 item 2",
+  "maxCapabilities": 16,
+  "scope": "The most a task_specialist installation may hold at launch, as fixed ids. work_specialist_grants_issue holds this allowlist; a spec's capabilities are the tools its eligible skills declare intersected with this list. Never at launch: order reads (orders.read, Level 1 aggregates included), support.*, customer reads, workspace.task.delegate, task create or assign, approve or execute on a publish capability, or any human_only capability. Computer tools join under the runtime switch when runtime.execution.use exists (ADR-0029 item 7).",
+  "capabilities": [
+    {
+      "capabilityId": "catalog.products.read",
+      "verbs": [
+        "view"
+      ]
+    },
+    {
+      "capabilityId": "inventory.levels.read",
+      "verbs": [
+        "view"
+      ]
+    },
+    {
+      "capabilityId": "workspace.knowledge.read",
+      "verbs": [
+        "view"
+      ]
+    },
+    {
+      "capabilityId": "workspace.artifact.read",
+      "verbs": [
+        "view"
+      ]
+    },
+    {
+      "capabilityId": "workspace.conversation.post",
+      "verbs": [
+        "execute"
+      ]
+    },
+    {
+      "capabilityId": "workspace.question.request",
+      "verbs": [
+        "execute"
+      ]
+    },
+    {
+      "capabilityId": "workspace.comment.create",
+      "verbs": [
+        "execute"
+      ]
+    },
+    {
+      "capabilityId": "workspace.artifact.edit",
+      "verbs": [
+        "execute"
+      ]
+    },
+    {
+      "capabilityId": "catalog.content.propose",
+      "verbs": [
+        "execute"
+      ]
+    },
+    {
+      "capabilityId": "catalog.content.publish",
+      "verbs": [
+        "propose"
+      ]
+    },
+    {
+      "capabilityId": "catalog.collection.propose",
+      "verbs": [
+        "execute"
+      ]
+    },
+    {
+      "capabilityId": "catalog.collection.publish",
+      "verbs": [
+        "propose"
+      ]
+    }
+  ]
+}

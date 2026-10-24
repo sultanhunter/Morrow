@@ -548,6 +548,8 @@ await withWorkDatabase(
             ["catalog.content.propose", ["execute", "delegate"]],
             ["catalog.content.publish", ["propose", "approve", "execute", "delegate"]],
             ["catalog.products.read", ["view", "delegate"]],
+            // Store-link template v2 ("Disconnect store", the ADR-0022 item 3 amendment).
+            ["governance.connection.disconnect", ["execute"]],
           ]) &&
           grants.every(
             (g) =>

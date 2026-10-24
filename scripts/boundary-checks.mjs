@@ -380,11 +380,13 @@ export const replacedBillingDefinitionNames = (changes) =>
   replacedNames(changes, "billing_definition");
 // Generated files define every exact selector and type, replaced ones included.
 const generatedContracts = /^packages\/contracts\/src\/generated\//;
-// EventEnvelope@2, the StreamFrame carrying it, AskAdminReadRecord, and the v1.1
-// ResourceRef, Scope, Grant and AgentInstallation have code rules beyond their schemas
-// (the event registry, the payloadRef binding, the admin-read reader and uniqueness
-// rules, and the store rule: a store resource's id is its storeId, ADR-0022 item 2), applied
-// only by `validateCurrentDefinition` in packages/contracts/src/validation.ts.
+// EventEnvelope@2, the StreamFrame carrying it, AskAdminReadRecord, the v1.1
+// ResourceRef, Scope, Grant and AgentInstallation, and KillSwitchRecord have code rules
+// beyond their schemas (the event registry, the payloadRef binding, the admin-read reader
+// and uniqueness rules, the store rule: a store resource's id is its storeId, ADR-0022
+// item 2, and the connection rule: a disconnect's connection target's id is its
+// connectionId, the item 2 amendment of 2026-10-22), applied only by
+// `validateCurrentDefinition` in packages/contracts/src/validation.ts.
 // Product code under apps/ and packages/ never validates them by their exact v1.1
 // selector: a `"core-v1.1:<name>"` literal or `validateDefinition("core-v1.1", <name>)`.
 export const refinedDefinitionNames = Object.freeze([
@@ -392,6 +394,7 @@ export const refinedDefinitionNames = Object.freeze([
   "AskAdminReadRecord",
   "EventEnvelope",
   "Grant",
+  "KillSwitchRecord",
   "ResourceRef",
   "Scope",
   "StreamFrame",

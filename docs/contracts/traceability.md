@@ -28,6 +28,7 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | workspace.project.pin | J01 | P07.T03, P14.T01 | P01.A01, P14.A01 | D01 |
 | workspace.inbox.read | J01 | P07.T03, P14.T03 | P01.A01, P07.A03 | D01 |
 | workspace.inbox.mark | J01 | P07.T03 | P01.A01, P07.A03 | D01 |
+| workspace.routine.revoke | J01 | P05.T04, P12.T04 | P01.A01, P05.A03 | D01 |
 | catalog.products.read | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D02 |
 | catalog.audit.create | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |
 | catalog.content.propose | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |
@@ -107,6 +108,7 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | governance.access.request | J13 | P05.T02, P14.T03 | P01.A01, P05.A01 | D01 |
 | governance.billing.manage | J13 | P18.T01 | P01.A01, P18.A01 | D21 |
 | governance.model_default.revise | J13 | P12.T01 | P01.A01 | D01 |
+| governance.mail_identity.revise | J13 | P17.T02 | P01.A01, P17.A04 | D01 |
 | agents.listing.read | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |
 | agents.builder.describe | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |
 | agents.installation.stage | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |
