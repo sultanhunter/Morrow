@@ -49,6 +49,13 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "projects_preview",
+  "projects_teammate",
+  "projects_start_stale",
+  "projects_start_uncertain",
+  "projects_start_denied",
+  "projects_changed_meanwhile",
+  "projects_revise_stale",
   "team_member",
   "team_admin",
   "team_add_uncertain",
@@ -336,6 +343,31 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // T7 PR 19: the project screens with the Linen & Form sample (Maya Chen, the Owner).
+  projects_preview: {},
+  // A member who may read projects but not act on them: the server's actions say so.
+  projects_teammate: {},
+  // The first start is refused as stale (the draft changed): nothing starts, the card is
+  // read again, and the next tap asks for a new document.
+  projects_start_stale: {
+    "plans.start": (call) => (call === 0 ? { kind: "conflict", recheck: true, message: "" } : null),
+  },
+  // The first start is applied but its reply is lost; Check again replays the same key.
+  projects_start_uncertain: {
+    "plans.start": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // The first start is refused without the server's words (ADR-0034 item 5(b)).
+  projects_start_denied: {
+    "plans.start": (call) => (call === 0 ? { kind: "denied", message: "", reference: null } : null),
+  },
+  // A teammate changed each project after this page first read it (`changedMeanwhileIn`):
+  // the first act on it is a 409, and the page reads it again.
+  projects_changed_meanwhile: {},
+  // The first Edit of the plan card is refused as stale.
+  projects_revise_stale: {
+    "plans.revise": (call) =>
+      call === 0 ? { kind: "conflict", recheck: true, message: "" } : null,
+  },
   // T7 PR 16: Team as a member (no change controls) and as an Admin (added agents only),
   // the add confirmation's lost reply (Check again replays it), and a thinking change
   // whose record moved on (the server's 409: reread).
@@ -385,6 +417,24 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
       call === 0 ? { kind: "unavailable", offline: true } : null,
   },
 };
+/**
+ * T7 PR 19: the default-off project screens' switch. `projects.*` and `plans.*` are
+ * composed only in these scenarios; every other scenario, like the HTTP build, leaves
+ * them uncomposed (Work renders as before).
+ */
+export const projectsComposedIn: readonly ScenarioName[] = [
+  "projects_preview",
+  "projects_teammate",
+  "projects_start_stale",
+  "projects_start_uncertain",
+  "projects_start_denied",
+  "projects_changed_meanwhile",
+  "projects_revise_stale",
+];
+/** The preview as a member whose actions are off. */
+export const teammateIn: readonly ScenarioName[] = ["projects_teammate"];
+/** The first read of each project shows the revision before a teammate's change. */
+export const changedMeanwhileIn: readonly ScenarioName[] = ["projects_changed_meanwhile"];
 /** T7 PR 16: these scenarios start with the Listings agent on (Stop all AI work has a target). */
 export const listingsOnIn: readonly ScenarioName[] = ["stop_all", "stop_all_uncertain"];
 /** T7 PR 16: who views Team in each scenario (the Owner unless named). */

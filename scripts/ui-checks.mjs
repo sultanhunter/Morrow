@@ -102,6 +102,16 @@ const pageChecks = () => {
     const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
     return (x + 0.05) / (y + 0.05);
   };
+  // WCAG 2.5.8's inline exception: a link inside a sentence, its size set by the line of
+  // text around it. An inline link alone in its block (a row title, a section's action,
+  // a link beside a button) is a target like any other, however it is styled.
+  const inSentence = (el) => {
+    if (el.tagName !== "A" || getComputedStyle(el).display !== "inline") return false;
+    let block = el.parentElement;
+    while (block && getComputedStyle(block).display === "inline") block = block.parentElement;
+    if (!block) return false;
+    return block.textContent.trim().length > el.textContent.trim().length;
+  };
   const visible = (el) => {
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
@@ -154,8 +164,7 @@ const pageChecks = () => {
             ? (el.closest("label") ?? el)
             : el;
         const rect = box.getBoundingClientRect();
-        const inline = el.tagName === "A" && getComputedStyle(el).display === "inline";
-        if (!inline && (rect.width < floor || rect.height < floor))
+        if (!inSentence(el) && (rect.width < floor || rect.height < floor))
           failures.push(
             `target_size:${el.tagName.toLowerCase()}${el.classList[0] ? "." + el.classList[0] : ""}`,
           );
@@ -777,6 +786,178 @@ fixtureCases.push(
     },
   }),
 );
+// T7 PR 19: the project screens, composed only in the projects preview scenarios.
+const preview = "projects_preview";
+fixtureCases.push(
+  fixtureCase("projects", "overview", `/w/${ws}/work`, { scenario: preview }),
+  fixtureCase("projects", "tasks_board", `/w/${ws}/work`, {
+    scenario: preview,
+    setup: (page) => page.getByRole("tab", { name: /^Tasks/ }).click(),
+  }),
+  fixtureCase("projects", "tasks_list", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("tab", { name: /^Tasks/ }).click();
+      await page.getByRole("button", { name: "List" }).click();
+    },
+  }),
+  fixtureCase("projects", "repeating", `/w/${ws}/work`, {
+    scenario: preview,
+    setup: (page) => page.getByRole("tab", { name: /^Repeating/ }).click(),
+  }),
+  fixtureCase("projects", "tell_morrow_dialog", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: (page) => page.getByRole("button", { name: "New project" }).click(),
+  }),
+  fixtureCase("projects", "set_up_yourself_dialog", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "New project" }).click();
+      await page.getByRole("button", { name: "Set it up yourself" }).click();
+    },
+  }),
+  fixtureCase("projects", "project", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    // Review F8: the page heading's name is the title alone; the health badge sits beside it.
+    setup: (page) =>
+      page
+        .getByRole("heading", { level: 1, name: "Everyday Tote in AI answers", exact: true })
+        .waitFor({ timeout: 5000 }),
+  }),
+  fixtureCase("projects", "project_ended", `/w/${ws}/projects/project-summer`, {
+    scenario: preview,
+  }),
+  fixtureCase("projects", "area", `/w/${ws}/projects/area-stock`, { scenario: preview }),
+  fixtureCase("projects", "project_teammate", `/w/${ws}/projects/project-tote`, {
+    scenario: "projects_teammate",
+  }),
+  fixtureCase("projects", "goal_drawer", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: (page) =>
+      page.getByRole("button", { name: /Everyday Tote’s page is complete: open details/ }).click(),
+  }),
+  fixtureCase("projects", "stop_dialog", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: (page) => page.getByRole("button", { name: "Stop steps" }).click(),
+  }),
+  fixtureCase("projects", "plan_change", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Plan next steps" }).click();
+      await page.getByRole("button", { name: "Apply changes" }).waitFor();
+    },
+  }),
+  fixtureCase("projects", "ask_choice", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "New project" }).click();
+      await page
+        .getByLabel("What do you want to get done, and by when?")
+        .fill("Rank in AI answers");
+      await page.getByRole("button", { name: "Send to Morrow" }).click();
+      await page.getByRole("heading", { name: "Which product?" }).waitFor();
+    },
+  }),
+  fixtureCase("projects", "ask_card", `/w/${ws}/ask/conv-sample`, { scenario: preview }),
+  fixtureCase("projects", "start_stale", `/w/${ws}/ask/conv-sample`, {
+    scenario: "projects_start_stale",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Start project" }).click();
+      await page.getByText("This plan changed since you opened it").waitFor();
+    },
+  }),
+  fixtureCase("projects", "start_uncertain", `/w/${ws}/ask/conv-sample`, {
+    scenario: "projects_start_uncertain",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Start project" }).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+  // A start refused without the server's words says who may start it, not "it changed".
+  fixtureCase("projects", "start_denied", `/w/${ws}/ask/conv-sample`, {
+    scenario: "projects_start_denied",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Start project" }).click();
+      await page.getByText("Only the person who asked can start this plan.").waitFor();
+    },
+  }),
+  // Plan next steps on a project a teammate changed: the 409 re-reads the project, so the
+  // second tap carries the new revision and Morrow is asked.
+  fixtureCase("projects", "plan_next_stale", `/w/${ws}/projects/project-tote`, {
+    scenario: "projects_changed_meanwhile",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Plan next steps" }).click();
+      await page
+        .getByText("This project changed since you opened it. Look it over, then ask again.")
+        .waitFor();
+      await page.getByRole("button", { name: "Plan next steps" }).click();
+      await page.getByRole("button", { name: "Apply changes" }).waitFor();
+    },
+  }),
+  // Sending nothing says why, beside the field (WCAG 3.3.1).
+  fixtureCase("projects", "composer_empty", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Send", exact: true }).click();
+      await page.getByText("Write a message first.").waitFor();
+      const described = await page
+        .getByLabel("Message", { exact: true })
+        .getAttribute("aria-describedby");
+      if (!described) throw Error("composer_error_not_described");
+    },
+  }),
+  fixtureCase("projects", "ask_other_empty", `/w/${ws}/work`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "New project" }).click();
+      await page
+        .getByLabel("What do you want to get done, and by when?")
+        .fill("Rank in AI answers");
+      await page.getByRole("button", { name: "Send to Morrow" }).click();
+      await page.getByRole("button", { name: "Something else…" }).click();
+      await page.getByRole("button", { name: "Send", exact: true }).first().click();
+      await page.getByText("Write your answer first.").waitFor();
+    },
+  }),
+  // "Ask Morrow privately instead" opens a new private Ask, not the Listings run form.
+  fixtureCase("projects", "ask_privately", `/w/${ws}/projects/project-tote`, {
+    scenario: preview,
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Ask Morrow privately instead" }).click();
+      await page.getByRole("dialog", { name: "Tell Morrow what you want to achieve" }).waitFor();
+    },
+  }),
+  // Edit refused as stale keeps the dialog open with its notice, and Save waits for a
+  // fresh form.
+  fixtureCase("projects", "edit_stale", `/w/${ws}/ask/conv-sample`, {
+    scenario: "projects_revise_stale",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Edit", exact: true }).click();
+      await page.getByRole("button", { name: "Save changes" }).click();
+      await page
+        .getByText(
+          "This plan changed since you opened it. Close this, look it over, then edit again.",
+        )
+        .waitFor();
+      if (!(await page.getByRole("dialog", { name: "Change the plan" }).isVisible()))
+        throw Error("edit_dialog_closed_on_conflict");
+    },
+  }),
+);
 // T7 PR 16 (Sunrise): Team, an agent's page, Add agents and its consent, Settings, Shop
 // knowledge and Files, on fixtures (the HTTP build leaves their reads uncomposed).
 const two = [1440, 390];
@@ -1283,6 +1464,75 @@ export const keyboardWalks = [
       await page.keyboard.press("Escape");
       await page.getByRole("dialog").waitFor({ state: "hidden" });
       expect((await active(page)).text === "Create goal", "dialog_focus_restore");
+    },
+  },
+  {
+    // T7 PR 19: a person starts a plan card by keyboard; the card's one tap opens the
+    // project it created.
+    name: "start_project",
+    path: `/w/${ws}/ask/conv-sample`,
+    scenario: "projects_preview",
+    run: async (page) => {
+      await tabTo(page, (a) => a.text === "Start project", 120);
+      await page.keyboard.press("Enter");
+      await page.waitForURL(`**/w/${ws}/projects/project-new-*`);
+      await page.getByRole("heading", { name: /Linen Shirt in AI answers/ }).waitFor();
+    },
+  },
+  {
+    // T7 PR 19 review F2: Stop steps by keyboard. The header button and the dialog are
+    // gone once the page reads the project again; the confirmation is said in the page's
+    // status region and focus rests on the page title, not on <body>.
+    name: "stop_steps_focus",
+    path: `/w/${ws}/projects/project-tote`,
+    scenario: "projects_preview",
+    run: async (page) => {
+      await tabTo(page, (a) => a.text === "Stop steps", 120);
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog").waitFor();
+      await tabTo(page, (a) => a.inDialog && a.text === "Stop steps", 8);
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page
+        .getByRole("button", { name: "Stop steps", exact: true })
+        .waitFor({ state: "detached" });
+      const said = await page
+        .getByRole("status")
+        .filter({ hasText: /^Steps stopped\. \d+ repeating tasks? turned off/ })
+        .count();
+      expect(said === 1, "stop_confirmation_not_said");
+      const now = await active(page);
+      expect(now.tag === "H1" && now.text === "Everyday Tote in AI answers", "focus_after_stop");
+    },
+  },
+  {
+    // T7 PR 19 review F7: Edit, save, and Edit again: a fresh form from the new revision,
+    // with no notice left over; the saved confirmation is said beside the card.
+    name: "edit_plan_reopen",
+    path: `/w/${ws}/ask/conv-sample`,
+    scenario: "projects_preview",
+    run: async (page) => {
+      await tabTo(page, (a) => a.text === "Edit", 120);
+      await page.keyboard.press("Enter");
+      const dialog = page.getByRole("dialog", { name: "Change the plan" });
+      await dialog.waitFor();
+      await dialog.getByLabel("Project name").fill("Linen Shirt on AI answers");
+      await dialog.getByRole("button", { name: "Save changes" }).click();
+      await dialog.waitFor({ state: "hidden" });
+      await page
+        .getByRole("status")
+        .filter({ hasText: "Plan changed. Look it over, then start it." })
+        .waitFor();
+      expect((await active(page)).text === "Edit", "edit_focus_restore");
+      await page.getByRole("heading", { name: "Linen Shirt on AI answers" }).waitFor();
+      await page.keyboard.press("Enter");
+      await dialog.waitFor();
+      const name = await dialog.getByLabel("Project name").inputValue();
+      expect(name === "Linen Shirt on AI answers", "edit_not_reseeded");
+      expect(
+        (await dialog.getByText("Plan changed. Look it over, then start it.").count()) === 0,
+        "edit_old_notice",
+      );
     },
   },
   {

@@ -135,11 +135,14 @@ const command = (body, key = "0b6f2a8e-5c1d-4e7f-9a2b-3c4d5e6f7a8b") => ({ key, 
 test("§4.2 PR-2: account.* and work.* are composed; keepAlive, people.list and the Home preview are not", async () => {
   // T7 PR 16's group (team.*, settings.*, library.*) has no server routes yet either;
   // tests/workspace-web-team.test.mjs checks it sends nothing.
+  // T7 PR 19: the project screens' default-off methods are uncomposed too, until their
+  // routes land (tests/workspace-ui-projects.test.mjs).
+  const { projectPortMethods } = await import("../packages/workspace-ui/src/port.ts");
   assert.deepEqual(
     Object.entries(composed)
       .filter(([, on]) => !on)
       .map(([method]) => method),
-    ["session.keepAlive", "people.list", ...teamPortMethods, "samples.home"],
+    ["session.keepAlive", "people.list", ...projectPortMethods, ...teamPortMethods, "samples.home"],
   );
   const { calls, port: p } = port(() => json(200, {}));
   assert.deepEqual(await p.people.list(ws), { kind: "not_in_build" });

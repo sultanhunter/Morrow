@@ -4,6 +4,7 @@
 // key answers `replayed`.
 import {
   portMethods,
+  projectPortMethods,
   type AnswerView,
   type ApplyResultView,
   type ConnectionDisconnectView,
@@ -45,10 +46,14 @@ import {
   fixtureWorkspace,
   people,
 } from "./seed";
+import { createProjectsFixture } from "./projects";
 import {
+  changedMeanwhileIn,
   listingsOnIn,
+  projectsComposedIn,
   samplesComposedIn,
   scenarios,
+  teammateIn,
   teamViewerIn,
   uncomposedIn,
   unlinkedStoreIn,
@@ -67,6 +72,8 @@ export function fixtureComposedFor(scenario: ScenarioName): Composed {
     ...(uncomposedIn[scenario] ?? []),
     // ADR-0032: the Home preview switch stays off outside its own scenario.
     ...(samplesComposedIn.includes(scenario) ? [] : (["samples.home"] as const)),
+    // T7 PR 19: the project screens' switch stays off outside its preview scenarios.
+    ...(projectsComposedIn.includes(scenario) ? [] : projectPortMethods),
   ];
   return Object.freeze(
     Object.fromEntries(portMethods.map((m) => [m, !off.includes(m)])) as Record<
@@ -962,5 +969,20 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
           return ok({ revision: modelDefault.revision });
         }),
     },
+    // T7 PR 19: the project screens' sample (composed only in the preview scenarios).
+    ...createProjectsFixture(
+      {
+        reply,
+        command,
+        ws,
+        tasks: projectsComposedIn.includes(scenario) ? seed.tasks : [],
+        owner: people.owner,
+        editor: people.editor,
+      },
+      {
+        teammate: teammateIn.includes(scenario),
+        changedMeanwhile: changedMeanwhileIn.includes(scenario),
+      },
+    ),
   };
 }

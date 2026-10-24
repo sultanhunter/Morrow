@@ -84,7 +84,7 @@ ADR-0023 built everything on development stores, put the owner's store last (aft
    2. Turn on the model with the owner's Anthropic key, together with "Disconnect store": the owner sets the monthly limit and saves the key; it is placed on the broker; the model switch goes on. The Listings agent (built) drafts on real products. Drafts stay inside Morrow.
    3. The gateway applies approved changes (T3): the owner approves the exact change; the gateway applies it, reads it back and audits it. Nothing is written to the store before this. "Undo" (a new exact approval, from the values read before the apply) follows next.
 
-   Side by side, starting now: E2B (item 6); the agent loop (T4) and the agents that need no customer data; the workspace screens (T7, Sunrise, ADR-0032); the project flow (the work model and plan records, ADR-0033 and ADR-0034, proposed).
+   Side by side, starting now: E2B (item 6); the agent loop (T4) and the agents that need no customer data; the workspace screens (T7, Sunrise, ADR-0032); the project flow (the work model and plan records, ADR-0033 and ADR-0034, accepted 2026-10-24).
 
    After v1: Support with customer data (item 7), then the public app, billing, App Review and the first outside merchant, each with what this record moved there.
 

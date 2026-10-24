@@ -408,6 +408,8 @@ export const copy = {
       agent: "a change to the Listings agent",
       model_default: "the default model",
       run: "a Listings run",
+      project: "a change to a project",
+      plan: "starting a plan",
       thinking: "a change to how a helper thinks",
       add_agent: "adding an agent",
       disconnect: "disconnecting a store",

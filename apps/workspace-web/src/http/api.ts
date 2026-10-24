@@ -891,5 +891,30 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         ) => command(requests.reviseModelDefault(ws, c), decodeModelDefaultRevised),
       ),
     },
+    // T7 PR 19 (ADR-0033, ADR-0034): the project screens. No route or decoder exists yet
+    // (T2 and T6 build them), so this build never composes these: each answers
+    // not_in_build and sends nothing. Each is wired here, with its decoder and tests, in
+    // the PR that lands its route, and composed in `composed.ts` then.
+    projects: {
+      overview: unbuilt,
+      tasks: unbuilt,
+      repeating: unbuilt,
+      get: unbuilt,
+      messages: unbuilt,
+      post: unbuilt,
+      planNextSteps: unbuilt,
+      stopSteps: unbuilt,
+      extend: unbuilt,
+      finishDocument: unbuilt,
+      create: unbuilt,
+    },
+    plans: {
+      ask: unbuilt,
+      conversation: unbuilt,
+      answer: unbuilt,
+      revise: unbuilt,
+      startDocument: unbuilt,
+      start: unbuilt,
+    },
   };
 }

@@ -25,6 +25,8 @@ const markerKinds: readonly MarkerKind[] = [
   "agent",
   "model_default",
   "run",
+  "project",
+  "plan",
   "thinking",
   "add_agent",
   "disconnect",
