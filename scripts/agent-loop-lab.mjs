@@ -9,7 +9,8 @@
 //   A  admission: with the switch off, switch_off before any statement; with catalogue v2
 //      proposed, catalogue_inactive; published (sim), one transaction admits a routed run
 //      (queued, its manifest pinned, the caps and hold SQL derived, child task T', envelope,
-//      Coordinator grant and hop, run lease, events, command); refusals persist nothing (a
+//      Coordinator grant and hop scoped to the offered tools' fields, run lease, events,
+//      command); refusals persist nothing (a
 //      forged manifest, a Coordinator-only tool, a foreign task, the unrecovered-cost cap and
 //      the daily backstop); the cron lists ids only and keeps the run's lease out of the
 //      Listings starts;
@@ -18,13 +19,18 @@
 //      installation does not hold), records each call, wraps the product text as data naming
 //      its source (the run is tainted), books each turn from the catalogue's rates, ends
 //      completed, strips reasoning and revokes the envelope and hop;
-//   Q  a question: the run waits durably (its lease released), only the requester's answer
-//      opens the resume lease, and the answer reaches the next turn;
+//   Q  a question: one open at a time (a second ask in the turn is refused question_limit);
+//      the run waits durably (its lease released; a wait step replayed after a lost result
+//      finds its wait committed), only the requester's answer opens the resume lease, and
+//      the answer reaches the next turn;
 //   U  an uncertain turn is booked at its worst case and sent again once; a fence a dead
-//      broker left open is booked at its worst case, and its late close is refused;
+//      broker left open is booked at its worst case, and its late close is refused; attempt
+//      2 books an expired fence of attempt 1 first; the broker's own uncertain over a
+//      committed reply is settled against SQL (read back, never resent);
 //   I  a reply calling a tool the run was not given ends the run invalid_output (booked);
 //   C  usage past the hold is overflow, never dropped, and the next turn is not started
-//      (cost_budget);
+//      (cost_budget); a call over the run's tool-call cap stays refused (never dispatched)
+//      when its finish fails and the step is retried;
 //   S  "Stop AI work" refuses the next step; the stale close ends the run stopped;
 //   T  tenancy: the logins reach the records only through their definers; forged settings,
 //      another tenant and the api role see no content; nothing is deleted;
@@ -50,7 +56,10 @@ import {
   answerRunQuestion,
   routedManifest,
 } from "../packages/work/src/loop/admission.ts";
-import { createDelegationAuthority } from "../packages/work/src/loop/authority.ts";
+import {
+  createDelegationAuthority,
+  loopToolFieldScope,
+} from "../packages/work/src/loop/authority.ts";
 import { answerLabel } from "../packages/work/src/loop/conversation.ts";
 import { agentRun, AgentRunRetry } from "../packages/work/src/loop/runner.ts";
 import { listAgentPendingStarts, resolveAgentRunLease } from "../packages/work/src/loop/steps.ts";
@@ -513,11 +522,11 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       return d;
     },
   });
-  const portsFor = (authority = realAuthority) =>
+  const portsFor = (authority = realAuthority, over = {}) =>
     Object.freeze({
-      lease,
+      lease: over.lease ?? lease,
       resolveLease,
-      modelTurn,
+      modelTurn: over.modelTurn ?? modelTurn,
       tools: createToolHandlers([inboxAskHandler, productsRead]),
       authority: recorded(authority),
       now: () => Date.now(),
@@ -527,14 +536,20 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   // results cross a JSON boundary and are kept for the L checks.
   const stepResults = [];
   const retries = [];
-  const durable = ({ onWait, after } = {}) => {
+  const durable = ({ onWait, after, lose = [] } = {}) => {
     const names = [];
+    const lost = new Set();
     return {
       names,
       async do(name, body) {
         for (let n = 1; ; n++) {
           try {
             const value = JSON.parse(JSON.stringify(await body()));
+            // A step whose result is lost once after its body committed (`lose`).
+            if (lose.includes(name) && !lost.has(name)) {
+              lost.add(name);
+              throw new AgentRunRetry("result_lost");
+            }
             names.push(name);
             stepResults.push({ name, value });
             await after?.(name, value);
@@ -559,10 +574,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     workspaceId: W,
     runId,
   });
-  async function execute(runId, { authority, onWait, after } = {}) {
-    const steps = durable({ onWait, after });
+  async function execute(runId, { authority, onWait, after, lose, lease, modelTurn } = {}) {
+    const steps = durable({ onWait, after, lose });
     const result = await within(
-      agentRun(portsFor(authority), steps, paramsOf(runId)),
+      agentRun(portsFor(authority, { lease, modelTurn }), steps, paramsOf(runId)),
       900000,
       "run",
     );
@@ -748,11 +763,27 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       `SELECT status,owner_principal_id::text AS owner,goal_id::text AS goal FROM morrow_work.tasks WHERE id=${literal(r?.child ?? "")}`,
     );
     const envelope = one(
-      `SELECT capability_ids::text AS caps,verbs::text AS verbs,requester_principal_id::text AS requester,task_id::text AS task,maximum_depth,maximum_children FROM morrow_work.work_envelopes WHERE id=${literal(r?.envelope ?? "")}`,
+      `SELECT capability_ids::text AS caps,verbs::text AS verbs,requester_principal_id::text AS requester,task_id::text AS task,maximum_depth,maximum_children,(scope->'fields')::text AS fields,(scope-'fields')::text AS place FROM morrow_work.work_envelopes WHERE id=${literal(r?.envelope ?? "")}`,
     );
     const hop = one(
-      `SELECT dispatcher_kind,recipient_installation_id::text AS recipient,parent_task_id::text AS parent,child_task_id::text AS child,capability_ids::text AS caps FROM morrow_work.delegation_hops WHERE id=${literal(r?.hop ?? "")}`,
+      `SELECT dispatcher_kind,recipient_installation_id::text AS recipient,parent_task_id::text AS parent,child_task_id::text AS child,capability_ids::text AS caps,(scope->'fields')::text AS fields,(scope-'fields')::text AS place FROM morrow_work.delegation_hops WHERE id=${literal(r?.hop ?? "")}`,
     );
+    // The envelope's and the hop's scope: the run's store, and exactly the offered tools'
+    // fields (inbox.ask's with the listing fields), so neither blocks a tool it carries.
+    const onStore = (text) => {
+      const p = text ? JSON.parse(text) : null;
+      return (
+        p?.organizationId === O &&
+        p.workspaceId === W &&
+        JSON.stringify(p.storeIds) === JSON.stringify([S]) &&
+        JSON.stringify(p.accountIds) === "[]" &&
+        p.resources.length === 1 &&
+        p.resources[0].kind === "store" &&
+        p.resources[0].id === S &&
+        p.resources[0].connectionId === C
+      );
+    };
+    const toolFields = JSON.stringify(loopToolFieldScope(["products.read", "inbox.ask"]));
     const leaseRow = one(
       `SELECT kind,subject_id::text AS subject,status,started_at IS NULL AS unstarted FROM morrow_work.work_leases WHERE id=${literal(r?.lease_id ?? "")}`,
     );
@@ -783,7 +814,12 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         envelope.verbs === "{execute,view}" &&
         envelope.requester === P.A.principal &&
         envelope.task === T1 &&
+        JSON.stringify(JSON.parse(envelope.fields)) === toolFields &&
+        JSON.parse(envelope.fields).includes("question") &&
+        onStore(envelope.place) &&
         hop?.dispatcher_kind === "builtin_coordinator" &&
+        JSON.stringify(JSON.parse(hop.fields)) === toolFields &&
+        onStore(hop.place) &&
         hop.recipient === installation.id &&
         hop.child === r.child &&
         leaseRow?.kind === "run" &&
@@ -1063,14 +1099,15 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       decide: async (step, run, tool, input) =>
         tool.name === "inbox.ask" ? "allowed" : realAuthority.decide(step, run, tool, input),
     };
+    // Two asks in the turn: the second is refused question_limit (one open at a time).
     scripts.set("Retitle the summer collection", (resolved, turn) =>
       turn === 1
         ? reply(
-            say("One question first.", [
-              "tu_q",
-              "inbox.ask",
-              { question: questionText, choices: ["Playful", "Plain"] },
-            ]),
+            say(
+              "One question first.",
+              ["tu_q", "inbox.ask", { question: questionText, choices: ["Playful", "Plain"] }],
+              ["tu_q2", "inbox.ask", { question: "How long?", choices: ["Short", "Long"] }],
+            ),
           )
         : reply(say("Done with the plain titles.")),
     );
@@ -1078,8 +1115,11 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const R2 = q.runId;
     const seen = {};
     let checksAt = 0;
+    const retriesBefore = retries.length;
     const { result, names } = await execute(R2, {
       authority: questionAuthority,
+      // The wait step's result is lost once after it committed (its lease released with it).
+      lose: ["wait-1"],
       async onWait() {
         checksAt += 1;
         if (checksAt > 1) return false;
@@ -1114,15 +1154,24 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         return true;
       },
     });
+    const asks = toolCalls(R2);
     check(
-      "Q1:the_run_waits_durably_with_its_lease_released",
+      "Q1:the_run_waits_durably_with_its_lease_released_on_its_one_open_question",
       seen.waiting?.status === "waiting" &&
         seen.waiting.lease !== "active" &&
         seen.waiting.question?.status === "open" &&
         seen.waiting.question.question === questionText &&
         seen.waiting.question.choices === '["Playful", "Plain"]' &&
-        seen.waiting.question.tool_use_id === "tu_q",
-      seen.waiting,
+        seen.waiting.question.tool_use_id === "tu_q" &&
+        asks.length === 2 &&
+        asks[0].outcome === "ok" &&
+        asks[0].record_kind === "question" &&
+        asks[1].outcome === "refused" &&
+        asks[1].refusal === "question_limit" &&
+        count(
+          `SELECT count(*) FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`,
+        ) === 1,
+      { waiting: seen.waiting, asks },
     );
     check(
       "Q2:only_the_requester_answers_once_and_the_answer_opens_the_resume_lease",
@@ -1143,7 +1192,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const input2 = t.find((x) => x.turn === 2)?.input ?? "{}";
     const blocks = JSON.parse(input2).content ?? [];
     check(
-      "Q3:the_answer_reaches_the_next_turn_and_the_run_completes",
+      "Q3:the_answer_reaches_the_next_turn_and_the_run_completes_after_a_lost_wait_result",
       result.kind === "ended" &&
         result.status === "succeeded" &&
         JSON.stringify(names) ===
@@ -1151,16 +1200,21 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
             "start",
             "turn-1-1",
             "tool-1-0",
+            "tool-1-1",
             "wait-1",
             "answer-1-1",
             "resume-1-1",
             "turn-2-1",
             "finish",
           ]) &&
-        blocks.length === 2 &&
+        JSON.stringify(retries.slice(retriesBefore).filter((x) => x.startsWith("wait-"))) ===
+          JSON.stringify(["wait-1:result_lost"]) &&
+        blocks.length === 3 &&
         blocks[0].type === "tool_result" &&
-        blocks[1].type === "text" &&
-        blocks[1].text === answerLabel + answerText &&
+        blocks[1].type === "tool_result" &&
+        JSON.parse(blocks[1].content).refusal === "question_limit" &&
+        blocks[2].type === "text" &&
+        blocks[2].text === answerLabel + answerText &&
         runRow(R2).questions === 1 &&
         runRow(R2).tainted === false &&
         one(`SELECT status FROM morrow_work.agent_run_questions WHERE run_id=${literal(R2)}`)
@@ -1285,6 +1339,107 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         !turns(R4).some((x) => (x.output ?? "").includes("Forged")),
       { opened, begun, settled, lateClose, c4, resumed: resumed.result },
     );
+    // U3: attempt 2 is opened only over what SQL recorded: an expired fence of attempt 1
+    // (sim: opened by the broker's definer, aged with the triggers off) is booked as
+    // uncertain at its worst case by agent_turn_open itself, with no settle first; then the
+    // runner goes on from SQL's record (turn 1 attempt 2).
+    const T8 = await taskOf(P.A, "Count the spring products");
+    scripts.set("Count the spring products", () => reply(say("Four spring products.")));
+    const e = await admit(P.A, T8);
+    const R8 = e.runId;
+    const ref8 = { leaseId: runRow(R8).lease_id, generation: runRow(R8).generation };
+    const input8 = { role: "user", content: [{ type: "text", text: "Count the spring products" }] };
+    const digest8 = sha(
+      JSON.stringify({
+        content: [{ text: "Count the spring products", type: "text" }],
+        role: "user",
+      }),
+    );
+    const open8 = (attempt) => (step) =>
+      step.loop.turnOpen({
+        turn: 1,
+        attempt,
+        inputCanonical: JSON.stringify(input8),
+        inputDigest: digest8,
+        untrusted: false,
+        readTagsCanonical: "[]",
+      });
+    const first = await lease(ref8, async (step) => {
+      await step.loop.start();
+      return open8(1)(step);
+    });
+    const fence = db.rows(
+      `SELECT outcome,call_id FROM morrow_vault.agent_turn_begin(${literal(ref8.leaseId)},'1','1','1','1','false','200000','',${literal(digest8)})`,
+      { user: "morrow_vault_broker" },
+    )[0];
+    const early = await lease(ref8, open8(2));
+    replica(
+      `UPDATE morrow_work.agent_model_calls SET started_at=started_at-interval '10 minutes' WHERE id=${literal(fence?.call_id ?? randomUUID())};`,
+    );
+    const second = await lease(ref8, open8(2));
+    const c8 = calls(R8);
+    const done8 = await execute(R8);
+    check(
+      "U3:attempt_2_books_an_expired_fence_of_attempt_1_before_it_opens",
+      first?.entered === true &&
+        first.value.outcome === "opened" &&
+        fence?.outcome === "begun" &&
+        early?.entered === true &&
+        early.value.outcome === "invalid" &&
+        second?.entered === true &&
+        second.value.outcome === "opened" &&
+        c8.length === 1 &&
+        c8[0].status === "closed" &&
+        c8[0].outcome === "uncertain" &&
+        c8[0].cost === rates.worst &&
+        done8.result.status === "succeeded" &&
+        JSON.stringify(done8.names) ===
+          JSON.stringify(["start", "turn-1-1", "turn-1-2", "finish"]) &&
+        JSON.stringify(turns(R8).map((x) => [x.turn, x.attempt, x.outcome])) ===
+          JSON.stringify([
+            [1, 1, "uncertain"],
+            [1, 2, "end_turn"],
+          ]),
+      { first, fence, early, second, c8, done: done8.result, names: done8.names },
+    );
+    // U4: the broker's own uncertain (its close committed but its result was lost) is never
+    // SQL's verdict: the step settles against SQL, reads the committed reply back and sends
+    // nothing again.
+    const T9 = await taskOf(P.A, "Count the autumn products");
+    scripts.set("Count the autumn products", () => reply(say("Three autumn products.")));
+    const f = await admit(P.A, T9);
+    const R9 = f.runId;
+    const sendsBefore = provider.sends.length;
+    let masked = 0;
+    const done9 = await execute(R9, {
+      async modelTurn(leaseId, generation, callJson, budgetMs) {
+        const real = JSON.parse(await modelTurn(leaseId, generation, callJson, budgetMs));
+        masked += 1;
+        return JSON.stringify({
+          ...real,
+          outcome: "uncertain",
+          message: null,
+          usage: null,
+          prefixDigest: null,
+          retryAfterMs: null,
+        });
+      },
+    });
+    const c9 = calls(R9);
+    check(
+      "U4:the_brokers_uncertain_over_a_committed_reply_is_read_back_never_resent",
+      done9.result.status === "succeeded" &&
+        done9.result.reason === "completed" &&
+        JSON.stringify(done9.names) === JSON.stringify(["start", "turn-1-1", "finish"]) &&
+        masked === 1 &&
+        provider.sends.length === sendsBefore + 1 &&
+        c9.length === 1 &&
+        c9[0].outcome === "end_turn" &&
+        turns(R9).length === 1 &&
+        turns(R9)[0].outcome === "end_turn" &&
+        runRow(R9).booked === text8(costOf(usage())),
+      { done: done9.result, names: done9.names, c9, masked },
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -1340,6 +1495,79 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         calls(R6)[0].overflow === row.overflow &&
         turns(R6).length === 1,
       { r6, names, row, cost: text8(cost) },
+    );
+    // C2: the per-run tool-call cap (sim: the run's count set to its cap with the triggers
+    // off after turn 1). The call over it is recorded uncounted and refused tool_call_limit;
+    // the finish's transaction fails once, and the retried step's begin refuses it again
+    // (never resumed): it is never validated, decided or dispatched.
+    const T10 = await taskOf(P.A, "Read the products past the cap");
+    scripts.set("Read the products past the cap", (resolved, turn) =>
+      turn === 1
+        ? reply(
+            say(null, [
+              "tu_cap",
+              "products.read",
+              { productIds: null, titleContains: null, limit: 2 },
+            ]),
+          )
+        : reply(say("Stopped at the cap.")),
+    );
+    const k = await admit(P.A, T10);
+    const R10 = k.runId;
+    const readsBefore = reads.length;
+    const retriesBefore = retries.length;
+    let armed = false;
+    let failed = 0;
+    const { result: r10, names: n10 } = await execute(R10, {
+      async after(name) {
+        if (name === "turn-1-1") {
+          replica(
+            `UPDATE morrow_work.agent_runs SET tool_calls_taken=tool_calls_per_run WHERE id=${literal(R10)};`,
+          );
+          armed = true;
+        }
+      },
+      // The first transaction after the refusing begin (the finish) fails, as a dropped
+      // connection would, before it runs.
+      lease: async (ref, body) => {
+        if (armed === "refused" && failed === 0) {
+          failed += 1;
+          return "failed";
+        }
+        return lease(ref, (step) =>
+          body(
+            Object.freeze({
+              ...step,
+              loop: Object.freeze({
+                ...step.loop,
+                async toolBegin(input) {
+                  const begun = await step.loop.toolBegin(input);
+                  if (armed === true && begun.outcome === "refuse") armed = "refused";
+                  return begun;
+                },
+              }),
+            }),
+          ),
+        );
+      },
+    });
+    const capped = one(
+      `SELECT outcome,refusal,counted FROM morrow_work.run_tool_calls WHERE run_id=${literal(R10)} AND tool_use_id='tu_cap'`,
+    );
+    check(
+      "C2:a_call_over_the_run_tool_call_cap_stays_refused_when_its_finish_fails",
+      r10.status === "succeeded" &&
+        JSON.stringify(n10) ===
+          JSON.stringify(["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]) &&
+        failed === 1 &&
+        JSON.stringify(retries.slice(retriesBefore)) === JSON.stringify(["tool-1-0:transaction"]) &&
+        capped?.outcome === "refused" &&
+        capped.refusal === "tool_call_limit" &&
+        capped.counted === false &&
+        reads.length === readsBefore &&
+        !decisions.some((d) => d[0] === R10) &&
+        runRow(R10).calls === 40,
+      { r10, n10, failed, retries: retries.slice(retriesBefore), capped },
     );
   }
 
@@ -1516,7 +1744,7 @@ COMMIT;`);
         count(
           "SELECT count(*) FROM morrow_work.agent_model_calls WHERE outcome NOT IN ('not_sent','input_over_cap') AND counted",
         ) -
-          1 &&
+          2 &&
         count(
           "SELECT count(*) FROM morrow_work.agent_model_calls WHERE provider_request_id LIKE 'req_lab_%'",
         ) > 0,
@@ -1559,7 +1787,7 @@ async function main() {
       "products.read is a lab handler returning one synthetic product (sim): the real handler is Listings on the runner's (the follow-up), with run_turns' store-content cleanup. The question run's authority allows inbox.ask (sim): no released package declares workspace.question.request yet; every other tool call is the real kernel's decision.",
       "M5's billing records (route, account, operator test entitlement snapshot) are owner-seeded with the triggers off (sim); lab:test-entitlement proves the grant that writes them.",
       "Durable steps are an in-process stand-in for Cloudflare Workflows' step.do and waitForEvent (an AgentRunRetry is retried; results cross a JSON boundary).",
-      "U2's dead fence is aged past its budget with the triggers off (sim).",
+      "U2's and U3's dead fences are aged past their budgets with the triggers off (sim); C2's run count is set to its cap with the triggers off (sim), and its failed finish transaction is a wrapper that refuses to run it once (sim).",
     ],
   });
   if (result.failures.length) {
