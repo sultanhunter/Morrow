@@ -41,6 +41,7 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_identity.work_executor_safe(text)') IS NULL
  OR to_regprocedure('morrow_identity.shop_pseudonym(text)') IS NULL
  OR to_regprocedure('morrow_identity.shopify_scope_list_valid(jsonb)') IS NULL
+ OR to_regprocedure('morrow_identity.privacy_evidence_valid(text,jsonb)') IS NULL
  OR to_regprocedure('morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text)') IS NOT NULL
  OR EXISTS(SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid='morrow_identity.store_installations'::regclass
    AND a.attname IN ('scopes_observed_at','token_refused_at') AND NOT a.attisdropped)
@@ -90,34 +91,19 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
     UNION SELECT regexp_replace(s,'^(unauthenticated_)?write_','\1read_') FROM jsonb_array_elements_text(p_list) s) z
    WHERE z.s IN ('read_products','write_products')) END
 $$;
--- The 48-hour deletion's evidence (ADR-0031 item 3): content-free and closed, the shape of
--- shop/redact's evidence (0036 privacy_evidence_valid) with its own kind.
+-- The 48-hour deletion's evidence (ADR-0031 item 3): content-free and closed, exactly
+-- shop/redact's shape (0036 privacy_evidence_valid, whose closed handler list every
+-- store-content table extends, so both deletions admit the same handlers) with its own kind
+-- and a credential that was destroyed.
 --   {schemaVersion 1, kind "store_deleted", scopes, handlers [{table, action, rows}],
 --    credential (destroyed | already_destroyed), outstanding []}
 CREATE FUNCTION morrow_identity.store_deletion_evidence_valid(p_evidence jsonb) RETURNS boolean
-LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
-DECLARE v_keys text[];
-BEGIN
- IF p_evidence IS NULL OR jsonb_typeof(p_evidence)<>'object' THEN RETURN false; END IF;
- SELECT COALESCE(array_agg(k ORDER BY k),'{}') INTO v_keys FROM jsonb_object_keys(p_evidence) k;
- IF v_keys<>ARRAY['credential','handlers','kind','outstanding','schemaVersion','scopes'] OR p_evidence->'schemaVersion'<>'1'::jsonb
-  OR p_evidence->>'kind' IS DISTINCT FROM 'store_deleted' OR p_evidence->'outstanding'<>'[]'::jsonb
-  OR jsonb_typeof(p_evidence->'credential')<>'string' OR (p_evidence->>'credential') NOT IN ('destroyed','already_destroyed')
-  OR jsonb_typeof(p_evidence->'scopes')<>'array' OR jsonb_array_length(p_evidence->'scopes')>8
-  OR jsonb_typeof(p_evidence->'handlers')<>'array' OR jsonb_array_length(p_evidence->'handlers')>16 THEN
-  RETURN false;
- END IF;
- IF EXISTS(SELECT 1 FROM jsonb_array_elements(p_evidence->'scopes') s WHERE jsonb_typeof(s)<>'string'
-   OR (s#>>'{}') NOT IN ('read_products','write_products')) THEN RETURN false; END IF;
- RETURN NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p_evidence->'handlers') h WHERE jsonb_typeof(h)<>'object'
-   OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(h) k)<>ARRAY['action','rows','table']
-   OR jsonb_typeof(h->'table')<>'string' OR (h->>'table') NOT IN ('morrow_vault.credentials','morrow_identity.linking_candidates',
-    'morrow_identity.shopify_apps','morrow_identity.store_installations','morrow_work.proposal_parameters',
-    'morrow_work.product_snapshots','morrow_work.run_drafts')
-   OR jsonb_typeof(h->'action')<>'string' OR (h->>'action') NOT IN ('destroy_credential','empty_keep_digest','delete_rows',
-    'pseudonymise','clear_install_link')
-   OR jsonb_typeof(h->'rows')<>'number' OR (h->>'rows') !~ '^(0|[1-9][0-9]{0,8})$');
-END $$;
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT CASE WHEN jsonb_typeof(p_evidence) IS DISTINCT FROM 'object' OR p_evidence->>'kind' IS DISTINCT FROM 'store_deleted'
+   OR jsonb_typeof(p_evidence->'credential') IS DISTINCT FROM 'string'
+   OR (p_evidence->>'credential') NOT IN ('destroyed','already_destroyed') THEN false
+  ELSE COALESCE(morrow_identity.privacy_evidence_valid('shop/redact',jsonb_set(p_evidence,'{kind}','"shop_redacted"'::jsonb)),false) END
+$$;
 REVOKE ALL ON FUNCTION morrow_identity.shopify_scopes_known(jsonb),morrow_identity.store_deletion_evidence_valid(jsonb) FROM PUBLIC;
 
 -- ---------------------------------------------------------------------------

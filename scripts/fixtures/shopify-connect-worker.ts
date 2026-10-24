@@ -19,7 +19,8 @@ import {
   createConnectorDatabase,
   type ConnectorDriverFactory,
 } from "../../apps/shopify-connector/worker/database";
-import { createShopifyBroker } from "../../apps/broker/src/shopify-install";
+import { createShopifyHealthChecker } from "../../apps/broker/src/shopify-health";
+import { createShopifyBroker, type VaultTransaction } from "../../apps/broker/src/shopify-install";
 import {
   runVaultTransactionWithDriver,
   type VaultDriverFactory,
@@ -123,16 +124,24 @@ export default {
 function connectorHandler(env: Env) {
   const binding = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
   const vaultDriver: VaultDriverFactory = (config) => bridgedClient(env, config.user);
+  const transaction: VaultTransaction = (vault, budgetMs, body) =>
+    runVaultTransactionWithDriver(
+      vaultDriver,
+      vault,
+      Math.min(10000, budgetMs * 3),
+      body,
+      Date.now,
+      NoSocket,
+    );
   const shopify = createShopifyBroker({
-    transaction: (vault, budgetMs, body) =>
-      runVaultTransactionWithDriver(
-        vaultDriver,
-        vault,
-        Math.min(10000, budgetMs * 3),
-        body,
-        Date.now,
-        NoSocket,
-      ),
+    transaction,
+    fetch: (target, init) => fetch(target, init),
+    now: () => Date.now(),
+  });
+  // v1 PR 5: the scopes read-back (the connector's clean-up switch is off in this lab, so it
+  // is never asked; lab:connection-health runs it).
+  const health = createShopifyHealthChecker({
+    transaction,
     fetch: (target, init) => fetch(target, init),
     now: () => Date.now(),
   });
@@ -147,6 +156,8 @@ function connectorHandler(env: Env) {
         shopify.webhookVerify(env, appKey, headersJson, rawBodyBase64),
       shopifyCredentialDestroy: (installationId, reason) =>
         shopify.credentialDestroy(env, installationId, reason),
+      shopifyConnectionCheck: (installationId, budgetMs) =>
+        health.check(env, installationId, budgetMs),
     },
     // The ConnectorBroker lease: the lab's login takes any password, so the grant is
     // the one fixed lab value (the real lease is proved by lab:edge-workers).

@@ -118,6 +118,12 @@ test("static: new tables are FORCE RLS, append-only or guarded, and content-free
     for (const body of tables)
       assert.doesNotMatch(body, /\b(email|phone|address|first_name|last_name|customer|note)\b/i);
   }
+  // The deletion's evidence is shop/redact's closed shape (one handler list for both
+  // deletions: a new store-content table extends privacy_evidence_valid once).
+  assert.match(
+    functionText(identity.text, "morrow_identity.store_deletion_evidence_valid"),
+    /morrow_identity\.privacy_evidence_valid\('shop\/redact',jsonb_set\(p_evidence,'\{kind\}','"shop_redacted"'::jsonb\)\)/,
+  );
   // The deletion's evidence is content-free and closed; its clock is 365 days, set in code.
   assert.match(identity.text, /CHECK \(expires_at=opened_at\+interval '365 days'\)/);
   assert.match(identity.text, /CHECK \(due_at=uninstalled_at\+interval '48 hours'\)/);

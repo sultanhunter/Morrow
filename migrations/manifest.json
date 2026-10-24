@@ -364,7 +364,7 @@
     {
       "sequence": 47,
       "file": "0047.connection-health-identity.sql",
-      "sha256": "dbb010e8300f1d936e992c4125c0d3ae5782faf61d0600d4559d296e5b8afcde",
+      "sha256": "22096826e2c9a49e0c668fe89d622656b7ac2588ff9ee96853aab446c85a9665",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/v1-connection-health.md"
     },
