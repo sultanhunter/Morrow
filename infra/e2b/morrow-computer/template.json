@@ -3,7 +3,7 @@
   "profile": "morrow.computer@1",
   "name": "morrow-computer-v1",
   "recipe": "infra/e2b/morrow-computer/e2b.Dockerfile",
-  "recipe_sha256": "93274a47b0a3f53ba2b39c5cbe7f172f063163d7f6f9a420a5b9c1d0a155a207",
+  "recipe_sha256": "582ebf5b5c4bb565ddddd74a20e4716820fbdf423cf8046aeaa90d09d8bb1cb9",
   "cpu_count": 2,
   "memory_mb": 1024,
   "cli": "@e2b/cli@2.22.3",
@@ -12,5 +12,35 @@
   "build_id": null,
   "envd_version": null,
   "built_on": null,
-  "scope": "The owner's E2B template build of profile morrow.computer v1 (ADR-0029 item 1 and owner question 1; build order PR 8). Recorded after the owner runs the build in README.md with the owner's own E2B login: template_id is E2B's id of the template named `name`, the pin the broker creates from (apps/broker/src/runtime-e2b.ts e2bPinnedTemplate); build_id, envd_version and built_on come from the owner's `template list` output, which holds no secret. All four stay null until then, and the runtime switch cannot go on (build order PR 9 qualifies this exact build first). E2B starts a template's newest ready build and documents no create by build, so build_id is the build the qualification checked: a new build of the same template, or a changed recipe_sha256, needs a new record and a new qualification before the switch may stay on."
+  "agent_canary": [
+    {
+      "try": "su root -c id",
+      "expect": "refused"
+    },
+    {
+      "try": "su user -c 'sudo -n id'",
+      "expect": "refused"
+    },
+    {
+      "try": "sudo -n id",
+      "expect": "refused"
+    },
+    {
+      "try": "ssh user@127.0.0.1 id; ssh root@127.0.0.1 id",
+      "expect": "refused"
+    },
+    {
+      "try": "read /proc/<envd pid>/environ and /proc/<envd pid>/mem",
+      "expect": "refused"
+    },
+    {
+      "try": "write a file under /usr/local/bin and /usr/local/sbin",
+      "expect": "recorded"
+    },
+    {
+      "try": "list every setuid or setgid file and its mode",
+      "expect": "recorded"
+    }
+  ],
+  "scope": "The owner's E2B template build of profile morrow.computer v1 (ADR-0029 item 1 and owner question 1; build order PR 8). Recorded after the owner runs the build in README.md with the owner's own E2B login: template_id is E2B's id of the template named `name`, the pin the broker creates from (apps/broker/src/runtime-e2b.ts e2bPinnedTemplate); build_id, envd_version and built_on come from the owner's `template list` output, which holds no secret. All four stay null until then, and the runtime switch cannot go on (build order PR 9 qualifies this exact build first). E2B starts a template's newest ready build and documents no create by build, so build_id is the build the qualification checked: a new build of the same template, or a changed recipe_sha256, needs a new record and a new qualification before the switch may stay on. agent_canary lists what build order PR 9's recorded check tries as `agent` on this exact build, with each answer recorded: a way to root (or to envd's token) that answers anything but refused denies the profile (ADR-0029 item 3). E2B's own build makes /usr/local writable by all after the recipe, so that row is recorded with whether anything runs from there as root while a job runs."
 }

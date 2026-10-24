@@ -894,6 +894,27 @@ test("the pinned template is the owner's build record (none until it is built an
   assert.equal(e2bPinnedTemplate, null);
 });
 
+// Review F1 (2026-10-24): E2B's builder runs its provisioning (root's password cleared;
+// sudo, openssh-server with root and empty-password logins, curl, socat, git, iptables) and
+// its default user `user` before the recipe's steps, and its finalize step (`user` with an
+// empty password and passwordless sudo, /usr/local writable by all) after them. As root,
+// before `USER agent`, the recipe closes each way from agent to root and stops the build if
+// one did not take. Reproduced offline in Debian trixie: without these lines, `su agent -c
+// "su root -c id"` printed uid=0; with them, su answers "Permission denied" to agent.
+const recipeHardening = [
+  "RUN passwd -l root \\",
+  " && dpkg-statoverride --update --add root root 4750 /usr/bin/su \\",
+  " && dpkg-statoverride --update --add root root 4750 /usr/bin/sudo \\",
+  " && if dpkg-query -W -f='${Status}' openssh-server 2>/dev/null | grep -q 'ok installed'; then \\",
+  "      DEBIAN_FRONTEND=noninteractive apt-get purge -y openssh-server; \\",
+  "    fi \\",
+  " && test \"$(passwd -S root | cut -d' ' -f2)\" = L \\",
+  ' && test "$(stat -c %a:%U:%G /usr/bin/su)" = 4750:root:root \\',
+  ' && if [ -e /usr/bin/sudo ]; then test "$(stat -c %a:%U:%G /usr/bin/sudo)" = 4750:root:root; fi \\',
+  " && test ! -e /usr/sbin/sshd \\",
+  ' && test "$(id -nG agent)" = agent',
+].join("\n");
+
 test("the template recipe: Debian's Python and data libraries, no browser or network tool, agent last", () => {
   const recipe = readFileSync("infra/e2b/morrow-computer/e2b.Dockerfile", "utf8");
   const record = JSON.parse(readFileSync("infra/e2b/morrow-computer/template.json", "utf8"));
@@ -906,6 +927,7 @@ test("the template recipe: Debian's Python and data libraries, no browser or net
   assert.deepEqual(
     Object.keys(record).sort(),
     [
+      "agent_canary",
       "build_id",
       "built_on",
       "cli",
@@ -931,15 +953,34 @@ test("the template recipe: Debian's Python and data libraries, no browser or net
   assert.ok(built.every((v) => v === null) || built.every((v) => typeof v === "string"));
   if (record.template_id !== null) assert.doesNotMatch(record.template_id, /:/);
   assert.match(record.scope, /new build of the same template/);
-  const lines = recipe
+  const all = recipe
     .split("\n")
     .filter((l) => l.trim() && !l.trim().startsWith("#"))
     .join("\n");
+  // The hardening step (review F1) is pinned on its own below; everything else is checked here.
+  assert.ok(all.includes(recipeHardening), "the hardening step, exactly");
+  const lines = all.replace(recipeHardening + "\n", "");
   // One base, Debian's packages only (no pip, no download, no copied file), no secret.
   assert.equal((lines.match(/^FROM /gm) ?? []).length, 1);
   assert.match(lines, /^FROM debian:[a-z]+-slim$/m);
   const forbiddenTools = /\bpip3?\b|curl|wget|\bgit\b|ssh|netcat|\bnc\b|nmap|socat/;
   assert.doesNotMatch(lines, forbiddenTools);
+  // The one install installs exactly these (so never sudo, an SSH server or a network tool).
+  const install =
+    /apt-get install -y --no-install-recommends \\\n((?:[ ]+[a-z0-9.+-]+ \\\n)+) && apt-get clean/.exec(
+      lines,
+    );
+  assert.ok(install, "one apt-get install");
+  assert.deepEqual(install[1].replace(/\\/g, "").trim().split(/\s+/), [
+    "python3",
+    "python3-numpy",
+    "python3-pandas",
+    "python3-matplotlib",
+    "python3-openpyxl",
+    "python3-xlsxwriter",
+    "fonts-dejavu-core",
+  ]);
+  assert.equal((lines.match(/apt-get install/g) ?? []).length, 1);
   assert.doesNotMatch(lines, /chrom|firefox|playwright|puppeteer|selenium|webkit|xvfb/i);
   assert.doesNotMatch(lines, /^(ADD|COPY|ENV|ARG|EXPOSE|CMD|ENTRYPOINT) /m);
   assert.doesNotMatch(lines, /sudo|wheel|--groups|usermod|setuid|E2B_|KEY|TOKEN/);
@@ -973,4 +1014,47 @@ test("the template recipe: Debian's Python and data libraries, no browser or net
     ),
   );
   assert.doesNotMatch(readme, /E2B_API_KEY=|export E2B|e2b_[A-Za-z0-9]{8}/);
+});
+
+test("the template recipe closes every way from agent to root that E2B's build leaves (review F1)", () => {
+  const recipe = readFileSync("infra/e2b/morrow-computer/e2b.Dockerfile", "utf8");
+  const record = JSON.parse(readFileSync("infra/e2b/morrow-computer/template.json", "utf8"));
+  const readme = readFileSync("infra/e2b/morrow-computer/README.md", "utf8");
+  const steps = recipe
+    .split("\n")
+    .filter((l) => l.trim() && !l.trim().startsWith("#"))
+    .join("\n");
+  // Exactly once, as root (no USER before it), after agent exists, right before USER agent.
+  const at = steps.indexOf(recipeHardening);
+  assert.ok(at > 0, "the hardening step, exactly");
+  assert.equal(steps.indexOf(recipeHardening, at + 1), -1);
+  assert.equal(steps.lastIndexOf("\nUSER ", at), -1, "it runs as root");
+  assert.ok(steps.indexOf("useradd ") < at, "agent exists before it");
+  assert.deepEqual(
+    steps
+      .slice(at + recipeHardening.length)
+      .trim()
+      .split("\n"),
+    ["USER " + computerProfile.user, "WORKDIR " + computerProfile.workDirectory],
+  );
+  // Nothing in the recipe gives agent a group, sudo or a password.
+  const rest = steps.replace(recipeHardening, "");
+  assert.doesNotMatch(rest, /sudo|wheel|--groups|usermod|chpasswd|passwd|NOPASSWD|setcap|chmod/);
+  // PR 9's recorded check tries each way as agent on the exact build.
+  assert.deepEqual(record.agent_canary, [
+    { try: "su root -c id", expect: "refused" },
+    { try: "su user -c 'sudo -n id'", expect: "refused" },
+    { try: "sudo -n id", expect: "refused" },
+    { try: "ssh user@127.0.0.1 id; ssh root@127.0.0.1 id", expect: "refused" },
+    { try: "read /proc/<envd pid>/environ and /proc/<envd pid>/mem", expect: "refused" },
+    { try: "write a file under /usr/local/bin and /usr/local/sbin", expect: "recorded" },
+    { try: "list every setuid or setgid file and its mode", expect: "recorded" },
+  ]);
+  assert.match(record.scope, /agent_canary/);
+  // The owner is told what E2B adds and that egress is the platform's, not the image's.
+  assert.doesNotMatch(readme, /It has no browser, no network tool|never as root/);
+  for (const tool of ["curl", "socat", "git", "iptables", "SSH server", "sudo", "/usr/local"])
+    assert.ok(readme.includes(tool), tool);
+  assert.match(readme, /It is E2B,\s+not the image, that keeps the sandbox off the internet/);
+  assert.match(readme, /agent_canary/);
 });
