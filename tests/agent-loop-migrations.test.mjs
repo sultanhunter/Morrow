@@ -22,6 +22,7 @@ import { generatedLoopCatalogue } from "../packages/policy/src/generated/loop-ca
 import { generatedToolCatalogue } from "../packages/policy/src/generated/tool-catalogue.ts";
 import { loopEntries } from "../packages/policy/src/loop-catalogue.ts";
 import { routedRunCaps } from "../packages/work/src/loop/admission.ts";
+import { toolFieldScopes } from "../packages/work/src/loop/authority.ts";
 import { agentRunSql } from "../packages/work/src/loop/steps.ts";
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
@@ -412,6 +413,85 @@ test("definers: command-owned, explicit ACLs, ids only; the runtime lookups and 
     "'routed'=ANY(t.contexts)",
   ])
     assert.ok(admit.includes(piece), piece);
+});
+
+test("review fixes: settle before a resend, a replayable wait, the uncounted call, the scope, one open question", () => {
+  // F1: attempt 2 books an expired open call of attempt 1 as uncertain before it checks
+  // attempt 1's outcome (defence in depth: the runner settles against SQL first).
+  const open = fnBody("morrow_work", "agent_turn_open");
+  const attempt2 = open.slice(open.indexOf(" ELSE\n"), open.indexOf("r.overflow_usd>0"));
+  assert.match(
+    attempt2,
+    /x\.attempt=1 AND x\.status='started'\s+AND x\.started_at\+make_interval\(secs=>x\.budget_ms\/1000\.0\+60\)<=pg_catalog\.clock_timestamp\(\) LOOP\s+PERFORM morrow_work\.agent_turn_close_uncertain\(/,
+  );
+  assert.ok(
+    attempt2.indexOf("agent_turn_close_uncertain") < attempt2.indexOf("x.outcome='uncertain'"),
+  );
+  // F2: the lookup names an open run's status, a waiting run's too, and the runtime login
+  // reads exactly the open runs.
+  const lookup = fnBody("morrow_work", "agent_run_resume_lease");
+  assert.match(lookup, /RETURNS TABLE\(lease_id text,generation text,status text\)/);
+  assert.match(lookup, /a\.status IN \('queued','running','waiting'\)/);
+  assert.match(
+    sql,
+    /CREATE POLICY runtime_agent_open ON morrow_work\.agent_runs FOR SELECT TO morrow_work_command\s+USING \(session_user=''morrow_runtime_executor'' AND status IN \(''queued'',''running'',''waiting''\)\)/,
+  );
+  // F3: a call is born counted or not; an unfinished uncounted call is refused again, never
+  // resumed, and can only finish refused with its code.
+  const calls = tableBody("run_tool_calls");
+  assert.match(calls, /^ counted boolean NOT NULL,$/m);
+  assert.match(
+    calls,
+    /CONSTRAINT run_tool_calls_counted CHECK \(counted OR outcome IS NULL OR \(outcome='refused' AND refusal IN \('not_offered','tool_call_limit'\)\)\)/,
+  );
+  const begin = fnBody("morrow_work", "agent_tool_call_begin");
+  const replayed = begin.slice(
+    begin.indexOf(" IF FOUND THEN"),
+    begin.indexOf("SELECT x.capability_id"),
+  );
+  assert.ok(
+    replayed.indexOf("IF c.outcome IS NULL AND NOT c.counted THEN") > 0 &&
+      replayed.indexOf("IF c.outcome IS NULL AND NOT c.counted THEN") <
+        replayed.indexOf("'resumed'"),
+  );
+  assert.match(
+    replayed,
+    /RETURN QUERY SELECT 'refuse'::text,CASE WHEN NOT p_tool=ANY\(r\.tools\) THEN 'not_offered' ELSE 'tool_call_limit' END/,
+  );
+  assert.match(begin, /p_input_digest,\s+v_refusal IS NULL,NULL,NULL/);
+  // F4: the envelope's and the hop's scope fields are the offered tools' (drift: the SQL
+  // map is authority.ts's toolFieldScopes, entry for entry).
+  const fields = fnBody("morrow_work", "loop_tool_fields");
+  const map = Object.fromEntries(
+    [...fields.matchAll(/WHEN '([a-z.]+)' THEN ARRAY\[([^\]]*)\]/g)].map((m) => [
+      m[1],
+      [...m[2].matchAll(/'([^']+)'/g)].map((x) => x[1]),
+    ]),
+  );
+  assert.deepEqual(map, toolFieldScopes);
+  assert.match(fields, /ELSE ARRAY\[\]::text\[\] END/);
+  assert.match(fields, /ORDER BY q\.f COLLATE "C"/);
+  const admit = fnBody("morrow_work", "cmd_agent_run_admit");
+  assert.match(
+    admit,
+    /v_scope:=jsonb_set\(morrow_work\.listings_scope\(p\.organization_id,p\.workspace_id,p_store_id,s\.connection_id\),'\{fields\}',\s+morrow_work\.loop_tool_fields\(v_tools\)\);/,
+  );
+  assert.equal(admit.match(/v_scope:=/g).length, 1);
+  assert.deepEqual(workFunctions["loop_tool_fields(text[])"], {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  });
+  // F6: at most one open question per run, in the definer and as a unique index.
+  const ask = fnBody("morrow_work", "agent_question_ask");
+  assert.match(
+    ask,
+    /IF r\.questions_asked>=r\.questions_limit OR EXISTS\(SELECT 1 FROM morrow_work\.agent_run_questions x WHERE x\.organization_id=r\.organization_id\s+AND x\.workspace_id=r\.workspace_id AND x\.run_id=r\.id AND x\.status='open'\) THEN\s+RETURN QUERY SELECT 'question_limit'/,
+  );
+  assert.match(ask, /WHEN unique_violation THEN RETURN QUERY SELECT 'question_limit'/);
+  assert.match(
+    sql,
+    /CREATE UNIQUE INDEX agent_run_questions_one_open ON morrow_work\.agent_run_questions \(organization_id,workspace_id,run_id\) WHERE status='open';/,
+  );
 });
 
 test("the agent-loop switch record is committed off with every prerequisite unrecorded", () => {

@@ -341,7 +341,7 @@ export const workTables = Object.freeze({
   // agent and the requester wrote. The run steps reach them under the run lease
   // (tenant_lease); the broker's two turn definers reach the one run (and call) their own
   // transaction-local settings name (broker_agent_*); the runtime login's cron and lease
-  // lookup read queued and running runs only (runtime_agent_open).
+  // lookup read open (queued, running and waiting) runs only (runtime_agent_open).
   loop_catalogue_versions: {
     class: "platform",
     parents: [],
@@ -811,6 +811,8 @@ export const workFunctions = Object.freeze({
   "loop_assistant_message_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "loop_tool_results_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "loop_choices_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  // Admission's envelope and hop scope fields: the offered tools' field scopes.
+  "loop_tool_fields(text[])": { kind: "check", grantees: ["morrow_work_command"] },
   "agent_manifest_matches(text,text,text,text,text,text,text,text,text,text,text,bigint,text,text,integer,text,text[],integer,text,text,integer,integer,integer,integer,integer,integer,integer,numeric,timestamp with time zone)":
     { kind: "check", grantees: ["morrow_work_command"] },
   "agent_run_guard()": { kind: "trigger", grantees: [] },
@@ -840,8 +842,8 @@ export const workFunctions = Object.freeze({
     command: "question.answer",
   },
   // The cron's ids-only list of queued agent runs (cross-tenant, as pending_starts) and the
-  // ids-only lookup of one open run's current lease, which AgentRunParams@1 (ids only)
-  // names by its tenant and run; it grants nothing (enter_lease decides).
+  // ids-only lookup of one open run's current lease and status, which AgentRunParams@1 (ids
+  // only) names by its tenant and run; it grants nothing (enter_lease decides).
   "agent_run_pending_starts()": {
     kind: "runtime",
     grantees: ["morrow_runtime_executor"],

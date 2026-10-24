@@ -22,6 +22,7 @@ import {
 } from "./conversation.js";
 import type {
   AgentRunEndReason,
+  AgentRunLease,
   AgentRunState,
   ConversationRow,
   RecordKind,
@@ -46,8 +47,10 @@ import type { ToolDispatch, ToolHandlers } from "./tools.js";
 //              fence as SQL sees it (agent_turn_settle: a recorded outcome is used as is, a
 //              live call is waited for, an expired one is booked as uncertain), then one
 //              ModelCall@2 through the broker's modelTurn (a throttle resends the attempt
-//              with the next sequence; a hold that left nothing in SQL is tried again at
-//              most twice). The reply is validated with the generated contract
+//              with the next sequence; a hold, or the broker's own uncertain, is settled
+//              against what SQL recorded, never taken as SQL's verdict; one that left
+//              nothing in SQL is tried again at most twice). The reply is validated with the
+//              generated contract
 //              (the strict tool_use shapes the run was given), its tools must be offered and
 //              a final turn must call none: anything else ends the run invalid_output. An
 //              uncertain attempt 1 is sent again at most once, as attempt 2; an uncertain
@@ -59,7 +62,9 @@ import type { ToolDispatch, ToolHandlers } from "./tools.js";
 //              returns its first record); the result as wrapped data (8 KiB) appended to the
 //              turn's tool results.
 //   wait-q     after a turn that asked the requester (inbox.ask): running -> waiting, the
-//              lease released; then answer-q-i (the durable wait for the answer event, an
+//              lease released (replayed after a lost result, the run's status says the
+//              wait committed: waiting, or queued or running under a newer lease); then
+//              answer-q-i (the durable wait for the answer event, an
 //              hour at a time) and resume-q-i (the resume lease the answer opened), for at
 //              most the 72 hours a question stays open. Unanswered, the Workflow ends and
 //              the workspace's stale close ends the run (question_unanswered).
@@ -79,12 +84,12 @@ export interface AgentRunPorts {
     ref: LeaseRef,
     body: (step: LeaseStep) => Promise<T>,
   ): Promise<LeaseStepResult<T> | "failed">;
-  /** The open run's current lease reference (agent_run_resume_lease), or null. */
+  /** The open run's current lease reference and status (agent_run_resume_lease), or null. */
   resolveLease(
     organizationId: string,
     workspaceId: string,
     runId: string,
-  ): Promise<LeaseRef | null | "failed">;
+  ): Promise<AgentRunLease | null | "failed">;
   /** RuntimeBroker.modelTurn: a ModelResult@2 string, or a thrown BROKER_HELD. */
   modelTurn(
     leaseId: string,
@@ -380,13 +385,17 @@ export async function runTurn(
         await ports.modelTurn(ref.leaseId, ref.generation, JSON.stringify(built.value), budgetMs),
       );
     } catch {
-      // BROKER_HELD: the gateway refused before any request, or the reply was lost. What SQL
-      // recorded decides. With nothing recorded and no call open nothing was sent (the fence
-      // commits before any request), so the call is tried again, at most heldSends times in
-      // all, before the run ends.
       result = null;
     }
-    if (result === null) {
+    if (result === null || result.outcome === "uncertain") {
+      // BROKER_HELD (the gateway refused before any request, or the reply was lost), or the
+      // broker's own uncertain (its close failed or found the fence already closed, or its
+      // count failed): never SQL's verdict. What SQL recorded decides (CLAUDE.md: an unknown
+      // outcome is reconciled before any retry): a live fence is waited for, an expired one
+      // is booked as uncertain, a committed reply is read back, and only an uncertain that
+      // SQL recorded for attempt 1 is sent again. With nothing recorded and no call open
+      // nothing was sent (the fence commits before any request), so the call is tried
+      // again, at most heldSends times in all, before the run ends.
       state = await settle();
       if (state.kind === "send") {
         held += 1;
@@ -603,9 +612,11 @@ async function startRun(
   | { readonly kind: "ended"; readonly status: string }
   | ReturnType<typeof interrupted>
 > {
-  const ref = await ports.resolveLease(params.organizationId, params.workspaceId, params.runId);
-  if (ref === "failed") throw retry("resolve");
-  if (ref === null) return interrupted("not_found");
+  const found = await ports.resolveLease(params.organizationId, params.workspaceId, params.runId);
+  if (found === "failed") throw retry("resolve");
+  if (found === null) return interrupted("not_found");
+  if (found.status === "waiting") return interrupted("waiting");
+  const ref = leaseRef(found);
   const r = await under(ports, ref, (step) => step.loop.start());
   if (!r.entered) return interrupted(r.refusal);
   if (r.value.outcome === "denied" || r.value.outcome === "waiting")
@@ -662,7 +673,7 @@ export async function agentRun(
     }
     if (asked) {
       questions += 1;
-      const w = await steps.do("wait-" + questions, () => enterWait(ports, ref));
+      const w = await steps.do("wait-" + questions, () => enterWait(ports, params, ref));
       if (w.kind === "interrupted") return w;
       let resumed: LeaseRef | null = null;
       for (let i = 1; i <= agentRunTimings.answerChecks && resumed === null; i++) {
@@ -682,14 +693,38 @@ export async function agentRun(
   return steps.do("finish", () => finishRun(ports, ref, reason!));
 }
 
+const leaseRef = (l: AgentRunLease): LeaseRef =>
+  Object.freeze({ leaseId: l.leaseId, generation: l.generation });
+const waiting = Object.freeze({ kind: "waiting" as const });
 async function enterWait(
   ports: AgentRunPorts,
+  params: Current_AgentRunParams,
   ref: LeaseRef,
 ): Promise<{ readonly kind: "waiting" } | ReturnType<typeof interrupted>> {
   for (let wait = 0; wait < 200; wait++) {
     const r = await under(ports, ref, (step) => step.loop.wait());
-    if (!r.entered) return interrupted(r.refusal);
-    if (r.value.outcome === "waiting") return Object.freeze({ kind: "waiting" as const });
+    if (!r.entered) {
+      // The wait releases the lease it entered in the same transaction, so a replayed wait
+      // step (its first attempt committed, then its result was lost) cannot enter it again.
+      // What SQL recorded decides: the run waiting, or queued or running under a newer
+      // lease (only an answer to a waiting run opens one), is this step's wait; anything
+      // else is the refusal (a stop, an ended lease, an ended run).
+      const found = await ports.resolveLease(
+        params.organizationId,
+        params.workspaceId,
+        params.runId,
+      );
+      if (found === "failed") throw retry("resolve");
+      if (
+        found !== null &&
+        (found.status === "waiting" ||
+          found.leaseId !== ref.leaseId ||
+          found.generation !== ref.generation)
+      )
+        return waiting;
+      return interrupted(r.refusal);
+    }
+    if (r.value.outcome === "waiting") return waiting;
     if (r.value.outcome === "call_open") {
       await ports.sleep(agentRunTimings.openCallPollMs);
       continue;
@@ -708,9 +743,11 @@ async function tryResume(
   | { readonly kind: "still_waiting" }
   | { readonly kind: "ended"; readonly status: string }
 > {
-  const ref = await ports.resolveLease(params.organizationId, params.workspaceId, params.runId);
-  if (ref === "failed") throw retry("resolve");
-  if (ref === null) return Object.freeze({ kind: "still_waiting" as const });
+  const found = await ports.resolveLease(params.organizationId, params.workspaceId, params.runId);
+  if (found === "failed") throw retry("resolve");
+  if (found === null || found.status === "waiting")
+    return Object.freeze({ kind: "still_waiting" as const });
+  const ref = leaseRef(found);
   const r = await under(ports, ref, (step) => step.loop.start());
   if (!r.entered) return Object.freeze({ kind: "still_waiting" as const });
   const v = r.value;

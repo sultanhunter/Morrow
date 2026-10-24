@@ -365,7 +365,7 @@ extraPolicies.broker_agent_call = [
 extraPolicies.runtime_agent_open = [
   "SELECT",
   "{morrow_work_command}",
-  "((SESSION_USER = 'morrow_runtime_executor'::name) AND (status = ANY (ARRAY['queued'::text, 'running'::text])))",
+  "((SESSION_USER = 'morrow_runtime_executor'::name) AND (status = ANY (ARRAY['queued'::text, 'running'::text, 'waiting'::text])))",
   null,
 ];
 // The only restrictive policies; every other policy is permissive.

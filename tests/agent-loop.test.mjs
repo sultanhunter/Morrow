@@ -25,7 +25,8 @@ import {
   routedSystemText,
   routedSystemTextDigest,
 } from "../packages/policy/src/loop-prompts.ts";
-import { listingFieldPaths } from "../packages/policy/src/store-resource.ts";
+import { createAgentAuthorityService } from "../packages/policy/src/agent-authority.ts";
+import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
 import {
   toolCatalogueDigest,
   toolCatalogueVersion,
@@ -41,6 +42,8 @@ import {
 import {
   createDelegationAuthority,
   idsInScope,
+  loopToolFieldScope,
+  toolFieldScopes,
   toolOperation,
 } from "../packages/work/src/loop/authority.ts";
 import {
@@ -63,7 +66,11 @@ import {
   parseAgentRunParams,
   turnCaps,
 } from "../packages/work/src/loop/runner.ts";
-import { agentRunSql, createAgentRunSteps } from "../packages/work/src/loop/steps.ts";
+import {
+  agentRunSql,
+  createAgentRunSteps,
+  decodeAgentRunLease,
+} from "../packages/work/src/loop/steps.ts";
 import {
   builtInToolHandlers,
   createToolHandlers,
@@ -71,6 +78,14 @@ import {
 } from "../packages/work/src/loop/tools.ts";
 import { canonicalJson } from "../packages/work/src/digest.ts";
 import { agentWorld, ids, objectiveText, params, reply } from "./fixtures/agent-loop-world.mjs";
+import {
+  at as kernelAt,
+  clone,
+  delegationFixture,
+  grant,
+  scope as kernelScope,
+  synchronizeExecutor,
+} from "./fixtures/agent-authority.mjs";
 
 const sha = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 // A products.read stand-in that returns outside (untrusted) product text: the real handler is
@@ -799,12 +814,17 @@ test("a question waits durably for the requester; the answer opens the resume le
   // The third question in a run is refused question_limit (2 per run) and the run goes on.
   const many = agentWorld({
     script: async (call) =>
-      call.turn === 1
-        ? usageOk(reply(null, ask("tu_1", "First?"), ask("tu_2", "Second?"), ask("tu_3", "Third?")))
+      call.turn <= 3
+        ? usageOk(reply(null, ask("tu_" + call.turn, "Question " + call.turn + "?")))
         : usageOk(reply("Done.")),
   });
   compose(many);
-  await agentRun(many.ports, many.durable({ onWait: async () => many.answer("Yes") }), params);
+  const answered = await agentRun(
+    many.ports,
+    many.durable({ onWait: async () => many.answer("Yes") }),
+    params,
+  );
+  assert.equal(answered.reason, "completed");
   assert.deepEqual(
     ["tu_1", "tu_2", "tu_3"].map((id) => [
       many.db.toolCalls.get(id).outcome,
@@ -816,6 +836,46 @@ test("a question waits durably for the requester; the answer opens the resume le
       ["refused", "question_limit"],
     ],
   );
+});
+
+test("one open question at a time: a second ask in the same turn is refused (review F6)", async () => {
+  // Both asks would be open, but the run waits on one and only its answer resumes it, so the
+  // second is refused question_limit at once; the model sees the refusal and the answer.
+  const world = agentWorld({
+    script: async (call) =>
+      call.turn === 1
+        ? usageOk(reply(null, ask("tu_q1", "Which tone?"), ask("tu_q2", "Which length?")))
+        : usageOk(reply("Done.")),
+  });
+  compose(world);
+  const d = world.durable({ onWait: async () => world.answer("Plain") });
+  assert.deepEqual(await agentRun(world.ports, d, params), {
+    kind: "ended",
+    status: "succeeded",
+    reason: "completed",
+  });
+  assert.deepEqual(
+    world.db.questions.map((q) => [q.toolUseId, q.status]),
+    [["tu_q1", "answered"]],
+  );
+  assert.deepEqual(
+    ["tu_q1", "tu_q2"].map((id) => [
+      world.db.toolCalls.get(id).outcome,
+      world.db.toolCalls.get(id).refusal,
+    ]),
+    [
+      ["ok", null],
+      ["refused", "question_limit"],
+    ],
+  );
+  assert.equal(world.db.run.questionsAsked, 1);
+  const input = world.db.sends[1].call.messages[2];
+  assert.deepEqual(
+    input.content.map((b) => b.type),
+    ["tool_result", "tool_result", "text"],
+  );
+  assert.equal(JSON.parse(input.content[1].content).refusal, "question_limit");
+  assert.equal(input.content[2].text, answerLabel + "Plain");
 });
 
 test("a stop or a lost lease interrupts the next step; a failed transaction is retried", async () => {
@@ -851,6 +911,218 @@ test("a stop or a lost lease interrupts the next step; a failed transaction is r
     kind: "interrupted",
     refusal: "not_found",
   });
+});
+
+// Durable steps that retry an AgentRunRetry as the Workflow does (four retries), and lose the
+// result of the named steps once after their body committed (the hook runs in between).
+function lossyDurable(lose = {}, { onWait } = {}) {
+  const results = new Map();
+  const names = [];
+  const retries = [];
+  const lost = new Set();
+  return {
+    names,
+    results,
+    retries,
+    async do(name, body) {
+      if (results.has(name)) return structuredClone(results.get(name));
+      for (let n = 1; ; n++) {
+        try {
+          const value = await body();
+          if (name in lose && !lost.has(name)) {
+            lost.add(name);
+            await lose[name]?.();
+            throw new AgentRunRetry("result_lost");
+          }
+          names.push(name);
+          results.set(name, structuredClone(value));
+          return value;
+        } catch (error) {
+          if (!(error instanceof AgentRunRetry) || n >= 5) throw error;
+          retries.push(name + ":" + error.code);
+        }
+      }
+    },
+    async waitForAnswer(name, timeoutMs) {
+      names.push(name);
+      return (await onWait?.(name, timeoutMs)) ? "event" : "timeout";
+    },
+  };
+}
+
+test("the broker's own uncertain is settled against SQL, never taken as its verdict (review F1)", async () => {
+  const done = { kind: "ended", status: "succeeded", reason: "completed" };
+  // The close never committed (the fence stays open): the step waits while the fence is
+  // live, the expired fence is booked as uncertain at its worst case, and only then is
+  // attempt 2 sent.
+  let n = 0;
+  const open = agentWorld({
+    script: async () => (++n === 1 ? { outcome: "open", polls: 2 } : usageOk(reply("Done."))),
+  });
+  compose(open);
+  const d = open.durable();
+  assert.deepEqual(await agentRun(open.ports, d, params), done);
+  assert.deepEqual(d.names, ["start", "turn-1-1", "turn-1-2", "finish"]);
+  assert.deepEqual(
+    open.db.turns.map((t) => [t.turn, t.attempt, t.outcome]),
+    [
+      [1, 1, "uncertain"],
+      [1, 2, "end_turn"],
+    ],
+  );
+  assert.deepEqual(open.db.sleeps, [
+    agentRunTimings.openCallPollMs,
+    agentRunTimings.openCallPollMs,
+  ]);
+  assert.equal(open.text8(open.db.run.booked8), "0.22000000");
+  // The close committed a paid reply but its result was lost (the broker says uncertain):
+  // the reply SQL recorded is read back and used; nothing is sent again.
+  const committed = agentWorld({
+    script: async (call) =>
+      call.turn === 1
+        ? { ...usageOk(reply(null, read("tu_1"))), brokerSays: "uncertain" }
+        : usageOk(reply("Done.")),
+  });
+  compose(committed);
+  const d2 = committed.durable();
+  assert.deepEqual(await agentRun(committed.ports, d2, params), done);
+  assert.deepEqual(d2.names, ["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]);
+  assert.deepEqual(
+    committed.db.sends.map((s) => [s.call.turn, s.call.attempt]),
+    [
+      [1, 1],
+      [2, 1],
+    ],
+  );
+  assert.deepEqual(committed.db.dispatched, [["products.read", "tu_1", false]]);
+  assert.equal(committed.text8(committed.db.run.booked8), "0.02000000");
+  // An uncertain that SQL recorded (the provider's own) is still sent again once.
+  let m = 0;
+  const recorded = agentWorld({
+    script: async () => (++m === 1 ? { outcome: "uncertain" } : usageOk(reply("Done."))),
+  });
+  compose(recorded);
+  const d3 = recorded.durable();
+  assert.deepEqual(await agentRun(recorded.ports, d3, params), done);
+  assert.deepEqual(d3.names, ["start", "turn-1-1", "turn-1-2", "finish"]);
+});
+
+test("a wait step whose result was lost after it committed goes on waiting (review F2)", async () => {
+  const done = { kind: "ended", status: "succeeded", reason: "completed" };
+  const script = async (call) =>
+    call.turn === 1 ? usageOk(reply(null, ask("tu_q"))) : usageOk(reply("Done."));
+  // The run is waiting with its lease released: the replayed step cannot enter the lease,
+  // and the run's status says the wait committed.
+  const world = compose(agentWorld({ script }));
+  const d = lossyDurable({ "wait-1": null }, { onWait: async () => world.answer("Plain") });
+  assert.deepEqual(await agentRun(world.ports, d, params), done);
+  assert.deepEqual(d.retries, ["wait-1:result_lost"]);
+  assert.deepEqual(d.names, [
+    "start",
+    "turn-1-1",
+    "tool-1-0",
+    "wait-1",
+    "answer-1-1",
+    "resume-1-1",
+    "turn-2-1",
+    "finish",
+  ]);
+  assert.equal(world.db.sends[1].call.messages[2].content[1].text, answerLabel + "Plain");
+  // The answer came before the replay: the run is queued under the resume lease, which the
+  // next resume step enters.
+  const early = compose(agentWorld({ script }));
+  const d2 = lossyDurable(
+    { "wait-1": () => assert.equal(early.answer("Plain"), true) },
+    { onWait: async () => true },
+  );
+  assert.deepEqual(await agentRun(early.ports, d2, params), done);
+  assert.equal(early.db.leases, 2);
+  // A wait that never committed (a stop before it) is still interrupted with its refusal.
+  const stopped = compose(
+    agentWorld({
+      script: async (call) => {
+        if (call.turn === 1) return usageOk(reply(null, ask("tu_q")));
+        return usageOk(reply("Done."));
+      },
+    }),
+  );
+  const d3 = lossyDurable(
+    {},
+    {
+      onWait: async () => true,
+    },
+  );
+  const lease = stopped.ports.lease;
+  stopped.ports.lease = async (ref, body) =>
+    lease(ref, (step) =>
+      body(
+        Object.freeze({
+          ...step,
+          loop: Object.freeze({
+            ...step.loop,
+            async wait() {
+              stopped.db.stopped = true;
+              throw new AgentRunRetry("transaction");
+            },
+          }),
+        }),
+      ),
+    );
+  assert.deepEqual(await agentRun(stopped.ports, d3, params), {
+    kind: "interrupted",
+    refusal: "stopped",
+  });
+  assert.equal(stopped.db.run.status, "running");
+});
+
+test("a call refused at the run's tool-call cap stays refused when its finish fails (review F3)", async () => {
+  const world = compose(
+    agentWorld({
+      script: async (call) =>
+        call.turn === 1 ? usageOk(reply(null, read("tu_a"))) : usageOk(reply("Done.")),
+    }),
+  );
+  world.db.run.toolCallsTaken = 40;
+  // The finish's transaction fails once, right after the begin that refused the call.
+  const lease = world.ports.lease;
+  let armed = true;
+  world.ports.lease = async (ref, body) =>
+    lease(ref, (step) =>
+      body(
+        Object.freeze({
+          ...step,
+          loop: Object.freeze({
+            ...step.loop,
+            async toolBegin(input) {
+              const begun = await step.loop.toolBegin(input);
+              if (begun.outcome === "refuse" && armed) {
+                armed = false;
+                world.db.failNextLease = true;
+              }
+              return begun;
+            },
+          }),
+        }),
+      ),
+    );
+  const d = lossyDurable();
+  assert.deepEqual(await agentRun(world.ports, d, params), {
+    kind: "ended",
+    status: "succeeded",
+    reason: "completed",
+  });
+  assert.deepEqual(d.retries, ["tool-1-0:transaction"]);
+  // Never validated, decided or dispatched; recorded refused tool_call_limit, uncounted.
+  assert.deepEqual(world.db.dispatched, []);
+  assert.deepEqual(world.db.decisions, []);
+  const call = world.db.toolCalls.get("tu_a");
+  assert.deepEqual(
+    [call.outcome, call.refusal, call.counted],
+    ["refused", "tool_call_limit", false],
+  );
+  assert.equal(world.db.run.toolCallsTaken, 40);
+  const input = world.db.sends[1].call.messages[2];
+  assert.equal(JSON.parse(input.content[0].content).refusal, "tool_call_limit");
 });
 
 test("the cost, turn and wall-time caps end the run in code", async () => {
@@ -984,6 +1256,33 @@ test("each tool's operation is its catalogue pair on the run's store; ids in sco
     ["seo.description", "seo.title", "title"],
   );
   assert.equal(op("proposal.listing", { changes: [] }), null);
+  // Every call's fields are inside its tool's field scope; the envelope's and the hop's are
+  // exactly the union over the offered tools (review F4: inbox.ask's fields are in it).
+  for (const [tool, input] of [
+    ["products.read", {}],
+    ["inbox.ask", {}],
+    [
+      "proposal.listing",
+      { changes: [{ title: "x", descriptionHtml: "d", seo: { title: "t" }, tags: ["a"] }] },
+    ],
+  ])
+    assert.ok(
+      op(tool, input).fields.every((f) => toolFieldScopes[tool].includes(f)),
+      tool,
+    );
+  assert.deepEqual(loopToolFieldScope(["products.read", "inbox.ask"]), [
+    "answerSchema",
+    "descriptionHtml",
+    "question",
+    "respondentId",
+    "seo.description",
+    "seo.title",
+    "tags",
+    "taskId",
+    "title",
+  ]);
+  assert.deepEqual(loopToolFieldScope(["inbox.ask"]), toolFieldScopes["inbox.ask"]);
+  assert.deepEqual(loopToolFieldScope(["knowledge.search"]), []);
   // A tool with no field scope in this build has no operation (refused before the kernel).
   assert.equal(op("work.read", { target: "task", id: null }), null);
   // Model text never names a capability: the verb must be one of the four.
@@ -1053,6 +1352,69 @@ test("each tool's operation is its catalogue pair on the run's store; ids in sco
     ),
     "authority_denied",
   );
+});
+
+test("the real kernel allows inbox.ask under the tools' field scope, not under listings' (review F4)", async () => {
+  // A delegation whose every layer holds workspace.question.request on the run's store
+  // (as an installation that declares inbox.ask will): the envelope and the Coordinator's hop
+  // scoped as admission now scopes them allow the call; scoped listings-only, as before,
+  // they refuse it origin_denied.
+  const tool = { name: "inbox.ask", capabilityId: "workspace.question.request", verb: "execute" };
+  const op = toolOperation(tool, { question: "Which tone?", choices: [] });
+  const res = storeResource("org_a", "workspace_a", "store_a", "connection_a");
+  const fixture = (envelopeFields) => {
+    const f = delegationFixture();
+    const domain = { ...kernelScope([res], op.fields), accountIds: [] };
+    Object.assign(f.input.operation, {
+      capabilityId: op.capabilityId,
+      verb: op.verb,
+      resource: clone(res),
+      accountId: null,
+      fields: [...op.fields],
+    });
+    const { envelope, hops, origin, executor, constraints } = f.facts;
+    const scoped = { ...clone(domain), fields: [...envelopeFields] };
+    Object.assign(envelope, { capabilityIds: [op.capabilityId], verbs: [op.verb], scope: scoped });
+    for (const hop of hops)
+      Object.assign(hop, {
+        capabilityIds: [op.capabilityId],
+        verbs: [op.verb],
+        scope: clone(scoped),
+      });
+    origin.grants[0] = grant("owner_tool", origin.actor, op.capabilityId, [op.verb], domain);
+    origin.grants[1] = grant(
+      "owner_tool_delegate",
+      origin.actor,
+      op.capabilityId,
+      ["delegate"],
+      domain,
+    );
+    executor.installation.scope = clone(domain);
+    executor.current.grants = [
+      grant("specialist_tool", executor.current.actor, op.capabilityId, [op.verb], domain),
+    ];
+    executor.owner.grants[0] = grant(
+      "installation_owner_tool",
+      executor.owner.actor,
+      op.capabilityId,
+      [op.verb],
+      domain,
+    );
+    Object.assign(constraints, { resource: clone(res), accountId: null });
+    synchronizeExecutor(f.facts);
+    return f;
+  };
+  const decide = async (f) =>
+    (
+      await createAgentAuthorityService(
+        { readDelegationCurrent: async () => JSON.stringify(f.facts) },
+        () => new Date(kernelAt),
+      ).decideDelegation(JSON.stringify(f.input))
+    ).decision;
+  const admitted = await decide(fixture(loopToolFieldScope(["products.read", "inbox.ask"])));
+  assert.equal(admitted.allowed, true, admitted.reason);
+  assert.equal((await decide(fixture(loopToolFieldScope(["inbox.ask"])))).allowed, true);
+  assert.equal((await decide(fixture([...listingFieldPaths]))).reason, "origin_denied");
 });
 
 test("the steps' SQL is source-fixed and each decoder accepts only its closed shape", async () => {
@@ -1131,4 +1493,25 @@ test("the steps' SQL is source-fixed and each decoder accepts only its closed sh
     "finished",
   );
   assert.deepEqual(finish.seen[0][1], ["tu_1", "ok", "", "{}", sha("{}"), "", "", "true"]);
+  // The run's lease lookup: none, or one open run's lease, generation and status (a waiting
+  // run's too, so a replayed wait step can tell its wait committed).
+  const lease = "00000000-0000-4000-8000-000000000101";
+  assert.equal(decodeAgentRunLease([]), null);
+  for (const status of ["queued", "running", "waiting"])
+    assert.deepEqual(decodeAgentRunLease([{ lease_id: lease, generation: "1", status }]), {
+      leaseId: lease,
+      generation: 1,
+      status,
+    });
+  for (const rows of [
+    [{ lease_id: lease, generation: "1", status: "succeeded" }],
+    [{ lease_id: lease, generation: "1" }],
+    [{ lease_id: "lease", generation: "1", status: "queued" }],
+    [{ lease_id: lease, generation: "0", status: "queued" }],
+    [
+      { lease_id: lease, generation: "1", status: "queued" },
+      { lease_id: lease, generation: "1", status: "queued" },
+    ],
+  ])
+    assert.throws(() => decodeAgentRunLease(rows), /RUNTIME_AGENT_RUN_HELD/);
 });

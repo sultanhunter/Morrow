@@ -136,6 +136,21 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
   ELSE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(p) c WHERE jsonb_typeof(c)<>'string' OR char_length(c#>>'{}') NOT BETWEEN 1 AND 100)
    AND (SELECT count(DISTINCT c) FROM jsonb_array_elements(p) c)=jsonb_array_length(p) END
 $$;
+-- The fields each offered tool's operation names (packages/work/src/loop/authority.ts
+-- toolFieldScopes, drift-tested): the envelope's and the hop's scope fields are exactly
+-- their sorted union over the run's tools, so the delegation is never wider than its tools
+-- and never blocks one of them. A tool with no field scope in this build adds none (its
+-- calls are refused before the kernel).
+CREATE FUNCTION morrow_work.loop_tool_fields(p_tools text[]) RETURNS jsonb
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT COALESCE(jsonb_agg(q.f ORDER BY q.f COLLATE "C"),'[]'::jsonb) FROM (SELECT DISTINCT u.f FROM unnest(p_tools) t(tool)
+  CROSS JOIN LATERAL unnest(CASE t.tool
+   WHEN 'products.read' THEN ARRAY['descriptionHtml','seo.description','seo.title','tags','title']
+   WHEN 'proposal.listing' THEN ARRAY['descriptionHtml','seo.description','seo.title','tags','title']
+   WHEN 'inbox.ask' THEN ARRAY['answerSchema','question','respondentId','taskId']
+   WHEN 'message.post' THEN ARRAY['parts','replyToMessageId']
+   ELSE ARRAY[]::text[] END) u(f)) q
+$$;
 -- AgentRunManifest@1 of a routed run, as admission pins it (ADR-0027 item 1). The canonical
 -- text is the Worker's RFC 8785 output of the validated manifest; this proves it parses to
 -- exactly the run's own columns: no content, only ids, digests, codes, caps and the hold.
@@ -405,9 +420,11 @@ CREATE TABLE morrow_work.run_turns (
  CONSTRAINT run_turns_times CHECK (updated_at>=created_at AND expires_at>=created_at+interval '90 days')
 );
 -- One tool call (RunToolCall@1): ids, codes and digests only (the input and the result live
--- in run_turns). Born started when the call's step begins (that counts the call); finished
--- once, with its outcome, refusal, result digest and size, and the first record an internal
--- write made (returned again on replay). Content class none; 365 days.
+-- in run_turns). Born started when the call's step begins (that counts the call, unless it
+-- is over a cap or not offered: then it is born uncounted and can only finish refused with
+-- that code, however often its step is retried); finished once, with its outcome, refusal,
+-- result digest and size, and the first record an internal write made (returned again on
+-- replay). Content class none; 365 days.
 CREATE TABLE morrow_work.run_tool_calls (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -420,6 +437,7 @@ CREATE TABLE morrow_work.run_tool_calls (
  verb text NOT NULL CHECK (verb IN ('view','propose','approve','execute','delegate','administer')),
  replay_class text NOT NULL CHECK (replay_class IN ('read','internal_write','computer')),
  input_digest morrow_work.digest NOT NULL,
+ counted boolean NOT NULL,
  outcome text CHECK (outcome IN ('ok','refused','invalid_input','tool_outcome_unknown','computer_unavailable')),
  refusal text CHECK (refusal IN ('not_offered','lease_ended','run_closed','deadline_passed','task_closed','release_revoked','switch_off',
   'stopped','input_invalid','id_out_of_scope','authority_denied','budget_exhausted','tool_call_limit','question_limit','route_used',
@@ -441,6 +459,7 @@ CREATE TABLE morrow_work.run_tool_calls (
   ELSE refusal IS NULL AND finished_at IS NOT NULL END
   AND (record_kind IS NULL)=(record_id IS NULL) AND (result_digest IS NULL)=(result_bytes IS NULL)
   AND (outcome IS NULL OR result_digest IS NOT NULL)),
+ CONSTRAINT run_tool_calls_counted CHECK (counted OR outcome IS NULL OR (outcome='refused' AND refusal IN ('not_offered','tool_call_limit'))),
  CONSTRAINT run_tool_calls_times CHECK ((finished_at IS NULL OR finished_at>=started_at) AND expires_at=started_at+interval '365 days')
 );
 -- One model call of one turn (the broker's turn fence and the traceRef target): keyed by the
@@ -514,6 +533,9 @@ CREATE TABLE morrow_work.agent_run_questions (
   AND (status='answered')=(resume_lease_id IS NOT NULL) AND (answered_at IS NULL OR answered_at>=created_at)),
  CONSTRAINT agent_run_questions_window CHECK (answer_by=created_at+interval '72 hours')
 );
+-- At most one open question per run: the run waits on it, and only its answer resumes the
+-- run (a second inbox.ask while one is open is refused question_limit).
+CREATE UNIQUE INDEX agent_run_questions_one_open ON morrow_work.agent_run_questions (organization_id,workspace_id,run_id) WHERE status='open';
 
 -- ---------------------------------------------------------------------------
 -- Row security. Every new table: ENABLE + FORCE and the maintenance-only owner policy.
@@ -556,10 +578,11 @@ DO $$ DECLARE t text; BEGIN
     OR id::text=pg_catalog.current_setting(''morrow.vault_agent_call'',true)))
    WITH CHECK (session_user=''morrow_vault_broker'' AND organization_id::text||''|''||workspace_id::text||''|''||run_id::text=pg_catalog.current_setting(''morrow.vault_agent_run'',true))';
  -- The orchestrator's cron lists queued agent runs (ids only, agent_run_pending_starts) and
- -- a Workflow finds its run's current lease (agent_run_resume_lease): the runtime login reads
- -- queued and running runs only, as lease_pending (0020) shows it unstarted leases.
+ -- a Workflow finds its run's current lease and status (agent_run_resume_lease): the runtime
+ -- login reads open (queued, running and waiting) runs only, as lease_pending (0020) shows it
+ -- unstarted leases.
  EXECUTE 'CREATE POLICY runtime_agent_open ON morrow_work.agent_runs FOR SELECT TO morrow_work_command
-   USING (session_user=''morrow_runtime_executor'' AND status IN (''queued'',''running''))';
+   USING (session_user=''morrow_runtime_executor'' AND status IN (''queued'',''running'',''waiting''))';
 END $$;
 
 -- Privileges: table SELECT and INSERT, column-scoped UPDATE, never DELETE or TRUNCATE.
@@ -879,7 +902,8 @@ END $$;
 -- never taken from the request: the caps and the hold (the turn limit is the version's,
 -- lowered so that it times the entry's worst-case turn fits the run backstop; the hold the
 -- lower of that product and the backstop; refused cap_below_turn under one worst-case
--- turn), the envelope's capabilities and verbs (exactly the tools' pairs), the workspace's
+-- turn), the envelope's and the hop's capabilities and verbs (exactly the tools' pairs) and
+-- scope (the run's store and exactly the tools' fields, loop_tool_fields), the workspace's
 -- active Morrow-direct billing account, its operator test entitlement (before the rate card
 -- no other entitlement admits a loop run, ADR-0027 item 6) and billing period, the
 -- Coordinator's principal and its grant. Then, in order: the workspace's stale agent runs
@@ -1021,7 +1045,9 @@ BEGIN
  END IF;
  SELECT * INTO l FROM morrow_work.lease_open('run',p_run_id,p_store_id,s.connection_id,i.id);
  IF l.outcome IS DISTINCT FROM 'opened' THEN RETURN QUERY SELECT CASE l.outcome WHEN 'stopped' THEN 'stopped' ELSE 'invalid' END,NULL::text; RETURN; END IF;
- v_scope:=morrow_work.listings_scope(p.organization_id,p.workspace_id,p_store_id,s.connection_id);
+ -- The scope of the envelope and the hop: the run's store and exactly the offered tools' fields.
+ v_scope:=jsonb_set(morrow_work.listings_scope(p.organization_id,p.workspace_id,p_store_id,s.connection_id),'{fields}',
+  morrow_work.loop_tool_fields(v_tools));
  v_actor:=jsonb_build_object('kind','human','principalId',p.principal_id,'organizationId',p.organization_id,'workspaceId',p.workspace_id,
   'membershipId',p.membership_id,'installationId',NULL,'mandateId',NULL);
  v_child_envelope:='envelope:'||p_hop_id;
@@ -1161,12 +1187,15 @@ BEGIN
   WHERE a.status='queued' AND l.status='active' AND l.started_at IS NULL AND l.kind='run' AND l.expires_at>pg_catalog.clock_timestamp()
   ORDER BY a.created_at,a.id LIMIT 100;
 END $$;
--- One open run's current lease reference (ids only): what AgentRunWorkflow enters first (or
--- again, when its first step's result was lost after it committed), and after an answer.
--- Zero rows unless the run is queued or running. It grants nothing: enter_lease decides
--- whether the lease is still usable.
+-- One open run's current lease reference and status (ids and a code only): what
+-- AgentRunWorkflow enters first (or again, when its first step's result was lost after it
+-- committed), and after an answer; and what a replayed wait step reads when it cannot enter
+-- its lease (a waiting run, or one queued or running under a newer lease, is a wait that
+-- committed before its result was lost; the wait released the lease it entered). Zero rows
+-- unless the run is queued, running or waiting. It grants nothing: enter_lease decides
+-- whether the lease is still usable (a waiting run's is released).
 CREATE FUNCTION morrow_work.agent_run_resume_lease(p_organization_id text,p_workspace_id text,p_run_id text)
-RETURNS TABLE(lease_id text,generation text)
+RETURNS TABLE(lease_id text,generation text,status text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 BEGIN
@@ -1176,8 +1205,9 @@ BEGIN
   OR p_run_id IS NULL OR p_run_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' THEN
   RETURN;
  END IF;
- RETURN QUERY SELECT a.lease_id::text,a.lease_generation::text FROM morrow_work.agent_runs a
-  WHERE a.organization_id=p_organization_id AND a.workspace_id=p_workspace_id AND a.id=p_run_id AND a.status IN ('queued','running');
+ RETURN QUERY SELECT a.lease_id::text,a.lease_generation::text,a.status FROM morrow_work.agent_runs a
+  WHERE a.organization_id=p_organization_id AND a.workspace_id=p_workspace_id AND a.id=p_run_id
+   AND a.status IN ('queued','running','waiting');
 END $$;
 -- Starts (or resumes) the entered lease's run: queued -> running, the lease marked started,
 -- a new wall-time segment. A running run is returned as it stands; a waiting or terminal one
@@ -1281,7 +1311,7 @@ END $$;
 -- Opens one turn attempt (ADR-0027 items 4 and 6): the run is running; attempt 1 of turn n
 -- is the next turn (n = turns taken + 1) after a tool_use reply whose every tool call
 -- finished (or n = 1); attempt 2 only after attempt 1 of the same turn closed uncertain
--- (resent at most once); the turn limit, the hold (one more worst-case turn, no overflow)
+-- (resent at most once; an expired open call of attempt 1 is booked so first); the turn limit, the hold (one more worst-case turn, no overflow)
 -- and the wall time are checked again here after the code checked them. The input and its
 -- digest are stored before any send; the same input again is opened_before (a replayed
 -- step). Outcomes: opened, opened_before, conflict, stop (reason turn_limit, cost_budget or
@@ -1290,7 +1320,7 @@ CREATE FUNCTION morrow_work.agent_turn_open(p_turn text,p_attempt text,p_input t
 RETURNS TABLE(outcome text,reason text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
-DECLARE e record; r record; t record; v_turn integer; v_attempt integer; v_now timestamptz; v_active bigint; n integer;
+DECLARE e record; r record; t record; c record; v_turn integer; v_attempt integer; v_now timestamptz; v_active bigint; n integer;
 BEGIN
  IF p_turn IS NULL OR p_turn !~ '^[1-9][0-9]?$' OR p_attempt IS NULL OR p_attempt !~ '^[12]$'
   OR p_input IS NULL OR octet_length(p_input)>393216 OR NOT pg_input_is_valid(p_input,'jsonb')
@@ -1319,9 +1349,20 @@ BEGIN
     AND jsonb_array_length(x.tool_results)=(SELECT count(*) FROM jsonb_array_elements(x.output->'content') b WHERE b->>'type'='tool_use')) THEN
    RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
   END IF;
- ELSIF v_turn<>r.turns_taken OR NOT EXISTS(SELECT 1 FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id
-   AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=1 AND x.outcome='uncertain') THEN
-  RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+ ELSE
+  -- Attempt 2: an open call of attempt 1 past its budget (plus a minute) is booked as
+  -- uncertain at its worst case first (never promoted; a live one keeps attempt 2 closed),
+  -- so the resend follows only what SQL recorded.
+  FOR c IN SELECT x.id::text AS id FROM morrow_work.agent_model_calls x WHERE x.organization_id=r.organization_id
+    AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=1 AND x.status='started'
+    AND x.started_at+make_interval(secs=>x.budget_ms/1000.0+60)<=pg_catalog.clock_timestamp() LOOP
+   PERFORM morrow_work.agent_turn_close_uncertain(r.organization_id,r.workspace_id,c.id);
+  END LOOP;
+  SELECT x.* INTO r FROM morrow_work.agent_runs x WHERE x.organization_id=e.organization_id AND x.workspace_id=e.workspace_id AND x.id=e.run_id;
+  IF v_turn<>r.turns_taken OR NOT EXISTS(SELECT 1 FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id
+    AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=1 AND x.outcome='uncertain') THEN
+   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+  END IF;
  END IF;
  IF r.overflow_usd>0 OR r.hold_usd-r.booked_usd<r.worst_case_turn_usd THEN RETURN QUERY SELECT 'stop'::text,'cost_budget'::text; RETURN; END IF;
  v_now:=morrow_work.db_now();
@@ -1375,11 +1416,12 @@ END $$;
 -- Begins one tool call (ADR-0027 item 2): the call must be exactly a tool_use the turn's
 -- recorded reply made (its id and tool at its position); its capability, verb and replay
 -- class come from the tool catalogue, never the caller. A recorded call is returned again
--- (replay: its outcome and first record; resumed: begun but not finished, the step reruns
--- a read and looks up an internal write's first record). A new call is counted against the
--- run's caps first: over the per-turn or per-run limit, or a tool the manifest does not
--- offer, it is still recorded but not counted, and the step must finish it refused
--- (tool_call_limit, not_offered). Outcomes: begun, refuse (with the refusal), resumed,
+-- (replay: its outcome and first record; resumed: begun and counted but not finished, the
+-- step reruns a read and looks up an internal write's first record). A new call is counted
+-- against the run's caps first: over the per-turn or per-run limit, or a tool the manifest
+-- does not offer, it is still recorded but not counted, and the step must finish it refused
+-- (tool_call_limit, not_offered); begun again before that finish, it is refused again with
+-- the same code, never resumed. Outcomes: begun, refuse (with the refusal), resumed,
 -- replay, run_inactive, invalid, denied.
 CREATE FUNCTION morrow_work.agent_tool_call_begin(p_turn text,p_ordinal text,p_tool_use_id text,p_tool text,p_input_digest text)
 RETURNS TABLE(outcome text,refusal text,capability_id text,verb text,replay_class text,recorded_outcome text,recorded_refusal text,
@@ -1415,6 +1457,14 @@ BEGIN
   IF c.turn<>v_turn OR c.ordinal<>v_ordinal OR c.tool<>p_tool OR c.input_digest::text<>p_input_digest THEN
    RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
   END IF;
+  -- An unfinished call that was never counted (over a cap, or not offered) is refused again
+  -- with the same code (the run's tools never change), never resumed: a retried step cannot
+  -- dispatch it.
+  IF c.outcome IS NULL AND NOT c.counted THEN
+   RETURN QUERY SELECT 'refuse'::text,CASE WHEN NOT p_tool=ANY(r.tools) THEN 'not_offered' ELSE 'tool_call_limit' END,c.capability_id,c.verb,
+    c.replay_class,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
+   RETURN;
+  END IF;
   RETURN QUERY SELECT CASE WHEN c.outcome IS NULL THEN 'resumed' ELSE 'replay' END,NULL::text,c.capability_id,c.verb,c.replay_class,c.outcome,
    c.refusal,c.record_kind,c.record_id::text,c.result_digest::text;
   RETURN;
@@ -1428,9 +1478,9 @@ BEGIN
   WHEN v_ordinal>=r.tool_calls_per_turn OR r.tool_calls_taken>=r.tool_calls_per_run THEN 'tool_call_limit' END;
  v_now:=morrow_work.db_now();
  INSERT INTO morrow_work.run_tool_calls(organization_id,workspace_id,run_id,tool_use_id,turn,ordinal,tool,capability_id,verb,replay_class,
-  input_digest,outcome,refusal,result_digest,result_bytes,record_kind,record_id,started_at,finished_at,expires_at)
- VALUES (r.organization_id,r.workspace_id,r.id,p_tool_use_id,v_turn,v_ordinal,p_tool,k.capability_id,k.verb,k.replay_class,p_input_digest,NULL,NULL,
-  NULL,NULL,NULL,NULL,v_now,NULL,v_now+interval '365 days');
+  input_digest,counted,outcome,refusal,result_digest,result_bytes,record_kind,record_id,started_at,finished_at,expires_at)
+ VALUES (r.organization_id,r.workspace_id,r.id,p_tool_use_id,v_turn,v_ordinal,p_tool,k.capability_id,k.verb,k.replay_class,p_input_digest,
+  v_refusal IS NULL,NULL,NULL,NULL,NULL,NULL,NULL,v_now,NULL,v_now+interval '365 days');
  IF v_refusal IS NULL THEN
   UPDATE morrow_work.agent_runs x SET tool_calls_taken=x.tool_calls_taken+1,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
    WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.id=r.id;
@@ -1494,9 +1544,10 @@ BEGIN
  RETURN QUERY SELECT 'finished'::text;
 END $$;
 -- inbox.ask's internal write (ADR-0027 item 1): one question to the run's requester per
--- begun inbox.ask call, at most the run's questions limit (2). The same call again returns
--- its first question (replay). Outcomes: asked, replay, question_limit, run_inactive,
--- invalid, denied.
+-- begun inbox.ask call, at most the run's questions limit (2) and at most one open at a time
+-- (the run waits on that one; a second ask while it is open, as in the same turn, is
+-- question_limit). The same call again returns its first question (replay). Outcomes:
+-- asked, replay, question_limit, run_inactive, invalid, denied.
 CREATE FUNCTION morrow_work.agent_question_ask(p_tool_use_id text,p_question text,p_choices text)
 RETURNS TABLE(outcome text,question_id text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -1517,7 +1568,10 @@ BEGIN
  SELECT x.id::text AS id INTO q FROM morrow_work.agent_run_questions x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id
   AND x.run_id=r.id AND x.tool_use_id=p_tool_use_id;
  IF FOUND THEN RETURN QUERY SELECT 'replay'::text,q.id; RETURN; END IF;
- IF r.questions_asked>=r.questions_limit THEN RETURN QUERY SELECT 'question_limit'::text,NULL::text; RETURN; END IF;
+ IF r.questions_asked>=r.questions_limit OR EXISTS(SELECT 1 FROM morrow_work.agent_run_questions x WHERE x.organization_id=r.organization_id
+   AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.status='open') THEN
+  RETURN QUERY SELECT 'question_limit'::text,NULL::text; RETURN;
+ END IF;
  v_now:=morrow_work.db_now();
  v_id:=gen_random_uuid()::text;
  BEGIN
@@ -1526,6 +1580,7 @@ BEGIN
   VALUES (r.organization_id,r.workspace_id,v_id,r.id,p_tool_use_id,p_question,p_choices::jsonb,'open',NULL,NULL,NULL,NULL,v_now,
    v_now+interval '72 hours',NULL);
  EXCEPTION WHEN check_violation THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+  WHEN unique_violation THEN RETURN QUERY SELECT 'question_limit'::text,NULL::text; RETURN;
  END;
  UPDATE morrow_work.agent_runs x SET questions_asked=x.questions_asked+1,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
   WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.id=r.id;
@@ -1856,7 +1911,8 @@ END $$;
 -- Explicit ACLs per function (S5 and S7 read proacl), then the ownership transfer.
 DO $$ DECLARE r record; BEGIN
  FOR r IN SELECT p.oid::regprocedure AS signature FROM pg_catalog.pg_proc p WHERE (p.pronamespace='morrow_work'::regnamespace AND p.proname IN (
-  'loop_user_message_valid','loop_assistant_message_valid','loop_tool_results_valid','loop_choices_valid','agent_manifest_matches','agent_run_entered',
+  'loop_user_message_valid','loop_assistant_message_valid','loop_tool_results_valid','loop_choices_valid','loop_tool_fields','agent_manifest_matches',
+  'agent_run_entered',
   'cmd_agent_run_admit','cmd_agent_run_answer','agent_run_pending_starts','agent_run_resume_lease','agent_run_start','agent_run_state',
   'agent_run_objective','agent_run_conversation','agent_run_answers','agent_turn_open','agent_turn_settle','agent_tool_call_begin','agent_tool_call_finish',
   'agent_question_ask','agent_run_wait','agent_run_finish')) OR (p.pronamespace='morrow_vault'::regnamespace AND p.proname IN (
@@ -1865,7 +1921,7 @@ DO $$ DECLARE r record; BEGIN
  END LOOP;
 END $$;
 GRANT EXECUTE ON FUNCTION morrow_work.loop_user_message_valid(jsonb),morrow_work.loop_assistant_message_valid(jsonb),
- morrow_work.loop_tool_results_valid(jsonb),morrow_work.loop_choices_valid(jsonb),
+ morrow_work.loop_tool_results_valid(jsonb),morrow_work.loop_choices_valid(jsonb),morrow_work.loop_tool_fields(text[]),
  morrow_work.agent_manifest_matches(text,text,text,text,text,text,text,text,text,text,text,bigint,text,text,integer,text,text[],integer,text,text,
   integer,integer,integer,integer,integer,integer,integer,numeric,timestamp with time zone) TO morrow_work_command;
 GRANT EXECUTE ON FUNCTION morrow_work.cmd_agent_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,

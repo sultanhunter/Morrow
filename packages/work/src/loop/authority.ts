@@ -23,14 +23,34 @@ export interface ToolOperation {
   readonly verb: "view" | "propose" | "execute" | "delegate";
   readonly fields: readonly string[];
 }
-// The fields each tool's operation names (the kernel requires at least one, inside the
-// envelope's, the installation's and every grant's field scope). A tool with no entry has no
-// field scope in this build: its calls are refused before the kernel (authority_denied), and
-// its own PR adds it with its handler.
+/**
+ * Each tool's field scope: every field its operations may name (the kernel requires at least
+ * one, inside the envelope's, the hop's, the installation's and every grant's field scope).
+ * Admission gives the envelope and the Coordinator's hop exactly the union over the run's
+ * offered tools (morrow_work.loop_tool_fields, drift-tested), so the delegation is never
+ * wider than its tools and never blocks one. A tool with no entry has no field scope in this
+ * build: its calls are refused before the kernel (authority_denied), and its own PR adds it
+ * with its handler.
+ */
+export const toolFieldScopes: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  // The listing fields, as the Listings run reads and proposes them.
+  "products.read": Object.freeze([...listingFieldPaths]),
+  "proposal.listing": Object.freeze([...listingFieldPaths]),
+  // The work API's question.request and message.post rules (work-permissions.ts).
+  "inbox.ask": Object.freeze(["answerSchema", "question", "respondentId", "taskId"]),
+  "message.post": Object.freeze(["parts", "replyToMessageId"]),
+});
+/** The envelope's and the hop's scope fields for these offered tools: sorted, distinct. */
+export function loopToolFieldScope(tools: readonly string[]): readonly string[] {
+  const fields = new Set<string>();
+  for (const tool of tools) for (const f of toolFieldScopes[tool] ?? []) fields.add(f);
+  return Object.freeze([...fields].sort());
+}
+// The fields one call's operation names: its tool's whole field scope, or (a proposal) the
+// fields its changes touch.
 const toolFields: Readonly<Record<string, (input: unknown) => readonly string[] | null>> =
   Object.freeze({
-    // The listing fields, as the Listings run reads and proposes them.
-    "products.read": () => [...listingFieldPaths],
+    "products.read": () => toolFieldScopes["products.read"]!,
     "proposal.listing": (input) => {
       const changes = (input as { changes?: unknown }).changes;
       if (!Array.isArray(changes)) return null;
@@ -43,9 +63,8 @@ const toolFields: Readonly<Record<string, (input: unknown) => readonly string[] 
       }
       return fields.size ? [...fields].sort() : null;
     },
-    // The work API's question.request and message.post rules (work-permissions.ts).
-    "inbox.ask": () => ["answerSchema", "question", "respondentId", "taskId"],
-    "message.post": () => ["parts", "replyToMessageId"],
+    "inbox.ask": () => toolFieldScopes["inbox.ask"]!,
+    "message.post": () => toolFieldScopes["message.post"]!,
   });
 /** The operation of one call: the tool's catalogue pair on the run's store, its fields. */
 export function toolOperation(
@@ -53,7 +72,13 @@ export function toolOperation(
   input: unknown,
 ): ToolOperation | null {
   const fields = toolFields[tool.name]?.(input) ?? null;
-  if (!fields || !["view", "propose", "execute", "delegate"].includes(tool.verb)) return null;
+  const scope = toolFieldScopes[tool.name] ?? [];
+  if (
+    !fields ||
+    !fields.every((f) => scope.includes(f)) ||
+    !["view", "propose", "execute", "delegate"].includes(tool.verb)
+  )
+    return null;
   return Object.freeze({
     capabilityId: tool.capabilityId,
     verb: tool.verb as ToolOperation["verb"],

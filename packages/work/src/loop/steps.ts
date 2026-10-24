@@ -35,7 +35,8 @@ export const agentRunSql = Object.freeze({
   finish: "SELECT outcome,status FROM morrow_work.agent_run_finish($1)",
   pendingStarts:
     "SELECT organization_id,workspace_id,run_id,lease_id,generation,resume FROM morrow_work.agent_run_pending_starts()",
-  resumeLease: "SELECT lease_id,generation FROM morrow_work.agent_run_resume_lease($1,$2,$3)",
+  resumeLease:
+    "SELECT lease_id,generation,status FROM morrow_work.agent_run_resume_lease($1,$2,$3)",
 } as const);
 
 /** How an agent run ended (AgentRunEndReason): code derives it, never model text. */
@@ -900,7 +901,14 @@ export async function listAgentPendingStarts(
     );
   });
 }
-/** One open agent run's current lease reference (agent_run_resume_lease), or null. */
+/** An open agent run's current lease reference and status (agent_run_resume_lease). */
+export interface AgentRunLease {
+  readonly leaseId: string;
+  readonly generation: number;
+  /** A waiting run's lease is the one its wait released (enter_lease refuses it). */
+  readonly status: "queued" | "running" | "waiting";
+}
+/** One open agent run's current lease reference and status (agent_run_resume_lease), or null. */
 export async function resolveAgentRunLease(
   pool: FixedSqlPool,
   attempt: FixedSqlAttempt,
@@ -908,18 +916,27 @@ export async function resolveAgentRunLease(
   organizationId: string,
   workspaceId: string,
   runId: string,
-): Promise<FixedSqlOutcome<{ readonly leaseId: string; readonly generation: number } | null>> {
+): Promise<FixedSqlOutcome<AgentRunLease | null>> {
   if (!exact(recordId, organizationId) || !exact(recordId, workspaceId) || !exact(uuid, runId))
     return Object.freeze({ ok: true, value: null });
   return runFixedSqlTransaction(pool, attempt, profile, async (query) => {
     const rows = await query(agentRunSql.resumeLease, [organizationId, workspaceId, runId]);
-    if (!Array.isArray(rows) || rows.length > 1) throw held();
-    if (rows.length === 0) return null;
-    const r = shape(rows[0], ["lease_id", "generation"]);
-    if (!exact(uuid, r.lease_id)) throw held();
-    return Object.freeze({
-      leaseId: r.lease_id,
-      generation: integer(r.generation, 1, Number.MAX_SAFE_INTEGER),
-    });
+    return decodeAgentRunLease(rows);
+  });
+}
+/** agent_run_resume_lease's rows: none, or one open run's lease, generation and status. */
+export function decodeAgentRunLease(rows: unknown): AgentRunLease | null {
+  if (!Array.isArray(rows) || rows.length > 1) throw held();
+  if (rows.length === 0) return null;
+  const r = shape(rows[0], ["lease_id", "generation", "status"]);
+  if (
+    !exact(uuid, r.lease_id) ||
+    (r.status !== "queued" && r.status !== "running" && r.status !== "waiting")
+  )
+    throw held();
+  return Object.freeze({
+    leaseId: r.lease_id,
+    generation: integer(r.generation, 1, Number.MAX_SAFE_INTEGER),
+    status: r.status as AgentRunLease["status"],
   });
 }

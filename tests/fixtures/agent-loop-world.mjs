@@ -38,8 +38,11 @@ export const objectiveText = "Tidy the summer collection's product titles";
 /**
  * One run's world. `script(call)` answers each send: {outcome, message?, usage?,
  * retryAfterMs?}, or {outcome: "lost"} (the broker's reply is lost after the close
- * committed: the step must read what SQL recorded). `handlers` are the composed tools;
- * `authority(tool, input)` decides each call ("allowed" by default).
+ * committed: the step must read what SQL recorded). With `brokerSays: "uncertain"` the
+ * broker answers uncertain whatever SQL recorded (its close's result was lost); with
+ * {outcome: "open", polls} the close never committed: the fence stays open (live for
+ * `polls` settles, then expired and booked as uncertain). `handlers` are the composed
+ * tools; `authority(tool, input)` decides each call ("allowed" by default).
  */
 export function agentWorld({
   model = "claude_sonnet_5_5",
@@ -90,6 +93,7 @@ export function agentWorld({
     questions: [],
     sends: [],
     sequences: new Map(),
+    fences: new Map(),
     dispatched: [],
     decisions: [],
     sleeps: [],
@@ -224,10 +228,24 @@ export function agentWorld({
       if (!running()) return { outcome: "run_inactive" };
       const t = db.turns.find((x) => x.turn === turn && x.attempt === attempt);
       if (!t) return { outcome: "invalid" };
+      // An open fence: live for its polls, then expired and booked at the worst case.
+      let openCall = "none";
+      for (const [key, fence] of db.fences) {
+        if (fence.polls > 0) {
+          fence.polls -= 1;
+          openCall = "live";
+          continue;
+        }
+        db.fences.delete(key);
+        const [ft, fa] = key.split(".").map(Number);
+        const row = db.turns.find((x) => x.turn === ft && x.attempt === fa);
+        book(db.run.worst8);
+        if (row.outcome === null) row.outcome = "uncertain";
+      }
       return {
         outcome: "found",
         turnOutcome: t.outcome,
-        openCall: "none",
+        openCall,
         lastSequence: db.sequences.get(turn + "." + attempt) ?? 0,
       };
     },
@@ -244,6 +262,13 @@ export function agentWorld({
           c.inputDigest !== inputDigest
         )
           return { outcome: "invalid" };
+        // An unfinished uncounted call is refused again (never resumed), as SQL does.
+        if (c.outcome === null && !c.counted)
+          return {
+            outcome: "refuse",
+            refusal: db.run.tools.includes(tool) ? "tool_call_limit" : "not_offered",
+            ...pair,
+          };
         if (c.outcome === null) return { outcome: "resumed", ...pair };
         return {
           outcome: "replay",
@@ -264,6 +289,7 @@ export function agentWorld({
         ordinal,
         tool,
         inputDigest,
+        counted: refusal === null,
         outcome: null,
         refusal: null,
         record: null,
@@ -280,6 +306,12 @@ export function agentWorld({
       if (c.outcome !== null)
         return c.outcome === outcome && c.resultDigest === resultDigest ? "replay" : "conflict";
       if (!running()) return "run_inactive";
+      // run_tool_calls_counted: an uncounted call finishes only refused with its code.
+      if (
+        !c.counted &&
+        !(outcome === "refused" && ["not_offered", "tool_call_limit"].includes(refusal))
+      )
+        throw Error("WORLD_UNCOUNTED_CALL_FINISHED");
       if (createHash("sha256").update(result).digest("hex") !== resultDigest) return "invalid";
       Object.assign(c, { outcome, refusal, record, resultDigest });
       const t = db.turns
@@ -295,7 +327,11 @@ export function agentWorld({
       if (!c || c.tool !== "inbox.ask" || c.outcome !== null) return { outcome: "invalid" };
       const q = db.questions.find((x) => x.toolUseId === toolUseId);
       if (q) return { outcome: "replay", questionId: q.id };
-      if (db.run.questionsAsked >= db.run.questionsLimit) return { outcome: "question_limit" };
+      if (
+        db.run.questionsAsked >= db.run.questionsLimit ||
+        db.questions.some((x) => x.status === "open")
+      )
+        return { outcome: "question_limit" };
       const id = "00000000-0000-4000-8000-00000000090" + (db.questions.length + 1);
       db.questions.push({
         id,
@@ -389,8 +425,12 @@ export function agentWorld({
       return { entered: true, lease, value: await body(step) };
     },
     async resolveLease() {
-      if (db.run.status !== "queued" && db.run.status !== "running") return null;
-      return Object.freeze({ leaseId: db.lease.leaseId, generation: db.lease.generation });
+      if (!["queued", "running", "waiting"].includes(db.run.status)) return null;
+      return Object.freeze({
+        leaseId: db.lease.leaseId,
+        generation: db.lease.generation,
+        status: db.run.status,
+      });
     },
     async modelTurn(leaseId, generation, callJson, budgetMs) {
       const call = JSON.parse(callJson);
@@ -415,6 +455,11 @@ export function agentWorld({
       const reply = await script(Object.freeze({ ...call, run: state() }));
       if (reply.outcome === "not_sent")
         return result("not_sent", null, null, null, reply.retryAfterMs ?? 1000);
+      if (reply.outcome === "open") {
+        // The close never committed: the fence stays open; the broker says uncertain.
+        db.fences.set(key, { polls: reply.polls ?? 0 });
+        return result("uncertain");
+      }
       db.calls.push({
         turn: call.turn,
         attempt: call.attempt,
@@ -433,6 +478,7 @@ export function agentWorld({
         db.run.prefixDigest = row.prefixAfter;
       }
       if (lost) throw Error("BROKER_HELD");
+      if (reply.brokerSays === "uncertain") return result("uncertain");
       const usage =
         message === null && outcome === "uncertain"
           ? null
