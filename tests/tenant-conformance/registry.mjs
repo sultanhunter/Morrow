@@ -863,13 +863,14 @@ export const bridgeFunctions = Object.freeze([
   // broker's vault definer of shopify-live-store-vault (ADR-0035 item 2).
   "work_shopify_live_store(text,text)",
   // v1 PR 5 (connection-health-identity): the health target, the scope record, the read-back
-  // target, the ids-only due lists, the reinstall leftovers, the 48-hour deletion's open,
+  // target, the ids-only due lists (read-backs and reconnects), the reinstall leftovers, the 48-hour deletion's open,
   // identity handlers and completion, and the stuck-delivery close, called only by
   // connection-health-work's connector and vault definers.
   "work_shopify_health_target(text)",
   "work_shopify_scopes_record(text,text,text,text,text,text)",
   "work_shopify_check_target(text)",
   "work_shopify_checks_due()",
+  "work_shopify_reconnect_due()",
   "work_shopify_reinstall_leftovers(text,text)",
   "work_shopify_deletions_due()",
   "work_shopify_deletion_open(text)",

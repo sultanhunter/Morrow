@@ -28,7 +28,8 @@ BEGIN;
 --     link is offered unless the app's installation is suspended);
 --   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0048's
 --     connector and vault definers call them): the scope record, the health target, the
---     reinstall leftovers, the ids-only due lists (checks, deletions, stuck inbox rows), the
+--     reinstall leftovers, the ids-only due lists (checks, reconnects, deletions, stuck inbox
+--     rows), the
 --     deletion's open, identity redaction and completion.
 -- The tenant always comes from a row the broker recorded or the installation itself, never
 -- from a caller (invariant 1). Nothing here deletes a row or reaches the vault.
@@ -789,6 +790,19 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,
   AND EXISTS(SELECT 1 FROM morrow_identity.shopify_apps a WHERE a.app_key=i.app_key AND a.status='active')
  ORDER BY i.scopes_observed_at NULLS FIRST,i.created_at,i.id LIMIT 20
 $$;
+-- The cron's reconcile list (ids only, across tenants): live installations of active apps
+-- that need reconnecting (a requested scope the installation does not record, or a token
+-- Shopify refused), least recently changed first, at most 20. 0048's cron reconciles each
+-- one, so a recorded narrowing whose reconcile was lost still stops its agents and raises its
+-- Reconnect item.
+CREATE FUNCTION morrow_identity.work_shopify_reconnect_due()
+RETURNS TABLE(installation_id text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT i.id::text FROM morrow_identity.store_installations i JOIN morrow_identity.shopify_apps a ON a.app_key=i.app_key
+ WHERE i.status IN ('unlinked','linked') AND i.redacted_at IS NULL AND a.status='active'
+  AND (i.token_refused_at IS NOT NULL OR NOT (string_to_array(a.scopes,',')<@i.granted_scopes))
+ ORDER BY i.updated_at,i.id LIMIT 20
+$$;
 -- A reinstall's leftovers (0048's vault prepare destroys them first): earlier installations
 -- of this app and shop that are uninstalled and whose token's destruction is not recorded.
 CREATE FUNCTION morrow_identity.work_shopify_reinstall_leftovers(p_app_key text,p_shop_id text)
@@ -948,13 +962,15 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION morrow_identity.work_shopify_health_target(text),
  morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
- morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reinstall_leftovers(text,text),
+ morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reconnect_due(),
+ morrow_identity.work_shopify_reinstall_leftovers(text,text),
  morrow_identity.work_shopify_deletions_due(),morrow_identity.work_shopify_deletion_open(text),
  morrow_identity.work_shopify_deletion_redact_identity(text,text,text),morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
  morrow_identity.work_shopify_inbox_stuck() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_identity.work_shopify_health_target(text),
  morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
- morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reinstall_leftovers(text,text),
+ morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reconnect_due(),
+ morrow_identity.work_shopify_reinstall_leftovers(text,text),
  morrow_identity.work_shopify_deletions_due(),morrow_identity.work_shopify_deletion_open(text),
  morrow_identity.work_shopify_deletion_redact_identity(text,text,text),morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
  morrow_identity.work_shopify_inbox_stuck() TO morrow_work_command;

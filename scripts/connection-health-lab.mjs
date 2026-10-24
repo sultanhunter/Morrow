@@ -728,6 +728,24 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
         installationOf(T.installation).scopes === "read_products,write_products",
       { unclear, stale, notLive },
     );
+    // A recorded narrowing whose reconcile was lost (sim: H's scopes narrowed by the identity
+    // owner, the guard's narrowing path, with no reconcile): the cron's reconcile list names
+    // it, so its item is raised again, and H's agent keeps its system stop.
+    db.sql(
+      `BEGIN; SET LOCAL ROLE morrow_identity_owner; UPDATE morrow_identity.store_installations SET granted_scopes=ARRAY['read_products'],revision=revision+1,updated_at=greatest(${tx},updated_at) WHERE id=${literal(H.installation)}; COMMIT;`,
+    );
+    const lostRun = await connector.redrive();
+    const hOpen = noticesOf(H).filter((n) => n.cleared_reason === null);
+    check(
+      "C5:a_recorded_narrowing_whose_reconcile_was_lost_is_reconciled_by_the_cron",
+      lostRun.notices >= 1 &&
+        hOpen.length === 1 &&
+        JSON.stringify(hOpen[0].missing_scopes) === '["write_products"]' &&
+        JSON.stringify(hOpen[0].stopped_installations) === JSON.stringify([H.agent]) &&
+        JSON.stringify(agentStops(H).map((s) => s.reason_code)) === '["shopify_scope_missing"]' &&
+        agentStops(T).length === 0,
+      { lostRun, notices: noticesOf(H) },
+    );
 
     // -------------------------------------------------------------------------
     // R: reinstall after an uninstall.

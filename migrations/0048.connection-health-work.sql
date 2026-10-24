@@ -24,7 +24,8 @@ BEGIN;
 --     and reconciles; every other topic is 0037's connector_inbox_apply, unchanged, followed
 --     by the reconcile that clears the notice of an ended connection), connector_health_reconcile
 --     (after the broker's read-back), and the clean-up jobs' ids-only lists and steps: the
---     read-backs due, the open notices, the 48-hour deletions due, connector_deletion_apply
+--     read-backs due, the open notices and the connections that need reconnecting, the
+--     48-hour deletions due, connector_deletion_apply
 --     (ADR-0031 item 3: every store-content and identity handler of an installation
 --     uninstalled 48 hours ago whose shop/redact never completed, once, with its record) and
 --     the stuck-delivery close;
@@ -52,6 +53,7 @@ DO $$ BEGIN
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_health_target(text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_check_target(text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_checks_due()','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_reconnect_due()','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_reinstall_leftovers(text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_deletions_due()','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_deletion_open(text)','EXECUTE')
@@ -409,10 +411,11 @@ BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_connector_ingress') THEN RETURN; END IF;
  RETURN QUERY SELECT d.installation_id FROM morrow_identity.work_shopify_checks_due() d;
 END $$;
--- The cron's open-notice list (ids only, across tenants): the store installations of open
--- Reconnect items, least recently revised first, at most 20, so each is reconciled again
--- (cleared once its scopes are back; an agent a person resumed while a scope is missing is
--- stopped again).
+-- The cron's reconcile list (ids only, across tenants): the store installations of open
+-- Reconnect items (cleared once their scopes are back; an agent a person resumed while a
+-- scope is missing is stopped again) and the live installations that need reconnecting
+-- (work_shopify_reconnect_due: a recorded narrowing or refusal whose reconcile was lost gets
+-- its stops and its item), new ones first, then the least recently revised, at most 20.
 CREATE FUNCTION morrow_work.connector_notices_due()
 RETURNS TABLE(installation_id text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -423,8 +426,10 @@ BEGIN
   pg_catalog.set_config('morrow.connector_sweep','',true);
  IF NOT morrow_identity.work_executor_safe('morrow_connector_ingress') THEN RETURN; END IF;
  PERFORM pg_catalog.set_config('morrow.connector_sweep','open',true);
- RETURN QUERY SELECT n.installation_id::text FROM morrow_work.connection_notices n WHERE n.cleared_at IS NULL
-  ORDER BY n.updated_at,n.id LIMIT 20;
+ RETURN QUERY SELECT u.id FROM (
+   SELECT n.installation_id::text AS id,n.updated_at AS at FROM morrow_work.connection_notices n WHERE n.cleared_at IS NULL
+   UNION ALL SELECT d.installation_id,NULL::timestamptz FROM morrow_identity.work_shopify_reconnect_due() d) u
+  GROUP BY u.id ORDER BY min(u.at) NULLS FIRST,u.id LIMIT 20;
  PERFORM pg_catalog.set_config('morrow.connector_sweep','',true);
 END $$;
 -- The cron's 48-hour deletion list (ids only, across tenants; ADR-0031 item 3).
