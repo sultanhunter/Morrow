@@ -396,44 +396,6 @@ export function sameNotificationChoices(a: NotificationChoices, b: NotificationC
 }
 
 /**
- * Activity (the SettingsActivity board): what people, agents and Morrow did, newest
- * first. Nobody can change or delete it. Conversations with Morrow are private and not
- * listed. Fixture data only in this build (PR 15 brings the activity log).
- */
-export const activityFilters = ["all", "store", "approvals", "access"] as const;
-export type ActivityFilter = (typeof activityFilters)[number];
-export type ActivityBadge =
-  | "stopped"
-  | "working"
-  | "suggested"
-  | "updated_in_shopify"
-  | "done"
-  | "needs_you"
-  | "sent";
-export interface ActivityEntryView {
-  readonly id: Id;
-  /** The day heading it sits under ("Today, Friday, October 23"). */
-  readonly day: string;
-  readonly time: string;
-  readonly actor:
-    | { readonly kind: "person"; readonly name: string; readonly initials: string }
-    | {
-        readonly kind: "helper";
-        readonly name: string;
-        readonly character: AgentCharacter;
-        readonly prop: SpecialistProp | null;
-      };
-  readonly what: string;
-  readonly detail: string;
-  readonly category: Exclude<ActivityFilter, "all"> | "work";
-  readonly badge: ActivityBadge | null;
-}
-export interface ActivityView {
-  readonly shopName: string;
-  readonly entries: readonly ActivityEntryView[];
-}
-
-/**
  * "Stop all AI work" (ADR-0005: human_only, no second approver). It is wired to the stop
  * that exists: each store's Listings "Stop AI work" (`agents.listingsStop`), one command
  * per store. A store is a target only when the server says this person may stop it and it
@@ -548,7 +510,6 @@ export interface SettingsPort {
     ws: Id,
     c: Command<NotificationChoices & { expectedRevision: number }>,
   ): Promise<Outcome<{ readonly revision: number }>>;
-  activity(ws: Id): Promise<Outcome<ActivityView>>;
 }
 export interface LibraryPort {
   knowledge(ws: Id): Promise<Outcome<KnowledgeView>>;
@@ -565,7 +526,6 @@ export const teamPortMethods = [
   "settings.emailAddresses",
   "settings.notifications",
   "settings.reviseNotifications",
-  "settings.activity",
   "library.knowledge",
   "library.files",
 ] as const;

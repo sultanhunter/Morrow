@@ -12,6 +12,7 @@
 // unknown-outcome state (and its Check again) off the screen. Nothing here decides
 // anything: the server answers every read and checks every action.
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import type { InboxSamplesView, InboxView } from "./inbox-model";
 import type { ConnectionsView, HomeSamplesView, Id, Page, QuestionView } from "./model";
 import type { Outcome } from "./port";
 import { useRead, useServices, useServicesVersion, type ReadState } from "./services";
@@ -64,6 +65,30 @@ export function useOpenQuestions(
     () => services.port.work.listMyOpenQuestions(ws, null),
     follow,
   );
+}
+/**
+ * v1 PR 15: what waits for this person (GET /work/inbox), the one read the Inbox, Home's
+ * header and Needs you, and the sidebar and top bar's count share, under the shell's
+ * refresh: one request per page, command change or Retry.
+ */
+export function useInbox(
+  ws: Id,
+  follow: Follow = "shell",
+): readonly [ReadState<InboxView>, () => void] {
+  const services = useServices();
+  return useSharedRead(`${ws}|inbox`, () => services.port.inbox.read(ws), follow);
+}
+/**
+ * The Inbox preview's sample items (default off). While `samples.inbox` is uncomposed
+ * (always, over HTTP) nothing is read and nothing is shown.
+ */
+export function useInboxSamples(ws: Id): InboxSamplesView | null {
+  const services = useServices();
+  const on = services.composed["samples.inbox"];
+  const [samples] = useRead(on ? `${ws}|samples.inbox` : null, () =>
+    services.port.samples.inbox(ws),
+  );
+  return on && samples.kind === "ok" ? samples.value : null;
 }
 /** The count a person sees: the first page's size, or "50+" when more pages follow. */
 export function waitingCount(page: Page<unknown>): string {

@@ -1,0 +1,123 @@
+/* v1 PR 15 (ADR-0032, Sunrise): the Inbox, the exception screen and the activity log's
+   additions. Colours come only from tokens.css; every control is at least 44 px (48 below
+   760 px, as base.css's --target sets it). No motion. */
+
+/* The filter chips (the board's "Show in Inbox"): pressed buttons, never tabs. */
+.inbox-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.inbox-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: var(--target);
+  min-height: var(--target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-selected);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: 550;
+  cursor: pointer;
+}
+.inbox-filter:hover {
+  background: var(--color-subtle);
+}
+.inbox-filter[aria-pressed="true"] {
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+.inbox-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-round);
+  background: var(--color-neutral-surface);
+  color: var(--color-neutral);
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 700;
+}
+.inbox-filter[aria-pressed="true"] .inbox-filter-count {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.inbox-count-note {
+  color: var(--color-subdued);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+/* The list: one card of rows, as Home's Needs you. An empty list says why, with its one
+   action. */
+.inbox-card {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.inbox-card > .row-list {
+  margin-bottom: 0;
+  border-top: 0;
+}
+.inbox-card > .row-list > li:last-child > .row-link {
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+}
+.inbox-card > .row-list > li:first-child > .row-link {
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+.inbox-card > .row-list > li:only-child > .row-link {
+  border-radius: var(--radius-card);
+}
+.inbox-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding: var(--space-5) 0;
+}
+.inbox-empty h2 {
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 650;
+}
+.inbox-empty p {
+  color: var(--color-reading);
+}
+.inbox-samples .row {
+  min-height: 72px;
+}
+
+/* The activity log's leads (a person, Shopify) and "Show earlier". */
+.sr-activity-lead {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-round);
+  background: var(--color-subtle);
+  color: var(--color-reading);
+}
+.sr-activity-more {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-rule);
+}
+
+@media (max-width: 759px) {
+  .inbox-filters {
+    gap: var(--space-1) var(--space-2);
+  }
+}

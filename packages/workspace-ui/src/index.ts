@@ -4,6 +4,7 @@
 export * from "./port";
 export * from "./model";
 export * from "./team-model";
+export * from "./inbox-model";
 export { copy, statusLabel } from "./copy";
 export { breakpoints, referenceWidths, motionDurationMs, targetPx } from "./tokens";
 export * from "./services";
@@ -17,6 +18,8 @@ export {
   primaryStore,
   useConnections,
   useHomeSamples,
+  useInbox,
+  useInboxSamples,
   useOpenQuestions,
   waitingCount,
 } from "./workspace-data";
@@ -37,6 +40,8 @@ export { HomeScreen, byRecent, byUrgency, homeDate, homeHeader } from "./screens
 export { WorkScreen } from "./screens/work";
 export { TaskScreen } from "./screens/task";
 export { InboxScreen, QuestionScreen } from "./screens/inbox";
+export { ExceptionScreen } from "./screens/exception";
+export { describeActivity, type ActivityLine } from "./screens/activity";
 export { UnavailableDestination } from "./screens/unavailable";
 export { ListingsAgentCard } from "./screens/agents";
 export { ModelDefaultScreen } from "./screens/settings-models";
