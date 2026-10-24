@@ -148,6 +148,62 @@ test("AC22/AC30: remaining times are the SQL expiries minus the delivery clock; 
   assert.equal(short.headers.getSetCookie().length, 0);
 });
 
+// fix-signin-clock-and-stage-log: the expiries are the database's clock. A family rotated
+// moments after its admission, by a database whose clock leads the Worker's, has an absolute
+// expiry just past the Worker's at + 12 hours: up to 5 s past it reads as the 12-hour bound,
+// beyond it the answer is not trusted (503 unknown, no cookie).
+test("a database clock lead of up to 5 s reads as the 12-hour bound; more is unknown", async () => {
+  for (const [lead, accepted] of [
+    [1, true],
+    [1000, true],
+    [5000, true],
+    [5001, false],
+    [60000, false],
+  ])
+    for (const outcome of ["rotated", "current"]) {
+      const { handler } = await setup({
+        row: (state) => ({
+          outcome,
+          idle_expires_at_ms: String(state.now() + 1800000 + Math.min(lead, 5000)),
+          absolute_expires_at_ms: String(state.now() + 43200000 + lead),
+        }),
+      });
+      const response = await handler.fetch(rotateRequest());
+      if (accepted) {
+        assert.equal(response.status, 200, outcome + " " + lead);
+        const body = await response.json();
+        assert.deepEqual(body, {
+          schemaVersion: 1,
+          outcome,
+          idleRemainingMs: 1800000 + lead,
+          absoluteRemainingMs: 43200000,
+        });
+        assert.equal(validateCurrentDefinition("SessionRotationResult", body), true);
+        const cookies = response.headers.getSetCookie();
+        if (outcome === "rotated") {
+          assert.equal(cookies.length, 1);
+          assert.ok(cookies[0].endsWith("; Max-Age=1800"));
+        } else assert.equal(cookies.length, 0);
+      } else {
+        assert.equal(response.status, 503, outcome + " " + lead);
+        assert.deepEqual(await response.json(), {
+          schemaVersion: 1,
+          outcome: "rotation_outcome_unknown",
+        });
+        assert.equal(response.headers.getSetCookie().length, 0);
+      }
+    }
+  // The idle expiry is bounded the same way.
+  const { handler } = await setup({
+    row: (state) => ({
+      outcome: "rotated",
+      idle_expires_at_ms: String(state.now() + 43205001),
+      absolute_expires_at_ms: String(state.now() + 43200000),
+    }),
+  });
+  assert.equal((await handler.fetch(rotateRequest())).status, 503);
+});
+
 test("AC24: current → 200 without a cookie; denied and reuse → identical 401 bytes, no cookie", async () => {
   const current = await (
     await setup({

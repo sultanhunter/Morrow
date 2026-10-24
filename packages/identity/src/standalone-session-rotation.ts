@@ -1,3 +1,4 @@
+import { CROSS_CLOCK_ALLOWANCE_MS } from "./clock-allowance.js";
 import { createSelfRotationControl } from "./self-session-rotation-control.js";
 import type { StandaloneWorkspaceSqlPool } from "./standalone-workspace-bootstrap.js";
 import {
@@ -176,11 +177,16 @@ async function dispatch(
     const at = attempt.check();
     if (answer.outcome === "rotated" || answer.outcome === "current") {
       // Remaining times relative to the attempt clock, so the client needs no wall clock.
+      // The expiries are the database's clock and `at` the Worker's: a family rotated within
+      // moments of its admission has an absolute expiry up to the database's lead past
+      // at + 12 hours. Up to CROSS_CLOCK_ALLOWANCE_MS past the bound reads as the bound
+      // (clock-allowance.ts); beyond it the answer is not trusted. Reporting less time than
+      // the database granted never lengthens a lifetime.
       const idleRemainingMs = Math.max(0, answer.idleExpiresAtMs - at),
         absoluteRemainingMs = Math.max(0, answer.absoluteExpiresAtMs - at);
       if (
-        idleRemainingMs > SESSION_ROTATION_MAXIMUM_REMAINING_MS ||
-        absoluteRemainingMs > SESSION_ROTATION_MAXIMUM_REMAINING_MS
+        idleRemainingMs > SESSION_ROTATION_MAXIMUM_REMAINING_MS + CROSS_CLOCK_ALLOWANCE_MS ||
+        absoluteRemainingMs > SESSION_ROTATION_MAXIMUM_REMAINING_MS + CROSS_CLOCK_ALLOWANCE_MS
       ) {
         deliver(unknown());
         return;
@@ -188,8 +194,8 @@ async function dispatch(
       const body = {
         schemaVersion: 1,
         outcome: answer.outcome,
-        idleRemainingMs,
-        absoluteRemainingMs,
+        idleRemainingMs: Math.min(idleRemainingMs, SESSION_ROTATION_MAXIMUM_REMAINING_MS),
+        absoluteRemainingMs: Math.min(absoluteRemainingMs, SESSION_ROTATION_MAXIMUM_REMAINING_MS),
       };
       if (answer.outcome === "current") {
         deliver(plan(200, body));

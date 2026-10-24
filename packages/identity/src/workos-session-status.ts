@@ -1,3 +1,4 @@
+import { CROSS_CLOCK_ALLOWANCE_MS } from "./clock-allowance.js";
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
 
 // A provider observation only. These handles issue no local identity, session,
@@ -118,7 +119,16 @@ function session(value: unknown, subjectId: string, now: number) {
   const expiresAt = time(row.expires_at);
   const createdAt = time(row.created_at);
   const updatedAt = time(row.updated_at);
-  if (createdAt > updatedAt || updatedAt > now || createdAt >= expiresAt || expiresAt <= now)
+  // updated_at is WorkOS's clock and `now` the Worker's: a session the code exchange has just
+  // touched carries WorkOS's instant, which may lead the Worker's by more than the latency
+  // between them. It may lead by at most CROSS_CLOCK_ALLOWANCE_MS (clock-allowance.ts).
+  // expires_at <= now stays exact: an allowance never lengthens a lifetime.
+  if (
+    createdAt > updatedAt ||
+    updatedAt > now + CROSS_CLOCK_ALLOWANCE_MS ||
+    createdAt >= expiresAt ||
+    expiresAt <= now
+  )
     throw fail();
   optionalText(row.ip_address, 128);
   optionalText(row.user_agent, 4096);
