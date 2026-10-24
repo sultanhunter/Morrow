@@ -346,7 +346,7 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   // PR 2 its "Disconnect store" lab; build order PR 7 its runtime operations lab.
   assert.equal(
     pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs && npm run lab:disconnect-store && npm run lab:runtime-operations",
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs && npm run lab:disconnect-store",
   );
   assert.equal(
     pkg.scripts["lab:disconnect-store"],
@@ -370,7 +370,12 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
     "node --import tsx scripts/listings-authority-lab.mjs",
   );
   assert.equal(pkg.scripts["lab:run-credits"], "node --import tsx scripts/run-credits-lab.mjs");
-  assert.ok(pkg.scripts["lab:group:pg-linking"].endsWith(" && npm run lab:run-credits"));
+  // lab:runtime-operations moved to pg-linking when pg-work passed its 14-minute cap.
+  assert.ok(
+    pkg.scripts["lab:group:pg-linking"].endsWith(
+      " && npm run lab:run-credits && npm run lab:runtime-operations",
+    ),
+  );
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(
     read(".github/workflows/ci.yml"),
