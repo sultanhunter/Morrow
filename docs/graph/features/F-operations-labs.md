@@ -7,7 +7,7 @@ area: Privacy and operations
 must: later
 links:
   part_of: [V-morrow]
-  defers: [P04.T04, P18.T03, P18.T04, P08.T04]
+  defers: [P04.T04, P18.T03, P18.T04]
   governed_by: [ADR-0023]
 ---
 

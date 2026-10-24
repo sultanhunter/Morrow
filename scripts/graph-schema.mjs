@@ -149,6 +149,8 @@ export const NODE_TYPES = Object.freeze({
       label: shape(/^G[0-9]{1,2}$/),
       owner_kind: oneOf("owner", "shopify", "provider", "ci", "claude"),
       due_week: shape(/^W[0-9]{1,2}$/),
+      // The event an open gate is due before when the plan sets no week ("before real data").
+      due_when: text,
     },
     required: ["label"],
   },
@@ -164,12 +166,15 @@ export const NODE_TYPES = Object.freeze({
   // golden-path M1 to M5, built from the plan's milestone table under the label M<n>.
   // V1-PR<nn>: the owner-facing v1 build order's PRs 1 to 26 (ADR-0035,
   // docs/plan/v1-build-order.md), each part_of its tracks; a merged pull request whose title
-  // starts "v1 PR <n>:" implements it.
+  // starts "v1 PR <n>:" (or a lettered "v1 PR <n>a:") implements it. MS-<slug>: a stage of
+  // a track that the plan names without a PR, such as T17's simulated week.
   milestone: {
-    shape: "M<n> (beta), GP<n> (golden path), V1-PR<nn> (v1 build order)",
-    patterns: [/^M[1-9]$/, /^GP[1-9]$/, /^V1-PR[0-9]{2}$/],
+    shape:
+      "M<n> (beta), GP<n> (golden path), V1-PR<nn> (v1 build order), MS-<slug> (a track's stage)",
+    patterns: [/^M[1-9]$/, /^GP[1-9]$/, /^V1-PR[0-9]{2}$/, slugId("MS")],
     dir: "milestones",
-    stored: "brief frontmatter, a file when there is no brief (V1-PR<nn>), or the plan (GP)",
+    stored:
+      "brief frontmatter, a file when there is no brief (V1-PR<nn>, MS-<slug>), or the plan (GP)",
     statuses: ["proposed", "active", "done", "folded", "dropped"],
     fields: { label: shape(/^M[1-9]$/) },
   },
@@ -427,7 +432,7 @@ export const MENTION = new RegExp(
       "P[0-9]{2}\\.T[0-9]{2}[a-z]*-AC[0-9]{2}[a-z]?",
       "P[0-9]{2}\\.A[0-9]{2}",
       "P[0-9]{2}\\.T[0-9]{2}[a-z]*",
-      `(?:V|F|AG|SK|IK|TRK|GATE|DC|C|Q|RISK)-${SLUG}`,
+      `(?:V|F|AG|SK|IK|TRK|GATE|DC|C|Q|RISK|MS)-${SLUG}`,
       "V1-PR[0-9]{2}",
     ].join("|") +
     ")(?![\\w-])",
@@ -490,7 +495,8 @@ export const ERRORS = Object.freeze({
   GRAPH_CYCLE: "No cycles in part_of, supersedes, depends_on or waits_on",
   GRAPH_STATUS: "Status values come from the type's list",
   GRAPH_TASK_STATUS_DRIFT: "Parent task statuses equal tasks.json, and both list the same tasks",
-  GRAPH_GATE_FIELDS: "An open gate has owner_kind and due_week",
+  GRAPH_GATE_FIELDS:
+    "An open gate has owner_kind, and due_week or (when the plan sets no week) due_when",
   GRAPH_DATA_CLASS:
     "A live data class has a deleted_by link to a merged PR (without history, a PR link is a warning)",
   GRAPH_SKILL_ELIGIBLE:
@@ -515,7 +521,8 @@ export const ERRORS = Object.freeze({
 
 export const WARNINGS = Object.freeze({
   GRAPH_WARN_SUPERSEDED_BASIS: "An accepted ADR whose approving decision was superseded",
-  GRAPH_WARN_STALE_ACTIVE: "An active node with no recent PR or evidence and no open branch",
+  GRAPH_WARN_STALE_ACTIVE:
+    "An active node with no recent PR or evidence and no open or built branch with a recent commit",
   GRAPH_WARN_CARD_EXPIRING: "An approval card expires within 14 days",
   GRAPH_WARN_GATE_OVERDUE: "An open gate past its due week",
   GRAPH_WARN_PLAN_UNCOVERED: "A plan task that no feature or track includes or defers by name",
@@ -525,4 +532,6 @@ export const WARNINGS = Object.freeze({
   GRAPH_WARN_NO_HISTORY:
     "Git history is shallow or missing, so PR nodes are skipped and PR links are not checked",
   GRAPH_WARN_BRANCH_MERGED: "A merged PR came from a branch node that is not marked merged",
+  GRAPH_WARN_BRANCH_STALE:
+    "An open or built branch node with no local or remote ref, or no commit on it within 7 days",
 });

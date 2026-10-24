@@ -7,7 +7,7 @@ status: open
 owner_kind: owner
 due_week: W18
 links:
-  depends_on: [TRK-end-to-end, TRK-launch-agents]
+  depends_on: [MS-simulated-week, TRK-launch-agents]
   waits_on: [GATE-deletion-paths, GATE-production, GATE-app-review-submission, GATE-shopify-review, GATE-legal, GATE-owner-signoff]
   governed_by: [ADR-0023]
 ---

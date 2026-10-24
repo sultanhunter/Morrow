@@ -334,7 +334,8 @@ function git(root, args) {
 // Merged pull requests come from git: first-parent history of HEAD with the files each
 // commit changed against its first parent, plus every other ancestor (a branch that merged
 // main reaches newer PRs through second parents). A shallow clone skips them. Each commit
-// keeps the first line of its body: GitHub's merge commit puts the PR's title there.
+// keeps the first line of its body: GitHub's merge commit puts the PR's title there. `refs`
+// maps each local or remote-tracking branch name to the date of its newest tip.
 export function readHistory(root) {
   const head = git(root, ["rev-parse", "--is-shallow-repository", "--show-toplevel"]);
   if (head === null) return { available: false, reason: "no git repository", commits: [] };
@@ -378,7 +379,26 @@ export function readHistory(root) {
     if (sha && subject !== undefined && !seen.has(sha))
       commits.push({ sha, date, subject, body: firstLine(body), firstParent: false, files: [] });
   }
-  return { available: true, head: commits[0]?.sha ?? null, commits };
+  const refList = git(root, [
+    "for-each-ref",
+    "--format=%(refname)%1f%(committerdate:short)",
+    "refs/heads",
+    "refs/remotes",
+  ]);
+  return { available: true, head: commits[0]?.sha ?? null, commits, refs: branchTips(refList) };
+}
+
+// Branch name (refs/heads/<name> or refs/remotes/<remote>/<name>) to its newest tip date.
+export function branchTips(refList) {
+  const refs = {};
+  for (const line of (refList ?? "").split("\n").filter(Boolean)) {
+    const [ref, date] = line.split("\x1f");
+    const name =
+      /^refs\/heads\/(.+)$/.exec(ref)?.[1] ?? /^refs\/remotes\/[^/]+\/(.+)$/.exec(ref)?.[1];
+    if (!name || name === "HEAD" || !/^\d{4}-\d{2}-\d{2}$/.test(date ?? "")) continue;
+    if (!Object.hasOwn(refs, name) || date > refs[name]) refs[name] = date;
+  }
+  return refs;
 }
 
 // A merged pull request from a commit: a squash subject "Title (#n)", or GitHub's merge
@@ -998,7 +1018,7 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
       const label = /^M([1-9])(?=[\s:-])/.exec(prefix);
       if (label && nodes.get(`M${label[1]}`)?.type === "milestone")
         derive(id, "implements", `M${label[1]}`, "git");
-      const step = /^v1 PR ([1-9]\d?)(?![\w])/.exec(prefix);
+      const step = /^v1 PR ([1-9]\d?)[a-z]?(?![\w])/.exec(prefix);
       if (step) prBuildSteps.push([id, `V1-PR${pad2(step[1])}`]);
       if (pr.branch) prBranches.push([id, pr.branch]);
       for (const file of commit.files) {
@@ -1275,9 +1295,16 @@ export function supersededBasis(graph) {
   return findings;
 }
 
-// Parent tasks that no active feature or track includes or defers, directly or through
-// their package. A dropped feature or track covers nothing.
+// Parent tasks that no active feature or track includes or defers, directly, through their
+// package, or through every one of their lettered children (P17.T02g included and P17.T02a
+// to P17.T02f deferred cover P17.T02). A dropped feature or track covers nothing. A child
+// deferred by name is left out of a parent that another node includes.
 export function uncoveredTasks(graph) {
+  const children = new Map();
+  for (const n of graph.nodes.values()) {
+    const parent = n.type === "task" ? /^(P\d{2}\.T\d{2})[a-z]+$/.exec(n.id)?.[1] : undefined;
+    if (parent) children.set(parent, [...(children.get(parent) ?? []), n.id]);
+  }
   const covered = new Set();
   for (const e of graph.edges) {
     const from = graph.nodes.get(e.from);
@@ -1293,12 +1320,19 @@ export function uncoveredTasks(graph) {
       n.type === "task" &&
       /^P\d{2}\.T\d{2}$/.test(n.id) &&
       !covered.has(n.id) &&
-      !covered.has(n.id.slice(0, 3)),
+      !covered.has(n.id.slice(0, 3)) &&
+      !(children.has(n.id) && children.get(n.id).every((c) => covered.has(c))),
   );
 }
 
 // Recent work on a node, its parts or the build-order steps that deliver it: a PR or live
-// evidence since the date, or a branch node still open (in flight) that implements it.
+// evidence since the date, or an open or built branch node that implements it and whose ref
+// (local or remote) has a commit since the date.
+const branchTip = (graph, name) => {
+  const refs = graph.history?.refs;
+  return refs && Object.hasOwn(refs, name) ? refs[name] : null;
+};
+
 function activity(graph, id, since) {
   const ids = [
     id,
@@ -1313,7 +1347,8 @@ function activity(graph, id, since) {
       if (
         e.edge === "implements" &&
         from?.type === "branch" &&
-        ["open", "built"].includes(from.status)
+        ["open", "built"].includes(from.status) &&
+        (branchTip(graph, from.id) ?? "") >= since
       )
         return true;
       if (
@@ -1400,14 +1435,20 @@ function applyRules(graph, report) {
         );
       else labels.set(key, node.id);
     }
-    if (node.type === "gate" && node.status === "open")
-      for (const key of ["owner_kind", "due_week"])
-        if (!field(node, key))
-          report(
-            "GRAPH_GATE_FIELDS",
-            node.headerPath ?? node.origin,
-            `${node.id} is open without ${key}`,
-          );
+    if (node.type === "gate" && node.status === "open") {
+      if (!field(node, "owner_kind"))
+        report(
+          "GRAPH_GATE_FIELDS",
+          node.headerPath ?? node.origin,
+          `${node.id} is open without owner_kind`,
+        );
+      if (!field(node, "due_week") && !field(node, "due_when"))
+        report(
+          "GRAPH_GATE_FIELDS",
+          node.headerPath ?? node.origin,
+          `${node.id} is open without due_week or due_when`,
+        );
+    }
   }
   const byLabel = new Map();
   for (const node of nodes.values())
@@ -1634,7 +1675,7 @@ function applyRules(graph, report) {
       report(
         "GRAPH_WARN_STALE_ACTIVE",
         node.id,
-        `${node.id} is ${node.status} with no PR or evidence since ${since}`,
+        `${node.id} is ${node.status} with no PR, evidence or branch commit since ${since}`,
       );
     if (node.type === "card" && node.status === "approved" && field(node, "expires_on")) {
       const left = dayNumber(field(node, "expires_on")) - dayNumber(today);
@@ -1666,6 +1707,21 @@ function applyRules(graph, report) {
         nodes.get(e.to).headerPath ?? e.to,
         `${e.to} is ${nodes.get(e.to).status ?? "without a status"}, but ${e.from} merged it; set status merged`,
       );
+  // An open or built branch counts as recent work only while a ref of its name has a recent
+  // commit, so an abandoned or squash-merged branch cannot hide stale work.
+  if (graph.history.available && graph.history.refs)
+    for (const node of nodes.values())
+      if (node.type === "branch" && ["open", "built"].includes(node.status)) {
+        const tip = branchTip(graph, node.id);
+        if ((tip ?? "") < since)
+          report(
+            "GRAPH_WARN_BRANCH_STALE",
+            node.headerPath ?? node.id,
+            tip
+              ? `${node.id} is ${node.status}, but its newest commit is from ${tip}; push it or set its status`
+              : `${node.id} is ${node.status}, but no local or remote branch has that name; push it or set its status`,
+          );
+      }
   for (const task of uncoveredTasks(graph))
     report(
       "GRAPH_WARN_PLAN_UNCOVERED",
@@ -2069,8 +2125,9 @@ export function query(graph, name, args, flags) {
     case "gates": {
       need(0);
       const week = flags.get("week");
+      // A gate due before an event (due_when) has no week, so every week's list shows it.
       const gates = openGates(graph).filter(
-        (g) => !week || weekNumber(g.fields.due_week) <= weekNumber(week),
+        (g) => !week || !g.fields.due_week || weekNumber(g.fields.due_week) <= weekNumber(week),
       );
       lines.push(...(gates.length ? gates.map((g) => gateLine(graph, g)) : ["No open gates."]));
       for (const f of supersededBasis(graph))
@@ -2333,7 +2390,13 @@ function openGates(graph) {
 
 function gateLine(graph, gate) {
   const blocks = typedIn(graph, gate.id, "waits_on").map((e) => e.from);
-  return `${(gate.label ?? "-").padEnd(5)}${gate.id.padEnd(34)}${(gate.fields.owner_kind ?? "-").padEnd(10)}${(gate.fields.due_week ?? "-").padEnd(5)}${blocks.length ? `blocks ${blocks.join(", ")}` : ""}`;
+  const tail = [
+    !gate.fields.due_week && gate.fields.due_when ? `due ${gate.fields.due_when}` : "",
+    blocks.length ? `blocks ${blocks.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return `${(gate.label ?? "-").padEnd(5)}${gate.id.padEnd(34)}${(gate.fields.owner_kind ?? "-").padEnd(10)}${(gate.fields.due_week ?? "-").padEnd(5)}${tail}`;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -2460,7 +2523,7 @@ export function liveStatus(graph) {
   lines.push("", "### Open gates", "");
   for (const g of gates)
     lines.push(
-      `- ${g.label ?? ""} ${g.id} (${g.fields.owner_kind ?? "?"}, ${g.fields.due_week ?? "?"}): ${g.title}`,
+      `- ${g.label ?? ""} ${g.id} (${g.fields.owner_kind ?? "?"}, ${g.fields.due_week ?? g.fields.due_when ?? "?"}): ${g.title}`,
     );
   if (!gates.length) lines.push("- None in the graph yet.");
   lines.push("", "### Unknown outcomes", "");

@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   acceptanceStatus,
+  branchTips,
   buildGraph,
   graphJson,
   mermaid,
@@ -778,12 +779,27 @@ test("merge commits: the title's v1 step, the branch node and what it implements
   assert.ok(bare.nodes.has("PR-3") && !edgeIn(bare, "PR-3", "from_branch", "claude/v1-thing"));
   // statusDrift reads the latest merged PR from a merge commit too.
   assert.match(statusDrift(graph).join("\n"), /the latest merged PR is PR-3 at `ccccccc`/);
+  // A stacked step's lettered title ("v1 PR 1a:") implements the step; "1ab" is no step.
+  const lettered = (body) =>
+    graphOf(files, {
+      history: withMerge([
+        { ...MERGE, subject: MERGE.subject.replace("v1-thing", "v1-other"), body },
+      ]),
+    });
+  assert.ok(edgeIn(lettered("v1 PR 1a: the apply engine"), "PR-3", "implements", "V1-PR01"));
+  assert.ok(edgeIn(lettered("v1 PR 1b: the screens"), "PR-3", "implements", "V1-PR01"));
+  assert.ok(!edgeIn(lettered("v1 PR 1ab: no step"), "PR-3", "implements", "V1-PR01"));
+  assert.ok(!edgeIn(lettered("v1 PR 1A: no step"), "PR-3", "implements", "V1-PR01"));
 });
 
 test("v1 build steps: id shape, part_of a track only, mentions in bodies", () => {
   assert.equal(typeOfId("V1-PR01"), "milestone");
   assert.equal(typeOfId("V1-PR26"), "milestone");
   for (const id of ["V1-PR1", "V1-PR100", "V2-PR01", "v1-PR01"])
+    assert.equal(typeOfId(id), null, id);
+  // MS-<slug>: a track's stage that the plan names without a PR (T17's simulated week).
+  assert.equal(typeOfId("MS-simulated-week"), "milestone");
+  for (const id of ["MS-", "MS-Simulated", "ms-simulated-week", "MS-simulated-"])
     assert.equal(typeOfId(id), null, id);
   const files = baseFiles();
   files["docs/graph/milestones/V1-PR01.md"] = V1_STEP;
@@ -841,15 +857,68 @@ test("stale work: a build step's recent PR, an open branch and a delivering step
   graph = graphOf(files, { history: withMerge() });
   assert.ok(!stale(graph, "TRK-privacy") && !stale(graph, "F-gateway"));
   assert.ok(!stale(graph, "V1-PR01"));
-  // Without the PR the step is stale; an open branch that implements it is current work.
+  // Without the PR the step is stale; an open branch that implements it is current work
+  // while a ref of its name has a commit within 7 days (TODAY is 2026-10-23).
   graph = graphOf(files);
   assert.ok(stale(graph, "V1-PR01") && stale(graph, "TRK-privacy"));
   files["docs/graph/branches/claude--v1-thing.md"] = BRANCH.replace(
     "status: merged\nhead: cccccccc\nlinks:\n  implements: [TRK-privacy]",
     "status: open\nlinks:\n  implements: [V1-PR01]",
   );
-  graph = graphOf(files);
+  const branchWarning = (g) =>
+    g.issues.find(
+      (i) =>
+        i.code === "GRAPH_WARN_BRANCH_STALE" &&
+        i.where === "docs/graph/branches/claude--v1-thing.md",
+    );
+  const withRefs = (refs) => ({ history: { ...HISTORY, refs } });
+  graph = graphOf(files, withRefs({ "claude/v1-thing": "2026-10-16", main: "2026-10-23" }));
   assert.ok(!stale(graph, "V1-PR01") && !stale(graph, "TRK-privacy") && !stale(graph, "F-gateway"));
+  assert.equal(branchWarning(graph), undefined);
+  // A ref older than 7 days, or none at all, is no recent work and warns on the branch node.
+  graph = graphOf(files, withRefs({ "claude/v1-thing": "2026-10-15" }));
+  assert.ok(stale(graph, "V1-PR01") && stale(graph, "TRK-privacy") && stale(graph, "F-gateway"));
+  assert.match(
+    branchWarning(graph).message,
+    /claude\/v1-thing is open, but its newest commit is from 2026-10-15/,
+  );
+  graph = graphOf(files, withRefs({ main: "2026-10-23" }));
+  assert.ok(stale(graph, "V1-PR01"));
+  assert.match(branchWarning(graph).message, /no local or remote branch has that name/);
+  // A built branch is held to the same rule; a merged or abandoned one never warns.
+  edit(files, "docs/graph/branches/claude--v1-thing.md", "status: open", "status: built");
+  assert.match(branchWarning(graphOf(files, withRefs({}))).message, /claude\/v1-thing is built/);
+  edit(files, "docs/graph/branches/claude--v1-thing.md", "status: built", "status: abandoned");
+  assert.equal(branchWarning(graphOf(files, withRefs({}))), undefined);
+  // Without refs (history not read) nothing counts and nothing warns.
+  edit(files, "docs/graph/branches/claude--v1-thing.md", "status: abandoned", "status: open");
+  graph = graphOf(files);
+  assert.ok(stale(graph, "V1-PR01") && branchWarning(graph) === undefined);
+});
+
+test("branchTips: local and remote-tracking names, the newest tip, never HEAD", () => {
+  const tips = branchTips(
+    [
+      "refs/heads/main\x1f2026-10-23",
+      "refs/heads/claude/v1-thing\x1f2026-10-20",
+      "refs/remotes/origin/claude/v1-thing\x1f2026-10-22",
+      "refs/remotes/origin/claude/v1-other\x1f2026-10-19",
+      "refs/remotes/origin/HEAD\x1f2026-10-23",
+      "refs/tags/v1\x1f2026-10-23",
+      "refs/heads/claude/no-date\x1f",
+      "",
+    ].join("\n"),
+  );
+  assert.deepEqual(tips, {
+    main: "2026-10-23",
+    "claude/v1-thing": "2026-10-22",
+    "claude/v1-other": "2026-10-19",
+  });
+  assert.deepEqual(branchTips(null), {});
+  assert.equal(
+    Object.hasOwn(branchTips("refs/heads/constructor\x1f2026-10-01"), "constructor"),
+    true,
+  );
 });
 
 test("readHistory: a merge commit keeps its body's first line; second-parent commits follow", () => {
@@ -893,6 +962,8 @@ test("readHistory: a merge commit keeps its body's first line; second-parent com
       title: "v1 PR 1: the thing",
       branch: "claude/v1-thing",
     });
+    assert.deepEqual(Object.keys(history.refs).sort(), ["claude/v1-thing", "main"]);
+    for (const date of Object.values(history.refs)) assert.match(date, /^\d{4}-\d{2}-\d{2}$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -985,6 +1056,16 @@ test("queries: open, ready, gates, critical, slip, data, skills, ceiling, uncove
   assert.doesNotMatch(ready, /F-gateway/, "it waits on an open question and gate");
   assert.match(q("gates", [], new Map([["week", "W18"]])), /GATE-launch/);
   assert.match(q("gates", [], new Map([["week", "W3"]])), /No open gates/);
+  const event = baseFiles();
+  edit(event, "docs/graph/gates/GATE-launch.md", "due_week: W18", "due_when: before real data");
+  assert.match(
+    query(graphOf(event), "gates", [], new Map([["week", "W3"]])),
+    /^G18 {2}GATE-launch {23}owner {5}- {4}due before real data; blocks AG-support$/m,
+  );
+  assert.match(
+    query(graphOf(event), "open", [], new Map()),
+    /Open gates \(1\)\n {2}G18 {2}GATE-launch .*due before real data/,
+  );
   assert.match(
     q("critical"),
     /Critical chain to GATE-launch \(3 nodes\):\n {2}Q-scope[^\n]*\n {2}F-gateway[^\n]*\n {2}GATE-launch/,
@@ -1049,8 +1130,31 @@ test("query uncovered: a dropped feature or track covers nothing; defers covers 
     query(graph, "uncovered", [], new Map()),
     /Every plan task is included or deferred by name/,
   );
+  // A parent is covered when each of its lettered children is named, and not before.
+  edit(
+    files,
+    "docs/graph/tracks/TRK-privacy.md",
+    "  defers: [P01.T02]",
+    "  defers: [P01.T02a, P01.T02d]",
+  );
+  edit(
+    files,
+    "docs/graph/features/F-gateway.md",
+    'status: dropped\nmust: "yes"\nlinks:\n  part_of: [V-morrow]\n  includes: [P01.T02]',
+    'status: planned\nmust: "yes"\nlinks:\n  part_of: [V-morrow]\n  includes: [P01.T02e]',
+  );
+  graph = graphOf(files);
+  assert.deepEqual(codes(graph, "error"), []);
+  assert.deepEqual(uncovered(graph), ["P01.T02"], "P01.T02f is named by nobody");
+  edit(
+    files,
+    "docs/graph/features/F-gateway.md",
+    "includes: [P01.T02e]",
+    "includes: [P01.T02e, P01.T02f]",
+  );
+  assert.deepEqual(uncovered(graphOf(files)), []);
   // A package named by an active track covers its tasks.
-  edit(files, "docs/graph/tracks/TRK-privacy.md", "defers: [P01.T02]", "defers: [P01]");
+  edit(files, "docs/graph/tracks/TRK-privacy.md", "defers: [P01.T02a, P01.T02d]", "defers: [P01]");
   assert.deepEqual(uncovered(graphOf(files)), []);
   edit(files, "docs/graph/tracks/TRK-privacy.md", "status: proposed", "status: dropped");
   assert.deepEqual(uncovered(graphOf(files)), ["P01.T01", "P01.T02"]);
@@ -1072,7 +1176,7 @@ test("warnings at their boundaries: stale work, expiring cards, overdue gates, u
   assert.ok(warned(at("2026-10-29"), "GRAPH_WARN_STALE_ACTIVE", "P01.T02"), "8 days");
   assert.match(
     at("2026-10-29").issues.find((i) => i.code === "GRAPH_WARN_STALE_ACTIVE").message,
-    /^P01\.T02 is In progress with no PR or evidence since 2026-10-22$/,
+    /^P01\.T02 is In progress with no PR, evidence or branch commit since 2026-10-22$/,
   );
   // staging-card-1 is approved and expires 2026-11-18.
   assert.ok(!warned(at("2026-11-03"), "GRAPH_WARN_CARD_EXPIRING", "staging-card-1"), "15 days");
@@ -1086,6 +1190,11 @@ test("warnings at their boundaries: stale work, expiring cards, overdue gates, u
   edit(gate, "docs/graph/gates/GATE-launch.md", "due_week: W18", "due_week: W0");
   assert.ok(!warned(at("2026-11-01", gate), "GRAPH_WARN_GATE_OVERDUE", "GATE-launch"));
   assert.ok(warned(at("2026-11-02", gate), "GRAPH_WARN_GATE_OVERDUE", "GATE-launch"));
+  // A gate due before an event (due_when) has no week and is never overdue.
+  const event = baseFiles();
+  edit(event, "docs/graph/gates/GATE-launch.md", "due_week: W18", "due_when: before real data");
+  assert.deepEqual(codes(at("2027-06-01", event), "error"), []);
+  assert.ok(!warned(at("2027-06-01", event), "GRAPH_WARN_GATE_OVERDUE", "GATE-launch"));
   edit(gate, "docs/graph/gates/GATE-launch.md", "status: open", "status: passed");
   assert.ok(!warned(at("2026-11-02", gate), "GRAPH_WARN_GATE_OVERDUE", "GATE-launch"));
   // A plan task no feature or track includes.
@@ -1527,7 +1636,8 @@ test("this repository: phase 1 covers every plan task and holds the MVP's tracks
     /^Every plan task is included or deferred/,
   );
   const nodes = [...graph.nodes.values()];
-  // The tracks alone cover all 80, directly or through a package (docs/graph/README.md).
+  // The tracks alone cover all 80, directly, through a package or through every lettered
+  // child (docs/graph/README.md).
   const byTracks = new Set(
     graph.edges
       .filter(
@@ -1535,13 +1645,34 @@ test("this repository: phase 1 covers every plan task and holds the MVP's tracks
       )
       .map((e) => e.to),
   );
+  const childrenOf = (id) =>
+    nodes.filter(
+      (n) => n.type === "task" && new RegExp(`^${id.replace(".", "\\.")}[a-z]+$`).test(n.id),
+    );
   assert.deepEqual(
     nodes
       .filter((n) => n.type === "task" && /^P\d{2}\.T\d{2}$/.test(n.id))
-      .filter((n) => !byTracks.has(n.id) && !byTracks.has(n.id.slice(0, 3)))
+      .filter(
+        (n) =>
+          !byTracks.has(n.id) &&
+          !byTracks.has(n.id.slice(0, 3)) &&
+          !(childrenOf(n.id).length && childrenOf(n.id).every((c) => byTracks.has(c.id))),
+      )
       .map((n) => n.id),
     [],
   );
+  // Package 17 at launch is the Resend adapter and its operation contract; the other adapters
+  // are deferred by name, and P05.T01aa (SSO and SCIM) is left out of P05.T01.
+  const covering = (id, edge) =>
+    graph.edges.filter((e) => e.to === id && e.edge === edge).map((e) => e.from);
+  assert.deepEqual(covering("P17.T02", "includes"), []);
+  assert.ok(covering("P17.T02g", "includes").includes("TRK-email"));
+  for (const child of ["a", "b", "c", "d", "e", "f"])
+    assert.ok(covering(`P17.T02${child}`, "defers").includes("F-more-integrations"), child);
+  assert.deepEqual(covering("P17.T01", "defers"), []);
+  assert.ok(covering("P05.T01aa", "defers").includes("F-enterprise-identity"));
+  assert.ok(covering("P08.T04", "includes").includes("TRK-shopify-app"));
+  assert.deepEqual(covering("P08.T04", "defers"), []);
   const active = (type) =>
     nodes.filter((n) => n.type === type && !schema.INACTIVE_STATUSES.includes(n.status));
   for (let n = 0; n <= 18; n += 1)
@@ -1593,10 +1724,32 @@ test("this repository: phase 1 covers every plan task and holds the MVP's tracks
       "V1-PR19": ["PR-57"],
     }))
       for (const pr of prs) assert.ok(edgeIn(graph, pr, "implements", step), `${pr} ${step}`);
-  // The plan's critical path: T0, T2, T4, T12, T17, then submission, review and launch.
+  // The plan's critical path: T0, T2, T4, T12, T17's simulated week, then submission, review
+  // and launch. The gates follow the simulated week, not the whole of T17, which waits on them.
   const critical = query(graph, "critical", [], new Map());
-  for (const id of ["TRK-agent-platform", "TRK-launch-agents", "TRK-end-to-end", "GATE-launch"])
+  for (const id of [
+    "TRK-agent-platform",
+    "TRK-launch-agents",
+    "MS-simulated-week",
+    "GATE-app-review-submission",
+    "GATE-shopify-review",
+    "GATE-launch",
+  ])
     assert.match(critical, new RegExp(`^ {2}${id} `, "m"), id);
+  assert.ok(edgeIn(graph, "MS-simulated-week", "part_of", "TRK-end-to-end"));
+  for (const gate of ["GATE-app-review-submission", "GATE-owner-signoff", "GATE-launch"]) {
+    assert.ok(!edgeIn(graph, gate, "depends_on", "TRK-end-to-end"), gate);
+    assert.ok(edgeIn(graph, "TRK-end-to-end", "waits_on", gate), gate);
+  }
+  // Only the plan's weeks: G9, G10 and G17 are due before an event.
+  for (const gate of [
+    "GATE-deletion-paths",
+    "GATE-gateway-reservations-stops",
+    "GATE-owner-signoff",
+  ]) {
+    assert.equal(graph.nodes.get(gate).fields.due_week, undefined, gate);
+    assert.ok(graph.nodes.get(gate).fields.due_when, gate);
+  }
   // Answered decision questions point at the owner's decision; no hand-written node is an orphan.
   for (const n of nodes)
     if (n.type === "question" && n.status === "answered")
@@ -1611,6 +1764,46 @@ test("this repository: phase 1 covers every plan task and holds the MVP's tracks
       .map((i) => i.where),
     [],
   );
+});
+
+test("this repository: the specialist ceiling node matches specialist-ceiling.json", () => {
+  const graph = repo();
+  const contract = JSON.parse(readFileSync("docs/contracts/specialist-ceiling.json", "utf8"));
+  const ids = contract.capabilities.map((c) => c.capabilityId);
+  const held = (edge) =>
+    graph.edges.filter((e) => e.from === "IK-task-specialist" && e.edge === edge).map((e) => e.to);
+  // The 12 ids exactly, plus runtime.execution.use, which joins only under the runtime switch.
+  assert.deepEqual(held("may_hold").sort(), [...ids, "runtime.execution.use"].sort());
+  assert.deepEqual(
+    held("never_holds").filter((id) => ids.includes(id)),
+    [],
+  );
+  for (const id of ["workspace.task.delegate", "orders.read", "support.case.read"])
+    assert.ok(held("never_holds").includes(id), id);
+  // Publish ids are held with propose only, never approve or execute (ADR-0028 item 2).
+  for (const c of contract.capabilities)
+    if (c.capabilityId.endsWith(".publish")) assert.deepEqual(c.verbs, ["propose"], c.capabilityId);
+});
+
+test("this repository: only agents with read_orders hold order aggregates, directly or by skill", () => {
+  const graph = repo();
+  const holders = graph.edges
+    .filter((e) => e.edge === "holds" && e.to === "DC-order-aggregates")
+    .map((e) => e.from);
+  assert.ok(holders.length > 0);
+  for (const id of holders) {
+    const agents =
+      graph.nodes.get(id)?.type === "agent"
+        ? [id]
+        : graph.edges.filter((e) => e.edge === "bundles" && e.to === id).map((e) => e.from);
+    assert.ok(agents.length, `${id} belongs to an agent`);
+    for (const agent of agents)
+      assert.ok(
+        (graph.nodes.get(agent).fields.scopes_optional ?? []).includes("read_orders"),
+        `${agent} holds DC-order-aggregates through ${id} without read_orders`,
+      );
+  }
+  assert.ok(!holders.includes("SK-promotion-plan"));
 });
 
 test("this repository: P04.T01i shows its PRs, acceptance ids and the M-O1 evidence", () => {

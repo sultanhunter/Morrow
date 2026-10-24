@@ -11,5 +11,7 @@ links:
   governed_by: [ADR-0031, ADR-0035]
 ---
 
-Level 1 order reads for the Business Analyst, Inventory and Marketing. ADR-0035 item 7 lets the
-owner's store fill it before its path; the path lands with the Business Analyst (V1-PR22).
+Level 1 order reads for the Business Analyst and Inventory, the agents that hold `read_orders`
+(Support holds it too, for its own replies; ADR-0025 item 6). Marketing holds no `read_orders` and
+reads no orders. ADR-0035 item 7 lets the owner's store fill it before its path; the path lands with
+the Business Analyst (V1-PR22).

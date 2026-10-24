@@ -7,7 +7,7 @@ area: Email
 must: "yes"
 links:
   part_of: [V-morrow]
-  includes: [P17.T02]
+  includes: [P17.T01, P17.T02g]
   holds: [DC-customer-mail, DC-mail-deliveries, DC-sender-identities]
   waits_on: [GATE-email-vendor, GATE-deletion-paths]
   governed_by: [ADR-0030, ADR-0031]
@@ -17,4 +17,5 @@ links:
 Inbound by forwarding (Cloudflare Email Routing); outbound support replies only after approval, with
 an idempotency key and status; a BCC to the merchant; the sender picked from the workspace's list of
 sending addresses, the shop's Morrow address by default (ADR-0030 item 10). No supplier email.
-V1-PR25.
+V1-PR25. Plan work: the Resend adapter (P17.T02g) and the support-reply slice of P17.T01's
+operation contracts; P17.T01's other providers wait (F-more-integrations).
