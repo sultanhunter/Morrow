@@ -22,6 +22,7 @@ import type {
   KnowledgePageView,
   KnowledgeView,
   LibraryPort,
+  NotebookView,
   NotificationChoices,
   NotificationsView,
   Outcome,
@@ -633,13 +634,6 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
             },
           ]
         : entry.schedule.map((title) => ({ icon: "calendar" as const, title, detail: null })),
-      notes: listings
-        ? [
-            "Maya prefers ‘linen’ in lowercase in titles.",
-            "Size advice applies to shirts, not totes.",
-            "Next: photo descriptions for 12 Autumn photos.",
-          ]
-        : [],
       ownerName: owner,
     };
   };
@@ -774,6 +768,22 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           monthlyCreditLimit: document.monthlyCreditLimit,
         });
         return ok({ status: "added" as const, agentId });
+      }),
+    // PR 20: the notes Listings keeps between jobs (its notebook), newest first.
+    notebook: (ws, agentId) =>
+      reply<NotebookView>("team.notebook", () => {
+        const summary = addedAgents().find((a) => a.agentId === agentId);
+        if (!deps.isWorkspace(ws) || !summary) return notFound;
+        return ok({
+          entries:
+            summary.character === "listings" && !addedWith.has(summary.agentId)
+              ? [
+                  { id: "note-3", text: "Next: photo descriptions for 12 Autumn photos." },
+                  { id: "note-2", text: "Size advice applies to shirts, not totes." },
+                  { id: "note-1", text: "Maya prefers ‘linen’ in lowercase in titles." },
+                ]
+              : [],
+        });
       }),
   };
 

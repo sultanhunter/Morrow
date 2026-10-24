@@ -223,8 +223,14 @@ export interface AgentDetailView {
     readonly title: string;
     readonly detail: string | null;
   }[];
-  readonly notes: readonly string[];
   readonly ownerName: string;
+}
+/**
+ * PR 20: an agent's own notebook (the notes it keeps between jobs), newest first: only the
+ * entries this person may see under their read tags (the server leaves the rest out).
+ */
+export interface NotebookView {
+  readonly entries: readonly { readonly id: Id; readonly text: string }[];
 }
 
 export type AgentCategory = "product_pages" | "sales" | "stock" | "customer_emails" | "promotions";
@@ -577,6 +583,8 @@ export interface TeamPort {
     releaseId: Id,
     c: Command<{ documentDigest: string; nonce: string }>,
   ): Promise<Outcome<AddResultView>>;
+  /** PR 20: the agent's notebook (`agentId` is its installation id on the server). */
+  notebook(ws: Id, agentId: Id): Promise<Outcome<NotebookView>>;
 }
 export interface SettingsPort {
   plan(ws: Id): Promise<Outcome<PlanView>>;
@@ -625,6 +633,7 @@ export const teamPortMethods = [
   "team.catalogue",
   "team.addDocument",
   "team.addConfirm",
+  "team.notebook",
   "settings.plan",
   "settings.emailAddresses",
   "settings.notifications",

@@ -37,6 +37,7 @@ import {
   decodeKnowledgePages,
   decodeKnowledgeProposals,
   decodeKnowledgeWritten,
+  decodeNotebook,
   decodeSuggestionDecided,
 } from "./knowledge-decoders";
 import { handoffTokenPattern } from "../handoff";
@@ -417,6 +418,9 @@ export const requests = {
       byteLimits.work,
     );
   },
+  // PR 20: an agent's notebook, the entries this person may see (the installation's id).
+  notebook: (ws: string, installationId: string) =>
+    ids(ws, installationId) ? get(workPath(ws, "agents", installationId, "notebook")) : null,
   decideSuggestion(
     ws: string,
     proposalId: string,
@@ -819,6 +823,11 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       catalogue: unbuilt,
       addDocument: unbuilt,
       addConfirm: unbuilt,
+      // PR 20: the agent's notebook over its route; uncomposed in this build (the
+      // shop-knowledge switch is committed off), so it answers not_in_build and sends nothing.
+      notebook: gated("team.notebook", (ws: string, agentId: string) =>
+        read(requests.notebook(ws, agentId), (b) => decodeNotebook(b, agentId)),
+      ),
     },
     settings: {
       plan: unbuilt,

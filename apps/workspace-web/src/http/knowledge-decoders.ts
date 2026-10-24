@@ -9,6 +9,7 @@ import {
   type KnowledgePageKind,
   type KnowledgePageView,
   type KnowledgeView,
+  type NotebookView,
 } from "@morrow/workspace-ui";
 import { isId } from "./client";
 import { isUtcTime } from "./work-decoders";
@@ -267,4 +268,44 @@ export function decodeSuggestionDecided(
     body.status === "rejected"
     ? { decision }
     : null;
+}
+
+/**
+ * GET /work/agents/:installationId/notebook: the entries of that agent's notebook this person
+ * may see (NotebookEntry@1 each, newest first, at most the 100 live ones), for that agent only.
+ */
+export function decodeNotebook(body: unknown, installationId: string): NotebookView | null {
+  if (
+    !record(body) ||
+    !keysOf(body, ["installationId", "entries"]) ||
+    body.installationId !== installationId ||
+    !Array.isArray(body.entries) ||
+    body.entries.length > 100
+  )
+    return null;
+  const entries: { id: string; text: string }[] = [];
+  const seen = new Set<string>();
+  let last = Infinity;
+  for (const e of body.entries) {
+    if (
+      !record(e) ||
+      !keysOf(e, ["schemaVersion", "id", "installationId", "sequence", "text", "createdAt"]) ||
+      e.schemaVersion !== 1 ||
+      !isId(e.id) ||
+      seen.has(e.id) ||
+      e.installationId !== installationId ||
+      typeof e.sequence !== "number" ||
+      !Number.isSafeInteger(e.sequence) ||
+      e.sequence < 1 ||
+      e.sequence > 1_000_000 ||
+      e.sequence >= last ||
+      !text(e.text, 2000) ||
+      !isUtcTime(e.createdAt)
+    )
+      return null;
+    seen.add(e.id);
+    last = e.sequence;
+    entries.push({ id: e.id, text: e.text });
+  }
+  return { entries };
 }

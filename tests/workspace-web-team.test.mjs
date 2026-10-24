@@ -49,9 +49,10 @@ const h = React.createElement;
 const ws = fixtureWorkspace.id;
 const command = (body) => ({ key: randomUUID(), body });
 
-test("the port: eighteen methods, none composed over HTTP, and none sends a request", async () => {
-  // T7 PR 16's thirteen, and PR 20's five Shop knowledge methods (the shop-knowledge switch).
-  assert.equal(teamPortMethods.length, 18);
+test("the port: nineteen methods, none composed over HTTP, and none sends a request", async () => {
+  // T7 PR 16's thirteen, and PR 20's five Shop knowledge methods and the agent's notebook (the
+  // shop-knowledge switch).
+  assert.equal(teamPortMethods.length, 19);
   for (const method of teamPortMethods) {
     assert.ok(portMethods.includes(method), method);
     assert.equal(composed[method], false, method);
@@ -84,6 +85,7 @@ test("the port: eighteen methods, none composed over HTTP, and none sends a requ
       "release-marketing",
       command({ documentDigest: "a".repeat(64), nonce: "b".repeat(64) }),
     ),
+    await port.team.notebook(ws, "agent-listings"),
     await port.settings.plan(ws),
     await port.settings.emailAddresses(ws),
     await port.library.knowledge(ws),
@@ -123,7 +125,7 @@ test("the port: eighteen methods, none composed over HTTP, and none sends a requ
   ];
   assert.deepEqual(
     outcomes.map((o) => o.kind),
-    Array(18).fill("not_in_build"),
+    Array(19).fill("not_in_build"),
   );
   assert.equal(recorded.calls.length, 0);
 });

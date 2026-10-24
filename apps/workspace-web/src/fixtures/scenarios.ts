@@ -101,6 +101,7 @@ const reads: readonly PortMethod[] = [
   "settings.activity",
   "library.knowledge",
   // PR 20.
+  "team.notebook",
   "library.knowledgePage",
   "library.files",
 ];

@@ -20,6 +20,7 @@ import {
   decodeKnowledgePages,
   decodeKnowledgeProposals,
   decodeKnowledgeWritten,
+  decodeNotebook,
   decodeSuggestionDecided,
 } from "../apps/workspace-web/src/http/knowledge-decoders.ts";
 import { createFixtureAdapter } from "../apps/workspace-web/src/fixtures/adapter.ts";
@@ -45,6 +46,8 @@ const knowledgeMethods = [
   "library.editKnowledge",
   "library.deleteKnowledge",
   "library.decideSuggestion",
+  // An agent's notebook (the agent page's notes), behind the same switch.
+  "team.notebook",
 ];
 const k = sunriseCopy.knowledge;
 
@@ -364,6 +367,82 @@ test("decoders: each reply only for the record the path names", () => {
     ),
     null,
   );
+});
+
+test("an agent's notebook: uncomposed, one exact read, and only that agent's entries newest first", async () => {
+  const INSTALLATION = "installation_k";
+  const entry = (sequence, text) => ({
+    schemaVersion: 1,
+    id: `0000000${sequence}-1111-4111-8111-111111111111`,
+    installationId: INSTALLATION,
+    sequence,
+    text,
+    createdAt: "2026-10-24T12:00:00.000Z",
+  });
+  // The server's reply (commands.ts notebookRead): the entries this person may see, newest first.
+  const reply = {
+    installationId: INSTALLATION,
+    entries: [entry(2, "Product 4242 needs care facts."), entry(1, "Keep titles under 60.")],
+  };
+  assert.equal(composed["team.notebook"], false);
+  const recorded = recordingTransport(() => {
+    throw Error("no request expected");
+  });
+  const off = createHttpPort({
+    client: createClient({ transport: recorded.transport, online: () => true }),
+    composed,
+    loginBodyVersion,
+    navigationSignal: () => undefined,
+  });
+  assert.equal((await off.team.notebook(ws, INSTALLATION)).kind, "not_in_build");
+  assert.equal(recorded.calls.length, 0);
+  const path = `/workspace/${ws}/work/agents/${INSTALLATION}/notebook`;
+  assert.deepEqual(requests.notebook(ws, INSTALLATION), { method: "GET", path });
+  assert.equal(requests.notebook(ws, "a/b"), null);
+  const { calls, port } = onPort(() => json(200, reply));
+  assert.deepEqual(await port.team.notebook(ws, INSTALLATION), {
+    kind: "ok",
+    value: {
+      entries: [
+        { id: reply.entries[0].id, text: "Product 4242 needs care facts." },
+        { id: reply.entries[1].id, text: "Keep titles under 60." },
+      ],
+    },
+    replayed: false,
+  });
+  assert.deepEqual(
+    calls.map((c) => [c.init.method, c.path]),
+    [["GET", path]],
+  );
+  assert.deepEqual(decodeNotebook({ installationId: INSTALLATION, entries: [] }, INSTALLATION), {
+    entries: [],
+  });
+  // Anything outside the exact shape is not read: another agent's notebook or entry, a read tag
+  // (they never leave the server), the oldest first, a repeated entry, empty text, too many.
+  for (const bad of [
+    { ...reply, installationId: "installation_other" },
+    { ...reply, entries: [{ ...reply.entries[0], installationId: "installation_other" }] },
+    { ...reply, entries: [{ ...reply.entries[0], readTags: [] }] },
+    { ...reply, entries: [...reply.entries].reverse() },
+    { ...reply, entries: [reply.entries[0], { ...reply.entries[1], id: reply.entries[0].id }] },
+    { ...reply, entries: [{ ...reply.entries[0], text: " " }] },
+    { ...reply, entries: [{ ...reply.entries[0], text: "x".repeat(2001) }] },
+    { ...reply, entries: [{ ...reply.entries[0], schemaVersion: 2 }] },
+    { ...reply, entries: Array.from({ length: 101 }, (_, i) => entry(101 - i, "Note")) },
+    { ...reply, schemaVersion: 1 },
+  ])
+    assert.equal(decodeNotebook(bad, INSTALLATION), null, JSON.stringify(bad).slice(0, 120));
+  const { port: odd } = onPort(() => json(200, { ...reply, installationId: "installation_other" }));
+  assert.deepEqual(await odd.team.notebook(ws, INSTALLATION), {
+    kind: "unavailable",
+    offline: false,
+  });
+  // The fixture: Listings keeps three notes; another agent none; an unknown agent is not found.
+  const fixture = createFixtureAdapter("ready");
+  const listings = await fixture.team.notebook(ws, "agent-listings");
+  assert.equal(listings.kind, "ok");
+  assert.equal(listings.value.entries.length, 3);
+  assert.equal((await fixture.team.notebook(ws, "agent-absent")).kind, "not_found");
 });
 
 test("commands over the adapter: a stale version is a conflict to recheck; a lost reply is uncertain", async () => {

@@ -37,6 +37,7 @@ import {
   decodeKnowledgePages,
   decodeKnowledgeProposals,
   decodeKnowledgeWritten,
+  decodeNotebook,
   decodeSuggestionDecided,
 } from "../../apps/workspace-web/src/http/knowledge-decoders.ts";
 import {
@@ -817,6 +818,11 @@ test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 10
     ["Product 4242 needs care facts.", "Titles on linen shirts run long; keep under 60."],
   );
   for (const entry of a.entries) assert.ok(validateCurrentDefinition("NotebookEntry", entry));
+  // The agent page reads exactly this reply (the SPA's closed decoder), newest first.
+  assert.deepEqual(
+    decodeNotebook(a, INSTALLATION)?.entries.map((e) => e.text),
+    ["Product 4242 needs care facts.", "Titles on linen shirts run long; keep under 60."],
+  );
   // B may view neither the store's artifact tag nor its catalogue: nothing is shown.
   assert.deepEqual((await read(P.B)).entries, []);
   assert.equal((await send(open, P.A, "GET", `/agents/installation_absent/notebook`)).status, 404);

@@ -795,6 +795,7 @@ export function guardPort(
       catalogue: watch(port.team.catalogue.bind(port.team), first),
       addDocument: watch(port.team.addDocument.bind(port.team), first),
       addConfirm: watch(port.team.addConfirm.bind(port.team), first),
+      notebook: watch(port.team.notebook.bind(port.team), first),
     },
     settings: {
       plan: watch(port.settings.plan.bind(port.settings), first),
