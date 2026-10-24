@@ -69,7 +69,9 @@ export type BrokerMethod =
   | "runtimeSweep"
   // v1 PR 3 (ApiBroker): the gateway's apply and read-back of one catalog_write operation.
   | "shopifyProductApply"
-  | "shopifyProductReconcile";
+  | "shopifyProductReconcile"
+  // v1 PR 4 (ApiBroker): the undo check of one verified catalog_write operation.
+  | "shopifyProductUndoCheck";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"

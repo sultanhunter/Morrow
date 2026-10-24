@@ -144,8 +144,8 @@ CREATE POLICY broker_undo_snapshot ON morrow_work.product_snapshots FOR INSERT T
 -- Privileges: SELECT and INSERT, never UPDATE, DELETE or TRUNCATE (append-only); the api reads
 -- the undo records column by column.
 GRANT SELECT,INSERT ON morrow_work.operation_undo_checks,morrow_work.catalog_undos TO morrow_work_command;
-GRANT SELECT (organization_id,workspace_id,proposal_id,operation_id,check_sequence,requester_principal_id,requester_membership_id,created_at)
- ON morrow_work.catalog_undos TO morrow_work_api;
+GRANT SELECT (organization_id,workspace_id,proposal_id,operation_id,check_sequence,requester_principal_id,requester_membership_id,command_id,
+ request_digest,created_at) ON morrow_work.catalog_undos TO morrow_work_api;
 DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['operation_undo_checks','catalog_undos'] LOOP
   EXECUTE format('CREATE TRIGGER append_only BEFORE UPDATE OR DELETE ON morrow_work.%I FOR EACH ROW EXECUTE FUNCTION morrow_work.append_only()',t);

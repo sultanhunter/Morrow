@@ -171,6 +171,23 @@ export const workTables = Object.freeze({
     policies: ["broker_catalog_operation", "broker_catalog_read"],
     content: "none",
   },
+  // v1 PR 4 (0047 catalog-undo): the broker's reads of a product before an undo (the read's
+  // digest, per-field codes and time; content-free, 365 days), written only by its undo
+  // definers (broker_catalog_operation) and read by the session context (commandRead); and
+  // one record per undo proposal naming the change it undoes (ids and times), written by
+  // cmd_catalog_undo and read by the api.
+  operation_undo_checks: {
+    class: "tenant_internal",
+    parents: ["operations"],
+    commandRead: true,
+    policies: ["broker_catalog_operation"],
+    content: "none",
+  },
+  catalog_undos: {
+    class: "tenant_readable",
+    parents: ["proposals", "operations", "operation_undo_checks"],
+    content: "none",
+  },
   // M3 PR-1 listings authority (migration 0031).
   agent_releases: { class: "platform", parents: [], content: "none" },
   model_catalogue_versions: { class: "platform", parents: [], content: "none" },
@@ -271,9 +288,12 @@ export const workTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     lease: true,
-    // v1 PR 3: the broker's catalog read-back reads the draft's source snapshot.
+    // v1 PR 3: the broker's catalog read-back reads the draft's source snapshot. v1 PR 4
+    // (catalog-undo): the broker's undo check stores its read of one product, for exactly the
+    // tenant, store and product its own setting names (broker_undo_snapshot, INSERT only).
     policies: [
       "broker_catalog_read",
+      "broker_undo_snapshot",
       "connector_content_delete",
       "connector_content_delete_only",
       "connector_content_read",
@@ -691,6 +711,19 @@ export const workFunctions = Object.freeze({
   "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },
   "catalog_item_matches(jsonb,jsonb)": { kind: "helper", grantees: [] },
   "readback_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  // v1 PR 4 (0047 catalog-undo): the history's undo states and the undo's source (reads), the
+  // undo command (the api), the undo state and the undo item's set (helpers the definers call)
+  // and the undo checks' CHECK.
+  "catalog_undo_states(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "catalog_undo_source(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.undo",
+  },
+  "catalog_undo_state(text,text,text)": { kind: "helper", grantees: [] },
+  "catalog_undo_set(jsonb,text[])": { kind: "helper", grantees: [] },
+  "undo_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   // PR 18 (0046). Pure functions of the CHECKs.
   "goal_time(text)": { kind: "check", grantees: ["morrow_work_command"] },
   "valid_goal_measure(jsonb,timestamp with time zone)": {
@@ -1389,6 +1422,13 @@ export const vaultFunctions = Object.freeze({
   },
   "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  // v1 PR 4 (0047 catalog-undo): the undo check's resolution and record, keyed by one
+  // operation id as the read-back is.
+  "catalog_undo_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_undo_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -1521,6 +1561,9 @@ export const executorLogins = Object.freeze({
     "morrow_vault.catalog_write_begin(text,text,text,text,text)",
     "morrow_vault.catalog_write_end(text,text,text,text)",
     "morrow_vault.catalog_write_resolve(text)",
+    // v1 PR 4 (catalog-undo).
+    "morrow_vault.catalog_undo_record(text,text,text,text,text)",
+    "morrow_vault.catalog_undo_resolve(text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

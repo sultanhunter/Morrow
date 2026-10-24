@@ -35,5 +35,26 @@ export const reviewStatements = Object.freeze({
   // One operation's history: its transitions and read-backs (codes and times only).
   operationTransitions: `SELECT t.revision::text AS revision,t.from_status,t.to_status,t.reason,${utc("t.occurred_at")} AS occurred_at FROM morrow_work.operation_transitions t WHERE t.operation_id=$1::text ORDER BY t.revision`,
   operationReadbacks: `SELECT r.sequence::text AS sequence,${utc("r.observed_at")} AS observed_at,r.outcome,r.verdict,r.field_verdicts::text AS field_verdicts FROM morrow_work.operation_readbacks r WHERE r.operation_id=$1::text ORDER BY r.sequence DESC LIMIT 20`,
+  // v1 PR 4 (migration catalog-undo). The history's undo state of a task's changes, and what
+  // one undo is built from (the before values only while it is available; the Worker requires
+  // the store's product read first): ids, codes, times and that one snapshot.
+  catalogUndoStates:
+    "SELECT operation_id,state,available_until,undo_proposal_id,undo_of_operation_id FROM morrow_work.catalog_undo_states($1)",
+  catalogUndoSource:
+    "SELECT state,available_until,undo_proposal_id,before_snapshot,check_sequence,check_digest,check_verdict,check_fields,check_observed_at FROM morrow_work.catalog_undo_source($1)",
+  cmdCatalogUndo:
+    "SELECT outcome,result FROM morrow_work.cmd_catalog_undo($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+  // The person's own earlier undo command (a replay), its proposal and approval.
+  undoOfCommand:
+    "SELECT u.proposal_id::text AS proposal_id,u.operation_id::text AS operation_id,u.request_digest::text AS request_digest FROM morrow_work.catalog_undos u WHERE u.requester_principal_id=$1::text AND u.command_id=$2::text",
+  undoProposalApproval: `SELECT p.digest::text AS digest,a.id::text AS approval_id,a.status,${utc("a.expires_at")} AS expires_at FROM morrow_work.proposals p JOIN morrow_work.approvals a ON a.organization_id=p.organization_id AND a.workspace_id=p.workspace_id AND a.proposal_id=p.id WHERE p.id=$1::text`,
+  // Whether a proposal undoes a change: the change's operation, proposal, product and send.
+  undoOfProposal: `SELECT u.operation_id::text AS operation_id,o.proposal_id::text AS proposal_id,o.target_resource_id::text AS product_id,${utc("o.send_started_at")} AS applied_at FROM morrow_work.catalog_undos u JOIN morrow_work.operations o ON o.organization_id=u.organization_id AND o.workspace_id=u.workspace_id AND o.id=u.operation_id WHERE u.proposal_id=$1::text`,
+  // The workspace's current review policy, which an undo proposal binds.
+  currentReviewPolicy:
+    "SELECT r.revision::text AS revision,r.canonical,r.digest::text AS digest FROM morrow_work.review_policies r WHERE r.id='review-policy' ORDER BY r.revision DESC LIMIT 1",
+  // "Approve several at once": the pending, unexpired root proposals of one task, capability
+  // and store (at most 11 read: the batch takes 2 to 10).
+  pendingOfTask: `SELECT p.id::text AS id FROM morrow_work.proposals p JOIN morrow_work.approvals a ON a.organization_id=p.organization_id AND a.workspace_id=p.workspace_id AND a.proposal_id=p.id WHERE p.task_id=$1::text AND p.capability_id=$2::text AND p.store_id=$3::text AND p.derived_from_id IS NULL AND a.status='pending' AND a.expires_at>date_trunc('milliseconds',clock_timestamp()) ORDER BY p.created_at,p.id::text COLLATE "C" LIMIT 11`,
 } as const);
 export type ReviewStatementName = keyof typeof reviewStatements;

@@ -231,6 +231,12 @@ export interface ApiBrokerRpc {
   // read-back is never blocked by the switch.
   shopifyProductApply(operationId: string, budgetMs: number): Promise<string>;
   shopifyProductReconcile(operationId: string, budgetMs: number): Promise<string>;
+  // v1 PR 4: the undo check of one verified catalog_write operation: one product read, its
+  // five listing fields compared with the values the apply left, the read stored as a product
+  // snapshot and its codes recorded (encodeShopifyUndoCheckResult: codes only). Ids and a
+  // budget only, keyed by the operation as the read-back is, never blocked by the switch (it
+  // only reads; the undo it prepares is applied through the gateway).
+  shopifyProductUndoCheck(operationId: string, budgetMs: number): Promise<string>;
   // "Disconnect store" (ADR-0022 items 7 and 13; the M2 brief's PR-3 checklist): after the
   // api's disconnect committed, destroys that installation's offline token and records the
   // destruction on it. The reason is fixed (`disconnected`): the api can destroy only a token
@@ -1241,6 +1247,79 @@ export function decodeShopifyReconcileResult(text: unknown): ShopifyReconcileRes
     outcome: v.outcome as ShopifyReconcileOutcome,
     status: v.status as OperationStatusName | null,
     verdict: v.verdict as ShopifyReconcileResult["verdict"],
+  });
+}
+
+// v1 PR 4: the undo check's closed result. `recorded` carries the check's sequence (which the
+// undo command names), the overall verdict and the five listing fields' codes (`missing` has
+// no codes); every other outcome is a refusal code with nulls. Codes only: never a value.
+export const shopifyUndoCheckOutcomes = Object.freeze([
+  "recorded",
+  "not_applied",
+  "unavailable",
+  "too_soon",
+  "link_changed",
+  "credential_unavailable",
+  "held",
+] as const);
+export type ShopifyUndoCheckOutcome = (typeof shopifyUndoCheckOutcomes)[number];
+export const undoCheckFields = Object.freeze([
+  "descriptionHtml",
+  "seo.description",
+  "seo.title",
+  "tags",
+  "title",
+] as const);
+export type UndoFieldCode = "unchanged" | "changed";
+export interface ShopifyUndoCheckResult {
+  readonly outcome: ShopifyUndoCheckOutcome;
+  readonly sequence: number | null;
+  readonly verdict: "unchanged" | "changed" | "missing" | null;
+  readonly fields: Readonly<Record<(typeof undoCheckFields)[number], UndoFieldCode>> | null;
+}
+function undoCheckValid(r: Record<string, unknown>): boolean {
+  const fields = r.fields;
+  const fieldsValid =
+    fields === null ||
+    (!!fields &&
+      typeof fields === "object" &&
+      !Array.isArray(fields) &&
+      Object.keys(fields).sort().join(",") === [...undoCheckFields].join(",") &&
+      Object.values(fields).every((v) => v === "unchanged" || v === "changed"));
+  if (!(shopifyUndoCheckOutcomes as readonly unknown[]).includes(r.outcome) || !fieldsValid)
+    return false;
+  if (r.outcome !== "recorded") return r.sequence === null && r.verdict === null && fields === null;
+  if (!Number.isSafeInteger(r.sequence) || (r.sequence as number) < 1) return false;
+  if (r.verdict === "missing") return fields === null;
+  if (fields === null) return false;
+  const all = Object.values(fields as Record<string, string>).every((v) => v === "unchanged");
+  return r.verdict === (all ? "unchanged" : "changed");
+}
+export function encodeShopifyUndoCheckResult(r: ShopifyUndoCheckResult): string {
+  const value = {
+    schemaVersion: 1,
+    outcome: r.outcome,
+    sequence: r.sequence,
+    verdict: r.verdict,
+    fields:
+      r.fields === null ? null : Object.fromEntries(undoCheckFields.map((f) => [f, r.fields![f]])),
+  };
+  if (!undoCheckValid(value)) throw invalid();
+  return JSON.stringify(value);
+}
+export function decodeShopifyUndoCheckResult(text: unknown): ShopifyUndoCheckResult {
+  const v = closedResult(text, ["schemaVersion", "outcome", "sequence", "verdict", "fields"]);
+  if (!undoCheckValid(v)) throw invalid();
+  return Object.freeze({
+    outcome: v.outcome as ShopifyUndoCheckOutcome,
+    sequence: v.sequence as number | null,
+    verdict: v.verdict as ShopifyUndoCheckResult["verdict"],
+    fields:
+      v.fields === null
+        ? null
+        : (Object.freeze({
+            ...(v.fields as Record<string, UndoFieldCode>),
+          }) as ShopifyUndoCheckResult["fields"]),
   });
 }
 
