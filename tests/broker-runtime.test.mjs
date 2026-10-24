@@ -836,17 +836,14 @@ test("the vault ledger: registered statements only, rows read strictly, failures
     ),
     [true, true, true, true, true, true],
   );
-  assert.deepEqual(
-    Object.keys(runtimeVaultStatements).sort(),
-    [
-      "runtimeOperationBegin",
-      "runtimeOperationCreated",
-      "runtimeOperationSettle",
-      "runtimeOperationsSweep",
-      "runtimeTokenGet",
-      "runtimeTokenPut",
-    ],
-  );
+  assert.deepEqual(Object.keys(runtimeVaultStatements).sort(), [
+    "runtimeOperationBegin",
+    "runtimeOperationCreated",
+    "runtimeOperationSettle",
+    "runtimeOperationsSweep",
+    "runtimeTokenGet",
+    "runtimeTokenPut",
+  ]);
   const sent = [];
   let reply = [];
   const transaction = async (_vault, budgetMs, body) => {

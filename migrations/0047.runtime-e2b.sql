@@ -105,7 +105,8 @@ BEGIN
  IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
   OR p_kek_version IS NULL OR p_kek_version !~ '^[1-9][0-9]{0,2}$'
   OR p_wrapped_key IS NULL OR p_wrapped_key !~ '^[0-9a-f]{120}$'
-  OR p_sealed_value IS NULL OR p_sealed_value !~ '^([0-9a-f]{2}){29,4124}$' THEN
+  OR p_sealed_value IS NULL OR p_sealed_value !~ '^[0-9a-f]+$' OR length(p_sealed_value) NOT BETWEEN 58 AND 8248
+  OR length(p_sealed_value)%2<>0 THEN
   RETURN QUERY SELECT 'invalid'::text; RETURN;
  END IF;
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.status INTO o
