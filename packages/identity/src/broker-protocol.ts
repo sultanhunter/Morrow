@@ -261,6 +261,13 @@ export interface ConnectorBrokerRpc {
   // M2 PR-3: destroys an ended installation's offline token, only with the end reason its
   // row records, and records the destruction on it (encodeShopifyCredentialResult).
   shopifyCredentialDestroy(installationId: string, reason: string): Promise<string>;
+  // Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md): a
+  // budget only. The broker takes the active installations whose app/uninstalled and
+  // app/scopes_update subscriptions are not registered from its own vault login, lists each
+  // store's subscriptions of those topics with its token and creates only a missing one, to
+  // the connector's webhook path built from its own configuration; counts only come back
+  // (encodeShopifyWebhookSyncResult). Held without the vault or that configuration.
+  shopifyWebhookSubscriptionsSync(budgetMs: number): Promise<string>;
 }
 export interface RuntimeBrokerRpc {
   health(): Promise<boolean>;
@@ -830,6 +837,120 @@ export function decodeShopifyCredentialResult(text: unknown): ShopifyCredentialO
   )
     throw invalid();
   return v.outcome as ShopifyCredentialOutcome;
+}
+
+// ---------------------------------------------------------------------------
+// Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md). One
+// sync takes at most `batch` installations from the vault's pending list (the identity
+// bridge's LIMIT) within its budget. Each installation ends in one closed outcome:
+// registered (both subscriptions exist with exactly the connector's callback URL), failed
+// (nothing was created, or Shopify refused it), unknown (a create whose outcome the broker
+// could not prove and the reconciling list did not settle), unauthorized (Shopify refused
+// the token), or skipped (the installation ended, its credential changed, or the outcome
+// could not be recorded). The first four are what the vault records; the result carries
+// only the counts.
+export const shopifyWebhookSyncLimits = Object.freeze({
+  budgetMinMs: 2000,
+  budgetMaxMs: 25000,
+  batch: 10,
+});
+// The connector's own origin, from the reviewed CONNECTOR_CONFIGURATION_JSON the broker binds
+// byte-equal to the connector's ({schemaVersion: 1, origin, apiOrigin}, at most 1024 bytes):
+// an https origin exactly (no path, credentials or port), or loopback http in development
+// only (the workerd lab), as the connector's own parser admits it. The broker builds each
+// subscription's callback URL from this origin and the app key alone. Throws otherwise.
+export function parseConnectorWebhookOrigin(json: unknown, environment: string): string {
+  let c: Readonly<Record<string, unknown>>;
+  try {
+    c = loginJson(json, 1024, ["schemaVersion", "origin", "apiOrigin"]);
+  } catch {
+    throw invalid();
+  }
+  const origin = (value: unknown): string | null => {
+    if (typeof value !== "string" || value.length > 300) return null;
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      return null;
+    }
+    if (url.origin !== value || url.username || url.password) return null;
+    if (url.protocol === "https:" && url.port === "") return value;
+    if (
+      environment === "development" &&
+      /^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(value) &&
+      Number(url.port) <= 65535
+    )
+      return value;
+    return null;
+  };
+  const own = origin(c.origin);
+  const api = origin(c.apiOrigin);
+  if (c.schemaVersion !== 1 || own === null || api === null || own === api) throw invalid();
+  return own;
+}
+/** One app's webhook callback URL: the connector's signed webhook route for that app key. */
+export function shopifyWebhookCallbackUrl(origin: string, appKey: string): string {
+  if (!exact(shopifyAppKeyPattern, appKey)) throw invalid();
+  return `${origin}/shopify/a/${appKey}/webhooks`;
+}
+export const shopifyWebhookRegistrationStatuses = Object.freeze([
+  "registered",
+  "failed",
+  "unknown",
+  "unauthorized",
+] as const);
+export type ShopifyWebhookRegistrationStatus = (typeof shopifyWebhookRegistrationStatuses)[number];
+export interface ShopifyWebhookSyncResult {
+  readonly checked: number;
+  readonly registered: number;
+  readonly failed: number;
+  readonly unknown: number;
+  readonly unauthorized: number;
+  readonly skipped: number;
+}
+const webhookSyncCounts = [
+  "registered",
+  "failed",
+  "unknown",
+  "unauthorized",
+  "skipped",
+] as const;
+const syncCount = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isSafeInteger(value) &&
+  value >= 0 &&
+  value <= shopifyWebhookSyncLimits.batch;
+export function encodeShopifyWebhookSyncResult(r: ShopifyWebhookSyncResult): string {
+  const text = JSON.stringify({
+    schemaVersion: 1,
+    checked: r.checked,
+    registered: r.registered,
+    failed: r.failed,
+    unknown: r.unknown,
+    unauthorized: r.unauthorized,
+    skipped: r.skipped,
+  });
+  decodeShopifyWebhookSyncResult(text);
+  return text;
+}
+export function decodeShopifyWebhookSyncResult(text: unknown): ShopifyWebhookSyncResult {
+  const v = verdictJson(text, ["schemaVersion", "checked", ...webhookSyncCounts]);
+  if (
+    v.schemaVersion !== 1 ||
+    !syncCount(v.checked) ||
+    !webhookSyncCounts.every((name) => syncCount(v[name])) ||
+    webhookSyncCounts.reduce((sum, name) => sum + (v[name] as number), 0) !== v.checked
+  )
+    throw invalid();
+  return Object.freeze({
+    checked: v.checked,
+    registered: v.registered as number,
+    failed: v.failed as number,
+    unknown: v.unknown as number,
+    unauthorized: v.unauthorized as number,
+    skipped: v.skipped as number,
+  });
 }
 
 // ---------------------------------------------------------------------------

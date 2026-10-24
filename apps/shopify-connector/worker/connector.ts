@@ -26,6 +26,16 @@
 //             destroyed again. The inbox row is the queue: no Queue resource exists. Then
 //             (M2 PR-3 review) the count of open privacy requests past their target or
 //             their 30-day due time, logged as PRIVACY_TARGET_MISSED / PRIVACY_DUE_MISSED.
+//             Then the shop-specific webhook subscriptions (below).
+//   subscriptions  Shopify CLI 4.9 admits no app-specific app/uninstalled or
+//             app/scopes_update subscription under the legacy install flow, so the broker
+//             registers both for each active installation as shop-specific subscriptions to
+//             this connector's webhook path (docs/briefs/shopify-shop-specific-webhooks.md).
+//             The connector only asks, with a budget: after an install or re-authorisation
+//             (waitUntil, after the redirect: the install never waits for it or depends on
+//             it) and from the cron, which catches every installation that still lacks them
+//             (installed before this existed, or a failed or unknown attempt). Counts only
+//             come back; one fixed-code morrow_connector_webhooks line per sync.
 // Ingress limits (M2 PR-2 review, layer 1 of apps/broker/src/shopify-install.ts; ADR-0019
 // items 6 and 8 applied to the second public Worker): every request that would reach the
 // broker is first counted per client address (CF-Connecting-IP, the api's P05.T01ab key),
@@ -40,6 +50,7 @@ import {
   decodeShopifyCredentialResult,
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
+  decodeShopifyWebhookSyncResult,
   decodeShopifyWebhookVerdict,
   type ConnectorBrokerRpc,
   type ShopifyCredentialReason,
@@ -67,6 +78,7 @@ export interface ConnectorDependencies {
     | "shopifyInstallComplete"
     | "shopifyWebhookVerify"
     | "shopifyCredentialDestroy"
+    | "shopifyWebhookSubscriptionsSync"
   >;
   readonly database: ConnectorDatabase;
   /** The ingress limits; null or absent only in development (a lab without them). */
@@ -89,6 +101,11 @@ export const connectorBudgets = Object.freeze({
   destroyMs: 4000,
   pendingMs: 3000,
   redriveMs: 60000,
+  // The shop-specific webhook subscriptions: the broker's budget after an install and from
+  // the cron (within shopifyWebhookSyncLimits), and the RPC timer's slack over it.
+  subscriptionsMs: 15000,
+  subscriptionsCronMs: 20000,
+  subscriptionsSlackMs: 2000,
 });
 /** A request's context: the response may return before work handed to waitUntil ends. */
 export type ConnectorContext = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
@@ -201,7 +218,30 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     return new Response(null, { status: 302, headers });
   }
 
-  async function callback(request: Request, appKey: string, rawQuery: string): Promise<Response> {
+  // The shop-specific webhook subscriptions: one broker sync with this budget. Never throws;
+  // one fixed-code line with the counts, or SUBSCRIPTIONS_UNAVAILABLE.
+  async function subscriptions(budgetMs: number) {
+    try {
+      const result = decodeShopifyWebhookSyncResult(
+        await rpc(
+          () => broker.shopifyWebhookSubscriptionsSync(budgetMs),
+          budgetMs + connectorBudgets.subscriptionsSlackMs,
+        ),
+      );
+      log("morrow_connector_webhooks", { code: "SUBSCRIPTIONS_SYNCED", ...result });
+      return result;
+    } catch {
+      log("morrow_connector_webhooks", { code: "SUBSCRIPTIONS_UNAVAILABLE" });
+      return null;
+    }
+  }
+
+  async function callback(
+    request: Request,
+    appKey: string,
+    rawQuery: string,
+    ctx: ConnectorContext,
+  ): Promise<Response> {
     const cookie = readStateCookie(request.headers.get("cookie"));
     let queryState: string | null = null;
     try {
@@ -234,6 +274,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     switch (installed.outcome) {
       case "installed":
       case "reauthorised": {
+        // The store's app/uninstalled and app/scopes_update subscriptions, after the
+        // response: the install is complete whatever this does, and the cron retries.
+        ctx.waitUntil(subscriptions(connectorBudgets.subscriptionsMs));
         const location = connectionsUrl(
           configuration.apiOrigin,
           installed.workspaceId!,
@@ -362,6 +405,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       destroyed: 0,
       targetMissed: 0,
       dueMissed: 0,
+      subscriptionsChecked: 0,
+      subscriptionsRegistered: 0,
       unavailable: 0,
     };
     let ids: readonly string[] = [];
@@ -404,6 +449,18 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       counts.unavailable++;
       log("morrow_connector_privacy", { code: "PRIVACY_CHECK_UNAVAILABLE" });
     }
+    // The shop-specific webhook subscriptions of every active installation that lacks them,
+    // when the run still has the sync's whole budget.
+    if (
+      deadline - Date.now() >=
+      connectorBudgets.subscriptionsCronMs + connectorBudgets.subscriptionsSlackMs
+    ) {
+      const synced = await subscriptions(connectorBudgets.subscriptionsCronMs);
+      if (synced) {
+        counts.subscriptionsChecked = synced.checked;
+        counts.subscriptionsRegistered = synced.registered;
+      } else counts.unavailable++;
+    }
     log("morrow_connector_redrive", counts);
     return Object.freeze(counts);
   }
@@ -423,7 +480,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
         });
       if (selected.route === "webhooks") return webhooks(request, selected.appKey, ctx);
       if (selected.route === "callback")
-        return callback(request, selected.appKey, selected.rawQuery);
+        return callback(request, selected.appKey, selected.rawQuery, ctx);
       return launch(request, selected.appKey, selected.rawQuery, selected.route === "status");
     },
   });

@@ -360,6 +360,20 @@
       "sha256": "b6f8e266732275c0e1f6e3d3455c7199fc35bcdd3f43c858445767e8bb8c65f7",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/projects-backend.md"
+    },
+    {
+      "sequence": 47,
+      "file": "0047.shopify-webhook-registrations-identity.sql",
+      "sha256": "0f0ec373efcc76e2058504ebc361aef107f9e7934f2b9f6f07a9f527dfa6cd73",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
+    },
+    {
+      "sequence": 48,
+      "file": "0048.shopify-webhook-registrations-vault.sql",
+      "sha256": "953f0a45ea94d9414669838f4d8fd2477d8844c2b6a01bac08e4c8a1740a0324",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
     }
   ]
 }
