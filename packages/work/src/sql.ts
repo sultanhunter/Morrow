@@ -2,6 +2,7 @@ import { agentStatements } from "./agents/sql.js";
 import { approvalStatements } from "./approvals/sql.js";
 import { billingStatements } from "./billing/sql.js";
 import { catalogStatements } from "./catalog/sql.js";
+import { loopStatements } from "./loop/sql.js";
 import { connectionStatements } from "./connections/sql.js";
 import { reviewStatements } from "./review/sql.js";
 import { projectStatements } from "./projects/sql.js";
@@ -86,5 +87,7 @@ export const workStatements = Object.freeze({
   ...reviewStatements,
   // PR 18: the goal and plan-start routes (migration 0046).
   ...projectStatements,
+  // Build order PR 11: agent-run admission and the requester's answer (migration 0047).
+  ...loopStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

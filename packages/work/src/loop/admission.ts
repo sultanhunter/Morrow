@@ -10,6 +10,7 @@ import {
 import type { StepRunIntent } from "@morrow/policy/projects";
 import { agentLoopOn, agentLoopVar } from "../../../identity/src/broker-protocol.js";
 import { generatedLoopCatalogue } from "../../../policy/src/generated/loop-catalogue.js";
+import { WorkSqlUnavailable, type WorkTx } from "../connection.js";
 import { canonicalJson } from "../digest.js";
 
 // Agent-run admission in code (ADR-0027 items 1, 6, 9 and 12), the part the api composes
@@ -220,3 +221,185 @@ export const planStepAdmitterOff: PlanStepAdmitter = Object.freeze({
     );
   },
 });
+
+/** What the api's caller supplies beyond the manifest: the command and the new records' ids. */
+export interface RoutedAdmissionInput extends RoutedManifestInput {
+  readonly commandId: string;
+  readonly requestDigest: string;
+  readonly correlationId: string;
+  /** The person's own task T, on which the envelope is issued. */
+  readonly parentTaskId: string;
+  readonly envelopeId: string;
+  readonly hopId: string;
+  /** The workspace's Coordinator principal id to ensure (agent_<uuid>). */
+  readonly coordinatorPrincipalId: string;
+  readonly grantId: string;
+}
+const admitRefusals = [
+  "invalid",
+  "ineligible",
+  "stale_authority",
+  "command_conflict",
+  "not_found",
+  "state_conflict",
+  "stopped",
+  "denied",
+  "catalogue_inactive",
+  "entry_not_offered",
+  "cap_below_turn",
+  "entitlement",
+  "no_billing_period",
+  "daily_backstop",
+  "unrecovered_cost_cap",
+] as const;
+export type RoutedAdmission =
+  | {
+      readonly outcome: "applied";
+      readonly runId: string;
+      readonly childTaskId: string;
+      readonly turnLimit: number;
+      readonly holdUsd: string;
+    }
+  | {
+      readonly outcome:
+        | "switch_off"
+        | "no_tools"
+        | (typeof admitRefusals)[number];
+    };
+/**
+ * A person's routed run of one installed agent (ADR-0027 items 1, 6 and 12), inside the
+ * api's transaction after enter_context: the switch first (switch_off before any statement),
+ * then the manifest in code, then cmd_agent_run_admit, which re-checks every rule and derives
+ * the caps, the hold, the envelope and the billing facts itself (its CHECK proves the
+ * manifest is the run's). Any refusal rolls the transaction back. The route that composes it
+ * (and replays its command through begin_run_command) is PR 12's, behind the same switch.
+ */
+export async function admitRoutedRun(
+  tx: WorkTx,
+  agentLoop: AgentLoopSwitch,
+  input: RoutedAdmissionInput,
+): Promise<RoutedAdmission> {
+  if (agentLoop !== "on") return Object.freeze({ outcome: "switch_off" as const });
+  const built = routedManifest(input);
+  if (!built.ok)
+    return Object.freeze({ outcome: built.code === "no_tools" ? ("no_tools" as const) : built.code });
+  tx.markSubmitted();
+  const rows = await tx.run("cmdAgentRunAdmit", [
+    input.commandId,
+    input.requestDigest,
+    input.correlationId,
+    input.parentTaskId,
+    input.storeId,
+    input.installationId,
+    input.runId,
+    input.childTaskId,
+    input.envelopeId,
+    input.hopId,
+    input.coordinatorPrincipalId,
+    input.grantId,
+    String(input.profile.catalogueVersion),
+    input.profile.model,
+    input.profile.effort,
+    JSON.stringify(input.tools),
+    String(toolCatalogueVersion),
+    toolCatalogueDigest,
+    routedSystemTextDigest,
+    built.canonical,
+    input.admittedAt,
+  ]);
+  const row = rows.length === 1 ? rows[0] : undefined;
+  if (!row || typeof row.outcome !== "string") throw new WorkSqlUnavailable();
+  if (row.outcome !== "applied") {
+    if (!(admitRefusals as readonly string[]).includes(row.outcome) || row.result !== null)
+      throw new WorkSqlUnavailable();
+    tx.rollbackOnly();
+    return Object.freeze({ outcome: row.outcome as (typeof admitRefusals)[number] });
+  }
+  let result: Record<string, unknown>;
+  try {
+    result = JSON.parse(String(row.result)) as Record<string, unknown>;
+  } catch {
+    throw new WorkSqlUnavailable();
+  }
+  if (
+    result.runId !== input.runId ||
+    result.childTaskId !== input.childTaskId ||
+    result.status !== "queued" ||
+    result.turnLimit !== built.caps.turnLimit ||
+    result.holdUsd !== built.caps.holdUsd
+  )
+    throw new WorkSqlUnavailable();
+  return Object.freeze({
+    outcome: "applied" as const,
+    runId: input.runId,
+    childTaskId: input.childTaskId,
+    turnLimit: built.caps.turnLimit,
+    holdUsd: built.caps.holdUsd,
+  });
+}
+
+const answerRefusals = [
+  "invalid",
+  "ineligible",
+  "stale_authority",
+  "command_conflict",
+  "not_found",
+  "denied",
+  "state_conflict",
+  "expired",
+  "stopped",
+] as const;
+/**
+ * The run's requester answers its open question (ADR-0027 item 1): the switch first, then
+ * cmd_agent_run_answer, which checks that the actor is the run's requester, the question is
+ * the run's open one within its 72 hours, no stop blocks the run and the store's connection
+ * is current, and opens the resume lease (it grants nothing). The Inbox route that composes
+ * it is PR 15's, behind the same switch.
+ */
+export async function answerRunQuestion(
+  tx: WorkTx,
+  agentLoop: AgentLoopSwitch,
+  input: {
+    readonly commandId: string;
+    readonly requestDigest: string;
+    readonly correlationId: string;
+    readonly questionId: string;
+    readonly answer: string;
+  },
+): Promise<
+  | { readonly outcome: "applied"; readonly runId: string }
+  | { readonly outcome: "switch_off" | (typeof answerRefusals)[number] }
+> {
+  if (agentLoop !== "on") return Object.freeze({ outcome: "switch_off" as const });
+  if (
+    typeof input.answer !== "string" ||
+    !/\S/.test(input.answer) ||
+    [...input.answer].length > 2000
+  )
+    return Object.freeze({ outcome: "invalid" as const });
+  tx.markSubmitted();
+  const rows = await tx.run("cmdAgentRunAnswer", [
+    input.commandId,
+    input.requestDigest,
+    input.correlationId,
+    input.questionId,
+    input.answer,
+  ]);
+  const row = rows.length === 1 ? rows[0] : undefined;
+  if (!row || typeof row.outcome !== "string") throw new WorkSqlUnavailable();
+  if (row.outcome !== "applied") {
+    if (!(answerRefusals as readonly string[]).includes(row.outcome) || row.result !== null)
+      throw new WorkSqlUnavailable();
+    tx.rollbackOnly();
+    return Object.freeze({ outcome: row.outcome as (typeof answerRefusals)[number] });
+  }
+  let result: Record<string, unknown>;
+  try {
+    result = JSON.parse(String(row.result)) as Record<string, unknown>;
+  } catch {
+    throw new WorkSqlUnavailable();
+  }
+  if (result.questionId !== input.questionId || typeof result.runId !== "string" || result.status !== "queued")
+    throw new WorkSqlUnavailable();
+  return Object.freeze({ outcome: "applied" as const, runId: result.runId });
+}
