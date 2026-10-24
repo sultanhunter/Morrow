@@ -1,7 +1,7 @@
 # v1 PR 4: Undo, history and the product picker
 
-- Status: brief, 2026-10-24. The v1 build order's PR 4 (milestone 2, "safe to use every day") under ADR-0035, on top of PR 3's gateway ([v1-review-apply.md](v1-review-apply.md); migrations 0044 and 0045). Decided by: ADR-0011 (digest-bound approval of the exact change), ADR-0022 items 3, 7, 9 and 13, ADR-0024 items 8 and 9 (one confirmation per batch), ADR-0031 item 1 (product data's clock), ADR-0032 (Sunrise), ADR-0035 item 5. Nothing here needs a new ADR; the questions below are for the owner or the lead.
-- Branch `claude/v1-undo-history-picker`. Migration `0047.catalog-undo` (the next free number on `main` at 2455dc80; integration renumbers if another PR lands first). No new switch: Undo can only follow a verified apply, and every apply, an undo's included, goes through PR 3's switch (`docs/decisions/shopify-write-staging.json`, still off).
+- Status: brief, 2026-10-24. The [v1 build order](../plan/v1-build-order.md)'s PR 4 (milestone 2, "safe to use every day") under ADR-0035, on top of PR 3's gateway ([v1-review-apply.md](v1-review-apply.md); migrations 0044 and 0045). Decided by: ADR-0011 (digest-bound approval of the exact change), ADR-0022 items 3, 7, 9 and 13, ADR-0024 items 8 and 9 (one confirmation per batch), ADR-0031 item 1 (product data's clock), ADR-0032 (Sunrise), ADR-0035 item 5. Nothing here needs a new ADR; the questions below are for the owner or the lead.
+- Branch `claude/v1-undo-history-picker`. Migration `0047.catalog-undo` (the next free number on `main` at 2455dc80, and still free after merging `main` at 17b69fa4 on 2026-10-25; integration renumbers if another PR lands first). No new switch: Undo can only follow a verified apply, and every apply, an undo's included, goes through PR 3's switch (`docs/decisions/shopify-write-staging.json`, still off).
 
 ## Goal
 
