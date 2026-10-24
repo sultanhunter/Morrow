@@ -4,21 +4,21 @@ BEGIN;
 -- (0038). No external effect: nothing here creates, reads or kills a sandbox; the broker's
 -- runtime gateway (apps/broker/src/runtime-gateway.ts) calls these definers on its own login
 -- around each provider request, and its switch is committed off.
---   * morrow_vault.runtime_operations: one row per sandbox (a runtime operation), tenant-keyed,
+--   * morrow_work.runtime_operations: one row per sandbox (a runtime operation), tenant-keyed,
 --     content-free (ids, digests, codes and times). Its send mark (status `sending`) commits
 --     before any create; a create, kill or lookup the broker cannot prove becomes
 --     `unknown_effect` and is reconciled by its metadata before anything else, never promoted
 --     to success, and `not_found` alone never settles it. One row per run and call key, so a
 --     retried step never creates twice.
---   * morrow_vault.runtime_holds: the runtime hold (ADR-0029 item 9). A quota or billing block,
+--   * morrow_work.runtime_holds: the runtime hold (ADR-0029 item 9). A quota or billing block,
 --     an unreconciled unknown effect or a profile violation sets one; while any is active no
 --     create is admitted (cleanup is never blocked). Only a person lifts it, through the
 --     owner's runtime_hold_lift (INVOKER, owned by the owner, granted to nobody).
---   * morrow_vault.runtime_capacity: the platform's one row of runtime caps in use (open
+--   * morrow_work.runtime_capacity: the platform's one row of runtime caps in use (open
 --     sandboxes and the month's committed worst cases), so the monthly budget below E2B's
 --     usage limit and the concurrency cap are checked under one row lock without any
 --     cross-tenant read.
---   * morrow_vault.runtime_caps(): the caps in code (ADR-0029 item 8), drift-tested against
+--   * morrow_work.runtime_caps(): the caps in code (ADR-0029 item 8), drift-tested against
 --     packages/policy/src/runtime-computer.ts: a monthly budget of US$10 (E2B's limit is
 --     US$20), 10 concurrent sandboxes (half of Hobby's 20), 3 per workspace, US$0.03 a
 --     sandbox's worst case at list rates, a 960 s deadline (900 s lifetime plus the create's
@@ -33,6 +33,14 @@ BEGIN;
 --     runtime_operation_created, runtime_operation_settle and runtime_operations_open (the
 --     sweep's ids-only, cross-tenant list of stale open operations; ADR-0029's accepted
 --     residual).
+-- Placement: the ledger's tables, its guard, the caps and the operator's lift live in
+-- morrow_work, beside 0038's run_model_calls; only the broker's four definers live in
+-- morrow_vault (as 0038's model definers and 0040's admission do). The vault holds sealed
+-- secrets only, so the command role's vault privileges stay app_secrets and credentials
+-- (lab:spine-foundation V3). The broker's login still holds no table privilege and reaches
+-- the ledger only through those definers (broker_runtime: the broker's session user, under
+-- FORCE RLS); the session template on the operations is read-only (tenant_command FOR
+-- SELECT), so no session definer writes the ledger.
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR NOT morrow_identity.morrow_memberships_closed()
@@ -44,8 +52,8 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_billing.run_book_cost(text,text,text,text,numeric,text)') IS NULL
  OR to_regprocedure('morrow_vault.resolve_call(text,text,text,text)') IS NULL
  OR to_regprocedure('morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)') IS NULL
- OR to_regclass('morrow_vault.runtime_operations') IS NOT NULL OR to_regclass('morrow_vault.runtime_holds') IS NOT NULL
- OR to_regclass('morrow_vault.runtime_capacity') IS NOT NULL
+ OR to_regclass('morrow_work.runtime_operations') IS NOT NULL OR to_regclass('morrow_work.runtime_holds') IS NOT NULL
+ OR to_regclass('morrow_work.runtime_capacity') IS NOT NULL
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_executor_safe(text)','EXECUTE')
  THEN RAISE EXCEPTION 'RUNTIME_OPERATIONS_PREREQUISITES_INVALID'; END IF;
 END $$;
@@ -138,7 +146,7 @@ END $$;
 -- records the provider's opaque id; `unknown_effect` means the broker cannot prove whether a
 -- sandbox exists (with the last reason); `killed`, `absent_verified` and `not_created` are
 -- terminal. reconciled_at is the sweep's last look. Content-free: ids, digests, codes, times.
-CREATE TABLE morrow_vault.runtime_operations (
+CREATE TABLE morrow_work.runtime_operations (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
  id morrow_work.record_id NOT NULL CHECK (id::text ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'),
@@ -173,13 +181,13 @@ CREATE TABLE morrow_vault.runtime_operations (
  CONSTRAINT runtime_operations_times CHECK (updated_at>=send_started_at AND (settled_at IS NULL OR settled_at>=send_started_at)
   AND (reconciled_at IS NULL OR reconciled_at>=send_started_at))
 );
-CREATE UNIQUE INDEX runtime_operations_id ON morrow_vault.runtime_operations (id);
-CREATE INDEX runtime_operations_open ON morrow_vault.runtime_operations (send_started_at,id) WHERE status IN ('sending','created','unknown_effect');
-CREATE INDEX runtime_operations_workspace_open ON morrow_vault.runtime_operations (organization_id,workspace_id)
+CREATE UNIQUE INDEX runtime_operations_id ON morrow_work.runtime_operations (id);
+CREATE INDEX runtime_operations_open ON morrow_work.runtime_operations (send_started_at,id) WHERE status IN ('sending','created','unknown_effect');
+CREATE INDEX runtime_operations_workspace_open ON morrow_work.runtime_operations (organization_id,workspace_id)
  WHERE status IN ('sending','created','unknown_effect');
 -- A runtime hold (platform): raised by the settle definer at most once per operation and
 -- class, lifted once, only by a person (the owner's runtime_hold_lift). Content-free.
-CREATE TABLE morrow_vault.runtime_holds (
+CREATE TABLE morrow_work.runtime_holds (
  id morrow_work.record_id NOT NULL PRIMARY KEY CHECK (id::text ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'),
  reason text NOT NULL CHECK (reason IN ('unknown_effect','quota_exhausted','billing_blocked','profile_violation')),
  operation_id morrow_work.record_id NOT NULL CHECK (operation_id::text ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'),
@@ -191,10 +199,10 @@ CREATE TABLE morrow_vault.runtime_holds (
  CONSTRAINT runtime_holds_lift CHECK ((lifted_at IS NULL)=(lifted_by_operator_id IS NULL) AND (lifted_at IS NULL)=(lift_reason IS NULL)
   AND (lifted_at IS NULL OR lifted_at>=created_at))
 );
-CREATE INDEX runtime_holds_active ON morrow_vault.runtime_holds (created_at,id) WHERE lifted_at IS NULL;
+CREATE INDEX runtime_holds_active ON morrow_work.runtime_holds (created_at,id) WHERE lifted_at IS NULL;
 -- The platform's runtime caps in use: one row, moved only by the begin and settle definers
 -- under the capacity lock. The bounds repeat runtime_caps() as a backstop.
-CREATE TABLE morrow_vault.runtime_capacity (
+CREATE TABLE morrow_work.runtime_capacity (
  scope text NOT NULL PRIMARY KEY CHECK (scope='platform'),
  open_operations integer NOT NULL CHECK (open_operations BETWEEN 0 AND 10),
  budget_month date NOT NULL CHECK (budget_month=date_trunc('month',budget_month)::date),
@@ -202,7 +210,7 @@ CREATE TABLE morrow_vault.runtime_capacity (
  revision morrow_work.revision NOT NULL,
  updated_at timestamptz NOT NULL CHECK (updated_at=date_trunc('milliseconds',updated_at) AND isfinite(updated_at))
 );
-INSERT INTO morrow_vault.runtime_capacity(scope,open_operations,budget_month,month_committed_usd,revision,updated_at)
+INSERT INTO morrow_work.runtime_capacity(scope,open_operations,budget_month,month_committed_usd,revision,updated_at)
 VALUES ('platform',0,date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')::date,0,1,date_trunc('milliseconds',clock_timestamp()));
 
 -- ---------------------------------------------------------------------------
@@ -211,8 +219,8 @@ VALUES ('platform',0,date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')::d
 -- its reason, the sandbox ref and the times change, along the edges below; a terminal
 -- operation never changes. A hold changes once, to lifted. The capacity row only moves by
 -- revision. Nothing is deleted or truncated.
-CREATE FUNCTION morrow_vault.runtime_guard() RETURNS trigger
-LANGUAGE plpgsql SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
+CREATE FUNCTION morrow_work.runtime_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE v_mutable text[];
 BEGIN
  IF TG_OP IN ('DELETE','TRUNCATE') THEN RAISE EXCEPTION 'RUNTIME_RECORD_IMMUTABLE'; END IF;
@@ -250,38 +258,44 @@ BEGIN
  IF TG_OP='UPDATE' AND NEW.scope=OLD.scope AND NEW.revision=OLD.revision+1 AND NEW.updated_at>=OLD.updated_at THEN RETURN NEW; END IF;
  RAISE EXCEPTION 'RUNTIME_RECORD_INVALID';
 END $$;
-REVOKE ALL ON FUNCTION morrow_vault.runtime_guard() FROM PUBLIC;
-CREATE TRIGGER runtime_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_vault.runtime_operations FOR EACH ROW EXECUTE FUNCTION morrow_vault.runtime_guard();
-CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_vault.runtime_operations FOR EACH STATEMENT EXECUTE FUNCTION morrow_vault.runtime_guard();
-CREATE TRIGGER runtime_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_vault.runtime_holds FOR EACH ROW EXECUTE FUNCTION morrow_vault.runtime_guard();
-CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_vault.runtime_holds FOR EACH STATEMENT EXECUTE FUNCTION morrow_vault.runtime_guard();
-CREATE TRIGGER runtime_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_vault.runtime_capacity FOR EACH ROW EXECUTE FUNCTION morrow_vault.runtime_guard();
-CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_vault.runtime_capacity FOR EACH STATEMENT EXECUTE FUNCTION morrow_vault.runtime_guard();
+REVOKE ALL ON FUNCTION morrow_work.runtime_guard() FROM PUBLIC;
+CREATE TRIGGER runtime_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_work.runtime_operations FOR EACH ROW EXECUTE FUNCTION morrow_work.runtime_guard();
+CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_work.runtime_operations FOR EACH STATEMENT EXECUTE FUNCTION morrow_work.runtime_guard();
+CREATE TRIGGER runtime_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_work.runtime_holds FOR EACH ROW EXECUTE FUNCTION morrow_work.runtime_guard();
+CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_work.runtime_holds FOR EACH STATEMENT EXECUTE FUNCTION morrow_work.runtime_guard();
+CREATE TRIGGER runtime_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_work.runtime_capacity FOR EACH ROW EXECUTE FUNCTION morrow_work.runtime_guard();
+CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_work.runtime_capacity FOR EACH STATEMENT EXECUTE FUNCTION morrow_work.runtime_guard();
 
 -- ---------------------------------------------------------------------------
--- Row security: ENABLE + FORCE, the maintenance-only owner policy and the vault's one
--- policy, the broker's own login through its definers (it holds no table privilege).
+-- Row security: ENABLE + FORCE, the maintenance-only owner policy and broker_runtime, the
+-- broker's own login through its vault definers (it holds no table privilege; the
+-- command role, which owns those definers, sees no row outside the broker's session). The
+-- operations are tenant-keyed, so they also carry the session template, read-only
+-- (tenant_command FOR SELECT, as on 0029's ledger): no session definer writes them. The
+-- holds and the capacity row are platform rows (no tenant keys, no session template).
 DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['runtime_operations','runtime_holds','runtime_capacity'] LOOP
-  EXECUTE format('ALTER TABLE morrow_vault.%I ENABLE ROW LEVEL SECURITY',t);
-  EXECUTE format('ALTER TABLE morrow_vault.%I FORCE ROW LEVEL SECURITY',t);
-  EXECUTE format('CREATE POLICY work_owner ON morrow_vault.%I TO morrow_work_owner USING (true) WITH CHECK (true)',t);
-  EXECUTE format('CREATE POLICY vault_broker ON morrow_vault.%I TO morrow_work_command
+  EXECUTE format('ALTER TABLE morrow_work.%I ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('ALTER TABLE morrow_work.%I FORCE ROW LEVEL SECURITY',t);
+  EXECUTE format('CREATE POLICY work_owner ON morrow_work.%I TO morrow_work_owner USING (true) WITH CHECK (true)',t);
+  EXECUTE format('CREATE POLICY broker_runtime ON morrow_work.%I TO morrow_work_command
    USING (session_user=''morrow_vault_broker'') WITH CHECK (session_user=''morrow_vault_broker'')',t);
-  EXECUTE format('REVOKE ALL ON morrow_vault.%I FROM PUBLIC',t);
+  EXECUTE format('REVOKE ALL ON morrow_work.%I FROM PUBLIC',t);
  END LOOP;
 END $$;
+CREATE POLICY tenant_command ON morrow_work.runtime_operations FOR SELECT TO morrow_work_command
+ USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c));
 -- Privileges: SELECT and INSERT, column-scoped UPDATE; no DELETE or TRUNCATE for anyone.
-GRANT SELECT,INSERT ON morrow_vault.runtime_operations,morrow_vault.runtime_holds TO morrow_work_command;
-GRANT UPDATE (revision,status,unknown_reason,sandbox_ref,reconciled_at,settled_at,updated_at) ON morrow_vault.runtime_operations TO morrow_work_command;
-GRANT SELECT ON morrow_vault.runtime_capacity TO morrow_work_command;
-GRANT UPDATE (open_operations,budget_month,month_committed_usd,revision,updated_at) ON morrow_vault.runtime_capacity TO morrow_work_command;
+GRANT SELECT,INSERT ON morrow_work.runtime_operations,morrow_work.runtime_holds TO morrow_work_command;
+GRANT UPDATE (revision,status,unknown_reason,sandbox_ref,reconciled_at,settled_at,updated_at) ON morrow_work.runtime_operations TO morrow_work_command;
+GRANT SELECT ON morrow_work.runtime_capacity TO morrow_work_command;
+GRANT UPDATE (open_operations,budget_month,month_committed_usd,revision,updated_at) ON morrow_work.runtime_capacity TO morrow_work_command;
 
 -- ---------------------------------------------------------------------------
 -- The runtime caps in code (ADR-0029 item 8): INVOKER, owned by the owner (a later owner
 -- migration may revise them), EXECUTE for the command role only. Drift-tested against
 -- packages/policy/src/runtime-computer.ts (tests/runtime-computer.test.mjs).
-CREATE FUNCTION morrow_vault.runtime_caps()
+CREATE FUNCTION morrow_work.runtime_caps()
 RETURNS TABLE(monthly_budget_usd numeric,concurrent_sandboxes integer,sandboxes_per_workspace integer,worst_case_usd numeric,
  deadline_seconds integer,absent_grace_seconds integer,stale_seconds integer)
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
@@ -322,7 +336,7 @@ BEGIN
   OR p_provider IS NULL OR p_provider !~ '^[a-z][a-z0-9_]{1,31}$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN;
  END IF;
- SELECT * INTO k FROM morrow_vault.runtime_caps();
+ SELECT * INTO k FROM morrow_work.runtime_caps();
  -- The lease's tenant, store and subject (resolve_call's own lease policy, keyed by its setting).
  PERFORM pg_catalog.set_config('morrow.vault_resolve_lease',p_lease_id,true);
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.subject_id::text AS subject_id,x.store_id::text AS store_id,
@@ -352,7 +366,7 @@ BEGIN
  END IF;
  IF v_outcome IS NULL THEN
   -- The same run and call key again: the recorded operation, never a second create.
-  SELECT x.id::text AS id INTO o FROM morrow_vault.runtime_operations x WHERE x.organization_id=rc.organization_id AND x.workspace_id=rc.workspace_id
+  SELECT x.id::text AS id INTO o FROM morrow_work.runtime_operations x WHERE x.organization_id=rc.organization_id AND x.workspace_id=rc.workspace_id
    AND x.run_id=r.id AND x.call_key=p_call_key;
   IF FOUND THEN
    PERFORM pg_catalog.set_config('morrow.vault_model_run','',true),pg_catalog.set_config('morrow.vault_model_tenant','',true);
@@ -374,15 +388,15 @@ BEGIN
  END IF;
  IF v_outcome IS NULL THEN
   -- The platform's caps under one lock: holds, the month's budget, concurrency, the workspace.
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.vault.runtime_capacity')::text,0));
-  SELECT x.open_operations,x.budget_month,x.month_committed_usd INTO cap FROM morrow_vault.runtime_capacity x WHERE x.scope='platform' FOR UPDATE;
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.runtime_capacity')::text,0));
+  SELECT x.open_operations,x.budget_month,x.month_committed_usd INTO cap FROM morrow_work.runtime_capacity x WHERE x.scope='platform' FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'RUNTIME_CAPACITY_MISSING'; END IF;
   v_now:=date_trunc('milliseconds',clock_timestamp());
   v_month:=date_trunc('month',v_now AT TIME ZONE 'UTC')::date;
   v_committed:=CASE WHEN cap.budget_month=v_month THEN cap.month_committed_usd ELSE 0 END;
-  SELECT count(*)::integer INTO v_open FROM morrow_vault.runtime_operations x WHERE x.organization_id=rc.organization_id
+  SELECT count(*)::integer INTO v_open FROM morrow_work.runtime_operations x WHERE x.organization_id=rc.organization_id
    AND x.workspace_id=rc.workspace_id AND x.status IN ('sending','created','unknown_effect');
-  IF EXISTS(SELECT 1 FROM morrow_vault.runtime_holds h WHERE h.lifted_at IS NULL) THEN v_outcome:='runtime_held';
+  IF EXISTS(SELECT 1 FROM morrow_work.runtime_holds h WHERE h.lifted_at IS NULL) THEN v_outcome:='runtime_held';
   ELSIF v_committed+k.worst_case_usd>k.monthly_budget_usd THEN v_outcome:='monthly_budget';
   ELSIF cap.open_operations>=k.concurrent_sandboxes THEN v_outcome:='concurrency_limit';
   ELSIF v_open>=k.sandboxes_per_workspace THEN v_outcome:='workspace_limit';
@@ -399,11 +413,11 @@ BEGIN
   RETURN QUERY SELECT v_outcome,NULL::text,NULL::text; RETURN;
  END IF;
  v_deadline:=v_now+make_interval(secs=>k.deadline_seconds);
- INSERT INTO morrow_vault.runtime_operations(organization_id,workspace_id,id,revision,run_id,lease_id,installation_id,call_key,job_digest,profile,
+ INSERT INTO morrow_work.runtime_operations(organization_id,workspace_id,id,revision,run_id,lease_id,installation_id,call_key,job_digest,profile,
   profile_version,provider,status,unknown_reason,sandbox_ref,worst_case_usd,booking_id,send_started_at,deadline_at,reconciled_at,settled_at,updated_at)
  VALUES (rc.organization_id,rc.workspace_id,v_op,1,r.id,p_lease_id,rc.installation_id,p_call_key,p_job_digest,'morrow.computer',1,p_provider,
   'sending',NULL,NULL,k.worst_case_usd,v_entry,v_now,v_deadline,NULL,NULL,v_now);
- UPDATE morrow_vault.runtime_capacity x SET open_operations=cap.open_operations+1,budget_month=v_month,month_committed_usd=v_committed+k.worst_case_usd,
+ UPDATE morrow_work.runtime_capacity x SET open_operations=cap.open_operations+1,budget_month=v_month,month_committed_usd=v_committed+k.worst_case_usd,
   revision=x.revision+1,updated_at=greatest(v_now,x.updated_at) WHERE x.scope='platform';
  GET DIAGNOSTICS n=ROW_COUNT;
  IF n<>1 THEN RAISE EXCEPTION 'RUNTIME_CAPACITY_MISSING'; END IF;
@@ -426,12 +440,12 @@ BEGIN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.status,x.sandbox_ref INTO o
-  FROM morrow_vault.runtime_operations x WHERE x.id=p_operation_id FOR UPDATE;
+  FROM morrow_work.runtime_operations x WHERE x.id=p_operation_id FOR UPDATE;
  IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
  IF o.status='created' AND o.sandbox_ref=p_sandbox_ref THEN RETURN QUERY SELECT 'recorded'::text,'created'::text; RETURN; END IF;
  IF o.status<>'sending' THEN RETURN QUERY SELECT 'refused'::text,o.status; RETURN; END IF;
  v_now:=date_trunc('milliseconds',clock_timestamp());
- UPDATE morrow_vault.runtime_operations x SET status='created',sandbox_ref=p_sandbox_ref,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
+ UPDATE morrow_work.runtime_operations x SET status='created',sandbox_ref=p_sandbox_ref,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
   WHERE x.organization_id=o.organization_id AND x.workspace_id=o.workspace_id AND x.id=p_operation_id;
  RETURN QUERY SELECT 'recorded'::text,'created'::text;
 END $$;
@@ -459,20 +473,20 @@ BEGIN
    'kill_not_found','status_unknown','not_found_unverified','paused_found')) THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
- SELECT * INTO k FROM morrow_vault.runtime_caps();
- PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.vault.runtime_capacity')::text,0));
+ SELECT * INTO k FROM morrow_work.runtime_caps();
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.runtime_capacity')::text,0));
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.status,x.deadline_at INTO o
-  FROM morrow_vault.runtime_operations x WHERE x.id=p_operation_id FOR UPDATE;
+  FROM morrow_work.runtime_operations x WHERE x.id=p_operation_id FOR UPDATE;
  IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
  IF o.status IN ('killed','absent_verified','not_created') THEN RETURN QUERY SELECT 'already_settled'::text,o.status; RETURN; END IF;
  v_now:=date_trunc('milliseconds',clock_timestamp());
  IF p_status='unknown_effect' THEN
-  UPDATE morrow_vault.runtime_operations x SET status='unknown_effect',unknown_reason=p_reason,reconciled_at=greatest(v_now,x.send_started_at),
+  UPDATE morrow_work.runtime_operations x SET status='unknown_effect',unknown_reason=p_reason,reconciled_at=greatest(v_now,x.send_started_at),
    revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
    WHERE x.organization_id=o.organization_id AND x.workspace_id=o.workspace_id AND x.id=p_operation_id;
   v_class:=CASE p_reason WHEN 'quota_exhausted' THEN 'quota_exhausted' WHEN 'billing_blocked' THEN 'billing_blocked'
    WHEN 'paused_found' THEN 'profile_violation' ELSE 'unknown_effect' END;
-  INSERT INTO morrow_vault.runtime_holds(id,reason,operation_id,created_at,lifted_at,lifted_by_operator_id,lift_reason)
+  INSERT INTO morrow_work.runtime_holds(id,reason,operation_id,created_at,lifted_at,lifted_by_operator_id,lift_reason)
   VALUES (gen_random_uuid()::text,v_class,p_operation_id,v_now,NULL,NULL,NULL) ON CONFLICT (operation_id,reason) DO NOTHING;
   RETURN QUERY SELECT CASE WHEN o.status='unknown_effect' THEN 'already_unknown' ELSE 'settled' END::text,'unknown_effect'::text; RETURN;
  END IF;
@@ -480,11 +494,11 @@ BEGIN
  IF p_status='absent_verified' AND v_now<o.deadline_at+make_interval(secs=>k.absent_grace_seconds) THEN
   RETURN QUERY SELECT 'too_early'::text,o.status; RETURN;
  END IF;
- UPDATE morrow_vault.runtime_operations x SET status=p_status,settled_at=greatest(v_now,x.send_started_at),
+ UPDATE morrow_work.runtime_operations x SET status=p_status,settled_at=greatest(v_now,x.send_started_at),
   reconciled_at=CASE WHEN p_status='not_created' THEN x.reconciled_at ELSE greatest(v_now,x.send_started_at) END,
   revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
   WHERE x.organization_id=o.organization_id AND x.workspace_id=o.workspace_id AND x.id=p_operation_id;
- UPDATE morrow_vault.runtime_capacity x SET open_operations=x.open_operations-1,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
+ UPDATE morrow_work.runtime_capacity x SET open_operations=x.open_operations-1,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
   WHERE x.scope='platform';
  GET DIAGNOSTICS n=ROW_COUNT;
  IF n<>1 THEN RAISE EXCEPTION 'RUNTIME_CAPACITY_MISSING'; END IF;
@@ -502,10 +516,10 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_vault
 DECLARE k record;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') OR p_limit IS NULL OR p_limit !~ '^[1-9][0-9]?$' THEN RETURN; END IF;
- SELECT * INTO k FROM morrow_vault.runtime_caps();
+ SELECT * INTO k FROM morrow_work.runtime_caps();
  RETURN QUERY SELECT x.id::text,x.provider,x.sandbox_ref,x.status,to_char(x.deadline_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),true,
   pg_catalog.clock_timestamp()>=x.deadline_at+make_interval(secs=>k.absent_grace_seconds)
-  FROM morrow_vault.runtime_operations x WHERE x.status IN ('sending','created','unknown_effect')
+  FROM morrow_work.runtime_operations x WHERE x.status IN ('sending','created','unknown_effect')
    AND x.send_started_at+make_interval(secs=>k.stale_seconds)<=pg_catalog.clock_timestamp()
   ORDER BY COALESCE(x.reconciled_at,x.send_started_at),x.id LIMIT p_limit::integer;
 END $$;
@@ -515,9 +529,9 @@ END $$;
 -- audited script as morrow_work_owner, naming the operator and the reason. INVOKER, owned by
 -- the owner, granted to nobody: no runtime login, the broker's included, can call it.
 -- Outcomes: lifted, not_found (unknown or already lifted), invalid, denied.
-CREATE FUNCTION morrow_vault.runtime_hold_lift(p_operator_id text,p_hold_id text,p_reason text)
+CREATE FUNCTION morrow_work.runtime_hold_lift(p_operator_id text,p_hold_id text,p_reason text)
 RETURNS TABLE(outcome text)
-LANGUAGE plpgsql SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE v_now timestamptz; n integer;
 BEGIN
@@ -528,7 +542,7 @@ BEGIN
   RETURN QUERY SELECT 'invalid'::text; RETURN;
  END IF;
  v_now:=date_trunc('milliseconds',clock_timestamp());
- UPDATE morrow_vault.runtime_holds h SET lifted_at=greatest(v_now,h.created_at),lifted_by_operator_id=p_operator_id,lift_reason=p_reason
+ UPDATE morrow_work.runtime_holds h SET lifted_at=greatest(v_now,h.created_at),lifted_by_operator_id=p_operator_id,lift_reason=p_reason
   WHERE h.id=p_hold_id AND h.lifted_at IS NULL;
  GET DIAGNOSTICS n=ROW_COUNT;
  RETURN QUERY SELECT CASE WHEN n=1 THEN 'lifted' ELSE 'not_found' END::text;
@@ -536,13 +550,13 @@ END $$;
 
 -- ---------------------------------------------------------------------------
 -- Explicit ACLs per function (S7 reads proacl), then the ownership transfer.
-REVOKE ALL ON FUNCTION morrow_vault.runtime_caps() FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_work.runtime_caps() FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_vault.runtime_operation_begin(text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_vault.runtime_operation_created(text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_vault.runtime_operation_settle(text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_vault.runtime_operations_open(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION morrow_vault.runtime_hold_lift(text,text,text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION morrow_vault.runtime_caps() TO morrow_work_command;
+REVOKE ALL ON FUNCTION morrow_work.runtime_hold_lift(text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION morrow_work.runtime_caps() TO morrow_work_command;
 GRANT EXECUTE ON FUNCTION morrow_vault.runtime_operation_begin(text,text,text,text,text),morrow_vault.runtime_operation_created(text,text),
  morrow_vault.runtime_operation_settle(text,text,text),morrow_vault.runtime_operations_open(text) TO morrow_vault_broker;
 GRANT CREATE ON SCHEMA morrow_vault TO morrow_work_command;

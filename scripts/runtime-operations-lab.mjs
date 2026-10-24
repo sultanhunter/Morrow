@@ -28,7 +28,9 @@
 //      work" refuses the send mark while the sweep still kills a stopped run's sandbox;
 //   G  the guards and grants: the broker's login holds no table privilege, no other login
 //      executes its definers, a terminal operation never changes, nothing is deleted, the
-//      sweep's list is ids only, and the settle definer's edges hold.
+//      sweep's list is ids only, and the settle definer's edges hold; the ledger's tables are
+//      morrow_work's, so the vault keeps its two sealed-secret tables only, and the ledger's
+//      ACL is exactly the command role's.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
 // marked sim stand in for states no API path reaches yet. CI pg-work group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -506,19 +508,19 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   });
   const ops = (runId = main.runId) =>
     db.rows(
-      `SELECT id::text AS id,call_key,status,unknown_reason AS reason,provider,sandbox_ref,worst_case_usd::text AS worst,booking_id,job_digest::text AS digest,installation_id::text AS installation,settled_at IS NOT NULL AS settled,deadline_at-send_started_at AS span FROM morrow_vault.runtime_operations WHERE run_id=${literal(runId)} ORDER BY send_started_at,id`,
+      `SELECT id::text AS id,call_key,status,unknown_reason AS reason,provider,sandbox_ref,worst_case_usd::text AS worst,booking_id,job_digest::text AS digest,installation_id::text AS installation,settled_at IS NOT NULL AS settled,deadline_at-send_started_at AS span FROM morrow_work.runtime_operations WHERE run_id=${literal(runId)} ORDER BY send_started_at,id`,
     );
   const op = (id) =>
     one(
-      `SELECT status,unknown_reason AS reason,sandbox_ref,settled_at IS NOT NULL AS settled,revision::int AS revision FROM morrow_vault.runtime_operations WHERE id=${literal(id)}`,
+      `SELECT status,unknown_reason AS reason,sandbox_ref,settled_at IS NOT NULL AS settled,revision::int AS revision FROM morrow_work.runtime_operations WHERE id=${literal(id)}`,
     );
   const capacity = () =>
     one(
-      "SELECT open_operations::int AS open,budget_month::text AS month,month_committed_usd::text AS committed FROM morrow_vault.runtime_capacity",
+      "SELECT open_operations::int AS open,budget_month::text AS month,month_committed_usd::text AS committed FROM morrow_work.runtime_capacity",
     );
   const holds = (active = true) =>
     db.rows(
-      `SELECT id::text AS id,reason,operation_id::text AS operation FROM morrow_vault.runtime_holds${active ? " WHERE lifted_at IS NULL" : ""} ORDER BY created_at,id`,
+      `SELECT id::text AS id,reason,operation_id::text AS operation FROM morrow_work.runtime_holds${active ? " WHERE lifted_at IS NULL" : ""} ORDER BY created_at,id`,
     );
   const bookings = (runId = main.runId) =>
     db.rows(
@@ -542,12 +544,12 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   // absent grace can be reached without waiting 11 or 26 minutes.
   const age = (id, seconds) =>
     replica(
-      `UPDATE morrow_vault.runtime_operations SET send_started_at=send_started_at-interval '${seconds} seconds',deadline_at=deadline_at-interval '${seconds} seconds',reconciled_at=CASE WHEN reconciled_at IS NULL THEN NULL ELSE reconciled_at-interval '${seconds} seconds' END WHERE id=${literal(id)};`,
+      `UPDATE morrow_work.runtime_operations SET send_started_at=send_started_at-interval '${seconds} seconds',deadline_at=deadline_at-interval '${seconds} seconds',reconciled_at=CASE WHEN reconciled_at IS NULL THEN NULL ELSE reconciled_at-interval '${seconds} seconds' END WHERE id=${literal(id)};`,
     );
   const liftAll = () => {
     for (const h of holds())
       db.workOwner(
-        `SELECT outcome FROM morrow_vault.runtime_hold_lift('operator_lab',${literal(h.id)},'checked the provider console: nothing left running');`,
+        `SELECT outcome FROM morrow_work.runtime_hold_lift('operator_lab',${literal(h.id)},'checked the provider console: nothing left running');`,
       );
   };
   check(
@@ -725,30 +727,30 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       (user) =>
         as(
           user,
-          `SELECT outcome FROM morrow_vault.runtime_hold_lift('operator_lab',${literal(h.id)},'not mine to lift');`,
+          `SELECT outcome FROM morrow_work.runtime_hold_lift('operator_lab',${literal(h.id)},'not mine to lift');`,
         ),
     );
     const brokerUpdate = as(
       "morrow_vault_broker",
-      `UPDATE morrow_vault.runtime_holds SET lifted_at=clock_timestamp() WHERE id=${literal(h.id)};`,
+      `UPDATE morrow_work.runtime_holds SET lifted_at=clock_timestamp() WHERE id=${literal(h.id)};`,
     );
     const bad = last(
       db.workOwner(
-        `SELECT outcome FROM morrow_vault.runtime_hold_lift('operator_lab',${literal(h.id)},' ');`,
+        `SELECT outcome FROM morrow_work.runtime_hold_lift('operator_lab',${literal(h.id)},' ');`,
       ),
     );
     const lifted = last(
       db.workOwner(
-        `SELECT outcome FROM morrow_vault.runtime_hold_lift('operator_lab',${literal(h.id)},'checked the provider console: nothing left running');`,
+        `SELECT outcome FROM morrow_work.runtime_hold_lift('operator_lab',${literal(h.id)},'checked the provider console: nothing left running');`,
       ),
     );
     const again = last(
       db.workOwner(
-        `SELECT outcome FROM morrow_vault.runtime_hold_lift('operator_lab',${literal(h.id)},'twice');`,
+        `SELECT outcome FROM morrow_work.runtime_hold_lift('operator_lab',${literal(h.id)},'twice');`,
       ),
     );
     const record = one(
-      `SELECT lifted_by_operator_id AS operator,lift_reason IS NOT NULL AS reason FROM morrow_vault.runtime_holds WHERE id=${literal(h.id)}`,
+      `SELECT lifted_by_operator_id AS operator,lift_reason IS NOT NULL AS reason FROM morrow_work.runtime_holds WHERE id=${literal(h.id)}`,
     );
     const resumed = await execute(job("after-the-lift"));
     check(
@@ -820,22 +822,22 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
     // sim: the platform's other workspaces hold the concurrency cap.
     replica(
-      `UPDATE morrow_vault.runtime_capacity SET open_operations=${runtimeCaps.concurrentSandboxes};`,
+      `UPDATE morrow_work.runtime_capacity SET open_operations=${runtimeCaps.concurrentSandboxes};`,
     );
     const busy = begin("cap-busy");
-    replica("UPDATE morrow_vault.runtime_capacity SET open_operations=0;");
+    replica("UPDATE morrow_work.runtime_capacity SET open_operations=0;");
     // sim: this month's committed worst cases leave less than one sandbox of the budget.
     const committed = capacity().committed;
-    replica("UPDATE morrow_vault.runtime_capacity SET month_committed_usd=9.98;");
+    replica("UPDATE morrow_work.runtime_capacity SET month_committed_usd=9.98;");
     const spent = begin("cap-spent");
     // A new month starts from zero.
     replica(
-      "UPDATE morrow_vault.runtime_capacity SET budget_month=(date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')-interval '1 month')::date,month_committed_usd=10.00;",
+      "UPDATE morrow_work.runtime_capacity SET budget_month=(date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')-interval '1 month')::date,month_committed_usd=10.00;",
     );
     const fresh = begin("cap-new-month");
     const afterMonth = capacity();
     settle(fresh[1], "not_created");
-    replica(`UPDATE morrow_vault.runtime_capacity SET month_committed_usd=${committed};`);
+    replica(`UPDATE morrow_work.runtime_capacity SET month_committed_usd=${committed};`);
     check(
       "K2:the_platform_concurrency_and_the_monthly_budget_refuse_before_any_row",
       busy[0] === "concurrency_limit" &&
@@ -889,13 +891,13 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const terminal = settle(id, "unknown_effect", "kill_unknown");
     const guarded = [
       db.tryRun(
-        `SET ROLE morrow_work_owner; UPDATE morrow_vault.runtime_operations SET status='created',revision=revision+1 WHERE id=${literal(id)};`,
+        `SET ROLE morrow_work_owner; UPDATE morrow_work.runtime_operations SET status='created',revision=revision+1 WHERE id=${literal(id)};`,
       ),
       db.tryRun(
-        `SET ROLE morrow_work_owner; DELETE FROM morrow_vault.runtime_operations WHERE id=${literal(id)};`,
+        `SET ROLE morrow_work_owner; DELETE FROM morrow_work.runtime_operations WHERE id=${literal(id)};`,
       ),
-      db.tryRun("SET ROLE morrow_work_owner; DELETE FROM morrow_vault.runtime_holds;"),
-      db.tryRun("SET ROLE morrow_work_owner; TRUNCATE morrow_vault.runtime_operations;"),
+      db.tryRun("SET ROLE morrow_work_owner; DELETE FROM morrow_work.runtime_holds;"),
+      db.tryRun("SET ROLE morrow_work_owner; TRUNCATE morrow_work.runtime_operations;"),
     ];
     check(
       "G1:the_settle_edges_hold_and_a_terminal_operation_never_changes",
@@ -913,7 +915,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     // The broker's login holds no table privilege, no other login executes its definers, and
     // the sweep's list is ids only.
     const tables = ["runtime_operations", "runtime_holds", "runtime_capacity"].map((t) =>
-      as("morrow_vault_broker", `SELECT count(*) FROM morrow_vault.${t};`),
+      as("morrow_vault_broker", `SELECT count(*) FROM morrow_work.${t};`),
     );
     const others = ["morrow_api_worker", "morrow_runtime_executor", "morrow_connector_ingress"].map(
       (user) =>
@@ -922,10 +924,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
           `SELECT outcome FROM morrow_vault.runtime_operation_begin(${literal(main.ref.leaseId)},'1','x','${"a".repeat(64)}','fake');`,
         ),
     );
-    const apiRead = as(
-      "morrow_api_worker",
-      "SELECT count(*) FROM morrow_vault.runtime_operations;",
-    );
+    const apiRead = as("morrow_api_worker", "SELECT count(*) FROM morrow_work.runtime_operations;");
     const [, openId] = begin("list-1");
     age(openId, 700);
     const columns = last(
@@ -956,6 +955,61 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         asBroker,
         badLimit,
       },
+    );
+    // The ledger lives in morrow_work, so the vault still holds its two sealed-secret tables
+    // only (lab:spine-foundation V3 pins the command role's vault privileges to them), and the
+    // ledger's whole ACL is exactly the command role's: SELECT and INSERT, the column
+    // UPDATEs its definers write, nothing for anyone else.
+    const ledger = "('runtime_operations','runtime_holds','runtime_capacity')";
+    // Compared as sorted lists in JavaScript, so the database's collation never matters.
+    const list = (query) =>
+      db
+        .rows(query)
+        .map((r) => r.x)
+        .sort()
+        .join(",");
+    const vault = list(
+      "SELECT c.relname::text AS x FROM pg_catalog.pg_class c WHERE c.relnamespace='morrow_vault'::regnamespace AND c.relkind IN ('r','p','v','m','S','f')",
+    );
+    const tableAcl = list(
+      `SELECT c.relname::text||':'||a.grantee::regrole::text||':'||a.privilege_type AS x FROM pg_catalog.pg_class c, aclexplode(c.relacl) a WHERE c.relnamespace='morrow_work'::regnamespace AND c.relname IN ${ledger} AND a.grantee<>c.relowner`,
+    );
+    const columnAcl = list(
+      `SELECT c.relname::text||'.'||t.attname::text||':'||a.grantee::regrole::text||':'||a.privilege_type AS x FROM pg_catalog.pg_attribute t JOIN pg_catalog.pg_class c ON c.oid=t.attrelid, aclexplode(t.attacl) a WHERE c.relnamespace='morrow_work'::regnamespace AND c.relname IN ${ledger} AND t.attacl IS NOT NULL`,
+    );
+    const expectedTableAcl = [
+      "runtime_capacity:SELECT",
+      "runtime_holds:INSERT",
+      "runtime_holds:SELECT",
+      "runtime_operations:INSERT",
+      "runtime_operations:SELECT",
+    ]
+      .map((e) => e.replace(":", ":morrow_work_command:"))
+      .sort()
+      .join(",");
+    const expectedColumnAcl = [
+      ...["budget_month", "month_committed_usd", "open_operations", "revision", "updated_at"].map(
+        (c) => "runtime_capacity." + c,
+      ),
+      ...[
+        "reconciled_at",
+        "revision",
+        "sandbox_ref",
+        "settled_at",
+        "status",
+        "unknown_reason",
+        "updated_at",
+      ].map((c) => "runtime_operations." + c),
+    ]
+      .map((e) => e + ":morrow_work_command:UPDATE")
+      .sort()
+      .join(",");
+    check(
+      "G3:the_vault_keeps_its_two_secret_tables_and_the_ledger_acl_is_exact",
+      vault === "app_secrets,credentials" &&
+        tableAcl === expectedTableAcl &&
+        columnAcl === expectedColumnAcl,
+      { vault, tableAcl, columnAcl },
     );
   }
 

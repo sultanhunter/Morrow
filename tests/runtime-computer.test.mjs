@@ -83,7 +83,7 @@ test("migration 0043 holds the same caps, deadline, grace and staleness in SQL",
   const sql = readFileSync("migrations/0043.runtime-operations.sql", "utf8");
   const staleSeconds = runtimeGatewayLimits.executeBudgetMaxMs / 1000 + 60;
   const caps =
-    /CREATE FUNCTION morrow_vault\.runtime_caps\(\)[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(
+    /CREATE FUNCTION morrow_work\.runtime_caps\(\)[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(
       sql,
     );
   assert.ok(caps);

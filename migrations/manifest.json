@@ -336,7 +336,7 @@
     {
       "sequence": 43,
       "file": "0043.runtime-operations.sql",
-      "sha256": "4e65edbcece5fb646143d5a8246d5d92ab7815b4fdc9d756e6f7304f781a9f5d",
+      "sha256": "5d9a6d7ef59acc0198c1a64ea2b3be78e89f3a8c501439e152aae7cb9573f153",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/runtime-computer-foundation.md"
     }
