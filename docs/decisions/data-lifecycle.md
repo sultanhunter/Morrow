@@ -104,6 +104,13 @@ Review and apply (v1 PR 3, the gateway's first slice; ADR-0022 items 3, 7 and 9;
 | `morrow_work.operation_writes` | Content-free record of the send fence: the credential id and version the send used, the listing field names sent and Shopify's `updatedAt` read just before the send (compared only for equality); 365 days | P09.T05 prunes after 365 days; no delete path exists |
 | `morrow_work.operation_readbacks` | Content-free read-backs: per-field verdict codes (`approved`, `source`, `other`), the overall verdict and Shopify's `updatedAt`; no value and no digest of one; 365 days | P09.T05 prunes after 365 days; no delete path exists |
 
+Undo, history and "Approve several at once" (v1 PR 4; migration 0047 catalog-undo). Undo builds a new proposal from records only: its "before" is the broker's read of the product, stored in `product_snapshots` (store content, 90 days, deleted at shop/redact, as every snapshot), and its parameters hold the values read before the apply (`proposal_parameters`, emptied at shop/redact). Undo is offered only while the before values are held, so it ends at 90 days or at shop/redact. A batch approval records one ordinary decision per proposal; nothing new holds content.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_work.operation_undo_checks` | Content-free record of the broker's reads before an undo: the read snapshot's digest (the same content address `product_snapshots` and the undo proposal's `expectedSourceRevision` carry), per-field codes (`unchanged`, `changed`) and the time; never a value; 365 days | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.catalog_undos` | Content-free: one row per undo proposal naming the change it undoes, the check it was built from, the person and their command key; 365 days | P09.T05 prunes after 365 days; no delete path exists |
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.
