@@ -364,7 +364,7 @@
     {
       "sequence": 47,
       "file": "0047.catalog-undo.sql",
-      "sha256": "bf8a63ecabf46e0c83c30d2d2c2423b23638b2bf8f785bf852dbedbaf69d9aa4",
+      "sha256": "824a922b46d9d0c196a1d89b117f665f2431a599106494bf0f74b05f72c373aa",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-undo-history-picker.md"
     }

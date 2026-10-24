@@ -42,8 +42,12 @@ export const reviewStatements = Object.freeze({
     "SELECT operation_id,state,available_until,undo_proposal_id,undo_of_operation_id FROM morrow_work.catalog_undo_states($1)",
   catalogUndoSource:
     "SELECT state,available_until,undo_proposal_id,before_snapshot,check_sequence,check_digest,check_verdict,check_fields,check_observed_at FROM morrow_work.catalog_undo_source($1)",
+  // Review F1: the installation that would propose an undo of one operation (the owner's
+  // catalog.content.publish grants for the kernel, never a client), and the command.
+  catalogUndoProposer:
+    "SELECT installation_id,agent_principal_id,scope,owner_principal_id,owner_membership_id,owner_live,owner_grants,owner_grant_count,owner_grants_digest,agent_grant_set,stopped FROM morrow_work.catalog_undo_proposer($1)",
   cmdCatalogUndo:
-    "SELECT outcome,result FROM morrow_work.cmd_catalog_undo($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+    "SELECT outcome,result FROM morrow_work.cmd_catalog_undo($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
   // The person's own earlier undo command (a replay), its proposal and approval.
   undoOfCommand:
     "SELECT u.proposal_id::text AS proposal_id,u.operation_id::text AS operation_id,u.request_digest::text AS request_digest FROM morrow_work.catalog_undos u WHERE u.requester_principal_id=$1::text AND u.command_id=$2::text",

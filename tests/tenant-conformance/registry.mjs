@@ -716,12 +716,15 @@ export const workFunctions = Object.freeze({
   // and the undo checks' CHECK.
   "catalog_undo_states(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
   "catalog_undo_source(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
-  "cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text)": {
+  // Review F1: the installation that would propose an undo (read), and its facts (helper).
+  "catalog_undo_proposer(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text,text)": {
     kind: "api",
     grantees: ["morrow_work_api"],
     command: "catalog.undo",
   },
   "catalog_undo_state(text,text,text)": { kind: "helper", grantees: [] },
+  "catalog_undo_proposer_facts(text,text,text,text)": { kind: "helper", grantees: [] },
   "catalog_undo_set(jsonb,text[])": { kind: "helper", grantees: [] },
   "undo_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   // PR 18 (0046). Pure functions of the CHECKs.

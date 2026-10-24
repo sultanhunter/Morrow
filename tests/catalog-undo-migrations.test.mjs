@@ -27,9 +27,11 @@ const tables = ["operation_undo_checks", "catalog_undos"];
 const functions = {
   "morrow_work.catalog_undo_set(jsonb,text[])": [],
   "morrow_work.catalog_undo_state(text,text,text)": [],
+  "morrow_work.catalog_undo_proposer_facts(text,text,text,text)": [],
   "morrow_work.catalog_undo_states(text)": ["morrow_work_api"],
   "morrow_work.catalog_undo_source(text)": ["morrow_work_api"],
-  "morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text)": [
+  "morrow_work.catalog_undo_proposer(text)": ["morrow_work_api"],
+  "morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text,text)": [
     "morrow_work_api",
   ],
   "morrow_vault.catalog_undo_resolve(text)": ["morrow_vault_broker"],
@@ -110,7 +112,7 @@ test("every function: an explicit ACL, owned by the command role, in the registr
     const registry = schema === "morrow_vault" ? vaultFunctions : workFunctions;
     assert.deepEqual(registry[name]?.grantees, grantees, signature);
   }
-  // The api reaches only its three; the broker's login only its two, each guarded.
+  // The api reaches only its four; the broker's login only its two, each guarded.
   assert.match(
     sql,
     /GRANT EXECUTE ON FUNCTION morrow_vault\.catalog_undo_resolve\(text\),morrow_vault\.catalog_undo_record\(text,text,text,text,text\)\n TO morrow_vault_broker;/,
@@ -129,10 +131,95 @@ test("every function: an explicit ACL, owned by the command role, in the registr
     );
   }
   // Tenant and actor come only from the session (the prelude and current_tenant()).
-  for (const name of ["catalog_undo_states", "catalog_undo_source", "cmd_catalog_undo"]) {
+  for (const name of [
+    "catalog_undo_states",
+    "catalog_undo_source",
+    "catalog_undo_proposer",
+    "cmd_catalog_undo",
+  ]) {
     const start = sql.indexOf("CREATE FUNCTION morrow_work." + name + "(");
     const end = sql.indexOf("END $$;", start);
     assert.match(sql.slice(start, end), /current_tenant\(\)|command_prelude\(/, name);
     assert.doesNotMatch(sql.slice(start, end).split("RETURNS")[0], /p_org|p_ws|organization/, name);
   }
+});
+
+// Review F1: the undo is proposed by the store's Listings installation, so it needs what the
+// agent kernel requires of a Listings run proposing there, rechecked under the command's lock.
+const body = (schema, name) => {
+  const start = sql.indexOf("CREATE FUNCTION " + schema + "." + name + "(");
+  return sql.slice(start, sql.indexOf("END $$;", start));
+};
+
+test("F1: the proposing installation's facts: owner, grants, grant set and stops", () => {
+  const facts = body("morrow_work", "catalog_undo_proposer_facts");
+  assert.doesNotMatch(facts, /SECURITY DEFINER/);
+  // The active Listings installation through exactly the change's store and connection.
+  assert.match(
+    facts,
+    /x\.status='active' AND x\.release_id='morrow\.listings' AND x\.store_id=p_store\n {3}AND x\.connection_id=p_connection;/,
+  );
+  // The owner: that installation's own membership, live (work_member_authority), and only its
+  // catalog.content.publish grants with their digest; more than 1,000 grants overflow.
+  assert.match(
+    facts,
+    /morrow_identity\.work_member_authority\(p_org,p_ws,i\.owner_principal_id\) a;\n IF FOUND AND m\.membership_id=i\.owner_membership_id THEN\n {2}v_live:=true;/,
+  );
+  assert.match(facts, /WHERE q\.g->>'capabilityId'='catalog\.content\.publish';/);
+  assert.match(facts, /IF m\.grant_count>1000 THEN v_count:=1001; END IF;/);
+  // The agent principal's grant set is still exactly the installation's document.
+  assert.match(
+    facts,
+    /morrow_identity\.work_agent_grant_set_current\(p_org,p_ws,i\.id,i\.agent_principal_id,i\.grant_refs,\n {2}morrow_work\.listings_grant_set\(p_org,p_ws,p_store,p_connection\)\)/,
+  );
+  // Any stop on runs of the connection or the installation.
+  assert.match(facts, /morrow_work\.stop_active\(p_org,p_ws,'run',p_connection,i\.id\)/);
+  // The api's read: the tenant's own operation only, then those facts.
+  const read = body("morrow_work", "catalog_undo_proposer");
+  assert.match(read, /SECURITY DEFINER/);
+  assert.match(read, /current_tenant\(\)/);
+  assert.match(
+    read,
+    /catalog_undo_proposer_facts\(t\.organization_id,t\.workspace_id,o\.store_id,o\.connection_id\)/,
+  );
+});
+
+test("F1: cmd_catalog_undo refuses a stopped, ownerless or changed installation under its lock", () => {
+  const cmd = body("morrow_work", "cmd_catalog_undo");
+  const at = (pattern) => {
+    const i = cmd.search(pattern);
+    assert.ok(i > 0, String(pattern));
+    return i;
+  };
+  const lock = at(
+    /WHERE x\.organization_id=pre\.organization_id AND x\.workspace_id=pre\.workspace_id AND x\.id=p_operation_id FOR UPDATE;/,
+  );
+  const stopKey = at(
+    /pg_advisory_xact_lock_shared\(pg_catalog\.hashtextextended\(pg_catalog\.jsonb_build_array\('morrow\.work\.stop',\n {2}pre\.organization_id/,
+  );
+  const facts = at(
+    /FROM morrow_work\.catalog_undo_proposer_facts\(pre\.organization_id,pre\.workspace_id,o\.store_id,o\.connection_id\) f;/,
+  );
+  const stopped = at(
+    /IF ins\.stopped THEN RETURN QUERY SELECT 'stopped'::text,NULL::text; RETURN; END IF;/,
+  );
+  const owner = at(
+    /IF NOT ins\.owner_live OR ins\.agent_grant_set IS DISTINCT FROM 'exact' THEN\n {2}RETURN QUERY SELECT 'installation_inactive'::text/,
+  );
+  const digest = at(
+    /IF ins\.owner_grants_digest IS DISTINCT FROM p_owner_grants_digest THEN RETURN QUERY SELECT 'stale_authority'::text/,
+  );
+  const expired = at(/IF v_expired IS NOT FALSE THEN RETURN QUERY SELECT 'stale_authority'::text/);
+  const write = at(/INSERT INTO morrow_work\.proposal_parameters/);
+  assert.ok(stopKey < lock && lock < facts, "under the stop key and the row lock");
+  assert.ok(facts < stopped && stopped < owner && owner < digest && digest < expired);
+  assert.ok(expired < write, "before anything is written");
+  // The proposal names that same installation (0032's document check and the insert).
+  assert.match(cmd, /'allowed',1,0,ins\.agent_principal_id,ins\.id,pre\.principal_id,/);
+  assert.match(cmd, /'agent',ins\.id\);/);
+  // The owner's grants digest is a closed parameter.
+  assert.match(
+    cmd,
+    /OR p_owner_grants_digest IS NULL OR p_owner_grants_digest !~ '\^\[a-f0-9\]\{64\}\$'/,
+  );
 });

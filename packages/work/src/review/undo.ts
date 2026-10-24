@@ -1,4 +1,11 @@
-import type { CapabilityId } from "@morrow/contracts";
+import type {
+  CapabilityId,
+  Core_ActorRef,
+  Current_Grant,
+  Current_ResourceRef,
+  Current_Scope,
+} from "@morrow/contracts";
+import { validateCurrentDefinition, validateDefinition } from "@morrow/contracts/validation";
 import {
   listingFieldPaths,
   storeResource,
@@ -7,7 +14,7 @@ import {
 import { decideOn } from "../agents/commands.js";
 import { readContext, readProposalRow } from "../approvals/family.js";
 import type { WorkTx } from "../connection.js";
-import { WorkContextUnavailable, type WorkAuthority } from "../context.js";
+import { decodeGrants, WorkContextUnavailable, type WorkAuthority } from "../context.js";
 import { canonicalJson, sha256Hex } from "../digest.js";
 import { listingFields, type ListingField } from "../runs/drafting.js";
 import type { ListingFieldsRead } from "../runs/listing-canonical.js";
@@ -27,9 +34,14 @@ import { decodeOperation, operationVisible, type OperationRow } from "./apply.js
 //   * prepareUndo: the person may read the change's proposal, holds `view` on
 //     catalog.products.read (the before values are store content) and `propose` and
 //     `delegate` on catalog.content.publish on the store resource with the change's fields
-//     (the Listings agent proposes it on their behalf, as a run's proposals are), and the
-//     change is available to undo (catalog_undo_state: verified, within 90 days, the before
-//     values held, no open, uncertain or applied undo of it, no later write).
+//     (the Listings agent proposes it on their behalf, as a run's proposals are); the
+//     installation that proposes it may still propose there (review F1: undoProposerRefusal,
+//     what decideDelegation requires of a Listings run's propose step: an active installation
+//     whose owner is a live member holding `propose` on catalog.content.publish over the store
+//     resource with the fields, whose scope covers them and whose own grant set is exact, with
+//     no stop on its runs); and the change is available to undo (catalog_undo_state:
+//     verified, within 90 days, the before values held, no open, uncertain or applied undo of
+//     it, no later write). All of it before the broker's read.
 //   * admitUndo: after the broker's check, the proposal built by the Listings producer from a
 //     one-product "draft" of the before values, stored by cmd_catalog_undo, which rebuilds and
 //     rechecks every part of it in SQL.
@@ -49,6 +61,8 @@ export type UndoRefusal =
   | "not_reversible"
   | "link_changed"
   | "installation_inactive"
+  // Review F1: a stop blocks the Listings installation's runs on this store.
+  | "stopped"
   | "limit_reached"
   | "stale_authority"
   | "command_conflict"
@@ -230,10 +244,145 @@ export async function undoAllowed(
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Review F1: the proposing installation. An undo is stored as proposed by the store's
+// Listings installation (0032's catalog_proposal_bind), so it needs what the agent kernel
+// (decideDelegation) requires of a Listings run's propose step on that store, beyond the
+// person's own grants: the installation is active through the change's connection, its agent
+// principal is active with exactly its document's grant set (installedBound), its scope covers
+// the store resource and the fields, its owner is still a live member whose own grants cover
+// `propose` on catalog.content.publish (grantCovers(owner)), and no stop blocks its runs
+// (providerAllowed). Decided here before the broker's read; cmd_catalog_undo rechecks the
+// liveness, the grant set, the stop and the owner's grants digest under its lock.
+// Entitlement stays the gateway's: an undo costs no credits, and its apply is paid work that
+// claimantMayApply decides with entitlement before any write.
+
+/** catalog_undo_proposer's row, decoded closed: null when there is no active installation. */
+export interface UndoProposer {
+  readonly installationId: string;
+  readonly agentPrincipalId: string;
+  readonly scope: Current_Scope;
+  readonly owner: Core_ActorRef;
+  readonly ownerLive: boolean;
+  readonly ownerGrants: readonly Current_Grant[] | "overflow";
+  readonly ownerGrantsDigest: string;
+  readonly agentGrantSet: "exact" | "differs" | "invalid" | "denied";
+  readonly stopped: boolean;
+}
+const proposerKeys = [
+  "agent_grant_set",
+  "agent_principal_id",
+  "installation_id",
+  "owner_grant_count",
+  "owner_grants",
+  "owner_grants_digest",
+  "owner_live",
+  "owner_membership_id",
+  "owner_principal_id",
+  "scope",
+  "stopped",
+].join(",");
+const flag = (value: unknown): boolean => {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new WorkContextUnavailable();
+};
+export function decodeUndoProposer(
+  rows: readonly Record<string, unknown>[],
+  a: WorkAuthority,
+): UndoProposer | null {
+  if (rows.length === 0) return null;
+  const r = rows[0]!;
+  if (rows.length !== 1 || Object.keys(r).sort().join(",") !== proposerKeys)
+    throw new WorkContextUnavailable();
+  const ids = [
+    r.installation_id,
+    r.agent_principal_id,
+    r.owner_principal_id,
+    r.owner_membership_id,
+  ];
+  if (
+    !ids.every((v) => typeof v === "string" && idPattern.test(v)) ||
+    typeof r.owner_grants_digest !== "string" ||
+    !/^[a-f0-9]{64}$/.test(r.owner_grants_digest) ||
+    !["exact", "differs", "invalid", "denied"].includes(r.agent_grant_set as string) ||
+    typeof r.scope !== "string"
+  )
+    throw new WorkContextUnavailable();
+  let scope: unknown;
+  try {
+    scope = JSON.parse(r.scope);
+  } catch {
+    throw new WorkContextUnavailable();
+  }
+  if (!validateCurrentDefinition("Scope", scope)) throw new WorkContextUnavailable();
+  const owner: Core_ActorRef = Object.freeze({
+    kind: "human",
+    principalId: r.owner_principal_id as string,
+    organizationId: a.actor.organizationId,
+    workspaceId: a.resource.workspaceId,
+    membershipId: r.owner_membership_id as string,
+    installationId: null,
+    mandateId: null,
+  });
+  if (!validateDefinition("core", "ActorRef", owner)) throw new WorkContextUnavailable();
+  return Object.freeze({
+    installationId: r.installation_id as string,
+    agentPrincipalId: r.agent_principal_id as string,
+    scope: scope as Current_Scope,
+    owner,
+    ownerLive: flag(r.owner_live),
+    ownerGrants: decodeGrants(r.owner_grants, r.owner_grant_count),
+    ownerGrantsDigest: r.owner_grants_digest,
+    agentGrantSet: r.agent_grant_set as UndoProposer["agentGrantSet"],
+    stopped: flag(r.stopped),
+  });
+}
+const sameResource = (r: Current_ResourceRef, s: StoreResource) =>
+  r.organizationId === s.organizationId &&
+  r.workspaceId === s.workspaceId &&
+  r.storeId === s.storeId &&
+  r.connectionId === s.connectionId &&
+  r.kind === s.kind &&
+  r.id === s.id;
+/**
+ * Whether that installation may propose the undo, in the kernel's order (origin, capability,
+ * provider): null when it may, else the refusal. Pure over the decoded facts (the owner's
+ * grants decided by the human kernel at the request's database time).
+ */
+export async function undoProposerRefusal(
+  a: WorkAuthority,
+  store: StoreResource,
+  fields: readonly string[],
+  proposer: UndoProposer | null,
+): Promise<"installation_inactive" | "denied" | "stopped" | null> {
+  if (proposer === null || !proposer.ownerLive || proposer.agentGrantSet !== "exact")
+    return "installation_inactive";
+  const s = proposer.scope;
+  if (
+    fields.length < 1 ||
+    s.organizationId !== store.organizationId ||
+    s.workspaceId !== store.workspaceId ||
+    !s.storeIds.includes(store.storeId) ||
+    s.accountIds.length !== 0 ||
+    !s.resources.some((r) => sameResource(r, store)) ||
+    !fields.every((f) => s.fields.includes(f))
+  )
+    return "denied";
+  if (proposer.ownerGrants === "overflow") return "denied";
+  const owner: WorkAuthority = { ...a, actor: proposer.owner, grants: proposer.ownerGrants };
+  const decided = await decideOn(owner, store, "catalog.content.publish", "propose", fields);
+  if (!decided.decision.allowed) return "denied";
+  if (proposer.stopped) return "stopped";
+  return null;
+}
+
 export interface PreparedUndo {
   readonly operation: OperationRow;
   readonly store: StoreResource;
   readonly fields: readonly ListingField[];
+  /** The installation that proposes it, as the kernel allowed it in this transaction. */
+  readonly proposer: UndoProposer;
 }
 /**
  * The person's checks of one undo request, in their own session: the change is visible to
@@ -273,10 +422,15 @@ export async function prepareUndo(
     throw new WorkContextUnavailable();
   }
   if (!(await undoAllowed(a, store, fields))) throw new UndoReject("denied");
+  // Review F1: the installation that proposes it may still propose there.
+  const proposer = decodeUndoProposer(await tx.run("catalogUndoProposer", [operationId]), a);
+  const refused = await undoProposerRefusal(a, store, fields, proposer);
+  if (refused !== null || proposer === null)
+    throw new UndoReject(refused ?? "installation_inactive");
   const source = await undoSource(tx, operationId);
   if (!source) throw new UndoReject("not_found");
   if (source.state !== "available") throw new UndoReject(undoStateRefusal(source.state));
-  return Object.freeze({ operation: op, store, fields: Object.freeze([...fields]) });
+  return Object.freeze({ operation: op, store, fields: Object.freeze([...fields]), proposer });
 }
 
 /** The undo command's request digest: the work API's command digest of its (empty) body. */
@@ -485,11 +639,8 @@ export async function admitUndo(
   const set = undoSet(before, prepared.fields);
   if (!undoSetWritable(set)) throw new UndoReject("not_reversible");
   // The store's active Listings installation, through the change's connection: the proposer
-  // a catalog proposal must have (0032).
-  const installation = (await tx.run("listingsInstallation", [op.storeId])).find(
-    (i) => i.status === "active" && i.connection_id === op.connectionId,
-  );
-  if (!installation) throw new UndoReject("installation_inactive");
+  // a catalog proposal must have (0032), as prepareUndo's kernel allowed it (review F1).
+  const proposer = prepared.proposer;
   const policies = await tx.run("currentReviewPolicy", []);
   if (policies.length !== 1) throw new WorkContextUnavailable();
   const policy = policies[0]!;
@@ -513,8 +664,8 @@ export async function admitUndo(
         storeId: op.storeId,
         connectionId: op.connectionId,
         taskId: op.taskId,
-        installationId: text(installation, "id"),
-        agentPrincipalId: text(installation, "agent_principal_id"),
+        installationId: proposer.installationId,
+        agentPrincipalId: proposer.agentPrincipalId,
         requesterPrincipalId: a.actor.principalId,
         requesterMembershipId: membershipId,
       },
@@ -556,6 +707,7 @@ export async function admitUndo(
     p.proposalCanonical,
     p.proposalDigest,
     p.scopeCanonical,
+    proposer.ownerGrantsDigest,
   ]);
   const row = rows.length === 1 ? rows[0] : undefined;
   if (!row || typeof row.outcome !== "string") throw new WorkContextUnavailable();
@@ -574,6 +726,7 @@ export async function admitUndo(
     "not_reversible",
     "link_changed",
     "installation_inactive",
+    "stopped",
     "limit_reached",
     "stale_authority",
     "command_conflict",

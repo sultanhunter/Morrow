@@ -25,8 +25,17 @@ BEGIN;
 --   * The broker's login (morrow_vault_broker), keyed by operation id as R1 and R2 are:
 --     catalog_undo_resolve and catalog_undo_record (the read's snapshot and its codes).
 --   * The api: catalog_undo_states (the history's undo state of a task's changes),
---     catalog_undo_source (what the Worker builds the undo proposal from) and cmd_catalog_undo
+--     catalog_undo_source (what the Worker builds the undo proposal from),
+--     catalog_undo_proposer (the proposing installation as the agent kernel would require it:
+--     its owner's liveness and grants, its own grant set and any stop) and cmd_catalog_undo
 --     (stores it after rechecking every part of it in SQL).
+--   * Review F1 (2026-10-25): the Listings installation that proposes an undo must be able to
+--     propose it, as a Listings run on that store must (decideDelegation): an active
+--     installation whose owner is still a live member holding `propose` on
+--     catalog.content.publish over the store resource with the change's fields (decided by the
+--     human kernel in the Worker; the owner's grants digest rechecked here under lock), whose
+--     own grant set is still exactly its document's, with no stop on runs of that connection
+--     or installation. Otherwise the undo is refused before the broker's read and again here.
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR to_regprocedure('morrow_work.cmd_catalog_apply(text,text,text,text,text,text,text,text,text)') IS NULL
@@ -42,6 +51,8 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_work.command_prelude(text,text)') IS NULL
  OR to_regprocedure('morrow_work.append_event(text,text,text,text,text,text,text,bigint,text,jsonb,text,timestamp with time zone)') IS NULL
  OR to_regprocedure('morrow_work.listings_store_current(text,text,text)') IS NULL
+ OR to_regprocedure('morrow_work.listings_grant_set(text,text,text,text)') IS NULL
+ OR to_regprocedure('morrow_work.stop_active(text,text,text,text,text)') IS NULL
  OR to_regprocedure('morrow_work.effective_rule(jsonb,text,boolean)') IS NULL
  OR to_regprocedure('morrow_work.db_now()') IS NULL OR to_regprocedure('morrow_work.sha256_text(text)') IS NULL
  OR to_regprocedure('morrow_work.utc_text(timestamp with time zone)') IS NULL
@@ -49,6 +60,8 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_work.catalog_proposal_document_matches(text,text,text,text,text,bigint,text,text,integer[],text,text,text,boolean,text,integer,numeric,text,text,text,text,text[],text,bigint,text,text,text,timestamp with time zone,timestamp with time zone,text,text)') IS NULL
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_read_target(text,text,text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_executor_safe(text)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_member_authority(text,text,text)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_agent_grant_set_current(text,text,text,text,jsonb,jsonb)','EXECUTE')
  OR to_regclass('morrow_work.operation_writes') IS NULL OR to_regclass('morrow_work.product_snapshots') IS NULL
  OR to_regclass('morrow_work.operation_undo_checks') IS NOT NULL OR to_regclass('morrow_work.catalog_undos') IS NOT NULL
  THEN RAISE EXCEPTION 'CATALOG_UNDO_PREREQUISITES_INVALID'; END IF;
@@ -229,6 +242,43 @@ BEGIN
  END IF;
  RETURN QUERY SELECT 'available'::text,least(o.send_started_at+interval '90 days',s.expires_at),NULL::text;
 END $$;
+-- The installation that would propose an undo on this store and connection (review F1): the
+-- store's active morrow.listings installation through that connection (no row when there is
+-- none), with what the agent kernel requires of it before a Listings run may propose there
+-- (decideDelegation; spine §5): owner_live, the owner is still that installation owner's
+-- membership, an active human member of the active organization and workspace
+-- (work_member_authority); owner_grants, that member's catalog.content.publish grants (by id;
+-- the kernel in the Worker decides `propose` over them; never interpreted here) with their
+-- digest, and owner_grant_count 1001 when the member holds more than 1,000 grants (the Worker
+-- denies); agent_grant_set, whether the agent principal is active and its grants are still
+-- exactly the installation's document (work_agent_grant_set_current: exact, differs, invalid
+-- or denied); stopped, whether a stop blocks runs on the connection or the installation
+-- (stop_active). Run in the caller's session (the grant-set check resolves its context).
+CREATE FUNCTION morrow_work.catalog_undo_proposer_facts(p_org text,p_ws text,p_store text,p_connection text)
+RETURNS TABLE(installation_id text,agent_principal_id text,scope jsonb,owner_principal_id text,owner_membership_id text,owner_live boolean,
+ owner_grants jsonb,owner_grant_count integer,owner_grants_digest text,agent_grant_set text,stopped boolean)
+LANGUAGE plpgsql STABLE SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+#variable_conflict use_column
+DECLARE i record; m record; v_live boolean:=false; v_grants jsonb:='[]'::jsonb; v_count integer:=0; v_set text;
+BEGIN
+ SELECT x.id::text AS id,x.agent_principal_id::text AS agent_principal_id,x.scope,x.grant_refs,x.owner_principal_id::text AS owner_principal_id,
+  x.owner_membership_id::text AS owner_membership_id INTO i FROM morrow_work.agent_installations x
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.status='active' AND x.release_id='morrow.listings' AND x.store_id=p_store
+   AND x.connection_id=p_connection;
+ IF NOT FOUND THEN RETURN; END IF;
+ SELECT a.membership_id,a.grants,a.grant_count INTO m FROM morrow_identity.work_member_authority(p_org,p_ws,i.owner_principal_id) a;
+ IF FOUND AND m.membership_id=i.owner_membership_id THEN
+  v_live:=true;
+  SELECT COALESCE(jsonb_agg(q.g ORDER BY q.n),'[]'::jsonb),count(*)::integer INTO v_grants,v_count
+   FROM jsonb_array_elements(m.grants) WITH ORDINALITY q(g,n) WHERE q.g->>'capabilityId'='catalog.content.publish';
+  IF m.grant_count>1000 THEN v_count:=1001; END IF;
+ END IF;
+ SELECT g.outcome INTO v_set FROM morrow_identity.work_agent_grant_set_current(p_org,p_ws,i.id,i.agent_principal_id,i.grant_refs,
+  morrow_work.listings_grant_set(p_org,p_ws,p_store,p_connection)) g;
+ RETURN QUERY SELECT i.id,i.agent_principal_id,i.scope,i.owner_principal_id,i.owner_membership_id,v_live,v_grants,v_count,
+  encode(sha256(convert_to(v_grants::text,'UTF8')),'hex'),COALESCE(v_set,'denied'),
+  morrow_work.stop_active(p_org,p_ws,'run',p_connection,i.id);
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- API functions: SECURITY DEFINER, owned by the command role after the transfer, EXECUTE for
@@ -292,6 +342,30 @@ BEGIN
   k.fields,morrow_work.utc_text(k.observed_at);
 END $$;
 
+-- The installation that would propose an undo of one of the tenant's catalog_write operations
+-- (catalog_undo_proposer_facts on the operation's store and connection; review F1), for the
+-- Worker's kernel before the broker's read: ids, the installation's scope, the owner's
+-- catalog.content.publish grants and their digest, and codes. No row when the operation is
+-- not the tenant's catalog_write operation or the store has no active Listings installation
+-- through its connection. The Worker calls it only after the person's own checks.
+CREATE FUNCTION morrow_work.catalog_undo_proposer(p_operation_id text)
+RETURNS TABLE(installation_id text,agent_principal_id text,scope text,owner_principal_id text,owner_membership_id text,owner_live text,
+ owner_grants text,owner_grant_count text,owner_grants_digest text,agent_grant_set text,stopped text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+#variable_conflict use_column
+DECLARE t record; o record;
+BEGIN
+ IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' THEN RETURN; END IF;
+ SELECT c.organization_id,c.workspace_id INTO t FROM morrow_work.current_tenant() c;
+ IF NOT FOUND THEN RETURN; END IF;
+ SELECT x.store_id::text AS store_id,x.connection_id::text AS connection_id INTO o FROM morrow_work.operations x
+  WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.id=p_operation_id AND x.kind='catalog_write';
+ IF NOT FOUND THEN RETURN; END IF;
+ RETURN QUERY SELECT f.installation_id,f.agent_principal_id,f.scope::text,f.owner_principal_id,f.owner_membership_id,f.owner_live::text,
+  f.owner_grants::text,f.owner_grant_count::text,f.owner_grants_digest,f.agent_grant_set,f.stopped::text
+  FROM morrow_work.catalog_undo_proposer_facts(t.organization_id,t.workspace_id,o.store_id,o.connection_id) f;
+END $$;
+
 -- The undo (ADR-0011; ADR-0022 item 3; ADR-0024 item 8): one catalog.content.publish
 -- Proposal@2 that undoes one verified catalog_write operation, after the Worker's checks (the
 -- person reads the operation's proposal, holds `view` on catalog.products.read and `propose`
@@ -307,18 +381,22 @@ END $$;
 -- connection and fields, the check's digest as expectedSourceRevision) and the item that sets
 -- each field back to the draft snapshot's value (draft_set_valid, else not_reversible); the
 -- store is still linked through that connection; it is proposed by the store's active Listings
--- installation through its agent principal for this person; the task is the operation's; the
--- workspace's current review policy (never seeded here), its 1,000 pending cap and 0032's
--- document check. Writes the parameters, the proposal, its pending approval, the undo record
+-- installation through its agent principal for this person, and that installation may still
+-- propose (review F1, catalog_undo_proposer_facts): no stop on runs of the connection or the
+-- installation (stopped); its owner still a live member and its own grant set exact
+-- (installation_inactive); the owner's catalog.content.publish grants exactly those the
+-- Worker's kernel decided on (p_owner_grants_digest), none expired since that decision
+-- (stale_authority); the task is the operation's; the workspace's current review policy
+-- (never seeded here), its 1,000 pending cap and 0032's document check. Writes the parameters, the proposal, its pending approval, the undo record
 -- and one proposal.submitted event whose actor is the person. The same person's same command
 -- (Idempotency-Key and request digest) answers replayed with the recorded result.
 -- Outcomes: applied, replayed, the prelude's, not_found, not_applied, already_requested,
 -- already_undone, changed_since_apply, unavailable, check_stale, product_missing,
--- not_reversible, link_changed, installation_inactive, limit_reached, stale_authority,
+-- not_reversible, link_changed, installation_inactive, stopped, limit_reached, stale_authority,
 -- command_conflict, invalid.
 CREATE FUNCTION morrow_work.cmd_catalog_undo(p_command_id text,p_request_digest text,p_operation_id text,p_check_sequence text,
  p_approval_id text,p_policy_digest text,p_parameters_canonical text,p_parameters_digest text,p_proposal_canonical text,
- p_proposal_digest text,p_scope_canonical text)
+ p_proposal_digest text,p_scope_canonical text,p_owner_grants_digest text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
@@ -326,10 +404,11 @@ DECLARE
  pre record; o record; u record; st record; k record; s record; cap record; pol record; ins record; p record;
  d jsonb; v_params jsonb; v_created timestamptz; v_expires timestamptz; v_now timestamptz; v_id text; v_parameters_id text;
  v_risk text; v_rule jsonb; v_approval_expires timestamptz; v_list text[]; v_org_revision bigint; v_target jsonb; v_fields text[];
- v_sorted text[]; v_set jsonb; v_targets jsonb; v_items jsonb; v_sequence integer; v_result jsonb;
+ v_sorted text[]; v_set jsonb; v_targets jsonb; v_items jsonb; v_sequence integer; v_result jsonb; v_expired boolean;
 BEGIN
  IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
   OR p_check_sequence IS NULL OR p_check_sequence !~ '^[1-9][0-9]{0,8}$'
+  OR p_owner_grants_digest IS NULL OR p_owner_grants_digest !~ '^[a-f0-9]{64}$'
   OR p_approval_id IS NULL OR p_approval_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
   OR p_policy_digest IS NULL OR p_policy_digest !~ '^[a-f0-9]{64}$'
   OR p_parameters_canonical IS NULL OR octet_length(p_parameters_canonical) NOT BETWEEN 2 AND 32768 OR NOT pg_input_is_valid(p_parameters_canonical,'jsonb')
@@ -417,10 +496,27 @@ BEGIN
    WHERE x.connection_id=o.connection_id) THEN
   RETURN QUERY SELECT 'link_changed'::text,NULL::text; RETURN;
  END IF;
- SELECT x.id::text AS id,x.agent_principal_id::text AS agent_principal_id INTO ins FROM morrow_work.agent_installations x
-  WHERE x.organization_id=pre.organization_id AND x.workspace_id=pre.workspace_id AND x.status='active' AND x.release_id='morrow.listings'
-   AND x.store_id=o.store_id AND x.connection_id=o.connection_id;
+ -- Review F1: that installation may still propose here, as the agent kernel requires of a
+ -- Listings run (under the stop keys and the row lock, after the prelude: a new statement sees
+ -- any stop, removal or grant change that committed before it).
+ SELECT f.installation_id AS id,f.agent_principal_id,f.owner_live,f.owner_grants,f.owner_grants_digest,f.agent_grant_set,f.stopped INTO ins
+  FROM morrow_work.catalog_undo_proposer_facts(pre.organization_id,pre.workspace_id,o.store_id,o.connection_id) f;
  IF NOT FOUND THEN RETURN QUERY SELECT 'installation_inactive'::text,NULL::text; RETURN; END IF;
+ IF ins.stopped THEN RETURN QUERY SELECT 'stopped'::text,NULL::text; RETURN; END IF;
+ IF NOT ins.owner_live OR ins.agent_grant_set IS DISTINCT FROM 'exact' THEN
+  RETURN QUERY SELECT 'installation_inactive'::text,NULL::text; RETURN;
+ END IF;
+ IF ins.owner_grants_digest IS DISTINCT FROM p_owner_grants_digest THEN RETURN QUERY SELECT 'stale_authority'::text,NULL::text; RETURN; END IF;
+ -- An owner grant that expired after the Worker's decision (work_lock_and_recheck's rule, from
+ -- this transaction's own context snapshot).
+ BEGIN
+  SELECT EXISTS(SELECT 1 FROM jsonb_array_elements(ins.owner_grants) g WHERE g->'expiresAt'<>'null'::jsonb
+   AND (g->>'expiresAt')::timestamptz<=pg_catalog.clock_timestamp()
+   AND (g->>'expiresAt')::timestamptz>timestamptz 'epoch'+(pg_catalog.current_setting('morrow.work_evaluated_at_us',true)||' microseconds')::interval)
+   INTO v_expired;
+ EXCEPTION WHEN OTHERS THEN v_expired:=NULL;
+ END;
+ IF v_expired IS NOT FALSE THEN RETURN QUERY SELECT 'stale_authority'::text,NULL::text; RETURN; END IF;
  -- The one target and item this undo must be.
  v_targets:=jsonb_build_array(jsonb_build_object('resource',jsonb_build_object('organizationId',pre.organization_id,
   'workspaceId',pre.workspace_id,'storeId',o.store_id,'connectionId',o.connection_id,'kind','product','id',o.product_id),
@@ -638,19 +734,22 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- Explicit ACLs per function (S5 and S7 read proacl), then the ownership transfer.
 REVOKE ALL ON FUNCTION morrow_work.catalog_undo_set(jsonb,text[]),morrow_work.catalog_undo_state(text,text,text),
- morrow_work.catalog_undo_states(text),morrow_work.catalog_undo_source(text),
- morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text),
+ morrow_work.catalog_undo_proposer_facts(text,text,text,text),
+ morrow_work.catalog_undo_states(text),morrow_work.catalog_undo_source(text),morrow_work.catalog_undo_proposer(text),
+ morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text,text),
  morrow_vault.catalog_undo_resolve(text),morrow_vault.catalog_undo_record(text,text,text,text,text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION morrow_work.catalog_undo_states(text),morrow_work.catalog_undo_source(text),
- morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text) TO morrow_work_api;
+GRANT EXECUTE ON FUNCTION morrow_work.catalog_undo_states(text),morrow_work.catalog_undo_source(text),morrow_work.catalog_undo_proposer(text),
+ morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text,text) TO morrow_work_api;
 GRANT EXECUTE ON FUNCTION morrow_vault.catalog_undo_resolve(text),morrow_vault.catalog_undo_record(text,text,text,text,text)
  TO morrow_vault_broker;
 GRANT CREATE ON SCHEMA morrow_work,morrow_vault TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_undo_set(jsonb,text[]) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_undo_state(text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.catalog_undo_proposer_facts(text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_undo_states(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.catalog_undo_source(text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.catalog_undo_proposer(text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_undo_resolve(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.catalog_undo_record(text,text,text,text,text) OWNER TO morrow_work_command;
 REVOKE CREATE ON SCHEMA morrow_work,morrow_vault FROM morrow_work_command;
