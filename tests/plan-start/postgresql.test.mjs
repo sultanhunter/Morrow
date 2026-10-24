@@ -978,12 +978,12 @@ test("goal records: CHECKs and guards refuse start values, a 4th measure, both k
       `INSERT INTO morrow_work.goal_measure_values(organization_id,workspace_id,id,goal_id,key,product_id,value,observed_at,recorder_kind,recorder_principal_id,recorder_membership_id,assistant,answers,counted,read_tags,data_class,expires_at,created_at)
  SELECT ${literal(P.A.org)},${literal(P.A.workspace)},${literal(randomUUID())},'goal_area','pages_complete',NULL,40,t,'code',NULL,NULL,NULL,'[]',true,${literal(JSON.stringify(tags))}::jsonb,${literal(cls)},${expires},t FROM (SELECT ${now} AS t) x;`,
     );
-  r = value([{ storeId: "store_a", capabilityId: "support.case.read" }], "work", "NULL");
+  r = value([{ storeId: "store_a", capability: "support.case.read" }], "work", "NULL");
   assert.match(r.stderr, /goal_measure_values_no_customer/);
-  r = value([{ storeId: "store_a", capabilityId: "orders.read" }], "order_aggregates", "NULL");
+  r = value([{ storeId: "store_a", capability: "orders.read" }], "order_aggregates", "NULL");
   assert.match(r.stderr, /goal_measure_values_clock/);
   r = value(
-    [{ storeId: "store_a", capabilityId: "orders.read" }],
+    [{ storeId: "store_a", capability: "orders.read" }],
     "order_aggregates",
     `${now}+interval '91 days'`,
   );

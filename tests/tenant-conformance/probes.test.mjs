@@ -158,7 +158,7 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "begin_run_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_run_command('run.admit','${uuid}','${digest}')`,
     "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','1','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
     "cmd_runs_reconcile(text,text,text)": `SELECT outcome FROM morrow_work.cmd_runs_reconcile('${uuid}','${digest}','corr')`,
-    // PR 18 (0039): the goal and plan-start commands, every scalar and document well-formed.
+    // PR 18 (0046): the goal and plan-start commands, every scalar and document well-formed.
     "begin_project_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_project_command('plan.start','${uuid}','${digest}')`,
     "cmd_goal_revise(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_goal_revise('${uuid}','${digest}','corr','${records.A.goal}','1','own','x',NULL,'[{"description":"d","verificationCapabilityId":null,"evidenceRequired":false}]')`,
     "cmd_goal_check(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_goal_check('${uuid}','${digest}','corr','${records.A.goal}','named','product:1','chatgpt','["named_no_shop"]','${randomUUID()}')`,

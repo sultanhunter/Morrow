@@ -351,7 +351,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     check("AC05:serialized", waiting);
   });
 
-  // Finish's code-computed results record (0039), as owner fixture SQL.
+  // Finish's code-computed results record (0046), as owner fixture SQL.
   const finishResults = (goalId, revision) =>
     db.workOwner(
       `INSERT INTO morrow_work.goal_finish_results SELECT ${literal(P.A.org)},${literal(P.A.workspace)},${literal(goalId)},${revision},'achieved',c,morrow_work.sha256_text(c),${literal(randomUUID())},${literal(P.A.principal)},${literal(P.A.membership)},date_trunc('milliseconds',clock_timestamp()) FROM (SELECT '{"outcome":"achieved"}'::text AS c) x;`,
@@ -380,7 +380,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         const g = await goal(P.A, "Machine " + from + " " + to);
         let revision = 1;
         for (const step of path[from]) {
-          // Since PR 18 (0039) `achieved` needs Finish's results record at that revision,
+          // Since PR 18 (0046) `achieved` needs Finish's results record at that revision,
           // even for owner maintenance; the fixture writes one first.
           if (step === "achieved") finishResults(g, revision + 1);
           db.workOwner(
@@ -499,7 +499,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
 
   await section("AC07", async () => {
     // draft→ready under a cancelled goal (owner maintenance cancels the goal). Since PR 18
-    // (0039) a goal with an open task cannot be cancelled at all; the fixture lifts that
+    // (0046) a goal with an open task cannot be cancelled at all; the fixture lifts that
     // guard for this one statement to keep proving the task-side guard.
     const g1 = await goal(P.A, "Guard ready");
     const t1 = await task(g1);

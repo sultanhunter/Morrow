@@ -45,15 +45,18 @@ const body = (name) => {
 test("manifest: the last row, executeAs the work owner, its brief and digest, no prerequisites", () => {
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
-  assert.equal(row.sequence, manifest.migrations.length);
+  // The last row (0046 at integration; the no-gap rule is migration-history's).
+  assert.equal(row, manifest.migrations.at(-1));
   assert.deepEqual(
     [row.executeAs, row.reviewRef],
     ["morrow_work_owner", "docs/briefs/projects-backend.md"],
   );
   assert.equal(row.sha256, sha(text));
   assert.equal(row.prerequisites, undefined);
-  // Forward only, after M3 PR-2's listings runs.
-  assert.match(manifest.migrations[row.sequence - 2].file, /\.listings-runs\.sql$/);
+  // Forward only, after M3 PR-2's listings runs and v1 PR 1's live-store pair.
+  const before = (s) => manifest.migrations.find((m) => m.file.endsWith("." + s + ".sql"));
+  for (const s of ["listings-runs", "shopify-live-store-identity", "shopify-live-store-vault"])
+    assert.ok(before(s).sequence < row.sequence, s);
   const chain = loadMigrationChain();
   assert.equal(chain.find((e) => e.sequence === row.sequence).executeAs, "morrow_work_owner");
 });
@@ -244,7 +247,7 @@ test("goal records: a stored start value, a fourth measure, a dated area and Fin
     "goal_measure_values_recorder",
   ])
     assert.ok(sql.includes("CONSTRAINT " + name + " CHECK"), name);
-  assert.ok(sql.includes(`read_tags @> '[{"capabilityId":"support.case.read"}]'::jsonb`));
+  assert.ok(sql.includes(`read_tags @> '[{"capability":"support.case.read"}]'::jsonb`));
   assert.ok(sql.includes("+interval '90 days'"));
   // A card's edit keeps revision 1's taint and restricted sources; a start document lasts
   // five minutes and its nonce is single use.

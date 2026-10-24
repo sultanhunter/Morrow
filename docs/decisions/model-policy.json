@@ -20,6 +20,9 @@
     "call_contract": "ModelCall@1",
     "result_contract": "ModelResult@1",
     "selection_contract": "ModelSelection@1",
+    "loop_call_contract": "ModelCall@2",
+    "loop_result_contract": "ModelResult@2",
+    "profile_contract": "ModelProfile@1",
     "credential_holder": "broker",
     "automatic_fallback": false,
     "provider_side_fallback": false,
@@ -58,14 +61,83 @@
     "morrow_storage": "prompts and raw outputs are not stored; digests and usage only",
     "structured_output_schema_cache": "up to 24 hours after last use; schemas hold no merchant data"
   },
+  "loop_request": {
+    "decision": "ADR-0027 item 4 (PR 10 fixes these fields; the broker sends nothing else)",
+    "workflow": "agent-run@1",
+    "stream": false,
+    "sent": [
+      "model",
+      "max_tokens",
+      "system",
+      "messages",
+      "tools",
+      "tool_choice",
+      "thinking",
+      "output_config",
+      "cache_control"
+    ],
+    "tool_definition_fields": [
+      "name",
+      "description",
+      "input_schema",
+      "strict"
+    ],
+    "strict_tools": true,
+    "tool_choice": {
+      "default": "auto",
+      "final_turn": "none"
+    },
+    "thinking": {
+      "type": "adaptive"
+    },
+    "cache": "the fixed prefix only (tools, system text and skill bodies), 5-minute TTL (owner question 3)",
+    "never_sent": [
+      "temperature",
+      "top_p",
+      "top_k",
+      "stop_sequences",
+      "metadata",
+      "service_tier",
+      "stream",
+      "container",
+      "mcp_servers",
+      "fallbacks",
+      "inference_geo",
+      "speed",
+      "context_management",
+      "disable_parallel_tool_use",
+      "output_config.format",
+      "output_config.task_budget"
+    ],
+    "content_sent": [
+      "the person's request text",
+      "the agent's role prompt and its pinned skill bodies",
+      "the run's offered tool definitions",
+      "tool results and other untrusted content, wrapped as data naming their source",
+      "the run's own earlier turns, reasoning blocks included"
+    ],
+    "content_never_sent": [
+      "capabilities, grants, scopes, caps or prices",
+      "credentials",
+      "shop domain",
+      "staff emails",
+      "payment data",
+      "the workspace's sending addresses",
+      "customer data, except Level 2 name, email and mail in Support's runs",
+      "another run's content"
+    ]
+  },
   "quality_status": "not_evaluated",
   "catalogue": {
     "id": "morrow-model-catalogue",
-    "active_version": 1,
+    "active_versions": {
+      "per_product": 1,
+      "agent_loop": null
+    },
     "published_digests": {
       "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660"
     },
-    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation).",
+    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while version 1 stays active (ADR-0027 item 4).",
     "versions": [
       {
         "version": 1,
@@ -197,6 +269,138 @@
           "max_worst_case_share": "0.90",
           "rule": "every selection's worst case per product is at most max_worst_case_share of its credits' share of the plan's net revenue after every fee, and the unrecovered-cost cap is at most the rest"
         }
+      },
+      {
+        "version": 2,
+        "status": "proposed",
+        "run_shape": "agent_loop",
+        "proposed_on": "2026-10-23",
+        "decision": "ADR-0027 items 6 and 12, ADR-0026 item 4 (PR 10 proposes it; it publishes only on the owner's recorded confirmation, ADR-0027 item 11)",
+        "owner_confirmation": null,
+        "effective_from": null,
+        "default_profiles": {
+          "coordinator": {
+            "model": "claude_opus_5_5",
+            "effort": "high"
+          },
+          "specialist": {
+            "model": "claude_opus_5_5",
+            "effort": "medium"
+          },
+          "installed": {
+            "model": "claude_sonnet_5_5",
+            "effort": "low"
+          }
+        },
+        "limits": {
+          "max_input_tokens_per_turn": 64000,
+          "max_turns_per_run": 16,
+          "max_turns_per_coordinator_run": 6,
+          "max_tool_calls_per_turn": 4,
+          "max_tool_calls_per_run": 40,
+          "max_questions_per_run": 2,
+          "question_wait_hours": 72,
+          "wall_time_minutes": 30,
+          "specialist_default_run_minutes": 60,
+          "specialist_max_run_minutes": 480,
+          "tool_result_max_bytes": 8192,
+          "run_cost_cap_usd": "7",
+          "workspace_daily_cost_cap_usd": "25",
+          "workspace_period_unrecovered_cost_cap_usd": "4.50",
+          "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
+        },
+        "expected_turn": {
+          "input_tokens": 20000,
+          "cached_prefix_tokens": 12000
+        },
+        "efforts": [
+          {
+            "key": "low",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "low"
+              }
+            },
+            "max_output_tokens": 5000,
+            "expected_output_tokens": 1200
+          },
+          {
+            "key": "medium",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "medium"
+              }
+            },
+            "max_output_tokens": 12000,
+            "expected_output_tokens": 2500
+          },
+          {
+            "key": "high",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "high"
+              }
+            },
+            "max_output_tokens": 16000,
+            "expected_output_tokens": 5000
+          }
+        ],
+        "models": [
+          {
+            "key": "claude_haiku_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-haiku-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-10-07",
+            "rates_usd_per_million_tokens": {
+              "input": "0.10",
+              "output": "0.50",
+              "cache_write_5m": "0.125",
+              "cache_read": "0.01"
+            },
+            "rate_tier_max_input_tokens": 100000
+          },
+          {
+            "key": "claude_sonnet_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-sonnet-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-28",
+            "rates_usd_per_million_tokens": {
+              "input": "2",
+              "output": "10",
+              "cache_write_5m": "2.50",
+              "cache_read": "0.20"
+            },
+            "rate_tier_max_input_tokens": null
+          },
+          {
+            "key": "claude_opus_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-opus-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-22",
+            "rates_usd_per_million_tokens": {
+              "input": "4",
+              "output": "20",
+              "cache_write_5m": "5",
+              "cache_read": "0.20"
+            },
+            "rate_tier_max_input_tokens": null
+          }
+        ]
       }
     ]
   },

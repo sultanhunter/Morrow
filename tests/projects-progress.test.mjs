@@ -31,9 +31,9 @@ const day = 86_400_000;
 const t0 = Date.parse("2026-10-23T10:00:00Z");
 const due = t0 + 42 * day;
 const store = "store_a";
-const tag = (capabilityId) => ({ storeId: store, capabilityId });
+const tag = (capability) => ({ storeId: store, capability });
 const everyTag = { mayView: () => true };
-const only = (...capabilities) => ({ mayView: (t) => capabilities.includes(t.capabilityId) });
+const only = (...capabilities) => ({ mayView: (t) => capabilities.includes(t.capability) });
 const facts = {
   kind: "checklist",
   checklistId: "product_facts_complete",

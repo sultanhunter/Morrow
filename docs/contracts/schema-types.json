@@ -400,6 +400,22 @@
     "string": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/string",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "MailIdentityAction": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/MailIdentityAction",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "NullableSenderDisplayName": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableSenderDisplayName",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "NullableEmailAddress": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableEmailAddress",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "UtcTime": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/UtcTime",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     }
   }
 }

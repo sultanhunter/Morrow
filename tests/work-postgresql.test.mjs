@@ -171,8 +171,8 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
     );
   }
   // No later migration redefines them without the interlock. M2 PR-2's identity migration
-  // (located by slug) replaces link_workspace_store; its new definition keeps the exclusive
-  // interlock before the organization FOR UPDATE.
+  // and v1 PR 1's live-store migration (located by slug) replace link_workspace_store; each
+  // new definition keeps the exclusive interlock before the organization FOR UPDATE.
   for (const m of manifest.migrations.filter((x) => x.sequence > 14)) {
     const text = read("migrations/" + m.file);
     assert.doesNotMatch(
@@ -181,7 +181,11 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
       m.file,
     );
     if (!/FUNCTION morrow_identity\.link_workspace_store\(/.test(text)) continue;
-    assert.ok(m.file.endsWith(".shopify-install-identity.sql"), m.file);
+    assert.ok(
+      m.file.endsWith(".shopify-install-identity.sql") ||
+        m.file.endsWith(".shopify-live-store-identity.sql"),
+      m.file,
+    );
     const replaced = definition(text, "link_workspace_store");
     const lock = replaced.indexOf(interlock("", "p_org"));
     assert.ok(

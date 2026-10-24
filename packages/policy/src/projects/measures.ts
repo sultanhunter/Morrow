@@ -15,7 +15,7 @@ import type {
 // days of stock cover), plus one entry each for the Sales and Promotions areas.
 
 export type GoalDirection = "at_least" | "at_most";
-export type ReadCapability = Current_ReadTag["capabilityId"];
+export type ReadCapability = Current_ReadTag["capability"];
 export type GoalValueClass = Current_GoalValueClass;
 export type GoalValueSource = "store" | "checklist" | "hand_check";
 
@@ -120,15 +120,18 @@ export function measureSource(measure: Current_GoalMeasure): GoalValueSource {
 export const isCustomerMeasure = (measure: Current_GoalMeasure) =>
   measureValueClass(measure) === "customer";
 
-/** The read tags of a measure's values: its capabilities on each of the stores, sorted. */
+/**
+ * The read tags of a measure's values (ReadTag@1, PR 10): its capabilities on each of the
+ * stores, sorted. A goal value's tags always name a store.
+ */
 export function readTagsFor(
   measure: Current_GoalMeasure,
   storeIds: readonly string[],
 ): readonly Current_ReadTag[] {
   const tags: Current_ReadTag[] = [];
   for (const storeId of [...new Set(storeIds)].sort())
-    for (const capabilityId of [...measureReadCapabilities(measure)].sort())
-      tags.push({ storeId, capabilityId });
+    for (const capability of [...measureReadCapabilities(measure)].sort())
+      tags.push({ storeId, capability });
   return Object.freeze(tags);
 }
 

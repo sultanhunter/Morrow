@@ -40,6 +40,10 @@ export const capabilitiesAfter0018 = Object.freeze([
   // M5 PR-1 (ADR-0022 items 2 and 3): neither is review-required.
   "governance.billing.manage",
   "governance.model_default.revise",
+  // PR 10 (ADR-0024 item 4, ADR-0030 item 10(c)): neither is review-required. Agents may
+  // only propose revoke; its row comes with the forward migration of its definer.
+  "workspace.routine.revoke",
+  "governance.mail_identity.revise",
   // PR 18 (ADR-0033 items 4 and 5): both human_only, neither review-required.
   "workspace.goal.revise",
   "workspace.goal.measure.record",

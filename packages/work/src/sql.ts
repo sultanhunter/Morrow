@@ -78,7 +78,7 @@ export const workStatements = Object.freeze({
   ...catalogStatements,
   // M3 PR-2: run admission, the stale-run close and the run reads.
   ...runStatements,
-  // PR 18: the goal and plan-start routes (migration 0039).
+  // PR 18: the goal and plan-start routes (migration 0046).
   ...projectStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

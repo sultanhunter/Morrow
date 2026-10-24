@@ -1,4 +1,4 @@
-// Every statement the goal and plan-start routes send (PR 18; migration 0039), merged into
+// Every statement the goal and plan-start routes send (PR 18; migration 0046), merged into
 // workStatements so WorkTx.run accepts no other text. Source fixed: values travel only as
 // bind parameters, and every selected column is text.
 

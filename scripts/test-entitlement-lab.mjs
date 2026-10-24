@@ -19,8 +19,14 @@
 //      wallet's sum is the grant's units and only moves keep it.
 //   L  the route admits linking; the billing view reads the beta plan, 300 credits and the
 //      period, offers no purchase, and a production reader refuses the test route.
+//   V  v1 PR 1 (ADR-0035 items 2 to 4): the runner's registerShopifyApp registers the
+//      owner's app with the live-store mark and stores its sealed client secret at the
+//      app's next version (a rerun replays the registration and rotates the secret); a
+//      second live-store app is refused and stores nothing; under the standing approval the
+//      entitlement goes only to the workspace the live-store app invites. No statement
+//      carries the secret.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data.
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   fixtureGrant,
   grantInsert,
@@ -30,7 +36,8 @@ import {
 } from "../tests/tenant-conformance/harness.mjs";
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
 import { stagingBillingTermsRows } from "./staging.mjs";
-import { grantTestEntitlement, seedBillingTerms } from "./staging-runner.mjs";
+import { grantTestEntitlement, registerShopifyApp, seedBillingTerms } from "./staging-runner.mjs";
+import { checkEnvelope, sealAppSecretWithKek } from "./vault.mjs";
 import { psqlConnector } from "./fixtures/staging-psql-connection.mjs";
 import {
   administrator as neonAdministrator,
@@ -518,6 +525,149 @@ INSERT INTO morrow_billing.stripe_event_receipts(organization_id,workspace_id,id
       produced.status === 200 &&
         produced.body.phase === "morrow_direct" &&
         produced.body.state === "not_billable",
+    );
+
+    // -------------------------------------------------------------------------------
+    // V. The owner's live-store app (v1 PR 1; ADR-0035 items 2 to 4).
+    const V = tenant("te_v");
+    const W = tenant("te_w");
+    const labKek = randomBytes(32).toString("hex");
+    const labSecret = "shpss_" + randomBytes(16).toString("hex");
+    const liveShop = "lab-owner-live.myshopify.com";
+    const liveInput = (p, key, shop) => ({
+      appKey: key,
+      clientId: randomBytes(16).toString("hex"),
+      shopDigest: createHash("sha256").update(shop).digest("hex"),
+      workspaceId: p.workspace,
+      installUrl: `https://admin.shopify.com/oauth/install_custom_app?client_id=${key}&signature=lab`,
+    });
+    const owned = liveInput(V, "lab-owner-live", liveShop);
+    const sealWith = (appKey) => async (version) =>
+      sealAppSecretWithKek(
+        { environment: "staging", "app-key": appKey, version: String(version), "kek-version": "1" },
+        labSecret,
+        () => labKek,
+      );
+    const registered = [];
+    const registerLive = async (input) => {
+      const connector = runner();
+      registered.push(connector);
+      return registerShopifyApp({
+        connect: connector.connect,
+        binding: labBinding,
+        administrator,
+        input,
+        seal: sealWith(input.appKey),
+      });
+    };
+    const standingGrant = (p, n) =>
+      grantTestEntitlement({
+        connect: runner().connect,
+        binding: labBinding,
+        administrator,
+        input: {
+          operatorId: "operator_lab",
+          workspaceId: p.workspace,
+          approvalRef: `adr-0035.e13.2026-10-23.${n}`,
+          evidenceRef: ["docs/evidence/live/2026-10-23-standing-approval", "md"].join("."),
+        },
+        requireLiveStoreWorkspace: true,
+      });
+    const secrets = (key) =>
+      db.rows(
+        `SELECT version::int AS version,status,wrapped_key IS NULL AS erased,encode(wrapped_key,'hex') AS wrapped,encode(sealed_value,'hex') AS sealed FROM morrow_vault.app_secrets WHERE app_key=${lit(key)} ORDER BY version`,
+      );
+    const apps = () =>
+      db.rows(
+        `SELECT app_key,live_store,status,invited_workspace_id::text AS ws,intended_shop_digest AS digest FROM morrow_identity.shopify_apps WHERE live_store ORDER BY app_key`,
+      );
+    const beforeLive = counts();
+    const early = await rejection(standingGrant(V, 1));
+    check(
+      "V_the_standing_entitlement_refuses_the_workspace_before_its_live_store_app_exists",
+      early?.code === "STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE" &&
+        same(counts(), beforeLive) &&
+        morrowSetRows(db.id) === 0,
+    );
+    const firstLive = await registerLive(owned);
+    const [secret1] = secrets(owned.appKey);
+    const opens = async (row) =>
+      checkEnvelope(
+        {
+          environment: "staging",
+          appKey: owned.appKey,
+          version: row.version,
+          kekVersion: 1,
+          wrappedKeyHex: row.wrapped,
+          sealedValueHex: row.sealed,
+        },
+        labKek,
+      ).then(
+        () => true,
+        () => false,
+      );
+    check(
+      "V_registration_writes_the_marked_app_and_its_sealed_secret_at_version_1",
+      firstLive.registration === "registered" &&
+        firstLive.secretVersion === "1" &&
+        firstLive.organizationId === V.org &&
+        same(apps(), [
+          {
+            app_key: owned.appKey,
+            live_store: true,
+            status: "active",
+            ws: V.workspace,
+            digest: owned.shopDigest,
+          },
+        ]) &&
+        secret1?.version === 1 &&
+        secret1.status === "active" &&
+        (await opens(secret1)) &&
+        morrowSetRows(db.id) === 0,
+    );
+    const again = await registerLive(owned);
+    const rotated = secrets(owned.appKey);
+    check(
+      "V_a_rerun_replays_the_registration_and_rotates_the_secret_to_the_next_version",
+      again.registration === "already_registered" &&
+        again.secretVersion === "2" &&
+        rotated.length === 2 &&
+        rotated[0].status === "retired" &&
+        rotated[0].erased === true &&
+        rotated[1].status === "active" &&
+        (await opens(rotated[1])) &&
+        apps().length === 1,
+    );
+    const second = liveInput(W, "lab-other-live", "lab-other-live.myshopify.com");
+    const refused = await rejection(registerLive(second));
+    check(
+      "V_a_second_live_store_app_is_refused_and_stores_nothing",
+      refused?.code === "STAGING_SHOPIFY_APP_REFUSED" &&
+        refused.details?.outcome === "live_store_taken" &&
+        apps().length === 1 &&
+        secrets(second.appKey).length === 0 &&
+        morrowSetRows(db.id) === 0,
+    );
+    const other = await rejection(standingGrant(W, 2));
+    const granted = await standingGrant(V, 3);
+    check(
+      "V_the_standing_entitlement_goes_only_to_the_live_store_apps_workspace",
+      other?.code === "STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE" &&
+        granted.outcome === "granted" &&
+        granted.workspaceId === V.workspace &&
+        granted.creditUnits === "300" &&
+        linkRoute(V) === "morrow_direct" &&
+        linkRoute(W) === "unfixed" &&
+        morrowSetRows(db.id) === 0,
+    );
+    const statements = registered.flatMap((connector) => connector.statements).join("\n");
+    check(
+      "V_no_statement_carries_the_secret_the_kek_or_the_shop",
+      statements.includes("app_secret_put") &&
+        !statements.includes(labSecret) &&
+        !statements.includes(Buffer.from(labSecret).toString("hex")) &&
+        !statements.includes(labKek) &&
+        !statements.includes(liveShop),
     );
   },
   { administrator: "createrole" },

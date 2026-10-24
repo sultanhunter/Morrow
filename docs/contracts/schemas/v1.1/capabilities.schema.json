@@ -529,6 +529,171 @@
       ],
       "additionalProperties": false
     },
+    "governance.mail_identity.revise.input": {
+      "description": "PR 10 (ADR-0030 item 10(c)): the Owner's change to the workspace's sending addresses: set the default, change a display name, disable or enable an identity, or change the verified support address. One audited transaction; it voids unclaimed approvals of pending proposals whose sender, From, Reply-To or Bcc it changes.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/MailIdentityAction"
+        },
+        "senderIdentityId": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableId"
+        },
+        "displayName": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableSenderDisplayName"
+        },
+        "supportAddress": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableEmailAddress"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableRevision"
+        }
+      },
+      "required": [
+        "action",
+        "senderIdentityId",
+        "displayName",
+        "supportAddress",
+        "expectedRevision"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "enum": [
+                  "set_default",
+                  "disable",
+                  "enable"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "senderIdentityId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "null"
+              },
+              "supportAddress": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "const": "set_display_name"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "senderIdentityId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "supportAddress": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "const": "set_support_address"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "senderIdentityId": {
+                "type": "null"
+              },
+              "displayName": {
+                "type": "null"
+              },
+              "supportAddress": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "governance.mail_identity.revise.output": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.routine.revoke.input": {
+      "description": "PR 10 (ADR-0024 item 4): revoke one installation's current mandate. An idempotent target state with a recorded reason, like a stop: no expectedRevision, no reservation, never blocked by entitlement. It voids unclaimed approvals of the mandate's proposals and ends its running run; a claimed operation still finishes and reconciles.",
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "mandateId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "control": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KillSwitchControl"
+        }
+      },
+      "required": [
+        "installationId",
+        "mandateId",
+        "control"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.routine.revoke.output": {
+      "type": "object",
+      "properties": {
+        "revokedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "pendingOperations": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/IdList"
+        }
+      },
+      "required": [
+        "revokedAt",
+        "pendingOperations"
+      ],
+      "additionalProperties": false
+    },
     "workspace.goal.revise.input": {
       "description": "ADR-0033 item 5: a person revises a goal record (human_only): the objective, the date (Extend), targets, questions and assistant, within 3 measured goals. A stored measure's startRef stays null; the server derives it.",
       "type": "object",

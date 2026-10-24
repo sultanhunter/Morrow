@@ -390,8 +390,10 @@ export async function storeViewer(
   }
   return {
     viewer: Object.freeze({
+      // A tag with no store (ReadTag@1 allows one for the workspace capabilities) is never
+      // decided on a store resource, so it is never viewable here.
       mayView: (tag: Current_ReadTag) =>
-        decisions.get(tag.storeId + "|" + tag.capabilityId) === true,
+        tag.storeId !== null && decisions.get(tag.storeId + "|" + tag.capability) === true,
     }),
     storeIds: Object.freeze([...stores].sort()),
   };
@@ -543,7 +545,7 @@ export async function goalProgressRead(tx: WorkTx, g: Guarded): Promise<ProjectR
   const view = await storeViewer(
     tx,
     a,
-    values.flatMap((v) => v.readTags.map((tag) => tag.storeId)),
+    values.flatMap((v) => v.readTags.flatMap((tag) => (tag.storeId === null ? [] : [tag.storeId]))),
   );
   const finishRow = one(await tx.run("goalFinish", [goalId]));
   const waiting = one(await tx.run("goalWaitingOn", [goalId, a.actor.principalId]));

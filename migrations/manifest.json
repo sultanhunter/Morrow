@@ -307,8 +307,22 @@
     },
     {
       "sequence": 39,
-      "file": "0039.projects-goal-measures.sql",
-      "sha256": "9d946dc1c0b36848ae6c2644535ac06e156f5eac57aede3d143177ef0aa2ccfc",
+      "file": "0039.shopify-live-store-identity.sql",
+      "sha256": "30543aa4053278c06ac54af3a54f2e4e21309ab02a8bc30b943570bdf0ecfd41",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-connect-store.md"
+    },
+    {
+      "sequence": 40,
+      "file": "0040.shopify-live-store-vault.sql",
+      "sha256": "ffdff6ff5a78320880c6c4b44e5464801165bde8204f63d0973d2ced45030e70",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-connect-store.md"
+    },
+    {
+      "sequence": 46,
+      "file": "0046.projects-goal-measures.sql",
+      "sha256": "4858c68b31f67f917a15973bb2d7802c5efcdb3c141360f66f0af83cd6a0b282",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/projects-backend.md"
     }

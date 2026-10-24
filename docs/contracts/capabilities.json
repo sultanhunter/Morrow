@@ -1774,6 +1774,80 @@
       "activation": "blocked_until_contract_and_provider_qualified"
     },
     {
+      "id": "workspace.routine.revoke",
+      "name": "Revoke an installed agent's standing mandate",
+      "domain": "Workspace coordination",
+      "contract_version": "0.1.0-draft",
+      "status": "Proposed",
+      "owner": "Morrow platform owner",
+      "effect": "control",
+      "provider_dependency": "D01",
+      "input": {
+        "envelope": "ScopedRequestV1",
+        "fields": {
+          "installationId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "mandateId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          },
+          "control": {
+            "type": "KillSwitchControl",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "output": {
+        "envelope": "EvidenceResultV1",
+        "fields": {
+          "revokedAt": {
+            "type": "UtcTime",
+            "required": true,
+            "nullable": false
+          },
+          "pendingOperations": {
+            "type": "IdList",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "eligible_principal": "human_or_bounded_installation_with_explicit_capability_grant",
+      "grant": "workspace.routine.revoke",
+      "resource_scope": "Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable.",
+      "field_scope": [
+        "mandate state",
+        "pending mandate approvals"
+      ],
+      "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
+      "retention_class": "R02",
+      "review_required": false,
+      "executor": "human_only",
+      "kill_switch": false,
+      "irreversible": false,
+      "verification": "The mandate admits no run after revocation, unclaimed approvals of its proposals are void and its running run ends; a claimed operation still finishes and reconciles",
+      "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "layout": "Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.",
+      "implementation_tasks": [
+        "P05.T04",
+        "P12.T04"
+      ],
+      "acceptance_cases": [
+        "P01.A01",
+        "P05.A03"
+      ],
+      "activation": "blocked_until_contract_and_provider_qualified"
+    },
+    {
       "id": "workspace.goal.revise",
       "name": "Revise a project's goal record",
       "domain": "Workspace coordination",
@@ -4681,7 +4755,8 @@
       "field_scope": [
         "reply body",
         "recipient",
-        "channel"
+        "channel",
+        "sender identity"
       ],
       "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
       "retention_class": "R03",
@@ -4751,7 +4826,8 @@
       "field_scope": [
         "recipient",
         "channel",
-        "reply body"
+        "reply body",
+        "sender identity"
       ],
       "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
       "retention_class": "R03",
@@ -7498,6 +7574,86 @@
       ],
       "acceptance_cases": [
         "P01.A01"
+      ],
+      "activation": "blocked_until_contract_and_provider_qualified"
+    },
+    {
+      "id": "governance.mail_identity.revise",
+      "name": "Manage the workspace's sending addresses",
+      "domain": "Governance",
+      "contract_version": "0.1.0-draft",
+      "status": "Proposed",
+      "owner": "Morrow platform owner",
+      "effect": "control",
+      "provider_dependency": "D01",
+      "input": {
+        "envelope": "ScopedRequestV1",
+        "fields": {
+          "action": {
+            "type": "MailIdentityAction",
+            "required": true,
+            "nullable": false
+          },
+          "senderIdentityId": {
+            "type": "NullableId",
+            "required": true,
+            "nullable": false
+          },
+          "displayName": {
+            "type": "NullableSenderDisplayName",
+            "required": true,
+            "nullable": false
+          },
+          "supportAddress": {
+            "type": "NullableEmailAddress",
+            "required": true,
+            "nullable": false
+          },
+          "expectedRevision": {
+            "type": "NullableRevision",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "output": {
+        "envelope": "EvidenceResultV1",
+        "fields": {
+          "revision": {
+            "type": "Revision",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "eligible_principal": "human_or_bounded_installation_with_explicit_capability_grant",
+      "grant": "governance.mail_identity.revise",
+      "resource_scope": "Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable.",
+      "field_scope": [
+        "default sender identity",
+        "sender display name",
+        "sender status",
+        "support address"
+      ],
+      "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
+      "retention_class": "R02",
+      "review_required": false,
+      "executor": "human_only",
+      "kill_switch": false,
+      "irreversible": false,
+      "verification": "The default is always active, a new default never changes an existing proposal's sender, and a change voids unclaimed approvals of pending proposals whose sender, From, Reply-To or Bcc it changes",
+      "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "layout": "Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.",
+      "implementation_tasks": [
+        "P17.T02"
+      ],
+      "acceptance_cases": [
+        "P01.A01",
+        "P17.A04"
       ],
       "activation": "blocked_until_contract_and_provider_qualified"
     },

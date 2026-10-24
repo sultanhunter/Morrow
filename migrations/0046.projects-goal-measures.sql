@@ -1,6 +1,8 @@
 BEGIN;
 -- PR 18 projects behind the scenes (ADR-0033 and ADR-0034; docs/briefs/projects-backend.md).
--- Executes AS morrow_work_owner, after M3 PR-2's listings runs (0038). Forward only: no
+-- Executes AS morrow_work_owner, as 0046 after the v1 PRs' 0039-0045 (written after M3
+-- PR-2's listings runs, 0038; the shared CHECKs it widens are asserted below exactly as the
+-- head defines them, so a revision by any earlier file stops it). Forward only: no
 -- published migration is edited. On the ADR-0010 tenant pattern: composite tenant keys,
 -- ENABLE and FORCE RLS, definers owned by morrow_work_command, INVOKER triggers and checks
 -- owned by the owner. No external effect: nothing here sends a request, reserves money,
@@ -175,14 +177,16 @@ BEGIN
  RETURN v_measured BETWEEN 1 AND 3 AND v_measured=jsonb_array_length(c);
 EXCEPTION WHEN OTHERS THEN RETURN false;
 END $$;
--- Read tags (ADR-0031 item 6): 0..12 unique {storeId, capabilityId} from the closed list.
+-- Read tags (ADR-0031 item 6; core v1.1 ReadTags, PR 10): 0..24 unique {storeId, capability}
+-- from the closed list. ReadTag@1 allows a null store for the two workspace capabilities; a
+-- goal value's tags always name a store, so here storeId is always an id.
 CREATE FUNCTION morrow_work.valid_read_tags(t jsonb) RETURNS boolean
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
- SELECT CASE WHEN t IS NULL OR jsonb_typeof(t)<>'array' OR jsonb_array_length(t)>12 THEN false ELSE NOT EXISTS(
+ SELECT CASE WHEN t IS NULL OR jsonb_typeof(t)<>'array' OR jsonb_array_length(t)>24 THEN false ELSE NOT EXISTS(
   SELECT 1 FROM jsonb_array_elements(t) e WHERE NOT (CASE WHEN jsonb_typeof(e)<>'object' THEN false ELSE
-   e ?& ARRAY['storeId','capabilityId'] AND (e-ARRAY['storeId','capabilityId'])='{}'::jsonb
+   e ?& ARRAY['storeId','capability'] AND (e-ARRAY['storeId','capability'])='{}'::jsonb
    AND jsonb_typeof(e->'storeId')='string' AND (e->>'storeId') ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
-   AND jsonb_typeof(e->'capabilityId')='string' AND (e->>'capabilityId') IN ('catalog.products.read','inventory.levels.read',
+   AND jsonb_typeof(e->'capability')='string' AND (e->>'capability') IN ('catalog.products.read','inventory.levels.read',
     'orders.read','support.case.read','workspace.knowledge.read','workspace.artifact.read') END))
   AND (SELECT count(DISTINCT e) FROM jsonb_array_elements(t) e)=jsonb_array_length(t) END
 $$;
@@ -273,7 +277,7 @@ CREATE TABLE morrow_work.goal_measure_values (
  FOREIGN KEY (organization_id,recorder_membership_id,recorder_principal_id) REFERENCES morrow_identity.memberships(organization_id,id,principal_id),
  FOREIGN KEY (workspace_id,recorder_membership_id) REFERENCES morrow_identity.workspace_memberships(workspace_id,membership_id),
  -- ADR-0031 item 2: customer data lives only in content: customer tables.
- CONSTRAINT goal_measure_values_no_customer CHECK (NOT (read_tags @> '[{"capabilityId":"support.case.read"}]'::jsonb)),
+ CONSTRAINT goal_measure_values_no_customer CHECK (NOT (read_tags @> '[{"capability":"support.case.read"}]'::jsonb)),
  CONSTRAINT goal_measure_values_clock CHECK ((data_class='work')=(expires_at IS NULL)
   AND (data_class<>'order_aggregates' OR expires_at<=date_trunc('day',observed_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'+interval '90 days')),
  -- A person records only a hand check: its assistant, its product row and its answers.
@@ -621,7 +625,7 @@ $$;
 -- The read tags of a hand check: the catalogue tag of every store linked to the workspace.
 CREATE FUNCTION morrow_work.hand_check_read_tags(p_org text,p_ws text) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_work,pg_temp AS $$
- SELECT COALESCE(jsonb_agg(DISTINCT jsonb_build_object('storeId',i.store_id,'capabilityId','catalog.products.read')),'[]'::jsonb)
+ SELECT COALESCE(jsonb_agg(DISTINCT jsonb_build_object('storeId',i.store_id,'capability','catalog.products.read')),'[]'::jsonb)
  FROM morrow_identity.work_store_installations(p_org,p_ws) i WHERE i.status='linked' AND i.linked_at<=pg_catalog.clock_timestamp()
 $$;
 REVOKE ALL ON FUNCTION morrow_work.goal_task_count(text,text,text) FROM PUBLIC;

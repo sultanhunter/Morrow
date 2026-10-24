@@ -31,8 +31,10 @@ import {
   edgeStripeVarNames,
   edgeModelNamesRequired,
   edgeModelVarNames,
+  edgePublicWorkers,
   edgeVarNames,
   edgeWorkers,
+  edgeWorkersDev,
   orchestratorPackageAllowlist,
   resolvedEdgeConfig,
   edgePlanDraftsPrerequisites,
@@ -84,7 +86,19 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
     assert.deepEqual(verdict.resolved["api:" + environment].services, [
       { binding: "BROKER", service: `morrow-${environment}-broker`, entrypoint: "ApiBroker" },
     ]);
-    assert.deepEqual(verdict.resolved["connector:" + environment].bindings, ["MORROW_ENVIRONMENT"]);
+    // v1 PR 1 (ADR-0035 item 2): the staging connector also carries its two reviewed
+    // identifiers (its own origin and the api's; the database binding byte-equal to the
+    // api's); development and production carry MORROW_ENVIRONMENT only.
+    assert.deepEqual(
+      verdict.resolved["connector:" + environment].bindings,
+      edgeVarNames("connector", environment),
+    );
+    assert.deepEqual(
+      verdict.resolved["connector:" + environment].bindings,
+      environment === "staging"
+        ? ["MORROW_ENVIRONMENT", "CONNECTOR_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"]
+        : ["MORROW_ENVIRONMENT"],
+    );
     // M3 PR-2: the orchestrator carries MORROW_ENVIRONMENT and binds the broker's
     // RuntimeBroker entrypoint; with the model-provider switch off, nothing else.
     assert.deepEqual(verdict.resolved["orchestrator:" + environment].bindings, [
@@ -736,7 +750,12 @@ test("P04.T01i AC01/AC02: the committed staging blocks are D1's and pass every v
   for (const worker of edgeWorkers)
     for (const environment of edgeEnvironments) {
       const config = await resolvedEdgeConfig(worker.key, environment);
-      assert.equal(config.workers_dev, worker.key === "api" && environment === "staging");
+      // v1 PR 1 (ADR-0035 item 2): the api and the connector are the public Workers.
+      assert.equal(
+        config.workers_dev,
+        ["api", "connector"].includes(worker.key) && environment === "staging",
+      );
+      assert.equal(config.workers_dev, edgeWorkersDev(worker.key, environment));
       assert.equal(config.preview_urls, false);
       assert.deepEqual(config.observability, edgeObservability(environment));
       assert.deepEqual(Object.keys(config.vars ?? {}), edgeVarNames(worker.key, environment));
@@ -773,6 +792,17 @@ test("P04.T01i AC01/AC02: the committed staging blocks are D1's and pass every v
     hostname: "ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech",
     database: "morrow",
   });
+  // v1 PR 1: the connector's own origin and the api's, and the api's database binding.
+  const connector = (await resolvedEdgeConfig("connector", "staging")).vars;
+  assert.equal(
+    connector.CONNECTOR_CONFIGURATION_JSON,
+    JSON.stringify({
+      schemaVersion: 1,
+      origin: "https://morrow-staging-connector.sultanibneusman0.workers.dev",
+      apiOrigin: stagingOrigin,
+    }),
+  );
+  assert.equal(connector.MORROW_DATABASE_BINDING_JSON, api.MORROW_DATABASE_BINDING_JSON);
   const challenge = JSON.parse(api.LOGIN_CHALLENGE_JSON);
   const turnstile = JSON.parse(broker.TURNSTILE_CONFIGURATION_JSON);
   assert.equal(challenge.siteKey, "0x4AAAAAAFdwF1eDox4vfBd2");
@@ -785,7 +815,10 @@ test("P04.T01i AC01: workers.dev, previews, observability and routes are exact p
     [{ api: (c) => (c.env.staging.workers_dev = false) }, "EDGE_FLAG_WORKERS_DEV"],
     // AC01: a broker with workers_dev:true fails.
     [{ broker: (c) => (c.env.staging.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
-    [{ connector: (c) => (c.env.staging.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
+    // v1 PR 1: the staging connector is on workers.dev; off, or on in production, fails.
+    [{ connector: (c) => (c.env.staging.workers_dev = false) }, "EDGE_FLAG_WORKERS_DEV"],
+    [{ connector: (c) => (c.env.production.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
+    [{ connector: (c) => (c.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
     [{ orchestrator: (c) => (c.env.staging.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
     [{ api: (c) => (c.env.production.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
     [{ api: (c) => (c.env.staging.preview_urls = true) }, "EDGE_FLAG_PREVIEW_URLS"],
@@ -839,7 +872,11 @@ test("P04.T01i AC01: each Worker's staging vars are exactly its allowlist", asyn
     },
     { broker: (c) => delete c.env.staging.vars.TURNSTILE_CONFIGURATION_JSON },
     { broker: (c) => (c.env.staging.vars.WORKSPACE_CONFIGURATION_JSON = "{}") },
-    { connector: (c) => (c.env.staging.vars.MORROW_DATABASE_BINDING_JSON = "{}") },
+    // v1 PR 1: the staging connector's two reviewed identifiers, exactly.
+    { connector: (c) => (c.env.staging.vars.EXTRA_JSON = "{}") },
+    { connector: (c) => delete c.env.staging.vars.CONNECTOR_CONFIGURATION_JSON },
+    { connector: (c) => delete c.env.staging.vars.MORROW_DATABASE_BINDING_JSON },
+    { connector: (c) => (c.env.production.vars.CONNECTOR_CONFIGURATION_JSON = "{}") },
     { orchestrator: (c) => (c.env.staging.vars = {}) },
     { orchestrator: (c) => (c.env.staging.vars.NOTE = "x") },
     // Development and production stay unbound.
@@ -850,6 +887,109 @@ test("P04.T01i AC01: each Worker's staging vars are exactly its allowlist", asyn
     const found = codes(await verify(tree(mutate)));
     assert.ok(found.includes("EDGE_VARS"), index + ": " + found.join(","));
   }
+});
+
+// v1 PR 1 (ADR-0035 item 2, amending ADR-0019 item 2 and ADR-0022 item 6): the staging
+// connector is the second public Worker. Its CONNECTOR_CONFIGURATION_JSON names exactly its
+// own workers.dev origin and the api's, its MORROW_DATABASE_BINDING_JSON is the api's byte
+// for byte, and its origin is admitted in that one var only.
+test("v1 PR 1: the staging connector's configuration names its own origin and the api's; the binding is the api's", async () => {
+  assert.deepEqual([...edgePublicWorkers], ["api", "connector"]);
+  const connectorOrigin = "https://morrow-staging-connector.sultanibneusman0.workers.dev";
+  const configure = (value) => ({
+    connector: (c) => (c.env.staging.vars.CONNECTOR_CONFIGURATION_JSON = value),
+  });
+  const json = (value) => JSON.stringify({ schemaVersion: 1, ...value });
+  const cases = [
+    // Another Worker's hostname as the connector's origin, or the api's twice.
+    [
+      configure(
+        json({
+          origin: "https://morrow-staging-broker.sultanibneusman0.workers.dev",
+          apiOrigin: stagingOrigin,
+        }),
+      ),
+      "EDGE_STAGING_CONNECTOR_CONFIGURATION",
+    ],
+    [
+      configure(json({ origin: stagingOrigin, apiOrigin: stagingOrigin })),
+      "EDGE_STAGING_CONNECTOR_CONFIGURATION",
+    ],
+    // The api origin on another subdomain, a path, plain http, an extra member, or the same
+    // values in another member order (not the canonical text).
+    [
+      configure(
+        json({
+          origin: connectorOrigin,
+          apiOrigin: "https://morrow-staging-api.lab0.workers.dev",
+        }),
+      ),
+      "EDGE_STAGING_CONNECTOR_CONFIGURATION",
+    ],
+    [
+      configure(json({ origin: connectorOrigin + "/shopify", apiOrigin: stagingOrigin })),
+      "EDGE_STAGING_CONNECTOR_CONFIGURATION",
+    ],
+    [
+      configure(
+        json({ origin: connectorOrigin.replace("https:", "http:"), apiOrigin: stagingOrigin }),
+      ),
+      "EDGE_STAGING_CONNECTOR_CONFIGURATION",
+    ],
+    [
+      configure(json({ origin: connectorOrigin, apiOrigin: stagingOrigin, note: "x" })),
+      "EDGE_STAGING_CONNECTOR_CONFIGURATION",
+    ],
+    [
+      configure(
+        JSON.stringify({ apiOrigin: stagingOrigin, origin: connectorOrigin, schemaVersion: 1 }),
+      ),
+      "EDGE_STAGING_CONNECTOR_CONFIGURATION",
+    ],
+    [configure("not json"), "EDGE_STAGING_CONNECTOR_CONFIGURATION"],
+    // The binding differs from the api's (another database, the same in another order).
+    [
+      {
+        connector: (c) =>
+          patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { database: "other" }),
+      },
+      "EDGE_STAGING_SHARED_VARS",
+    ],
+    [
+      {
+        connector: (c) =>
+          (c.env.staging.vars.MORROW_DATABASE_BINDING_JSON = JSON.stringify(
+            Object.fromEntries(
+              Object.entries(JSON.parse(c.env.staging.vars.MORROW_DATABASE_BINDING_JSON)).reverse(),
+            ),
+          )),
+      },
+      "EDGE_STAGING_SHARED_VARS",
+    ],
+    // The connector's origin anywhere else is an unreviewed URL and hostname.
+    [
+      {
+        api: (c) =>
+          patchVar(c.env.staging.vars, "WORKSPACE_CONFIGURATION_JSON", {
+            origin: connectorOrigin,
+          }),
+      },
+      "EDGE_STAGING_VALUE_URL",
+    ],
+  ];
+  for (const [index, [mutate, expected]] of cases.entries()) {
+    const found = codes(await verify(tree(mutate)));
+    assert.ok(found.includes(expected), index + ": " + expected + " not in " + found.join(","));
+  }
+  // staging.json's connector name must be the connector's resolved staging name.
+  const renamed = codes(
+    await verify(
+      tree(),
+      undefined,
+      records({ staging: (s) => (s.cloudflare.workers.connector = "morrow-staging-other") }),
+    ),
+  );
+  assert.ok(renamed.includes("EDGE_STAGING_ORIGIN"), renamed.join(","));
 });
 
 test("P04.T01i AC01: every origin use is https://<api>.<workers_dev_subdomain>.workers.dev", async () => {
@@ -1627,6 +1767,9 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
       moved[worker](c);
       patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
     };
+  // v1 PR 1: the connector's copy of the binding moves with the api's.
+  all.connector = (c) =>
+    patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
   const relocated = await verify(
     tree(all),
     undefined,

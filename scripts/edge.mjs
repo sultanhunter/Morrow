@@ -594,8 +594,12 @@ export const edgeStagingObservability = Object.freeze({
 });
 export const edgeObservability = (environment) =>
   environment === "staging" ? edgeStagingObservability : Object.freeze({ enabled: false });
+// v1 PR 1 (ADR-0035 item 2, amending ADR-0019 item 2 and ADR-0022 item 6): the staging
+// connector too, so that Shopify can reach its launch, callback and webhook paths. These
+// two are the public Workers; the broker and the orchestrator never are.
+export const edgePublicWorkers = Object.freeze(["api", "connector"]);
 export const edgeWorkersDev = (worker, environment) =>
-  worker === "api" && environment === "staging";
+  edgePublicWorkers.includes(worker) && environment === "staging";
 // P04.T01i D1 (placement, 2026-10-21): the staging api and broker run in the region of the
 // committed Neon endpoint, so the api's sequential database round trips stay inside that
 // region instead of crossing from the edge nearest the caller (the first deploy's
@@ -622,7 +626,11 @@ export function edgePlacementRegion(regionId) {
 export function edgeVarNames(worker, environment, stripe = "off", model = "off") {
   const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
   if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
-  if (environment !== "staging" || worker === "connector") return ["MORROW_ENVIRONMENT"];
+  if (environment !== "staging") return ["MORROW_ENVIRONMENT"];
+  // v1 PR 1: the staging connector's two reviewed identifiers (its own origin and the
+  // api's; the database binding byte-equal to the api's).
+  if (worker === "connector")
+    return ["MORROW_ENVIRONMENT", "CONNECTOR_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"];
   const stripeVars = stripe === "on" ? edgeStripeVarNames(worker, environment) : [];
   return worker === "api"
     ? [
@@ -825,11 +833,13 @@ const loadStagingParsers = () =>
   (stagingParsers ??= (async () => {
     const { tsImport } = await import("tsx/esm/api");
     const here = import.meta.url;
-    const [binding, login, protocol, guard] = await Promise.all([
+    const [binding, login, protocol, guard, connector] = await Promise.all([
       tsImport("../packages/identity/src/managed-workspace-binding.ts", here),
       tsImport("../packages/identity/src/standalone-login-protocol.ts", here),
       tsImport("../packages/identity/src/broker-protocol.ts", here),
       tsImport("../apps/api/src/abuse-guard.ts", here),
+      // v1 PR 1: the connector's own configuration parser.
+      tsImport("../apps/shopify-connector/worker/environment.ts", here),
     ]);
     return Object.freeze({
       captureManagedWorkspaceBinding: binding.captureManagedWorkspaceBinding,
@@ -839,6 +849,7 @@ const loadStagingParsers = () =>
       parseStripeConfiguration: protocol.parseStripeConfiguration,
       turnstileHostnameMismatch: protocol.turnstileHostnameMismatch,
       parseLoginChallengeConfiguration: guard.parseLoginChallengeConfiguration,
+      parseConnectorConfiguration: connector.parseConnectorConfiguration,
     });
   })());
 
@@ -857,7 +868,12 @@ const loadStagingParsers = () =>
 // `stripe` is the reviewed record (reviewedStripeRecord), or null when it is unreadable or
 // invalid (already a problem). Returns the problems, the identifiers a committed file may
 // name, and `allowedIn(worker, name)`, the identifiers admitted in one var.
-async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
+// v1 PR 1 (ADR-0035 item 2): the staging connector's CONNECTOR_CONFIGURATION_JSON names
+// exactly its own origin, `https://${connector env.staging.name}.${workers_dev_subdomain}
+// .workers.dev`, and the api's origin, parsed with the connector's own parser; its
+// MORROW_DATABASE_BINDING_JSON is the api's, byte for byte. The connector's origin and
+// hostname are admitted inside that one var only.
+async function stagingValueChecks({ vars, apiName, connectorName, staging, workos, stripe }) {
   const {
     captureManagedWorkspaceBinding,
     parseLoginConfiguration,
@@ -866,18 +882,50 @@ async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
     parseStripeConfiguration,
     turnstileHostnameMismatch,
     parseLoginChallengeConfiguration,
+    parseConnectorConfiguration,
   } = await loadStagingParsers();
   const problems = [];
   const problem = (code, where) => problems.push(code + ":" + where);
   const text = (worker, name) =>
     typeof vars[worker]?.[name] === "string" ? vars[worker][name] : null;
   const subdomain = staging?.cloudflare?.workers_dev_subdomain;
-  const origin =
-    typeof subdomain === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)
-      ? `https://${apiName}.${subdomain}.workers.dev`
-      : null;
+  const subdomainOk =
+    typeof subdomain === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain);
+  const origin = subdomainOk ? `https://${apiName}.${subdomain}.workers.dev` : null;
   if (origin === null || staging?.cloudflare?.origin !== origin)
     problem("EDGE_STAGING_ORIGIN", "staging.json");
+  // v1 PR 1: the connector's own origin, from its resolved staging name and staging.json's
+  // subdomain; it must be the connector of staging.json's Worker names.
+  const connectorOrigin =
+    subdomainOk &&
+    typeof connectorName === "string" &&
+    connectorName === staging?.cloudflare?.workers?.connector
+      ? `https://${connectorName}.${subdomain}.workers.dev`
+      : null;
+  if (connectorOrigin === null) problem("EDGE_STAGING_ORIGIN", "connector:staging");
+  else
+    try {
+      const parsed = parseConnectorConfiguration(
+        text("connector", "CONNECTOR_CONFIGURATION_JSON"),
+        "staging",
+      );
+      if (
+        parsed === null ||
+        parsed.origin !== connectorOrigin ||
+        parsed.apiOrigin !== origin ||
+        text("connector", "CONNECTOR_CONFIGURATION_JSON") !==
+          JSON.stringify({ schemaVersion: 1, origin: connectorOrigin, apiOrigin: origin })
+      )
+        problem("EDGE_STAGING_CONNECTOR_CONFIGURATION", "connector:staging");
+    } catch {
+      problem("EDGE_STAGING_CONNECTOR_CONFIGURATION", "connector:staging");
+    }
+  if (
+    text("connector", "MORROW_DATABASE_BINDING_JSON") === null ||
+    text("connector", "MORROW_DATABASE_BINDING_JSON") !==
+      text("api", "MORROW_DATABASE_BINDING_JSON")
+  )
+    problem("EDGE_STAGING_SHARED_VARS", "connector:staging:MORROW_DATABASE_BINDING_JSON");
   const neon = staging?.neon ?? {};
   const allowed = new Set(
     [workos?.environment_id, workos?.application_id, workos?.client_id, neon.branch_id].filter(
@@ -991,6 +1039,10 @@ async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
         ],
   );
   const host = origin === null ? null : new URL(origin).hostname;
+  // v1 PR 1: the connector's origin and hostname, inside its configuration var only.
+  const connectorVar = (worker, name) =>
+    connectorOrigin !== null && worker === "connector" && name === "CONNECTOR_CONFIGURATION_JSON";
+  const connectorHost = connectorOrigin === null ? null : new URL(connectorOrigin).hostname;
   for (const [worker, record] of Object.entries(vars))
     for (const [name, value] of Object.entries(record ?? {})) {
       if (typeof value !== "string") continue;
@@ -1002,9 +1054,17 @@ async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
           )
         )
           problem("EDGE_STAGING_VALUE_" + kind.toUpperCase(), where);
-      if (matchesOf(/https?:\/\/[^\s"\\]*/i, value).some((url) => !urls.has(url)))
+      if (
+        matchesOf(/https?:\/\/[^\s"\\]*/i, value).some(
+          (url) => !urls.has(url) && !(connectorVar(worker, name) && url === connectorOrigin),
+        )
+      )
         problem("EDGE_STAGING_VALUE_URL", where);
-      if (matchesOf(/[A-Za-z0-9.-]*\.workers\.dev\b/i, value).some((match) => match !== host))
+      if (
+        matchesOf(/[A-Za-z0-9.-]*\.workers\.dev\b/i, value).some(
+          (match) => match !== host && !(connectorVar(worker, name) && match === connectorHost),
+        )
+      )
         problem("EDGE_STAGING_VALUE_HOSTNAME", where);
       const keys = matchesOf(/\b0x[0-9A-Za-z_-]*/, value);
       if (
@@ -1069,6 +1129,7 @@ export async function verifyEdgeConfig({
   const stagingVars = {};
   const stagingPlacements = {};
   let apiStagingName = null;
+  let connectorStagingName = null;
   const problem = (code, where) => problems.push(code + ":" + where);
   // M5, the Stripe switch (owner decision (c), 2026-10-21): the reviewed record decides it
   // for the staging Workers; an unreadable or invalid record is a problem and counts as off,
@@ -1245,6 +1306,7 @@ export async function verifyEdgeConfig({
       if (environment === "staging") {
         stagingVars[worker.key] = vars;
         if (worker.key === "api") apiStagingName = config.name;
+        if (worker.key === "connector") connectorStagingName = config.name;
       }
       if (worker.key === "broker") {
         if (
@@ -1352,6 +1414,7 @@ export async function verifyEdgeConfig({
   const checked = await stagingValueChecks({
     vars: stagingVars,
     apiName: apiStagingName ?? selectedConfiguration("staging").cloudflare.workers.api,
+    connectorName: connectorStagingName,
     staging,
     workos,
     stripe,
@@ -1376,7 +1439,7 @@ export async function verifyEdgeConfig({
       const remaining = new Map();
       for (const match of matchesOf(pattern, texts[worker.key]))
         remaining.set(match, (remaining.get(match) ?? 0) + 1);
-      if (["api", "broker", "orchestrator"].includes(worker.key))
+      if (["api", "broker", "orchestrator", "connector"].includes(worker.key))
         for (const [name, value] of Object.entries(stagingVars[worker.key] ?? {}))
           if (typeof value === "string")
             for (const match of matchesOf(pattern, value))

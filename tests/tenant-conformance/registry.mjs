@@ -263,7 +263,7 @@ export const workTables = Object.freeze({
     commandDelete: "connector_redact",
     content: "store",
   },
-  // PR 18 (0039, ADR-0033 and ADR-0034). A project names its goal record and a title people
+  // PR 18 (0046, ADR-0033 and ADR-0034). A project names its goal record and a title people
   // write; values are numbers, codes and read tags (the work API filters them per viewer);
   // Finish's results are keys and health codes (never a number); a card's revisions and a start
   // document hold text people and Morrow write (titles, steps, "Done when").
@@ -600,7 +600,7 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_runtime_executor"],
   },
   "run_finish(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  // PR 18 (0039). Pure functions of the CHECKs.
+  // PR 18 (0046). Pure functions of the CHECKs.
   "goal_time(text)": { kind: "check", grantees: ["morrow_work_command"] },
   "valid_goal_measure(jsonb,timestamp with time zone)": {
     kind: "check",
@@ -694,6 +694,9 @@ export const bridgeFunctions = Object.freeze([
   "work_shopify_credential_end(text,text)",
   "work_shopify_credentials_pending()",
   "work_shopify_read_target(text,text,text,text)",
+  // v1 PR 1 (shopify-live-store-identity): the live-store admission, called only by the
+  // broker's vault definer of shopify-live-store-vault (ADR-0035 item 2).
+  "work_shopify_live_store(text,text)",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
@@ -1253,6 +1256,8 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // v1 PR 1 (shopify-live-store-vault): the live-store admission of an install.
+  "shopify_live_store_admission(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
   // and counts only; the broker's login).
   "model_call_begin(text,text,text,text,text,text,text,text)": {
@@ -1379,6 +1384,8 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_credential_destroy(text,text)",
     "morrow_vault.shopify_read_resolve(text,text,text,text,text)",
     "morrow_vault.shopify_webhook_record(text,text,text,text,text,text)",
+    // v1 PR 1 (shopify-live-store-vault).
+    "morrow_vault.shopify_live_store_admission(text,text)",
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",

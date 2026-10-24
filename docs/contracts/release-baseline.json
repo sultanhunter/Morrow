@@ -14,9 +14,9 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "e8807ba16d2f01970c6bc8b7a8c0c807d9f54d8829be53ebd204c2dda53590e1",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "e1295ff6a199b390632ab4ce974a0977d10298776811a33c3b578b05c67fc8ac",
-    "docs/contracts/schemas/v1.1/billing.schema.json": "0d3fa0baed844d062be4333790ba96015ee785ab5ec8515c81841fbf20e0438c"
+    "docs/contracts/schemas/v1.1/core.schema.json": "8cf4698b6973772a8b701fb2fd11a1ad481ac0e7aeddbca1a678d22c67d091a6",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "c607064b2844abb2ec1c2bab9e50ffadb20744aff902a3f23c4f754821d6b912",
+    "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206"
   },
   "event_registry": {
     "path": "docs/contracts/event-registry.json",

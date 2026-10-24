@@ -66,8 +66,6 @@ test("every new definition is in core v1.1 and none reuses a v1 name but Goal an
     "GoalCriteria",
     "GoalObjective",
     "NullableUtcTime",
-    "ReadTag",
-    "ReadTags",
     "GoalCheckAnswer",
     "GoalCheckAnswers",
     "GoalValueClass",
@@ -147,7 +145,7 @@ test("GoalMeasureValue@1: classes, clocks and the hand-check recorder", () => {
     assistant: null,
     answers: [],
     counted: true,
-    readTags: [{ storeId: "store_a", capabilityId: "orders.read" }],
+    readTags: [{ storeId: "store_a", capability: "orders.read" }],
     dataClass: "order_aggregates",
     expiresAt: "2027-01-22T10:30:00Z",
   };
@@ -159,7 +157,7 @@ test("GoalMeasureValue@1: classes, clocks and the hand-check recorder", () => {
     recorder: human,
     assistant: "chatgpt",
     answers: ["named_this_product", "named_no_shop"],
-    readTags: [{ storeId: "store_a", capabilityId: "catalog.products.read" }],
+    readTags: [{ storeId: "store_a", capability: "catalog.products.read" }],
     dataClass: "work",
     expiresAt: null,
   };
@@ -176,7 +174,16 @@ test("GoalMeasureValue@1: classes, clocks and the hand-check recorder", () => {
     ["an agent recorder", { ...code, recorder: { ...human, kind: "agent" } }],
     [
       "an unknown tag",
-      { ...code, readTags: [{ storeId: "store_a", capabilityId: "ads.performance.read" }] },
+      { ...code, readTags: [{ storeId: "store_a", capability: "ads.performance.read" }] },
+    ],
+    // ReadTag@1 is PR 10's: the field is `capability`, and a store-bound one names a store.
+    [
+      "a capabilityId tag",
+      { ...code, readTags: [{ storeId: "store_a", capabilityId: "orders.read" }] },
+    ],
+    [
+      "an order tag with no store",
+      { ...code, readTags: [{ storeId: null, capability: "orders.read" }] },
     ],
     ["an unknown answer", { ...hand, answers: ["named_maybe"] }],
   ])
