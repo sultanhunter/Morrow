@@ -53,17 +53,23 @@ function sources(value: unknown): readonly Source[] | null {
   return out;
 }
 
-/** GET /work/knowledge/pages: the viewer's pages (an excerpt each) and what they may do. */
+/**
+ * GET /work/knowledge/pages: the viewer's pages (an excerpt each), the pages a disconnected
+ * store left (for a person who may delete them only), and what they may do.
+ */
 export function decodeKnowledgePages(body: unknown): {
   readonly facts: readonly KnowledgeItemView[];
+  readonly disconnected: KnowledgeView["disconnected"];
   readonly may: KnowledgeView["may"];
 } | null {
   if (
     !record(body) ||
-    !keysOf(body, ["schemaVersion", "pages", "pendingProposals", "may"]) ||
+    !keysOf(body, ["schemaVersion", "pages", "disconnectedPages", "pendingProposals", "may"]) ||
     body.schemaVersion !== 1 ||
     !Array.isArray(body.pages) ||
     body.pages.length > 500 ||
+    !Array.isArray(body.disconnectedPages) ||
+    body.disconnectedPages.length > 500 ||
     typeof body.pendingProposals !== "number" ||
     !record(body.may) ||
     !keysOf(body.may, ["write", "delete"]) ||
@@ -101,7 +107,24 @@ export function decodeKnowledgePages(body: unknown): {
       target: null,
     });
   }
-  return { facts, may: { write: body.may.write, delete: body.may.delete } };
+  // Pages a disconnected store left (review R2): named only to a person who may delete them,
+  // with the version a deletion names and the kind; never a title or text.
+  if (body.disconnectedPages.length > 0 && !body.may.delete) return null;
+  const disconnected: KnowledgeView["disconnected"][number][] = [];
+  for (const p of body.disconnectedPages) {
+    if (
+      !record(p) ||
+      !keysOf(p, ["id", "kind", "version"]) ||
+      !isId(p.id) ||
+      seen.has(p.id) ||
+      !kind(p.kind) ||
+      !version(p.version)
+    )
+      return null;
+    seen.add(p.id);
+    disconnected.push({ id: p.id, pageKind: p.kind, version: p.version });
+  }
+  return { facts, disconnected, may: { write: body.may.write, delete: body.may.delete } };
 }
 
 /**

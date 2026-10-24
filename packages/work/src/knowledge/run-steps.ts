@@ -25,6 +25,11 @@ import {
 // column text. Every decoder accepts only its definer's closed shape; anything else is
 // RUNTIME_KNOWLEDGE_HELD, so the step fails and the loop retries it (reads run again; an
 // internal write returns its first record, by run and tool_use id).
+// Every read returns its content's read tags with it (each search hit's, the brand voice
+// page's). The loop must union them into the run's KnowledgeRunFacts.readTags
+// (withResultTags, @morrow/policy/knowledge) before any later tool call: a proposal or a
+// notebook entry then carries at least the tags of the content it may be based on, so a
+// viewer who may not see that content never reads it back through either (ADR-0031 item 6).
 export const knowledgeRunSql = Object.freeze({
   page: "SELECT kind,version,read_tags FROM morrow_work.run_knowledge_page($1)",
   brandVoice: "SELECT page_id,version,body,read_tags FROM morrow_work.run_brand_voice()",
@@ -207,18 +212,34 @@ export async function brandVoiceForRun(query: FixedSqlQuery): Promise<BrandVoice
     readTags: tags(r),
   });
 }
+/** The brand voice of one Listings turn, with the read tags of the content it carries. */
+export interface ListingsBrandVoice {
+  readonly blocks: ReturnType<typeof brandVoiceBlocks>;
+  /**
+   * The page's read tags when `blocks` carry its text, [] otherwise. The loop unions them into
+   * the run's KnowledgeRunFacts.readTags (withResultTags) before any later tool call.
+   */
+  readonly readTags: readonly Current_ReadTag[];
+}
+const noBrandVoice: ListingsBrandVoice = Object.freeze({
+  blocks: Object.freeze([]),
+  readTags: Object.freeze([]),
+});
 /**
- * The brand voice blocks of a Listings turn: the accepted page as marked data, if viewable.
- * `agentTools` is the shop-knowledge switch's (committed off): while it is off, Listings gets
- * no brand voice and nothing is read.
+ * The brand voice blocks of a Listings turn: the accepted page as marked data, if viewable,
+ * with the page's read tags. `agentTools` is the shop-knowledge switch's (committed off): while
+ * it is off, Listings gets no brand voice and nothing is read.
  */
 export async function listingsBrandVoice(
   query: FixedSqlQuery,
   viewer: TagViewer,
   agentTools: "on" | "off",
-): Promise<ReturnType<typeof brandVoiceBlocks>> {
-  if (agentTools !== "on") return Object.freeze([]);
-  return brandVoiceBlocks(await brandVoiceForRun(query), viewer);
+): Promise<ListingsBrandVoice> {
+  if (agentTools !== "on") return noBrandVoice;
+  const page = await brandVoiceForRun(query);
+  const blocks = brandVoiceBlocks(page, viewer);
+  if (page === null || blocks.length === 0) return noBrandVoice;
+  return Object.freeze({ blocks, readTags: page.readTags });
 }
 
 export interface KnowledgeSearchHit {
@@ -227,10 +248,13 @@ export interface KnowledgeSearchHit {
   readonly version: number;
   readonly title: string;
   readonly text: string;
+  /** The page's read tags: the loop unions them into the run's (withResultTags). */
+  readonly readTags: readonly Current_ReadTag[];
 }
 /**
  * knowledge.search's candidates for one run: the full-text hits whose every read tag the run
- * may view (ADR-0031 item 6), at most `limit` (1 to 10). Page text is data, never instructions.
+ * may view (ADR-0031 item 6), at most `limit` (1 to 10), each with those tags. Page text is
+ * data, never instructions.
  */
 export async function knowledgeSearchForRun(
   query: FixedSqlQuery,
@@ -248,7 +272,8 @@ export async function knowledgeSearchForRun(
   const hits: KnowledgeSearchHit[] = [];
   for (const row of rows) {
     const r = exactRow([row], ["page_id", "kind", "version", "title", "body", "read_tags"]);
-    if (!viewable(viewer, tags(r))) continue;
+    const readTags = tags(r);
+    if (!viewable(viewer, readTags)) continue;
     hits.push(
       Object.freeze({
         pageId: str(r, "page_id"),
@@ -256,6 +281,7 @@ export async function knowledgeSearchForRun(
         version: positive(str(r, "version")),
         title: str(r, "title"),
         text: str(r, "body"),
+        readTags: Object.freeze(readTags),
       }),
     );
     if (hits.length >= Math.min(limit, knowledgeLimits.searchResults)) break;

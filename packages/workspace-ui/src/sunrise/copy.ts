@@ -645,6 +645,11 @@ export const sunriseCopy = {
       `“${title}” and all its earlier versions will be deleted. Agents stop using it. This can’t be undone.`,
     removeConfirm: "Delete page",
     removed: "Deleted.",
+    // Pages a disconnected store left (review R2): shown only to someone who may delete them.
+    disconnected: "From a disconnected store",
+    disconnectedTitle: (kind: string) => `${kind} from a disconnected store`,
+    disconnectedBody:
+      "Its store was disconnected, so no one can open it. Delete it to erase what it held.",
     accept: (title: string) => `Accept ${title}`,
     reject: (title: string) => `Decline ${title}`,
     acceptLabel: "Accept",

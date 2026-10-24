@@ -420,9 +420,27 @@ export function KnowledgeBody({
   const [editing, setEditing] = useState<Editing>(null);
   const [deleting, setDeleting] = useState<KnowledgeItemView | null>(null);
   const items = view.items.filter((i) => i.kind === kind);
-  const existingBrandVoice = view.items.some(
-    (i) => i.kind === "fact" && i.pageKind === "brand_voice",
-  );
+  // A stranded brand voice (its store disconnected) still holds the shop's one brand voice
+  // until it is deleted.
+  const existingBrandVoice =
+    view.items.some((i) => i.kind === "fact" && i.pageKind === "brand_voice") ||
+    view.disconnected.some((d) => d.pageKind === "brand_voice");
+  // Pages a disconnected store left (review R2): no title or text, only what a deletion names.
+  const disconnected: readonly KnowledgeItemView[] = view.may.delete
+    ? view.disconnected.map((d) => ({
+        id: d.id,
+        kind: "fact",
+        title: k.disconnectedTitle(k.pageKinds[d.pageKind]),
+        text: k.disconnectedBody,
+        source: "",
+        pageKind: d.pageKind,
+        version: d.version,
+        digest: null,
+        untrusted: false,
+        sources: [],
+        target: null,
+      }))
+    : [];
   return (
     <>
       <p className="sr-help sr-with-icon">
@@ -517,6 +535,30 @@ export function KnowledgeBody({
             </ul>
           )}
         </Card>
+        {kind === "fact" && disconnected.length > 0 ? (
+          <Card title={k.disconnected} flush>
+            <ul className="sr-rows">
+              {disconnected.map((item) => (
+                <li key={item.id} className="sr-list-row">
+                  <SrIcon name="alert" />
+                  <div className="sr-list-text">
+                    <p className="sr-row-title" dir="auto">
+                      {item.title}
+                    </p>
+                    <p className="sr-reading" dir="auto">
+                      {item.text}
+                    </p>
+                    <div className="sr-actions">
+                      <Button aria-label={k.remove(item.title)} onClick={() => setDeleting(item)}>
+                        {k.removeConfirm}
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
       </div>
       <p className="sr-help sr-with-icon">
         <SrIcon name="clock" size={16} />

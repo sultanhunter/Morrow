@@ -1314,7 +1314,12 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         },
       ];
   const notes = new Map<string, string>([["k-voice", "Written by the owner"]]);
-  const knowledgeView = (): KnowledgeView => ({ items: withKnowledgeTargets(items), may });
+  // No store was disconnected in these scenarios: nothing is stranded (review R2).
+  const knowledgeView = (): KnowledgeView => ({
+    items: withKnowledgeTargets(items),
+    disconnected: [],
+    may,
+  });
   const pageOf = (id: string) => items.find((i) => i.id === id && i.kind === "fact") ?? null;
   let pageSeq = 0;
   const files: FilesView = {

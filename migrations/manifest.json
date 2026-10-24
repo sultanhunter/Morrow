@@ -364,7 +364,7 @@
     {
       "sequence": 47,
       "file": "0047.shop-knowledge.sql",
-      "sha256": "8d1bf92d2b19e501a52ea50e64017e2e7239beed5be76de0035fbb7bf2197e8a",
+      "sha256": "e73d6675a77a2c7a75c34bc4312bee38ab3ef2e63608b0ef2e008e9eab9b1553",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/shop-knowledge.md"
     }

@@ -9,7 +9,7 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { checkToolInput, toolEntry, type ToolContext } from "../tool-catalogue";
-import { customerTagged, sourcesValid, storableText } from "./rules";
+import { customerTagged, sourcesValid, storableText, unionTags } from "./rules";
 
 // The two agent tools' code checks (PR 20; ADR-0027 item 2), run by the tool-call step after
 // lease re-entry and replay and before the server-side command. The agent loop (PR 11) owns
@@ -25,7 +25,11 @@ import { customerTagged, sourcesValid, storableText } from "./rules";
 /** What the loop knows about the run making the call (server-held, never model output). */
 export interface KnowledgeRunFacts {
   readonly context: ToolContext;
-  /** The union of the run's tool results' read tags so far. */
+  /**
+   * The union of the run's tool results' read tags so far: every result that put content in
+   * the run's context (a knowledge.search hit's tags, the brand voice's, any other tool's),
+   * added with withResultTags before the run's next tool call.
+   */
   readonly readTags: readonly Current_ReadTag[];
   /** untrusted_external once the run consumed product text, mail, uploads or tool output. */
   readonly taint: Current_ContextTaint;
@@ -47,6 +51,29 @@ export interface KnowledgeProposeArgs {
 export interface NotebookWriteArgs {
   readonly text: string;
   readonly readTags: readonly Current_ReadTag[];
+}
+
+/**
+ * The run's facts once a tool result's content entered its context (ADR-0031 item 6: a run's
+ * read tags are the union of its tool results' tags, and they only narrow). The loop calls it
+ * with each result's tags (knowledgeSearchForRun's hits, listingsBrandVoice's page) before the
+ * run's next tool call, so a later knowledge.propose or notebook.write carries at least the
+ * tags of everything it may be based on. More than 24 distinct tags cannot be carried:
+ * KNOWLEDGE_RUN_TAGS_OVERFLOW, and the step fails closed.
+ */
+export function withResultTags(
+  run: KnowledgeRunFacts,
+  tags: readonly Current_ReadTag[],
+): KnowledgeRunFacts {
+  if (
+    !run ||
+    !validateCurrentDefinition("ReadTags", run.readTags) ||
+    !validateCurrentDefinition("ReadTags", tags)
+  )
+    throw Error("KNOWLEDGE_RUN_FACTS_INVALID");
+  const readTags = unionTags(run.readTags, tags);
+  if (readTags === null) throw Error("KNOWLEDGE_RUN_TAGS_OVERFLOW");
+  return Object.freeze({ ...run, readTags });
 }
 
 const refused = (refusal: Current_ToolRefusalCode): KnowledgeToolRefusal =>

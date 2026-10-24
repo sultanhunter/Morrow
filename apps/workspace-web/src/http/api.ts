@@ -850,6 +850,7 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
           kind: "ok" as const,
           value: {
             items: withKnowledgeTargets([...pages.value.facts, ...proposals.value]),
+            disconnected: pages.value.disconnected,
             may: pages.value.may,
           },
           replayed: false,

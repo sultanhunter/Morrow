@@ -922,9 +922,13 @@ BEGIN
  -- One proposal per run and tool call, serialised per workspace (the pending cap counts them).
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
   pg_catalog.jsonb_build_array('morrow.work.knowledge_proposals',l.organization_id,l.workspace_id)::text,0));
+ -- The target under a share lock until commit: an in-flight deletion (cmd_knowledge_delete
+ -- holds the page FOR UPDATE) or new version is waited for and the row re-checked, so a
+ -- proposal never lands pending on a page deleted under it, and its base is the version
+ -- committed when it is made.
  IF p_page_id IS NOT NULL THEN
   SELECT x.kind,x.current_version INTO g FROM morrow_work.knowledge_pages x
-   WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.id=p_page_id AND x.deleted_at IS NULL;
+   WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.id=p_page_id AND x.deleted_at IS NULL FOR SHARE;
   IF NOT FOUND OR g.kind<>p_kind THEN RETURN QUERY SELECT 'id_out_of_scope'::text,NULL::text; RETURN; END IF;
   v_base:=g.current_version;
  END IF;

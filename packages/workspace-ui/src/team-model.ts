@@ -571,8 +571,21 @@ export function withKnowledgeTargets(
       : i,
   );
 }
+/**
+ * A page a disconnected store left behind (review R2): no one can open it, so the server names
+ * it only to a person who may delete knowledge, without its title or text, so they can delete
+ * it (a stranded brand voice also blocks a new one).
+ */
+export interface KnowledgeDisconnectedView {
+  readonly id: Id;
+  readonly pageKind: KnowledgePageKind;
+  /** Its current version, which the deletion names. */
+  readonly version: number;
+}
 export interface KnowledgeView {
   readonly items: readonly KnowledgeItemView[];
+  /** Pages of a disconnected store, for a person who may delete them; [] for anyone else. */
+  readonly disconnected: readonly KnowledgeDisconnectedView[];
   /** What this person may do (the server decides again on every command). */
   readonly may: { readonly write: boolean; readonly delete: boolean };
 }

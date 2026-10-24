@@ -173,6 +173,14 @@ async function allow(
 // kernel needs the fields a request names, and a read tag names none of its own: each distinct
 // field list one of the viewer's view grants on that capability holds is asked in turn (as the
 // goal reads do, PR 18). With no such grant nothing is viewable.
+// `detached` names a tag on a store with no current association (the store was disconnected:
+// no one can view the tag while it stays so, and in this release reconnecting needs a new
+// install). Content whose every hidden tag is detached is stranded: a person who may delete
+// knowledge on the workspace erases it unseen (pageDelete), and the pages read names it to
+// them without its title (review R2).
+export interface KnowledgeViewer extends TagViewer {
+  detached(tag: Current_ReadTag): boolean;
+}
 function viewFieldLists(a: WorkAuthority, capabilityId: string): readonly string[][] {
   const lists = new Map<string, string[]>();
   for (const g of a.grants)
@@ -187,12 +195,13 @@ export async function knowledgeViewer(
   tx: WorkTx,
   a: WorkAuthority,
   tags: Iterable<Current_ReadTag>,
-): Promise<TagViewer> {
+): Promise<KnowledgeViewer> {
   const decisions = new Map<string, boolean>();
   const resources = new Map<string | null, Current_ResourceRef | null>();
   for (const tag of tags) {
     const key = tagKey(tag);
     if (decisions.has(key)) continue;
+    // The customer tag is never viewable, and never detached (CHECK keeps it out regardless).
     if (tag.capability === "support.case.read") {
       decisions.set(key, false);
       continue;
@@ -223,8 +232,24 @@ export async function knowledgeViewer(
         }
     decisions.set(key, allowed);
   }
-  return Object.freeze({ mayView: (tag: Current_ReadTag) => decisions.get(tagKey(tag)) === true });
+  return Object.freeze({
+    mayView: (tag: Current_ReadTag) => decisions.get(tagKey(tag)) === true,
+    detached: (tag: Current_ReadTag) =>
+      tag.storeId !== null &&
+      tag.capability !== "support.case.read" &&
+      decisions.has(tagKey(tag)) &&
+      resources.get(tag.storeId) === null,
+  });
 }
+/**
+ * Stranded content (review R2): hidden from this viewer only by tags on stores with no current
+ * association, so hidden from everyone while they stay so. A tag on a linked store the viewer
+ * may not view keeps it hidden and out of reach: no blind deletion of content others can see.
+ */
+const stranded = (viewer: KnowledgeViewer, tags: readonly Current_ReadTag[]): boolean =>
+  tags.length > 0 &&
+  !viewable(viewer, tags) &&
+  tags.every((tag) => viewer.mayView(tag) || viewer.detached(tag));
 
 // ---------------------------------------------------------------------------
 // Fixed row decoders. Any other shape is WorkContextUnavailable (a 503, never a guess).
@@ -504,7 +529,16 @@ async function pageDelete(
   const replay = await begin(tx, g, prepared);
   if (replay) return replay;
   await allow(a, "workspace.knowledge.approve", "administer", knowledgeFields.approve);
-  const page = await viewablePage(tx, a, g.params.pageId!);
+  // A live page the person may see, or a stranded one (every tag they may not view is on a
+  // disconnected store: no one can view it again). The deletion path stays reachable for the
+  // latter (ADR-0031 item 4; review R2): the person holds administer on the workspace, decided
+  // above, and a deletion erases and shows nothing. Anything else is the same 404.
+  const row = one(await tx.run("knowledgePage", [g.params.pageId!]));
+  if (!row) throw new WorkReject("not_found");
+  const page = pageRowOf(row);
+  const viewer = await knowledgeViewer(tx, a, page.readTags);
+  if (!viewable(viewer, page.readTags) && !stranded(viewer, page.readTags))
+    throw new WorkReject("not_found");
   const result = await submit(tx, "cmdKnowledgeDelete", [
     g.commandId,
     prepared.digest,
@@ -526,8 +560,20 @@ async function proposalDecide(
   if (replay) return replay;
   await allow(a, "workspace.knowledge.approve", "execute", knowledgeFields.approve);
   const proposal = await viewableProposal(tx, a, g.params.proposalId!);
-  // The page it changes must still be one this person may see (its tags may have grown).
-  if (proposal.pageId !== null) await viewablePage(tx, a, proposal.pageId);
+  // The page it changes must still be one this person may see (its tags may have grown). A
+  // reject of a proposal whose page was deleted under it proceeds: it only erases the
+  // proposal's text, which nothing else can then reach (review R3's backstop; the propose
+  // definer's share lock keeps one from landing there). An accept of it is the same 404.
+  if (proposal.pageId !== null) {
+    const row = one(await tx.run("knowledgePage", [proposal.pageId]));
+    if (row === null) {
+      if (prepared.type === "knowledge.accept") throw new WorkReject("not_found");
+    } else {
+      const page = pageRowOf(row);
+      if (!viewable(await knowledgeViewer(tx, a, page.readTags), page.readTags))
+        throw new WorkReject("not_found");
+    }
+  }
   if (proposal.digest !== body.digest) throw new KnowledgeReject("stale");
   const result =
     prepared.type === "knowledge.accept"
@@ -588,14 +634,16 @@ async function notebookClear(
     entries.flatMap((e) => e.tags),
   );
   if (entries.some((e) => !viewable(viewer, e.tags))) throw new KnowledgeReject("hidden_entries");
-  await submit(tx, "cmdNotebookClear", [
+  // The definer's recorded result ({installationId, entriesErased}), the same body a replay
+  // returns (with replayed: true), like every other knowledge command (review R4).
+  const result = await submit(tx, "cmdNotebookClear", [
     g.commandId,
     prepared.digest,
     correlationId,
     installationId,
     expectedRevision,
   ]);
-  return { status: 200, body: { installationId, cleared: true }, outcome: "applied" };
+  return { status: 200, body: result, outcome: "applied" };
 }
 export function runKnowledgeCommand(
   tx: WorkTx,
@@ -647,12 +695,21 @@ async function pagesRead(tx: WorkTx, a: WorkAuthority): Promise<Record<string, u
   // What this person may do, for the screen only (each command decides again).
   const may = async (capabilityId: CapabilityId, verb: PermissionVerb, fields: readonly string[]) =>
     (await decideOn(a, a.resource, capabilityId, verb, fields)).allowed;
+  const mayDelete = await may("workspace.knowledge.approve", "administer", knowledgeFields.approve);
   return {
     pages: shown,
+    // Pages stranded by a disconnected store (review R2), named only to a person who may delete
+    // them so they can be: the id and version a deletion names and the kind, never the title,
+    // text or times. Deleting one also frees the workspace's one brand voice.
+    disconnectedPages: mayDelete
+      ? pages
+          .filter((p) => stranded(viewer, p.readTags))
+          .map((p) => ({ id: p.id, kind: p.kind, version: p.version }))
+      : [],
     pendingProposals: proposalTags.filter((tags) => viewable(viewer, tags)).length,
     may: {
       write: await may("workspace.knowledge.approve", "execute", knowledgeFields.approve),
-      delete: await may("workspace.knowledge.approve", "administer", knowledgeFields.approve),
+      delete: mayDelete,
     },
   };
 }
