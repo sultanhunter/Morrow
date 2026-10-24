@@ -588,6 +588,9 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
     },
     work,
     people: { list: unbuilt },
+    // ADR-0032 Home preview: no backend, no route and no contract. Never composed over
+    // HTTP, so it answers not_in_build and sends nothing.
+    samples: { home: unbuilt },
     connections: {
       list: gated("connections.list", async (ws: string) => {
         const request = requests.connections(ws);

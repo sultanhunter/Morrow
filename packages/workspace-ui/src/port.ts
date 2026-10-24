@@ -7,6 +7,7 @@ import type {
   ConnectionsView,
   DisconnectResultView,
   GoalView,
+  HomeSamplesView,
   Id,
   ListingsAgentView,
   ListingsChangeView,
@@ -210,6 +211,12 @@ export interface WorkspacePort {
       }>,
     ): Promise<Outcome<{ readonly revision: number }>>;
   };
+  /**
+   * ADR-0032 Home preview: sample sections with no backend (no contract, no route). The
+   * HTTP build never composes it; the fixture build composes it only in its
+   * `home_preview` scenario. A default-off switch, not a feature.
+   */
+  readonly samples: { home(ws: Id): Promise<Outcome<HomeSamplesView>> };
 }
 
 export const portMethods = [
@@ -251,6 +258,7 @@ export const portMethods = [
   "runs.listOfTask",
   "runs.get",
   "runs.reconcile",
+  "samples.home",
 ] as const;
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */

@@ -242,6 +242,80 @@ export interface Page<T> {
   readonly next: string | null;
 }
 
+// ADR-0032 Home: the board's sections that have no backend yet. Only the fixture adapter
+// answers `samples.home`, and only where its scenario composes it; the HTTP build keeps
+// it uncomposed (not_in_build, nothing sent). These are presentational strings for a
+// preview, never contract data: the contracts and backend of ADR-0033 and ADR-0034
+// (projects with goals, Morrow drafting plans; accepted 2026-10-24) land in their own PRs.
+export type AgentKind =
+  | "morrow"
+  | "listings"
+  | "analyst"
+  | "inventory"
+  | "support"
+  | "marketing"
+  | "specialist";
+/** An agent a workspace installs (Morrow, the Coordinator, and one-time specialists aren't). */
+export type InstalledAgentKind = Exclude<AgentKind, "morrow" | "specialist">;
+export type SampleHealth = "on_track" | "behind" | "working" | "needs_you";
+export interface HomeSamplesView {
+  readonly viewerName: string;
+  readonly waiting: {
+    readonly review: number;
+    readonly tasks: number;
+    readonly alerts: number;
+  };
+  readonly creditsLeft: string;
+  readonly projects: readonly {
+    readonly id: Id;
+    readonly name: string;
+    readonly ends: string;
+    readonly summary: string;
+    readonly health: SampleHealth;
+  }[];
+  readonly everyday: readonly {
+    readonly name: string;
+    readonly summary: string;
+    readonly health: SampleHealth | null;
+  }[];
+  readonly team: {
+    /** Installed agents, each on the route contract's `agent` route; Morrow is implicit. */
+    readonly agents: readonly {
+      readonly agent: InstalledAgentKind;
+      readonly installationId: Id;
+    }[];
+    readonly people: readonly { readonly name: string; readonly presence: "online" | "away" }[];
+  };
+  readonly today: readonly {
+    readonly when: string;
+    readonly title: string;
+    readonly who: string;
+    readonly agent: AgentKind | null;
+    readonly where: string;
+    readonly status: "done" | "working" | "to_do";
+  }[];
+  readonly glance: {
+    readonly source: string;
+    readonly metrics: readonly {
+      readonly label: string;
+      readonly value: string;
+      readonly note: string | null;
+    }[];
+    readonly take: string;
+  };
+  readonly ideas: readonly {
+    readonly id: Id;
+    readonly agent: AgentKind;
+    readonly text: string;
+    readonly helps: string;
+  }[];
+  readonly recentAsks: readonly {
+    readonly asked: string;
+    readonly when: string;
+    readonly outcome: string;
+  }[];
+}
+
 const kindLabel = { human: "Member", agent: "Agent", service: "Service" } as const;
 /** Opaque label (§4.10): "Member ·" plus the last four characters of the principal id. */
 export function personLabel(person: PersonRef): string {

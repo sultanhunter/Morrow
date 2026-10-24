@@ -25,6 +25,7 @@ import { useCommand, useDirty, useRead, useServices } from "../services";
 import { Button, TextArea } from "../components/controls";
 import { outcomeState } from "../components/feedback";
 import { CommandFeedback } from "./entry";
+import { useConnections } from "../workspace-data";
 
 const label = (key: string) => copy.models.labels[key] ?? key;
 const entryKey = (e: { readonly model: string; readonly effort: string }) =>
@@ -97,9 +98,9 @@ export function AskScreen({ workspace }: { readonly workspace: WorkspaceView }) 
   const services = useServices();
   const ws = workspace.id;
   const ids = { request: useId(), store: useId(), model: useId(), fields: useId() };
-  const [connections, reloadConnections] = useRead(`${ws}|connections`, () =>
-    services.port.connections.list(ws),
-  );
+  // Read once per mount: a background re-read that failed would swap the form, and the
+  // goal, task or run's Check again with it, for a Retry view.
+  const [connections, reloadConnections] = useConnections(ws, "mount");
   const [models, reloadModels] = useRead(`${ws}|models`, () => services.port.models.list(ws));
   const [request, setRequest] = useState("");
   const [storeId, setStoreId] = useState("");

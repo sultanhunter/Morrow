@@ -73,14 +73,67 @@ export const copy = {
     body: "This address doesn't match a page in Morrow.",
     back: "Go to Morrow",
   },
+  // ADR-0032, the Sunrise sidebar: the seven destinations of the route contract, with
+  // three labels changed for shop owners ("Work" is Projects, "Agents" is Team, "Assets"
+  // is Files). Route ids, paths and the contract's titles don't change.
   destinations: {
     home: "Home",
-    work: "Work",
+    work: "Projects",
     inbox: "Inbox",
-    agents: "Agents",
-    assets: "Assets",
-    knowledge: "Knowledge",
+    agents: "Team",
+    assets: "Files",
+    knowledge: "Shop knowledge",
     settings: "Settings",
+  },
+  /** Tab titles and unbuilt-page names for routes whose label differs from the contract's. */
+  routeTitles: {
+    work: "Projects",
+    agents: "Team",
+    assets: "Files",
+    knowledge: "Shop knowledge",
+    ask: "Ask Morrow",
+    agent_store: "Add agents",
+    connections: "Shopify connection",
+  } as Readonly<Record<string, string>>,
+  shell: {
+    askMorrow: "Ask Morrow",
+    searchLabel: (store: string) => `Search ${store}`,
+    searchPlaceholder: "Search…",
+    searchLater: "Search isn't available in this build yet.",
+    pinnedProjects: "Pinned projects",
+    teamMembers: "Team members",
+    everydayWork: "Everyday work",
+    agentSuffix: ", agent",
+    online: ", online",
+    away: ", away",
+    inboxWaiting: (count: string) => `Inbox, ${count} waiting`,
+    ends: (date: string) => `Ends ${date}`,
+    credits: (count: string) => `${count} credits left`,
+    sampleData: "Sample data",
+    sampleSuffix: ", sample data",
+    connection: {
+      linked: "Shopify connected",
+      unlinked: "Finish connecting your store",
+      suspended: "Store disconnected",
+      uninstalled: "Store disconnected",
+      none: "Connect your store",
+    } as Readonly<Record<string, string>>,
+  },
+  // ADR-0032: the Settings sub-navigation the ConnectStore board draws. Activity sits
+  // under Settings, not in the sidebar; its log arrives with its own route.
+  settings: {
+    navLabel: "Settings",
+    sections: {
+      billing: "Plan and credits",
+      people: "People and roles",
+      notifications: "Notifications",
+      governance: "Model default",
+      usage: "Usage",
+      stores: "Stores",
+    } as Readonly<Record<string, string>>,
+    connection: "Shopify connection",
+    activity: "Activity",
+    activityLater: ", not in this build yet",
   },
   unavailableDestination: (title: string) =>
     `${title} isn't available in this provisional build. Nothing here is hidden from you; it hasn't been built yet.`,
@@ -95,20 +148,72 @@ export const copy = {
     retry: "Retry",
     reference: (reference: string) => `Reference: ${reference}`,
   },
+  // ADR-0032 Home: the day at a glance. Real data today: what waits for you in the Inbox
+  // (open questions), recent work and the store connection. The rest of the board shows
+  // only from fixtures behind the default-off `samples.home` switch.
   home: {
-    questionsTitle: "Questions for you",
-    questionsCount: (count: string) => `${count} open`,
-    noQuestions: "No open questions for you.",
-    goalsTitle: "Goals",
-    noGoals: "No goals yet.",
-    goToWork: "Go to Work",
-    goToInbox: "Go to Inbox",
+    greeting: (hour: number) =>
+      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening",
+    scope: (store: string) => `Here's your day at ${store}.`,
+    scopeClear: (store: string) => `Nothing needs you right now. Here's your day at ${store}.`,
+    review: (count: string) => `Review ${count} ${count === "1" ? "item" : "items"}`,
+    waitingLabel: "Waiting for you",
+    questionsChip: (count: string) => `${count} ${count === "1" ? "question" : "questions"}`,
+    reviewChip: (count: number) => `${count} to review`,
+    tasksChip: (count: number) => `${count} ${count === 1 ? "task" : "tasks"} for you`,
+    alertChip: (count: number) => `${count} ${count === 1 ? "alert" : "alerts"}`,
+    needsTitle: "Needs you",
+    seeAllInbox: (count: string) => `See all ${count} in Inbox`,
+    questionLine: "A question for you",
+    expires: (date: string) => `Expires ${date}`,
+    needsYou: "Needs you",
+    nothingWaiting: "Nothing needs you right now.",
+    recentTitle: "Recent work",
+    seeAllProjects: "See all in Projects",
+    updated: (date: string) => `Updated ${date}`,
+    noWork: "No work yet. Work you and your agents start shows up here.",
+    storeTitle: "Your store",
+    storeOpen: "See connection",
+    storeConnect: "Connect your store",
+    noStore:
+      "No store is connected yet. Connect your Shopify store so agents can suggest changes for you to approve.",
+    footer: "Agents never change your store or reply to a customer without your OK.",
     prepaymentTitle: "Paid work",
     prepayment:
       "Paid work starts once this workspace has an active plan. Plans aren't available in this provisional build.",
+    samples: {
+      note: "Sample data · a preview of what's coming",
+      todayTitle: "Today",
+      todaySource: "From your schedules and due dates",
+      next: "Next",
+      projectsTitle: "Your projects",
+      projectsGroup: "Projects",
+      everydayGroup: "Everyday work",
+      glanceTitle: "Yesterday at a glance",
+      take: (name: string) => `${name}'s take`,
+      ideasTitle: "Ideas",
+      ideasNote: "From your agents. Nothing is added unless you choose.",
+      dismiss: "Dismiss",
+      dismissIdea: (agent: string) => `Dismiss the idea from ${agent}`,
+      noIdeas: "No more ideas for now. New ones show up here.",
+      askIntro:
+        "Tell Morrow what you want to get done. It answers, or drafts a task or project for you to start.",
+      recent: "Recent",
+      openAsk: "Open Ask Morrow",
+      privacy:
+        "Private to you. Admins can read your conversations with Morrow, and each read is recorded.",
+    },
+    status: {
+      done: "Done",
+      working: "Working",
+      to_do: "To do",
+      on_track: "On track",
+      behind: "Behind",
+      needs_you: "Needs you",
+    } as Readonly<Record<string, string>>,
   },
   work: {
-    title: "Work",
+    title: "Projects",
     empty: "No work yet",
     emptyBody: "Create a goal to start organising tasks.",
     denied: "You don't have access to view work",
@@ -134,7 +239,7 @@ export const copy = {
     cancel: "Cancel",
   },
   task: {
-    breadcrumb: "Work",
+    breadcrumb: "Projects",
     tabsLabel: "Task sections",
     brief: "Brief",
     questions: "Questions",
@@ -182,7 +287,7 @@ export const copy = {
   },
   // M2 PR-2: the store connections screens and the install-continuation link step.
   connections: {
-    title: "Connections",
+    title: "Shopify connection",
     storesTitle: "Stores",
     noStores: "No store is connected to this workspace yet.",
     installTitle: "Connect your Shopify store",
@@ -229,7 +334,7 @@ export const copy = {
     linkConflict: "This link request didn't match an earlier one. Nothing was changed.",
     notLinkedYet: "The store isn't linked yet. You can link it now.",
     detailTitle: "Connection",
-    back: "Back to Connections",
+    back: "Back to Shopify connection",
     shop: "Store",
     status: "Status",
     // M2 PR-3 review: an uninstall, a scope change or a disconnect ends the store's
@@ -301,7 +406,7 @@ export const copy = {
       disconnect: "disconnecting a store",
     },
     body: (kind: string) =>
-      `A change you started earlier (${kind}) may have been saved. Check Work before creating it again.`,
+      `A change you started earlier (${kind}) may have been saved. Check Projects before creating it again.`,
     dismiss: "Dismiss",
   },
   // M3 PR-1: the Listings agent card (connection screen) and the model default

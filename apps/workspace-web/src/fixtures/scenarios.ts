@@ -1,5 +1,6 @@
 // Scripted outcomes per scenario (P14.T01a §4.11). A script maps a port method and its
-// call index to a reply; `null` keeps the seed behaviour. Scripted, not simulated: there
+// call index (and, where a reply depends on it, how often another method was called) to
+// a reply; `null` keeps the seed behaviour. Scripted, not simulated: there
 // are no permissions, digests or caps here; PR-2 proves those over HTTP.
 import type { Outcome, PortMethod } from "@morrow/workspace-ui";
 
@@ -48,6 +49,9 @@ export const scenarioNames = [
   "connections_handoff_route",
   "connections_handoff_expired",
   "connections_link_uncertain",
+  "home_preview",
+  "listings_enable_reread_failed",
+  "home_offline_retry",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -57,7 +61,9 @@ export type Reply =
   // A reply after `delayMs`; a null outcome is the seed behaviour, applied then.
   | { readonly delayMs: number; readonly outcome: Outcome<unknown> | null }
   | null;
-export type Script = Partial<Record<PortMethod, (call: number) => Reply>>;
+export type Script = Partial<
+  Record<PortMethod, (call: number, calls: (method: PortMethod) => number) => Reply>
+>;
 
 const reads: readonly PortMethod[] = [
   "work.listGoals",
@@ -310,7 +316,30 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   connections_link_uncertain: {
     "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
   },
+  // ADR-0032: the Home board's sample sections, shown only where `samples.home` is
+  // composed (here alone; see `samplesComposedIn`).
+  home_preview: {},
+  // T7 review F1: the Listings enable is applied but its reply is lost, and from the
+  // moment it is sent every connections read fails. The connection screen reads once per
+  // mount, so the card, its review and Check again stay; the sidebar's connection line
+  // keeps its last reply. Check again replays the enable.
+  listings_enable_reread_failed: {
+    "agents.listingsEnable": (call) => (call === 0 ? { kind: "uncertain" } : null),
+    "connections.list": (_call, calls) =>
+      calls("agents.listingsEnable") > 0 ? { kind: "unavailable", offline: false } : null,
+  },
+  // T7 review F2: Home opens offline (the shell and Home share the first open-questions
+  // read); Retry reads the shell's copy again too, so the Inbox count appears with Home's.
+  home_offline_retry: {
+    "work.listMyOpenQuestions": (call) =>
+      call === 0 ? { kind: "unavailable", offline: true } : null,
+  },
 };
+/**
+ * The default-off Home preview switch: `samples.home` is composed only in these
+ * scenarios. Every other scenario, like the HTTP build, leaves it uncomposed.
+ */
+export const samplesComposedIn: readonly ScenarioName[] = ["home_preview"];
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [
   "connections_unlinked",

@@ -19,6 +19,7 @@ import {
   QuestionScreen,
   ReentryNotice,
   ServicesProvider,
+  SettingsFrame,
   SignedOutScreen,
   SignInScreen,
   SignOutUnconfirmedScreen,
@@ -29,6 +30,7 @@ import {
   WorkspaceLoadFailedScreen,
   WorkspaceUnavailableScreen,
   copy,
+  inSettings,
   useRead,
   useServices,
   useServicesVersion,
@@ -185,7 +187,19 @@ export function screenTitle(view: {
   if (view.session !== "active") return sessionTitles[view.session];
   if (!view.match) return copy.notFound.title;
   if (view.entryFailed) return copy.workspace.loadFailedTitle;
-  return routeTitle(workspaceRoutes, view.match.id) ?? copy.notFound.title;
+  return destinationTitle(view.match.id, view.match.params.section);
+}
+/**
+ * A route's name as the interface shows it: the Sunrise label where it differs from the
+ * contract's title (ADR-0032: "Work" is Projects, "Agents" is Team; a settings section by
+ * its own name), else the contract's.
+ */
+export function destinationTitle(id: string, section?: string): string {
+  if (id === "settings_section" && section !== undefined)
+    if (Object.hasOwn(copy.settings.sections, section)) return copy.settings.sections[section]!;
+  return Object.hasOwn(copy.routeTitles, id)
+    ? copy.routeTitles[id]!
+    : (routeTitle(workspaceRoutes, id) ?? copy.notFound.title);
 }
 
 const workspaceScoped = (match: RouteMatch | null): Id | null =>
@@ -573,7 +587,7 @@ function WorkspaceFrame({
         return services.composed["runs.admit"] ? (
           <AskScreen workspace={workspace} />
         ) : (
-          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+          <UnavailableDestination title={destinationTitle(match.id)} />
         );
       case "inbox":
         return <InboxScreen workspace={workspace} />;
@@ -596,23 +610,33 @@ function WorkspaceFrame({
         return params.section === "governance" ? (
           <ModelDefaultScreen workspace={workspace} />
         ) : (
-          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+          <UnavailableDestination title={destinationTitle(match.id, params.section)} />
         );
       default:
-        return <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />;
+        return <UnavailableDestination title={destinationTitle(match.id)} />;
     }
   })();
+  const page = match.id + JSON.stringify(params);
   return (
     <AppShell
       workspace={workspace}
       currentRoute={match.id}
+      page={page}
       switcherWorkspaces={overview.kind === "ok" ? overview.value.workspaces : null}
       onSignOut={onSignOut}
       signOutBusy={signOutState === "busy"}
       notices={notices}
       fixture={fixture}
     >
-      <div key={match.id + JSON.stringify(params)}>{screen}</div>
+      <div key={page}>
+        {inSettings(match.id) ? (
+          <SettingsFrame workspaceId={workspace.id} route={match.id} sectionParam={params.section}>
+            {screen}
+          </SettingsFrame>
+        ) : (
+          screen
+        )}
+      </div>
     </AppShell>
   );
 }
@@ -679,5 +703,6 @@ export function guardPort(
       list: watch(port.models.list.bind(port.models), first),
       reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
     },
+    samples: { home: watch(port.samples.home.bind(port.samples), first) },
   };
 }

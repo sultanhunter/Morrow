@@ -1,6 +1,6 @@
 # Stateful prototype and journey map
 
-**Option 1 prototype (ADR-0032, 2026-10-23).** `prototype.html` shows Visual option 1, which ADR-0032 replaced with Sunrise. Its journeys and states still describe behaviour to keep; T7 (`docs/plan/mvp.md`) replaces it with a Sunrise prototype and its own browser receipt.
+**Option 1 prototype (ADR-0032, 2026-10-23).** `prototype.html` shows Visual option 1, which ADR-0032 replaced with Sunrise. Its journeys and states still describe behaviour to keep; T7 (`docs/plan/mvp.md`) replaces it with a Sunrise prototype and its own browser receipt. Since T7 PR 14 the workspace port itself is Sunrise (`docs/design/sunrise.md`); `browser-checks.json` remains this prototype's receipt.
 
 Open docs/design/prototype.html in a browser, or serve docs/design locally. Sample Linen & Form data only. Role and Scenario selectors are test controls. No store actions, AI runs, actual messages, subscription purchases, OAuth or authority enforcement occur. Mock saved briefs use local browser storage; unsaved offline text survives only in the currently open page, not a reload or another device.
 
