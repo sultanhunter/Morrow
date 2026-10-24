@@ -493,3 +493,55 @@ test("unchanged preauthentication queued query is sunk after the first wait chec
   assert.equal(released, 1, "the already-owned handle is disposed exactly once");
   assert.equal(attempt.control().deadlineMs, epoch + 25000);
 });
+// fix-signin-clock-and-stage-log: Workers Logs attaches the request URL, with WorkOS's code and
+// the state, to every line. A callback that fails before claim (setup, input) has asked no pool
+// for a connection and so has logged no cleanup event; it emits no stage line either. From
+// claim on, the stage line joins the cleanup events the request already logs with that URL.
+test("the callback stage line is written only once a pool has published a cleanup", async (t) => {
+  const callback = (cookie) =>
+    new Request(
+      origin + "/auth/workos/callback?code=fixed&state=" + randomBytes(32).toString("base64url"),
+      cookie ? { headers: { cookie: "__Host-morrow_login=" + cookie } } : {},
+    );
+  for (const [name, change, withCookie, expected] of [
+    ["setup", { capsuleKeyringJson: "{}" }, true, null],
+    ["input", {}, false, null],
+    ["claim", {}, true, "claim"],
+  ]) {
+    const lines = [],
+      cleanups = [];
+    t.mock.method(console, "log", (line) => lines.push(String(line)));
+    t.mock.method(console, "debug", (line) => cleanups.push(String(line)));
+    const f = fixture(change),
+      handler = createWorkersManagedLoginHandler(f.dependencies);
+    const response = await handler.fetch(
+      callback(withCookie ? randomBytes(32).toString("base64url") : null),
+      undefined,
+      f.ctx,
+    );
+    await f.drain();
+    await tick();
+    t.mock.restoreAll();
+    assert.equal(response.status, 303, name);
+    assert.equal(response.headers.get("location"), "/auth/result", name);
+    assert.equal(response.headers.getSetCookie().length, 0, name);
+    assert.deepEqual(f.calls, [], name);
+    const published = snapshotManagedLoginResponseMetrics(response).scope.publicationAttempts;
+    assert.equal(cleanups.length, published, name);
+    for (const line of cleanups)
+      assert.equal(JSON.parse(line).event, "morrow_managed_login_cleanup_settled", name);
+    if (expected === null) {
+      assert.equal(published, 0, name);
+      assert.deepEqual(f.borrows, [], name);
+      assert.deepEqual(lines, [], name);
+    } else {
+      assert.equal(published, 1, name);
+      assert.equal(f.borrows.length, 1, name);
+      assert.deepEqual(
+        lines.map((line) => JSON.parse(line)),
+        [{ event: "morrow_login_callback_failed", stage: expected, sub: null, lead: null }],
+        name,
+      );
+    }
+  }
+});
