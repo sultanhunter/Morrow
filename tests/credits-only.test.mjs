@@ -76,17 +76,10 @@ test("OD-2026-10-25-4 is recorded verbatim in its node and in version 4's owner 
   assert.equal(v4.effective_from, "2026-10-25");
 });
 
-// ADR-0039 is on pull request 75. This case reads its Approval section and passes once that
-// pull request is on main (the ship stage merges main before this branch merges); until then
-// it fails, so the code cannot merge ahead of the record it carries out.
-test("ADR-0039's Approval quotes OD-2026-10-25-4 verbatim (needs pull request 75 on main)", () => {
-  const path = "docs/decisions/adr/ADR-0039-credits-only-spend-limit.md";
-  let adr;
-  try {
-    adr = read(path);
-  } catch {
-    assert.fail(path + " is not on this branch yet: merge main once pull request 75 has merged");
-  }
+// ADR-0039 merged with pull request 75. The code carries out the record, so the record's
+// Approval must quote the same words the catalogue's version 4 cites.
+test("ADR-0039's Approval quotes OD-2026-10-25-4 verbatim and item 4 publishes version 4", () => {
+  const adr = read("docs/decisions/adr/ADR-0039-credits-only-spend-limit.md");
   assert.match(adr, /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-4; see Approval\)/m);
   const approval = adr.slice(adr.indexOf("## Approval"));
   assert.ok(approval.includes("> " + quote + "\n"));

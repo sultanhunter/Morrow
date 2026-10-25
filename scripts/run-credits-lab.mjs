@@ -271,13 +271,16 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
     )[0];
 
   // Two runs racing for one balance: the first session reserves and holds its transaction
-  // open; the second waits on the workspace interlock, then sees the debited wallet.
+  // open; the second waits on the workspace interlock, then sees the debited wallet. The hold
+  // is 5 s (it was 1.5 s): starting the second session and observing its lock wait each take
+  // a container exec, and on a loaded host 1.5 s let the first commit before the wait was
+  // seen, while the outcomes were already right.
   const race = async (account, label, [first, second], model, effort, products) => {
     const hold = (run, app) =>
       db.runAsync(
         asCommandRole(
           accountOf(account).p,
-          reserveCall(account, run, model, effort, products) + "\nSELECT pg_sleep(1.5);",
+          reserveCall(account, run, model, effort, products) + "\nSELECT pg_sleep(5);",
           {
             end: "COMMIT",
           },

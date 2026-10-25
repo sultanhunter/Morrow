@@ -1,7 +1,7 @@
 # ADR-0039 PR 1: the catalogue and the runtime, credits only
 
-- Status: brief, 2026-10-25. Branch `claude/adr0039-credits-catalogue`, from `main` at `66689751`. Decision: ADR-0039 (credits are the only spend limit; OD-2026-10-25-4, the owner in chat), its implementation plan's PR 1 (the listings and the catalogue, credits only) with PR 4's removal of the runtime budget (`docs/plan/adr-0039-implementation.md`). Change class: material (money), recorded by the owner-approved ADR before this code.
-- **Merge gate:** ADR-0039 is on pull request 75, not yet on `main`. `tests/credits-only.test.mjs` reads its Approval section and fails until `main` carries it; the ship stage merges `main` after pull request 75 merges, and the case then passes (checked here against pull request 75's file). This branch must not merge before it.
+- Status: built, 2026-10-26. Branch `claude/adr0039-credits-catalogue`, from `main` at `66689751`, merged with `main` at `410cabb3` (pull request 75, ADR-0039). Decision: ADR-0039 (credits are the only spend limit; OD-2026-10-25-4, the owner in chat), its implementation plan's PR 1 (the listings and the catalogue, credits only) with PR 4's removal of the runtime budget (`docs/plan/adr-0039-implementation.md`). Change class: material (money), recorded by the owner-approved ADR before this code.
+- **Record on `main`:** ADR-0039 merged with pull request 75 and is in this tree; `tests/credits-only.test.mjs` checks that its Approval quotes OD-2026-10-25-4 as version 4's `owner_confirmation` does.
 - **Migration number:** 0052, the next free number on `main` (0051 is ADR-0036's). Open pull requests #66 (0052-0053) and #68 (0052) also hold 0052; whichever merges later renumbers at its integration, with its manifest row, references and tests.
 
 ## Goal
@@ -30,7 +30,10 @@ Make credits the only spend limit for Listings runs and the computer, as ADR-003
 
 ## Test checklist
 
-- [x] `tests/credits-only.test.mjs` (new): OD-2026-10-25-4 verbatim in its node and version 4; ADR-0039's Approval (fails until pull request 75 is on `main`; passes against its file); version 4's values and digest; no cap field after version 3 and verify refusing one; the sample's listing; 0052's seed, shape, manifest row, pinned bodies and kept checks; `daily_cap` kept but never produced.
+- [x] `tests/credits-only.test.mjs` (new): OD-2026-10-25-4 verbatim in its node and version 4; ADR-0039's Approval and item 4; version 4's values and digest; no cap field after version 3 and verify refusing one; the sample's listing; 0052's seed, shape, manifest row, pinned bodies and kept checks; `daily_cap` kept but never produced.
 - [x] Updated: `run-credits`, `model-catalogue`, `providers`, `model-defaults-cost-cap` ("backstops reconfirmed" becomes "removed by ADR-0039"), `loop-catalogue`, `runtime-computer`, `edge-config`, `spine-foundation` (a re-created definer's grant), `tool-catalogue`, `listings-authority`, `workspace-web-{agents,team}`.
-- [ ] Labs (results below): `lab:run-credits` (C3, C4, C5, C6 on version 5, C12, C13), `lab:listings-runs` (B4, M5, C1), `lab:runtime-operations` (J2, K2: E2B's refusal sets the runtime hold), `lab:listings-authority` (M1, M4), `lab:work-workers` (M3).
-- [ ] `typecheck`, `typecheck:edge`, `edge:check`, `verify`, `format:check`, `graph -- check`, `npm test`.
+- [x] `lab:run-credits` (C3, C4, C5, C6 on version 5, C12, C13): 22 of 22 on 2026-10-26, twice in a row. The race helper (C1 and C3) now holds the first session 5 s, not 1.5 s: on this Mac, starting the second session and observing its lock wait took 1.8 to 2.2 s (timed with temporary logs, since removed), so three runs at 1.5 s under load near 1,000 failed only the `waited` observation (C3 in each, C1 in one), and one run at 5 s failed it once more for C3's second order during a load spike. Every race in every run admitted exactly one run and conserved the wallet.
+- [x] `lab:listings-runs` (B4, M5, C1, M1, U1): 73 of 73 on 2026-10-26, on the rerun; the first run stalled in `selection` at the lab's 600 s wait for M5's 25-product run, under load near 1,000.
+- [x] `lab:runtime-operations` (J2, K2: E2B's refusal sets the runtime hold): 24 of 24 on 2026-10-25 at `6cd9f7a1` (migration 0052 and the lab unchanged since).
+- [ ] `lab:listings-authority` (M1, M4) and `lab:work-workers` (M3): not run locally (catalogue version numbers only); hosted CI.
+- [x] `typecheck`, `typecheck:edge`, `edge:check`, `verify`, `format:check`, `graph -- check`: pass. `npm test`: 4,625 of 4,628; the 3 failures (`billing-webhook-verify` signature timestamps, `workos-authentication-operator-cli` and `workspace-api-build` with `spawnSync … ETIMEDOUT`) are files this branch does not touch and pass when run alone (22 of 22).
