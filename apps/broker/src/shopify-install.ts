@@ -55,7 +55,15 @@
 //      uninstall is a fresh install (new ids, born unlinked: a person links it again), and
 //      the prepare (shopify_install_prepare_v2) destroys the earlier installations' leftover
 //      tokens in this same transaction, so a new token is never stored beside an old one.
-// The offline token never leaves the broker, and nothing here logs.
+// The offline token never leaves the broker. A launch or install that does not succeed
+// logs one stage line of closed values (shopify-stage.ts: the step it stopped at, a closed
+// reason, where its last vault transaction ended and how long it took); nothing else here
+// logs, and a success logs nothing.
+//
+// Budgets (fix-shopify-install-live, shopifyBrokerBudgets): the launch's registry read and
+// the callback's claim each get 5 s, enough for a fresh vault connection while the Neon
+// compute wakes from suspend or while a request runs away from the database's region; a
+// webhook's record keeps 3 s, inside Shopify's 5 s delivery timeout.
 //
 // M2 PR-3: shopifyWebhookVerify also records the delivery. In one ingress transaction it
 // reads the app secret, verifies the signature over the raw body, minimises the body (a body
@@ -93,6 +101,7 @@ import { loginJson } from "../../../packages/identity/src/standalone-login-proto
 import {
   BrokerHold,
   brokerCapabilities,
+  brokerCapabilitiesWarm,
   invokeBrokerMethod,
   type BrokerMethod,
   type BrokerVault,
@@ -103,14 +112,25 @@ import {
   parseShopifyQuery,
   readShopifyIdentity,
   sha256Hex,
-  shopifyQueryShape,
+  shopifyQueryShapeReason,
   shopifyScopesExact,
   shopifyWebhookHmacPattern,
   verifyShopifyQuery,
   verifyShopifyWebhookHmac,
   type ShopifyFetch,
 } from "./shopify.js";
-import { runVaultTransaction } from "./vault-database.js";
+import {
+  emitShopifyStage,
+  newShopifyStageTrace,
+  recordVaultObservation,
+  type ShopifyStage,
+  type ShopifyStageTrace,
+} from "./shopify-stage.js";
+import {
+  runVaultTransaction,
+  type VaultTransactionObservation,
+  type VaultTransactionObserver,
+} from "./vault-database.js";
 import {
   VaultError,
   readAppSecret,
@@ -124,6 +144,7 @@ export type VaultTransaction = <T>(
   vault: Readonly<BrokerVault>,
   budgetMs: number,
   body: (query: VaultQuery) => Promise<T>,
+  observe?: VaultTransactionObserver,
 ) => Promise<T>;
 export interface ShopifyBrokerDependencies {
   readonly transaction: VaultTransaction;
@@ -135,8 +156,25 @@ const exact = (pattern: RegExp, value: unknown): value is string =>
   typeof value === "string" && pattern.exec(value)?.[0] === value;
 // v1 PR 5: the launch states, "reconnect" included (the protocol's own list).
 const installationStates: readonly string[] = shopifyInstallationStates;
-// The one database step of a launch or webhook gets at most this much.
-const readBudgetMs = 3000;
+// The Shopify vault transactions' budgets (fix-shopify-install-live). The first live
+// launch and callback failed at exactly the old 3 s: the connector, and so this broker
+// behind its RPC, ran at the edge nearest the merchant, where each of a transaction's
+// about 13 sequential round trips (a fresh WebSocket connection, BEGIN, the role preflight,
+// three SET LOCALs, the app secret, the registry or claim statement and COMMIT) crossed to
+// Neon's region. The connector is now placed in that region (its wrangler.jsonc), where the
+// same transaction takes tens of milliseconds; these budgets add headroom for a compute
+// waking from suspend or a request that still runs unplaced. The connector's RPC timers
+// cover each with slack for a cold isolate (connector.ts connectorBudgets; a test ties them).
+export const shopifyBrokerBudgets = Object.freeze({
+  /** The launch's registry read (secret and installation state). */
+  launchMs: 5000,
+  /** The callback's claim, at most what is left of the install's budget. */
+  claimMs: 5000,
+  /** A webhook's record and a token's destruction: inside Shopify's 5 s webhook timeout. */
+  ingressMs: 3000,
+  /** The install keeps this much of its budget for its last transaction. */
+  storeReserveMs: 3500,
+});
 // Ingress vault transactions at once per broker isolate (layer 3 of the header):
 // `unverified` for requests whose signature could not be checked first, `total` for all.
 export const shopifyIngressLimits = Object.freeze({ unverified: 1, total: 3 });
@@ -148,8 +186,6 @@ export const shopifyIngressLimits = Object.freeze({ unverified: 1, total: 3 });
 export const shopifySecretCacheMs = 60_000;
 export const shopifySecretStaleMs = 3_600_000;
 const secretCacheApps = 64;
-// The install keeps this much of its budget for its last transaction.
-const storeReserveMs = 2500;
 
 function row(rows: readonly Record<string, unknown>[], names: readonly string[]) {
   if (!Array.isArray(rows) || rows.length !== 1) throw new VaultError("VAULT_RECORD_INVALID");
@@ -194,47 +230,104 @@ interface LaunchContext {
   readonly workspaceId: string;
   readonly installation: ShopifyInstallationState;
 }
-// The app secret and the registry state of one app and shop, in one read transaction.
-// `context` is null when either is absent (an unknown app, a foreign shop, a retired app);
-// `secret` is the app's secret whenever the vault holds one, for the isolate's cache.
-async function launchContext(
-  deps: ShopifyBrokerDependencies,
-  vault: Readonly<BrokerVault>,
-  appKey: string,
-  shop: string,
-  budgetMs: number,
-): Promise<{ secret: string | null; context: LaunchContext | null }> {
-  return deps.transaction(vault, budgetMs, async (query) => {
-    const secret = await readAppSecret(vault.keyring, query, appKey);
-    const c = row(await query(vaultStatements.shopifyLaunchContext, [appKey, shop]), [
-      "outcome",
-      "client_id",
-      "workspace_id",
-      "installation",
-    ]);
-    const found = secret.outcome === "found" ? secret.secret : null;
-    if (found === null || c.outcome !== "found") return { secret: found, context: null };
-    if (
-      !exact(/^[a-f0-9]{32}$/, c.client_id) ||
-      !exact(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/, c.workspace_id) ||
-      typeof c.installation !== "string" ||
-      !installationStates.includes(c.installation)
-    )
-      throw new VaultError("VAULT_RECORD_INVALID");
-    return {
-      secret: found,
-      context: Object.freeze({
-        secret: found,
-        clientId: c.client_id,
-        workspaceId: c.workspace_id,
-        installation: c.installation as ShopifyInstallationState,
-      }),
-    };
-  });
+// The closed reason of a claim the definer did not grant (0026 work_shopify_state_claim:
+// claimed, expired, replayed, not_found, invalid; 0027 adds denied).
+const claimReason = (outcome: unknown) =>
+  outcome === "expired"
+    ? "claim_expired"
+    : outcome === "replayed"
+      ? "claim_replayed"
+      : outcome === "not_found"
+        ? "claim_not_found"
+        : "claim_invalid";
+// A held call's reason when its step recorded none: the hold's own, a vault error, or
+// "unexpected".
+function heldReason(error: unknown): string {
+  if (error instanceof BrokerHold)
+    return error.code === "INPUT_INVALID"
+      ? "input_invalid"
+      : error.code === "BUDGET_INVALID"
+        ? "budget_invalid"
+        : error.code === "INGRESS_BUSY"
+          ? "ingress_busy"
+          : error.code === "CAPABILITY_UNAVAILABLE"
+            ? "vault_absent"
+            : "unexpected";
+  return error instanceof VaultError ? "vault_error" : "unexpected";
 }
 
 export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
   const nowSeconds = () => Math.trunc(deps.now() / 1000);
+  // One vault transaction whose observation (or, from a transport that gives none, its
+  // elapsed time) and error code go into the call's trace.
+  async function traced<T>(
+    trace: ShopifyStageTrace,
+    vault: Readonly<BrokerVault>,
+    budgetMs: number,
+    body: (query: VaultQuery) => Promise<T>,
+  ): Promise<T> {
+    const seen: { observation: Readonly<VaultTransactionObservation> | null } = {
+      observation: null,
+    };
+    const started = deps.now();
+    try {
+      return await deps.transaction(vault, budgetMs, body, (observation) => {
+        seen.observation = observation;
+      });
+    } catch (error) {
+      if (error instanceof VaultError) trace.vault = error.code;
+      throw error;
+    } finally {
+      recordVaultObservation(trace, budgetMs, seen.observation, deps.now() - started);
+    }
+  }
+  // The app secret and the registry state of one app and shop, in one read transaction.
+  // `context` is null when either is absent (an unknown app, a foreign shop, a retired app),
+  // and `why` says which; `secret` is the app's secret whenever the vault holds one, for
+  // the isolate's cache.
+  async function launchContext(
+    trace: ShopifyStageTrace,
+    vault: Readonly<BrokerVault>,
+    appKey: string,
+    shop: string,
+  ): Promise<{
+    secret: string | null;
+    context: LaunchContext | null;
+    why: "secret_not_found" | "registry_not_found" | null;
+  }> {
+    return traced(trace, vault, shopifyBrokerBudgets.launchMs, async (query) => {
+      const secret = await readAppSecret(vault.keyring, query, appKey);
+      const c = row(await query(vaultStatements.shopifyLaunchContext, [appKey, shop]), [
+        "outcome",
+        "client_id",
+        "workspace_id",
+        "installation",
+      ]);
+      const found = secret.outcome === "found" ? secret.secret : null;
+      if (found === null) return { secret: found, context: null, why: "secret_not_found" as const };
+      if (c.outcome !== "found")
+        return { secret: found, context: null, why: "registry_not_found" as const };
+      if (
+        !exact(/^[a-f0-9]{32}$/, c.client_id) ||
+        !exact(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/, c.workspace_id) ||
+        typeof c.installation !== "string" ||
+        !installationStates.includes(c.installation)
+      ) {
+        trace.reason = "registry_invalid";
+        throw new VaultError("VAULT_RECORD_INVALID");
+      }
+      return {
+        secret: found,
+        context: Object.freeze({
+          secret: found,
+          clientId: c.client_id,
+          workspaceId: c.workspace_id,
+          installation: c.installation as ShopifyInstallationState,
+        }),
+        why: null as null,
+      };
+    });
+  }
   // Layer 3: one pair of counters per broker instance, which is one per isolate for the
   // live broker.
   let ingressAll = 0,
@@ -273,15 +366,18 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     vault: Readonly<BrokerVault>,
     appKey: string,
     check: (secret: string) => Promise<boolean>,
+    trace?: ShopifyStageTrace,
   ): Promise<"refused" | "verified" | "unverified"> {
     const apps = secrets.get(vault);
     const entry = apps?.get(appKey);
+    if (trace) trace.secretCache = "none";
     if (!entry) return "unverified";
     const age = deps.now() - entry.readAt;
     if (!(age >= 0 && age < shopifySecretStaleMs)) {
       apps!.delete(appKey);
       return "unverified";
     }
+    if (trace) trace.secretCache = age < shopifySecretCacheMs ? "fresh" : "stale";
     if (await check(entry.secret)) return "verified";
     return age < shopifySecretCacheMs ? "refused" : "unverified";
   }
@@ -295,46 +391,119 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       )
     )?.get("shop") === shop;
 
-  async function launchVerify(env: unknown, appKey: unknown, rawQuery: unknown): Promise<string> {
+  // One call's trace, its outcome and its stage line: a call that throws is "held" (its
+  // step's reason, or the hold's own); every result but `success` emits the line.
+  async function staged(
+    method: ShopifyStageTrace["method"],
+    success: readonly string[],
+    run: (trace: ShopifyStageTrace) => Promise<string>,
+  ): Promise<string> {
+    const trace = newShopifyStageTrace(method);
+    const started = deps.now();
+    try {
+      return await run(trace);
+    } catch (error) {
+      trace.result = "held";
+      if (trace.reason === null) trace.reason = heldReason(error);
+      if (error instanceof VaultError && trace.vault === null) trace.vault = error.code;
+      throw error;
+    } finally {
+      trace.totalMs = deps.now() - started;
+      if (trace.result === null || !success.includes(trace.result)) emitShopifyStage(trace);
+    }
+  }
+  // Marks a step's end in the trace.
+  const mark = (
+    trace: ShopifyStageTrace,
+    stage: ShopifyStage,
+    result: string,
+    reason: string | null,
+  ) => {
+    trace.stage = stage;
+    trace.result = result;
+    trace.reason = reason;
+  };
+
+  function launchVerify(env: unknown, appKey: unknown, rawQuery: unknown): Promise<string> {
+    return staged("shopifyLaunchVerify", ["verified"], (trace) =>
+      launchSteps(trace, env, appKey, rawQuery),
+    );
+  }
+  async function launchSteps(
+    trace: ShopifyStageTrace,
+    env: unknown,
+    appKey: unknown,
+    rawQuery: unknown,
+  ): Promise<string> {
     if (typeof appKey !== "string" || typeof rawQuery !== "string")
       throw new BrokerHold("INPUT_INVALID");
-    const refused = encodeShopifyLaunchVerdict({ verdict: "refused" });
-    if (
-      !exact(shopifyAppKeyPattern, appKey) ||
-      brokerUtf8Bytes(rawQuery) > shopifyLimits.queryMaxBytes
-    )
-      return refused;
-    const shop = parseShopifyQuery(rawQuery)?.params.get("shop");
-    if (!exact(shopifyShopPattern, shop)) return refused;
+    const refused = (stage: ShopifyStage, reason: string) => {
+      mark(trace, stage, "refused", reason);
+      return encodeShopifyLaunchVerdict({ verdict: "refused" });
+    };
+    trace.stage = "shape";
+    if (!exact(shopifyAppKeyPattern, appKey)) return refused("shape", "app_key_shape");
+    if (brokerUtf8Bytes(rawQuery) > shopifyLimits.queryMaxBytes)
+      return refused("shape", "query_bytes");
+    const parsed = parseShopifyQuery(rawQuery);
+    const shop = parsed?.params.get("shop");
+    if (!exact(shopifyShopPattern, shop))
+      return refused("shape", parsed ? "shop_param" : "query_parse");
     // A signed query's shape (hmac, a fresh timestamp, no signature) before any database.
-    if (!shopifyQueryShape(rawQuery, nowSeconds(), shopifyLimits.timestampToleranceSeconds))
-      return refused;
+    const shape = shopifyQueryShapeReason(
+      rawQuery,
+      nowSeconds(),
+      shopifyLimits.timestampToleranceSeconds,
+    );
+    if (shape !== null) return refused("shape", shape);
+    trace.stage = "capability";
+    trace.coldIsolate = !brokerCapabilitiesWarm(env);
     const vault = await vaultOf(env);
     // With the app's secret held, Shopify's signature before any database.
-    const preverified = await preverify(vault, appKey, queryCheck(rawQuery, shop));
-    if (preverified === "refused") return refused;
-    const read = await ingress(preverified === "verified", () =>
-      launchContext(deps, vault, appKey, shop, readBudgetMs),
-    );
+    trace.stage = "preverify";
+    const preverified = await preverify(vault, appKey, queryCheck(rawQuery, shop), trace);
+    if (preverified === "refused") return refused("preverify", "secret_refused");
+    trace.stage = "ingress";
+    const read = await ingress(preverified === "verified", () => {
+      trace.stage = "launch_context";
+      return launchContext(trace, vault, appKey, shop);
+    });
     remember(vault, appKey, read.secret);
     const context = read.context;
-    if (!context) return refused;
+    if (!context) return refused("launch_context", read.why ?? "registry_not_found");
+    trace.installation = context.installation;
+    trace.stage = "verify";
     const verified = await verifyShopifyQuery(
       context.secret,
       rawQuery,
       nowSeconds(),
       shopifyLimits.timestampToleranceSeconds,
     );
-    if (!verified || verified.get("shop") !== shop) return refused;
-    return encodeShopifyLaunchVerdict({
+    if (!verified) return refused("verify", "hmac_mismatch");
+    if (verified.get("shop") !== shop) return refused("verify", "shop_mismatch");
+    const verdict = encodeShopifyLaunchVerdict({
       verdict: "verified",
       shop,
       installation: context.installation,
       workspaceId: context.workspaceId,
     });
+    mark(trace, "done", "verified", null);
+    return verdict;
   }
 
-  async function installComplete(
+  function installComplete(
+    env: unknown,
+    appKey: unknown,
+    rawQuery: unknown,
+    stateDigest: unknown,
+    budgetMs: unknown,
+  ): Promise<string> {
+    return staged("shopifyInstallComplete", ["installed", "reauthorised"], (trace) =>
+      installSteps(trace, env, appKey, rawQuery, stateDigest, budgetMs),
+    );
+  }
+  async function installSteps(
+    trace: ShopifyStageTrace,
     env: unknown,
     appKey: unknown,
     rawQuery: unknown,
@@ -348,106 +517,144 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       typeof budgetMs !== "number"
     )
       throw new BrokerHold("INPUT_INVALID");
+    trace.stage = "budget";
     if (!Number.isSafeInteger(budgetMs) || budgetMs < 1 || budgetMs > shopifyLimits.budgetMaxMs)
       throw new BrokerHold("BUDGET_INVALID");
     const deadline = deps.now() + budgetMs;
+    // The step's end in the trace, and the closed result.
     const answer = (
+      stage: ShopifyStage,
       outcome: ShopifyInstallOutcome,
+      reason: string | null,
       workspaceId: string | null = null,
       continuationToken: string | null = null,
-    ) => encodeShopifyInstallResult({ outcome, workspaceId, continuationToken });
+    ) => {
+      mark(trace, stage, outcome, reason);
+      return encodeShopifyInstallResult({ outcome, workspaceId, continuationToken });
+    };
     const remaining = (reserve = 0) => deadline - deps.now() - reserve;
-    if (
-      !exact(shopifyAppKeyPattern, appKey) ||
-      !exact(shopifyDigestPattern, stateDigest) ||
-      brokerUtf8Bytes(rawQuery) > shopifyLimits.queryMaxBytes
-    )
-      return answer("refused");
+    trace.stage = "shape";
+    if (!exact(shopifyAppKeyPattern, appKey)) return answer("shape", "refused", "app_key_shape");
+    if (!exact(shopifyDigestPattern, stateDigest))
+      return answer("shape", "refused", "digest_shape");
+    if (brokerUtf8Bytes(rawQuery) > shopifyLimits.queryMaxBytes)
+      return answer("shape", "refused", "query_bytes");
     const params = parseShopifyQuery(rawQuery)?.params;
     const state = params?.get("state");
     const shop = params?.get("shop");
     const code = params?.get("code");
     // 1. The query's state is the cookie's, and the query is shaped like a signed one.
-    if (!exact(shopifySecretPattern, state) || (await sha256Hex(state)) !== stateDigest)
-      return answer("state_invalid");
-    if (!exact(shopifyShopPattern, shop) || typeof code !== "string") return answer("refused");
-    if (!shopifyQueryShape(rawQuery, nowSeconds(), shopifyLimits.timestampToleranceSeconds))
-      return answer("refused");
+    if (!exact(shopifySecretPattern, state))
+      return answer("shape", "state_invalid", params ? "state_shape" : "query_parse");
+    if ((await sha256Hex(state)) !== stateDigest)
+      return answer("shape", "state_invalid", "state_mismatch");
+    if (!exact(shopifyShopPattern, shop)) return answer("shape", "refused", "shop_param");
+    if (typeof code !== "string") return answer("shape", "refused", "code_missing");
+    const shape = shopifyQueryShapeReason(
+      rawQuery,
+      nowSeconds(),
+      shopifyLimits.timestampToleranceSeconds,
+    );
+    if (shape !== null) return answer("shape", "refused", shape);
+    trace.stage = "capability";
+    trace.coldIsolate = !brokerCapabilitiesWarm(env);
     const vault = await vaultOf(env);
-    const preverified = await preverify(vault, appKey, queryCheck(rawQuery, shop));
-    if (preverified === "refused") return answer("refused");
+    trace.stage = "preverify";
+    const preverified = await preverify(vault, appKey, queryCheck(rawQuery, shop), trace);
+    if (preverified === "refused") return answer("preverify", "refused", "secret_refused");
     // 2. The secret, Shopify's signature and timestamp, then the claim, committed alone
     // before any provider call. An unverified query sends no claim statement.
     let read: {
       secret: string | null;
       claimed: { clientId: string; shopDigest: string } | "refused" | null;
     };
+    const seen: { refusal: "hmac_mismatch" | "shop_mismatch" | null; claim: unknown } = {
+      refusal: null,
+      claim: null,
+    };
+    trace.stage = "ingress";
     try {
-      read = await ingress(preverified === "verified", () =>
-        deps.transaction(vault, Math.min(readBudgetMs, Math.max(1, remaining())), async (query) => {
-          const secret = await readAppSecret(vault.keyring, query, appKey);
-          if (secret.outcome !== "found") return { secret: null, claimed: null };
-          const verified = await verifyShopifyQuery(
-            secret.secret,
-            rawQuery,
-            nowSeconds(),
-            shopifyLimits.timestampToleranceSeconds,
-          );
-          if (!verified || verified.get("shop") !== shop)
-            return { secret: secret.secret, claimed: "refused" as const };
-          const c = row(await query(vaultStatements.shopifyCallbackClaim, [appKey, stateDigest]), [
-            "outcome",
-            "shop_digest",
-            "client_id",
-          ]);
-          if (c.outcome !== "claimed") return { secret: secret.secret, claimed: null };
-          if (!exact(/^[a-f0-9]{64}$/, c.shop_digest) || !exact(/^[a-f0-9]{32}$/, c.client_id))
-            throw new VaultError("VAULT_RECORD_INVALID");
-          return {
-            secret: secret.secret,
-            claimed: { clientId: c.client_id, shopDigest: c.shop_digest },
-          };
-        }),
-      );
+      read = await ingress(preverified === "verified", () => {
+        trace.stage = "claim_tx";
+        return traced(
+          trace,
+          vault,
+          Math.min(shopifyBrokerBudgets.claimMs, Math.max(1, remaining())),
+          async (query) => {
+            const secret = await readAppSecret(vault.keyring, query, appKey);
+            if (secret.outcome !== "found") return { secret: null, claimed: null };
+            const verified = await verifyShopifyQuery(
+              secret.secret,
+              rawQuery,
+              nowSeconds(),
+              shopifyLimits.timestampToleranceSeconds,
+            );
+            if (!verified || verified.get("shop") !== shop) {
+              seen.refusal = verified ? "shop_mismatch" : "hmac_mismatch";
+              return { secret: secret.secret, claimed: "refused" as const };
+            }
+            const c = row(
+              await query(vaultStatements.shopifyCallbackClaim, [appKey, stateDigest]),
+              ["outcome", "shop_digest", "client_id"],
+            );
+            seen.claim = c.outcome;
+            if (c.outcome !== "claimed") return { secret: secret.secret, claimed: null };
+            if (!exact(/^[a-f0-9]{64}$/, c.shop_digest) || !exact(/^[a-f0-9]{32}$/, c.client_id))
+              throw new VaultError("VAULT_RECORD_INVALID");
+            return {
+              secret: secret.secret,
+              claimed: { clientId: c.client_id, shopDigest: c.shop_digest },
+            };
+          },
+        );
+      });
     } catch (error) {
       // An unknown claim may have consumed the state: it can only be relaunched.
       if (error instanceof VaultError && error.code === "VAULT_OUTCOME_UNKNOWN")
-        return answer("state_invalid");
+        return answer("claim_tx", "state_invalid", "vault_error");
       throw error;
     }
     remember(vault, appKey, read.secret);
-    if (read.claimed === "refused") return answer("refused");
-    if (!read.claimed || read.secret === null) return answer("state_invalid");
+    if (read.claimed === "refused")
+      return answer("claim_tx", "refused", seen.refusal ?? "hmac_mismatch");
+    if (read.secret === null) return answer("claim_tx", "state_invalid", "secret_not_found");
+    if (!read.claimed) return answer("claim", "state_invalid", claimReason(seen.claim));
     const claimed = { secret: read.secret, ...read.claimed };
     // 3. The claimed state's shop.
-    if ((await sha256Hex(shop)) !== claimed.shopDigest) return answer("refused");
-    if (remaining(storeReserveMs) <= 0) return answer("refused");
+    if ((await sha256Hex(shop)) !== claimed.shopDigest)
+      return answer("shop_digest", "refused", "shop_digest_mismatch");
+    if (remaining(shopifyBrokerBudgets.storeReserveMs) <= 0)
+      return answer("reserve", "refused", "budget_exhausted");
     // 4. The code exchange, once.
+    trace.stage = "exchange";
     const exchanged = await exchangeShopifyCode(
       deps.fetch,
       shop,
       claimed.clientId,
       claimed.secret,
       code,
-      remaining(storeReserveMs),
+      remaining(shopifyBrokerBudgets.storeReserveMs),
     );
-    if (exchanged.kind === "uncertain") return answer("exchange_uncertain");
-    if (exchanged.kind === "refused") return answer("refused");
+    if (exchanged.kind === "uncertain")
+      return answer("exchange", "exchange_uncertain", exchanged.reason);
+    if (exchanged.kind === "refused") return answer("exchange", "refused", exchanged.reason);
     // 5. Least privilege: exactly the requested scopes, expanded.
     const scopes = shopifyScopesExact(exchanged.scopes);
-    if (!scopes) return answer("scopes_mismatch");
+    if (!scopes) return answer("scopes", "scopes_mismatch", "scopes_mismatch");
     // 6. The shop's identity: a development store (ADR-0022 item 4), or the live-store
     // app's own shop, which step 7 asks the registry first (ADR-0035 item 2).
+    trace.stage = "identity";
     const identity = await readShopifyIdentity(
       deps.fetch,
       shop,
       exchanged.token,
-      deadline - storeReserveMs,
+      deadline - shopifyBrokerBudgets.storeReserveMs,
       deps.now,
     );
-    if (identity.kind !== "identity") return answer("refused");
+    if (identity.kind !== "identity") return answer("identity", "refused", identity.reason);
     // 7. The live-store admission when needed, then prepare, seal and store in one
     // transaction.
+    trace.stage = "store_tx";
     const continuationToken = base64urlRandom(32);
     const continuationDigest = await sha256Hex(continuationToken);
     const budget = Math.min(shopifyLimits.budgetMaxMs, Math.max(1, remaining()));
@@ -455,9 +662,11 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       outcome: ShopifyInstallOutcome;
       workspaceId: string | null;
       continuation: boolean;
+      why: string | null;
     };
+    const sealing = { failed: false };
     try {
-      stored = await deps.transaction(vault, budget, async (query) => {
+      stored = await traced(trace, vault, budget, async (query) => {
         // A store that is not a development store: only the marked app's own shop, asked
         // before anything is prepared or sealed. Any other answer stores nothing.
         if (!identity.development) {
@@ -469,6 +678,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
               outcome: "store_not_development" as const,
               workspaceId: null,
               continuation: false,
+              why: "admission_refused",
             };
         }
         const p = row(
@@ -490,9 +700,19 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
           ],
         );
         if (p.outcome === "state_invalid")
-          return { outcome: "state_invalid" as const, workspaceId: null, continuation: false };
+          return {
+            outcome: "state_invalid" as const,
+            workspaceId: null,
+            continuation: false,
+            why: "prepare_state_invalid",
+          };
         if (p.outcome !== "install" && p.outcome !== "reauthorise")
-          return { outcome: "refused" as const, workspaceId: null, continuation: false };
+          return {
+            outcome: "refused" as const,
+            workspaceId: null,
+            continuation: false,
+            why: "prepare_refused",
+          };
         const ids = [
           p.organization_id,
           p.workspace_id,
@@ -509,6 +729,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
         const plaintext = new TextEncoder().encode(exchanged.token);
         let envelope;
         try {
+          sealing.failed = true;
           envelope = await sealVaultRecord(
             vault.keyring,
             {
@@ -522,6 +743,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
             },
             plaintext,
           );
+          sealing.failed = false;
         } finally {
           plaintext.fill(0);
         }
@@ -555,24 +777,38 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
             outcome: s.outcome as ShopifyInstallOutcome,
             workspaceId: s.workspace_id as string,
             continuation: s.continuation === "created",
+            why: null,
           };
         }
         if (s.outcome === "state_invalid")
-          return { outcome: "state_invalid" as const, workspaceId: null, continuation: false };
-        return { outcome: "refused" as const, workspaceId: null, continuation: false };
+          return {
+            outcome: "state_invalid" as const,
+            workspaceId: null,
+            continuation: false,
+            why: "store_state_invalid",
+          };
+        return {
+          outcome: "refused" as const,
+          workspaceId: null,
+          continuation: false,
+          why: "store_refused",
+        };
       });
     } catch (error) {
       if (error instanceof VaultError && error.code === "VAULT_OUTCOME_UNKNOWN")
-        return answer("outcome_unknown");
+        return answer("store_tx", "outcome_unknown", "vault_error");
+      if (sealing.failed) trace.reason = "seal_failed";
       throw error;
     }
     if (stored.outcome === "installed" || stored.outcome === "reauthorised")
       return answer(
+        "done",
         stored.outcome,
+        null,
         stored.workspaceId,
         stored.continuation ? continuationToken : null,
       );
-    return answer(stored.outcome);
+    return answer("store_tx", stored.outcome, stored.why);
   }
 
   async function webhookVerify(
@@ -626,7 +862,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     let read: { secret: string | null; verdict: ShopifyWebhookVerdict };
     try {
       read = await ingress(preverified === "verified", () =>
-        deps.transaction(vault, readBudgetMs, async (query) => {
+        deps.transaction(vault, shopifyBrokerBudgets.ingressMs, async (query) => {
           const secret = await readAppSecret(vault.keyring, query, appKey);
           if (secret.outcome !== "found")
             return { secret: null, verdict: { verdict: "refused", inboxId: null, settled: null } };
@@ -709,7 +945,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     let outcome: ShopifyCredentialOutcome;
     try {
       outcome = await ingress(true, () =>
-        deps.transaction(vault, readBudgetMs, async (query) => {
+        deps.transaction(vault, shopifyBrokerBudgets.ingressMs, async (query) => {
           const r = row(
             await query(vaultStatements.shopifyCredentialDestroy, [
               installationId,

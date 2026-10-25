@@ -44,6 +44,7 @@ import {
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
   decodeShopifyWebhookVerdict,
+  encodeShopifyWebhookSyncResult,
 } from "../packages/identity/src/broker-protocol.ts";
 import { createControlledWorkspaceStoreLinking } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { runShopifyLinkIssuer } from "../packages/identity/src/shopify-link-issuer.ts";
@@ -399,7 +400,7 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       now: () => Date.now(),
     });
     const faults = { destroy: false };
-    const calls = { check: 0, destroy: [] };
+    const calls = { check: 0, destroy: [], subscriptions: 0 };
     const connectorDatabase = createConnectorDatabase(
       binding,
       {
@@ -427,6 +428,20 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       async shopifyConnectionCheck(installationId, budgetMs) {
         calls.check++;
         return checker.check(brokerEnv, installationId, Math.min(10000, budgetMs));
+      },
+      // The shop-specific webhook subscriptions are lab:shopify-connect-workers' (the real
+      // sync against the oracle); here the install's and the cron's sync answer nothing to
+      // do, so they never count as unavailable.
+      async shopifyWebhookSubscriptionsSync() {
+        calls.subscriptions++;
+        return encodeShopifyWebhookSyncResult({
+          checked: 0,
+          registered: 0,
+          failed: 0,
+          unknown: 0,
+          unauthorized: 0,
+          skipped: 0,
+        });
       },
     };
     const makeConnector = (cleanup) =>

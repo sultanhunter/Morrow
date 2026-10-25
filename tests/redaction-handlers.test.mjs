@@ -59,8 +59,9 @@ test("every registered table is classified, and every store table has exactly on
 test("every morrow_identity table is classified; the shop identity is store content", () => {
   const identity = registeredTables().filter(([name]) => name.startsWith("morrow_identity."));
   // 43 through M5 PR-1, plus M3 PR-1's agent_principals (ids only), M2 PR-3's inbox and
-  // privacy requests, and v1 PR 5's store_data_deletions (the 48-hour deletion's record).
-  assert.equal(identity.length, 47);
+  // privacy requests, the shop-specific webhook subscriptions' registrations (ids, codes,
+  // counts and times only), and v1 PR 5's store_data_deletions (the 48-hour deletion's record).
+  assert.equal(identity.length, 48);
   assert.equal(identityTables.agent_principals.content, "none");
   assert.deepEqual(
     identity.filter(([, spec]) => spec.content === "store").map(([name]) => name),
@@ -80,6 +81,7 @@ test("every morrow_identity table is classified; the shop identity is store cont
     "shopify_oauth_states",
     "shopify_webhook_inbox",
     "privacy_requests",
+    "shopify_webhook_registrations",
     "store_data_deletions",
   ])
     assert.equal(identityTables[name].content, "none", name);

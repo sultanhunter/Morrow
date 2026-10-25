@@ -26,6 +26,16 @@
 //             destroyed again. The inbox row is the queue: no Queue resource exists. Then
 //             (M2 PR-3 review) the count of open privacy requests past their target or
 //             their 30-day due time, logged as PRIVACY_TARGET_MISSED / PRIVACY_DUE_MISSED.
+//             Then the shop-specific webhook subscriptions (below).
+//   subscriptions  Shopify CLI 4.9 admits no app-specific app/uninstalled or
+//             app/scopes_update subscription under the legacy install flow, so the broker
+//             registers both for each active installation as shop-specific subscriptions to
+//             this connector's webhook path (docs/briefs/shopify-shop-specific-webhooks.md).
+//             The connector only asks, with a budget: after an install or re-authorisation
+//             (waitUntil, after the redirect: the install never waits for it or depends on
+//             it) and from the cron, which catches every installation that still lacks them
+//             (installed before this existed, or a failed or unknown attempt). Counts only
+//             come back; one fixed-code morrow_connector_webhooks line per sync.
 // v1 PR 5 ("Keep the store connection healthy"; ADR-0025 items 9 and 10; ADR-0031 item 3):
 //   launch    an uninstalled installation launches OAuth (a reinstall: a new installation,
 //             a new token, born unlinked, so only a person links it again); a live one that
@@ -37,9 +47,10 @@
 //             raises the Reconnect item; with the clean-up switch on it then asks the broker
 //             to read the granted scopes back (deliveries can arrive out of order) and
 //             reconciles again from what Shopify answered.
-//   cron      always: the open Reconnect items, and every live connection that needs
-//             reconnecting without one, reconciled again (cleared once the scopes are back;
-//             an agent a person resumed while a scope is missing is stopped again).
+//   cron      after the subscriptions, always: the open Reconnect items, and every live
+//             connection that needs reconnecting without one, reconciled again (cleared once
+//             the scopes are back; an agent a person resumed while a scope is missing is
+//             stopped again).
 //             With the connection clean-up switch on (MORROW_CONNECTION_CLEANUP, committed
 //             off): the daily read-back of every live installation (a missed scope change, or
 //             a token Shopify refused: a missed uninstall is reconciled into a Reconnect
@@ -62,6 +73,7 @@ import {
   decodeShopifyCredentialResult,
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
+  decodeShopifyWebhookSyncResult,
   decodeShopifyWebhookVerdict,
   type ConnectorBrokerRpc,
   type ShopifyCredentialReason,
@@ -89,6 +101,7 @@ export interface ConnectorDependencies {
     | "shopifyInstallComplete"
     | "shopifyWebhookVerify"
     | "shopifyCredentialDestroy"
+    | "shopifyWebhookSubscriptionsSync"
     | "shopifyConnectionCheck"
   >;
   readonly database: ConnectorDatabase;
@@ -104,10 +117,16 @@ export interface ConnectorDependencies {
 // adds installSlackMs to the broker's budget: the broker returns by its deadline (its last
 // transaction's close never waits past it), and the slack covers the RPC's two hops, so a
 // committed install is not reported as "Not confirmed".
+// fix-shopify-install-live: the launch RPC's timer is the broker's launch budget
+// (shopifyBrokerBudgets.launchMs, 5 s) plus 1.5 s for a cold broker isolate's start and
+// the RPC's hops; the state's own transaction and the install get the same headroom for a
+// Neon compute waking from suspend. The staging connector runs in Neon's region (its
+// wrangler.jsonc placement), where each of these takes well under a second;
+// tests/connector-worker.test.mjs ties these numbers to the broker's.
 export const connectorBudgets = Object.freeze({
-  launchMs: 4000,
-  stateOpenMs: 3000,
-  installMs: 9000,
+  launchMs: 6500,
+  stateOpenMs: 5000,
+  installMs: 10000,
   installSlackMs: 1500,
   webhookMs: 4000,
   // M2 PR-3: one inbox row's applier transaction, the token's destruction, a re-drive's id
@@ -117,6 +136,11 @@ export const connectorBudgets = Object.freeze({
   destroyMs: 4000,
   pendingMs: 3000,
   redriveMs: 60000,
+  // The shop-specific webhook subscriptions: the broker's budget after an install and from
+  // the cron (within shopifyWebhookSyncLimits), and the RPC timer's slack over it.
+  subscriptionsMs: 15000,
+  subscriptionsCronMs: 20000,
+  subscriptionsSlackMs: 2000,
   // v1 PR 5: one read-back of an installation's scopes (the broker's two vault steps and
   // the Shopify call) and the RPC's slack, one reconcile, one 48-hour deletion step.
   checkMs: 8000,
@@ -242,7 +266,30 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     return new Response(null, { status: 302, headers });
   }
 
-  async function callback(request: Request, appKey: string, rawQuery: string): Promise<Response> {
+  // The shop-specific webhook subscriptions: one broker sync with this budget. Never throws;
+  // one fixed-code line with the counts, or SUBSCRIPTIONS_UNAVAILABLE.
+  async function subscriptions(budgetMs: number) {
+    try {
+      const result = decodeShopifyWebhookSyncResult(
+        await rpc(
+          () => broker.shopifyWebhookSubscriptionsSync(budgetMs),
+          budgetMs + connectorBudgets.subscriptionsSlackMs,
+        ),
+      );
+      log("morrow_connector_webhooks", { code: "SUBSCRIPTIONS_SYNCED", ...result });
+      return result;
+    } catch {
+      log("morrow_connector_webhooks", { code: "SUBSCRIPTIONS_UNAVAILABLE" });
+      return null;
+    }
+  }
+
+  async function callback(
+    request: Request,
+    appKey: string,
+    rawQuery: string,
+    ctx: ConnectorContext,
+  ): Promise<Response> {
     const cookie = readStateCookie(request.headers.get("cookie"));
     let queryState: string | null = null;
     try {
@@ -275,6 +322,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     switch (installed.outcome) {
       case "installed":
       case "reauthorised": {
+        // The store's app/uninstalled and app/scopes_update subscriptions, after the
+        // response: the install is complete whatever this does, and the cron retries.
+        ctx.waitUntil(subscriptions(connectorBudgets.subscriptionsMs));
         const location = connectionsUrl(
           configuration.apiOrigin,
           installed.workspaceId!,
@@ -459,9 +509,10 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   // The cron's re-drives (ids only, both cross-tenant): received inbox rows, then the tokens
   // of ended installations whose destruction is not yet recorded; then the privacy deadline
   // check (M2 PR-3 review; ADR-0022 item 14): open requests past their target or their
-  // 30-day due time, each logged with a fixed code an alert can match. v1 PR 5: then the
-  // open Reconnect items, and, with the clean-up switch on, the read-backs due, the 48-hour
-  // deletions due and the stuck deliveries.
+  // 30-day due time, each logged with a fixed code an alert can match. Then the shop-specific
+  // webhook subscriptions, when the run still has their whole budget. v1 PR 5: then the open
+  // Reconnect items, and, with the clean-up switch on, the read-backs due, the 48-hour
+  // deletions due and the stuck deliveries (each loop stops at the run's deadline).
   async function redrive(): Promise<Readonly<Record<string, number>>> {
     const deadline = Date.now() + connectorBudgets.redriveMs;
     const counts = {
@@ -471,6 +522,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       destroyed: 0,
       targetMissed: 0,
       dueMissed: 0,
+      subscriptionsChecked: 0,
+      subscriptionsRegistered: 0,
       unavailable: 0,
       notices: 0,
       reconciled: 0,
@@ -521,6 +574,18 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     } catch {
       counts.unavailable++;
       log("morrow_connector_privacy", { code: "PRIVACY_CHECK_UNAVAILABLE" });
+    }
+    // The shop-specific webhook subscriptions of every active installation that lacks them,
+    // when the run still has the sync's whole budget.
+    if (
+      deadline - Date.now() >=
+      connectorBudgets.subscriptionsCronMs + connectorBudgets.subscriptionsSlackMs
+    ) {
+      const synced = await subscriptions(connectorBudgets.subscriptionsCronMs);
+      if (synced) {
+        counts.subscriptionsChecked = synced.checked;
+        counts.subscriptionsRegistered = synced.registered;
+      } else counts.unavailable++;
     }
     // v1 PR 5: the open Reconnect items and the live connections that need reconnecting,
     // reconciled again from each installation's state.
@@ -594,7 +659,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
         });
       if (selected.route === "webhooks") return webhooks(request, selected.appKey, ctx);
       if (selected.route === "callback")
-        return callback(request, selected.appKey, selected.rawQuery);
+        return callback(request, selected.appKey, selected.rawQuery, ctx);
       return launch(request, selected.appKey, selected.rawQuery, selected.route === "status");
     },
   });

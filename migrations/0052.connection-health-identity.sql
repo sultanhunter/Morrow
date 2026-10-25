@@ -1,7 +1,7 @@
 BEGIN;
 -- v1 PR 5, "Keep the store connection healthy": the identity side (ADR-0025 items 9 and 10;
 -- ADR-0031 item 3 and owner question 2; ADR-0035 item 3; docs/briefs/v1-connection-health.md).
--- Executes AS morrow_identity_owner, after 0046. It changes:
+-- Executes AS morrow_identity_owner, after 0051. It changes:
 --   * scope changes keep the connection: store_installations.granted_scopes may now record a
 --     narrower set ('{}' included) without a new token, and two columns record what the
 --     broker observed with the installation's own token: scopes_observed_at (the time it read
@@ -30,7 +30,7 @@ BEGIN;
 --     installation that is not uninstalled, so a shop/redact for an earlier installation never
 --     takes the link a reinstall is connected through; the 48-hour deletion runs the same
 --     function, so the two deletions keep one rule; PR 5 review finding F1);
---   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0048's
+--   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0053's
 --     connector and vault definers call them): the scope record, the health target, the
 --     reinstall leftovers, the ids-only due lists (checks, reconnects, deletions, stuck inbox
 --     rows), the deletion's open and completion.
@@ -348,7 +348,7 @@ END $$;
 -- writes the vault half in the same transaction). Every 0026 rule is kept, with the live
 -- installation of the app and shop in place of the one ever, and, for a fresh install after
 -- an uninstall (a reinstall): every earlier installation of this app and shop must already
--- record its token's destruction (0048's prepare destroys a leftover token in the same
+-- record its token's destruction (0053's prepare destroys a leftover token in the same
 -- transaction first; ineligible otherwise), and its candidates that are not redacted stop
 -- being active, so the new installation's candidate is the shop's one active candidate. A
 -- re-authorisation also records the new token's scopes as observed now and clears a token
@@ -640,7 +640,7 @@ END $$;
 -- and its app's install link is cleared unless that app has an installation that is not
 -- uninstalled. A reinstall connects through that link and its live installation holds the
 -- same shop domain, so a shop/redact for an earlier installation (a late or retried
--- delivery) or the 48-hour deletion of one (0048's connector_deletion_apply calls this same
+-- delivery) or the 48-hour deletion of one (0053's connector_deletion_apply calls this same
 -- function; ADR-0031 owner question 2: the earlier installation's data is deleted anyway)
 -- never leaves the reinstalled store without the link it would need after a later
 -- uninstall (the shopify_apps guard only ever clears it). With no live installation the
@@ -688,7 +688,7 @@ END $$;
 
 -- ---------------------------------------------------------------------------
 -- The identity bridges of PR 5: definers owned by the identity owner, EXECUTE for
--- morrow_work_command only. 0048's connector definers (the connector's login) and vault
+-- morrow_work_command only. 0053's connector definers (the connector's login) and vault
 -- definers (the broker's login) call them; each takes ids or the tenant its caller read
 -- from a row, never a value from a client.
 -- The health target of one installation: its tenant, app, state, store and connection, the
@@ -805,7 +805,7 @@ BEGIN
  RETURN QUERY SELECT 'applied'::text,array_to_string(i.granted_scopes,','),array_to_string(v_new,','),i.status,i.store_id::text,
   i.connection_id::text;
 END $$;
--- The broker's read-back target (0048's vault check): the live installation's tenant, shop
+-- The broker's read-back target (0053's vault check): the live installation's tenant, shop
 -- domain, credential id and version, and its revision (the record of the read refuses it as
 -- stale once the installation has changed since), only while unlinked or linked and not
 -- redacted. Outcomes: found, ineligible, not_found, invalid.
@@ -841,7 +841,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,
 $$;
 -- The cron's reconcile list (ids only, across tenants): every live installation of an active
 -- app that needs reconnecting (a requested scope the installation does not record, or a
--- token Shopify refused). Not capped here: 0048's connector_notices_due (its only caller)
+-- token Shopify refused). Not capped here: 0053's connector_notices_due (its only caller)
 -- keeps the ones whose connection has no open Reconnect item yet (a recorded narrowing or
 -- refusal whose reconcile was lost) and caps its merged list at 20. A cap here, in an order
 -- the reconcile never changes, would let the same 20 that already have their items hide
@@ -855,7 +855,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,
   AND (i.token_refused_at IS NOT NULL OR NOT (string_to_array(a.scopes,',')<@i.granted_scopes))
  ORDER BY i.id
 $$;
--- A reinstall's leftovers (0048's vault prepare destroys them first): earlier installations
+-- A reinstall's leftovers (0053's vault prepare destroys them first): earlier installations
 -- of this app and shop that are uninstalled and whose token's destruction is not recorded.
 CREATE FUNCTION morrow_identity.work_shopify_reinstall_leftovers(p_app_key text,p_shop_id text)
 RETURNS TABLE(installation_id text)

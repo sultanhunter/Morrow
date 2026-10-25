@@ -609,8 +609,12 @@ export const edgeWorkersDev = (worker, environment) =>
 // region instead of crossing from the edge nearest the caller (the first deploy's
 // SMOKE_DATABASE_PATH). It is a performance setting and changes no binding, route, secret
 // or trust boundary. Development has no hosted database and production waits for its own,
-// so neither has placement; the orchestrator and the connector never have it.
-export const edgePlacementWorkers = Object.freeze(["api", "broker"]);
+// so neither has placement. fix-shopify-install-live (2026-10-25): the staging connector
+// too. Placement moves a Worker's fetch handler, and the broker's ConnectorBroker RPC runs
+// beside its caller, so the unplaced connector held the broker's vault transactions at the
+// merchant's edge and the first live launches ran out of their budget. The orchestrator
+// never has it: its queue, workflow and cron handlers are not placed.
+export const edgePlacementWorkers = Object.freeze(["api", "broker", "connector"]);
 // Neon's AWS region id ("aws-us-east-1") and its Cloudflare targeted-placement region
 // ("aws:us-east-1"). Any other shape, another cloud included, is null and fails the check.
 const neonAwsRegion = (regionId) =>
@@ -672,6 +676,9 @@ export function edgeVarNames(
         "LOGIN_CONFIGURATION_JSON",
         "MORROW_DATABASE_BINDING_JSON",
         "TURNSTILE_CONFIGURATION_JSON",
+        // The shop-specific webhook subscriptions: the connector's configuration, byte-equal
+        // to the connector's, so the broker builds each callback URL from its own origin.
+        "CONNECTOR_CONFIGURATION_JSON",
         ...stripeVars,
         ...modelVars,
         ...runtimeVars,
@@ -1121,6 +1128,14 @@ async function stagingValueChecks({ vars, apiName, connectorName, staging, worko
   for (const name of ["LOGIN_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"])
     if (text("broker", name) === null || text("broker", name) !== text("api", name))
       problem("EDGE_STAGING_SHARED_VARS", "broker:staging:" + name);
+  // The shop-specific webhook subscriptions: the broker's CONNECTOR_CONFIGURATION_JSON is the
+  // connector's, byte for byte (checked above against the connector's own origin).
+  if (
+    text("broker", "CONNECTOR_CONFIGURATION_JSON") === null ||
+    text("broker", "CONNECTOR_CONFIGURATION_JSON") !==
+      text("connector", "CONNECTOR_CONFIGURATION_JSON")
+  )
+    problem("EDGE_STAGING_SHARED_VARS", "broker:staging:CONNECTOR_CONFIGURATION_JSON");
   // M3 PR-2: the orchestrator's binding (only while the model-provider switch is on) is the
   // api's, byte for byte.
   if (
@@ -1184,9 +1199,12 @@ async function stagingValueChecks({ vars, apiName, connectorName, staging, worko
         ],
   );
   const host = origin === null ? null : new URL(origin).hostname;
-  // v1 PR 1: the connector's origin and hostname, inside its configuration var only.
+  // v1 PR 1: the connector's origin and hostname, inside its configuration var only (the
+  // connector's, and the broker's byte-equal copy for the webhook subscriptions).
   const connectorVar = (worker, name) =>
-    connectorOrigin !== null && worker === "connector" && name === "CONNECTOR_CONFIGURATION_JSON";
+    connectorOrigin !== null &&
+    (worker === "connector" || worker === "broker") &&
+    name === "CONNECTOR_CONFIGURATION_JSON";
   const connectorHost = connectorOrigin === null ? null : new URL(connectorOrigin).hostname;
   for (const [worker, record] of Object.entries(vars))
     for (const [name, value] of Object.entries(record ?? {})) {
@@ -1429,9 +1447,9 @@ export async function verifyEdgeConfig({
       if (canonicalJson(config.observability) !== canonicalJson(edgeObservability(environment)))
         problem("EDGE_FLAG_OBSERVABILITY", where);
       if (!emptyValue(config.routes) || !emptyValue(config.route)) problem("EDGE_ROUTES", where);
-      // Placement (P04.T01i D1): exactly {mode: "targeted", region} on the staging api and
-      // broker, its region checked against staging.json below; absent everywhere else, an
-      // explicit `{mode: "off"}` included.
+      // Placement (P04.T01i D1): exactly {mode: "targeted", region} on the staging api,
+      // broker and (fix-shopify-install-live) connector, its region checked against
+      // staging.json below; absent everywhere else, an explicit `{mode: "off"}` included.
       const placement = config.placement;
       if (!edgePlacementWorkers.includes(worker.key)) {
         if (placement !== undefined) problem("EDGE_PLACEMENT_WORKER", where);
@@ -1663,7 +1681,7 @@ export async function verifyEdgeConfig({
   problems.push(...checked.problems);
   // The placement region is the region of staging.json's Neon project (`neon.region_id`,
   // Neon's `aws-<region>`), and the committed endpoint lies in that region, so the staging
-  // api and broker run beside the database the binding names.
+  // api, broker and connector run beside the database the binding names.
   const placementRegion = edgePlacementRegion(staging?.neon?.region_id);
   const endpointHost = staging?.neon?.endpoint_host;
   if (

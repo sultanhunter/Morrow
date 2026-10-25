@@ -564,7 +564,7 @@ await withWorkDatabase("P06.T01a.work-workers", async (db) => {
     const models = await sendAgents(P.A, "GET", "/models");
     check(
       "M3:models_listed",
-      models.status === 200 && models.body.catalogueVersion === 1 && models.body.canRevise === true,
+      models.status === 200 && models.body.catalogueVersion === 3 && models.body.canRevise === true,
     );
     const document = await sendAgents(P.A, "POST", listings + "/document", {});
     const enabled = await sendAgents(P.A, "POST", listings, {

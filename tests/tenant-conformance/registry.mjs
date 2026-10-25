@@ -182,6 +182,23 @@ export const workTables = Object.freeze({
     policies: ["broker_catalog_operation", "broker_catalog_read"],
     content: "none",
   },
+  // v1 PR 4 (0050 catalog-undo): the broker's reads of a product before an undo (the read's
+  // digest, per-field codes and time; content-free, 365 days), written only by its undo
+  // definers (broker_catalog_operation) and read by the session context (commandRead); and
+  // one record per undo proposal naming the change it undoes (ids and times), written by
+  // cmd_catalog_undo and read by the api.
+  operation_undo_checks: {
+    class: "tenant_internal",
+    parents: ["operations"],
+    commandRead: true,
+    policies: ["broker_catalog_operation"],
+    content: "none",
+  },
+  catalog_undos: {
+    class: "tenant_readable",
+    parents: ["proposals", "operations", "operation_undo_checks"],
+    content: "none",
+  },
   // M3 PR-1 listings authority (migration 0031).
   agent_releases: { class: "platform", parents: [], content: "none" },
   model_catalogue_versions: { class: "platform", parents: [], content: "none" },
@@ -283,9 +300,12 @@ export const workTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     lease: true,
-    // v1 PR 3: the broker's catalog read-back reads the draft's source snapshot.
+    // v1 PR 3: the broker's catalog read-back reads the draft's source snapshot. v1 PR 4
+    // (catalog-undo): the broker's undo check stores its read of one product, for exactly the
+    // tenant, store and product its own setting names (broker_undo_snapshot, INSERT only).
     policies: [
       "broker_catalog_read",
+      "broker_undo_snapshot",
       "connector_content_delete",
       "connector_content_delete_only",
       "connector_content_read",
@@ -738,6 +758,8 @@ export const workFunctions = Object.freeze({
   // Build order PR 7 (0043 runtime-operations): the ledger's guard, the caps in code (the
   // command role, inside the broker's vault definers) and the operator's hold lift (nobody).
   "runtime_guard()": { kind: "trigger", grantees: [] },
+  // Build order PR 8 (0047 runtime-e2b): any settlement destroys the operation's envd token.
+  "runtime_token_end()": { kind: "trigger", grantees: [] },
   "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "runtime_hold_lift(text,text,text)": { kind: "operator", grantees: [] },
   // v1 PR 3 (catalog-review, catalog-apply): the review screen's two reads, the claim and
@@ -765,6 +787,22 @@ export const workFunctions = Object.freeze({
   "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },
   "catalog_item_matches(jsonb,jsonb)": { kind: "helper", grantees: [] },
   "readback_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  // v1 PR 4 (0050 catalog-undo): the history's undo states and the undo's source (reads), the
+  // undo command (the api), the undo state and the undo item's set (helpers the definers call)
+  // and the undo checks' CHECK.
+  "catalog_undo_states(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "catalog_undo_source(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  // Review F1: the installation that would propose an undo (read), and its facts (helper).
+  "catalog_undo_proposer(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "catalog.undo",
+  },
+  "catalog_undo_state(text,text,text)": { kind: "helper", grantees: [] },
+  "catalog_undo_proposer_facts(text,text,text,text)": { kind: "helper", grantees: [] },
+  "catalog_undo_set(jsonb,text[])": { kind: "helper", grantees: [] },
+  "undo_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   // PR 18 (0046). Pure functions of the CHECKs.
   "goal_time(text)": { kind: "check", grantees: ["morrow_work_command"] },
   "valid_goal_measure(jsonb,timestamp with time zone)": {
@@ -862,11 +900,17 @@ export const bridgeFunctions = Object.freeze([
   // v1 PR 1 (shopify-live-store-identity): the live-store admission, called only by the
   // broker's vault definer of shopify-live-store-vault (ADR-0035 item 2).
   "work_shopify_live_store(text,text)",
+  // Shop-specific webhook subscriptions (shopify-webhook-registrations-identity): the
+  // registration target, the outcome record and the ids-only pending list, called only by the
+  // broker's vault definers of shopify-webhook-registrations-vault.
+  "work_shopify_webhook_target(text)",
+  "work_shopify_webhook_registration_record(text,text,text,text,text)",
+  "work_shopify_webhook_registrations_pending()",
   // v1 PR 5 (connection-health-identity): the health target, the scope record, the read-back
   // target, the ids-only due lists (read-backs and reconnects), the reinstall leftovers, the
   // 48-hour deletion's open and completion, and the stuck-delivery close, called only by
   // connection-health-work's connector and vault definers. The 48-hour deletion's identity
-  // handlers are shop/redact's work_shopify_redact_identity above, which 0047 revises.
+  // handlers are shop/redact's work_shopify_redact_identity above, which 0052 revises.
   "work_shopify_health_target(text)",
   "work_shopify_scopes_record(text,text,text,text,text,text,text)",
   "work_shopify_check_target(text)",
@@ -1438,6 +1482,14 @@ export const vaultFunctions = Object.freeze({
   },
   // v1 PR 1 (shopify-live-store-vault): the live-store admission of an install.
   "shopify_live_store_admission(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // Shop-specific webhook subscriptions (shopify-webhook-registrations-vault): the pending ids,
+  // one installation's target with its token's envelope, and the outcome record.
+  "shopify_webhook_registrations_pending()": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_webhook_target(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_webhook_registration_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
   // v1 PR 5 (connection-health-work): the install's prepare with a reinstall's leftover tokens
   // destroyed first, and the read-back's resolution and record.
   "shopify_install_prepare_v2(text,text,text,text)": {
@@ -1469,6 +1521,13 @@ export const vaultFunctions = Object.freeze({
   "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // Build order PR 8 (0047 runtime-e2b): the sandbox's envd token as a vault record, stored
+  // once and opened per call by the broker's login (any settlement destroys it, through the
+  // runtime_token_end trigger), and the sweep's list with stopped operations (the broker's
+  // registry no longer sends 0043's runtime_operations_open).
+  "runtime_token_put(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_token_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operations_sweep(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // v1 PR 3 (catalog-apply): the gateway's apply (resolve, fence, close) and read-back
   // (resolve, record), keyed by one operation id, and their revisable INVOKER helpers (the
   // context settings and the send refusal), which only the definers above call.
@@ -1489,6 +1548,13 @@ export const vaultFunctions = Object.freeze({
   },
   "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  // v1 PR 4 (0050 catalog-undo): the undo check's resolution and record, keyed by one
+  // operation id as the read-back is.
+  "catalog_undo_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "catalog_undo_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -1549,6 +1615,9 @@ export const identityTables = Object.freeze({
   // M2 PR-3 (0036): the minimised webhook bodies (ids, scope names and a keyed customer
   // digest only, spine §11; 7 days).
   shopify_webhook_inbox: { content: "none" },
+  // Shop-specific webhook subscriptions: the broker's last outcome per installation and
+  // Shopify's two subscription ids (ids, codes, counts and times only).
+  shopify_webhook_registrations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   store_installations: { content: "store" },
   // v1 PR 5 (connection-health-identity): the 48-hour deletion's record (ADR-0031 item 3):
@@ -1618,6 +1687,10 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_webhook_record(text,text,text,text,text,text)",
     // v1 PR 1 (shopify-live-store-vault).
     "morrow_vault.shopify_live_store_admission(text,text)",
+    // Shop-specific webhook subscriptions (shopify-webhook-registrations-vault).
+    "morrow_vault.shopify_webhook_registration_record(text,text,text,text,text)",
+    "morrow_vault.shopify_webhook_registrations_pending()",
+    "morrow_vault.shopify_webhook_target(text)",
     // v1 PR 5 (connection-health-work).
     "morrow_vault.shopify_check_record(text,text,text,text,text)",
     "morrow_vault.shopify_check_resolve(text)",
@@ -1630,12 +1703,19 @@ export const executorLogins = Object.freeze({
     "morrow_vault.runtime_operation_created(text,text)",
     "morrow_vault.runtime_operation_settle(text,text,text)",
     "morrow_vault.runtime_operations_open(text)",
+    // Build order PR 8 (0047 runtime-e2b).
+    "morrow_vault.runtime_operations_sweep(text)",
+    "morrow_vault.runtime_token_get(text)",
+    "morrow_vault.runtime_token_put(text,text,text,text)",
     // v1 PR 3 (catalog-apply).
     "morrow_vault.catalog_reconcile_record(text,text,text,text,text)",
     "morrow_vault.catalog_reconcile_resolve(text)",
     "morrow_vault.catalog_write_begin(text,text,text,text,text)",
     "morrow_vault.catalog_write_end(text,text,text,text)",
     "morrow_vault.catalog_write_resolve(text)",
+    // v1 PR 4 (catalog-undo).
+    "morrow_vault.catalog_undo_record(text,text,text,text,text)",
+    "morrow_vault.catalog_undo_resolve(text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

@@ -1,7 +1,7 @@
 BEGIN;
 -- v1 PR 5, "Keep the store connection healthy": the work, connector and vault side (ADR-0025
 -- items 9 and 10; ADR-0031 item 3; docs/briefs/v1-connection-health.md). Executes AS
--- morrow_work_owner, after connection-health-identity (0047). It adds:
+-- morrow_work_owner, after connection-health-identity (0052). It adds:
 --   * connection_notices: the "Reconnect" item of a store connection (ADR-0025 item 10), one
 --     open per connection, for the connection steward and the Owner, naming the scopes the
 --     app requests that are missing (or that Shopify refused the token) and the agent
@@ -473,7 +473,7 @@ END $$;
 -- own store). Once per installation, with its record (store_data_deletions): every
 -- store-content handler of its store in the connector's redaction context
 -- (store_content_redact, as shop/redact runs it), the identity handlers (shop/redact's own
--- work_shopify_redact_identity, as 0047 revises it: the domain becomes the pseudonym; the
+-- work_shopify_redact_identity, as 0052 revises it: the domain becomes the pseudonym; the
 -- install link is cleared unless a reinstall is live), the Reconnect item
 -- of the ended connection cleared, and the record completed only when nothing is outstanding,
 -- the token's destruction included: until it is recorded the outcome is pending with the

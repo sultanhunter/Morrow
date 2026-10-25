@@ -75,9 +75,9 @@ const functionText = (text, name) => {
   return text.slice(start, end + 3);
 };
 
-test("the migrations are registered after 0046 with their owners and this brief", () => {
+test("the migrations are registered after 0051 with their owners and this brief", () => {
   assert.equal(identity.entry.sequence + 1, work.entry.sequence);
-  assert.ok(identity.entry.sequence >= 47);
+  assert.ok(identity.entry.sequence >= 52);
   assert.equal(identity.entry.executeAs, "morrow_identity_owner");
   assert.equal(work.entry.executeAs, "morrow_work_owner");
   for (const { entry } of [identity, work])
@@ -343,7 +343,7 @@ test("twin: the system installation stops' codes and reasons are the reconcile's
     v2,
     /scopes_changed|shopify_credential_destroy|work_shopify_installation_end\(/,
   );
-  // 0047's installation end refuses scopes_changed.
+  // 0052's installation end refuses scopes_changed.
   const end = functionText(identity.text, "morrow_identity.work_shopify_installation_end");
   assert.match(end, /p_reason NOT IN \('uninstalled','disconnected'\)/);
 });

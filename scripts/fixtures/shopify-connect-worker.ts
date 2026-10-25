@@ -3,10 +3,11 @@
 //   connector  createConnectorHandler (launch, callback, status, webhooks and the waitUntil
 //              apply; the cron's redrive on the lab path "lab:redrive") with its own login's
 //              transport (createConnectorDatabase, morrow_connector_ingress);
-//   broker     createShopifyBroker (the ConnectorBroker methods' handlers) on the vault
-//              login's transport (runVaultTransactionWithDriver, morrow_vault_broker), with
-//              the broker's own capabilities (the vault keyring from its bindings) and its
-//              outbound fetch to the synthetic Shopify;
+//   broker     createShopifyBroker (the ConnectorBroker methods' handlers) and the
+//              shop-specific webhook subscriptions' sync (createShopifyWebhookSync) on the
+//              vault login's transport (runVaultTransactionWithDriver, morrow_vault_broker),
+//              with the broker's own capabilities (the vault keyring and the connector's
+//              origin from its bindings) and its outbound fetch to the synthetic Shopify;
 //   api        the store-link guard with the P09.T02a issuer in preview, apply and status,
 //              and GET /workspace/:ws/connections, on the linking login, with the policy
 //              package's connection kernel (as apps/api/src/deployed-worker.ts wires it).
@@ -21,6 +22,7 @@ import {
 } from "../../apps/shopify-connector/worker/database";
 import { createShopifyHealthChecker } from "../../apps/broker/src/shopify-health";
 import { createShopifyBroker, type VaultTransaction } from "../../apps/broker/src/shopify-install";
+import { createShopifyWebhookSync } from "../../apps/broker/src/shopify-webhooks";
 import {
   runVaultTransactionWithDriver,
   type VaultDriverFactory,
@@ -36,6 +38,7 @@ interface Env {
   readonly SQL: { fetch(request: Request): Promise<Response> };
   readonly MORROW_ENVIRONMENT: string;
   readonly MORROW_DATABASE_BINDING_JSON: string;
+  readonly CONNECTOR_CONFIGURATION_JSON: string;
   readonly LAB_CONNECTOR_ORIGIN: string;
   readonly LAB_API_ORIGIN: string;
   readonly LAB_LEASE_PASSWORD: string;
@@ -124,7 +127,7 @@ export default {
 function connectorHandler(env: Env) {
   const binding = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
   const vaultDriver: VaultDriverFactory = (config) => bridgedClient(env, config.user);
-  const transaction: VaultTransaction = (vault, budgetMs, body) =>
+  const transaction: VaultTransaction = (vault, budgetMs, body, observe) =>
     runVaultTransactionWithDriver(
       vaultDriver,
       vault,
@@ -132,19 +135,18 @@ function connectorHandler(env: Env) {
       body,
       Date.now,
       NoSocket,
+      observe,
     );
-  const shopify = createShopifyBroker({
+  const brokerDependencies = {
     transaction,
-    fetch: (target, init) => fetch(target, init),
+    fetch: (target: string, init: RequestInit) => fetch(target, init),
     now: () => Date.now(),
-  });
+  };
+  const shopify = createShopifyBroker(brokerDependencies);
+  const subscriptions = createShopifyWebhookSync(brokerDependencies);
   // v1 PR 5: the scopes read-back (the connector's clean-up switch is off in this lab, so it
   // is never asked; lab:connection-health runs it).
-  const health = createShopifyHealthChecker({
-    transaction,
-    fetch: (target, init) => fetch(target, init),
-    now: () => Date.now(),
-  });
+  const health = createShopifyHealthChecker(brokerDependencies);
   const connectorDriver: ConnectorDriverFactory = (config) => bridgedClient(env, config.user);
   return createConnectorHandler({
     configuration: { origin: env.LAB_CONNECTOR_ORIGIN, apiOrigin: env.LAB_API_ORIGIN },
@@ -156,6 +158,7 @@ function connectorHandler(env: Env) {
         shopify.webhookVerify(env, appKey, headersJson, rawBodyBase64),
       shopifyCredentialDestroy: (installationId, reason) =>
         shopify.credentialDestroy(env, installationId, reason),
+      shopifyWebhookSubscriptionsSync: (budgetMs) => subscriptions.sync(env, budgetMs),
       shopifyConnectionCheck: (installationId, budgetMs) =>
         health.check(env, installationId, budgetMs),
     },

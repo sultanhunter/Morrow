@@ -4,6 +4,7 @@ import { billingStatements } from "./billing/sql.js";
 import { catalogStatements } from "./catalog/sql.js";
 import { connectionHealthStatements } from "./connection-health/notices.js";
 import { connectionStatements } from "./connections/sql.js";
+import { inboxStatements } from "./inbox/sql.js";
 import { reviewStatements } from "./review/sql.js";
 import { projectStatements } from "./projects/sql.js";
 import { runStatements } from "./runs/sql.js";
@@ -87,7 +88,9 @@ export const workStatements = Object.freeze({
   ...reviewStatements,
   // PR 18: the goal and plan-start routes (migration 0046).
   ...projectStatements,
-  // v1 PR 5: the viewer's open Reconnect items (the Inbox's seam; migration 0048).
+  // v1 PR 15: the Inbox and the activity log (reads only, on existing grants).
+  ...inboxStatements,
+  // v1 PR 5: the viewer's open Reconnect items (the Inbox's seam; migration 0053).
   ...connectionHealthStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

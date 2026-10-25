@@ -166,12 +166,18 @@ for (const [name, change] of Object.entries({
   revoked_status: { status: "revoked" },
   ended: { ended_at: new Date(now - 100).toISOString() },
   expired: { expires_at: new Date(now).toISOString() },
-  future_update: { updated_at: new Date(now + 1).toISOString() },
+  // WorkOS's clock may lead the Worker's by at most 5 s (fix-signin-clock-and-stage-log).
+  future_update: { updated_at: new Date(now + 5001).toISOString() },
   malformed_date: { expires_at: "2026-02-30T00:00:00.000Z" },
   client_assertion: { client_id: profile.clientId },
   impersonated_target: { impersonator: { email: "synthetic@example.test", reason: "synthetic" } },
 }))
   add(name, [page([session(change)])]);
+add(
+  "update_within_clock_allowance",
+  [page([session({ updated_at: new Date(now + 5000).toISOString() })])],
+  "observed_active",
+);
 add("duplicate_same_page", [page([session(), session()])]);
 add("duplicate_cross_page", [page([session()], targetId), page([session()])], "held", {
   expectedReads: 2,
