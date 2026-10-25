@@ -790,6 +790,12 @@ export const bridgeFunctions = Object.freeze([
   // v1 PR 1 (shopify-live-store-identity): the live-store admission, called only by the
   // broker's vault definer of shopify-live-store-vault (ADR-0035 item 2).
   "work_shopify_live_store(text,text)",
+  // Shop-specific webhook subscriptions (shopify-webhook-registrations-identity): the
+  // registration target, the outcome record and the ids-only pending list, called only by the
+  // broker's vault definers of shopify-webhook-registrations-vault.
+  "work_shopify_webhook_target(text)",
+  "work_shopify_webhook_registration_record(text,text,text,text,text)",
+  "work_shopify_webhook_registrations_pending()",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
@@ -1351,6 +1357,14 @@ export const vaultFunctions = Object.freeze({
   },
   // v1 PR 1 (shopify-live-store-vault): the live-store admission of an install.
   "shopify_live_store_admission(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // Shop-specific webhook subscriptions (shopify-webhook-registrations-vault): the pending ids,
+  // one installation's target with its token's envelope, and the outcome record.
+  "shopify_webhook_registrations_pending()": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_webhook_target(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_webhook_registration_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
   // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
   // and counts only; the broker's login).
   "model_call_begin(text,text,text,text,text,text,text,text)": {
@@ -1458,6 +1472,9 @@ export const identityTables = Object.freeze({
   // M2 PR-3 (0036): the minimised webhook bodies (ids, scope names and a keyed customer
   // digest only, spine §11; 7 days).
   shopify_webhook_inbox: { content: "none" },
+  // Shop-specific webhook subscriptions: the broker's last outcome per installation and
+  // Shopify's two subscription ids (ids, codes, counts and times only).
+  shopify_webhook_registrations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   store_installations: { content: "store" },
   workspace_link_results: { content: "none" },
@@ -1516,6 +1533,10 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_webhook_record(text,text,text,text,text,text)",
     // v1 PR 1 (shopify-live-store-vault).
     "morrow_vault.shopify_live_store_admission(text,text)",
+    // Shop-specific webhook subscriptions (shopify-webhook-registrations-vault).
+    "morrow_vault.shopify_webhook_registration_record(text,text,text,text,text)",
+    "morrow_vault.shopify_webhook_registrations_pending()",
+    "morrow_vault.shopify_webhook_target(text)",
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",

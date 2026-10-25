@@ -669,6 +669,9 @@ export function edgeVarNames(
         "LOGIN_CONFIGURATION_JSON",
         "MORROW_DATABASE_BINDING_JSON",
         "TURNSTILE_CONFIGURATION_JSON",
+        // The shop-specific webhook subscriptions: the connector's configuration, byte-equal
+        // to the connector's, so the broker builds each callback URL from its own origin.
+        "CONNECTOR_CONFIGURATION_JSON",
         ...stripeVars,
         ...modelVars,
         ...runtimeVars,
@@ -1092,6 +1095,14 @@ async function stagingValueChecks({ vars, apiName, connectorName, staging, worko
   for (const name of ["LOGIN_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"])
     if (text("broker", name) === null || text("broker", name) !== text("api", name))
       problem("EDGE_STAGING_SHARED_VARS", "broker:staging:" + name);
+  // The shop-specific webhook subscriptions: the broker's CONNECTOR_CONFIGURATION_JSON is the
+  // connector's, byte for byte (checked above against the connector's own origin).
+  if (
+    text("broker", "CONNECTOR_CONFIGURATION_JSON") === null ||
+    text("broker", "CONNECTOR_CONFIGURATION_JSON") !==
+      text("connector", "CONNECTOR_CONFIGURATION_JSON")
+  )
+    problem("EDGE_STAGING_SHARED_VARS", "broker:staging:CONNECTOR_CONFIGURATION_JSON");
   // M3 PR-2: the orchestrator's binding (only while the model-provider switch is on) is the
   // api's, byte for byte.
   if (
@@ -1155,9 +1166,12 @@ async function stagingValueChecks({ vars, apiName, connectorName, staging, worko
         ],
   );
   const host = origin === null ? null : new URL(origin).hostname;
-  // v1 PR 1: the connector's origin and hostname, inside its configuration var only.
+  // v1 PR 1: the connector's origin and hostname, inside its configuration var only (the
+  // connector's, and the broker's byte-equal copy for the webhook subscriptions).
   const connectorVar = (worker, name) =>
-    connectorOrigin !== null && worker === "connector" && name === "CONNECTOR_CONFIGURATION_JSON";
+    connectorOrigin !== null &&
+    (worker === "connector" || worker === "broker") &&
+    name === "CONNECTOR_CONFIGURATION_JSON";
   const connectorHost = connectorOrigin === null ? null : new URL(connectorOrigin).hostname;
   for (const [worker, record] of Object.entries(vars))
     for (const [name, value] of Object.entries(record ?? {})) {
