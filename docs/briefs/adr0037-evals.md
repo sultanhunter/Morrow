@@ -34,7 +34,7 @@ New: `packages/policy/src/evals/{format,canonical,world,replay,score,report,roun
 - [x] Mutation checks by hand: letting a customer-tagged result through, or letting Morrow open any item, fails the tests.
 - [x] `tests/edge-config.test.mjs`: the live-evals record committed off; on refused before both prerequisites; closed keys; through `verifyEdgeConfig` (on, malformed, missing).
 - [x] `npm run evals -- replay`: `teammates@1` 16 of 16; `handoff_only@1` 2 pass, 3 fail, 11 without a recording.
-- [ ] `typecheck`, `typecheck:edge`, `edge:check`, `verify`, `format:check`, `graph -- check`, `npm test` (results in the PR body).
+- [x] Local, 2026-10-25 (load 300 to 400): `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` (graph check 0 errors), `format:check`, `graph -- check` all pass; `npm test` 4,637 of 4,637. No lab: nothing here touches PostgreSQL or a Worker.
 - [ ] Hosted CI `foundation`; Tier 2 AI review (separate context, same model family).
 
 ## Open questions
