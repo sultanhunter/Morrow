@@ -4,6 +4,7 @@
 // documented ones, bodies are closed literals with no organization, workspace or
 // principal key, and byte limits are checked before anything is sent.
 import type {
+  BatchDecisionBody,
   Command,
   Composed,
   Outcome,
@@ -66,13 +67,17 @@ import {
 } from "./runs-decoders";
 import {
   decodeApplied,
+  decodeBatchDecided,
+  decodeBatchDocument,
   decodeDecided,
   decodeOperationsOfTask,
   decodePendingApprovals,
   decodeRechecked,
   decodeSetAside,
   decodeReview,
+  decodeUndoRequested,
 } from "./review-decoders";
+import { decodeCatalogCollections, decodeCatalogProducts } from "./catalog-decoders";
 import { decodeActivity, decodeInbox, decodeOperationDetail } from "./inbox-decoders";
 
 export type HttpRequest =
@@ -554,7 +559,101 @@ export const requests = {
     );
     return request && request.key !== null ? request : null;
   },
+  // v1 PR 4: Undo (an empty body: the server builds the change), the batch document and its
+  // one confirmation (the document's digest, time and each member's exact refs, sent back).
+  undo(ws: string, operationId: string, c: Command<Record<string, never>>) {
+    if (!ids(ws) || !operationIdPattern.test(operationId) || Object.keys(c.body).length !== 0)
+      return null;
+    const request = post(
+      workPath(ws, "operations", operationId, "undo"),
+      {},
+      c.key,
+      byteLimits.work,
+    );
+    return request && request.key !== null ? request : null;
+  },
+  batch: (ws: string, proposalId: string) =>
+    ids(ws, proposalId) ? get(workPath(ws, "proposals", proposalId, "batch")) : null,
+  decideBatch(ws: string, proposalId: string, c: Command<BatchDecisionBody>) {
+    const b = c.body;
+    if (
+      !ids(ws, proposalId) ||
+      !hex64(b.documentDigest) ||
+      typeof b.issuedAt !== "string" ||
+      !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/.test(b.issuedAt) ||
+      !Array.isArray(b.items) ||
+      b.items.length < 2 ||
+      b.items.length > 10 ||
+      !b.items.every(
+        (i) => ids(i.proposalId, i.approvalId) && hex64(i.digest) && revision(i.revision),
+      ) ||
+      new Set(b.items.map((i) => i.proposalId)).size !== b.items.length ||
+      !(
+        b.soloOwnerConfirmation === null ||
+        (typeof b.soloOwnerConfirmation === "string" &&
+          b.soloOwnerConfirmation.length >= 1 &&
+          b.soloOwnerConfirmation.length <= 256)
+      )
+    )
+      return null;
+    const request = post(
+      workPath(ws, "proposals", proposalId, "batch-decision"),
+      {
+        documentDigest: b.documentDigest,
+        issuedAt: b.issuedAt,
+        soloOwnerConfirmation: b.soloOwnerConfirmation,
+        items: b.items.map((i) => ({
+          proposalId: i.proposalId,
+          digest: i.digest,
+          approvalId: i.approvalId,
+          revision: i.revision,
+        })),
+      },
+      c.key,
+      byteLimits.work,
+    );
+    return request && request.key !== null ? request : null;
+  },
+  // v1 PR 4: the product picker's catalogue reads (M2 PR-3's routes, beside /work): closed
+  // query parameters only (a cursor, a collection id or a search of letters and digits).
+  catalogProducts(
+    ws: string,
+    storeId: string,
+    q: {
+      readonly after: string | null;
+      readonly collectionId: string | null;
+      readonly query: string | null;
+    },
+  ) {
+    if (
+      !ids(ws, storeId) ||
+      !catalogCursor(q.after) ||
+      !(q.collectionId === null || /^collection:[1-9][0-9]{0,19}$/.test(q.collectionId)) ||
+      !(q.query === null || catalogSearch(q.query)) ||
+      (q.collectionId !== null && q.query !== null)
+    )
+      return null;
+    return get(
+      `/workspace/${ws}/stores/${storeId}/catalog/products` +
+        query([
+          ["after", q.after],
+          ["collectionId", q.collectionId],
+          ["query", q.query],
+        ]),
+    );
+  },
+  catalogCollections: (ws: string, storeId: string, after: string | null) =>
+    ids(ws, storeId) && catalogCursor(after)
+      ? get(`/workspace/${ws}/stores/${storeId}/catalog/collections` + query([["after", after]]))
+      : null,
 } as const;
+// The catalogue routes' closed parameters (packages/identity/src/broker-protocol.ts
+// parseShopifyReadVariables): Shopify's opaque cursor, and a search of at most 64 letters
+// and digits in at most five words.
+const catalogCursor = (value: string | null) =>
+  value === null || /^[A-Za-z0-9+/=_-]{1,1536}$/.test(value);
+const catalogSearch = (value: string) =>
+  [...value].length <= 64 && /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+){0,4}$/u.test(value);
 
 export interface HttpPortOptions {
   readonly client: Client;
@@ -901,6 +1000,41 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         "review.setAside",
         (ws: string, operationId: string, c: Command<Record<string, never>>) =>
           command(requests.setAside(ws, operationId, c), (b) => decodeSetAside(b, operationId)),
+      ),
+      undo: gated(
+        "review.undo",
+        (ws: string, operationId: string, c: Command<Record<string, never>>) =>
+          command(requests.undo(ws, operationId, c), (b) => decodeUndoRequested(b, operationId)),
+      ),
+      batch: gated("review.batch", (ws: string, proposalId: string) =>
+        read(requests.batch(ws, proposalId), (b) => decodeBatchDocument(b, proposalId)),
+      ),
+      decideBatch: gated(
+        "review.decideBatch",
+        (ws: string, proposalId: string, c: Command<BatchDecisionBody>) =>
+          command(requests.decideBatch(ws, proposalId, c), decodeBatchDecided),
+      ),
+    },
+    catalog: {
+      products: gated(
+        "catalog.products",
+        (
+          ws: string,
+          storeId: string,
+          q: {
+            readonly after: string | null;
+            readonly collectionId: string | null;
+            readonly query: string | null;
+          },
+        ) =>
+          read(requests.catalogProducts(ws, storeId, q), (b) => decodeCatalogProducts(b, storeId)),
+      ),
+      collections: gated(
+        "catalog.collections",
+        (ws: string, storeId: string, after: string | null) =>
+          read(requests.catalogCollections(ws, storeId, after), (b) =>
+            decodeCatalogCollections(b, storeId),
+          ),
       ),
     },
     models: {

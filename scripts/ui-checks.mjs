@@ -801,7 +801,45 @@ export const fixtureCases = [
   }),
   fixtureCase("task", "applied_history", `/w/${ws}/work/task-titles`, {
     widths: [1440, 390],
-    setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),
+    // The history loads with Review's chunk (v1 PR 4): measure it once it has loaded.
+    setup: async (page) => {
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await settle(page);
+    },
+  }),
+  // v1 PR 4: "Approve several at once" with the solo owner's one phrase, and the history's
+  // Undo after an apply (the undo is a new change, waiting for approval).
+  fixtureCase("review", "batch", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_batch",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve several at once" }).click();
+      await page.getByRole("button", { name: "Approve these 2 changes" }).waitFor();
+    },
+  }),
+  // v1 PR 4: the product picker on Ask (a scenario whose Listings agent is on), one product
+  // ticked into the list.
+  fixtureCase("ask", "picker", `/w/${ws}/ask`, {
+    scenario: "stop_all",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("combobox", { name: "Store", exact: true }).selectOption({ index: 1 });
+      await page.getByRole("button", { name: "Show products" }).click();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).check();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).isChecked();
+    },
+  }),
+  fixtureCase("task", "undo_history", `/w/${ws}/review/proposal-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("heading", { name: "Changes applied" }).waitFor();
+      await page.getByRole("link", { name: "Open the task" }).click();
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await page.getByRole("button", { name: "Undo" }).first().click();
+      await page.getByText("Morrow made a change back to the earlier values.").waitFor();
+    },
   }),
   fixtureCase("overlay", "drawer", `/w/${ws}`, {
     widths: [390, 320],
@@ -1106,7 +1144,8 @@ fixtureCases.push(
     },
   }),
   // A real 409 (a teammate's change landed first): the dialog shows the reread choice, and
-  // the next save, of the reread revision, goes through.
+  // the next save, of the reread revision, goes through. Business Analyst starts on Opus 5.5
+  // at Medium (ADR-0036), so the first pick is Sonnet 5.5: an unchanged choice can't be saved.
   fixtureCase("team", "thinking_conflict", `/w/${ws}/agents`, {
     widths: [1440],
     scenario: "team_thinking_conflict",
@@ -1114,7 +1153,7 @@ fixtureCases.push(
       const name = "Change how Business Analyst thinks";
       await page.getByRole("button", { name }).click();
       const dialog = page.getByRole("dialog", { name });
-      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("radio", { name: /Sonnet 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
       await dialog.getByText("This changed since you opened it.").waitFor();
       // The reread lands a few renders after the 409's message (as on notifications_conflict).
@@ -1134,7 +1173,7 @@ fixtureCases.push(
     },
   }),
   // An unknown outcome doesn't trap the dialog: Escape closes it, and the shell says the
-  // change may have been saved.
+  // change may have been saved. (Sonnet 5.5: Opus 5.5 at Medium is already the choice.)
   fixtureCase("team", "thinking_uncertain_closed", `/w/${ws}/agents`, {
     widths: [1440],
     scenario: "team_thinking_uncertain",
@@ -1142,7 +1181,7 @@ fixtureCases.push(
       const name = "Change how Business Analyst thinks";
       await page.getByRole("button", { name }).click();
       const dialog = page.getByRole("dialog", { name });
-      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("radio", { name: /Sonnet 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
       await dialog.getByRole("button", { name: "Check again" }).waitFor();
       await page.keyboard.press("Escape");
@@ -1162,11 +1201,13 @@ fixtureCases.push(
     },
   }),
   // The Listings agent's choice is the workspace default: above the member ceiling it
-  // can't be saved here.
+  // can't be saved here. The default is Opus 5.5 at Medium (4 credits a product) under a
+  // ceiling of 4 (ADR-0036), so High (6) is the choice above it.
   fixtureCase("team", "agent_over_limit", `/w/${ws}/agents/agent-listings`, {
     widths: two,
     setup: async (page) => {
       await page.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await page.getByRole("radio", { name: /^High/ }).check();
       await page.getByText("doesn’t fit the spending limit").waitFor();
       expect(await page.getByRole("button", { name: "Save" }).isDisabled(), "save_held");
     },

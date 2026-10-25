@@ -46,8 +46,12 @@ test("manifest: two contiguous rows, the identity owner then the work owner, dig
     ],
   );
   for (const row of rows) assert.equal(row.sha256, sha(readFileSync("migrations/" + row.file)));
-  // Forward only: they follow every applied migration.
-  assert.equal(rows[0].sequence, manifest.migrations.at(-2).sequence);
+  // Forward only: 0048 and 0049, applied live and immutable, follow every migration before
+  // them; later migrations (v1 PR 4's catalog-undo, ...) append after them, never between.
+  assert.equal(rows[0].sequence, 48);
+  const at = manifest.migrations.indexOf(rows[0]);
+  assert.ok(manifest.migrations.slice(0, at).every((m) => m.sequence < rows[0].sequence));
+  assert.ok(manifest.migrations.slice(at + 2).every((m) => m.sequence > rows[1].sequence));
 });
 
 test("the runner contract: one transaction, no role switch, fixed codes, every function revoked from PUBLIC", () => {

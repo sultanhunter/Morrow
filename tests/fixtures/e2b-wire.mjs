@@ -28,6 +28,28 @@ export const e2bWireOrigins = Object.freeze({
   sandbox: "https://sandbox.e2b.app",
 });
 const encoder = new TextEncoder();
+// A real connection holds its request while it is in flight; this fake must too. Node's
+// Request reaches its own abort controller from the caller's signal only through a WeakRef,
+// so a wait on request.signal that nothing else holds is lost at the next garbage
+// collection: the abort never arrives and the caller waits forever (PR #67's checks job
+// never finished this file on the Linux runner). A request waiting for its abort is held
+// here, at module scope, until the abort arrives.
+const waiting = new Set();
+function aborted(request) {
+  const { signal } = request;
+  return new Promise((_, reject) => {
+    if (signal.aborted) return reject(signal.reason ?? Error("aborted"));
+    waiting.add(request);
+    signal.addEventListener(
+      "abort",
+      () => {
+        waiting.delete(request);
+        reject(signal.reason ?? Error("aborted"));
+      },
+      { once: true },
+    );
+  });
+}
 const json = (status, value, headers = {}) =>
   new Response(JSON.stringify(value), {
     status,
@@ -99,15 +121,8 @@ export function createE2bWire(options) {
     network: { allowPublicTraffic: false },
     lifecycle: { autoResume: false, onTimeout: "kill" },
   });
-  const hang = (signal) =>
-    new Promise((_, reject) => {
-      if (signal.aborted) reject(signal.reason ?? Error("aborted"));
-      signal.addEventListener("abort", () => reject(signal.reason ?? Error("aborted")), {
-        once: true,
-      });
-    });
   // A fault either answers instead of the route, or (lost) after its effect.
-  async function faulted(route, signal, effect) {
+  async function faulted(route, request, effect) {
     const f = take(route);
     if (!f) return { response: await effect() };
     if (f.kind === "lost") {
@@ -115,7 +130,7 @@ export function createE2bWire(options) {
       throw new TypeError("network connection lost");
     }
     if (f.kind === "drop") throw new TypeError("network connection lost");
-    if (f.kind === "hang") return { response: await hang(signal) };
+    if (f.kind === "hang") return { response: await aborted(request) };
     if (f.kind === "redirect")
       return {
         response: new Response(null, {
@@ -184,7 +199,7 @@ export function createE2bWire(options) {
         return error(400, "request body has an error: doesn't match schema");
       }
       return (
-        await faulted("create", request.signal, () => {
+        await faulted("create", request, () => {
           guest.creates.push({
             template: parsed.templateID,
             timeoutSeconds: parsed.timeout,
@@ -227,7 +242,7 @@ export function createE2bWire(options) {
     }
     if (request.method === "GET" && path === "/v2/sandboxes") {
       return (
-        await faulted("list", request.signal, (f) => {
+        await faulted("list", request, (f) => {
           const filter = new URLSearchParams(url.searchParams.get("metadata") ?? "");
           const states = (url.searchParams.get("state") ?? "running").split(",");
           const items = [...sandboxes.values()]
@@ -242,14 +257,14 @@ export function createE2bWire(options) {
     const match = /^\/sandboxes\/([^/]+)$/.exec(path);
     if (match && request.method === "GET")
       return (
-        await faulted("detail", request.signal, () => {
+        await faulted("detail", request, () => {
           const s = live(decodeURIComponent(match[1]));
           return s ? json(200, detailOf(s)) : notFound(decodeURIComponent(match[1]));
         })
       ).response;
     if (match && request.method === "DELETE")
       return (
-        await faulted("kill", request.signal, () => {
+        await faulted("kill", request, () => {
           const s = live(decodeURIComponent(match[1]));
           if (!s) return notFound(decodeURIComponent(match[1]));
           s.killed = true;
@@ -281,7 +296,7 @@ export function createE2bWire(options) {
       return error(404, "not found");
     }
     return (
-      await faulted(route, request.signal, (f) => {
+      await faulted(route, request, (f) => {
         const s = live(id);
         if (!s) return json(502, { sandboxId: id, message: "The sandbox was not found", code: 502 });
         if (request.headers.get("x-access-token") !== s.token)
@@ -372,13 +387,10 @@ export function createE2bWire(options) {
           return new Response(concat(frames), { status: 200, headers });
         }
         if (verb === "stall") {
-          const signal = request.signal;
           const stream = new ReadableStream({
             start(controller) {
               controller.enqueue(frames[0]);
-              signal.addEventListener("abort", () => controller.error(signal.reason), {
-                once: true,
-              });
+              aborted(request).catch((reason) => controller.error(reason));
             },
           });
           return new Response(stream, { status: 200, headers });

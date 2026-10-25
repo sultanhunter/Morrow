@@ -281,6 +281,10 @@ The owner's answer to the 2026-10-26 decision sheet (OD-2026-10-23-7, quoted in 
 
 Members choosing a model per run stays dropped.
 
+### 2026-10-25: decision 7's defaults (ADR-0036)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes decision 7's defaults as restated above: the Coordinator runs Opus 5.5 at high effort and every other agent, specialists and the five installed agents included, Opus 5.5 at medium.
+
 ### 2026-10-25: one agent kind in place of specialists (ADR-0037)
 
 The owner's decisions of 2026-10-25 (OD-2026-10-25-3, and OD-2026-10-25-4 for the values, recorded in ADR-0037) change these lines; the text above is kept as approved.

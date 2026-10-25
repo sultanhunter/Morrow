@@ -87,6 +87,10 @@ What it approves: this record as written and each owner question above with its 
 
 ## Amendments
 
+### 2026-10-25: the installed agents' default (ADR-0036)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes the "Does not change" note above, kept as approved: the installed agents no longer keep Sonnet 5.5 at low; by default they run Opus 5.5 at medium (OD-2026-10-23-8 answer 8 is amended).
+
 ### 2026-10-25: teammates in place of specialists (ADR-0037)
 
 The owner's decisions of 2026-10-25 (OD-2026-10-25-3, and OD-2026-10-25-4 for the values, recorded in ADR-0037) change these items; the text above is kept as approved.

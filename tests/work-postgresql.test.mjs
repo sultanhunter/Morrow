@@ -364,12 +364,13 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   // PR 3's review, approve and apply lab (about two minutes of real read-back spacing) and
   // last PR 18's plan-start lab (with it, pg-work passed its cap: hosted run 40060794401
   // cancelled the work leg at 14 minutes, every lab passed) ride pg-linking after
-  // run-credits, in that order.
+  // run-credits, in that order; v1 PR 4's Undo, history and batch lab follows them.
   assert.equal(
     pkg.scripts["lab:group:pg-linking"],
-    "npm run lab:workspace-store-linking && npm run lab:browser-session-admission && npm run lab:workspace-linking-read && npm run lab:account-onboarding && npm run lab:shopify-install && npm run lab:run-credits && npm run lab:runtime-operations && npm run lab:catalog-apply && npm run lab:plan-start",
+    "npm run lab:workspace-store-linking && npm run lab:browser-session-admission && npm run lab:workspace-linking-read && npm run lab:account-onboarding && npm run lab:shopify-install && npm run lab:run-credits && npm run lab:runtime-operations && npm run lab:catalog-apply && npm run lab:plan-start && npm run lab:catalog-undo",
   );
   assert.equal(pkg.scripts["lab:catalog-apply"], "node --import tsx scripts/catalog-apply-lab.mjs");
+  assert.equal(pkg.scripts["lab:catalog-undo"], "node --import tsx scripts/catalog-undo-lab.mjs");
   assert.equal(
     pkg.scripts["lab:shopify-privacy"],
     "node --import tsx scripts/shopify-privacy-lab.mjs",

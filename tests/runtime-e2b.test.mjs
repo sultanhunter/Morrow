@@ -13,6 +13,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
+import v8 from "node:v8";
+import vm from "node:vm";
 import {
   createE2bRuntime,
   e2bCreateBody,
@@ -804,6 +806,34 @@ test("envd exec: deadlines are timed_out; a cut, refused or malformed stream is 
     assert.deepEqual(await w.adapter.exec(s, command, 200), { outcome: "unknown" });
   }
 });
+
+// PR #67: a garbage collection while the wire held a reply back dropped the request's abort,
+// so the call never returned and the checks job hung. The wire holds a waiting request the
+// way a connection does; the timeout makes a regression fail here instead of hanging.
+test(
+  "a reply held back until the abort survives a garbage collection",
+  { timeout: 10_000 },
+  async () => {
+    v8.setFlagsFromString("--expose-gc");
+    const gc = vm.runInNewContext("gc");
+    const collectSoon = () => setTimeout(() => gc(), 20);
+    {
+      const w = wireWorld();
+      w.wire.fault({ route: "create", kind: "hang" });
+      const pending = w.adapter.create(request(), w.credential, 200);
+      collectSoon();
+      assert.deepEqual(await pending, { outcome: "unknown_effect" });
+    }
+    {
+      const w = wireWorld();
+      const s = await sandboxOf(w);
+      await w.adapter.writeFile(s, computerProfile.jobPath, wireScript({ stall: true }), budget);
+      const pending = w.adapter.exec(s, command, 200);
+      collectSoon();
+      assert.deepEqual(await pending, { outcome: "unknown" });
+    }
+  },
+);
 
 // ---------------------------------------------------------------------------
 test("custody: the key reaches only the platform API, the token only envd, nothing reaches a guest", async () => {

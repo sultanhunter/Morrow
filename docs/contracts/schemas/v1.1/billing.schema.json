@@ -2247,7 +2247,7 @@
           "pattern": "^(0|[1-9][0-9]{0,8})(\\.[0-9]{1,8})?$"
         },
         "caps": {
-          "description": "Rate card v1 configuration (ADR-0026 item 4): lowerable by merchants, raised only by the Owner. Basis points of the monthly grant.",
+          "description": "Rate card v1 configuration (ADR-0026 item 4): lowerable by merchants, raised only by the Owner. Basis points of the monthly grant, except the look-for-work cap: a USD amount of worst-case vendor cost per agent per day (ADR-0036 item 7, which replaced its 1% of the grant per pass).",
           "type": "object",
           "properties": {
             "installationDailyCredits": {
@@ -2259,10 +2259,8 @@
             "workspaceDailyCredits": {
               "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
             },
-            "lookForWorkPassBasisPoints": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+            "lookForWorkDailyUsd": {
+              "$ref": "urn:morrow:contracts:billing:v1.1#/$defs/UsdBillingMoney"
             },
             "specialistRunBasisPoints": {
               "type": "integer",
@@ -2279,7 +2277,7 @@
             "installationDailyCredits",
             "installationMonthlyCredits",
             "workspaceDailyCredits",
-            "lookForWorkPassBasisPoints",
+            "lookForWorkDailyUsd",
             "specialistRunBasisPoints",
             "specialistWorkspaceDailyBasisPoints"
           ],
