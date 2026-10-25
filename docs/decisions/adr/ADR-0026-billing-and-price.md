@@ -77,6 +77,6 @@ What it approves: this record as written and each owner question above with its 
 
 ## Amendments
 
-### 2026-10-25: the specialist caps apply to workspace-created agents (ADR-0037)
+### 2026-10-25: the specialist caps retire with the specialist kind (ADR-0037)
 
-The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037 item 6) moves item 4's specialist caps, values unchanged, to workspace-created agents; the text above is kept as approved. Their runs hold at most 5% of the monthly grant each, and together at most 20% per workspace per day. Per-installation daily and monthly caps apply to agents of both origins, and the US$7 and US$25 backstops bind every run, a teammate's run that Morrow calls included. "A specialist Start rolls back" no longer applies: a teammate call that does not fit the daily backstop, or would wait for credits (item 3 (e)), is refused at once and Morrow receives the refusal code (ADR-0037 item 3(a)).
+The owner's decisions of 2026-10-25 (OD-2026-10-25-3 and OD-2026-10-25-4, recorded in ADR-0037 item 6) end the specialist kind, and item 4's specialist caps (5% of the monthly grant per run, 20% per workspace per day) retire with it; the text above is kept as approved. They do not carry over to workspace-created agents, whose runs, like every run, reserve and draw credits from the workspace's balance. "A specialist Start rolls back" no longer applies: a teammate call that the balance cannot cover at once, or that would wait for credits (item 3 (e)), is refused at once and Morrow receives the refusal code (ADR-0037 item 3(a)). OD-2026-10-25-4 also makes credits the only spend limit for every run; ADR-0039 records what that removes from item 4.

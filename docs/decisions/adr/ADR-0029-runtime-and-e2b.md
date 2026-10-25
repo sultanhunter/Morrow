@@ -67,4 +67,4 @@ What it approves: this record as written and each owner question above with its 
 
 ### 2026-10-25: uploads and workspace-created agents (ADR-0037)
 
-The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) ends the specialist kind, so item 6's "never a specialist at launch" lapses; the text above is kept as approved. A workspace-created agent opens an upload only as any installed agent does: in a sandbox, by its run the uploader's tags allow, and only when its approved card holds the computer tools.
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) ends the specialist kind, so item 6's "never a specialist at launch" lapses; the text above is kept as approved. A workspace-created agent opens an upload only as any installed agent does: in a sandbox, by its run the uploader's tags allow, and only when its approved card holds the computer tools. The owner confirmed this as recommended (OD-2026-10-25-4).
