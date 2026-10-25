@@ -1003,8 +1003,9 @@ SET session_replication_role = origin;`);
       administrator,
       rows: billingTermsSeedRows([published, raisedRevision]),
     });
-    const sameRaisedPeriod = await renew(V, ownerGrant);
     const walletBeforeRaise = walletOf(V);
+    const sameRaisedPeriod = await renew(V, ownerGrant);
+    const walletInSamePeriod = walletOf(V);
     travel(V, 720);
     const raisedRenewal = await renew(V, ownerGrant);
     const r6 = renewals().at(-1);
@@ -1015,7 +1016,7 @@ SET session_replication_role = origin;`);
         sameRaisedPeriod.period === "5" &&
         sameRaisedPeriod.creditUnits === "300" &&
         sameRaisedPeriod.termsRevision === "1" &&
-        same(walletOf(V), walletBeforeRaise) &&
+        same(walletInSamePeriod, walletBeforeRaise) &&
         raisedRenewal.outcome === "renewed" &&
         raisedRenewal.period === "6" &&
         raisedRenewal.creditUnits === "1000" &&
