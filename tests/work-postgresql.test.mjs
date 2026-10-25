@@ -371,6 +371,12 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   );
   assert.equal(pkg.scripts["lab:catalog-apply"], "node --import tsx scripts/catalog-apply-lab.mjs");
   assert.equal(pkg.scripts["lab:catalog-undo"], "node --import tsx scripts/catalog-undo-lab.mjs");
+  // PR 20's shop-knowledge lab rides in pg-http (the linking and work legs are near their
+  // caps; http had the most room), after the staging test entitlement lab (the group below).
+  assert.equal(
+    pkg.scripts["lab:shop-knowledge"],
+    "node --import tsx --test --test-concurrency=1 tests/shop-knowledge/postgresql.test.mjs",
+  );
   assert.equal(
     pkg.scripts["lab:shopify-privacy"],
     "node --import tsx scripts/shopify-privacy-lab.mjs",
@@ -385,12 +391,13 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
     "node --import tsx scripts/listings-authority-lab.mjs",
   );
   assert.equal(pkg.scripts["lab:run-credits"], "node --import tsx scripts/run-credits-lab.mjs");
-  // Build order PR 11's agent loop lab ends pg-http (after the staging test entitlement lab):
-  // the work and linking legs are near their caps, and http has room.
+  // Build order PR 11's agent loop lab ends pg-http (after the staging test entitlement lab
+  // and PR 20's shop-knowledge lab): the work and linking legs are near their caps, and http
+  // has room.
   assert.equal(pkg.scripts["lab:agent-loop"], "node --import tsx scripts/agent-loop-lab.mjs");
   assert.equal(
     pkg.scripts["lab:group:pg-http"],
-    "npm run lab:standalone-workspace-http && npm run lab:standalone-store-linking-http && npm run lab:standalone-login-https && npm run lab:standalone-logout-https && npm run lab:fixed-workos-login-https && npm run lab:standalone-rotate-https && npm run lab:staging-runner && npm run lab:billing && npm run lab:test-entitlement && npm run lab:agent-loop",
+    "npm run lab:standalone-workspace-http && npm run lab:standalone-store-linking-http && npm run lab:standalone-login-https && npm run lab:standalone-logout-https && npm run lab:fixed-workos-login-https && npm run lab:standalone-rotate-https && npm run lab:staging-runner && npm run lab:billing && npm run lab:test-entitlement && npm run lab:shop-knowledge && npm run lab:agent-loop",
   );
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(

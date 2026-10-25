@@ -6,6 +6,7 @@ import { loopStatements } from "./loop/sql.js";
 import { connectionStatements } from "./connections/sql.js";
 import { inboxStatements } from "./inbox/sql.js";
 import { reviewStatements } from "./review/sql.js";
+import { knowledgeStatements } from "./knowledge/sql.js";
 import { projectStatements } from "./projects/sql.js";
 import { runStatements } from "./runs/sql.js";
 import { spineStatements } from "./spine-sql.js";
@@ -88,9 +89,11 @@ export const workStatements = Object.freeze({
   ...reviewStatements,
   // PR 18: the goal and plan-start routes (migration 0046).
   ...projectStatements,
-  // Build order PR 11: agent-run admission and the requester's answer (migration 0052).
+  // Build order PR 11: agent-run admission and the requester's answer (migration 0053).
   ...loopStatements,
   // v1 PR 15: the Inbox and the activity log (reads only, on existing grants).
   ...inboxStatements,
+  // PR 20: shop knowledge and notebooks (migration 0052).
+  ...knowledgeStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

@@ -4,6 +4,7 @@ type: agent
 kind: installable
 title: Inventory and Purchasing
 status: planned
+origin: first-party
 scopes_required: [read_inventory, read_locations]
 scopes_optional: [read_orders]
 customer_data: level1

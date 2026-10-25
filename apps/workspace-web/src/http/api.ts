@@ -3,6 +3,12 @@
 // match the raw pathname, so `%3A` would 404), the only query parameters are the
 // documented ones, bodies are closed literals with no organization, workspace or
 // principal key, and byte limits are checked before anything is sent.
+import {
+  knowledgePageKinds,
+  withKnowledgeTargets,
+  type KnowledgeContent,
+  type KnowledgePageKind,
+} from "@morrow/workspace-ui";
 import type {
   BatchDecisionBody,
   Command,
@@ -27,6 +33,15 @@ import {
   decodeStoreLinkResult,
 } from "./connection-decoders";
 import { decodeDisconnectResult, decodeDisconnectStatus } from "./disconnect-decoders";
+import {
+  decodeKnowledgeDeleted,
+  decodeKnowledgePage,
+  decodeKnowledgePages,
+  decodeKnowledgeProposals,
+  decodeKnowledgeWritten,
+  decodeNotebook,
+  decodeSuggestionDecided,
+} from "./knowledge-decoders";
 import { handoffTokenPattern } from "../handoff";
 import {
   decodeAccountOverview,
@@ -175,6 +190,18 @@ const refOf = (value: RecordRefView, kind: "proposal" | "approval") =>
       }
     : null;
 const operationIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+// PR 20: a knowledge page's typed text (the server's KnowledgeTitle and KnowledgeText, counted
+// in characters as the server and the form count them, never a NUL) and its one optional note,
+// sent as the version's only source.
+const typed = (value: unknown, max: number) =>
+  typeof value === "string" &&
+  /\S/.test(value) &&
+  !value.includes("\0") &&
+  value.length <= 2 * max &&
+  [...value].length <= max;
+const knowledgeContent = (b: KnowledgeContent) =>
+  typed(b.title, 120) && typed(b.text, 8000) && (b.note === "" || typed(b.note, 200));
+const noteSources = (note: string) => (note === "" ? [] : [{ kind: "note", value: note }]);
 
 /** Every request this adapter can send; `null` means refused before sending. */
 export const requests = {
@@ -343,6 +370,75 @@ export const requests = {
     return post(
       `/workspace/${ws}/connections/${connectionId}/disconnect`,
       { control: { reason: c.body.reason, sourceProposalRef: null } },
+      c.key,
+      byteLimits.work,
+    );
+  },
+  // PR 20: the shop knowledge routes (under /work; default off: uncomposed in this build).
+  // Bodies are the closed shapes the server parses: typed text, and one optional note as the
+  // version's only source. No tag, author, tenant or version the server assigns.
+  knowledgePages: (ws: string) => (ids(ws) ? get(workPath(ws, "knowledge", "pages")) : null),
+  knowledgeProposals: (ws: string) =>
+    ids(ws) ? get(workPath(ws, "knowledge", "proposals")) : null,
+  knowledgePage: (ws: string, pageId: string) =>
+    ids(ws, pageId) ? get(workPath(ws, "knowledge", "pages", pageId)) : null,
+  addKnowledge(ws: string, c: Command<KnowledgeContent & { pageKind: KnowledgePageKind }>) {
+    const b = c.body;
+    if (
+      !ids(ws) ||
+      !knowledgeContent(b) ||
+      !(knowledgePageKinds as readonly string[]).includes(b.pageKind)
+    )
+      return null;
+    return post(
+      workPath(ws, "knowledge", "pages"),
+      { kind: b.pageKind, title: b.title, text: b.text, sources: noteSources(b.note) },
+      c.key,
+      byteLimits.work,
+    );
+  },
+  editKnowledge(
+    ws: string,
+    pageId: string,
+    c: Command<KnowledgeContent & { expectedVersion: number }>,
+  ) {
+    const b = c.body;
+    if (!ids(ws, pageId) || !knowledgeContent(b) || !revision(b.expectedVersion)) return null;
+    return post(
+      workPath(ws, "knowledge", "pages", pageId, "versions"),
+      {
+        expectedVersion: b.expectedVersion,
+        title: b.title,
+        text: b.text,
+        sources: noteSources(b.note),
+      },
+      c.key,
+      byteLimits.work,
+    );
+  },
+  deleteKnowledge(ws: string, pageId: string, c: Command<{ expectedVersion: number }>) {
+    if (!ids(ws, pageId) || !revision(c.body.expectedVersion)) return null;
+    return post(
+      workPath(ws, "knowledge", "pages", pageId, "delete"),
+      { expectedVersion: c.body.expectedVersion },
+      c.key,
+      byteLimits.work,
+    );
+  },
+  // PR 20: an agent's notebook, the entries this person may see (the installation's id).
+  notebook: (ws: string, installationId: string) =>
+    ids(ws, installationId) ? get(workPath(ws, "agents", installationId, "notebook")) : null,
+  decideSuggestion(
+    ws: string,
+    proposalId: string,
+    c: Command<{ decision: "accept" | "reject"; digest: string }>,
+  ) {
+    const { decision, digest } = c.body;
+    if (!ids(ws, proposalId) || (decision !== "accept" && decision !== "reject") || !hex64(digest))
+      return null;
+    return post(
+      workPath(ws, "knowledge", "proposals", proposalId, decision),
+      { digest },
       c.key,
       byteLimits.work,
     );
@@ -844,6 +940,11 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       catalogue: unbuilt,
       addDocument: unbuilt,
       addConfirm: unbuilt,
+      // PR 20: the agent's notebook over its route; uncomposed in this build (the
+      // shop-knowledge switch is committed off), so it answers not_in_build and sends nothing.
+      notebook: gated("team.notebook", (ws: string, agentId: string) =>
+        read(requests.notebook(ws, agentId), (b) => decodeNotebook(b, agentId)),
+      ),
     },
     settings: {
       plan: unbuilt,
@@ -862,7 +963,61 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         read(requests.activity(ws, after), decodeActivity),
       ),
     },
-    library: { knowledge: unbuilt, files: unbuilt },
+    // PR 20: Shop knowledge over its routes; uncomposed in this build (the shop-knowledge
+    // switch is committed off), so these answer not_in_build and send nothing.
+    library: {
+      knowledge: gated("library.knowledge", async (ws: string) => {
+        const pages = await read(requests.knowledgePages(ws), decodeKnowledgePages);
+        if (pages.kind !== "ok") return pages;
+        const proposals = await read(requests.knowledgeProposals(ws), decodeKnowledgeProposals);
+        if (proposals.kind !== "ok") return proposals;
+        // Each suggestion names the page it changes as this person sees it in the same read.
+        return {
+          kind: "ok" as const,
+          value: {
+            items: withKnowledgeTargets([...pages.value.facts, ...proposals.value]),
+            disconnected: pages.value.disconnected,
+            may: pages.value.may,
+          },
+          replayed: false,
+        };
+      }),
+      knowledgePage: gated("library.knowledgePage", (ws: string, pageId: string) =>
+        read(requests.knowledgePage(ws, pageId), (b) => decodeKnowledgePage(b, pageId)),
+      ),
+      addKnowledge: gated(
+        "library.addKnowledge",
+        (ws: string, c: Command<KnowledgeContent & { pageKind: KnowledgePageKind }>) =>
+          command(requests.addKnowledge(ws, c), (b) => decodeKnowledgeWritten(b, null)),
+      ),
+      editKnowledge: gated(
+        "library.editKnowledge",
+        (ws: string, pageId: string, c: Command<KnowledgeContent & { expectedVersion: number }>) =>
+          command(requests.editKnowledge(ws, pageId, c), (b) => {
+            const written = decodeKnowledgeWritten(b, pageId);
+            return written ? { version: written.version } : null;
+          }),
+      ),
+      deleteKnowledge: gated(
+        "library.deleteKnowledge",
+        (ws: string, pageId: string, c: Command<{ expectedVersion: number }>) =>
+          command(requests.deleteKnowledge(ws, pageId, c), (b) =>
+            decodeKnowledgeDeleted(b, pageId),
+          ),
+      ),
+      decideSuggestion: gated(
+        "library.decideSuggestion",
+        (
+          ws: string,
+          proposalId: string,
+          c: Command<{ decision: "accept" | "reject"; digest: string }>,
+        ) =>
+          command(requests.decideSuggestion(ws, proposalId, c), (b) =>
+            decodeSuggestionDecided(b, proposalId, c.body.decision),
+          ),
+      ),
+      files: unbuilt,
+    },
     // ADR-0032 Home preview and v1 PR 15's Inbox preview: no backend, no route and no
     // contract. Never composed over HTTP, so they answer not_in_build and send nothing.
     samples: { home: unbuilt, inbox: unbuilt },

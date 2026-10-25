@@ -31,6 +31,8 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | workspace.routine.revoke | J01 | P05.T04, P12.T04 | P01.A01, P05.A03 | D01 |
 | workspace.goal.revise | J01 | P06.T01, P07.T03, P14.T02 | P01.A01, P06.A01 | D01 |
 | workspace.goal.measure.record | J01 | P06.T01, P10.T02 | P01.A01, P06.A01 | D01 |
+| workspace.knowledge.propose | J01 | P10.T02, P13.T02 | P01.A01, P10.A02 | D01 |
+| workspace.notebook.write | J01 | P10.T02, P13.T02 | P01.A01, P10.A02 | D01 |
 | catalog.products.read | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D02 |
 | catalog.audit.create | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |
 | catalog.content.propose | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |

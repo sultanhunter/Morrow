@@ -12,7 +12,7 @@ BEGIN;
 --     item 12's limits and prices; no money cap, ADR-0039 item 1) committed `proposed`: admission takes only an `active`
 --     version, so no loop run is admitted until a later forward migration publishes it on
 --     the owner's recorded confirmation (drift-tested against the generated catalogue);
---     tool_catalogue_entries, ToolCatalogue@1 version 2 (each tool's capability, verb,
+--     tool_catalogue_entries, ToolCatalogue@1 version 3 (each tool's capability, verb,
 --     replay class and contexts), so SQL derives an envelope's capabilities and checks every
 --     tool call's pair itself.
 --   * Tenant: agent_runs (one agent-run@1: its pinned AgentRunManifest@1, the routed run's
@@ -242,7 +242,7 @@ FROM (VALUES ('claude_haiku_5_5','claude-haiku-5-5',100000::bigint,500000::bigin
   ('claude_opus_5_5','claude-opus-5-5',4000000,20000000,5000000,200000,3)) m(model_key,provider_model_id,input,output,cache_write,cache_read,o)
 CROSS JOIN (VALUES ('low',5000,1),('medium',12000,2),('high',16000,3)) e(effort_key,max_output_tokens,o)
 ORDER BY m.o,e.o;
--- ToolCatalogue@1 version 2 (docs/contracts/tool-catalogue.json, generated into
+-- ToolCatalogue@1 version 3 (docs/contracts/tool-catalogue.json, generated into
 -- packages/policy/src/generated/tool-catalogue.ts; drift-tested): each tool's one capability
 -- and verb, its replay class and the contexts it is offered in.
 CREATE TABLE morrow_work.tool_catalogue_entries (
@@ -256,22 +256,24 @@ CREATE TABLE morrow_work.tool_catalogue_entries (
  PRIMARY KEY (version,tool)
 );
 INSERT INTO morrow_work.tool_catalogue_entries(version,tool,capability_id,verb,replay_class,contexts) VALUES
- (2,'knowledge.search','workspace.knowledge.read','view','read',ARRAY['coordinator','routed','mandate','look_for_work','specialist']),
- (2,'work.read','workspace.artifact.read','view','read',ARRAY['coordinator','routed','mandate','look_for_work','specialist']),
- (2,'products.read','catalog.products.read','view','read',ARRAY['routed','mandate','look_for_work','specialist']),
- (2,'inventory.read','inventory.levels.read','view','read',ARRAY['routed','mandate','look_for_work','specialist']),
- (2,'orders.summary','orders.read','view','read',ARRAY['routed','mandate','look_for_work']),
- (2,'support.thread.read','support.case.read','view','read',ARRAY['routed','mandate']),
- (2,'message.post','workspace.conversation.post','execute','internal_write',ARRAY['coordinator','routed','mandate','specialist']),
- (2,'inbox.ask','workspace.question.request','execute','internal_write',ARRAY['coordinator','routed','mandate','specialist']),
- (2,'task.create','workspace.task.create','execute','internal_write',ARRAY['coordinator','routed','mandate']),
- (2,'suggestion.create','workspace.comment.create','execute','internal_write',ARRAY['routed','mandate','look_for_work','specialist']),
- (2,'report.write','workspace.artifact.edit','execute','internal_write',ARRAY['routed','mandate','specialist']),
- (2,'agent.route','workspace.task.delegate','delegate','internal_write',ARRAY['coordinator']),
- (2,'specialist.draft','agents.builder.describe','execute','internal_write',ARRAY['coordinator']),
- (2,'proposal.listing','catalog.content.publish','propose','internal_write',ARRAY['routed','mandate','specialist']),
- (2,'proposal.reply','support.reply.send','propose','internal_write',ARRAY['routed','mandate']),
- (2,'plan.draft','workspace.conversation.post','execute','internal_write',ARRAY['coordinator']);
+ (3,'knowledge.search','workspace.knowledge.read','view','read',ARRAY['coordinator','routed','mandate','look_for_work','specialist']),
+ (3,'work.read','workspace.artifact.read','view','read',ARRAY['coordinator','routed','mandate','look_for_work','specialist']),
+ (3,'products.read','catalog.products.read','view','read',ARRAY['routed','mandate','look_for_work','specialist']),
+ (3,'inventory.read','inventory.levels.read','view','read',ARRAY['routed','mandate','look_for_work','specialist']),
+ (3,'orders.summary','orders.read','view','read',ARRAY['routed','mandate','look_for_work']),
+ (3,'support.thread.read','support.case.read','view','read',ARRAY['routed','mandate']),
+ (3,'message.post','workspace.conversation.post','execute','internal_write',ARRAY['coordinator','routed','mandate','specialist']),
+ (3,'inbox.ask','workspace.question.request','execute','internal_write',ARRAY['coordinator','routed','mandate','specialist']),
+ (3,'task.create','workspace.task.create','execute','internal_write',ARRAY['coordinator','routed','mandate']),
+ (3,'suggestion.create','workspace.comment.create','execute','internal_write',ARRAY['routed','mandate','look_for_work','specialist']),
+ (3,'report.write','workspace.artifact.edit','execute','internal_write',ARRAY['routed','mandate','specialist']),
+ (3,'agent.route','workspace.task.delegate','delegate','internal_write',ARRAY['coordinator']),
+ (3,'specialist.draft','agents.builder.describe','execute','internal_write',ARRAY['coordinator']),
+ (3,'proposal.listing','catalog.content.publish','propose','internal_write',ARRAY['routed','mandate','specialist']),
+ (3,'proposal.reply','support.reply.send','propose','internal_write',ARRAY['routed','mandate']),
+ (3,'plan.draft','workspace.conversation.post','execute','internal_write',ARRAY['coordinator']),
+ (3,'knowledge.propose','workspace.knowledge.propose','execute','internal_write',ARRAY['routed','mandate']),
+ (3,'notebook.write','workspace.notebook.write','execute','internal_write',ARRAY['routed','mandate']);
 
 -- ---------------------------------------------------------------------------
 -- Tenant tables. Every stored time is millisecond-truncated.

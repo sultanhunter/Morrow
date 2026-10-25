@@ -352,7 +352,7 @@ export const workTables = Object.freeze({
     parents: ["morrow_identity.workspaces"],
     content: "workspace",
   },
-  // Build order PR 11 (0052 agent-runs, ADR-0027): the agent loop's catalogue and tool
+  // Build order PR 11 (0053 agent-runs, ADR-0027): the agent loop's catalogue and tool
   // catalogue (platform rows the command role reads), and one agent run's records. The run,
   // its tool calls and the broker's turn fence hold ids, digests, codes and amounts only;
   // run_turns is the only place loop content lives (the request, Morrow's replies and tool
@@ -418,6 +418,50 @@ export const workTables = Object.freeze({
   agent_run_questions: {
     class: "tenant_internal",
     parents: ["agent_runs"],
+    lease: true,
+    content: "workspace",
+  },
+  // PR 20 (0052, shop knowledge and notebooks). Pages, versions and pending proposals hold
+  // text people type or accept (never a store's content and never customer data: the
+  // customer tag is refused by CHECK); a deletion erases them in place, so no runtime role holds
+  // DELETE. The search entries hold the current version's full-text document; the deletion
+  // records, ids, counts and times only. A notebook entry holds an agent's working note
+  // (ADR-0031 item 1: 90 days); the runtime definers write proposals and entries under the
+  // run lease (the lease twin).
+  knowledge_pages: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    content: "workspace",
+  },
+  knowledge_proposals: {
+    class: "tenant_readable",
+    parents: ["knowledge_pages", "agent_installations"],
+    lease: true,
+    content: "workspace",
+  },
+  knowledge_versions: {
+    class: "tenant_readable",
+    parents: ["knowledge_pages", "knowledge_proposals", "agent_installations"],
+    lease: true,
+    content: "workspace",
+  },
+  knowledge_search_entries: {
+    class: "tenant_readable",
+    parents: ["knowledge_pages"],
+    lease: true,
+    content: "workspace",
+  },
+  knowledge_deletions: { class: "tenant_readable", parents: ["knowledge_pages"], content: "none" },
+  agent_notebooks: {
+    class: "tenant_readable",
+    parents: ["agent_installations"],
+    lease: true,
+    content: "none",
+  },
+  agent_notebook_entries: {
+    class: "tenant_readable",
+    parents: ["agent_notebooks"],
     lease: true,
     content: "workspace",
   },
@@ -845,7 +889,7 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_work_api"],
     command: "plan.start",
   },
-  // Build order PR 11 (0052 agent-runs). Pure functions of the CHECKs.
+  // Build order PR 11 (0053 agent-runs). Pure functions of the CHECKs.
   "loop_user_message_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "loop_assistant_message_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "loop_tool_results_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
@@ -916,6 +960,66 @@ export const workFunctions = Object.freeze({
   "agent_question_ask(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   "agent_run_wait()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   "agent_run_finish(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  // PR 20 (0052). Pure functions of the CHECKs.
+  "knowledge_tags_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "knowledge_sources_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "knowledge_content_digest(text,text,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "knowledge_proposal_digest(text,integer,text,text,text,jsonb)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "knowledge_tags_union(jsonb,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "knowledge_page_guard()": { kind: "trigger", grantees: [] },
+  "knowledge_version_guard()": { kind: "trigger", grantees: [] },
+  "knowledge_proposal_guard()": { kind: "trigger", grantees: [] },
+  "knowledge_search_guard()": { kind: "trigger", grantees: [] },
+  "agent_notebook_guard()": { kind: "trigger", grantees: [] },
+  "agent_notebook_entry_guard()": { kind: "trigger", grantees: [] },
+  // Revisable owner helpers: a page's read tags, a version's search document and the shared
+  // step that makes a version current.
+  "knowledge_read_tags(text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "knowledge_document(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "knowledge_version_put(text,text,text,integer,text,text,jsonb,jsonb,text,text,text,text,text,text,timestamp with time zone)":
+    { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  // The knowledge and notebook commands (people).
+  "begin_knowledge_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "cmd_knowledge_write(text,text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "knowledge.write",
+  },
+  "cmd_knowledge_accept(text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "knowledge.accept",
+  },
+  "cmd_knowledge_reject(text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "knowledge.reject",
+  },
+  "cmd_knowledge_delete(text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "knowledge.delete",
+  },
+  "cmd_notebook_clear(text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "notebook.clear",
+  },
+  // The agent tools' server-side commands and reads, under an entered run lease.
+  "run_knowledge_page(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_brand_voice()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_knowledge_search(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "run_knowledge_propose(text,text,text,text,text,text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+  },
+  "run_notebook_write(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
 });
 // The identity bridges (0014, 0017): definers owned by the identity owner, EXECUTE
 // for the command role only.
@@ -1588,7 +1692,7 @@ export const vaultFunctions = Object.freeze({
   },
   "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
-  // Build order PR 11 (0052 agent-runs): the agent loop's turn fence open and close (the
+  // Build order PR 11 (0053 agent-runs): the agent loop's turn fence open and close (the
   // broker's login; ids, digests, codes, counts, and the reply stored with the close).
   "agent_turn_begin(text,text,text,text,text,text,text,text,text)": {
     kind: "vault",
@@ -1698,15 +1802,21 @@ export const executorLogins = Object.freeze({
     "morrow_work.pending_starts()",
     // M3 PR-2 (listings-runs): the run steps.
     "morrow_work.run_billing_facts()",
+    // PR 20 (0052): the knowledge and notebook tools' reads and commands.
+    "morrow_work.run_brand_voice()",
     "morrow_work.run_drafts_pending()",
     "morrow_work.run_finish(text)",
+    "morrow_work.run_knowledge_page(text)",
+    "morrow_work.run_knowledge_propose(text,text,text,text,text,text,text,text)",
+    "morrow_work.run_knowledge_search(text)",
+    "morrow_work.run_notebook_write(text,text,text)",
     "morrow_work.run_product_begin(text)",
     "morrow_work.run_product_finish(text,text,text,text,text,text)",
     "morrow_work.run_review_context()",
     "morrow_work.run_snapshot_put(text,text)",
     "morrow_work.run_start()",
     "morrow_work.submit_agent_proposal(text,text,text,text,text,text,text,text,text)",
-    // Build order PR 11 (0052 agent-runs): the agent run steps and the cron's two lookups.
+    // Build order PR 11 (0053 agent-runs): the agent run steps and the cron's two lookups.
     "morrow_work.agent_question_ask(text,text,text)",
     "morrow_work.agent_run_answers()",
     "morrow_work.agent_run_conversation()",
@@ -1763,7 +1873,7 @@ export const executorLogins = Object.freeze({
     "morrow_vault.catalog_write_begin(text,text,text,text,text)",
     "morrow_vault.catalog_write_end(text,text,text,text)",
     "morrow_vault.catalog_write_resolve(text)",
-    // Build order PR 11 (0052 agent-runs).
+    // Build order PR 11 (0053 agent-runs).
     "morrow_vault.agent_turn_begin(text,text,text,text,text,text,text,text,text)",
     "morrow_vault.agent_turn_end(text,text,text,text,text,text,text,text,text,text,text,text)",
     // v1 PR 4 (catalog-undo).

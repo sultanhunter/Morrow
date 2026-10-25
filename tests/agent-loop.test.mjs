@@ -147,7 +147,11 @@ test("the system text is pinned by its SHA-256 and is the only text the broker m
 test("caps and holds: code equals the SQL formula for every v2 entry, with no money cap (ADR-0039)", () => {
   const entries = loopEntries(2);
   assert.equal(entries.length, 9);
-  const migration = readFileSync("migrations/0052.agent-runs.sql", "utf8");
+  // Located by slug: the integration renumbers the migration to the next free number.
+  const row = JSON.parse(readFileSync("migrations/manifest.json", "utf8")).migrations.find((m) =>
+    m.file.endsWith(".agent-runs.sql"),
+  );
+  const migration = readFileSync("migrations/" + row.file, "utf8");
   // The SQL formula, as cmd_agent_run_admit derives it: the version's 16 turns (never lowered
   // by a money value) and turns * worst held, the worst case rounded up to numeric(20,8).
   assert.match(migration, /v_turn_limit:=v\.max_turns_per_run;/);

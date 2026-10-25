@@ -132,8 +132,10 @@ const runtimeFileSpec = (required) => ({
 // morrow_put as `anthropic-api-key`. Required only while the switch is on (ANTHROPIC_API_KEY
 // among the broker's names); while it is off there is no spec, so the tools neither require
 // nor read the file, as for Stripe. The format is packages/identity/src/broker-protocol.ts
-// anthropicKeyPattern (drift-tested), the shape the broker itself admits.
-export const anthropicKeyFormat = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
+// anthropicKeyPattern (drift-tested), the shape the broker itself admits: a legacy workspace
+// key (sk-ant-api03-…) or an identity-backed personal or service-account key (sk-ant- plus a
+// three-letter type label).
+export const anthropicKeyFormat = /^sk-ant-(?:api03|[a-z]{3})-[A-Za-z0-9_-]{80,200}$/;
 const modelFileSpec = Object.freeze({
   required: true,
   secret: "ANTHROPIC_API_KEY",

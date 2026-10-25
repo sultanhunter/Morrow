@@ -398,8 +398,15 @@
     },
     {
       "sequence": 52,
-      "file": "0052.agent-runs.sql",
-      "sha256": "4239cd1798e4ccb0d08e70485393bce96b28dfb5a1eb6ed24fef9fe074c7fa09",
+      "file": "0052.shop-knowledge.sql",
+      "sha256": "4597c094203277ee75c2416ea591676c24da7f8fddd83841e5eadb69b6378f0a",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/shop-knowledge.md"
+    },
+    {
+      "sequence": 53,
+      "file": "0053.agent-runs.sql",
+      "sha256": "79082cd0e2806fe64b947e714c097e07afd5b4d323409700cd6b854743f98a6c",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/t4-agent-loop.md"
     }

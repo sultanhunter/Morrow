@@ -58,6 +58,20 @@ const listOf = (values) => Object.freeze({ kind: "enum_list", values });
 const shape = (pattern) => Object.freeze({ kind: "pattern", pattern });
 const yesNo = ["yes", "no"];
 
+// A teammate's origin (ADR-0037 item 4: one agent kind, two origins). first-party: an
+// AgentPackage@1 release that Morrow's team builds and publishes, installed in one click.
+// workspace: an agent Morrow drafts on an agent card that a person approves ("Add to team").
+export const AGENT_ORIGINS = Object.freeze(["first-party", "workspace"]);
+// How an installation comes to be: an Owner or Admin installs a release; a person approves an
+// agent card under the access-change review (ADR-0037 item 5); or the Start of the retired
+// run-scoped specialist (ADR-0028, whose kind ADR-0037 retired).
+export const INSTALLATION_STARTS = Object.freeze([
+  "owner-admin-install",
+  "card-approval",
+  "owner-start",
+  "member-start",
+]);
+
 // Fields every node file may carry. `links` maps an edge name to a list of ids; `docs`
 // lists auxiliary files (a path, or `codex-archive-f89ad75:<path>` for archived ones).
 export const COMMON_FIELDS = Object.freeze(["id", "type", "title", "status", "links", "docs"]);
@@ -89,8 +103,12 @@ export const NODE_TYPES = Object.freeze({
     dir: "agents",
     stored: "hand-written; later `agents/<id>/agent.json`",
     statuses: ["proposed", "planned", "built", "released", "dropped"],
+    // kind: builtin is Morrow, the Coordinator; installable is a teammate, an installation of
+    // either origin (ADR-0037 items 2 and 4). task_specialist is the run-scoped kind that
+    // ADR-0037 retired (item 7): only a dropped node keeps it (GRAPH_AGENT_KIND).
     fields: {
       kind: oneOf("builtin", "installable", "task_specialist"),
+      origin: oneOf(...AGENT_ORIGINS),
       slip_rank: shape(/^[0-9]$/),
       scopes_required: listOf(SHOPIFY_SCOPES),
       scopes_optional: listOf(SHOPIFY_SCOPES),
@@ -106,13 +124,16 @@ export const NODE_TYPES = Object.freeze({
     dir: "skills",
     stored: "hand-written until `skills/<id>/skill.json` exists",
     statuses: ["proposed", "planned", "built", "released", "revoked", "dropped"],
+    // card_eligible: Morrow may pick the skill, by id and pinned by digest, on an agent card
+    // (ADR-0037 items 4 and 5): it holds no customer data class and needs no support.* tool. A
+    // card that reads orders still needs the Owner; the code's allowlist stays the authority.
     fields: {
-      specialist_eligible: oneOf(...yesNo),
+      card_eligible: oneOf(...yesNo),
       runtime: oneOf("none", "computer", "computer-optional", "fallback"),
       output_contract: text,
       job_tags: list,
     },
-    required: ["specialist_eligible"],
+    required: ["card_eligible"],
   },
   installation_kind: {
     shape: "IK-<slug>",
@@ -124,9 +145,11 @@ export const NODE_TYPES = Object.freeze({
       lifetime: text,
       mandate: oneOf(...yesNo),
       triggers: oneOf(...yesNo),
-      started_by: oneOf("owner-admin-install", "owner-start", "member-start"),
+      started_by: listOf(INSTALLATION_STARTS),
       routable: oneOf(...yesNo),
       authority_records: text,
+      // The teammate origins this kind installs (ADR-0037 item 4).
+      origins: listOf(AGENT_ORIGINS),
     },
     required: ["mandate", "triggers", "routable"],
   },
@@ -500,11 +523,11 @@ export const ERRORS = Object.freeze({
   GRAPH_DATA_CLASS:
     "A live data class has a deleted_by link to a merged PR (without history, a PR link is a warning)",
   GRAPH_SKILL_ELIGIBLE:
-    "A skill a task_specialist composes is specialist_eligible and holds no customer data class",
+    "A skill a workspace-created agent composes is card_eligible, and a card_eligible skill holds no customer data class",
   GRAPH_AGENT_KIND:
-    "delegates_to starts at a builtin agent; a task_specialist delegates nothing and never_holds workspace.task.delegate; bundles starts at an installable agent",
+    "delegates_to runs from a builtin agent to an active teammate (an installable agent); a teammate names its origin and never_holds workspace.task.delegate, directly or by its installation kind; bundles starts at a first-party teammate and composes at a workspace-created one; only a dropped agent keeps the retired task_specialist kind",
   GRAPH_INSTALLATION_KIND:
-    "triggers need a mandate; routable needs triggers or a mandate; IK-task-specialist is not routable",
+    "triggers need a mandate; routable needs triggers or a mandate; a teammate installs as a kind whose origins include its own; an active agent never installs as a dropped kind",
   GRAPH_TENANT_RECORD:
     "No node id or field, and nothing in a hand-written graph file, looks like a tenant record id",
   GRAPH_DECISION_QUOTE: "An owner decision has a date, a channel and a blockquote",
