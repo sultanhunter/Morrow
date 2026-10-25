@@ -40,6 +40,8 @@ import {
   orchestratorPackageAllowlist,
   resolvedEdgeConfig,
   edgePlanDraftsPrerequisites,
+  edgeLiveEvalsPrerequisites,
+  reviewedLiveEvalsRecord,
   reviewedModelRecord,
   reviewedPlanDraftsRecord,
   reviewedRuntimeRecord,
@@ -2190,6 +2192,7 @@ test("model-provider-on: switched on, the full model set is required and every m
     ["off", "off", "off"],
   );
   for (const name of [
+    "agent-evals-live.json",
     "agent-loop-staging.json",
     "plan-drafts-staging.json",
     "shopify-write-staging.json",
@@ -2375,6 +2378,62 @@ test("the plan-drafts switch: committed off and held; on is refused while the lo
     const found = codes(
       await verify(resolve("."), undefined, {
         planDraftsPath: write("plan-drafts-staging.json", value),
+      }),
+    );
+    assert.deepEqual(found, [expected]);
+  }
+});
+
+// ADR-0037 plan PR 9 (ADR-0037 item 10): the live-evals switch is committed off, and edge:check
+// refuses it on until the agent loop is on and a deployed driver for teammate calls exists
+// (neither has a record yet, so both count as off).
+test("the live-evals switch: committed off; on is refused before the loop and a driver", async () => {
+  const committed = JSON.parse(readFileSync("docs/decisions/agent-evals-live.json", "utf8"));
+  assert.deepEqual(
+    { ...reviewedLiveEvalsRecord(committed) },
+    { switch: "off", set_id: "golden@1" },
+  );
+  assert.deepEqual({ ...edgeLiveEvalsPrerequisites }, { agentLoop: "off", liveDriver: false });
+  const on = { ...committed, switch: "on" };
+  for (const prerequisites of [
+    undefined,
+    { agentLoop: "on", liveDriver: false },
+    { agentLoop: "off", liveDriver: true },
+  ])
+    assert.throws(() => reviewedLiveEvalsRecord(on, prerequisites), /EDGE_LIVE_EVALS_BEFORE_LOOP/);
+  assert.deepEqual(
+    { ...reviewedLiveEvalsRecord(on, { agentLoop: "on", liveDriver: true }) },
+    { switch: "on", set_id: "golden@1" },
+  );
+  for (const edit of [
+    (r) => (r.switch = true),
+    (r) => (r.set_id = "golden"),
+    (r) => delete r.set_id,
+    (r) => (r.extra = 1),
+    (r) => (r.environment_kind = "production"),
+    (r) => (r.schema_version = 2),
+    (r) => (r.scope = null),
+  ]) {
+    const record = structuredClone(committed);
+    edit(record);
+    assert.throws(() => reviewedLiveEvalsRecord(record), /EDGE_STAGING_LIVE_EVALS_RECORD/);
+  }
+  // Through verifyEdgeConfig: the committed record passes; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "live-evals-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [value, expected] of [
+    [on, "EDGE_LIVE_EVALS_BEFORE_LOOP"],
+    [{ ...committed, switch: "yes" }, "EDGE_STAGING_LIVE_EVALS_RECORD"],
+    [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+  ]) {
+    const found = codes(
+      await verify(resolve("."), undefined, {
+        liveEvalsPath: write("agent-evals-live.json", value),
       }),
     );
     assert.deepEqual(found, [expected]);
