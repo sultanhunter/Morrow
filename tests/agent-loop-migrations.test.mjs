@@ -444,11 +444,12 @@ test("ADR-0039: no money cap in admission or at a turn's open; the stop conditio
     assert.ok(!admit.includes(gone), gone);
   assert.doesNotMatch(sql, /run_cost_cap_usd|workspace_daily_cost_cap_usd|unrecovered_cost/);
   // A turn's open and the broker's fence check the turn limit, the wall time, the attempt and
-  // the fence; neither stops for the hold left or an overflow, and `final` is the limit's.
+  // the fence; neither stops for the run's hold left or its overflow, and `final` is the
+  // limit's (a step's own overflow still stops: the next test).
   const open = code(fnBody("morrow_work", "agent_turn_open"));
   const begin = code(fnBody("morrow_vault", "agent_turn_begin"));
   for (const fn of [open, begin]) {
-    assert.doesNotMatch(fn, /cost_budget|hold_usd|booked_usd|r\.overflow_usd/);
+    assert.doesNotMatch(fn, /hold_usd|booked_usd|r\.overflow_usd/);
     assert.match(fn, /turn_limit/);
   }
   assert.match(open, /'stop'::text,'turn_limit'::text/);
@@ -458,7 +459,7 @@ test("ADR-0039: no money cap in admission or at a turn's open; the stop conditio
     /IF \(p_final='true'\)<>\(v_turn>=r\.turn_limit\) THEN\s+RETURN QUERY SELECT 'invalid'/,
   );
   // Every counted turn is still booked, an uncertain one at its worst case, and what passes
-  // the hold is overflow: recorded, never dropped (and never a stop).
+  // the run's hold is overflow: recorded, never dropped (and never a stop by itself).
   const end = fnBody("morrow_vault", "agent_turn_end");
   assert.match(end, /v_booked:=least\(v_cost,greatest\(r\.hold_usd-r\.booked_usd,0\)\);/);
   assert.match(end, /v_overflow:=v_cost-v_booked;/);
@@ -466,6 +467,56 @@ test("ADR-0039: no money cap in admission or at a turn's open; the stop conditio
   // The prerequisite: no loop run before the shared wallet's credit holds (ADR-0039 PR 3).
   assert.ok(agentLoopPrerequisites.includes("shared_wallet"));
   assert.ok(!agentLoopPrerequisites.includes("shared_daily_backstop"));
+});
+
+test("ADR-0039 item 9 (review F1 of 2026-10-26): a step booked past its own hold ends the run cost_budget", () => {
+  // A step overflow: a counted call, not uncertain, whose cost passed the worst-case turn (the
+  // step's own hold). An uncertain call is booked at exactly the worst case, so never one.
+  const stepOverflow = "x.counted AND x.outcome<>'uncertain' AND x.cost_usd>r.worst_case_turn_usd";
+  // The close books it in full and returns the flag; the run-wide overflow stays a record.
+  const end = fnBody("morrow_vault", "agent_turn_end");
+  assert.match(
+    end,
+    /RETURNS TABLE\(outcome text,recorded_outcome text,cost_usd text,overflow boolean,step_overflow boolean\)/,
+  );
+  const counted = end.slice(
+    end.indexOf(" IF v_counted THEN"),
+    end.indexOf("UPDATE morrow_work.agent_model_calls x SET status='closed'"),
+  );
+  assert.match(
+    counted,
+    /v_step_overflow:=v_outcome<>'uncertain' AND v_cost>r\.worst_case_turn_usd;/,
+  );
+  assert.match(end, /cost_usd=v_cost,/);
+  assert.match(end, /v_overflow>0,\s+v_step_overflow;/);
+  // The run's state carries it to the code (turnCaps and the reply's check end the run).
+  const state = fnBody("morrow_work", "agent_run_state");
+  assert.match(state, /prefix_digest text,step_overflow text\)/);
+  assert.ok(state.includes(stepOverflow + ")::text;"), "state");
+  assert.match(
+    agentRunSql.state,
+    /,prefix_digest,step_overflow FROM morrow_work\.agent_run_state\(\)$/,
+  );
+  // A turn's open stops cost_budget after a replayed open's answer and before either
+  // attempt's checks: no attempt opens once a step overflowed.
+  const open = fnBody("morrow_work", "agent_turn_open");
+  const at = open.indexOf(stepOverflow);
+  assert.ok(at > open.indexOf("'opened_before'"), "after the replayed open");
+  assert.ok(at < open.indexOf(" IF v_attempt=1 THEN"), "before the attempt checks");
+  assert.ok(at < open.indexOf("INSERT INTO morrow_work.run_turns"), "before the insert");
+  assert.match(
+    open.slice(at),
+    /^x\.counted AND x\.outcome<>'uncertain' AND x\.cost_usd>r\.worst_case_turn_usd\) THEN\s+RETURN QUERY SELECT 'stop'::text,'cost_budget'::text; RETURN;/,
+  );
+  assert.equal(open.split("'cost_budget'").length, 2);
+  // The broker's fence refuses a new call after it (defence in depth: nothing is sent).
+  const begin = fnBody("morrow_vault", "agent_turn_begin");
+  const fence = begin.indexOf(stepOverflow);
+  assert.ok(fence > 0 && fence < begin.indexOf("INSERT INTO morrow_work.agent_model_calls"));
+  assert.match(begin.slice(fence), /^[^;]*\) THEN v_outcome:='cost_budget';/);
+  // Nothing else in the migration stops a run for money: the other two are the end reason's
+  // CHECK and agent_run_finish's closed list.
+  assert.equal(sql.split("'cost_budget'").length - 1, 4);
 });
 
 test("review fixes: settle before a resend, a replayable wait, the uncounted call, the scope, one open question", () => {

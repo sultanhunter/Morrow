@@ -18,7 +18,7 @@ import {
 export const agentRunSql = Object.freeze({
   start: "SELECT outcome,status FROM morrow_work.agent_run_start()",
   state:
-    "SELECT outcome,run_id,status,kind,task_id,child_task_id,envelope_id,installation_id,agent_principal_id,store_id,connection_id,requester_principal_id,requester_membership_id,release_id,system_text_digest,tools,catalogue_version,model_key,effort_key,turn_limit,tool_calls_per_turn,tool_calls_per_run,questions_limit,max_input_tokens,max_output_tokens,wall_time_ms,hold_usd,worst_case_turn_usd,booked_usd,overflow_usd,turns_taken,tool_calls_taken,questions_asked,active_ms,lease_expires_at_ms,database_now_ms,tainted,prefix_digest FROM morrow_work.agent_run_state()",
+    "SELECT outcome,run_id,status,kind,task_id,child_task_id,envelope_id,installation_id,agent_principal_id,store_id,connection_id,requester_principal_id,requester_membership_id,release_id,system_text_digest,tools,catalogue_version,model_key,effort_key,turn_limit,tool_calls_per_turn,tool_calls_per_run,questions_limit,max_input_tokens,max_output_tokens,wall_time_ms,hold_usd,worst_case_turn_usd,booked_usd,overflow_usd,turns_taken,tool_calls_taken,questions_asked,active_ms,lease_expires_at_ms,database_now_ms,tainted,prefix_digest,step_overflow FROM morrow_work.agent_run_state()",
   objective: "SELECT outcome,objective FROM morrow_work.agent_run_objective()",
   conversation:
     "SELECT turn,attempt,final,budget_ms,input,input_digest,output,outcome,tool_results,prefix_digest_after FROM morrow_work.agent_run_conversation()",
@@ -215,6 +215,11 @@ export interface AgentRunState {
   readonly databaseNowMs: number;
   readonly tainted: boolean;
   readonly prefixDigest: string | null;
+  /**
+   * A step's booked cost passed its own hold: a counted call, not uncertain, cost more than
+   * the worst-case turn (ADR-0039 item 9). The run takes no further step (cost_budget).
+   */
+  readonly stepOverflow: boolean;
 }
 /** One stored turn attempt (content: in memory, inside one step only). */
 export interface ConversationRow {
@@ -237,7 +242,7 @@ export interface QuestionAnswer {
 }
 export type TurnOpen =
   | { readonly outcome: "opened" | "opened_before" }
-  | { readonly outcome: "stop"; readonly reason: "turn_limit" | "wall_time" }
+  | { readonly outcome: "stop"; readonly reason: "turn_limit" | "cost_budget" | "wall_time" }
   | { readonly outcome: "conflict" | "run_inactive" | "invalid" | "denied" };
 export type TurnSettle =
   | {
@@ -438,6 +443,7 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         "database_now_ms",
         "tainted",
         "prefix_digest",
+        "step_overflow",
       ];
       const r = one(await query(agentRunSql.state), names);
       if (r.outcome === "denied") {
@@ -477,7 +483,8 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
           exact(usd, v),
         ) ||
         (r.tainted !== "true" && r.tainted !== "false") ||
-        (r.prefix_digest !== null && !exact(digest, r.prefix_digest))
+        (r.prefix_digest !== null && !exact(digest, r.prefix_digest)) ||
+        (r.step_overflow !== "true" && r.step_overflow !== "false")
       )
         throw held();
       return Object.freeze({
@@ -518,6 +525,7 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         databaseNowMs: integer(r.database_now_ms, 1, Number.MAX_SAFE_INTEGER),
         tainted: r.tainted === "true",
         prefixDigest: r.prefix_digest as string | null,
+        stepOverflow: r.step_overflow === "true",
       });
     },
     async objective() {
@@ -628,10 +636,10 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         ["outcome", "reason"],
       );
       if (r.outcome === "stop") {
-        if (!["turn_limit", "wall_time"].includes(r.reason as string)) throw held();
+        if (!["turn_limit", "cost_budget", "wall_time"].includes(r.reason as string)) throw held();
         return Object.freeze({
           outcome: "stop" as const,
-          reason: r.reason as "turn_limit" | "wall_time",
+          reason: r.reason as "turn_limit" | "cost_budget" | "wall_time",
         });
       }
       if (

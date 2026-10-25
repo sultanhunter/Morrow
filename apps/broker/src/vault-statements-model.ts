@@ -13,5 +13,5 @@ export const modelVaultStatements = Object.freeze({
   agentTurnBegin:
     "SELECT outcome,call_id,model_key,effort_key,provider_model_id,max_input_tokens,max_output_tokens,tools,system_text_digest,recorded_outcome,recorded_output,recorded_prefix_after,recorded_usage FROM morrow_vault.agent_turn_begin($1,$2,$3,$4,$5,$6,$7,$8,$9)",
   agentTurnEnd:
-    "SELECT outcome,recorded_outcome,cost_usd,overflow::text AS overflow FROM morrow_vault.agent_turn_end($1,$2,NULLIF($3,''),NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),NULLIF($7,''),NULLIF($8,''),NULLIF($9,''),NULLIF($10,''),NULLIF($11,''),NULLIF($12,''))",
+    "SELECT outcome,recorded_outcome,cost_usd,overflow::text AS overflow,step_overflow::text AS step_overflow FROM morrow_vault.agent_turn_end($1,$2,NULLIF($3,''),NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),NULLIF($7,''),NULLIF($8,''),NULLIF($9,''),NULLIF($10,''),NULLIF($11,''),NULLIF($12,''))",
 } as const);

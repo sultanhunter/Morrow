@@ -830,7 +830,9 @@ export function edgeAgentLoopVarNames(worker, environment) {
 }
 // The reviewed staging agent-loop record (build order PR 11; committed off). Returns the
 // switch, or throws: EDGE_AGENT_LOOP_PREREQUISITES when it is on before every prerequisite
-// is recorded.
+// is recorded. observed_on is null, or a date only while the switch is on. The record rules
+// are exactly verify's (scripts/generate-agent-platform.mjs, inspectAgentPlatformSwitches);
+// this check also needs each recorded evidence file to exist.
 export function reviewedAgentLoopRecord(record, evidenceRoot = repositoryRoot) {
   const prerequisites = record?.prerequisites;
   if (
@@ -845,7 +847,8 @@ export function reviewedAgentLoopRecord(record, evidenceRoot = repositoryRoot) {
     (record.switch !== "off" && record.switch !== "on") ||
     typeof record.scope !== "string" ||
     (record.observed_on !== null &&
-      (typeof record.observed_on !== "string" ||
+      (record.switch !== "on" ||
+        typeof record.observed_on !== "string" ||
         !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
     !prerequisites ||
     typeof prerequisites !== "object" ||

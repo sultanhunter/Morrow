@@ -39,10 +39,10 @@ import type { ToolDispatch, ToolHandlers } from "./tools.js";
 // run lease, so a stop, a removed member or an ended lease stops the run at its next step.
 //   start      the run's current lease (agent_run_resume_lease, ids only), entered:
 //              queued -> running (agent_run_start).
-//   turn-n-a   one model turn: the caps in code first (the turn limit and the final turn,
-//              the last it allows; the wall time and the lease's time against the call's
-//              whole budget; no money cap, ADR-0039 item 1), then the input
-//              stored with its digest and the attempt's caps (agent_turn_open, which checks
+//   turn-n-a   one model turn: the caps in code first (a step's own overflow; the turn
+//              limit and the final turn, the last it allows; the wall time and the lease's
+//              time against the call's whole budget; no money cap, ADR-0039 item 1), then
+//              the input stored with its digest and the attempt's caps (agent_turn_open, which checks
 //              them again and fixes them: a replayed step takes the recorded final and
 //              budget, never the caps of the run's state after its own booking), then the
 //              fence as SQL sees it (agent_turn_settle: a recorded outcome is used as is, a
@@ -54,8 +54,10 @@ import type { ToolDispatch, ToolHandlers } from "./tools.js";
 //              left nothing in SQL is tried again at most twice). The reply is validated
 //              with the generated contract (the strict tool_use shapes the run was given),
 //              its tools must be offered and a final turn must call none: anything else
-//              ends the run invalid_output. An uncertain attempt 1 is sent again at most
-//              once, as attempt 2; an uncertain attempt 2 ends the run.
+//              ends the run invalid_output. A tool_use reply whose turn was booked past its
+//              own hold (the worst-case turn) ends the run cost_budget before its tool calls
+//              (ADR-0039 item 9). An uncertain attempt 1 is sent again at most once, as
+//              attempt 2; an uncertain attempt 2 ends the run.
 //   tool-n-k   one tool call (ADR-0027 item 2): lease re-entry; replay of a recorded call;
 //              validation with the full ToolInput definition (invalid_input goes back to the
 //              model); ids in the run's scope; the authority decision in code; dispatch
@@ -174,13 +176,16 @@ const interrupted = (refusal: string) => Object.freeze({ kind: "interrupted" as 
 const end = (reason: AgentRunEndReason) => Object.freeze({ kind: "end" as const, reason });
 
 /**
- * The caps of the next turn, in code, before any send (ADR-0027 item 6, as ADR-0039 items 1
- * and 5 amend it): the turn limit (the last turn it allows is final, tool_choice none), the
- * wall time (waits excluded) and the lease's own time, each against the call's whole budget
- * (the effort's max_tokens) plus the finish margin. No money cap starts, shortens or ends a
- * run: the hold and what is booked against it are records, and an overflow is recorded,
- * never a stop. The credit hold before each turn is ADR-0039's PR 3; until it exists the
- * agent-loop switch stays off (its `shared_wallet` prerequisite).
+ * The caps of the next turn, in code, before any send (ADR-0027 item 6, as ADR-0039 items 1,
+ * 5 and 9 amend it): a step's own overflow (a counted turn, not uncertain, booked past its own
+ * hold, the worst-case turn: cost_budget, which still ends the run), the turn limit (the last
+ * turn it allows is final, tool_choice none), the wall time (waits excluded) and the lease's
+ * own time, each against the call's whole budget (the effort's max_tokens) plus the finish
+ * margin. No money cap starts, shortens or ends a run: the run-wide hold and what is booked
+ * against it are records, and an overflow of that hold (an uncertain turn and its resend,
+ * both at the worst case) is recorded, never a stop. The credit hold before each turn is
+ * ADR-0039's PR 3; until it exists the agent-loop switch stays off (its `shared_wallet`
+ * prerequisite).
  */
 export function turnCaps(
   run: AgentRunState,
@@ -196,6 +201,7 @@ export function turnCaps(
     run.turnLimit > 16
   )
     throw retry("caps");
+  if (run.stepOverflow) return end("cost_budget");
   if (turn > run.turnLimit) return end("turn_limit");
   const budgetMs = modelCallBudgetMs(run.maxOutputTokens);
   if (!timeCovers(run, budgetMs)) return end("wall_time");
@@ -433,20 +439,41 @@ export async function runTurn(
     outcome = result.outcome;
     message = result.message;
   }
-  // 3. The outcome, derived in code.
+  // 3. The outcome, derived in code. A recorded reply (a replayed step) is read back from the
+  //    run's turns. A reply that calls tools has further steps after it, so whether its turn
+  //    passed its own hold is read from SQL with it: a step overflow (a counted turn booked
+  //    past the worst-case turn, ADR-0039 item 9) ends the run cost_budget here, its cost
+  //    booked in full, before any of its tool calls runs or asks a person anything. An
+  //    end_turn reply is the run's answer: no step follows it, and its overflow is recorded.
   if (outcome === "end_turn" || outcome === "tool_use") {
-    if (message === null) {
-      // A recorded reply (a replayed step): read it back from the run's turns.
+    const replyOutcome = outcome;
+    let overflowed = false;
+    if (message === null || replyOutcome === "tool_use") {
+      const known = message;
       const read = await under(ports, ref, async (step) => {
-        const rows = await step.loop.conversation();
-        return rows.find((r) => r.turn === turn && r.attempt === attempt)?.output ?? null;
+        let stepOverflow = false;
+        if (replyOutcome === "tool_use") {
+          const run = await step.loop.state();
+          if (run === "denied") return null;
+          stepOverflow = run.stepOverflow;
+        }
+        const output =
+          known !== null
+            ? known
+            : ((await step.loop.conversation()).find(
+                (r) => r.turn === turn && r.attempt === attempt,
+              )?.output ?? null);
+        return Object.freeze({ stepOverflow, output });
       });
       if (!read.entered) return interrupted(read.refusal);
-      message = read.value;
+      if (read.value === null) return interrupted("denied");
+      message = read.value.output;
+      overflowed = read.value.stepOverflow;
     }
-    const uses = checkReply(message, outcome, tools, final);
+    const uses = checkReply(message, replyOutcome, tools, final);
     if (!uses) return end("invalid_output");
-    return Object.freeze({ kind: "reply" as const, outcome, toolUses: uses });
+    if (overflowed) return end("cost_budget");
+    return Object.freeze({ kind: "reply" as const, outcome: replyOutcome, toolUses: uses });
   }
   if (outcome === "uncertain")
     return attempt === 1 ? Object.freeze({ kind: "resend" as const }) : end("provider_error");

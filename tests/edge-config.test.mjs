@@ -54,7 +54,10 @@ import {
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
 import { planDraftsSwitchAllowed } from "../packages/policy/src/projects/plan-draft.ts";
-import { agentLoopPrerequisites } from "../scripts/generate-agent-platform.mjs";
+import {
+  agentLoopPrerequisites,
+  inspectAgentPlatformSwitches,
+} from "../scripts/generate-agent-platform.mjs";
 
 // P04.T02a AC01, AC04, AC24 and the static half of AC22. Configuration is read
 // with the pinned wrangler (no account, credential or network).
@@ -2544,6 +2547,70 @@ test("PR 11: the committed agent-loop record is off with no prerequisite recorde
   for (const environment of ["development", "production"])
     for (const worker of ["api", "broker", "orchestrator", "connector"])
       assert.deepEqual(edgeAgentLoopVarNames(worker, environment), [], worker);
+});
+
+test("PR 11 (review F2 of 2026-10-26): edge:check and verify give one verdict on the agent-loop record", () => {
+  const specialists = JSON.parse(readFileSync("docs/decisions/specialists-staging.json", "utf8"));
+  const evidenceRoot = loopRecords(loopRecorded).evidenceRoot;
+  // Each check's verdict on one record: accepted (true) or refused (false).
+  const edge = (record) => {
+    try {
+      reviewedAgentLoopRecord(record, evidenceRoot);
+      return true;
+    } catch (error) {
+      assert.match(String(error), /EDGE_STAGING_AGENT_LOOP_RECORD|EDGE_AGENT_LOOP_PREREQUISITES/);
+      return false;
+    }
+  };
+  const verify = (record) => inspectAgentPlatformSwitches(record, specialists).length === 0;
+  const on = structuredClone(committedLoop);
+  on.switch = "on";
+  loopRecorded(on);
+  const cases = [
+    // The committed record, and the reviewed commit that turns it on with every prerequisite.
+    [committedLoop, true],
+    [on, true],
+    // The same commit dated: observed_on is a date only while the switch is on.
+    [{ ...on, observed_on: "2026-11-02" }, true],
+    [{ ...committedLoop, observed_on: "2026-11-02" }, false],
+    [{ ...on, observed_on: "02-11-2026" }, false],
+    [{ ...on, observed_on: 20261102 }, false],
+    // On with one prerequisite missing, dated or not.
+    [{ ...on, prerequisites: { ...on.prerequisites, shared_wallet: null } }, false],
+    [
+      {
+        ...on,
+        observed_on: "2026-11-02",
+        prerequisites: { ...on.prerequisites, shared_wallet: null },
+      },
+      false,
+    ],
+    // An evidence path outside docs/evidence, climbing out of it, or not a .md record.
+    ...[
+      "README.md",
+      "docs/evidence/../x.md",
+      "docs/evidence/live/x.txt",
+      "docs/evidence/live/X.md",
+    ].map((evidence) => [
+      {
+        ...on,
+        observed_on: "2026-11-02",
+        prerequisites: {
+          ...on.prerequisites,
+          lab_agent_loop: { recorded_on: "2026-11-02", evidence },
+        },
+      },
+      false,
+    ]),
+    [{ ...on, scope: null }, false],
+    [{ ...on, prerequisites: null }, false],
+    [{ ...on, prerequisites: [] }, false],
+  ];
+  for (const [record, verdict] of cases) {
+    const detail = JSON.stringify([record.switch, record.observed_on, record.prerequisites]);
+    assert.equal(edge(record), verdict, "edge " + detail);
+    assert.equal(verify(record), verdict, "verify " + detail);
+  }
 });
 
 test("PR 11: switched off, the loop var anywhere is a mixed state; on needs its prerequisites and the model switch", async () => {

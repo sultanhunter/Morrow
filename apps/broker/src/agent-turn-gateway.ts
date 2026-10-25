@@ -34,8 +34,9 @@ import { vaultStatements, type VaultQuery } from "./vault.js";
 //      with every resolve_call check under the stop interlock; the run is running under
 //      exactly this lease; the turn's stored input has exactly the last message's digest; the
 //      prefix is the run's recorded one; attempt 2 only after an uncertain attempt 1; the
-//      last turn the limit allows is final; one call per run is open (no money cap,
-//      ADR-0039 item 1). The same fence again never sends (replay or in_flight). The
+//      last turn the limit allows is final; one call per run is open; no step of the run
+//      was booked past its own hold (cost_budget, ADR-0039 item 9; no money cap, item 1).
+//      The same fence again never sends (replay or in_flight). The
 //      selection, the offered tools and the system text's digest come from SQL, never the
 //      call.
 //   5. The call against the run: the system text is the one its digest names; every tool in
@@ -46,7 +47,8 @@ import { vaultStatements, type VaultQuery } from "./vault.js";
 //      the run: only offered tools, at most four calls, none on the final turn; anything else
 //      is invalid_output. The close (agent_turn_end) records the outcome and usage, books the
 //      cost at the entry's rates (or its worst-case turn when uncertain) against the run's
-//      hold (overflow past it is recorded, never dropped), and stores the reply with the
+//      hold (overflow past it is recorded, never dropped; a turn past its own worst case is a
+//      step overflow, which ends the run cost_budget), and stores the reply with the
 //      conversation's digest after it in the same transaction. If the close cannot commit,
 //      the result is uncertain (the open fence is booked at its worst case later) and no
 //      reply is returned.

@@ -33,9 +33,11 @@
 //      final SQL does not derive is invalid, a fence with other caps is turn_state, and a
 //      turn step replayed after its close keeps its recorded caps and reply;
 //   I  a reply calling a tool the run was not given ends the run invalid_output (booked);
-//   C  usage past the hold is overflow, never dropped, and no money cap stops the run: the
-//      next turn starts, not made final (ADR-0039); a call over the run's tool-call cap stays
-//      refused (never dispatched) when its finish fails and the step is retried;
+//   C  a turn booked past its own hold (the worst-case turn) is booked in full and ends the
+//      run cost_budget before its tool calls, and SQL's open refuses the next turn (ADR-0039
+//      item 9); a call over the run's tool-call cap stays refused (never dispatched) when its
+//      finish fails and the step is retried; a turn within its own hold past the run's hold
+//      is overflow, never dropped, and no stop (no money cap, ADR-0039 item 1);
 //   S  "Stop AI work" refuses the next step; the stale close ends the run stopped;
 //   T  tenancy: the logins reach the records only through their definers; forged settings,
 //      another tenant and the api role see no content; nothing is deleted;
@@ -1588,28 +1590,78 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const o = await admit(P.A, T6);
     const R6 = o.runId;
     const before = provider.sends.length;
-    const { result: r6, names } = await execute(R6);
+    const retriesBefore6 = retries.length;
+    // Under the run's lease, after turn 1's step and before the finish: the state carries the
+    // step overflow, and SQL's own open refuses turn 2 (stop, cost_budget) whatever the code
+    // does (checked before the attempt's checks, so a turn 2 whose tool results never came is
+    // stopped, not merely invalid).
+    let seen6 = null;
+    const next6 = { role: "user", content: [{ type: "text", text: "Go on." }] };
+    const { result: r6, names } = await execute(R6, {
+      lose: ["turn-1-1"],
+      async after(name) {
+        if (name !== "turn-1-1") return;
+        const ref6 = { leaseId: runRow(R6).lease_id, generation: runRow(R6).generation };
+        const state6 = await lease(ref6, (step) => step.loop.state());
+        const open6 = await lease(ref6, (step) =>
+          step.loop.turnOpen({
+            turn: 2,
+            attempt: 1,
+            final: false,
+            budgetMs: callBudget,
+            inputCanonical: JSON.stringify(next6),
+            inputDigest: sha(JSON.stringify(next6)),
+            untrusted: false,
+            readTagsCanonical: "[]",
+          }),
+        );
+        seen6 = {
+          stepOverflow: state6?.entered ? state6.value.stepOverflow : null,
+          open: open6?.entered ? open6.value : null,
+        };
+      },
+    });
     const row = runRow(R6);
     const cost = costOf(huge);
-    // ADR-0039 item 1: the overflow is recorded and never dropped, and no money cap stops the
-    // run: turn 2 starts (not made final) and the run completes on its answer.
+    // ADR-0039 item 9: a step booked past its own hold (the worst-case turn) still ends the
+    // run cost_budget. Turn 1 reports a million input and output tokens, far past its
+    // worst case: it is booked in full (to the run's hold, the rest recorded as overflow,
+    // never dropped), and the run ends right after its reply: its tool call never runs and
+    // turn 2 is never sent. The turn step's result is lost once after it committed: the
+    // retried step reads the reply and the overflow back from SQL and sends nothing (one
+    // send in all; a loaded host may retry other steps' transactions too).
     const c6 = calls(R6);
     check(
-      "C1:usage_past_the_hold_is_overflow_never_dropped_and_no_money_cap_stops_the_run",
-      r6.status === "succeeded" &&
-        r6.reason === "completed" &&
-        JSON.stringify(names) ===
-          JSON.stringify(["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]) &&
-        provider.sends.length === before + 2 &&
-        c6.length === 2 &&
-        c6.every((x) => x.counted === true && x.final === false) &&
+      "C1:a_turn_booked_past_its_own_hold_ends_the_run_cost_budget_booked_in_full",
+      r6.status === "failed" &&
+        r6.reason === "cost_budget" &&
+        row.ended_reason === "cost_budget" &&
+        JSON.stringify(names) === JSON.stringify(["start", "turn-1-1", "finish"]) &&
+        retries.slice(retriesBefore6).includes("turn-1-1:result_lost") &&
+        provider.sends.length === before + 1 &&
+        c6.length === 1 &&
+        c6[0].outcome === "tool_use" &&
+        c6[0].counted === true &&
         c6[0].cost === text8(cost) &&
+        parse8(c6[0].cost) > parse8(rates.worst) &&
         c6[0].overflow === text8(cost - parse8(row.hold)) &&
-        c6[1].overflow === c6[1].cost &&
         row.booked === row.hold &&
-        parse8(row.booked) + parse8(row.overflow) === parse8(c6[0].cost) + parse8(c6[1].cost) &&
-        turns(R6).length === 2,
-      { r6, names, row, c6, cost: text8(cost) },
+        parse8(row.booked) + parse8(row.overflow) === cost &&
+        turns(R6).length === 1 &&
+        toolCalls(R6).length === 0 &&
+        seen6?.stepOverflow === true &&
+        seen6.open?.outcome === "stop" &&
+        seen6.open.reason === "cost_budget",
+      {
+        r6,
+        names,
+        row,
+        c6,
+        cost: text8(cost),
+        seen6,
+        retries: retries.slice(retriesBefore6),
+        sends: provider.sends.length - before,
+      },
     );
     // C2: the per-run tool-call cap (sim: the run's count set to its cap with the triggers
     // off after turn 1). The call over it is recorded uncounted and refused tool_call_limit;
@@ -1683,6 +1735,50 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         !decisions.some((d) => d[0] === R10) &&
         runRow(R10).calls === 40,
       { r10, n10, failed, retries: retries.slice(retriesBefore), capped },
+    );
+    // C3: past the run's hold, a turn within its own hold is overflow, recorded and never
+    // dropped, and no stop (ADR-0039 item 1: the run-wide hold is a record). Sim: after turn
+    // 1, the run's booking set to its hold with the triggers off, as many uncertain resends
+    // at the worst case would leave it; turn 2 is booked wholly as overflow and the run
+    // completes on its answer.
+    const T11 = await taskOf(P.A, "Read the products past the hold");
+    scripts.set("Read the products past the hold", (resolved, turn) =>
+      turn === 1
+        ? reply(
+            say(null, [
+              "tu_hold",
+              "products.read",
+              { productIds: null, titleContains: null, limit: 2 },
+            ]),
+          )
+        : reply(say("Read them past the hold.")),
+    );
+    const h = await admit(P.A, T11);
+    const R11 = h.runId;
+    const { result: r11, names: n11 } = await execute(R11, {
+      async after(name) {
+        if (name === "turn-1-1")
+          replica(
+            `UPDATE morrow_work.agent_runs SET booked_usd=hold_usd WHERE id=${literal(R11)};`,
+          );
+      },
+    });
+    const row11 = runRow(R11);
+    const c11 = calls(R11);
+    check(
+      "C3:a_turn_within_its_own_hold_past_the_run_hold_is_overflow_and_no_stop",
+      r11.status === "succeeded" &&
+        r11.reason === "completed" &&
+        JSON.stringify(n11) ===
+          JSON.stringify(["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]) &&
+        c11.length === 2 &&
+        c11.every((x) => x.counted === true && x.final === false) &&
+        c11.every((x) => parse8(x.cost) <= parse8(rates.worst)) &&
+        c11[0].overflow === null &&
+        c11[1].overflow === c11[1].cost &&
+        row11.booked === row11.hold &&
+        row11.overflow === c11[1].cost,
+      { r11, n11, row11, c11 },
     );
   }
 

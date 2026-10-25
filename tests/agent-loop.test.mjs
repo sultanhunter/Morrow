@@ -161,10 +161,14 @@ test("caps and holds: code equals the SQL formula for every v2 entry, with no mo
     "'daily_backstop'",
     "'cap_below_turn'",
     "'unrecovered_cost_cap'",
-    "'cost_budget'::text",
-    "v_outcome:='cost_budget'",
   ])
     assert.ok(!migration.includes(gone), gone);
+  // ADR-0039 item 9: cost_budget stays only for a step booked past its own hold (a counted
+  // call, not uncertain, past the worst-case turn): once at a turn's open, once at the fence.
+  // The run-wide hold left and its overflow stop nothing.
+  assert.equal(migration.split("'stop'::text,'cost_budget'::text").length, 2);
+  assert.equal(migration.split("v_outcome:='cost_budget'").length, 2);
+  assert.doesNotMatch(migration, /hold_usd-r\.booked_usd<|r\.overflow_usd>0/);
   // Opus 5.5 at medium (every agent but Morrow, ADR-0036) gets its full 16 turns (was 12 under
   // US$7), at high 16 (was 10): ADR-0039's Consequences.
   const expected = {
@@ -571,7 +575,7 @@ test("a reply is checked against what the run was given", () => {
   assert.equal(checkReply({ role: "assistant", content: [] }, "end_turn", offered, false), null);
 });
 
-test("the caps in code before every turn: turns, the final turn, wall time and the lease; no money cap", () => {
+test("the caps in code before every turn: a step's own overflow, turns, the final turn, wall time and the lease; no money cap", () => {
   const w = agentWorld();
   const s = w.state();
   assert.deepEqual(turnCaps({ ...s, status: "running" }, 1), {
@@ -582,11 +586,13 @@ test("the caps in code before every turn: turns, the final turn, wall time and t
   // The last turn the limit allows is final; past it the run ends turn_limit.
   assert.equal(turnCaps(s, s.turnLimit).final, true);
   assert.deepEqual(turnCaps(s, s.turnLimit + 1), { kind: "end", reason: "turn_limit" });
-  // No money cap (ADR-0039 item 1): the hold booked in full, under one worst-case turn left,
-  // or any overflow neither ends the run nor makes the turn final; only the limit does.
+  // No money cap (ADR-0039 item 1): the run's hold booked in full, under one worst-case turn
+  // left, or any overflow of that hold neither ends the run nor makes the turn final; only the
+  // limit does.
   const worst = BigInt(s.worstCaseTurnUsd.replace(".", ""));
   const hold = BigInt(s.holdUsd.replace(".", ""));
   const left = (n) => w.text8(hold - n);
+  assert.equal(s.stepOverflow, false);
   for (const spent of [
     { bookedUsd: left(worst + worst / 2n) },
     { bookedUsd: left(worst - 1n) },
@@ -598,6 +604,17 @@ test("the caps in code before every turn: turns, the final turn, wall time and t
       final: false,
       budgetMs: w.entry.callBudgetMs,
     });
+  // A step booked past its own hold (a counted turn, not uncertain, past the worst-case turn)
+  // still ends the run cost_budget (ADR-0039 item 9), before the turn limit or the time.
+  for (const at of [2, s.turnLimit, s.turnLimit + 1])
+    assert.deepEqual(turnCaps({ ...s, stepOverflow: true }, at), {
+      kind: "end",
+      reason: "cost_budget",
+    });
+  assert.deepEqual(turnCaps({ ...s, stepOverflow: true, activeMs: s.wallTimeMs }, 2), {
+    kind: "end",
+    reason: "cost_budget",
+  });
   // The call's whole budget plus the finish margin must fit the wall time and the lease.
   const budget = w.entry.callBudgetMs + agentRunTimings.finishMarginMs;
   assert.equal(turnCaps({ ...s, activeMs: s.wallTimeMs - budget }, 1).start, true);
@@ -1258,8 +1275,9 @@ test("a turn step replayed after its close committed keeps its recorded reply an
   assert.equal(tools.db.sends.length, 1);
   assert.deepEqual(turnOf(tools), [[1, 1, false, budget, "tool_use"]]);
   assert.equal(tools.text8(tools.db.run.booked8), "0.05000000");
-  // The last turn the limit allows (final), whose booking passed the run's hold: replayed, it
-  // is still the recorded reply (an overflow is recorded, never a stop: ADR-0039 item 1).
+  // The last turn the limit allows (final), whose booking passed the run's hold and its own:
+  // replayed, it is still the recorded reply (an end_turn reply is the run's answer, no step
+  // follows it; both overflows are recorded: ADR-0039 items 1 and 9).
   const last = await started(
     compose(
       agentWorld({
@@ -1354,29 +1372,33 @@ test("a turn step replayed after its close committed keeps its recorded reply an
 });
 
 test("the turn and wall-time caps end the run in code; no money cap does (ADR-0039)", async () => {
-  // US$0.50 held, US$0.21 worst case (Sonnet low), each turn US$0.30: the turns go on past the
-  // hold (booked to it, the rest recorded as overflow, never dropped) and no turn is made
-  // final or refused for money; the run completes on its own answer.
-  const costly = agentWorld({
-    holdUsd: "0.50000000",
-    turnCostUsd: "0.30000000",
+  // US$0.25 held, US$0.21 worst case (Sonnet low), each turn US$0.20, within its own hold: the
+  // turns go on past the run's hold (booked to it, the rest recorded as overflow, never
+  // dropped) and no turn is made final or refused for money; the run completes on its answer.
+  const pastRunHold = agentWorld({
+    holdUsd: "0.25000000",
+    turnCostUsd: "0.20000000",
     script: async (call) =>
       usageOk(call.turn < 4 ? reply(null, read("tu_" + call.turn)) : reply("Done.")),
   });
-  compose(costly);
-  assert.deepEqual(await agentRun(costly.ports, costly.durable(), params), {
+  compose(pastRunHold);
+  assert.deepEqual(await agentRun(pastRunHold.ports, pastRunHold.durable(), params), {
     kind: "ended",
     status: "succeeded",
     reason: "completed",
   });
   assert.deepEqual(
-    costly.db.sends.map((s) => s.call.final),
+    pastRunHold.db.sends.map((s) => s.call.final),
     [false, false, false, false],
   );
   assert.deepEqual(
-    [costly.text8(costly.db.run.booked8), costly.text8(costly.db.run.overflow8)],
-    ["0.50000000", "0.70000000"],
+    [
+      pastRunHold.text8(pastRunHold.db.run.booked8),
+      pastRunHold.text8(pastRunHold.db.run.overflow8),
+    ],
+    ["0.25000000", "0.55000000"],
   );
+  assert.equal(pastRunHold.state().stepOverflow, false);
   // The last turn the limit allows is final (tool_choice none), whatever is left of the hold.
   const tight = agentWorld({
     turnLimit: 2,
@@ -1407,6 +1429,109 @@ test("the turn and wall-time caps end the run in code; no money cap does (ADR-00
   compose(one);
   assert.equal((await agentRun(one.ports, one.durable(), params)).reason, "completed");
   assert.equal(one.db.sends[0].call.final, true);
+});
+
+test("a step booked past its own hold ends the run cost_budget, before its tool calls; booked in full (ADR-0039 item 9)", async () => {
+  // US$0.50 held, US$0.21 worst case (Sonnet low), turn 1 costs US$0.30: a counted turn past
+  // the worst-case turn passed its own hold. Its reply calls a tool, but the run ends
+  // cost_budget right after it: no tool call runs and no turn 2 is sent. The turn is booked in
+  // full (inside the run's hold, so no run-wide overflow).
+  const costly = agentWorld({
+    holdUsd: "0.50000000",
+    turnCostUsd: "0.30000000",
+    script: async (call) =>
+      usageOk(call.turn < 4 ? reply(null, read("tu_" + call.turn)) : reply("Done.")),
+  });
+  compose(costly);
+  const steps = costly.durable();
+  assert.deepEqual(await agentRun(costly.ports, steps, params), {
+    kind: "ended",
+    status: "failed",
+    reason: "cost_budget",
+  });
+  assert.deepEqual(steps.names, ["start", "turn-1-1", "finish"]);
+  assert.equal(costly.db.sends.length, 1);
+  assert.deepEqual(costly.db.dispatched, []);
+  assert.equal(costly.db.toolCalls.size, 0);
+  assert.deepEqual(
+    [costly.text8(costly.db.run.booked8), costly.text8(costly.db.run.overflow8)],
+    ["0.30000000", "0.00000000"],
+  );
+  assert.equal(costly.db.run.endedReason, "cost_budget");
+  assert.equal(costly.state().stepOverflow, true);
+  // A question in that turn is never asked: the person is not asked for a run that stops.
+  const asking = agentWorld({
+    turnCostUsd: "0.30000000",
+    script: async (call) => usageOk(call.turn === 1 ? reply(null, ask("tu_q")) : reply("Done.")),
+  });
+  compose(asking);
+  assert.equal((await agentRun(asking.ports, asking.durable(), params)).reason, "cost_budget");
+  assert.deepEqual(asking.db.questions, []);
+  assert.equal(asking.db.sends.length, 1);
+  // Replayed (the turn step's result lost after its close committed), the step reads the
+  // recorded reply and the overflow from SQL again, sends nothing and ends the run the same way.
+  const ref = Object.freeze({ leaseId: ids.lease, generation: 1 });
+  const replayed = compose(
+    agentWorld({
+      turnCostUsd: "0.30000000",
+      script: async () => usageOk(reply(null, read("tu_1"))),
+    }),
+  );
+  assert.equal(
+    (await replayed.ports.lease(ref, (step) => step.loop.start())).value.outcome,
+    "started",
+  );
+  const ended = { kind: "end", reason: "cost_budget" };
+  assert.deepEqual(await runTurn(replayed.ports, ref, 1, 1), ended);
+  assert.deepEqual(await runTurn(replayed.ports, ref, 1, 1), ended);
+  assert.equal(replayed.db.sends.length, 1);
+  // Past the turn, the caps in code and the open in SQL both stop: no turn 2 opens.
+  assert.deepEqual(await runTurn(replayed.ports, ref, 2, 1), ended);
+  const open = await replayed.ports.lease(ref, (step) =>
+    step.loop.turnOpen({
+      turn: 2,
+      attempt: 1,
+      final: false,
+      budgetMs: replayed.entry.callBudgetMs,
+      inputCanonical: "{}",
+      inputDigest: "0".repeat(64),
+      untrusted: false,
+      readTagsCanonical: "[]",
+    }),
+  );
+  assert.deepEqual(open.value, { outcome: "stop", reason: "cost_budget" });
+  assert.equal(replayed.db.turns.length, 1);
+  // An end_turn reply past its own hold is the run's answer: no step follows it, so the run
+  // completes, the turn booked in full and its overflow recorded.
+  const answer = agentWorld({
+    turnCostUsd: "0.30000000",
+    script: async () => usageOk(reply("Done.")),
+  });
+  compose(answer);
+  assert.deepEqual(await agentRun(answer.ports, answer.durable(), params), {
+    kind: "ended",
+    status: "succeeded",
+    reason: "completed",
+  });
+  assert.equal(answer.text8(answer.db.run.booked8), "0.30000000");
+  // An uncertain turn is booked at exactly its worst case: never a step overflow.
+  let n = 0;
+  const unsure = agentWorld({
+    turnCostUsd: "0.30000000",
+    script: async (call) =>
+      ++n === 1
+        ? { outcome: "uncertain" }
+        : call.turn === 1
+          ? { ...usageOk(reply(null, read("tu_1"))), cost8: 1_000_000n }
+          : { ...usageOk(reply("Done.")), cost8: 1_000_000n },
+  });
+  compose(unsure);
+  assert.deepEqual(await agentRun(unsure.ports, unsure.durable(), params), {
+    kind: "ended",
+    status: "succeeded",
+    reason: "completed",
+  });
+  assert.equal(unsure.state().stepOverflow, false);
 });
 
 // ---------------------------------------------------------------------------
@@ -1719,7 +1844,8 @@ test("the steps' SQL is source-fixed and each decoder accepts only its closed sh
       }),
       /RUNTIME_AGENT_RUN_HELD/,
     );
-  // A turn open stops only on the turn limit or the wall time: no money reason (ADR-0039).
+  // A turn open stops only on the turn limit, a step's own overflow (cost_budget, ADR-0039
+  // item 9) or the wall time: no other money reason (ADR-0039 item 1).
   const openWith = (row) =>
     fake([row]).steps.turnOpen({
       turn: 1,
@@ -1731,10 +1857,67 @@ test("the steps' SQL is source-fixed and each decoder accepts only its closed sh
       untrusted: false,
       readTagsCanonical: "[]",
     });
-  for (const reason of ["turn_limit", "wall_time"])
+  for (const reason of ["turn_limit", "cost_budget", "wall_time"])
     assert.deepEqual(await openWith({ outcome: "stop", reason }), { outcome: "stop", reason });
-  for (const reason of ["cost_budget", "daily_backstop", "cap_below_turn", null])
+  for (const reason of ["daily_backstop", "cap_below_turn", "credits_exhausted", null])
     await assert.rejects(openWith({ outcome: "stop", reason }), /RUNTIME_AGENT_RUN_HELD/);
+  // The run's state carries whether a step passed its own hold, exactly true or false.
+  const stateRow = {
+    outcome: "found",
+    run_id: ids.run,
+    status: "running",
+    kind: "routed",
+    task_id: ids.task,
+    child_task_id: ids.child,
+    envelope_id: ids.envelope,
+    installation_id: ids.installation,
+    agent_principal_id: ids.agent,
+    store_id: ids.store,
+    connection_id: ids.connection,
+    requester_principal_id: ids.requester,
+    requester_membership_id: ids.membership,
+    release_id: "morrow.listings",
+    system_text_digest: routedSystemTextDigest,
+    tools: '["inbox.ask"]',
+    catalogue_version: "2",
+    model_key: "claude_sonnet_5_5",
+    effort_key: "low",
+    turn_limit: "16",
+    tool_calls_per_turn: "4",
+    tool_calls_per_run: "40",
+    questions_limit: "2",
+    max_input_tokens: "64000",
+    max_output_tokens: "5000",
+    wall_time_ms: "1800000",
+    hold_usd: "3.36000000",
+    worst_case_turn_usd: "0.21000000",
+    booked_usd: "0.30000000",
+    overflow_usd: "0.00000000",
+    turns_taken: "1",
+    tool_calls_taken: "0",
+    questions_asked: "0",
+    active_ms: "1000",
+    lease_expires_at_ms: "1800000000000",
+    database_now_ms: "1700000000000",
+    tainted: "false",
+    prefix_digest: null,
+    step_overflow: "true",
+  };
+  assert.equal((await fake([stateRow]).steps.state()).stepOverflow, true);
+  assert.equal(
+    (await fake([{ ...stateRow, step_overflow: "false" }]).steps.state()).stepOverflow,
+    false,
+  );
+  for (const over of [{ step_overflow: null }, { step_overflow: "yes" }, { step_overflow: true }])
+    await assert.rejects(fake([{ ...stateRow, ...over }]).steps.state(), /RUNTIME_AGENT_RUN_HELD/);
+  const { step_overflow: _omitted, ...withoutFlag } = stateRow;
+  await assert.rejects(fake([withoutFlag]).steps.state(), /RUNTIME_AGENT_RUN_HELD/);
+  assert.equal(
+    await fake([
+      Object.fromEntries(Object.keys(stateRow).map((k) => [k, k === "outcome" ? "denied" : null])),
+    ]).steps.state(),
+    "denied",
+  );
   const turnRow = {
     turn: "1",
     attempt: "1",

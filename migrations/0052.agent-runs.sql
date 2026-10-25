@@ -37,7 +37,9 @@ BEGIN;
 -- run's hold is the turn limit times its entry's worst-case turn, computed here (the code
 -- computes the same and admission refuses a mismatch): the most its turns can cost, not a
 -- cap. Every counted turn books its cost (an uncertain one at the worst case; past the hold
--- it is overflow, recorded and never dropped). Admission still needs the operator test
+-- it is overflow, recorded and never dropped, and never a stop). A step whose booked cost
+-- passes its own hold (a counted turn, not uncertain, past the worst-case turn) still ends
+-- the run cost_budget (ADR-0039 item 9). Admission still needs the operator test
 -- entitlement and a billing period. The credit holds and draws that replace the hold
 -- (ADR-0039 items 2 and 3) are ADR-0039's PR 3; the switch's `shared_wallet` prerequisite
 -- keeps it off until they exist, so no loop run runs without them.
@@ -1233,14 +1235,17 @@ BEGIN
 END $$;
 -- The entered lease's run as every step checks it (ids, codes, caps, counters and amounts;
 -- never content): the active time includes the running segment, and the lease's expiry and
--- the database's time let the step size its wall-time check. Outcomes: found, denied.
+-- the database's time let the step size its wall-time check. `step_overflow` says a step's
+-- booked cost passed its own hold: a counted call, not uncertain, whose cost is more than
+-- the run's worst-case turn (ADR-0039 item 9: such a step ends the run cost_budget; the
+-- run-wide hold and its overflow are records only). Outcomes: found, denied.
 CREATE FUNCTION morrow_work.agent_run_state()
 RETURNS TABLE(outcome text,run_id text,status text,kind text,task_id text,child_task_id text,envelope_id text,installation_id text,
  agent_principal_id text,store_id text,connection_id text,requester_principal_id text,requester_membership_id text,release_id text,
  system_text_digest text,tools text,catalogue_version text,model_key text,effort_key text,turn_limit text,tool_calls_per_turn text,
  tool_calls_per_run text,questions_limit text,max_input_tokens text,max_output_tokens text,wall_time_ms text,hold_usd text,
  worst_case_turn_usd text,booked_usd text,overflow_usd text,turns_taken text,tool_calls_taken text,questions_asked text,active_ms text,
- lease_expires_at_ms text,database_now_ms text,tainted text,prefix_digest text)
+ lease_expires_at_ms text,database_now_ms text,tainted text,prefix_digest text,step_overflow text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE e record; r record; v_now timestamptz;
@@ -1249,7 +1254,8 @@ BEGIN
  IF NOT FOUND THEN
   RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
    NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
-   NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
+   NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
+   NULL::text;
   RETURN;
  END IF;
  SELECT x.* INTO r FROM morrow_work.agent_runs x WHERE x.organization_id=e.organization_id AND x.workspace_id=e.workspace_id AND x.id=e.run_id;
@@ -1262,7 +1268,9 @@ BEGIN
   to_char(r.booked_usd,'FM999999999990.00000000'),to_char(r.overflow_usd,'FM999999999990.00000000'),r.turns_taken::text,r.tool_calls_taken::text,
   r.questions_asked::text,(r.active_ms+CASE WHEN r.segment_started_at IS NULL THEN 0
    ELSE greatest((extract(epoch FROM v_now-r.segment_started_at)*1000)::bigint,0) END)::text,
-  (extract(epoch FROM e.expires_at)*1000)::bigint::text,(extract(epoch FROM v_now)*1000)::bigint::text,r.tainted::text,r.prefix_digest::text;
+  (extract(epoch FROM e.expires_at)*1000)::bigint::text,(extract(epoch FROM v_now)*1000)::bigint::text,r.tainted::text,r.prefix_digest::text,
+  EXISTS(SELECT 1 FROM morrow_work.agent_model_calls x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id
+   AND x.run_id=r.id AND x.counted AND x.outcome<>'uncertain' AND x.cost_usd>r.worst_case_turn_usd)::text;
 END $$;
 -- The entered lease's run's request: the parent task's objective, the person's own words
 -- (turn 1's text). Content, inside the step only. Outcomes: found, denied.
@@ -1312,14 +1320,17 @@ END $$;
 -- is the next turn (n = turns taken + 1) after a tool_use reply whose every tool call
 -- finished (or n = 1); attempt 2 only after attempt 1 of the same turn closed uncertain
 -- (resent at most once; an expired open call of attempt 1 is booked so first); the turn
--- limit and the wall time are checked again here after the code checked them (no money cap:
--- ADR-0039 item 1; the credit hold before each turn is ADR-0039's PR 3). The attempt's caps
+-- limit, a step's own overflow and the wall time are checked again here after the code
+-- checked them. No money cap (ADR-0039 item 1; the credit hold before each turn is
+-- ADR-0039's PR 3), but a step whose booked cost passed its own hold ends the run (item 9):
+-- once a counted call, not uncertain, cost more than the run's worst-case turn, no turn opens
+-- (stop, cost_budget). The run-wide hold and its overflow are records only. The attempt's caps
 -- are fixed here, with the input and its digest, before any send: `final` must be what SQL
 -- derives (the last turn the limit allows) and `budget_ms` its call's whole budget. The same
 -- input and caps again is opened_before (a replayed step, which takes the caps recorded here
 -- and is never ended by the caps of the run's state after its own booking); different ones
--- are a conflict. Outcomes: opened, opened_before, conflict, stop (reason turn_limit or
--- wall_time), run_inactive, invalid, denied.
+-- are a conflict. Outcomes: opened, opened_before, conflict, stop (reason turn_limit,
+-- cost_budget or wall_time), run_inactive, invalid, denied.
 CREATE FUNCTION morrow_work.agent_turn_open(p_turn text,p_attempt text,p_final text,p_budget_ms text,p_input text,p_input_digest text,
  p_untrusted text,p_read_tags text)
 RETURNS TABLE(outcome text,reason text)
@@ -1350,6 +1361,12 @@ BEGIN
   RETURN QUERY SELECT CASE WHEN t.input_digest=p_input_digest AND t.final=(p_final='true') AND t.budget_ms=v_budget THEN 'opened_before'
    ELSE 'conflict' END,NULL::text;
   RETURN;
+ END IF;
+ -- A step's own overflow (ADR-0039 item 9): once a counted call, not uncertain, cost more than
+ -- the worst-case turn, no turn attempt opens.
+ IF EXISTS(SELECT 1 FROM morrow_work.agent_model_calls x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id
+   AND x.run_id=r.id AND x.counted AND x.outcome<>'uncertain' AND x.cost_usd>r.worst_case_turn_usd) THEN
+  RETURN QUERY SELECT 'stop'::text,'cost_budget'::text; RETURN;
  END IF;
  IF v_attempt=1 THEN
   IF v_turn<>r.turns_taken+1 THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
@@ -1682,14 +1699,16 @@ END $$;
 -- with, and no outcome yet; the conversation's prefix is exactly the run's recorded one
 -- (null on turn 1), so the conversation is append-only (prefix_mismatch before any
 -- request); attempt 2 only after an uncertain attempt 1; the last turn the limit allows is
--- final (tool_choice none); one call per run is open (no money cap: ADR-0039 item 1; the
--- credit hold before each turn is ADR-0039's PR 3). The same fence again never sends: a closed
+-- final (tool_choice none); one call per run is open; no step of the run passed its own
+-- hold (a counted call, not uncertain, past the worst-case turn: cost_budget, ADR-0039 item
+-- 9; no money cap, item 1, and the run-wide hold is a record; the credit hold before each
+-- turn is ADR-0039's PR 3). The same fence again never sends: a closed
 -- one returns its recorded outcome, reply, digest and usage (`replay`), an open one in its
 -- budget is `in_flight`, an expired one is booked as uncertain and replayed. Returns the
 -- run's selection and its catalogue entry (provider model id, input and output caps), its
 -- offered tools and pinned system-text digest: never the caller's. Outcomes: begun, replay,
--- in_flight, call_open, prefix_mismatch, turn_state, attempt_invalid, run_inactive, denied,
--- invalid, and every resolve_call refusal.
+-- in_flight, call_open, prefix_mismatch, turn_state, attempt_invalid, cost_budget,
+-- run_inactive, denied, invalid, and every resolve_call refusal.
 CREATE FUNCTION morrow_vault.agent_turn_begin(p_lease_id text,p_generation text,p_turn text,p_attempt text,p_sequence text,p_final text,
  p_budget_ms text,p_prefix_digest text,p_input_digest text)
 RETURNS TABLE(outcome text,call_id text,model_key text,effort_key text,provider_model_id text,max_input_tokens text,max_output_tokens text,
@@ -1793,6 +1812,8 @@ BEGIN
   ELSIF v_attempt=2 AND NOT EXISTS(SELECT 1 FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id
     AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=1 AND x.outcome='uncertain') THEN v_outcome:='attempt_invalid';
   ELSIF v_turn=r.turn_limit AND p_final<>'true' THEN v_outcome:='invalid';
+  ELSIF EXISTS(SELECT 1 FROM morrow_work.agent_model_calls x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id
+    AND x.run_id=r.id AND x.counted AND x.outcome<>'uncertain' AND x.cost_usd>r.worst_case_turn_usd) THEN v_outcome:='cost_budget';
   END IF;
  END IF;
  IF v_outcome IS NOT NULL THEN
@@ -1821,24 +1842,29 @@ END $$;
 -- input_over_cap and a provider_error without usage do not. A counted call's cost is
 -- computed here from the run's loop catalogue entry (each token kind at its rate, rounded
 -- up), or its worst-case turn when uncertain, and booked against the run's hold; what the
--- hold cannot hold is overflow (never dropped). A reply (end_turn, tool_use) is written
+-- hold cannot hold is overflow (never dropped), a record and never a stop. A counted call, not
+-- uncertain, that cost more than the run's worst-case turn passed its own hold (a step
+-- overflow, ADR-0039 item 9): it is booked in full, and the run takes no further step
+-- (agent_run_state's step_overflow; agent_turn_open stops cost_budget, agent_turn_begin
+-- refuses cost_budget). A reply (end_turn, tool_use) is written
 -- into the turn's row with the conversation's digest after it, which becomes the run's
 -- prefix; a reply that is not a stored AssistantModelMessage, or names another provider
 -- model, is recorded as invalid_output or provider_error. not_sent leaves the turn open for
--- the next sequence. Outcomes: closed (with the recorded outcome, the cost and whether it
--- overflowed), already_closed (with the recorded outcome), not_found, denied, invalid.
+-- the next sequence. Outcomes: closed (with the recorded outcome, the cost, whether the run's
+-- hold overflowed and whether the step passed its own hold), already_closed (with the
+-- recorded outcome), not_found, denied, invalid.
 CREATE FUNCTION morrow_vault.agent_turn_end(p_call_id text,p_outcome text,p_raw_stop_reason text,p_provider_request_id text,
  p_provider_model_id text,p_counted_input_tokens text,p_input_tokens text,p_cache_write_tokens text,p_cache_read_tokens text,p_output_tokens text,
  p_reply text,p_prefix_after text)
-RETURNS TABLE(outcome text,recorded_outcome text,cost_usd text,overflow boolean)
+RETURNS TABLE(outcome text,recorded_outcome text,cost_usd text,overflow boolean,step_overflow boolean)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
 #variable_conflict use_column
 DECLARE
  c record; r record; en record; v_found boolean; v_outcome text; v_usage boolean; v_counted boolean; v_cost numeric(20,8); v_booked numeric(20,8);
- v_overflow numeric(20,8); v_reply jsonb; v_now timestamptz; n integer;
+ v_overflow numeric(20,8); v_step_overflow boolean:=false; v_reply jsonb; v_now timestamptz; n integer;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN
-  RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::boolean; RETURN;
+  RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::boolean,NULL::boolean; RETURN;
  END IF;
  IF p_call_id IS NULL OR p_call_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
   OR p_outcome IS NULL OR p_outcome NOT IN ('end_turn','tool_use','incomplete','refusal','invalid_output','spend_limit','provider_error','uncertain',
@@ -1856,14 +1882,14 @@ BEGIN
   OR ((p_outcome IN ('end_turn','tool_use'))<>(p_reply IS NOT NULL)) OR ((p_reply IS NULL)<>(p_prefix_after IS NULL))
   OR (p_prefix_after IS NOT NULL AND p_prefix_after !~ '^[a-f0-9]{64}$')
   OR (p_reply IS NOT NULL AND (octet_length(p_reply)>393216 OR NOT pg_input_is_valid(p_reply,'jsonb'))) THEN
-  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::boolean; RETURN;
+  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::boolean,NULL::boolean; RETURN;
  END IF;
  PERFORM pg_catalog.set_config('morrow.vault_agent_call',p_call_id,true);
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.run_id::text AS run_id,x.turn,x.attempt,x.status,
   x.outcome INTO c FROM morrow_work.agent_model_calls x WHERE x.id=p_call_id;
  v_found:=FOUND;
  PERFORM pg_catalog.set_config('morrow.vault_agent_call','',true);
- IF NOT v_found THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::boolean; RETURN; END IF;
+ IF NOT v_found THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::boolean,NULL::boolean; RETURN; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.agent_run',c.organization_id,
   c.workspace_id,c.run_id)::text,0));
  PERFORM pg_catalog.set_config('morrow.vault_agent_run',c.organization_id||'|'||c.workspace_id||'|'||c.run_id,true);
@@ -1871,7 +1897,7 @@ BEGIN
   AND x.workspace_id=c.workspace_id AND x.id=p_call_id;
  IF c.status<>'started' THEN
   PERFORM pg_catalog.set_config('morrow.vault_agent_run','',true);
-  RETURN QUERY SELECT 'already_closed'::text,c.outcome,NULL::text,NULL::boolean; RETURN;
+  RETURN QUERY SELECT 'already_closed'::text,c.outcome,NULL::text,NULL::boolean,NULL::boolean; RETURN;
  END IF;
  SELECT x.* INTO r FROM morrow_work.agent_runs x WHERE x.organization_id=c.organization_id AND x.workspace_id=c.workspace_id AND x.id=c.run_id;
  SELECT x.* INTO en FROM morrow_work.loop_catalogue_entries x WHERE x.version=r.catalogue_version AND x.model_key=r.model_key
@@ -1899,6 +1925,7 @@ BEGIN
   END IF;
   v_booked:=least(v_cost,greatest(r.hold_usd-r.booked_usd,0));
   v_overflow:=v_cost-v_booked;
+  v_step_overflow:=v_outcome<>'uncertain' AND v_cost>r.worst_case_turn_usd;
   UPDATE morrow_work.agent_runs x SET booked_usd=x.booked_usd+v_booked,overflow_usd=x.overflow_usd+v_overflow,
    prefix_digest=CASE WHEN v_reply IS NOT NULL THEN p_prefix_after ELSE x.prefix_digest END,revision=x.revision+1,
    updated_at=greatest(v_now,x.updated_at) WHERE x.organization_id=c.organization_id AND x.workspace_id=c.workspace_id AND x.id=c.run_id;
@@ -1920,7 +1947,8 @@ BEGIN
     AND t.outcome IS NULL;
  END IF;
  PERFORM pg_catalog.set_config('morrow.vault_agent_run','',true);
- RETURN QUERY SELECT 'closed'::text,v_outcome,CASE WHEN v_counted THEN to_char(v_cost,'FM999999999990.00000000') END,v_overflow>0;
+ RETURN QUERY SELECT 'closed'::text,v_outcome,CASE WHEN v_counted THEN to_char(v_cost,'FM999999999990.00000000') END,v_overflow>0,
+  v_step_overflow;
 END $$;
 
 -- ---------------------------------------------------------------------------

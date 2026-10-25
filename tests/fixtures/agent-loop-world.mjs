@@ -3,8 +3,9 @@
 // (packages/work/src/loop/runner.ts) through every branch without PostgreSQL. It follows the
 // definers' rules closely enough for the runner (the turn and attempt order, the tool-call
 // begin, finish and replay, the questions, the wait and the resume lease, the hold and the
-// booking at the worst case when uncertain, never a money cap: ADR-0039); lab:agent-loop
-// proves the real definers.
+// booking at the worst case when uncertain, never a money cap, and a step's own overflow,
+// a counted turn past the worst-case turn, which ends the run cost_budget: ADR-0039 items 1
+// and 9); lab:agent-loop proves the real definers.
 import { createHash } from "node:crypto";
 import { validateCurrentDefinition } from "../../packages/contracts/src/validation.ts";
 import { loopEntry } from "../../packages/policy/src/loop-catalogue.ts";
@@ -71,6 +72,8 @@ export function agentWorld({
       worst8: parse8(caps.worstCaseTurnUsd),
       booked8: 0n,
       overflow8: 0n,
+      // A counted call, not uncertain, past the worst-case turn (agent_run_state's step_overflow).
+      stepOverflow: false,
       turnsTaken: 0,
       toolCallsTaken: 0,
       questionsAsked: 0,
@@ -141,6 +144,7 @@ export function agentWorld({
     databaseNowMs: now.ms,
     tainted: db.run.tainted,
     prefixDigest: db.run.prefixDigest,
+    stepOverflow: db.run.stepOverflow,
   });
   const running = () => db.run.status === "running";
   const book = (cost8) => {
@@ -213,6 +217,9 @@ export function agentWorld({
               ? "opened_before"
               : "conflict",
         };
+      // No money cap (ADR-0039 item 1), but a step past its own hold ends the run (item 9):
+      // no attempt opens after it.
+      if (db.run.stepOverflow) return { outcome: "stop", reason: "cost_budget" };
       if (attempt === 1) {
         if (turn !== db.run.turnsTaken + 1) return { outcome: "invalid" };
         if (turn > db.run.turnLimit) return { outcome: "stop", reason: "turn_limit" };
@@ -221,8 +228,7 @@ export function agentWorld({
         !db.turns.some((t) => t.turn === turn && t.attempt === 1 && t.outcome === "uncertain")
       )
         return { outcome: "invalid" };
-      // No money cap (ADR-0039 item 1). SQL derives the final turn itself (the last the turn
-      // limit allows) and compares it with the code's.
+      // SQL derives the final turn itself (the last the turn limit allows) and compares it.
       if (final !== turn >= db.run.turnLimit) return { outcome: "invalid" };
       if ((await messageDigest(JSON.parse(inputCanonical))) !== inputDigest)
         throw Error("WORLD_INPUT_DIGEST");
@@ -490,7 +496,11 @@ export function agentWorld({
       const outcome = lost ? reply.recorded : reply.outcome;
       const message = outcome === "end_turn" || outcome === "tool_use" ? reply.message : null;
       const counted = !["spend_limit", "not_sent", "input_over_cap"].includes(outcome);
-      if (counted) book(outcome === "uncertain" ? db.run.worst8 : (reply.cost8 ?? turnCost8));
+      if (counted) {
+        const cost8 = outcome === "uncertain" ? db.run.worst8 : (reply.cost8 ?? turnCost8);
+        book(cost8);
+        if (outcome !== "uncertain" && cost8 > db.run.worst8) db.run.stepOverflow = true;
+      }
       row.outcome = outcome;
       row.output = message;
       if (message !== null) {
