@@ -108,7 +108,7 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
   - the cron's counts, its unavailable count, and no sync without its whole budget;
   - both budgets inside the broker's range and inside `waitUntil`'s 30 s.
 - [x] Entrypoint and configuration: `ConnectorBroker` gains exactly the one method with its arity check (`tests/broker.test.mjs`). The staging broker's `CONNECTOR_CONFIGURATION_JSON` is required, staging only and byte-equal to the connector's, and the connector's hostname is admitted in that var only (`tests/edge-config.test.mjs`).
-- [ ] `lab:shopify-install` H1-H8 (PostgreSQL 17, createrole administrator):
+- [x] `lab:shopify-install` H1-H8 (PostgreSQL 17, createrole administrator):
   - only the broker lists, reads targets and records;
   - the target's tenant, app, shop and current envelope;
   - the real sync registers both stores against the oracle, leaving another path's subscription alone;
@@ -117,9 +117,9 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
   - a re-authorisation's new version without a create;
   - an ended installation never pending.
 
-  Result: see the PR's local run note; the hosted pg-linking leg is the authority.
-- [ ] `lab:shopify-connect-workers` H1-H2 (workerd): the install's `waitUntil` registers both subscriptions and records version 1; the re-authorisation lists, creates nothing and records version 2; W3's re-drive counts include the sync. Hosted pg-work leg.
-- [ ] `lab:tenant-conformance` with the new table, bridges and definers registered (`tests/tenant-conformance/registry.mjs`). Hosted pg-work leg.
+  Local run 2026-10-25: 58 of 58 checks. Two earlier runs under a load average near 900 failed in the install and link phases, before H; the hosted pg-linking leg is the authority.
+- [x] `lab:shopify-connect-workers` H1-H2 (workerd): the install's `waitUntil` registers both subscriptions and records version 1; the re-authorisation lists, creates nothing and records version 2; W3's re-drive counts include the sync. Local run 2026-10-25: 29 of 29 checks; the hosted pg-work leg is the authority.
+- [x] `lab:tenant-conformance` with the new table, bridges and definers registered (`tests/tenant-conformance/registry.mjs`). Local run 2026-10-25: 17 of 17. Also run once, unchanged and green, because they share the oracle and the connector's re-drive: `lab:shopify-privacy` (39 checks) and `lab:disconnect-store` (28 checks).
 - [ ] Owner gate: none for the code. The post-merge steps above run under the standing approval.
 
 ## Open questions
