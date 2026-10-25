@@ -232,6 +232,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
         "plan_start_document(text)": `morrow_work.plan_start_document('${"a".repeat(64)}')`,
         // v1 PR 5: the viewer's open Reconnect items.
         "connection_notices_open()": "morrow_work.connection_notices_open()",
+        // v1 PR 5 review F3: the store a reinstall linked in place of an ended one.
+        "store_reinstalled(text)": "morrow_work.store_reinstalled('store_probe')",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(

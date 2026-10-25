@@ -31,9 +31,10 @@ BEGIN;
 --     takes the link a reinstall is connected through; the 48-hour deletion runs the same
 --     function, so the two deletions keep one rule; PR 5 review finding F1);
 --   * identity bridges (SECURITY DEFINER, EXECUTE for morrow_work_command only; 0053's
---     connector and vault definers call them): the scope record, the health target, the
+--     connector, vault and api definers call them): the scope record, the health target, the
 --     reinstall leftovers, the ids-only due lists (checks, reconnects, deletions, stuck inbox
---     rows), the deletion's open and completion.
+--     rows), the deletion's open and completion, and the store a reinstall linked in place
+--     of an ended one (the Inbox settles the ended connection's problem by it).
 -- The tenant always comes from a row the broker recorded or the installation itself, never
 -- from a caller (invariant 1). Nothing here deletes a row or reaches the vault.
 DO $$ BEGIN
@@ -967,18 +968,40 @@ BEGIN
   WHERE x.status='received' AND x.received_at<pg_catalog.clock_timestamp()-interval '24 hours';
  RETURN QUERY SELECT n,v_stuck;
 END $$;
+-- The store a reinstall linked in place of an ended one (PR 5 review finding F3, after
+-- integration with main's Inbox): for the tenant's installation of p_store_id that is
+-- uninstalled, the installation of the same app and the same shop in the same tenant that
+-- was created after it and is linked now (a reinstall is a new installation with a new store
+-- and connection, linked again only by a person). The shop id is kept by shop/redact's
+-- redaction (only the domain becomes the pseudonym), so this holds after either deletion.
+-- 0053's store_reinstalled (the api's session read) calls it with the session tenant. Ids
+-- only; at most one row (the latest).
+CREATE FUNCTION morrow_identity.work_shopify_store_successor(p_org text,p_ws text,p_store_id text)
+RETURNS TABLE(store_id text,connection_id text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT n.store_id::text,n.connection_id::text FROM morrow_identity.store_installations o
+  JOIN morrow_identity.store_installations n ON n.organization_id=o.organization_id AND n.workspace_id=o.workspace_id
+   AND n.app_key=o.app_key AND n.shop_id=o.shop_id AND n.id<>o.id AND n.created_at>o.created_at
+  JOIN morrow_identity.workspace_store_links l ON l.id=n.link_id AND l.installation_id=n.id
+   AND l.organization_id=n.organization_id AND l.workspace_id=n.workspace_id
+ WHERE p_org ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' AND p_ws ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  AND p_store_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  AND o.organization_id=p_org AND o.workspace_id=p_ws AND o.store_id=p_store_id AND o.status='uninstalled'
+  AND n.status='linked' AND n.linked_at<=pg_catalog.clock_timestamp()
+ ORDER BY n.created_at DESC,n.id LIMIT 1
+$$;
 REVOKE ALL ON FUNCTION morrow_identity.work_shopify_health_target(text),
  morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
  morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reconnect_due(),
  morrow_identity.work_shopify_reinstall_leftovers(text,text),
  morrow_identity.work_shopify_deletions_due(),morrow_identity.work_shopify_deletion_open(text),
  morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
- morrow_identity.work_shopify_inbox_stuck() FROM PUBLIC;
+ morrow_identity.work_shopify_inbox_stuck(),morrow_identity.work_shopify_store_successor(text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_identity.work_shopify_health_target(text),
  morrow_identity.work_shopify_scopes_record(text,text,text,text,text,text,text),morrow_identity.work_shopify_check_target(text),
  morrow_identity.work_shopify_checks_due(),morrow_identity.work_shopify_reconnect_due(),
  morrow_identity.work_shopify_reinstall_leftovers(text,text),
  morrow_identity.work_shopify_deletions_due(),morrow_identity.work_shopify_deletion_open(text),
  morrow_identity.work_shopify_deletion_complete(text,text,text,jsonb),
- morrow_identity.work_shopify_inbox_stuck() TO morrow_work_command;
+ morrow_identity.work_shopify_inbox_stuck(),morrow_identity.work_shopify_store_successor(text,text,text) TO morrow_work_command;
 COMMIT;

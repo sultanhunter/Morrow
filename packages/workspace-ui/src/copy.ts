@@ -335,16 +335,19 @@ export const copy = {
     back: "Back to Shopify connection",
     shop: "Store",
     status: "Status",
-    // M2 PR-3 review: an uninstall, a scope change or a disconnect ends the store's
-    // connection for good in this build (no reinstall under the same app); reconnecting needs
-    // a new install from Morrow.
+    // v1 PR 5: an uninstall or a disconnect still ends this connection, but the same app can
+    // be installed again (a scope change no longer ends it). The install link stays on the
+    // Shopify connection page until Morrow deletes the ended store's data, 48 hours after the
+    // uninstall; a reinstall is a new connection that a person links again, and the ended
+    // one's data is deleted anyway (ADR-0031 owner question 2). After a disconnect the app
+    // must be uninstalled first (PR 5 review finding F4, after integration with main).
     statusHelp: {
       unlinked: "Installed on Shopify, not linked to this workspace yet.",
       linked: "Linked to this workspace.",
       suspended:
         "Disconnected. Morrow no longer reads or changes this store, and its access to the store is erased.",
       uninstalled:
-        "The app was uninstalled from Shopify, so Morrow no longer uses this store. Reconnecting isn't available in this build; contact Morrow support to connect it again.",
+        "The app was uninstalled from Shopify, so Morrow no longer uses this store. To connect it again within 48 hours, install the app from the install link on the Shopify connection page, then link the store. It comes back as a new connection, and Morrow still deletes the data it kept for this one. After 48 hours, ask Morrow support for a new install link.",
     } as Readonly<Record<string, string>>,
     // "Disconnect store" (ADR-0022 item 15): the person's kill switch for the whole store.
     disconnect: {
@@ -359,7 +362,7 @@ export const copy = {
         "The Morrow app stays installed in your Shopify admin until you uninstall it there.",
       ],
       reconnectNote:
-        "Reconnecting needs a new install: uninstall the Morrow app in your Shopify admin, then ask Morrow support for a new install link. You can't undo a disconnect here.",
+        "To connect this store again, install the Morrow app again from the install link on the Shopify connection page, then link the store. After a disconnect, uninstall the app in your Shopify admin first. Do it within 48 hours of the uninstall, or ask Morrow support for a new install link. You can't undo a disconnect here.",
       reason: "Reason",
       reasonHint: "Required. Up to 1,024 characters. Recorded with the disconnect.",
       confirm: "Disconnect store",

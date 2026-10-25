@@ -362,14 +362,33 @@ test("the fixture adapter: disconnect once, then the stop stands and a repeat is
   assert.equal((await port.agents.listingsStatus(W, fixtureStore.storeId)).value.blocked, true);
 });
 
-test("copy: what a disconnect does, and that reconnecting needs a new install", () => {
+test("copy: what a disconnect does, and how the store connects again (a reinstall)", () => {
   const d = copy.connections.disconnect;
   assert.equal(d.button, "Disconnect store");
   const said = [d.intro, ...d.dialogBody].join(" ");
   for (const fact of ["Stops all AI work", "access token", "uninstall"])
     assert.ok(said.includes(fact), fact);
-  assert.ok(d.reconnectNote.includes("new install"));
-  assert.ok(d.reconnectNote.includes("can't undo"));
+  // v1 PR 5 makes reinstalling the same app work and offers its install link on the Shopify
+  // connection page (an uninstalled installation no longer blocks it; a suspended one does
+  // until the app is uninstalled): the note says so, and no longer sends everyone to support
+  // (PR 5 review finding F4, after integration with main).
+  for (const fact of [
+    "install link on the Shopify connection page",
+    "After a disconnect, uninstall the app",
+    "within 48 hours",
+    "can't undo",
+  ])
+    assert.ok(d.reconnectNote.includes(fact), fact);
+  assert.ok(!d.reconnectNote.includes("Reconnecting needs a new install"));
+  const uninstalled = copy.connections.statusHelp.uninstalled;
+  for (const fact of [
+    "install link on the Shopify connection page",
+    "within 48 hours",
+    "link the store",
+    "new connection",
+  ])
+    assert.ok(uninstalled.includes(fact), fact);
+  assert.doesNotMatch(uninstalled, /isn't available|contact Morrow support to connect/);
   assert.ok(d.credential.pending.includes("already disconnected"));
   assert.ok(!("disconnectLater" in copy.connections));
   assert.equal(copy.reentry.kinds.disconnect, "disconnecting a store");

@@ -17,11 +17,16 @@
 // installation stop, StopRecord@1, leases revoked; another store's and another tenant's agents
 // untouched), raises one Reconnect item for the steward and the Owner, and nothing resumes by
 // itself; the re-authorisation through the install link clears the item and leaves the stop;
+// the Inbox (GET /work/inbox, main's handler as the api login) shows the item as a
+// permissions problem to its recipients who hold the store's disconnect right, and to nobody
+// else (PR 5 review finding F1, after integration with main);
 // C  the read-back (switch on) reconciles a missed scope change and a refused token, records
 // nothing from an unclear answer, a stale token or a read that began before a narrowing
 // delivery, and the cron's reconcile list reaches every open item however many there are;
 // R  a reinstall after an uninstall is a new installation with a new token, the old token
-// destroyed in the same transaction, born unlinked and linked only by a person; D  the
+// destroyed in the same transaction, born unlinked and linked only by a person, and the
+// ended store's Inbox problem settles once the reinstall is linked (PR 5 review finding F3,
+// after integration with main); D  the
 // 48-hour deletion of an installation whose shop/redact never completed runs once with its
 // record, waits for the token, deletes the store's content and identity, keeps a live
 // reinstall's install link (as a shop/redact for an earlier installation does) and never
@@ -49,15 +54,23 @@ import {
 import { createControlledWorkspaceStoreLinking } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { runShopifyLinkIssuer } from "../packages/identity/src/shopify-link-issuer.ts";
 import { createConnectionKernel } from "../packages/policy/src/connection-authority.ts";
+import { disconnectFields } from "../packages/policy/src/store-link-template.ts";
+import { storeResource } from "../packages/policy/src/store-resource.ts";
 import { decodeReconnectNotices } from "../packages/work/src/connection-health/notices.ts";
+import { createInboxApiHandler } from "../packages/work/src/inbox/http.ts";
+import { decodeInbox } from "../apps/workspace-web/src/http/inbox-decoders.ts";
+import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 import { systemInstallationStopReasons } from "../packages/work/src/stops.ts";
 import { storeContentHandlers } from "../packages/work/src/redaction.ts";
 import {
   asApi,
+  grantInsert,
   literal,
   seedWorkFixtures,
+  sleep,
   withWorkDatabase,
   workFixtureOrigin,
+  workRequest,
 } from "../tests/tenant-conformance/harness.mjs";
 import { createShopifyOracle } from "./fixtures/shopify-oracle.mjs";
 import { writeArtifact } from "./artifacts.mjs";
@@ -103,6 +116,7 @@ const sourceDigests = Object.fromEntries(
     "apps/broker/src/vault-database.ts",
     "packages/identity/src/broker-protocol.ts",
     "packages/work/src/connection-health/notices.ts",
+    "packages/work/src/inbox/read.ts",
     ...files.map((f) => "migrations/" + f),
   ].map((p) => [p, sha(readFileSync(p))]),
 );
@@ -491,6 +505,64 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       );
       return decodeReconnectNotices(JSON.parse(out.split("\n").at(-1) ?? "[]"));
     };
+    // GET /work/inbox through main's Inbox handler as the api login (the SPA's decoder reads
+    // the reply); a read that a loaded engine timed out (503) is asked again.
+    const inboxHandler = createInboxApiHandler({
+      origin: workFixtureOrigin,
+      connector: db.connector(),
+      now: Date.now,
+    });
+    const inboxOf = async (p) => {
+      for (let n = 1; ; n++) {
+        const response = await inboxHandler.fetch(workRequest(p, "GET", "/inbox"), undefined, {
+          waitUntil() {},
+        });
+        const text = await response.text();
+        if (response.status === 503 && n < 5) {
+          await sleep(500);
+          continue;
+        }
+        const body = response.status === 200 ? JSON.parse(text) : null;
+        return { status: response.status, view: body === null ? null : decodeInbox(body), text };
+      }
+    };
+    const connectionItems = (read, connectionId) =>
+      (read.view?.items ?? []).filter((i) => i.kind === "connection" && i.id === connectionId);
+    // The store's disconnect right as the store link issues it (sim: owner-seeded, since these
+    // stores were seeded linked rather than linked through the issuer; v1.1's Grant).
+    const disconnectGrant = (p, s) => {
+      const actor = (kind, principalId, membershipId) => ({
+        kind,
+        principalId,
+        organizationId: s.org,
+        workspaceId: s.ws,
+        membershipId,
+        installationId: null,
+        mandateId: null,
+      });
+      const grant = {
+        id: `grant_${p.key.toLowerCase()}_disconnect_${s.agent}`,
+        principal: actor("human", p.principal, p.membership),
+        capabilityId: "governance.connection.disconnect",
+        verbs: ["execute"],
+        scope: {
+          organizationId: s.org,
+          workspaceId: s.ws,
+          storeIds: [s.store],
+          accountIds: [],
+          resources: [storeResource(s.org, s.ws, s.store, s.connection)],
+          fields: [...disconnectFields],
+        },
+        issuedBy: actor("service", "morrow.linking", null),
+        validFrom: "2026-01-01T00:00:00.000Z",
+        expiresAt: null,
+        revokedAt: null,
+        policyRevision: 1,
+      };
+      if (!validateCurrentDefinition("Grant", grant))
+        throw Error("CONNECTION_HEALTH_LAB_GRANT_INVALID");
+      return grantInsert(p, grant);
+    };
     const { G, H, D, T } = stores;
     const reasonText = systemInstallationStopReasons.shopify_scope_missing;
 
@@ -569,6 +641,37 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
         viewerNotices(Y).length === 0,
       { seenByA },
     );
+    // PR 5 review finding F1 (after integration with main): the Inbox itself shows it. A is the
+    // steward and the Owner; X is a member who holds the same disconnect right but is not a
+    // recipient; Y is another tenant's Owner.
+    db.admin([A, X].map((p) => disconnectGrant(p, G)).join("\n"));
+    const [gInboxA, gInboxX, gInboxY] = [await inboxOf(A), await inboxOf(X), await inboxOf(Y)];
+    check(
+      "G11:the_inbox_shows_the_reconnect_item_as_a_permissions_problem_to_its_recipients_only",
+      gInboxA.status === 200 &&
+        gInboxA.view !== null &&
+        gInboxA.view.sections.connections === "ok" &&
+        JSON.stringify(connectionItems(gInboxA, G.connection)) ===
+          JSON.stringify([
+            {
+              kind: "connection",
+              reason: "scopes_changed",
+              id: G.connection,
+              storeId: G.store,
+              setBy: "system",
+              since: seenByA[0]?.createdAt,
+              open: true,
+            },
+          ]) &&
+        [gInboxX, gInboxY].every(
+          (r) =>
+            r.status === 200 &&
+            r.view !== null &&
+            connectionItems(r, G.connection).length === 0 &&
+            !r.text.includes(G.store),
+        ),
+      { a: gInboxA.text.slice(0, 600), x: gInboxX.text.slice(0, 300), y: gInboxY.status },
+    );
     // Out of order: a delivery that names write_products again only narrows (the read-back or
     // a re-authorisation adds a scope back), and nothing resumes.
     const restoredLate = await deliver(
@@ -636,6 +739,15 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
         afterReconnect.length === 1 &&
         afterReconnect[0].open === false,
       { reconnected: reconnected.result.outcome, afterReconnect },
+    );
+    const gInboxAfter = await inboxOf(A);
+    check(
+      "G12:once_reconnected_the_inbox_no_longer_shows_the_problem_before_the_cron_clears_it",
+      gInboxAfter.status === 200 &&
+        gInboxAfter.view !== null &&
+        connectionItems(gInboxAfter, G.connection).length === 0 &&
+        noticesOf(G)[0]?.cleared_reason === null,
+      { a: gInboxAfter.text.slice(0, 600) },
     );
     const cron = await connector.redrive();
     check(
@@ -917,6 +1029,17 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
           `SELECT count(*)::int AS n FROM morrow_work.stop_controls WHERE scope='connection' AND target_id=${literal(r1.connection_id)} AND lifted_at IS NULL`,
         )[0].n === 1,
     );
+    // The Inbox shows the ended store to A (the steward and Owner, who holds the first link's
+    // disconnect right on it) until its shop is linked again.
+    const rInboxEnded = await inboxOf(A);
+    check(
+      "R7:the_inbox_shows_the_uninstalled_store_as_a_problem",
+      rInboxEnded.status === 200 &&
+        JSON.stringify(
+          connectionItems(rInboxEnded, r1.connection_id).map((i) => [i.reason, i.setBy, i.storeId]),
+        ) === JSON.stringify([["uninstalled", "system", r1.store_id]]),
+      { a: rInboxEnded.text.slice(0, 600) },
+    );
     const rLaunch = await launchOf(R);
     const rLaunchPage = await connector.fetch(
       new Request(`${connectorOrigin}/shopify/a/${R.appKey}/launch?${R.oracle.launchQuery()}`),
@@ -976,6 +1099,31 @@ SELECT ${literal(s.org)},${literal(s.ws)},${literal(randomUUID())},1,'run',${lit
       "R6:the_person_links_the_reinstalled_store_and_gets_the_store_link_grants_on_the_new_store",
       relink.outcome === "applied" && linkedR.status === "linked" && newGrants === 5,
       { relink, linkedR, newGrants },
+    );
+    // PR 5 review finding F3 (after integration with main): the ended store is never linked
+    // again (the reinstall is a new store), so the Inbox settles its problem by the reinstall
+    // of the same app and shop, linked in this workspace. The uninstall's stop still stands.
+    const rInboxRelinked = await inboxOf(A);
+    check(
+      "R8:once_the_reinstall_is_linked_the_inbox_settles_the_uninstalled_stores_problem",
+      rInboxRelinked.status === 200 &&
+        rInboxRelinked.view !== null &&
+        connectionItems(rInboxRelinked, r1.connection_id).length === 0 &&
+        connectionItems(rInboxRelinked, linkedR.connection_id).length === 0 &&
+        workRows(
+          `SELECT count(*)::int AS n FROM morrow_work.stop_controls WHERE scope='connection' AND target_id=${literal(r1.connection_id)} AND lifted_at IS NULL`,
+        )[0].n === 1 &&
+        db
+          .sql(
+            asApi(
+              Y,
+              `SELECT count(*) FROM morrow_work.store_reinstalled(${literal(r1.store_id)});`,
+            ),
+            { user: "morrow_api_worker" },
+          )
+          .split("\n")
+          .at(-1) === "0",
+      { a: rInboxRelinked.text.slice(0, 600) },
     );
 
     // -------------------------------------------------------------------------

@@ -30,6 +30,7 @@ import {
   shopifyExchangeReasons,
   shopifyQueryShapeReasons,
 } from "./shopify.js";
+import { shopifyInstallationStates } from "../../../packages/identity/src/broker-protocol.js";
 
 export const shopifyStageEvent = "morrow_broker_shopify_stage";
 export const shopifyStageMethods = Object.freeze([
@@ -127,7 +128,9 @@ const vaultErrorCodes = Object.freeze([
   "VAULT_STATEMENT_DENIED",
   "VAULT_OUTCOME_UNKNOWN",
 ] as const satisfies readonly VaultErrorCode[]);
-const installations = ["none", "unlinked", "linked", "suspended", "uninstalled"] as const;
+// The launch's installation states, from the protocol itself, so a state it adds (v1 PR 5's
+// `reconnect`) is never logged as null (PR 5 review finding F2, after integration with main).
+const installations = shopifyInstallationStates;
 /** The key set of the line, in order. */
 export const shopifyStageKeys = Object.freeze([
   "event",

@@ -385,6 +385,161 @@ test("GET /work/inbox: a denied question read marks its section; no disconnect r
   );
 });
 
+// v1 PR 5 after integration with main (review findings F1 and F3): a scope change keeps the
+// connection and raises a Reconnect item instead of a connection stop, and a reinstall is a
+// new store, so the Inbox reads both.
+const noticeRow = (over = {}) => ({
+  notice_id: "6f1c2e0a-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+  kind: "reconnect",
+  cause: "scopes_missing",
+  store_id: S,
+  connection_id: C,
+  installation_id: "storeinst_1",
+  missing_scopes: "write_products",
+  stopped_installations: '["agentinst_1"]',
+  revision: "1",
+  created_at: at,
+  updated_at: at,
+  still_open: "true",
+  ...over,
+});
+const inboxWith = async (t, replies) => {
+  const s = scripted({ pendingApprovalPage: [], inboxOperations: [], ...replies });
+  const { result } = await quiet(t, () => s.handler.fetch(get(base + "/inbox"), {}, ctx));
+  const body = result.status === 200 ? await result.json() : null;
+  return { status: result.status, body, calls: s.calls };
+};
+const connectionsOf = (body) => body.items.filter((i) => i.kind === "connection");
+
+test("GET /work/inbox: a live connection's Reconnect item is a permissions problem for its recipients who may disconnect the store", async (t) => {
+  // The steward and the Owner (the definer answers its recipients only) holding the store's
+  // disconnect right: one problem, a scope change set by the system, since the item began.
+  const owner = await inboxWith(t, {
+    enterContext: () => contextRow([questionRead, disconnectRight]),
+    questionPageForRespondent: [],
+    connectionNoticesOpen: [noticeRow()],
+  });
+  assert.equal(owner.status, 200);
+  assert.deepEqual(connectionsOf(owner.body), [
+    {
+      kind: "connection",
+      reason: "scopes_changed",
+      id: C,
+      storeId: S,
+      setBy: "system",
+      since: at,
+      open: true,
+    },
+  ]);
+  assert.equal(owner.body.sections.connections, "ok");
+  assert.deepEqual(
+    owner.calls.filter((c) => c.name === "connectionNoticesOpen").map((c) => c.values),
+    [[]],
+    "one read of the viewer's own items, no values: the definer takes the session",
+  );
+  // A Shopify refusal of the token is the same problem.
+  const refused = await inboxWith(t, {
+    enterContext: () => contextRow([disconnectRight]),
+    connectionNoticesOpen: [noticeRow({ cause: "token_refused", missing_scopes: "" })],
+  });
+  assert.deepEqual(
+    connectionsOf(refused.body).map((i) => [i.reason, i.id]),
+    [["scopes_changed", C]],
+  );
+  // A recipient without the store's disconnect right sees nothing of it (the rule of every
+  // connection problem), nor does a member the definer answers nothing for (not a recipient).
+  for (const [grants, rows] of [
+    [[questionRead], [noticeRow()]],
+    [[questionRead, disconnectRight], []],
+  ]) {
+    const other = await inboxWith(t, {
+      enterContext: () => contextRow(grants),
+      questionPageForRespondent: [],
+      connectionNoticesOpen: rows,
+    });
+    assert.equal(other.status, 200);
+    assert.deepEqual(connectionsOf(other.body), []);
+    assert.ok(!JSON.stringify(other.body).includes(S));
+  }
+  // Reconnected (a re-authorisation restored the scopes, before the cron clears the item):
+  // nothing waits.
+  const reconnected = await inboxWith(t, {
+    enterContext: () => contextRow([disconnectRight]),
+    connectionNoticesOpen: [noticeRow({ still_open: "false" })],
+  });
+  assert.deepEqual(connectionsOf(reconnected.body), []);
+  // A connection with a stop and an open item is one problem (the stop's).
+  const both = await inboxWith(t, {
+    enterContext: () => contextRow([disconnectRight]),
+    inboxConnectionStops: [stopRow()],
+    storeAssociation: [],
+    connectionNoticesOpen: [noticeRow()],
+  });
+  assert.deepEqual(
+    connectionsOf(both.body).map((i) => [i.reason, i.id]),
+    [["disconnected", C]],
+  );
+  // A row the strict decoder refuses is a failed read, never a guess.
+  for (const bad of [noticeRow({ kind: "other" }), { ...noticeRow(), extra: "1" }]) {
+    const failed = await inboxWith(t, {
+      enterContext: () => contextRow([disconnectRight]),
+      connectionNoticesOpen: [bad],
+    });
+    assert.equal(failed.status, 503);
+  }
+});
+
+test("GET /work/inbox: an ended store's problem settles once a reinstall of the same app is linked (a new store)", async (t) => {
+  const uninstalled = stopRow({ set_by_kind: "system", reason_code: "shopify_app_uninstalled" });
+  // No reinstall linked yet: the ended store is a problem.
+  const ended = await inboxWith(t, {
+    enterContext: () => contextRow([disconnectRight]),
+    inboxConnectionStops: [uninstalled],
+    storeAssociation: [],
+    storeReinstalled: [],
+  });
+  assert.deepEqual(
+    connectionsOf(ended.body).map((i) => [i.reason, i.id, i.storeId]),
+    [["uninstalled", C, S]],
+  );
+  assert.deepEqual(
+    ended.calls.filter((c) => c.name === "storeReinstalled").map((c) => c.values),
+    [[S]],
+  );
+  // The reinstall (a new store and connection) is linked here: settled, as a relink of the
+  // same store settles it. A person's disconnect followed by an uninstall and a reinstall
+  // settles the same way.
+  for (const stop of [uninstalled, stopRow()]) {
+    const settled = await inboxWith(t, {
+      enterContext: () => contextRow([disconnectRight]),
+      inboxConnectionStops: [stop],
+      storeAssociation: [],
+      storeReinstalled: [{ store_id: "store_new", connection_id: "connection_new" }],
+    });
+    assert.equal(settled.status, 200);
+    assert.deepEqual(connectionsOf(settled.body), []);
+  }
+  // A reply that names the ended store itself, more than one store or another column is a
+  // failed read.
+  for (const bad of [
+    [{ store_id: S, connection_id: "connection_new" }],
+    [
+      { store_id: "store_new", connection_id: "connection_new" },
+      { store_id: "store_newer", connection_id: "connection_newer" },
+    ],
+    [{ store_id: "store_new", connection_id: "connection_new", shop_id: "1" }],
+    [{ store_id: "store new", connection_id: "connection_new" }],
+  ]) {
+    const failed = await inboxWith(t, {
+      enterContext: () => contextRow([disconnectRight]),
+      inboxConnectionStops: [uninstalled],
+      storeAssociation: [],
+      storeReinstalled: bad,
+    });
+    assert.equal(failed.status, 503);
+  }
+});
+
 test("the Inbox's changes to review: only what this person may decide, counted only while the store is linked", async () => {
   // One page of the approvals list as the approvals library maps it (its own rule decided
   // each viewerRole); the Inbox keeps the reviewer's items and asks once per store whether

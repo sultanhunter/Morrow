@@ -29,6 +29,7 @@ import {
   connectionHealthStatements,
   connectionRequiredScopes,
   decodeReconnectNotices,
+  decodeReinstalledStore,
   planReconnect,
   readReconnectNotices,
   reconnectNoticeFixtures,
@@ -426,7 +427,7 @@ test("the Inbox seam: one fixed read, its columns the definer's, a strict decode
   assert.match(definer, /n\.recipients \? t\.principal_id/);
   assert.match(
     work.text,
-    /GRANT EXECUTE ON FUNCTION morrow_work\.connection_notices_open\(\) TO morrow_work_api;/,
+    /GRANT EXECUTE ON FUNCTION morrow_work\.connection_notices_open\(\),morrow_work\.store_reinstalled\(text\) TO morrow_work_api;/,
   );
   const [notice] = decodeReconnectNotices([row()]);
   assert.deepEqual(
@@ -490,6 +491,71 @@ test("the Inbox seam: one fixed read, its columns the definer's, a strict decode
   // The fixtures decode as the definer would answer.
   assert.ok(reconnectNoticeFixtures.length >= 2);
   for (const f of reconnectNoticeFixtures) assert.equal(f.kind, "reconnect");
+});
+
+test("the Inbox's reinstall read (review F3 after the merge): session only, the same app and shop, linked", () => {
+  // The api's definer: the session tenant only, through the identity bridge; its statement's
+  // columns are the definer's.
+  const definer = functionText(work.text, "morrow_work.store_reinstalled");
+  const returns = /RETURNS TABLE\(([^)]*)\)/.exec(definer)[1];
+  assert.deepEqual(
+    returns.split(",").map((c) => c.trim().split(/\s+/)[0]),
+    /^SELECT (.*) FROM morrow_work\.store_reinstalled\(\$1\)$/
+      .exec(connectionHealthStatements.storeReinstalled)[1]
+      .split(","),
+  );
+  assert.equal(workStatements.storeReinstalled, connectionHealthStatements.storeReinstalled);
+  assert.match(definer, /SECURITY DEFINER/);
+  assert.match(definer, /FROM morrow_work\.current_tenant\(\) c/);
+  assert.match(
+    definer,
+    /morrow_identity\.work_shopify_store_successor\(t\.organization_id,t\.workspace_id,p_store_id\)/,
+  );
+  assert.match(
+    work.text,
+    /ALTER FUNCTION morrow_work\.store_reinstalled\(text\) OWNER TO morrow_work_command;/,
+  );
+  assert.match(
+    work.text,
+    /has_function_privilege\('morrow_work_command','morrow_identity\.work_shopify_store_successor\(text,text,text\)','EXECUTE'\)/,
+  );
+  // The identity bridge: EXECUTE for the command role only; an uninstalled installation of the
+  // tenant's store, and a later installation of the same app and shop in the same tenant that
+  // is linked through its own link row.
+  const bridge = functionText(identity.text, "morrow_identity.work_shopify_store_successor");
+  for (const rule of [
+    /n\.organization_id=o\.organization_id AND n\.workspace_id=o\.workspace_id/,
+    /n\.app_key=o\.app_key AND n\.shop_id=o\.shop_id AND n\.id<>o\.id AND n\.created_at>o\.created_at/,
+    /JOIN morrow_identity\.workspace_store_links l ON l\.id=n\.link_id AND l\.installation_id=n\.id/,
+    /o\.organization_id=p_org AND o\.workspace_id=p_ws AND o\.store_id=p_store_id AND o\.status='uninstalled'/,
+    /n\.status='linked' AND n\.linked_at<=pg_catalog\.clock_timestamp\(\)/,
+    /LIMIT 1/,
+  ])
+    assert.match(bridge, rule);
+  assert.match(
+    identity.text,
+    /morrow_identity\.work_shopify_store_successor\(text,text,text\) TO morrow_work_command;/,
+  );
+  // The strict decoder: none, or one other store.
+  assert.equal(decodeReinstalledStore([], "store_old"), null);
+  assert.deepEqual(
+    decodeReinstalledStore(
+      [{ store_id: "store_new", connection_id: "connection_new" }],
+      "store_old",
+    ),
+    { storeId: "store_new", connectionId: "connection_new" },
+  );
+  for (const bad of [
+    [{ store_id: "store_old", connection_id: "connection_new" }],
+    [{ store_id: "store_new" }],
+    [{ store_id: "store_new", connection_id: "connection_new", extra: "x" }],
+    [{ store_id: "store new", connection_id: "connection_new" }],
+    [
+      { store_id: "store_new", connection_id: "connection_new" },
+      { store_id: "store_new2", connection_id: "connection_new2" },
+    ],
+  ])
+    assert.throws(() => decodeReinstalledStore(bad, "store_old"), /RECONNECT_NOTICE_INVALID/);
 });
 
 test("protocol: the read-back's closed result and the launch's reconnect state", () => {
@@ -793,6 +859,43 @@ test("the connector's launch: an uninstalled app reinstalls, a reconnect re-auth
       );
   }
   assert.equal(launches.length, 4);
+});
+
+test("the connector's Reconnect page promises no self-service resume (review F4 after the merge)", async () => {
+  // Morrow's resume lifts only a person's own "Stop AI work" (agents/commands.ts; 0031 lifts
+  // set_by_kind human only), so an agent a system scope stop holds cannot be restarted in the
+  // product yet: the page that a status launch of a connection needing reconnecting shows
+  // says so, and points to support instead of "resume them in Morrow".
+  const handler = createConnectorHandler({
+    configuration: {
+      origin: "https://connector.morrow.test",
+      apiOrigin: "https://api.morrow.test",
+    },
+    broker: {
+      async shopifyLaunchVerify() {
+        return encodeShopifyLaunchVerdict({
+          verdict: "verified",
+          shop: "dev-1.myshopify.com",
+          installation: "reconnect",
+          workspaceId: "ws_1",
+        });
+      },
+    },
+    database: {},
+  });
+  const page = await handler.fetch(
+    new Request(
+      "https://connector.morrow.test/shopify/a/dev-app/status?shop=dev-1.myshopify.com&hmac=x",
+    ),
+  );
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /<h1>Reconnect<\/h1>/);
+  assert.match(html, /Open the app again from your Shopify admin to reconnect it/);
+  assert.match(html, /stay paused after you reconnect/);
+  assert.match(html, /contact Morrow support/);
+  assert.doesNotMatch(html, /resume them in Morrow|until you resume/);
+  assert.ok(html.includes('href="https://api.morrow.test/w/ws_1/connections"'));
 });
 
 test("the clean-up switch: committed off, the connector's var only on staging", () => {

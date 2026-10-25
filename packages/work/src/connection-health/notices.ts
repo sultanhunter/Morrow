@@ -2,17 +2,23 @@
 // Inbox reads. Migration connection-health-work keeps one open morrow_work.connection_notices
 // row per connection while the app lacks a scope it requests (or Shopify refused the token),
 // naming the missing scopes and the agent installations stopped for it, for the connection
-// steward and the Owner only. The Inbox screen and its item kind are another PR's (the
-// Sunrise Inbox, PR 15; a `reconnect` InboxKind is PR 10b's): until then this module is the
-// contract, with a fake for the screens. Pure: the statement text, a strict decoder, the
+// steward and the Owner only. GET /work/inbox (inbox/read.ts, main's Sunrise Inbox) reads
+// them through readReconnectNotices and shows each open one as a connection problem
+// (`scopes_changed`) to a recipient who holds the store's disconnect right (PR 5 review
+// finding F1, after integration with main); a `reconnect` item kind with the missing scopes
+// and the stopped agents is PR 10b's. Pure: the statement texts, strict decoders, the
 // scopes each agent release needs (the twin of morrow_work.release_shopify_scopes), the plan
 // the reconcile follows (the twin of morrow_work.connection_health_reconcile's decisions) and
 // fixtures. Nothing here resumes an agent: only a person does.
 
-/** The read definer's one statement (session only; the viewer's open items, at most 20). */
+/** The read definers' statements (session only). */
 export const connectionHealthStatements = Object.freeze({
+  // The viewer's open Reconnect items, at most 20.
   connectionNoticesOpen:
     "SELECT notice_id,kind,cause,store_id,connection_id,installation_id,missing_scopes,stopped_installations,revision,created_at,updated_at,still_open FROM morrow_work.connection_notices_open()",
+  // The store a reinstall of the same app linked in place of the session tenant's ended
+  // store $1 (at most one; PR 5 review finding F3, after integration with main).
+  storeReinstalled: "SELECT store_id,connection_id FROM morrow_work.store_reinstalled($1)",
 } as const);
 
 export type ReconnectCause = "scopes_missing" | "token_refused";
@@ -133,6 +139,33 @@ export async function readReconnectNotices(
   source: ReconnectNoticeSource,
 ): Promise<readonly ReconnectNotice[]> {
   return decodeReconnectNotices(await source.run("connectionNoticesOpen", []));
+}
+
+/** The store a reinstall linked in place of an ended one, as store_reinstalled answers it. */
+export interface ReinstalledStore {
+  readonly storeId: string;
+  readonly connectionId: string;
+}
+/**
+ * store_reinstalled's rows for the ended store `endedStoreId`, strictly: none, or one new
+ * store (never the ended one itself); anything else is ReconnectNoticeInvalid.
+ */
+export function decodeReinstalledStore(
+  rows: readonly Record<string, unknown>[],
+  endedStoreId: string,
+): ReinstalledStore | null {
+  if (!Array.isArray(rows) || rows.length > 1) throw new ReconnectNoticeInvalid();
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  if (
+    !row ||
+    Object.keys(row).sort().join(",") !== "connection_id,store_id" ||
+    !exact(idPattern, row.store_id) ||
+    !exact(idPattern, row.connection_id) ||
+    row.store_id === endedStoreId
+  )
+    throw new ReconnectNoticeInvalid();
+  return Object.freeze({ storeId: row.store_id, connectionId: row.connection_id });
 }
 
 // ---------------------------------------------------------------------------

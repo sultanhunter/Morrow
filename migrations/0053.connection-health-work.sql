@@ -37,7 +37,11 @@ BEGIN;
 --     shopify_check_record (the read-back of the granted scopes with the installation's own
 --     token, ADR-0025 item 10, and the record of what Shopify answered, refused as stale when
 --     the installation changed after the read began);
---   * the api's read of the viewer's Reconnect items (connection_notices_open, session only).
+--   * the api's reads for the Inbox (session only): the viewer's Reconnect items
+--     (connection_notices_open), and the store a reinstall linked in place of an ended one
+--     (store_reinstalled), so an ended connection's problem settles once its shop is linked
+--     again through a reinstall (a new store; PR 5 review findings F1 and F3, after
+--     integration with main's Inbox).
 -- No definer here sends a request; nothing deletes outside the 0038 store-content handlers.
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
@@ -65,6 +69,7 @@ DO $$ BEGIN
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_inbox_stuck()','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_inbox_take(text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_inbox_settle(text,text,text,jsonb)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_shopify_store_successor(text,text,text)','EXECUTE')
  -- The 0020 index this file relies on: one open stop per installation target.
  OR (SELECT pg_catalog.pg_get_indexdef(i.indexrelid) FROM pg_catalog.pg_index i
    WHERE i.indexrelid=to_regclass('morrow_work.stop_controls_one_per_target'))
@@ -657,13 +662,32 @@ BEGIN
   ORDER BY n.updated_at DESC,n.id LIMIT 20;
 END $$;
 
+-- The api's read for the Inbox's connection problems (session only; PR 5 review finding F3,
+-- after integration with main): the store and connection a reinstall of the same app linked
+-- in place of the session tenant's ended store p_store_id (identity's
+-- work_shopify_store_successor, with the session tenant only). The Inbox settles the ended
+-- connection's problem by it, as it does when the same store is linked again. Ids only;
+-- nothing without a context or for another tenant.
+CREATE FUNCTION morrow_work.store_reinstalled(p_store_id text)
+RETURNS TABLE(store_id text,connection_id text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+#variable_conflict use_column
+DECLARE t record;
+BEGIN
+ IF p_store_id IS NULL OR p_store_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN RETURN; END IF;
+ SELECT c.organization_id,c.workspace_id INTO t FROM morrow_work.current_tenant() c;
+ IF NOT FOUND THEN RETURN; END IF;
+ RETURN QUERY SELECT s.store_id,s.connection_id
+  FROM morrow_identity.work_shopify_store_successor(t.organization_id,t.workspace_id,p_store_id) s;
+END $$;
+
 -- ---------------------------------------------------------------------------
 -- Explicit ACLs per function (S5 and S7 read proacl), then the ownership transfer.
 REVOKE ALL ON FUNCTION morrow_work.release_shopify_scopes(text),morrow_work.notice_scopes_valid(jsonb),
  morrow_work.notice_ids_valid(jsonb,integer),morrow_work.connection_health_reconcile(text,text,text,text),
  morrow_work.connector_inbox_apply_v2(text),morrow_work.connector_health_reconcile(text),morrow_work.connector_checks_due(),
  morrow_work.connector_notices_due(),morrow_work.connector_deletions_due(),morrow_work.connector_deletion_apply(text),
- morrow_work.connector_inbox_stuck(),morrow_work.connection_notices_open(),
+ morrow_work.connector_inbox_stuck(),morrow_work.connection_notices_open(),morrow_work.store_reinstalled(text),
  morrow_vault.shopify_install_prepare_v2(text,text,text,text),morrow_vault.shopify_check_resolve(text),
  morrow_vault.shopify_check_record(text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_work.release_shopify_scopes(text),morrow_work.notice_scopes_valid(jsonb),
@@ -673,7 +697,7 @@ GRANT EXECUTE ON FUNCTION morrow_work.connector_inbox_apply_v2(text),morrow_work
  morrow_work.connector_deletion_apply(text),morrow_work.connector_inbox_stuck() TO morrow_connector_ingress;
 GRANT EXECUTE ON FUNCTION morrow_vault.shopify_install_prepare_v2(text,text,text,text),morrow_vault.shopify_check_resolve(text),
  morrow_vault.shopify_check_record(text,text,text,text,text) TO morrow_vault_broker;
-GRANT EXECUTE ON FUNCTION morrow_work.connection_notices_open() TO morrow_work_api;
+GRANT EXECUTE ON FUNCTION morrow_work.connection_notices_open(),morrow_work.store_reinstalled(text) TO morrow_work_api;
 GRANT CREATE ON SCHEMA morrow_work,morrow_vault TO morrow_work_command;
 ALTER FUNCTION morrow_work.connector_inbox_apply_v2(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.connector_health_reconcile(text) OWNER TO morrow_work_command;
@@ -683,6 +707,7 @@ ALTER FUNCTION morrow_work.connector_deletions_due() OWNER TO morrow_work_comman
 ALTER FUNCTION morrow_work.connector_deletion_apply(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.connector_inbox_stuck() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.connection_notices_open() OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.store_reinstalled(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.shopify_install_prepare_v2(text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.shopify_check_resolve(text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_vault.shopify_check_record(text,text,text,text,text) OWNER TO morrow_work_command;

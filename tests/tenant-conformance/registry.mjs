@@ -666,6 +666,9 @@ export const workFunctions = Object.freeze({
   "notice_ids_valid(jsonb,integer)": { kind: "check", grantees: ["morrow_work_command"] },
   "connection_notice_guard()": { kind: "trigger", grantees: [] },
   "connection_notices_open()": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  // PR 5 review finding F3 (after integration with main): the store a reinstall linked in
+  // place of an ended one, for the Inbox (session only, ids only).
+  "store_reinstalled(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
   // M2 PR-3 (0037): the catalogue routes' read lease (session only).
   "catalog_read_lease(text,text)": { kind: "api", grantees: ["morrow_work_api"] },
   // The agent commands and their read definer.
@@ -921,6 +924,9 @@ export const bridgeFunctions = Object.freeze([
   "work_shopify_deletion_open(text)",
   "work_shopify_deletion_complete(text,text,text,jsonb)",
   "work_shopify_inbox_stuck()",
+  // PR 5 review finding F3 (after integration with main): the store a reinstall linked in
+  // place of an ended one, called only by connection-health-work's store_reinstalled.
+  "work_shopify_store_successor(text,text,text)",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
