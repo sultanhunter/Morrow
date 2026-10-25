@@ -70,6 +70,13 @@ What it approves: this record as written and each owner question above with its 
 
 ## Amendments
 
+### 2026-10-25: workspace-created agents (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) changes these items; the text above is kept as approved.
+
+- **Item 1.** A workspace-created agent is an installed agent: it may have a mandate, issued when a person approves an agent card that names trigger kinds (ADR-0037 item 4). The Coordinator still never has one.
+- **Item 2.** Confirming "Add to team" on an agent card, or a later change that adds to one, is an install request: a server-built document bound to the card's digest, the actor and a standalone-workspace session, valid for 5 minutes and consumed once, by a holder of `agents.installation.activate` who holds each capability on the card with its verbs and `delegate`. The request is an access change and keeps ADR-0011's review (Q1 to Q3): the requester is conflicted; a solo Owner passes with the exact phrase and the 300-second cool-down; in a team a second, non-conflicted member who holds the same grants with `delegate` approves, and the Owner approves alone only on this item's terms for a mandate, while no other member holds the card's store grants (owner question 1 (b)). A card with a store-effect capability, order or customer reads, or a capability in the spend or communication class needs the Owner as requester or approver, even when another member holds those grants (ADR-0037 item 5). No agent requests or approves a card.
+
 ### 2026-10-25: items 1 and 6, mandates and admission without money caps (ADR-0039)
 
 The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes these items; the text above is kept as approved. Item 1: code no longer builds caps into a mandate (MandateDocument@1 loses MandateCaps); a mandate keeps its owner, grants, scope, trigger kinds, quiet hours, depth 0 and 90-day expiry. Item 6: `admit_mandate_run` no longer checks caps or takes a cap reservation; it holds the run's admission credits from the workspace's wallet under its row lock (ADR-0039 item 2(d)), and a trigger the balance cannot cover stays pending, retried at the next tick and never dropped, until its recorded expiry. The look-for-work pass has no money cap. One pass per agent a day, one run per trigger key, quiet hours, stops and every other admission check stand, and it is still the only lease source for mandate runs.

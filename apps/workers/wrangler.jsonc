@@ -2,11 +2,12 @@
 // (one instance per run, ids only), the dispatch Queue consumer with its dead-letter queue
 // (no producer: the cron starts runs), a one-minute cron over pending_starts(), and the
 // broker's RuntimeBroker entrypoint (its role lease and modelRespond). No secret, route or
-// provider credential. MORROW_ENVIRONMENT is its only committed var: dispatch stays disabled
-// (every Workflow throws dispatch_disabled before any step) until the reviewed model-provider
-// switch (docs/decisions/model-provider-staging.json) is turned on by its own reviewed commit,
-// which adds MORROW_MODEL_PROVIDER and the reviewed MORROW_DATABASE_BINDING_JSON to
-// env.staging.vars (edge:check refuses any mixed state).
+// provider credential. Development and production carry MORROW_ENVIRONMENT only, so dispatch
+// stays disabled there (every Workflow throws dispatch_disabled before any step). The reviewed
+// model-provider switch (docs/decisions/model-provider-staging.json) is on in staging since
+// the model-provider-on commit (2026-10-25), which added MORROW_MODEL_PROVIDER and the
+// reviewed MORROW_DATABASE_BINDING_JSON to env.staging.vars (edge:check refuses any mixed
+// state).
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-orchestrator",
@@ -60,7 +61,13 @@
           "persist": true,
         },
       },
-      "vars": { "MORROW_ENVIRONMENT": "staging" },
+      // The model-provider switch, on (docs/decisions/model-provider-staging.json): dispatch
+      // with the reviewed database binding, byte-equal to the api's and the broker's.
+      "vars": {
+        "MORROW_ENVIRONMENT": "staging",
+        "MORROW_MODEL_PROVIDER": "anthropic",
+        "MORROW_DATABASE_BINDING_JSON": "{\"schemaVersion\":1,\"environment\":\"staging\",\"projectId\":\"sweet-sound-23947873\",\"branchId\":\"br-dark-recipe-b78ytwj9\",\"hostname\":\"ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech\",\"database\":\"morrow\"}",
+      },
       "services": [
         { "binding": "BROKER", "service": "morrow-staging-broker", "entrypoint": "RuntimeBroker" },
       ],

@@ -93,7 +93,8 @@ const brokerRequiredSecretsWithStripe: readonly string[] = Object.freeze([
 ]);
 // M3 PR-2 (ADR-0022 items 7 and 10): the Anthropic Console workspace's API key, bound only
 // to the broker and only while the reviewed model-provider switch is on. The switch is
-// docs/decisions/model-provider-staging.json `switch`, committed "off": while it is off the
+// docs/decisions/model-provider-staging.json `switch` (on in staging since model-provider-on,
+// 2026-10-25; committed "off" before): while it is off the
 // broker requires no model secret, modelRespond answers BROKER_HELD (MODEL_UNAVAILABLE)
 // before any input, database or provider access, run admission answers 503 before any
 // reservation and ListingsRunWorkflow throws dispatch_disabled before any step. Its runtime
@@ -322,8 +323,8 @@ export interface RuntimeBrokerRpc {
  * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant (an RPC stub
  * answers any method name, so it is never probed), true since M2 PR-3 and M3 PR-2 were
  * integrated. The api's run admission and the orchestrator's dispatch both require it with
- * the model-provider switch, so the switch (committed off, docs/decisions/
- * model-provider-staging.json) is now the only gate: no run, lease or reservation exists
+ * the model-provider switch, so the switch (docs/decisions/model-provider-staging.json, on in
+ * staging since model-provider-on) is now the only gate: no run, lease or reservation exists
  * while it is off.
  */
 export const runtimeProductReadAvailable: boolean = true;

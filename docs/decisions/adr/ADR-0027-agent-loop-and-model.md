@@ -99,6 +99,16 @@ The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) chang
 
 The owner's answers of 2026-10-25 (OD-2026-10-25-2, recorded in ADR-0036) change item 12's sentence on the look-for-work pass, kept as approved above: an installed agent's pass holds at most US$1.12 a day, two worst-case turns at its default, Opus 5.5 at medium, in place of the 1% cap (US$0.61 at US$149, US$0.41 at US$99). Catalogue version 2 carries it as `look_for_work_daily_cost_cap_usd`; its other values stay proposed.
 
+### 2026-10-25: teammates in place of specialists (ADR-0037)
+
+The owner's decisions of 2026-10-25 (OD-2026-10-25-3, and OD-2026-10-25-4 for the values, recorded in ADR-0037) change these items; the text above is kept as approved.
+
+- **Item 8.** Morrow's fixed grant set replaces `specialist.draft` with `agent.propose` (an agent card, granting nothing) and adds `agent.ask`, a teammate call that returns a closed, structured TeammateResult@1 with no character cap as wrapped, tainting data, and `agent.result.read`, which opens in full, page by page, a result item that a result its run received references. `agent.route` names one active teammate of either origin and is used only when the teammate must own the conversation. "Once per run" goes: Morrow may make any number of calls and hand-offs in one run, in sequence or in parallel, the same teammate more than once, each one child at depth 1, within the run's limits and the workspace's credits (ADR-0037 item 3). Briefs to teammates are structured, with no character cap. Morrow still has no store reads, proposals, computer or support tools.
+- **Item 3.** The 8 KiB bound on one tool result stays; a teammate's output larger than one result is stored as a result item and referenced by id, so nothing is cut (ADR-0037 item 3(a)).
+- **Item 10** is superseded: SpecialistSpec@1 and specialist child runs give way to AgentProposal@1 (ADR-0037 item 4) and the teammate call (ADR-0037 item 3).
+- **Items 1, 2, 3, 6, 9 and 12, where they name specialists.** A called or handed-off teammate's run is a routed run: `decideDelegation`, and an installed agent's lease, wall time and turn limit. The catalogue drops `specialist.draft`.
+- **Item 1's lease sources.** ADR-0028 item 6's renewal goes with the specialist kind. At a resume after teammate calls, the lease of Morrow's run comes from the terminal commit of the last of its open call runs: an ids-only definer, executable only by `morrow_runtime_executor`, re-issues it after re-checking the requester's live grants, the fixed set, rules, stops and switches, and otherwise ends the run (ADR-0037 item 3(a)). The stale-run sweep skips a run whose recorded wait names an open child run. The workspace's specialist profile becomes the default for new teammates, shown on each agent card, where a holder of `governance.model_default.revise` may pick another offered entry.
+
 ### 2026-10-25: items 6 and 12, holds in credits and no money caps (ADR-0039)
 
 The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes these items; the text above is kept as approved.

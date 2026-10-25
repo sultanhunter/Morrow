@@ -292,6 +292,41 @@ const scenarios = {
     argv: ["put-secret", "WORKOS_API_KEY", "--while-runtime-off"],
     tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
   }),
+  // model-provider-on: the Anthropic key. With the model-provider switch off put-secret refuses
+  // it before reading the file or running any tool (there is no flag to place it ahead of the
+  // switch); with the switch on (the committed state) the owner file reaches the broker only
+  // through `secret bulk` stdin, also when the running broker does not hold the name yet.
+  "put-secret-model-off": (constants) => ({
+    argv: ["put-secret", "ANTHROPIC_API_KEY"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
+  "put-secret-model-on": (constants) => ({
+    model: "on",
+    argv: ["put-secret", "ANTHROPIC_API_KEY"],
+    tools: {
+      emit,
+      wrangler: {
+        secrets: { broker: constants.brokerSecrets.filter((n) => n !== "ANTHROPIC_API_KEY") },
+      },
+    },
+  }),
+  "put-secret-model-flag": (constants) => ({
+    model: "on",
+    argv: ["put-secret", "ANTHROPIC_API_KEY", "--while-runtime-off"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
+  "put-secret-model-other-flag": (constants) => ({
+    argv: ["put-secret", "ANTHROPIC_API_KEY", "--while-model-off"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
+  // The first provisioning with the switch on reads the owner's Anthropic file into the
+  // broker file, like the Stripe files.
+  "provision-first-model": () => ({
+    model: "on",
+    argv: ["provision-roles", "--first"],
+    tools: { emit },
+    database: {},
+  }),
   "put-secret-fails": (constants) => ({
     argv: ["put-secret", "TURNSTILE_SECRET_KEY"],
     tools: {
@@ -376,7 +411,9 @@ if (!probe) process.exit(97);
 const stripe = probe.stripe ?? "off";
 // Build order PR 7: likewise the runtime switch (off unless the scenario says otherwise).
 const runtime = probe.runtime ?? "off";
-const constants = await identityConstants({ stripe, runtime });
+// model-provider-on: likewise the model-provider switch (off unless the scenario says "on").
+const model = probe.model ?? "off";
+const constants = await identityConstants({ stripe, model, runtime });
 const spec = scenarios[scenario](constants);
 const cloud = fakeCloudflare(spec.cloudflare ?? {});
 const fake = fakeTools({ ...(spec.tools ?? {}), cloudflare: cloud });
@@ -414,6 +451,7 @@ const loginConfiguration = {
 const { ctx, reports } = await fakeContext({
   home,
   stripe,
+  model,
   runtime,
   tools: fake.tools,
   cloudflare: cloud.api,
