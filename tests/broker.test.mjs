@@ -198,16 +198,32 @@ test("trust model v1: connector and runtime health need their own lease and the 
 // the staging broker is healthy for the api, the connector and the orchestrator.
 test("P04.T01i PR-D: the committed staging vars give the broker every capability", async () => {
   const { vars } = await resolvedEdgeConfig("broker", "staging");
+  // model-provider-on: the model-provider switch's var is committed on in staging.
   assert.deepEqual(Object.keys(vars).sort(), [
     "LOGIN_CONFIGURATION_JSON",
     "MORROW_DATABASE_BINDING_JSON",
     "MORROW_ENVIRONMENT",
+    "MORROW_MODEL_PROVIDER",
     "TURNSTILE_CONFIGURATION_JSON",
   ]);
+  assert.equal(vars.MORROW_MODEL_PROVIDER, "anthropic");
   const env = { ...brokerEnv("staging").env, ...vars };
   const capabilities = await brokerCapabilities(env);
   for (const name of ["sessions", "database", "connector", "runtime", "vault", "challenge"])
     assert.notEqual(capabilities[name], null, name);
+  // Before the owner's key is placed the broker fails closed on the model alone: the switch
+  // reads on, no model capability exists (modelRespond holds MODEL_UNAVAILABLE before any
+  // input, database or provider access), and every other capability and health stay as they
+  // were. With a well-formed key the model capability exists.
+  assert.equal(capabilities.modelMode, "anthropic");
+  assert.equal(capabilities.model, null);
+  const keyed = await brokerCapabilities({
+    ...env,
+    ANTHROPIC_API_KEY: "sk-ant-api03-" + randomBytes(48).toString("hex"),
+  });
+  assert.equal(keyed.model?.provider, "anthropic");
+  const malformed = await brokerCapabilities({ ...env, ANTHROPIC_API_KEY: marker("sk-ant-") });
+  assert.equal(malformed.model, null);
   assert.equal(capabilities.challenge.hostname, "morrow-staging-api.sultanibneusman0.workers.dev");
   assert.deepEqual(capabilities.challenge.actions, ["account_login", "organization_signup"]);
   assert.equal(await brokerHealth(env), true);

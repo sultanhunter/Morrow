@@ -82,8 +82,11 @@ async function world({
   overrides = {},
   tools = {},
   stripe = "off",
+  // model-provider-on: the model-provider switch (committed on; the fakes default to off).
+  model = "off",
   connectorReady = true,
 } = {}) {
+  const switched = await identityConstants({ stripe, model });
   const cloud = fakeCloudflare({ scripts, ...cloudflare });
   const hooks = { onDeploy: null };
   const fake = fakeTools({
@@ -101,7 +104,7 @@ async function world({
     wrangler: {
       secrets: {
         api: ["LOGIN_CAPSULE_KEYRING"],
-        broker: (stripe === "on" ? constantsOn : constants).brokerSecrets,
+        broker: switched.brokerSecrets,
         orchestrator: [],
         connector: [],
         ...(wrangler.secrets ?? {}),
@@ -121,6 +124,7 @@ async function world({
     environment,
     challengeVars,
     stripe,
+    model,
     fetch: site.fetch,
     overrides: {
       loginConfiguration: async () => ({ configurationDigest: digest, origin }),
@@ -744,6 +748,81 @@ test("AC04: gate 4 holds the Stripe vars to the switch; gate 6 its secrets; a mi
       const { result } = await mismatch.run(["deploy", "--ci"]);
       assert.equal(result.gates.brokerSecrets, "mismatch");
       assert.deepEqual(deploys(mismatch), []);
+    } finally {
+      mismatch.planted.cleanup();
+    }
+  }
+});
+
+// model-provider-on (docs/briefs/model-provider-on.md): the operator order. The switch's
+// reviewed commit merges before the owner's key is placed, so its deploy, local or CI, stops
+// at gate 6 before the census and any upload, and names put-secret and the rerun; once the
+// key is placed the same deploy passes, broker first, so the broker that reads the key is live
+// before the orchestrator dispatches and the api admits runs. A mismatch put-secret cannot
+// fix names no next step, and a broker still holding the key with the switch off (the reverse
+// commit) is a mismatch too.
+test("model-provider-on: gate 6 holds the switch's deploy until the owner's key is placed", async () => {
+  const { brokerRequiredSecrets } = await import("../packages/identity/src/broker-protocol.ts");
+  const modelOn = await identityConstants({ model: "on" });
+  assert.deepEqual(modelOn.brokerSecrets, [...brokerRequiredSecrets, "ANTHROPIC_API_KEY"].sort());
+  for (const ci of [false, true]) {
+    const held = await world({
+      model: "on",
+      wrangler: { secrets: { broker: [...brokerRequiredSecrets] } },
+      ...(ci ? { environment: ciEnvironment() } : {}),
+    });
+    try {
+      const { code, result } = await held.run(ci ? ["deploy", "--ci"] : ["deploy"]);
+      assert.equal(code, 1, JSON.stringify(result));
+      assert.equal(result.outcome, "failed");
+      assert.equal(result.code, "STAGING_BROKER_SECRETS_MISMATCH");
+      assert.equal(result.gates.brokerSecrets, "mismatch");
+      assert.deepEqual(result.missing, ["ANTHROPIC_API_KEY"]);
+      assert.equal(result.next, "run_staging_put_secret_then_gh_run_rerun");
+      assert.equal(result.censusBefore, null);
+      assert.deepEqual(deploys(held), []);
+      for (const key of deployOrder) assert.equal(result.versions[key], undefined, key);
+    } finally {
+      held.planted.cleanup();
+    }
+  }
+  // The key placed (put-secret): the rerun deploys broker, orchestrator, connector, api.
+  const placed = await world({ model: "on", environment: ciEnvironment() });
+  try {
+    const { code, result } = await placed.run(["deploy", "--ci"]);
+    assert.equal(code, 0, JSON.stringify(result));
+    assert.equal(result.gates.brokerSecrets, "ok");
+    assert.equal(result.outcome, "deployed");
+    assert.deepEqual(
+      deployedWorkers(placed).map((dir) => configWorker[dir]),
+      ["broker", "orchestrator", "connector", "api"],
+    );
+  } finally {
+    placed.planted.cleanup();
+  }
+  // Not put-secret's to fix: a missing role password (provision-roles places it) or a stray
+  // name beside the missing key. The gate holds and names no next step.
+  for (const [label, broker, model] of [
+    [
+      "role password",
+      modelOn.brokerSecrets.filter((name) => name !== "MORROW_DB_PASSWORD_MORROW_API"),
+      "on",
+    ],
+    ["stray", [...brokerRequiredSecrets, "STRAY_SECRET"], "on"],
+    // The switch off, the broker still holding the key.
+    ["key while off", [...brokerRequiredSecrets, "ANTHROPIC_API_KEY"], "off"],
+  ]) {
+    const mismatch = await world({
+      model,
+      environment: ciEnvironment(),
+      wrangler: { secrets: { broker } },
+    });
+    try {
+      const { result } = await mismatch.run(["deploy", "--ci"]);
+      assert.equal(result.code, "STAGING_BROKER_SECRETS_MISMATCH", label);
+      assert.equal(result.next, undefined, label);
+      assert.equal(result.missing, undefined, label);
+      assert.deepEqual(deploys(mismatch), [], label);
     } finally {
       mismatch.planted.cleanup();
     }
