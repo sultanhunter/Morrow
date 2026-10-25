@@ -67,3 +67,9 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 > approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
 
 What it approves: this record as written and each owner question above with its recommended answer.
+
+## Amendments
+
+### 2026-10-25: items 1 and 6, mandates and admission without money caps (ADR-0039)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes these items; the text above is kept as approved. Item 1: code no longer builds caps into a mandate (MandateDocument@1 loses MandateCaps); a mandate keeps its owner, grants, scope, trigger kinds, quiet hours, depth 0 and 90-day expiry. Item 6: `admit_mandate_run` no longer checks caps or takes a cap reservation; it holds the run's admission credits from the workspace's wallet under its row lock (ADR-0039 item 2(d)), and a trigger the balance cannot cover stays pending, retried at the next tick and never dropped, until its recorded expiry. The look-for-work pass has no money cap. One pass per agent a day, one run per trigger key, quiet hours, stops and every other admission check stand, and it is still the only lease source for mandate runs.

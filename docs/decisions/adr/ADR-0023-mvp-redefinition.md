@@ -284,3 +284,7 @@ Members choosing a model per run stays dropped.
 ### 2026-10-25: decision 7's defaults (ADR-0036)
 
 The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes decision 7's defaults as restated above: the Coordinator runs Opus 5.5 at high effort and every other agent, specialists and the five installed agents included, Opus 5.5 at medium.
+
+### 2026-10-25: decision 1's proactive caps and "What stays" (ADR-0039)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes these lines; the text above is kept as approved. Credits in the workspace's balance, held and drawn in code, are the only spend limit. Decision 1's "Proactive defaults" lose "per-agent daily and monthly caps", and its "daily read-only look-for-work pass under a small cap" has no money cap: the pass stays read-only and once per agent a day, and draws credits like any run. The 90-day mandates, quiet hours and recurring tasks stand, and admission control in code still gates every run. "What stays" no longer keeps ADR-0022 item 11's per-run and per-day USD caps as a concept. Decision 5's caps that Morrow enforces on usage charges (the extra-credit cap, `UsageCap`) stand. Whether an optional per-agent credit limit that the Owner sets, none by default, replaces the per-agent caps is put to the owner (Q-adr-0039-carried-out-values).
