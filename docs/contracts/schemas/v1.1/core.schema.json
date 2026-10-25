@@ -6595,7 +6595,7 @@
       "uniqueItems": true
     },
     "DataClass": {
-      "description": "ADR-0031 Terms (PR 10): a read-tag capability other than the customer tag. A specialist spec's dataClasses are a subset; the Specialist ceiling (ADR-0028 item 2) also leaves out orders.read at launch.",
+      "description": "ADR-0031 Terms (PR 10): a read-tag capability other than the customer tag. An agent card's data classes (ADR-0037 item 4) are derived in code from its read tools.",
       "type": "string",
       "enum": [
         "catalog.products.read",
@@ -6606,7 +6606,7 @@
       ]
     },
     "DataClasses": {
-      "description": "A specialist's data classes: distinct, at most five.",
+      "description": "Data classes: distinct, at most five.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/DataClass"
@@ -6616,7 +6616,7 @@
       "uniqueItems": true
     },
     "CapabilityVerbs": {
-      "description": "One capability and the verbs a document names for it (a mandate, a specialist spec, the Specialist ceiling). Names only; it is never a grant.",
+      "description": "One capability and the verbs a document names for it (a mandate, a package, an agent card). Names only; it is never a grant.",
       "type": "object",
       "properties": {
         "capabilityId": {
@@ -7133,7 +7133,7 @@
       "additionalProperties": false
     },
     "ToolName": {
-      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 adds plan.draft (ADR-0034 item 2; PR 18). A new tool is a new catalogue version and a deliberate schema change.",
+      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 added plan.draft (ADR-0034 item 2; PR 18). Version 3 (ADR-0037 items 1 to 3) replaces specialist.draft with agent.propose and adds agent.ask, agent.result.read and the called teammate's result.submit. A new tool is a new catalogue version and a deliberate schema change.",
       "type": "string",
       "enum": [
         "knowledge.search",
@@ -7148,14 +7148,17 @@
         "suggestion.create",
         "report.write",
         "agent.route",
-        "specialist.draft",
+        "agent.ask",
+        "agent.result.read",
+        "agent.propose",
         "proposal.listing",
         "proposal.reply",
-        "plan.draft"
+        "plan.draft",
+        "result.submit"
       ]
     },
     "ToolFamily": {
-      "description": "read: reads Morrow or store data; internal: writes internal work records; coordination: the Coordinator's routing and specialist drafts; proposal: a digest-bound proposal for the gateway (ADR-0027's proposal.create family); computer: E2B tools under the runtime switch (none in version 1).",
+      "description": "read: reads Morrow or store data, or one page of a teammate's result item; internal: writes internal work records (a called teammate's result included); coordination: Morrow's teammate calls, hand-offs, agent cards and plan cards; proposal: a digest-bound proposal for the gateway (ADR-0027's proposal.create family); computer: E2B tools under the runtime switch (none in version 3).",
       "type": "string",
       "enum": [
         "read",
@@ -7175,14 +7178,14 @@
       ]
     },
     "ToolContext": {
-      "description": "Where a tool may be offered: the Coordinator, a person's routed run, a mandate run, a look-for-work pass (reads and suggestions only, ADR-0024 item 6) or a specialist run.",
+      "description": "Where a tool may be offered: the Coordinator (Morrow), a person's routed run (a hand-off), a mandate run, a look-for-work pass (reads and suggestions only, ADR-0024 item 6) or a called teammate's run (ADR-0037 item 3(a): no inbox.ask or message.post, so it cannot talk to the person; it ends with result.submit). Version 3 retires the specialist context with the specialist kind.",
       "type": "string",
       "enum": [
         "coordinator",
         "routed",
         "mandate",
         "look_for_work",
-        "specialist"
+        "call"
       ]
     },
     "ToolWireName": {
@@ -7606,17 +7609,14 @@
       "additionalProperties": false
     },
     "ToolInputAgentRoute": {
-      "description": "agent.route: the Coordinator hands the task to one active installed agent on the task's store, once per run.",
+      "description": "agent.route (catalogue version 3): Morrow hands work to one active teammate that must own the conversation with the person, on its own child task, with a structured brief and no character cap. Any number per run (ADR-0037 item 3(b)); it returns nothing to Morrow's run. Never in a private Ask.",
       "type": "object",
       "properties": {
         "installationId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
         },
         "brief": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2000,
-          "pattern": "\\S"
+          "$ref": "#/$defs/TeammateBrief"
         }
       },
       "required": [
@@ -7633,111 +7633,11 @@
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
     },
     "OutputContractId": {
-      "description": "The closed list a specialist's brief picks its output contract from (ADR-0027 item 10).",
+      "description": "The closed list of report forms a skill may declare.",
       "type": "string",
       "enum": [
         "report@1"
       ]
-    },
-    "SpecialistInputRef": {
-      "description": "An input a specialist brief names. No upload and nothing customer-tagged (ADR-0028 item 7): code refuses those at draft and at Start.",
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": [
-            "task",
-            "artifact",
-            "knowledge_page",
-            "product"
-          ]
-        },
-        "id": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        }
-      },
-      "required": [
-        "kind",
-        "id"
-      ],
-      "additionalProperties": false
-    },
-    "SpecialistBrief": {
-      "description": "The part of a specialist spec the model writes (ADR-0027 item 10): the brief, 1 to 3 eligible skill ids and an output contract. These choose only which skill bodies load and the report's form; code derives tools and capabilities and writes every other field.",
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 120,
-          "pattern": "\\S"
-        },
-        "objective": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2000,
-          "pattern": "\\S"
-        },
-        "inputRefs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SpecialistInputRef"
-          },
-          "minItems": 0,
-          "maxItems": 10,
-          "uniqueItems": true
-        },
-        "doneCriteria": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 300,
-            "pattern": "\\S"
-          },
-          "minItems": 1,
-          "maxItems": 5,
-          "uniqueItems": true
-        },
-        "boundaries": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 300,
-            "pattern": "\\S"
-          },
-          "minItems": 0,
-          "maxItems": 5,
-          "uniqueItems": true
-        },
-        "skillIds": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SkillId"
-          },
-          "minItems": 1,
-          "maxItems": 3,
-          "uniqueItems": true
-        },
-        "outputContractId": {
-          "$ref": "#/$defs/OutputContractId"
-        }
-      },
-      "required": [
-        "title",
-        "objective",
-        "inputRefs",
-        "doneCriteria",
-        "boundaries",
-        "skillIds",
-        "outputContractId"
-      ],
-      "additionalProperties": false
-    },
-    "ToolInputSpecialistDraft": {
-      "description": "specialist.draft: the Coordinator's draft of a specialist for the task. It grants nothing and never runs in a turn holding a report.",
-      "$ref": "#/$defs/SpecialistBrief"
     },
     "ListingChange": {
       "description": "One product's listing change as a tool proposes it: every field present, null when unchanged, so the strict model schema and this definition agree. Code drops the nulls into a ListingDraft@1 and checks it again (at least one field, HTML sanitised, fields within the run's).",
@@ -8098,90 +7998,75 @@
     "ToolModelInputAgentRoute": {
       "description": "agent.route as the model is given it: ToolInputAgentRoute's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentRoute before dispatch; a breach is the call's invalid_input, not an invalid output.",
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "installationId": {
           "type": "string"
         },
         "brief": {
-          "type": "string"
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "objective": {
+              "type": "string"
+            },
+            "details": {
+              "type": "string"
+            },
+            "doneCriteria": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "boundaries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "task",
+                      "thread",
+                      "artifact",
+                      "knowledge_page",
+                      "product",
+                      "proposal",
+                      "result_item"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ]
+              }
+            }
+          },
+          "required": [
+            "objective",
+            "details",
+            "doneCriteria",
+            "boundaries",
+            "records"
+          ]
         }
       },
       "required": [
         "installationId",
         "brief"
-      ],
-      "additionalProperties": false
-    },
-    "ToolModelInputSpecialistDraft": {
-      "description": "specialist.draft as the model is given it: ToolInputSpecialistDraft's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputSpecialistDraft before dispatch; a breach is the call's invalid_input, not an invalid output.",
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "objective": {
-          "type": "string"
-        },
-        "inputRefs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "task",
-                  "artifact",
-                  "knowledge_page",
-                  "product"
-                ]
-              },
-              "id": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "id"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "doneCriteria": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "boundaries": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "skillIds": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "outputContractId": {
-          "type": "string",
-          "enum": [
-            "report@1"
-          ]
-        }
-      },
-      "required": [
-        "title",
-        "objective",
-        "inputRefs",
-        "doneCriteria",
-        "boundaries",
-        "skillIds",
-        "outputContractId"
-      ],
-      "additionalProperties": false
+      ]
     },
     "ToolModelInputProposalListing": {
       "description": "proposal.listing as the model is given it: ToolInputProposalListing's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputProposalListing before dispatch; a breach is the call's invalid_input, not an invalid output.",
@@ -8309,7 +8194,7 @@
       "additionalProperties": false
     },
     "ModelProfileTarget": {
-      "description": "Whose profile: an installation, the workspace's Coordinator, or the workspace's specialist default.",
+      "description": "Whose profile: an installation, the workspace's Coordinator, or the workspace's default for new teammates (ADR-0037 item 4: the former specialist default).",
       "oneOf": [
         {
           "type": "object",
@@ -8343,7 +8228,7 @@
           "type": "object",
           "properties": {
             "kind": {
-              "const": "specialist_default"
+              "const": "teammate_default"
             }
           },
           "required": [
@@ -8433,13 +8318,12 @@
       "additionalProperties": false
     },
     "AgentRunKind": {
-      "description": "The authority decision of every tool call depends on it (ADR-0027 item 2): routed and specialist runs use decideDelegation, mandate runs decideAutomation, the Coordinator a stated check in code.",
+      "description": "The authority decision of every tool call depends on it (ADR-0027 item 2): routed runs (hand-offs and teammate calls, ADR-0037 item 2) use decideDelegation, mandate runs decideAutomation, the Coordinator a stated check in code. The specialist kind retired with ADR-0037.",
       "type": "string",
       "enum": [
         "coordinator",
         "routed",
-        "mandate",
-        "specialist"
+        "mandate"
       ]
     },
     "AgentReleaseId": {
@@ -8591,7 +8475,7 @@
       ]
     },
     "AgentRunManifest": {
-      "description": "AgentRunManifest@1 (ADR-0027 item 1; PR 10): what admission pins for one agent-run@1: release, system-text and tool-catalogue digests, the offered tools, the model profile, caps and, for a specialist, the spec digest, data classes and deadline. The Coordinator, routed and mandate runs run on the wall time (ADR-0027 item 6), a specialist on its deadline (ADR-0028 item 6); a routed, mandate or specialist run acts on one store and names it and its connection (ADR-0027 item 8, ADR-0028 item 1). Code builds it from server facts; steps carry only the run id.",
+      "description": "AgentRunManifest@1 (ADR-0027 item 1; PR 10): what admission pins for one agent-run@1: release, system-text and tool-catalogue digests, the offered tools, the model profile and caps. Every kind runs on the wall time (ADR-0027 item 6); a routed or mandate run acts on one store and names it and its connection (ADR-0027 item 8). specDigest and dataClasses retired with the specialist kind (ADR-0037) and are always null. Code builds it from server facts; steps carry only the run id.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -8698,24 +8582,12 @@
           "$ref": "#/$defs/AgentRunCaps"
         },
         "specDigest": {
-          "anyOf": [
-            {
-              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Retired with the specialist kind (ADR-0037): always null.",
+          "type": "null"
         },
         "dataClasses": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DataClasses"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Retired with the specialist kind (ADR-0037): always null.",
+          "type": "null"
         },
         "admittedAt": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
@@ -8891,56 +8763,6 @@
               }
             }
           }
-        },
-        {
-          "if": {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "const": "specialist"
-              }
-            },
-            "required": [
-              "kind"
-            ]
-          },
-          "then": {
-            "type": "object",
-            "properties": {
-              "storeId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-              },
-              "connectionId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-              },
-              "installationId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-              },
-              "mandateId": {
-                "type": "null"
-              },
-              "triggerId": {
-                "type": "null"
-              },
-              "specDigest": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
-              },
-              "dataClasses": {
-                "$ref": "#/$defs/DataClasses"
-              },
-              "requester": {
-                "$ref": "#/$defs/HumanActorRef"
-              },
-              "caps": {
-                "type": "object",
-                "properties": {
-                  "deadline": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
         }
       ]
     },
@@ -9067,7 +8889,7 @@
       "additionalProperties": false
     },
     "ModelUntrustedSource": {
-      "description": "The source a wrapped piece of untrusted data names (ADR-0027 item 5).",
+      "description": "The source a wrapped piece of untrusted data names (ADR-0027 item 5). teammate_result and result_item: a teammate's result and an opened item (ADR-0037 item 3(a)).",
       "type": "string",
       "enum": [
         "product",
@@ -9080,7 +8902,9 @@
         "upload",
         "sandbox_output",
         "tool_result",
-        "message"
+        "message",
+        "teammate_result",
+        "result_item"
       ]
     },
     "ModelTextBlock": {
@@ -9436,10 +9260,58 @@
               "$ref": "#/$defs/ToolUseId"
             },
             "name": {
-              "const": "specialist.draft"
+              "const": "agent.ask"
             },
             "input": {
-              "$ref": "#/$defs/ToolModelInputSpecialistDraft"
+              "$ref": "#/$defs/ToolModelInputAgentAsk"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "agent.result.read"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputAgentResultRead"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "agent.propose"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputAgentPropose"
             }
           },
           "required": [
@@ -9512,6 +9384,30 @@
             },
             "input": {
               "$ref": "#/$defs/ToolModelInputPlanDraft"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "result.submit"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputResultSubmit"
             }
           },
           "required": [
@@ -9926,7 +9822,7 @@
       ]
     },
     "ToolRefusalCode": {
-      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused.",
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. Catalogue version 3 (ADR-0037 item 3) drops route_used (no limit of one hand-off per run) and adds the teammate codes: teammate_unavailable (not active, not on the code-built list, or the Coordinator), children_limit (the kernel's 32 children per envelope), insufficient_credits (the balance cannot cover the call's hold at once, or it would wait), result_customer_tagged, item_not_received (an item from a result this run did not receive), page_out_of_range, hand_off_in_ask, card_tool_excluded and card_limit (10 active workspace-created agents).",
       "type": "string",
       "enum": [
         "not_offered",
@@ -9943,15 +9839,23 @@
         "budget_exhausted",
         "tool_call_limit",
         "question_limit",
-        "route_used",
         "report_in_turn",
         "result_too_large",
         "sender_inactive",
-        "sender_not_usable"
+        "sender_not_usable",
+        "teammate_unavailable",
+        "children_limit",
+        "insufficient_credits",
+        "result_customer_tagged",
+        "item_not_received",
+        "page_out_of_range",
+        "hand_off_in_ask",
+        "card_tool_excluded",
+        "card_limit"
       ]
     },
     "RunToolCallRecordRef": {
-      "description": "The first record an internal write made, returned again on replay.",
+      "description": "The first record an internal write made, returned again on replay. Catalogue version 3: agent.propose records an agent_card, agent.ask the teammate_run it started, result.submit the teammate_result.",
       "type": "object",
       "properties": {
         "kind": {
@@ -9963,7 +9867,9 @@
             "suggestion",
             "artifact",
             "proposal",
-            "specialist_spec"
+            "agent_card",
+            "teammate_run",
+            "teammate_result"
           ]
         },
         "id": {
@@ -10330,212 +10236,6 @@
         }
       ]
     },
-    "SpecialistSpec": {
-      "description": "SpecialistSpec@1 (ADR-0027 item 10, ADR-0028 items 2 and 3; PR 10): a closed spec, digested with RFC 8785. The model writes only the brief; code writes every other field. The model profile is a priced choice, not authority.",
-      "type": "object",
-      "properties": {
-        "schemaVersion": {
-          "const": 1
-        },
-        "organizationId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "workspaceId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "storeId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "connectionId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "parentTaskId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "parentTaskRevision": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
-        },
-        "release": {
-          "$ref": "#/$defs/AgentReleasePin"
-        },
-        "brief": {
-          "$ref": "#/$defs/SpecialistBrief"
-        },
-        "tools": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ToolName"
-          },
-          "minItems": 1,
-          "maxItems": 32,
-          "uniqueItems": true
-        },
-        "capabilities": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CapabilityVerbs"
-          },
-          "minItems": 1,
-          "maxItems": 16,
-          "uniqueItems": true,
-          "description": "At most 16 ids, derived in code from the tools the eligible skills declare intersected with the Specialist ceiling, never from the chosen skill ids."
-        },
-        "dataClasses": {
-          "$ref": "#/$defs/DataClasses"
-        },
-        "modelProfile": {
-          "$ref": "#/$defs/ModelProfile"
-        },
-        "turnLimit": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 16
-        },
-        "creditCap": {
-          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
-        },
-        "runSeconds": {
-          "description": "The run's length from Start: 1 hour by default, 8 at most; the person may only shorten it.",
-          "type": "integer",
-          "minimum": 60,
-          "maximum": 28800
-        }
-      },
-      "required": [
-        "schemaVersion",
-        "organizationId",
-        "workspaceId",
-        "storeId",
-        "connectionId",
-        "parentTaskId",
-        "parentTaskRevision",
-        "release",
-        "brief",
-        "tools",
-        "capabilities",
-        "dataClasses",
-        "modelProfile",
-        "turnLimit",
-        "creditCap",
-        "runSeconds"
-      ],
-      "additionalProperties": false
-    },
-    "SpecialistStartDocument": {
-      "description": "SpecialistStartDocument@1 (ADR-0028 item 3; PR 10): the server-built document behind the Start card, bound to the actor, a standalone-workspace session, the spec digest, the parent task revision, the release, capabilities, data classes, model profile, caps and deadline. Only the asker, at launch only the Owner, may get one; card edits only narrow, each with a new document.",
-      "type": "object",
-      "properties": {
-        "schemaVersion": {
-          "const": 1
-        },
-        "documentId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "organizationId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "workspaceId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "actor": {
-          "$ref": "#/$defs/HumanActorRef"
-        },
-        "sessionDigest": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
-        },
-        "host": {
-          "const": "standalone"
-        },
-        "specDigest": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
-        },
-        "parentTaskId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-        },
-        "parentTaskRevision": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
-        },
-        "release": {
-          "$ref": "#/$defs/AgentReleasePin"
-        },
-        "capabilities": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CapabilityVerbs"
-          },
-          "minItems": 1,
-          "maxItems": 16,
-          "uniqueItems": true
-        },
-        "dataClasses": {
-          "$ref": "#/$defs/DataClasses"
-        },
-        "modelProfile": {
-          "$ref": "#/$defs/ModelProfile"
-        },
-        "turnLimit": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 16
-        },
-        "creditCap": {
-          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
-        },
-        "runSeconds": {
-          "type": "integer",
-          "minimum": 60,
-          "maximum": 28800
-        },
-        "issuedAt": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
-        },
-        "expiresAt": {
-          "description": "Five minutes after issuedAt; consumed once.",
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
-        }
-      },
-      "required": [
-        "schemaVersion",
-        "documentId",
-        "organizationId",
-        "workspaceId",
-        "actor",
-        "sessionDigest",
-        "host",
-        "specDigest",
-        "parentTaskId",
-        "parentTaskRevision",
-        "release",
-        "capabilities",
-        "dataClasses",
-        "modelProfile",
-        "turnLimit",
-        "creditCap",
-        "runSeconds",
-        "issuedAt",
-        "expiresAt"
-      ],
-      "additionalProperties": false
-    },
-    "SpecialistStartRefusal": {
-      "description": "Why a specialist Start is refused (ADR-0028 items 3, 4, 7 and 8). Any refusal rolls the whole Start back.",
-      "type": "string",
-      "enum": [
-        "actor_ineligible",
-        "host_ineligible",
-        "switch_off",
-        "workspace_off",
-        "stale",
-        "document_expired",
-        "document_used",
-        "running_limit_task",
-        "running_limit_workspace",
-        "cap_below_turn",
-        "daily_backstop",
-        "entitlement_denied",
-        "stopped"
-      ]
-    },
     "ReportArtifact": {
       "description": "report@1 (ADR-0027 item 10; PR 10): the artifact a specialist run ends with. Reports are data, never instructions; the Coordinator never reads them at launch, and code builds the parent-thread card from these typed fields.",
       "type": "object",
@@ -10873,11 +10573,10 @@
       ]
     },
     "AgentPackageKind": {
-      "description": "installed: an agent a shop installs; specialist: the built-in morrow.specialist release (ADR-0028); coordinator: the built-in morrow.coordinator release (ADR-0027 item 8).",
+      "description": "installed: an agent a shop installs or Morrow creates (either origin, ADR-0037 item 4); coordinator: the built-in morrow.coordinator release (ADR-0027 item 8). The specialist kind retired with ADR-0037.",
       "type": "string",
       "enum": [
         "installed",
-        "specialist",
         "coordinator"
       ]
     },
@@ -10918,7 +10617,7 @@
       "additionalProperties": false
     },
     "SkillManifest": {
-      "description": "SkillManifest@1 (ADR-0023 decision 11d; PR 10): the closed skill.json beside a first-party skills/<id>/SKILL.md, pinned by its release's digest. A skill declares the tools its instructions use and the data classes it reads; it never grants a tool or a capability. A specialist's tools are those its eligible skills declare, inside the Specialist ceiling.",
+      "description": "SkillManifest@1 (ADR-0023 decision 11d; PR 10): the closed skill.json beside a first-party skills/<id>/SKILL.md, pinned by its release's digest. A skill declares the tools its instructions use and the data classes it reads; it never grants a tool or a capability. eligibleForWorkspaceAgents: an agent card may pick it by id (ADR-0037 item 4), pinned by its digest.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -10963,7 +10662,7 @@
           "maxItems": 1,
           "uniqueItems": true
         },
-        "eligibleForSpecialists": {
+        "eligibleForWorkspaceAgents": {
           "type": "boolean"
         },
         "bodyDigest": {
@@ -10980,13 +10679,13 @@
         "tools",
         "dataClasses",
         "outputContracts",
-        "eligibleForSpecialists",
+        "eligibleForWorkspaceAgents",
         "bodyDigest"
       ],
       "additionalProperties": false
     },
     "AgentPackage": {
-      "description": "AgentPackage@1 (ADR-0023 decisions 6 and 11d, ADR-0027 items 3 and 12; PR 10): one release of an agent as data: its role text and pinned skills, the tools it declares, the capabilities it asks for, optional Shopify scopes, trigger kinds, customer-data level, whether it uses the computer, and the model entries it offers with its default. All agents share one tool catalogue, loop and gateway; they differ only in this. Code checks what JSON Schema cannot (agent-package.ts): every tool's capability is asked for, only Support asks for support.* or level 2, and no package declares both customer reads and the computer.",
+      "description": "AgentPackage@1 (ADR-0023 decisions 6 and 11d, ADR-0027 items 3 and 12, ADR-0037 item 4; PR 10, generalised in ADR-0037 PR 2): one release of an agent as data, of either origin: its role text (first-party: by digest; workspace: the approved card's instructions, whose digest roleTextDigest is) and pinned skills, a workspace agent's skill text, the tools it declares, the capabilities it asks for, optional Shopify scopes, trigger kinds, customer-data level, whether it uses the computer, and the model entries it offers with its default. All agents share one tool catalogue, loop and gateway; they differ only in this. Code checks what JSON Schema cannot (agent-package.ts): every tool's capability is asked for, no package but the Coordinator's holds an agent.* tool, workspace.task.delegate or an agents.* capability, only Support asks for support.* or level 2, a workspace package holds nothing ADR-0037 item 5 excludes, and no package declares both customer reads and the computer.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -11001,6 +10700,9 @@
         "kind": {
           "$ref": "#/$defs/AgentPackageKind"
         },
+        "origin": {
+          "$ref": "#/$defs/AgentPackageOrigin"
+        },
         "title": {
           "type": "string",
           "minLength": 1,
@@ -11009,6 +10711,30 @@
         },
         "roleTextDigest": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "instructions": {
+          "description": "A workspace agent's instructions (its role text), as approved on its card; null for a first-party release, whose role text is in the repository.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16000,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skillTexts": {
+          "description": "A workspace agent's skill text, as approved; empty for a first-party release.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentCardSkillText"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
         },
         "skills": {
           "type": "array",
@@ -11083,8 +10809,11 @@
         "id",
         "revision",
         "kind",
+        "origin",
         "title",
         "roleTextDigest",
+        "instructions",
+        "skillTexts",
         "skills",
         "tools",
         "capabilities",
@@ -11103,10 +10832,7 @@
             "type": "object",
             "properties": {
               "kind": {
-                "enum": [
-                  "specialist",
-                  "coordinator"
-                ]
+                "const": "coordinator"
               }
             },
             "required": [
@@ -11126,6 +10852,16 @@
               },
               "customerData": {
                 "const": "none"
+              },
+              "computer": {
+                "const": false
+              },
+              "skills": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "origin": {
+                "const": "first_party"
               }
             }
           }
@@ -11134,23 +10870,59 @@
           "if": {
             "type": "object",
             "properties": {
-              "kind": {
-                "const": "coordinator"
+              "origin": {
+                "const": "first_party"
               }
             },
             "required": [
-              "kind"
+              "origin"
             ]
           },
           "then": {
             "type": "object",
             "properties": {
-              "computer": {
-                "const": false
+              "instructions": {
+                "type": "null"
               },
-              "skills": {
+              "skillTexts": {
                 "type": "array",
                 "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "origin": {
+                "const": "workspace"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "installed"
+              },
+              "instructions": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16000,
+                "pattern": "\\S"
+              },
+              "customerData": {
+                "enum": [
+                  "none",
+                  "level1"
+                ]
+              },
+              "evalDigest": {
+                "type": "null"
               }
             }
           }
@@ -13831,6 +13603,1953 @@
         "goals",
         "steps",
         "target"
+      ]
+    },
+    "TeammateRecordKind": {
+      "description": "The kinds of record a teammate brief or finding names by id (ADR-0037 item 3(a)). A model-written id is never authority to read: code opens a result item only when it belongs to a result the calling Morrow run received, and any other record only as the teammate's own grants, the record's read tags and the requester's visibility allow.",
+      "type": "string",
+      "enum": [
+        "task",
+        "thread",
+        "artifact",
+        "knowledge_page",
+        "product",
+        "proposal",
+        "result_item"
+      ]
+    },
+    "TeammateRecordRef": {
+      "description": "One record a brief or finding names.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/TeammateRecordKind"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateRecordRefs": {
+      "description": "The records a brief or finding names: distinct, at most 256. A count bound, never a character cap: code refuses a longer list (input_invalid) and never cuts one.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TeammateRecordRef"
+      },
+      "minItems": 0,
+      "maxItems": 256,
+      "uniqueItems": true
+    },
+    "TeammateBriefLines": {
+      "description": "Done criteria or boundaries: each a line of any length (ADR-0037 item 3, OD-2026-10-25-4: no character cap), at most 64 lines.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "minItems": 0,
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "TeammateBrief": {
+      "description": "The structured brief Morrow passes with agent.ask or agent.route (ADR-0037 item 3(a) and (b)): an objective, details, done criteria, boundaries and the records the work is about, with no character cap (OD-2026-10-25-4); long material goes by record id. Bounded in practice by Morrow's output tokens per turn. It names no tool, capability, scope, store, model or limit: code sets those from the teammate's installation and the envelope.",
+      "type": "object",
+      "properties": {
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "details": {
+          "type": "string",
+          "minLength": 0
+        },
+        "doneCriteria": {
+          "$ref": "#/$defs/TeammateBriefLines"
+        },
+        "boundaries": {
+          "$ref": "#/$defs/TeammateBriefLines"
+        },
+        "records": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        }
+      },
+      "required": [
+        "objective",
+        "details",
+        "doneCriteria",
+        "boundaries",
+        "records"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputAgentAsk": {
+      "description": "agent.ask (catalogue version 3; ADR-0037 item 3(a)): Morrow calls one active teammate from the code-built list in its opening context and waits for its TeammateResult@1. Any number per run, in sequence or in parallel, the same teammate again included; each call is one child at depth 1, admitted and checked alone.",
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "brief": {
+          "$ref": "#/$defs/TeammateBrief"
+        }
+      },
+      "required": [
+        "installationId",
+        "brief"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputAgentResultRead": {
+      "description": "agent.result.read (catalogue version 3; ADR-0037 items 1 and 3(a)): one page of a result item that a teammate's result in this run listed. Pages start at 1. Code opens it only when the item belongs to a result Morrow's own run received and carries no customer read tag.",
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "itemId",
+        "page"
+      ],
+      "additionalProperties": false
+    },
+    "AgentCardSkillText": {
+      "description": "One piece of skill text Morrow writes for a workspace-created agent (ADR-0037 item 4; amends ADR-0023 decision 11d for this origin only). It is instructions for that agent alone: never code, a URL or a credential, and it never adds a tool or a capability. The length bounds are provisional (ADR-0037 leaves a skill size budget open).",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "\\S"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "title",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputAgentPropose": {
+      "description": "agent.propose (catalogue version 3; ADR-0037 item 4): Morrow drafts one agent card. The model writes the name, purpose, instructions and any skill text, picks first-party skills by id and tools from the catalogue, and names any trigger kinds; code derives and writes the rest (capabilities and verbs, Shopify scopes, data classes, the store, run limits, the model profile and the taint). It grants nothing: only a person's approval of the exact card does. tools is the one reviewed exception to the rule that no tool input names tools (ADR-0037 item 4: tools from the fixed catalogue); code refuses agent.*, support.*, delegation and every excluded tool.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000,
+          "pattern": "\\S"
+        },
+        "skillTexts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentCardSkillText"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "skillIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillId"
+          },
+          "minItems": 0,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "triggerKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TriggerKind"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name",
+        "purpose",
+        "instructions",
+        "skillTexts",
+        "skillIds",
+        "tools",
+        "triggerKinds"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateOutcome": {
+      "description": "How a called teammate's run ended (ADR-0037 item 3(a)). The teammate chooses done, partial, nothing_found or blocked in result.submit, and its run then ends completed. Code sets no_result (the run ended, by its limits or its own end turn, without result.submit), stopped (a person's stop, a switch, the lease or the task) and failed (an invalid output or a provider error), never from model text.",
+      "type": "string",
+      "enum": [
+        "done",
+        "partial",
+        "nothing_found",
+        "blocked",
+        "no_result",
+        "stopped",
+        "failed"
+      ]
+    },
+    "TeammateCounts": {
+      "description": "The typed counts of ADR-0034 item 9, from which code builds checkup_done: what was checked, what was missing, and the questions left for a person.",
+      "type": "object",
+      "properties": {
+        "checked": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "questions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "checked",
+        "missing",
+        "questions"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateFindingKind": {
+      "description": "A finding's type: a fact, an issue, a metric (with a value and a unit), a recommendation or a table.",
+      "type": "string",
+      "enum": [
+        "fact",
+        "issue",
+        "metric",
+        "recommendation",
+        "table"
+      ]
+    },
+    "TeammateTableInput": {
+      "description": "A table as the teammate writes it: column headings and rows of text cells. Code checks every row has one cell per column.",
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 0
+            },
+            "minItems": 1,
+            "maxItems": 32
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "columns",
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateFindingInput": {
+      "description": "One typed finding as the teammate writes it, with no character cap. value and unit only for a metric, table only for a table (checked in code).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/TeammateFindingKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 0
+        },
+        "records": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateTableInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "detail",
+        "records",
+        "value",
+        "unit",
+        "table"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputResultSubmit": {
+      "description": "result.submit (catalogue version 3; ADR-0037 item 3(a)): a called teammate ends its run by returning its result to Morrow: an outcome, counts, closed next-step codes, a summary and typed findings, with no character cap. Code adds the run's ids, the records it created, its read tags and taint, and stores anything too large for one 8 KiB tool result as a result item (nothing is cut).",
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "done",
+            "partial",
+            "nothing_found",
+            "blocked"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "counts": {
+          "$ref": "#/$defs/TeammateCounts"
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckupNextStepCode"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeammateFindingInput"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "outcome",
+        "summary",
+        "counts",
+        "nextSteps",
+        "findings"
+      ],
+      "additionalProperties": false
+    },
+    "ResultItemKind": {
+      "description": "text: a long summary, detail or list; table: rows under column headings; file: a text file a teammate produced. Binary files stay artifacts, named by id among the records a run created.",
+      "type": "string",
+      "enum": [
+        "text",
+        "table",
+        "file"
+      ]
+    },
+    "ResultItemMediaType": {
+      "description": "The closed media types of a result item's content: text only.",
+      "type": "string",
+      "enum": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json"
+      ]
+    },
+    "ResultItemRef": {
+      "description": "A result item as a result shows it (ADR-0037 item 3(a)): its id, kind, size, pages and title. Morrow opens it with agent.result.read, page by page.",
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/ResultItemKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 67108864
+        },
+        "pageCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "itemId",
+        "kind",
+        "title",
+        "sizeBytes",
+        "pageCount"
+      ],
+      "additionalProperties": false
+    },
+    "TaintSource": {
+      "description": "One untrusted source a run consumed (ADR-0027 item 5).",
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/ModelUntrustedSource"
+        },
+        "sourceId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "sourceId"
+      ],
+      "additionalProperties": false
+    },
+    "RunTaint": {
+      "description": "The taint a run, a result, an item or an agent card carries, with its sources (ADR-0027 item 5, ADR-0034 item 3, ADR-0037 items 3(a) and 5). Server-derived; approval never clears it.",
+      "type": "object",
+      "properties": {
+        "contextTaint": {
+          "$ref": "#/$defs/ContextTaint"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaintSource"
+          },
+          "minItems": 0,
+          "maxItems": 24,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "contextTaint",
+        "sources"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "contextTaint": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "contextTaint"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "sources": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "contextTaint": {
+                "const": "untrusted_external"
+              }
+            },
+            "required": [
+              "contextTaint"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "sources": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ResultItem": {
+      "description": "ResultItem@1 (ADR-0037 items 3(a) and 8; PR 2): one stored result item, a FORCE RLS record naming the run that produced it, with its read tags and taint. Run content: on its run's run_turns clock (expiresAt 90 days from that run's end, null while it runs) and deleted with its turns.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "itemId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/ResultItemKind"
+        },
+        "mediaType": {
+          "$ref": "#/$defs/ResultItemMediaType"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 67108864
+        },
+        "pageCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "contentDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "readTags": {
+          "$ref": "#/$defs/ReadTags"
+        },
+        "taint": {
+          "$ref": "#/$defs/RunTaint"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "itemId",
+        "organizationId",
+        "workspaceId",
+        "runId",
+        "kind",
+        "mediaType",
+        "title",
+        "sizeBytes",
+        "pageCount",
+        "contentDigest",
+        "readTags",
+        "taint",
+        "createdAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "ResultItemPageContent": {
+      "description": "One page of an item: a text chunk (cut at a character boundary, never inside one), or a run of table rows starting at firstRow.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 0
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "table"
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "minItems": 1,
+              "maxItems": 32
+            },
+            "firstRow": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 0
+                },
+                "minItems": 1,
+                "maxItems": 32
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "kind",
+            "columns",
+            "firstRow",
+            "rows"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ResultItemPage": {
+      "description": "ResultItemPage@1 (ADR-0037 item 3(a); PR 2): what agent.result.read returns, as wrapped tainting data naming source result_item. A page fits one 8 KiB tool result.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "itemId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/ResultItemKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "pageCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "content": {
+          "$ref": "#/$defs/ResultItemPageContent"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "itemId",
+        "kind",
+        "title",
+        "page",
+        "pageCount",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateText": {
+      "description": "A summary or detail as a result shows it: inline when it fits, or the result item that holds it in full.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 0
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "item"
+            },
+            "itemId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "itemId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TeammateTable": {
+      "description": "A finding's table: inline when it fits, or the result item that holds it.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "table"
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "minItems": 1,
+              "maxItems": 32
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 0
+                },
+                "minItems": 1,
+                "maxItems": 32
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "kind",
+            "columns",
+            "rows"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "item"
+            },
+            "itemId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "itemId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TeammateFinding": {
+      "description": "One typed finding as a result shows it.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/TeammateFindingKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "detail": {
+          "$ref": "#/$defs/TeammateText"
+        },
+        "records": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateTable"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "detail",
+        "records",
+        "value",
+        "unit",
+        "table"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateCreatedRecord": {
+      "description": "A record the teammate's run created, from its run_tool_calls rows (code, never model text).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "task",
+            "suggestion",
+            "artifact",
+            "proposal"
+          ]
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateResult": {
+      "description": "TeammateResult@1 (ADR-0037 item 3(a); PR 2): what a called teammate returns to Morrow's run, closed and structured with no character cap (OD-2026-10-25-4): an outcome, its end reason, typed counts, the ids of the records it created, closed next-step codes, its read tags and taint, a summary and typed findings. Anything too large for one 8 KiB tool result is a result item listed in items, so nothing is cut. Code validates it and gives it to Morrow's turn as wrapped tainting data (source teammate_result); one with a customer read tag never enters Morrow's context. report@1's free text never does either.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "parentRunId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "toolUseId": {
+          "$ref": "#/$defs/ToolUseId"
+        },
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "taskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "outcome": {
+          "$ref": "#/$defs/TeammateOutcome"
+        },
+        "endReason": {
+          "$ref": "#/$defs/AgentRunEndReason"
+        },
+        "counts": {
+          "$ref": "#/$defs/TeammateCounts"
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckupNextStepCode"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "created": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeammateCreatedRecord"
+          },
+          "minItems": 0,
+          "maxItems": 40,
+          "uniqueItems": true
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeammateFinding"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResultItemRef"
+          },
+          "minItems": 0,
+          "maxItems": 512,
+          "uniqueItems": true
+        },
+        "readTags": {
+          "$ref": "#/$defs/ReadTags"
+        },
+        "taint": {
+          "$ref": "#/$defs/RunTaint"
+        },
+        "completedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "parentRunId",
+        "toolUseId",
+        "runId",
+        "taskId",
+        "installationId",
+        "outcome",
+        "endReason",
+        "counts",
+        "nextSteps",
+        "created",
+        "summary",
+        "findings",
+        "items",
+        "readTags",
+        "taint",
+        "completedAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "done",
+                  "partial",
+                  "nothing_found",
+                  "blocked"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "endReason": {
+                "const": "completed"
+              },
+              "summary": {
+                "$ref": "#/$defs/TeammateText"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "no_result",
+                  "stopped",
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "null"
+              },
+              "findings": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "nextSteps": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "stopped",
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "endReason": {
+                "not": {
+                  "const": "completed"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AgentPackageOrigin": {
+      "description": "ADR-0037 item 4: first_party, a release Morrow's team builds and publishes; workspace, an agent Morrow drafted as a card and a person approved. One kind, two origins.",
+      "type": "string",
+      "enum": [
+        "first_party",
+        "workspace"
+      ]
+    },
+    "AgentCardRunLimits": {
+      "description": "An installed agent's run limits as code writes them on a card (ADR-0027 item 6): turns, tool calls and questions, and the wall time. Not money: credits are the only spend limit (ADR-0037 item 6, ADR-0039).",
+      "type": "object",
+      "properties": {
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "maxToolCallsPerTurn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "maxToolCallsPerRun": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "maxQuestions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "wallTimeSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 1800
+        }
+      },
+      "required": [
+        "maxTurns",
+        "maxToolCallsPerTurn",
+        "maxToolCallsPerRun",
+        "maxQuestions",
+        "wallTimeSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "AgentCardOwnerOnlyKind": {
+      "description": "ADR-0037 item 5: the four kinds of grant that need the Owner as the card's requester or approver: a store effect (an external_write capability, even with propose only), order or customer reads, spend and communication.",
+      "type": "string",
+      "enum": [
+        "store_effect",
+        "orders_or_customer",
+        "spend",
+        "communication"
+      ]
+    },
+    "AgentCardDrafter": {
+      "description": "Who drafted a card: the Morrow run and the person whose request started it.",
+      "type": "object",
+      "properties": {
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "requester": {
+          "$ref": "#/$defs/HumanActorRef"
+        }
+      },
+      "required": [
+        "runId",
+        "requester"
+      ],
+      "additionalProperties": false
+    },
+    "AgentProposal": {
+      "description": "AgentProposal@1 (ADR-0037 items 4 and 5; PR 2): an agent card, closed and digested with RFC 8785. The model writes the name, purpose, instructions and skill text and picks skills, tools and trigger kinds (agent.propose); code writes everything else from server facts and those tools: capabilities and verbs, Shopify scopes, data classes, customer-data level, the store, run limits (no money cap), the model profile, the Owner-only kinds and the taint. It names no code, URL or credential, and its text never adds a tool or a capability. Each person's edit is a new revision with its editor and a new digest that keeps the taint; only a person's approval of the exact digest, under ADR-0011's access-change review, creates the agent.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "cardId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "connectionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "origin": {
+          "const": "workspace"
+        },
+        "draftedBy": {
+          "$ref": "#/$defs/AgentCardDrafter"
+        },
+        "editedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HumanActorRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "\\S"
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000,
+          "pattern": "\\S"
+        },
+        "skillTexts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentCardSkillText"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PinnedSkill"
+          },
+          "minItems": 0,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "capabilities": {
+          "$ref": "#/$defs/CapabilityVerbsList"
+        },
+        "optionalScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ShopifyOptionalScope"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "dataClasses": {
+          "$ref": "#/$defs/DataClasses"
+        },
+        "customerData": {
+          "type": "string",
+          "enum": [
+            "none",
+            "level1"
+          ]
+        },
+        "computer": {
+          "type": "boolean"
+        },
+        "triggerKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TriggerKind"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "runLimits": {
+          "$ref": "#/$defs/AgentCardRunLimits"
+        },
+        "modelProfile": {
+          "$ref": "#/$defs/ModelProfile"
+        },
+        "ownerOnly": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentCardOwnerOnlyKind"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "taint": {
+          "$ref": "#/$defs/RunTaint"
+        },
+        "draftedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "revisedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "cardId",
+        "revision",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "connectionId",
+        "origin",
+        "draftedBy",
+        "editedBy",
+        "name",
+        "purpose",
+        "instructions",
+        "skillTexts",
+        "skills",
+        "tools",
+        "capabilities",
+        "optionalScopes",
+        "dataClasses",
+        "customerData",
+        "computer",
+        "triggerKinds",
+        "runLimits",
+        "modelProfile",
+        "ownerOnly",
+        "taint",
+        "draftedAt",
+        "revisedAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "const": 1
+              }
+            },
+            "required": [
+              "revision"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "editedBy": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "revision": {
+                "type": "integer",
+                "minimum": 2
+              }
+            },
+            "required": [
+              "revision"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "editedBy": {
+                "$ref": "#/$defs/HumanActorRef"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AddToTeamReview": {
+      "description": "How the request an Add to team document makes is reviewed (ADR-0037 item 5, ADR-0011 Q1 to Q3): a solo Owner with the exact phrase and the 300-second cool-down, or a second member who is not conflicted.",
+      "type": "string",
+      "enum": [
+        "solo_owner_phrase",
+        "second_member"
+      ]
+    },
+    "AddToTeamDocument": {
+      "description": "AddToTeamDocument@1 (ADR-0037 items 4 and 7; PR 2): the server-built document behind Add to team, bound to the card's digest and revision, the actor and a standalone-workspace session, showing the card's derived grants, scopes, data, triggers, limits, model, Owner-only kinds and taint. Valid for 5 minutes and consumed once; confirming it is the request, an access change bound to the card's digest that then passes ADR-0011's review.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "documentId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "actor": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "sessionDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "host": {
+          "const": "standalone"
+        },
+        "cardId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "cardRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "cardDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "capabilities": {
+          "$ref": "#/$defs/CapabilityVerbsList"
+        },
+        "optionalScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ShopifyOptionalScope"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "dataClasses": {
+          "$ref": "#/$defs/DataClasses"
+        },
+        "customerData": {
+          "type": "string",
+          "enum": [
+            "none",
+            "level1"
+          ]
+        },
+        "triggerKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TriggerKind"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "runLimits": {
+          "$ref": "#/$defs/AgentCardRunLimits"
+        },
+        "modelProfile": {
+          "$ref": "#/$defs/ModelProfile"
+        },
+        "ownerOnly": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AgentCardOwnerOnlyKind"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "taint": {
+          "$ref": "#/$defs/RunTaint"
+        },
+        "review": {
+          "$ref": "#/$defs/AddToTeamReview"
+        },
+        "issuedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "description": "Five minutes after issuedAt; consumed once.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "documentId",
+        "organizationId",
+        "workspaceId",
+        "actor",
+        "sessionDigest",
+        "host",
+        "cardId",
+        "cardRevision",
+        "cardDigest",
+        "storeId",
+        "tools",
+        "capabilities",
+        "optionalScopes",
+        "dataClasses",
+        "customerData",
+        "triggerKinds",
+        "runLimits",
+        "modelProfile",
+        "ownerOnly",
+        "taint",
+        "review",
+        "issuedAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "AddToTeamRefusal": {
+      "description": "Why Add to team is refused (ADR-0037 items 4 and 5, ADR-0011 Q1 to Q3, ADR-0024 item 2). Any refusal rolls the whole transaction back.",
+      "type": "string",
+      "enum": [
+        "switch_off",
+        "actor_ineligible",
+        "host_ineligible",
+        "document_expired",
+        "document_used",
+        "stale",
+        "card_excluded",
+        "amplification_denied",
+        "owner_required",
+        "conflicted",
+        "phrase_required",
+        "cooldown_active",
+        "agent_limit",
+        "stopped"
+      ]
+    },
+    "ToolModelInputAgentAsk": {
+      "description": "agent.ask as the model is given it: ToolInputAgentAsk's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentAsk before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "installationId": {
+          "type": "string"
+        },
+        "brief": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "objective": {
+              "type": "string"
+            },
+            "details": {
+              "type": "string"
+            },
+            "doneCriteria": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "boundaries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "task",
+                      "thread",
+                      "artifact",
+                      "knowledge_page",
+                      "product",
+                      "proposal",
+                      "result_item"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ]
+              }
+            }
+          },
+          "required": [
+            "objective",
+            "details",
+            "doneCriteria",
+            "boundaries",
+            "records"
+          ]
+        }
+      },
+      "required": [
+        "installationId",
+        "brief"
+      ]
+    },
+    "ToolModelInputAgentResultRead": {
+      "description": "agent.result.read as the model is given it: ToolInputAgentResultRead's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentResultRead before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "itemId": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "itemId",
+        "page"
+      ]
+    },
+    "ToolModelInputAgentPropose": {
+      "description": "agent.propose as the model is given it: ToolInputAgentPropose's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentPropose before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "skillTexts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "body"
+            ]
+          }
+        },
+        "skillIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "knowledge.search",
+              "work.read",
+              "products.read",
+              "inventory.read",
+              "orders.summary",
+              "support.thread.read",
+              "message.post",
+              "inbox.ask",
+              "task.create",
+              "suggestion.create",
+              "report.write",
+              "agent.route",
+              "agent.ask",
+              "agent.result.read",
+              "agent.propose",
+              "proposal.listing",
+              "proposal.reply",
+              "plan.draft",
+              "result.submit"
+            ]
+          }
+        },
+        "triggerKinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "schedule",
+              "shopify_event",
+              "inbound_mail",
+              "monitor",
+              "look_for_work"
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "purpose",
+        "instructions",
+        "skillTexts",
+        "skillIds",
+        "tools",
+        "triggerKinds"
+      ]
+    },
+    "ToolModelInputResultSubmit": {
+      "description": "result.submit as the model is given it: ToolInputResultSubmit's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputResultSubmit before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "done",
+            "partial",
+            "nothing_found",
+            "blocked"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "checked": {
+              "type": "integer"
+            },
+            "missing": {
+              "type": "integer"
+            },
+            "questions": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "checked",
+            "missing",
+            "questions"
+          ]
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "add_photo",
+              "ask_reviews",
+              "answer_question",
+              "fill_fact",
+              "check_ai_answers"
+            ]
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "fact",
+                  "issue",
+                  "metric",
+                  "recommendation",
+                  "table"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              },
+              "records": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "task",
+                        "thread",
+                        "artifact",
+                        "knowledge_page",
+                        "product",
+                        "proposal",
+                        "result_item"
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "id"
+                  ]
+                }
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "unit": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "table": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "columns": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "rows": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "columns",
+                      "rows"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "title",
+              "detail",
+              "records",
+              "value",
+              "unit",
+              "table"
+            ]
+          }
+        }
+      },
+      "required": [
+        "outcome",
+        "summary",
+        "counts",
+        "nextSteps",
+        "findings"
       ]
     }
   }

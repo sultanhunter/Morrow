@@ -1,14 +1,12 @@
-// The agent-platform generator (PR 10; ADR-0027 items 3 and 11, ADR-0028 items 2 and 8).
+// The agent-platform generator (PR 10; ADR-0027 items 3 and 11; ADR-0037 items 1 to 3 and 9,
+// whose contracts PR retired the Specialist ceiling and its switch with the specialist kind).
 // It reads the reviewed data files, refuses them unless every inspection below passes, and
-// writes data-only TypeScript modules for the loop (PR 11), the specialist Start and the
-// screens:
+// writes a data-only TypeScript module for the loop (PR 11) and the screens:
 //   docs/contracts/tool-catalogue.json   -> packages/policy/src/generated/tool-catalogue.ts
 //     ToolCatalogue@1 with each tool's strict model input schema (derived from its v1.1 core
 //     definition the way ListingDraft_v1 is) and the catalogue digest a run manifest pins.
-//   docs/contracts/specialist-ceiling.json -> packages/policy/src/generated/specialist-ceiling.ts
-//     The Specialist ceiling's fixed ids (ADR-0028 item 2: "T2 fixes the exact ids").
-// It also checks that docs/decisions/agent-loop-staging.json and specialists-staging.json are
-// committed off (no Worker reads them before PR 11; edge:check takes them over then).
+// It also checks that docs/decisions/agent-loop-staging.json, teammate-calls-staging.json and
+// agent-cards-staging.json are committed off (edge:check refuses an on teammate or card switch).
 // `--check` compares the committed files byte for byte and runs the inspections
 // (verify:boundaries). Nothing here compiles a schema at runtime.
 import { createHash } from "node:crypto";
@@ -19,11 +17,10 @@ import * as prettier from "prettier";
 import { repositoryRoot } from "./artifacts.mjs";
 
 export const toolCataloguePath = "docs/contracts/tool-catalogue.json";
-export const specialistCeilingPath = "docs/contracts/specialist-ceiling.json";
 export const agentLoopSwitchPath = "docs/decisions/agent-loop-staging.json";
-export const specialistSwitchPath = "docs/decisions/specialists-staging.json";
+export const teammateCallsSwitchPath = "docs/decisions/teammate-calls-staging.json";
+export const agentCardsSwitchPath = "docs/decisions/agent-cards-staging.json";
 export const generatedToolCataloguePath = "packages/policy/src/generated/tool-catalogue.ts";
-export const generatedSpecialistCeilingPath = "packages/policy/src/generated/specialist-ceiling.ts";
 const coreV1Path = "docs/contracts/schemas/v1/core.schema.json";
 const coreV11Path = "docs/contracts/schemas/v1.1/core.schema.json";
 const capabilitiesPath = "docs/contracts/capabilities.json";
@@ -48,8 +45,10 @@ export const jcs = (value) =>
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
 // ADR-0027 item 8: the Coordinator's fixed grant set, as tools, with plan.draft (ADR-0034
-// item 2 amends item 8; catalogue version 2). The launch subset and the plan-drafts switch
-// narrow what a Coordinator turn is offered (packages/policy/src/projects/plan-draft.ts).
+// item 2 amends item 8; catalogue version 2) and ADR-0037 item 1's teammate tools (catalogue
+// version 3: agent.propose in place of specialist.draft, agent.ask and agent.result.read).
+// The launch subset and the switches narrow what a Coordinator turn is offered
+// (packages/policy/src/projects/plan-draft.ts).
 export const coordinatorToolNames = Object.freeze([
   "knowledge.search",
   "work.read",
@@ -57,23 +56,30 @@ export const coordinatorToolNames = Object.freeze([
   "inbox.ask",
   "task.create",
   "agent.route",
-  "specialist.draft",
+  "agent.ask",
+  "agent.result.read",
+  "agent.propose",
   "plan.draft",
+]);
+// ADR-0037 item 3(a): a called teammate's run returns its result with this tool, offered only
+// in the call context, and never talks to the person (no question, no post).
+export const teammateResultToolName = "result.submit";
+const personFacingCapabilities = new Set([
+  "workspace.question.request",
+  "workspace.conversation.post",
 ]);
 // ADR-0027 item 3: no tool takes SQL, a URL, a role, a store, a recipient, a sender, a
 // credential or a model. Field names that would carry one, anywhere in a tool's input.
 export const forbiddenInputName =
   /^(sql|query|url|uri|urls|href|link|links|endpoint|domain|host|role|roles|store|stores|storeid|storeids|shop|shopdomain|connectionid|organizationid|workspaceid|tenant|recipient|recipients|to|cc|bcc|from|replyto|sender|senders|senderidentityid|email|emails|address|credential|credentials|token|tokens|secret|secrets|apikey|key|password|model|models|effort|provider|capabilityid|capabilities|grant|grants|scope|tools|caps|budget|reservation)$/i;
-// ADR-0028 item 2: never in the Specialist ceiling at launch.
-const neverForSpecialists = (capability, verb) =>
-  capability.id === "orders.read" ||
-  capability.id.startsWith("support.") ||
-  capability.id === "workspace.task.delegate" ||
-  capability.id === "workspace.task.create" ||
-  capability.id === "workspace.task.assign" ||
-  capability.executor === "human_only" ||
-  (capability.id.endsWith(".publish") && (verb === "approve" || verb === "execute")) ||
-  ["approve", "delegate", "administer"].includes(verb);
+// The one reviewed exception (ADR-0037 item 4): agent.propose picks a card's tools from the
+// fixed catalogue, by ToolName only. Code derives every capability, scope and limit from them,
+// and the card grants nothing until a person approves its exact digest.
+export const cardToolsException = Object.freeze({
+  tool: "agent.propose",
+  property: "tools",
+  items: "#/$defs/ToolName",
+});
 
 // The keywords strict tool use does not take (as for ListingDraft_v1, S156): string-length,
 // numeric and array bounds, patterns and formats. The tool-call step validates every input
@@ -206,10 +212,10 @@ function propertyNames(
 }
 
 /**
- * The inspections of ToolCatalogue@1 (ADR-0027 items 2, 3 and 8; ADR-0024 item 6; ADR-0028
- * item 2). Returns every problem as a string; an empty list passes.
+ * The inspections of ToolCatalogue@1 (ADR-0027 items 2, 3 and 8; ADR-0024 item 6; ADR-0037
+ * items 1 to 3). Returns every problem as a string; an empty list passes.
  */
-export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling, validate }) {
+export function inspectToolCatalogue({ catalogue, capabilities, schemas, validate }) {
   const errors = [];
   const fail = (message) => errors.push("tool catalogue: " + message);
   if (typeof validate === "function" && !validate(catalogue))
@@ -222,9 +228,6 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
   if (JSON.stringify(names) !== JSON.stringify(enumNames))
     fail("tools must be exactly the ToolName enum, in its order");
   const wires = new Set();
-  const ceilingPairs = new Set(
-    (ceiling?.capabilities ?? []).flatMap((c) => c.verbs.map((v) => c.capabilityId + ":" + v)),
-  );
   for (const tool of tools) {
     const at = (message) => fail(`${tool.name}: ${message}`);
     if (tool.wireName !== String(tool.name).replaceAll(".", "_")) at("wire name drift");
@@ -300,11 +303,28 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
       if (contexts.some((c) => !["routed", "mandate"].includes(c)))
         at("support tools only in Support's routed and mandate runs");
     }
-    if (contexts.includes("specialist")) {
-      if (!ceilingPairs.has(tool.capabilityId + ":" + tool.verb))
-        at("a specialist tool must be inside the Specialist ceiling");
-      if (neverForSpecialists(capability, tool.verb)) at("never offered to a specialist");
-    }
+    // ADR-0037 item 2: only Morrow calls, routes to or creates an agent. Every agent.* tool,
+    // and every tool on workspace.task.delegate or an agents.* capability, is the Coordinator's
+    // only, so no teammate is offered one (depth 1).
+    if (
+      (String(tool.name).startsWith("agent.") ||
+        tool.capabilityId === "workspace.task.delegate" ||
+        tool.capabilityId.startsWith("agents.")) &&
+      JSON.stringify(contexts) !== JSON.stringify(["coordinator"])
+    )
+      at("agent tools belong to the Coordinator only (depth 1)");
+    // ADR-0037 item 3(a): a called teammate cannot talk to the person (no question or post),
+    // never reads customer mail (the support rule above), and returns its result with
+    // result.submit, which no other run is offered.
+    if (contexts.includes("call") && personFacingCapabilities.has(tool.capabilityId))
+      at("a called teammate never asks or posts to the person");
+    if (
+      tool.name === teammateResultToolName &&
+      (tool.family !== "internal" || JSON.stringify(contexts) !== JSON.stringify(["call"]))
+    )
+      at("the teammate result is an internal tool of the call context only");
+    if (contexts.length === 1 && contexts[0] === "call" && tool.name !== teammateResultToolName)
+      at("only the teammate result is offered in the call context alone");
     // Input: a v1.1 core ToolInput definition, expressible as a strict schema, naming nothing
     // forbidden; its strict shape is the ToolModelInput definition of the same name.
     if (!/^ToolInput[A-Z][A-Za-z0-9]*$/.test(String(tool.inputDefinition)))
@@ -319,8 +339,17 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
     } catch (error) {
       at("input is not strict-expressible: " + error.message);
     }
-    for (const name of propertyNames(definition, schemas))
-      if (name.startsWith("format:") || forbiddenInputName.test(name))
+    const fields = propertyNames(definition, schemas);
+    const excepted =
+      tool.name === cardToolsException.tool &&
+      fields.filter((name) => name === cardToolsException.property).length === 1 &&
+      definition.properties?.[cardToolsException.property]?.items?.$ref ===
+        cardToolsException.items;
+    for (const name of fields)
+      if (
+        name.startsWith("format:") ||
+        (forbiddenInputName.test(name) && !(excepted && name === cardToolsException.property))
+      )
         at("input takes a forbidden field " + name);
   }
   // The recorded reply and the schema the model is given agree: ModelToolUseBlock has one
@@ -363,57 +392,40 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling
   const coordinator = tools.filter((t) => t.contexts?.includes("coordinator")).map((t) => t.name);
   if (JSON.stringify([...coordinator].sort()) !== JSON.stringify([...coordinatorToolNames].sort()))
     fail(
-      "the Coordinator's tools must be exactly ADR-0027 item 8's fixed set (with ADR-0034 item 2's plan.draft)",
+      "the Coordinator's tools must be exactly ADR-0027 item 8's fixed set (with ADR-0034 item 2's plan.draft and ADR-0037 item 1's teammate tools)",
     );
+  if (!tools.some((t) => t.name === teammateResultToolName && t.contexts?.includes("call")))
+    fail("the call context must offer result.submit (ADR-0037 item 3(a))");
   return errors;
 }
 
-/** The Specialist ceiling (ADR-0028 item 2): at most 16 ids, none of the never-list. */
-export function inspectSpecialistCeiling(ceiling, capabilities) {
-  const errors = [];
-  const fail = (message) => errors.push("specialist ceiling: " + message);
-  const byId = new Map(capabilities.map((c) => [c.id, c]));
-  if (
-    ceiling?.schemaVersion !== 1 ||
-    ceiling.release !== "morrow.specialist" ||
-    ceiling.maxCapabilities !== 16 ||
-    !Array.isArray(ceiling.capabilities)
-  )
-    return [...errors, "specialist ceiling: malformed"];
-  if (ceiling.capabilities.length < 1 || ceiling.capabilities.length > 16)
-    fail("between 1 and 16 capability ids");
-  const seen = new Set();
-  for (const row of ceiling.capabilities) {
-    const capability = byId.get(row?.capabilityId);
-    if (!capability || seen.has(row.capabilityId)) {
-      fail("unknown or repeated " + row?.capabilityId);
-      continue;
-    }
-    seen.add(row.capabilityId);
-    if (
-      !Array.isArray(row.verbs) ||
-      row.verbs.length < 1 ||
-      new Set(row.verbs).size !== row.verbs.length
-    )
-      fail(row.capabilityId + ": verbs");
-    for (const verb of row.verbs ?? []) {
-      if (neverForSpecialists(capability, verb))
-        fail(`${row.capabilityId} ${verb} is never a specialist's at launch`);
-      if (capability.effect === "read" && verb !== "view")
-        fail(`${row.capabilityId}: a read is only viewed`);
-      if (
-        ["external_write", "spend", "communication"].includes(capability.effect) &&
-        verb !== "propose"
-      )
-        fail(`${row.capabilityId}: an external effect is only proposed`);
-    }
-  }
-  return errors;
+/**
+ * The switches stay committed off until their reviewed commits (ADR-0027 item 11; ADR-0037
+ * item 9: teammate calls and agent cards, in place of the specialist switch).
+ */
+export const teamSwitchFeatures = Object.freeze({
+  "teammate-calls-staging.json": "teammate_calls",
+  "agent-cards-staging.json": "agent_cards",
+});
+export function inspectTeamSwitch(name, record) {
+  const keys = Object.keys(record ?? {})
+    .sort()
+    .join(",");
+  return keys === "environment_kind,feature,observed_on,schema_version,scope,switch" &&
+    record.schema_version === 1 &&
+    record.environment_kind === "staging" &&
+    record.feature === teamSwitchFeatures[name] &&
+    record.switch === "off" &&
+    record.observed_on === null &&
+    typeof record.scope === "string"
+    ? []
+    : [`${name} must be committed off (ADR-0037 item 9)`];
 }
-
-/** The two switches stay committed off until their reviewed commits (ADR-0027 item 11, ADR-0028 item 8). */
-export function inspectAgentPlatformSwitches(loop, specialists) {
-  const errors = [];
+export function inspectAgentPlatformSwitches(loop, teammateCalls, agentCards) {
+  const errors = [
+    ...inspectTeamSwitch("teammate-calls-staging.json", teammateCalls),
+    ...inspectTeamSwitch("agent-cards-staging.json", agentCards),
+  ];
   const keys = (value) =>
     Object.keys(value ?? {})
       .sort()
@@ -427,15 +439,6 @@ export function inspectAgentPlatformSwitches(loop, specialists) {
     loop.observed_on !== null
   )
     errors.push("agent-loop-staging.json must be committed off (ADR-0027 item 11)");
-  if (
-    keys(specialists) !== "environment_kind,observed_on,release,schema_version,scope,switch" ||
-    specialists.schema_version !== 1 ||
-    specialists.environment_kind !== "staging" ||
-    specialists.release !== "morrow.specialist" ||
-    specialists.switch !== "off" ||
-    specialists.observed_on !== null
-  )
-    errors.push("specialists-staging.json must be committed off (ADR-0028 item 8)");
   return errors;
 }
 
@@ -460,18 +463,17 @@ async function format(root, path, text) {
 /** Inspects every input and returns the generated files; throws with every problem. */
 export async function generateAgentPlatform(root = repositoryRoot) {
   const catalogue = readJson(root, toolCataloguePath);
-  const ceiling = readJson(root, specialistCeilingPath);
   const capabilities = readJson(root, capabilitiesPath).capabilities;
   const schemas = [readJson(root, coreV1Path), readJson(root, coreV11Path)];
   const { validators, currentDefinitionSelectors } = await import(resolve(root, validatorsPath));
   const validate = (value) =>
     validators[currentDefinitionSelectors.ToolCatalogue]?.(value) === true;
   const errors = [
-    ...inspectToolCatalogue({ catalogue, capabilities, schemas, ceiling, validate }),
-    ...inspectSpecialistCeiling(ceiling, capabilities),
+    ...inspectToolCatalogue({ catalogue, capabilities, schemas, validate }),
     ...inspectAgentPlatformSwitches(
       readJson(root, agentLoopSwitchPath),
-      readJson(root, specialistSwitchPath),
+      readJson(root, teammateCallsSwitchPath),
+      readJson(root, agentCardsSwitchPath),
     ),
   ];
   if (errors.length) refuse("INVALID: " + errors.join("; "));
@@ -489,29 +491,7 @@ export async function generateAgentPlatform(root = repositoryRoot) {
       JSON.stringify(data, null, 2) +
       " as const;\n",
   );
-  const specialist = await format(
-    root,
-    generatedSpecialistCeilingPath,
-    "// Generated by scripts/generate-agent-platform.mjs from docs/contracts/specialist-ceiling.json\n" +
-      "// (ADR-0028 item 2). Do not edit; run `npm run contracts:generate`. The most a\n" +
-      "// task_specialist installation may hold at launch, as fixed ids.\n" +
-      "export const generatedSpecialistCeiling = " +
-      JSON.stringify(
-        {
-          release: ceiling.release,
-          maxCapabilities: ceiling.maxCapabilities,
-          capabilities: ceiling.capabilities,
-          digest: sha256(jcs(ceiling.capabilities)),
-        },
-        null,
-        2,
-      ) +
-      " as const;\n",
-  );
-  return {
-    [generatedToolCataloguePath]: tools,
-    [generatedSpecialistCeilingPath]: specialist,
-  };
+  return { [generatedToolCataloguePath]: tools };
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -529,6 +509,6 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   }
   if (process.argv.includes("--check"))
     console.log(
-      "PASS: the tool catalogue, the Specialist ceiling and the committed-off agent switches reproduce and inspect clean.",
+      "PASS: the tool catalogue and the committed-off agent switches reproduce and inspect clean.",
     );
 }

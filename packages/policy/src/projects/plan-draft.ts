@@ -12,6 +12,7 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import planDraftsSwitch from "../../../../docs/decisions/plan-drafts-staging.json";
+import { type TeamSwitchState, teamSwitchState } from "../teammates";
 import { type ToolEntry, toolEntry } from "../tool-catalogue";
 import { canonicalText, sha256Hex } from "./digest";
 
@@ -42,7 +43,7 @@ export function planDraftsSwitchAllowed(state: {
 }
 
 /**
- * plan.draft (ADR-0034 item 2) as ToolCatalogue@1 version 2 lists it: a coordination tool on
+ * plan.draft (ADR-0034 item 2) as ToolCatalogue@1 lists it since version 2: a coordination tool on
  * workspace.conversation.post (execute, internal-write replay, 8 KiB results), offered to the
  * Coordinator only. It posts one card holding a closed, digested PlanDraft@1, creates no
  * other record and grants nothing (a catalogue entry names no grant).
@@ -53,7 +54,11 @@ export const planDraftTool: ToolEntry = (() => {
   return entry;
 })();
 
-/** ADR-0027 item 8's Coordinator grant set with plan.draft; it keeps task.create. */
+/**
+ * ADR-0027 item 8's Coordinator grant set with plan.draft and ADR-0037 item 1's teammate
+ * tools (ToolCatalogue@1 version 3: agent.ask, agent.result.read and agent.propose in place of
+ * specialist.draft); it keeps task.create.
+ */
 export const coordinatorGrantTools = Object.freeze([
   "knowledge.search",
   "work.read",
@@ -61,26 +66,39 @@ export const coordinatorGrantTools = Object.freeze([
   "inbox.ask",
   "task.create",
   "agent.route",
-  "specialist.draft",
+  "agent.ask",
+  "agent.result.read",
+  "agent.propose",
   "plan.draft",
 ] as const);
 export type CoordinatorTool = (typeof coordinatorGrantTools)[number];
 /**
  * The morrow.coordinator release's launch subset (ADR-0034 item 1, a product choice):
  * task.create is left out, so Morrow creates no task at launch. plan.draft is in it only
- * while the switch is on.
+ * while the plan-drafts switch is on; agent.ask and agent.result.read only while the
+ * teammate-calls switch is on, and agent.propose only while the agent-cards switch is on
+ * (ADR-0037 item 9; both committed off).
  */
-export function coordinatorLaunchTools(switchState: "on" | "off" = planDraftsRecord.switch) {
+export function coordinatorLaunchTools(
+  switchState: "on" | "off" = planDraftsRecord.switch,
+  team: TeamSwitchState = teamSwitchState(),
+) {
   return Object.freeze(
     coordinatorGrantTools.filter(
-      (t) => t !== "task.create" && (t !== "plan.draft" || switchState === "on"),
+      (t) =>
+        t !== "task.create" &&
+        (t !== "plan.draft" || switchState === "on") &&
+        ((t !== "agent.ask" && t !== "agent.result.read") || team.teammateCalls === "on") &&
+        (t !== "agent.propose" || team.agentCards === "on"),
     ),
   );
 }
 /**
  * Morrow's tools in a private Ask (ADR-0034 item 7), only under P05.T04b's Ask-bound
- * envelope: never task.create, specialist.draft, inbox.ask or a mention. agent.route once
- * per run, for one active added agent's read-only answer.
+ * envelope: never task.create, agent.propose, inbox.ask or a mention. agent.route once per
+ * run, for one active added agent's read-only answer. ADR-0037 item 3 replaces this with
+ * read-only agent.ask calls, as many as the work needs and no hand-off; its implementation
+ * plan's PR 5 (Morrow's tools) carries that change, before any Ask runs an agent (P05.T04b).
  */
 export const askTools = Object.freeze([
   "knowledge.search",
@@ -300,7 +318,7 @@ export const planDraftDigest = (draft: Current_PlanDraft): Promise<string> =>
  * One plan.draft call, decided in code. Refused while the switch is off, in a turn holding
  * a report (`report_in_context`), in an Ask without its envelope, outside the turn's tool
  * subset; a mention run drafts only task or plan-change cards. The input is the recorded
- * tool_use input (ToolInputPlanDraft, ToolCatalogue@1 version 2), mapped to the closed
+ * tool_use input (ToolInputPlanDraft, ToolCatalogue@1 since version 2), mapped to the closed
  * PlanDraft@1 by planDraftFromToolInput; nothing a model writes names a capability, scope,
  * grant, cap, model, recipient, sender or store.
  */

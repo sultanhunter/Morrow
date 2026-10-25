@@ -71,7 +71,7 @@ export class LoopCatalogueError extends Error {
   }
 }
 const invalid = () => new LoopCatalogueError("LOOP_CATALOGUE_INPUT_INVALID");
-const runKinds = ["coordinator", "routed", "mandate", "specialist"];
+const runKinds = ["coordinator", "routed", "mandate"];
 const usd12 = (value: number) => BigInt(value);
 const nonNegative = (value: unknown): value is bigint => typeof value === "bigint" && value >= 0n;
 
@@ -160,10 +160,13 @@ function limitsOf(version: number) {
   if (!v) throw invalid();
   return v.limits;
 }
-/** A mandate run (look-for-work included) and a specialist must call a tool: two turns. */
+/**
+ * A mandate run (look-for-work included) must call a tool: two turns. The specialist kind
+ * retired with ADR-0037.
+ */
 export function toolTurnsRequired(kind: Current_AgentRunKind): 1 | 2 {
   if (!runKinds.includes(kind)) throw invalid();
-  return kind === "mandate" || kind === "specialist" ? 2 : 1;
+  return kind === "mandate" ? 2 : 1;
 }
 /** The kind's limit lowered so that it times the worst-case turn fits the run backstop. */
 export function turnLimit(entry: LoopEntry, kind: Current_AgentRunKind): number {

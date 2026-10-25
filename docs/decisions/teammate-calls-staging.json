@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "feature": "teammate_calls",
+  "switch": "off",
+  "observed_on": null,
+  "scope": "The reviewed switch of teammate calls (ADR-0037 item 9; its implementation plan's PR 2 commits it off, replacing specialists-staging.json): Morrow's agent.ask and agent.result.read, and a called teammate's result.submit. While off, packages/policy's coordinatorLaunchTools leaves agent.ask and agent.result.read out of Morrow's turns, and edge:check refuses an on record. It goes on by one reviewed commit only after G9 and G10, the agent-loop switch (ADR-0027 item 11) and a passing eval round (ADR-0037 item 10), with its own prerequisites recorded. Hand-offs (agent.route) stay under the agent-loop switch. Production has no switch before the production custody ADR."
+}
