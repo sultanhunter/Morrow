@@ -10,9 +10,10 @@
 //      proposed, catalogue_inactive; published (sim), one transaction admits a routed run
 //      (queued, its manifest pinned, the caps and hold SQL derived, child task T', envelope,
 //      Coordinator grant and hop scoped to the offered tools' fields, run lease, events,
-//      command); refusals persist nothing (a
-//      forged manifest, a Coordinator-only tool, a foreign task, the unrecovered-cost cap and
-//      the daily backstop); the cron lists ids only and keeps the run's lease out of the
+//      command); refusals persist nothing (a forged manifest, a Coordinator-only tool, a
+//      foreign task, an entry the catalogue lacks); no money cap refuses a run (ADR-0039:
+//      four Opus 5.5 high runs of 16 turns, past the former US$25 a day and US$4.50 a
+//      period, are admitted); the cron lists ids only and keeps the run's lease out of the
 //      Listings starts;
 //   W  a run: the model reads products through a tool checked in code at call time (the real
 //      kernel allows it on the Listings installation's grants and refuses inbox.ask, which the
@@ -32,9 +33,9 @@
 //      final SQL does not derive is invalid, a fence with other caps is turn_state, and a
 //      turn step replayed after its close keeps its recorded caps and reply;
 //   I  a reply calling a tool the run was not given ends the run invalid_output (booked);
-//   C  usage past the hold is overflow, never dropped, and the next turn is not started
-//      (cost_budget); a call over the run's tool-call cap stays refused (never dispatched)
-//      when its finish fails and the step is retried;
+//   C  usage past the hold is overflow, never dropped, and no money cap stops the run: the
+//      next turn starts, not made final (ADR-0039); a call over the run's tool-call cap stays
+//      refused (never dispatched) when its finish fails and the step is retried;
 //   S  "Stop AI work" refuses the next step; the stale close ends the run stopped;
 //   T  tenancy: the logins reach the records only through their definers; forged settings,
 //      another tenant and the api role see no content; nothing is deleted;
@@ -851,9 +852,6 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const before = footprint();
     const foreign = await admit(P.A1, T1);
     const coordinatorTool = await admit(P.A, T1, { tools: ["agent.route"] });
-    const opus = await admit(P.A, T1, {
-      profile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
-    });
     const xhigh = await admit(P.A, T1, {
       profile: { model: "claude_opus_5_5", effort: "xhigh", catalogueVersion: 2 },
     });
@@ -898,23 +896,22 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       "A4:refusals_persist_nothing",
       foreign.outcome === "state_conflict" &&
         coordinatorTool.outcome === "invalid" &&
-        // R1's open hold (US$0.168) plus Opus high's (US$6.40) passes the US$4.50 cap.
-        opus.outcome === "unrecovered_cost_cap" &&
         xhigh.outcome === "entry_not_offered" &&
         forged === "invalid" &&
         footprint() === before,
       {
         foreign: foreign.outcome,
         coordinatorTool: coordinatorTool.outcome,
-        opus: opus.outcome,
         xhigh: xhigh.outcome,
         forged,
       },
     );
-    // A5: the daily backstop (US$25) with the period cap raised (sim): three Opus high runs
-    // hold US$19.20 beside R1; a fourth would pass US$25.
-    db.workOwner(
-      "UPDATE morrow_work.loop_catalogue_versions SET workspace_period_unrecovered_cost_cap_usd=100 WHERE version=2;",
+    // A5: no money cap (ADR-0039 item 1). Four Opus 5.5 high runs, each its version's 16
+    // turns (no longer 10 under US$7) and US$10.24 held, are all admitted beside R1: US$41.128
+    // of open holds in one day and one period, past the former US$25 daily backstop and the
+    // US$4.50 unrecovered-cost cap. The version row has no cap column to raise.
+    const capColumns = count(
+      "SELECT count(*) FROM information_schema.columns WHERE table_schema='morrow_work' AND table_name='loop_catalogue_versions' AND (column_name LIKE '%cost_cap%' OR column_name LIKE '%usd%')",
     );
     const opusRuns = [];
     for (let i = 0; i < 4; i++)
@@ -923,25 +920,24 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
           profile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
         }),
       );
-    check(
-      "A5:the_daily_backstop_counts_open_holds",
-      opusRuns.slice(0, 3).every((x) => x.outcome === "applied") &&
-        opusRuns[3].outcome === "daily_backstop" &&
-        opusRuns
-          .slice(0, 3)
-          .every(
-            (x) => runRow(x.runId)?.hold === "6.40000000" && runRow(x.runId).turn_limit === 10,
-          ),
-      { outcomes: opusRuns.map((x) => x.outcome) },
+    const heldToday = one(
+      `SELECT sum(hold_usd)::text AS held FROM morrow_work.agent_runs WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND status='queued'`,
     );
-    // The three end unstarted (sim, the owner's run end), and the cap is restored.
-    for (const x of opusRuns.slice(0, 3))
+    check(
+      "A5:no_money_cap_refuses_a_run_past_the_former_daily_and_period_caps",
+      capColumns === 0 &&
+        opusRuns.every((x) => x.outcome === "applied") &&
+        opusRuns.every(
+          (x) => runRow(x.runId)?.hold === "10.24000000" && runRow(x.runId).turn_limit === 16,
+        ) &&
+        heldToday?.held === "41.12800000",
+      { capColumns, outcomes: opusRuns.map((x) => x.outcome), heldToday },
+    );
+    // The four end unstarted (sim, the owner's run end).
+    for (const x of opusRuns)
       db.workOwner(
         `SELECT outcome FROM morrow_work.agent_run_end(${literal(O)},${literal(W)},${literal(x.runId)},'cancelled','stopped');`,
       );
-    db.workOwner(
-      "UPDATE morrow_work.loop_catalogue_versions SET workspace_period_unrecovered_cost_cap_usd=4.50000000 WHERE version=2;",
-    );
     // A6: the cron's ids-only list, and the run's lease kept out of the Listings starts.
     const attempt = createRuntimeAttempt(30000, new AbortController().signal);
     let agentStarts, listingStarts;
@@ -1436,8 +1432,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     replica(
       `UPDATE morrow_work.agent_model_calls SET started_at=started_at-interval '10 minutes' WHERE id=${literal(fence?.call_id ?? randomUUID())};`,
     );
-    // Review R1: a new attempt's final is SQL's own derivation (the hold left after attempt
-    // 1's booking still covers two worst-case turns, so attempt 2 is not final).
+    // Review R1: a new attempt's final is SQL's own derivation (the last turn the limit
+    // allows; turn 1 of 16 is not final, whatever is booked).
     const wrongFinal = await lease(ref8, open8(2, true));
     const second = await lease(ref8, open8(2));
     const c8 = calls(R8);
@@ -1577,15 +1573,17 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
     const T6 = await taskOf(P.A, "Read everything at once");
     const huge = usage({ inputTokens: 1_000_000, outputTokens: 1_000_000 });
-    scripts.set("Read everything at once", () =>
-      reply(
-        say(null, [
-          "tu_all",
-          "products.read",
-          { productIds: null, titleContains: null, limit: 25 },
-        ]),
-        { usage: huge },
-      ),
+    scripts.set("Read everything at once", (resolved, turn) =>
+      turn === 1
+        ? reply(
+            say(null, [
+              "tu_all",
+              "products.read",
+              { productIds: null, titleContains: null, limit: 25 },
+            ]),
+            { usage: huge },
+          )
+        : reply(say("Read them all.")),
     );
     const o = await admit(P.A, T6);
     const R6 = o.runId;
@@ -1593,18 +1591,25 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const { result: r6, names } = await execute(R6);
     const row = runRow(R6);
     const cost = costOf(huge);
+    // ADR-0039 item 1: the overflow is recorded and never dropped, and no money cap stops the
+    // run: turn 2 starts (not made final) and the run completes on its answer.
+    const c6 = calls(R6);
     check(
-      "C1:usage_past_the_hold_is_overflow_never_dropped_and_no_next_turn_starts",
-      r6.status === "failed" &&
-        r6.reason === "cost_budget" &&
+      "C1:usage_past_the_hold_is_overflow_never_dropped_and_no_money_cap_stops_the_run",
+      r6.status === "succeeded" &&
+        r6.reason === "completed" &&
         JSON.stringify(names) ===
           JSON.stringify(["start", "turn-1-1", "tool-1-0", "turn-2-1", "finish"]) &&
-        provider.sends.length === before + 1 &&
+        provider.sends.length === before + 2 &&
+        c6.length === 2 &&
+        c6.every((x) => x.counted === true && x.final === false) &&
+        c6[0].cost === text8(cost) &&
+        c6[0].overflow === text8(cost - parse8(row.hold)) &&
+        c6[1].overflow === c6[1].cost &&
         row.booked === row.hold &&
-        parse8(row.booked) + parse8(row.overflow) === cost &&
-        calls(R6)[0].overflow === row.overflow &&
-        turns(R6).length === 1,
-      { r6, names, row, cost: text8(cost) },
+        parse8(row.booked) + parse8(row.overflow) === parse8(c6[0].cost) + parse8(c6[1].cost) &&
+        turns(R6).length === 2,
+      { r6, names, row, c6, cost: text8(cost) },
     );
     // C2: the per-run tool-call cap (sim: the run's count set to its cap with the triggers
     // off after turn 1). The call over it is recorded uncounted and refused tool_call_limit;
@@ -1893,7 +1898,7 @@ async function main() {
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "Admission, the runner and the broker's turn gateway run in Node over psql connectors (morrow_api_worker, morrow_runtime_executor, morrow_vault_broker), not in workerd over the Neon transport; the model is a deterministic fake behind the gateway's provider port (tests/broker-agent-turn.test.mjs covers the Claude turn adapter).",
-      "Catalogue v2 is published by an owner UPDATE (sim): its publication is a later forward migration on the owner's recorded confirmation. The daily backstop is reached with the period cap raised (sim), and the three runs it admitted end by the owner's run end (sim).",
+      "Catalogue v2 is published by an owner UPDATE (sim): its publication is a later forward migration on the owner's recorded confirmation. The four Opus 5.5 high runs admitted past the former money caps (A5) end by the owner's run end (sim). No credit is held or drawn: the shared wallet's credit holds are ADR-0039's PR 3, and the switch's shared_wallet prerequisite keeps the loop off until they exist.",
       "products.read is a lab handler returning one synthetic product (sim): the real handler is Listings on the runner's (the follow-up), with run_turns' store-content cleanup. The question run's authority allows inbox.ask (sim): no released package declares workspace.question.request yet; every other tool call is the real kernel's decision.",
       "M5's billing records (route, account, operator test entitlement snapshot) are owner-seeded with the triggers off (sim); lab:test-entitlement proves the grant that writes them.",
       "Durable steps are an in-process stand-in for Cloudflare Workflows' step.do and waitForEvent (an AgentRunRetry is retried; results cross a JSON boundary).",
