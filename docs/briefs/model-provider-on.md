@@ -96,7 +96,8 @@ For an immediate stop, use "Stop AI work", the platform stop or the kill switch,
 - `scripts/staging-files.mjs`: `anthropicKeyFormat` and the `anthropic-api-key` spec.
 - `scripts/staging-deploy.mjs`: gate 6's `missing` and `next`.
 - Tests: `edge-config`, `staging-secrets`, `staging-deploy`, `broker`, `api-environment` and the staging fakes.
-- `infra/rotation-runbook.md`.
+- `infra/rotation-runbook.md`, and a note in `docs/briefs/M3-listings-agent.md`.
+- Comments only, where they said the switch is committed off: `scripts/edge.mjs`, `packages/identity/src/broker-protocol.ts` and `apps/workers/src/orchestrator.ts`.
 
 No migration, contract, route, binding kind, provider resource or Worker code changes. The api, broker and orchestrator code already reads the switch.
 
@@ -128,7 +129,12 @@ No migration, contract, route, binding kind, provider resource or Worker code ch
   - no marker reaches any output.
 - [x] `tests/staging-deploy.test.mjs`: gate 6 holds the on deploy, local and CI, before the census and any upload, with `missing` and `next`. The deploy passes once the key is placed, broker first. A role password missing, a stray name, or the key while off gets no next step.
 - [x] `tests/broker.test.mjs`: the committed staging broker vars carry the switch; without the key the model capability is null while health holds; a well-formed key gives the capability. `tests/api-environment.test.mjs`: the committed staging api maps `model: "anthropic"`.
-- [ ] Local results: see below.
+- [x] Local results, 2026-10-25, on a Mac under heavy load (load average 300–600), so CI is the authority:
+  - `edge-config` 37 of 37;
+  - `staging-secrets`, `staging-deploy`, `broker` and `api-environment` 86 of 86;
+  - `broker-model`, `broker-challenge` and `orchestrator` pass;
+  - `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments, types up to date), `build`, `edge:dry-run` (12 bundles), `verify` and `format:check` pass;
+  - `npm test` 4539 of 4539.
 - [ ] Hosted `foundation` on the PR head; Tier 2 AI review (separate context, same model family) with the security lens.
 
 ## Remaining gates
