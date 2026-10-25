@@ -1,9 +1,9 @@
 # ADR-0038 Cloudflare Durable Objects in the stack: one object that runs the connector's cron beside the database
 
-- Status: Proposed 2026-10-25. Awaits the owner's approval in chat. The branch `claude/fix-connector-cron-latency` is not merged or deployed before this record is accepted.
+- Status: Accepted 2026-10-25 (the owner, OD-2026-10-25-4)
 - Date: 2026-10-25
 - Supersedes: nothing.
-- Amends, on acceptance: the settled stack line in CLAUDE.md ("Stack: … Cloudflare Workers, Workflows, Queues and R2 …") and `docs/plan/build-plan.md`'s stack lines (its Stack bullet and the selected-stack paragraph), which gain Durable Objects within item 1's limits.
+- Amends: the settled stack line in CLAUDE.md ("Stack: … Cloudflare Workers, Workflows, Queues and R2 …") and `docs/plan/build-plan.md`'s stack lines (its Stack bullet and the selected-stack paragraph), which gain Durable Objects within item 1's limits. The wording of those lines changes in its own follow-up (see Approval).
 - Does not change: ADR-0007 and ADR-0022 item 7 (raw credentials stay in the broker); ADR-0019 and ADR-0035 (one environment; the api and the connector are the only public Workers); ADR-0031 (the object stores nothing); the M2 brief's 2026-10-21 decision on the ingress semaphore (still declined; another Durable Object use needs its own record); every security invariant.
 - Brief: `docs/briefs/fix-connector-cron-latency.md` (the diagnosis, the change and its tests).
 
@@ -16,7 +16,7 @@ The connector's five-minute check runs far from the database, so every step runs
 - The settled stack names Cloudflare Workers, Workflows, Queues and R2. ADR-0002, with ADR-0021 item 5, makes provider selection, deployment boundaries and creating provider resources material. The M2 brief already called a Durable Object "a provider selection". A Durable Object namespace is a new Cloudflare resource type, created by a Worker migration.
 - The first connector cron after PR #71's deploy (2026-10-25, 12:41 UTC) failed all four of its steps: the webhook inbox re-apply, the token destruction, the privacy count and the shop-specific webhook registration. The owner's store still has no `app/uninstalled` or `app/scopes_update` subscription.
 - The cause is distance. Cloudflare's placement moves only fetch handlers, so `scheduled()` runs on whatever machine Cloudflare picks, and the broker RPCs it makes run there too. Each database transaction is about 13 sequential round trips to Neon in us-east-1 against a 3000 ms budget, which every transaction misses from a machine more than about 230 ms away.
-- The fix was built and tested on an unmerged branch so the owner can decide with the evidence in hand. Nothing from it merges or deploys before this record is accepted.
+- The fix was built and tested on a branch before this record was accepted, so the owner could decide with the evidence in hand.
 
 ## Decision
 
@@ -48,13 +48,21 @@ The connector's five-minute check runs far from the database, so every step runs
 
 ## Owner question
 
+As put to the owner; answered on 2026-10-25 (see Approval).
+
 > The connector's five-minute check runs far from the database, so the shop webhooks never get registered. The fix moves the check into a Cloudflare Durable Object, a small built-in Cloudflare feature, created near the database inside the same connector Worker. It costs nothing at this size, stores nothing and adds no public address. Durable Objects are not in Morrow's agreed stack, so adding them needs a short decision record. What should we do?
 >
 > - **Approve ADR-0038 (Recommended).** Durable Objects join the stack for this one connector object only, under the limits in its item 1. The fix merges and deploys after that.
 > - **No new Cloudflare feature.** Use the stopgap instead: longer time limits on the cron path only. ADR-0038 is withdrawn.
 
-On acceptance, CLAUDE.md's stack line would read: "Stack: TypeScript/React; Cloudflare Workers (with SQLite-backed Durable Objects under ADR-0038), Workflows, Queues and R2; Neon PostgreSQL; E2B isolated execution; WorkOS identity. Morrow owns all authorization."
+With this record accepted, CLAUDE.md's stack line is to read: "Stack: TypeScript/React; Cloudflare Workers (with SQLite-backed Durable Objects under ADR-0038), Workflows, Queues and R2; Neon PostgreSQL; E2B isolated execution; WorkOS identity. Morrow owns all authorization."
 
 ## Approval
 
-Pending. The owner's statement is quoted here, verbatim and dated, when it is given.
+The owner's statement in chat, verbatim, on 2026-10-25, in answer to the lead's message that listed the eight questions of the agent architecture record (proposed on `claude/adr-0037-agent-architecture`) and this record's question, the Durable Object (recommended) against longer time limits (OD-2026-10-25-4):
+
+> for budget why we limiting anything? it should be very simple credit based system like suppose we give user 1000credits it will be spend on the agentic work so that creidt will bcome limit itself no need to hardcode all of that bullshit. and for one i want it to be truty multi agent system so the agents can be orchestrated by the main agent in any way no need to limit to a single agent call only. for 2 why we adding limit on characters? it might strip important information i think only needs to be structured. for other option use the recommded one
+
+The owner's words for this record are "for other option use the recommded one". The lead stated to the owner, in reply, that "use the recommended one" is taken as approval of the recommended option for this record: the Durable Object that runs the connector's scheduled jobs beside the database. The rest of the statement answers the agent architecture record's questions and is recorded in OD-2026-10-25-4.
+
+What it approves: this record as written, items 1 to 5. The longer time limits (the routine stopgap) are not taken. The CLAUDE.md and `docs/plan/build-plan.md` stack-line wording above is applied in its own follow-up; a change to CLAUDE.md's standing rules has needed the owner's own confirmation of the text before (OD-2026-10-23-10).

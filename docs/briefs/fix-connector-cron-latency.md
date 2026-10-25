@@ -1,7 +1,7 @@
 # Connector cron fix: run the re-drives beside the database
 
-- Status: built, 2026-10-25. Branch `claude/fix-connector-cron-latency`, pushed for review. Not merged, not deployed: it waits for ADR-0038.
-- Change class: **material; ADR-0038 (Proposed) before merge.** The fix adds a Durable Object namespace to the existing connector Worker. Durable Objects are a Cloudflare product that is not in the settled stack line ("Workers, Workflows, Queues and R2"), which CLAUDE.md lets only an owner-approved ADR change, and the M2 brief already recorded a Durable Object as "a provider selection". ADR-0002 (with ADR-0021 item 5: provider selection; deployment boundaries; creating provider resources) therefore needs an ADR approved by the owner in chat. `docs/decisions/adr/ADR-0038-connector-cron-durable-object.md` is that record, proposed with this branch. The branch stays unmerged and undeployed until the owner accepts it. If the owner prefers no new provider resource, the routine stopgap below is the alternative, and ADR-0038 is withdrawn.
+- Status: built, 2026-10-25. Branch `claude/fix-connector-cron-latency`, pushed for review. ADR-0038 accepted 2026-10-25 (OD-2026-10-25-4). Not merged or deployed yet: it merges once hosted CI is green on its head, then deploys.
+- Change class: **material; ADR-0038, Accepted 2026-10-25 (OD-2026-10-25-4).** The fix adds a Durable Object namespace to the existing connector Worker. Durable Objects are a Cloudflare product that is not in the settled stack line ("Workers, Workflows, Queues and R2"), which CLAUDE.md lets only an owner-approved ADR change, and the M2 brief already recorded a Durable Object as "a provider selection". ADR-0002 (with ADR-0021 item 5: provider selection; deployment boundaries; creating provider resources) therefore needs an ADR approved by the owner in chat. `docs/decisions/adr/ADR-0038-connector-cron-durable-object.md` is that record, proposed with this branch and accepted by the owner in chat on 2026-10-25. The routine stopgap below was the alternative and is not taken.
 - The review uses the security lens: the change touches the connector's database transport, its broker RPC path and its deployment configuration.
 
 ## Goal
@@ -63,7 +63,7 @@ The cause is distance, not a database or grant fault.
 
 - **Budgets.** Beside the database a transaction takes tens of milliseconds, and the budgets were set for that.
 - **The broker.** No broker change, so only the connector needs deploying.
-- **The routine stopgap**, if the owner declines the Durable Object:
+- **The routine stopgap**, the alternative the owner did not take (ADR-0038 accepted):
   - give the cron path its own distance-tolerant budgets: about 8–10 s for the connector's id reads and applies, and the sync's per-transaction vault budget scaled up (for example 8000 ms, with a 6000 ms record reserve and a 12000 ms installation minimum, inside `budgetMaxMs` 25000);
   - give the broker's token destruction a cron budget, which needs an RPC parameter;
   - await the run.
@@ -120,20 +120,22 @@ The cause is distance, not a database or grant fault.
 - A few seconds of duration per run, and no storage.
 - Within the existing caps.
 
-## Owner decision (before merge)
+## Owner decision
 
-The decision is ADR-0038's (`docs/decisions/adr/ADR-0038-connector-cron-durable-object.md`, Proposed). Its owner question:
+Decided on 2026-10-25: ADR-0038 accepted (`docs/decisions/adr/ADR-0038-connector-cron-durable-object.md`; OD-2026-10-25-4). Its owner question, as put:
 
 > The connector's five-minute check runs far from the database, so the shop webhooks never get registered. The fix moves the check into a Cloudflare Durable Object, a small built-in Cloudflare feature, created near the database inside the same connector Worker. It costs nothing at this size, stores nothing and adds no public address. Durable Objects are not in Morrow's agreed stack, so adding them needs a short decision record. What should we do?
 >
 > - **Approve ADR-0038 (Recommended).** Durable Objects join the stack for this one connector object only, under the limits in its item 1. The fix merges and deploys after that.
 > - **No new Cloudflare feature.** Use the stopgap instead: longer time limits on the cron path only. ADR-0038 is withdrawn.
 
-On approval: the owner's words go into ADR-0038's Approval section, its status becomes Accepted, CLAUDE.md's and `docs/plan/build-plan.md`'s stack lines gain Durable Objects as the record proposes, and only then does the PR merge.
+The owner answered "for other option use the recommded one", in a message that also answered the agent architecture record's questions (`claude/adr-0037-agent-architecture`). The lead stated to the owner, in reply, that "use the recommended one" is taken as approval of the Durable Object. ADR-0038's Approval section quotes the whole statement verbatim, and its status is Accepted.
+
+Still to do: CLAUDE.md's and `docs/plan/build-plan.md`'s stack lines gain Durable Objects in the wording ADR-0038 proposes, in their own change. A change to CLAUDE.md's standing rules has needed the owner's own confirmation of the text before (OD-2026-10-23-10). It does not hold up this PR: ADR-0038 already governs.
 
 ## Deploy and check
 
-Deploy only after the owner accepts ADR-0038, the PR merges, and hosted CI is green on its head. Claude deploys under the standing approval (ADR-0035), the connector only, with one activity-log line.
+ADR-0038 is accepted. Deploy only after the PR merges with hosted CI green on its head. Claude deploys under the standing approval (ADR-0035), the connector only, with one activity-log line.
 
 1. The connector's deploy applies migration `v1`, which creates the class. Staging rolls forward (E11 is suspended), and Cloudflare does not allow a version rollback across a Durable Object migration anyway. The way back is a forward deploy: `scheduled()` running locally again, with the class left unused or removed by a `deleted_classes` migration `v2`.
 2. Read the next cron in Workers Logs, within five minutes:
@@ -187,7 +189,8 @@ Deploy only after the owner accepts ADR-0038, the PR merges, and hosted CI is gr
 - [x] `lab:shopify-connect-workers`: the install, webhook and re-drive journey over the changed connector transport, 31 checks (see "Local results").
 - [ ] Hosted CI on the PR head.
 - [x] One AI review (separate context, same model family) with the security lens; see "AI review".
-- [ ] The owner's decision above: ADR-0038 accepted (then the stack lines updated), or the stopgap chosen and ADR-0038 withdrawn.
+- [x] The owner's decision above: ADR-0038 accepted on 2026-10-25 (OD-2026-10-25-4).
+- [ ] CLAUDE.md's and `docs/plan/build-plan.md`'s stack lines in ADR-0038's wording, in their own change.
 - [ ] After the deploy: the checks in "Deploy and check", step 2.
 
 ## AI review (separate context, same model family)
@@ -215,3 +218,5 @@ After the review fixes and a merge of `origin/main` at `3c08dc35` (PR #67; it to
 - These pass: `format:check`, `typecheck`, `typecheck:edge` (four Workers), `edge:check` (12 Worker environments; types up to date), `edge:dry-run` (12 bundles) and `verify` (`plan:check` and `graph:check` with ADR-0038 present).
 - `npm test`: 4602 of 4602 pass, among them `tests/edge-config.test.mjs` with the new Sao Paulo case.
 - The labs were not rerun: the fixes change only `edge:check`'s hint table and documents, and the merge brings no connector change. Hosted CI runs them.
+
+After ADR-0038's acceptance on 2026-10-25 (documents only: the record, OD-2026-10-25-4, the ADR index, this brief and P04's note): `graph:check` (ADR-0038 `approved_by` OD-2026-10-25-4), `verify` and `format:check` pass.
