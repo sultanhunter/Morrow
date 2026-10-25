@@ -9,6 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createClient } from "../apps/workspace-web/src/http/client.ts";
@@ -29,6 +30,8 @@ import { teamPortMethods } from "../packages/workspace-ui/src/team-model.ts";
 import { sunriseCopy } from "../packages/workspace-ui/src/sunrise/copy.ts";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import { KnowledgeBody } from "../packages/workspace-ui/src/screens/library.tsx";
+import { FilesScreen, ShopKnowledgeScreen } from "../packages/workspace-ui/src/screens/lazy.tsx";
+import { lazyModules } from "../scripts/workspace-web-checks.mjs";
 import { json, recordingTransport } from "./fixtures/workspace-web.mjs";
 
 // tsx compiles the components' JSX with the classic runtime here: React must be in scope.
@@ -798,4 +801,24 @@ test("the screen: a page a disconnected store left is named to a person who may 
   const admin = markup(await viewOf({ write: true, delete: false }));
   assert.ok(!admin.includes(k.disconnected));
   assert.ok(!admin.includes(title));
+});
+
+// Integration (hosted CI: DIST_ENTRY_TOO_LARGE:154976): this PR's screen took the workspace
+// entry past its 150 KB gzip budget, so Shop knowledge (with Files, the same module) loads as
+// its own chunk through screens/lazy.tsx, as v1 PR 4's Review and Ask do; the budget is
+// unchanged. tests/workspace-web-undo.test.mjs holds the static-import guard for every lazy
+// module, this one included.
+test("Shop knowledge and Files load as their own chunk, showing the loading state in the Sunrise frame", () => {
+  assert.ok(lazyModules.includes("packages/workspace-ui/src/screens/library.tsx"));
+  const index = readFileSync(
+    new URL("../packages/workspace-ui/src/index.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(index, /export \{ FilesScreen, ShopKnowledgeScreen \} from "\.\/screens\/lazy";/);
+  assert.doesNotMatch(index, /from "\.\/screens\/library"/);
+  const workspace = { id: ws };
+  for (const Screen of [ShopKnowledgeScreen, FilesScreen]) {
+    const first = renderToStaticMarkup(h(Screen, { workspace }));
+    assert.match(first, /^<div class="sr"><div class="state-view state-loading" role="status"/);
+  }
 });
