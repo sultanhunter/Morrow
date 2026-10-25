@@ -625,7 +625,8 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       await page.getByRole("link", { name: M.question }).waitFor({ timeout: T });
       h.check(
         "AC28:inbox_lists_only_my_open_questions",
-        (await page.locator("ul.item-list li").count()) === 1 &&
+        // v1 PR 15: the Inbox is one read (GET /work/inbox) of this person's items.
+        (await page.locator('[data-testid="inbox-items"] > li').count()) === 1 &&
           !(await page.content()).includes(M.question2),
       );
       state.bCookie = await cookieOf(b);

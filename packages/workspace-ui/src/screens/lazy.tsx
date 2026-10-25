@@ -1,8 +1,10 @@
 // v1 PR 4: the screens that load as their own chunk after the workspace entry, which stays
 // within its gzip budget (`entryGzipLimit`, scripts/workspace-web-checks.mjs, which also
 // fails if one of these modules is bundled into an entry): Review and the task's "Changes
-// applied" history (screens/review.tsx), and Ask with its product picker (screens/ask.tsx,
-// screens/product-picker.tsx). Nothing else may import those modules statically.
+// applied" history (screens/review.tsx), Ask with its product picker (screens/ask.tsx,
+// screens/product-picker.tsx), and v1 PR 15's exception screen (screens/exception.tsx),
+// which shows one operation with Review's own OperationList and so loads with it. Nothing
+// else may import those modules statically.
 // While a chunk loads, its place shows the loading state. A chunk that cannot load shows
 // "This couldn't load" with Retry, which reloads the page: after a deploy the open tab's
 // chunks are gone, so only the new entry can load the screen again (the leave guard still
@@ -46,3 +48,7 @@ export const AppliedPanel = lazyScreen(
   bareFrame,
 );
 export const AskScreen = lazyScreen(() => import("./ask").then((m) => m.AskScreen), pageFrame);
+export const ExceptionScreen = lazyScreen(
+  () => import("./exception").then((m) => m.ExceptionScreen),
+  pageFrame,
+);

@@ -33,7 +33,7 @@ import {
 } from "../packages/workspace-ui/src/screens/product-picker.tsx";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import { lazyScreen } from "../packages/workspace-ui/src/screens/lazy.tsx";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { inspectLazyChunks, lazyModules } from "../scripts/workspace-web-checks.mjs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -632,7 +632,7 @@ test("a lazy screen shows the loading state, then the screen; a chunk that fails
   assert.equal(attempts, 1, "Retry reloads the page; a render never refetches");
 });
 
-test("Review, the history and Ask are reached only through the lazy screens", () => {
+test("Review, the history, Ask and the exception screen are reached only through the lazy screens", () => {
   const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
   const lazyNames = lazyModules.map((m) =>
     m
@@ -640,7 +640,7 @@ test("Review, the history and Ask are reached only through the lazy screens", ()
       .at(-1)
       .replace(/\.tsx$/, ""),
   );
-  assert.deepEqual(lazyNames, ["review", "ask", "product-picker"]);
+  assert.deepEqual(lazyNames, ["review", "ask", "product-picker", "exception"]);
   const statics = (text) =>
     [...text.matchAll(/^(?:import|export)\b[^;]*?from "([^"]+)";/gms)].map((m) => m[1]);
   // The barrel and the task screen import none of them statically.
@@ -650,6 +650,18 @@ test("Review, the history and Ask are reached only through the lazy screens", ()
   ])
     for (const name of lazyNames)
       assert.ok(!statics(read(path)).includes(prefix + name), `${path} imports ${name}`);
+  // Merging v1 PR 15: no other screen imports one statically either (the exception screen
+  // takes Review's OperationList, so it is itself one of the lazy modules).
+  const screens = new URL("../packages/workspace-ui/src/screens/", import.meta.url);
+  for (const file of readdirSync(screens).filter((f) => /\.tsx?$/.test(f))) {
+    const own = file.replace(/\.tsx?$/, "");
+    if (own === "lazy" || lazyNames.includes(own)) continue;
+    for (const name of lazyNames)
+      assert.ok(
+        !statics(readFileSync(new URL(file, screens), "utf8")).includes("./" + name),
+        `screens/${file} imports ${name}`,
+      );
+  }
   // The dist check names a lazy screen bundled into an entry, or one missing from the build.
   const entry = { fileName: "assets/main.js", isEntry: true, moduleIds: ["apps/x.tsx"] };
   const split = { fileName: "assets/review.js", isEntry: false, moduleIds: [...lazyModules] };

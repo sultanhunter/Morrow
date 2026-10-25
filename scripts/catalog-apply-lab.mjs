@@ -43,6 +43,11 @@
 //      taken after that later write never settles the earlier one; the person who applied it
 //      sets it aside (not before its window, never someone else), and it is still read back;
 //   L  no product text, Shopify text or token reaches a response, a log line or a record.
+//   I  v1 PR 15's Inbox and activity reads over all of the above: the owner's disconnected
+//      store as one problem, the apply problems exactly the unknown and not-applied
+//      operations, the changes to review exactly the approvals list's reviewer items (none
+//      counted while the store is disconnected); a member without rights and another
+//      tenant see none of it; the log in codes, never the person's reason, paging back;
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
 // marked sim stand in for states no API path reaches yet. CI pg-linking group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -55,6 +60,7 @@ import { createWorkApiHandler } from "../packages/work/src/http.ts";
 import { createRunsApiHandler } from "../packages/work/src/runs/http.ts";
 import { createReviewApiHandler } from "../packages/work/src/review/http.ts";
 import { createConnectionsApiHandler } from "../packages/work/src/connections/http.ts";
+import { createInboxApiHandler } from "../packages/work/src/inbox/http.ts";
 import { listingsRun, RunStepRetry } from "../packages/work/src/runs/workflow.ts";
 import { createRuntimeAttempt, runLeaseStep } from "../packages/work/src/runtime/leases.ts";
 import { createBrokerCredentialDestroyer } from "../apps/api/src/broker-client.ts";
@@ -88,6 +94,7 @@ import {
   decodeReview,
   decodeSetAside,
 } from "../apps/workspace-web/src/http/review-decoders.ts";
+import { decodeActivity, decodeInbox } from "../apps/workspace-web/src/http/inbox-decoders.ts";
 
 const checks = [];
 const failures = [];
@@ -1947,6 +1954,146 @@ UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE
         destroyCalls.length === 1 &&
         destroyCalls[0] === INSTALLATION,
       { installationRow, credentialRow, stopRow, destroyCalls },
+    );
+  }
+  phase("inbox_and_activity");
+  {
+    // v1 PR 15: the Inbox and activity reads (packages/work/src/inbox/http.ts) as the api
+    // login, against everything the phases above recorded: approvals, operations whose
+    // outcome is unknown or not applied, the person's "Disconnect store" (S4) and the stops.
+    // Each person sees only what the record's own screen shows them, and the SPA's decoders
+    // accept every reply.
+    const inbox = createInboxApiHandler({
+      origin: workFixtureOrigin,
+      connector: db.connector(),
+      now: Date.now,
+    });
+    const read = (p, path, options) => call(inbox, p, "GET", path, undefined, options);
+    const owner = await read(P.A, "/inbox");
+    const view = owner.status === 200 ? decodeInbox(owner.body) : null;
+    const connectionItems = view?.items.filter((i) => i.kind === "connection") ?? [];
+    check(
+      "I1:the_owner_sees_the_disconnected_store_once_as_a_problem",
+      view !== null &&
+        Object.values(view.sections).every((s) => s === "ok") &&
+        connectionItems.length === 1 &&
+        connectionItems[0].id === C &&
+        connectionItems[0].storeId === S &&
+        connectionItems[0].reason === "disconnected" &&
+        connectionItems[0].setBy === "human" &&
+        connectionItems[0].open === true,
+      { status: owner.status, body: owner.text.slice(0, 600) },
+    );
+    // The apply problems are exactly the database's: unknown outcomes, and not-applied ones
+    // from the last week (A applied every one of them, so A sees them all).
+    const truth = db
+      .rows(
+        `SELECT id::text AS id,status FROM morrow_work.operations WHERE kind='catalog_write' AND (status='uncertain' OR (status IN ('failed','conflict') AND updated_at>clock_timestamp()-interval '7 days')) ORDER BY id`,
+      )
+      .slice(0, 50);
+    const exceptions = (view?.items ?? []).filter((i) => i.kind === "exception");
+    check(
+      "I2:apply_problems_are_the_unknown_and_not_applied_operations",
+      truth.length > 0 &&
+        JSON.stringify(exceptions.map((i) => i.id).sort()) ===
+          JSON.stringify(truth.map((r) => r.id).sort()) &&
+        exceptions.every((i) => i.open === (i.status === "uncertain")) &&
+        exceptions.some((i) => i.status === "failed"),
+      { truth, exceptions },
+    );
+    // Changes to review are the approvals list's own, for a reviewer; S is disconnected, so
+    // none of them can be applied and none is counted.
+    const pending = await call(reviewOn, P.A, "GET", "/approvals");
+    const reviewerIds = (pending.body.items ?? [])
+      .filter((i) => i.viewerRole === "reviewer")
+      .map((i) => i.approvalId)
+      .sort();
+    const approvals = (view?.items ?? []).filter((i) => i.kind === "approval");
+    check(
+      "I3:changes_to_review_are_the_approvals_this_person_may_decide",
+      pending.status === 200 &&
+        JSON.stringify(approvals.map((i) => i.id).sort()) === JSON.stringify(reviewerIds) &&
+        approvals.every((i) => i.storeId === S && i.storeLinked === false && i.open === false),
+      { pending: pending.text.slice(0, 400), approvals },
+    );
+    // A member without any store grant or question read: nothing of the store, and the
+    // questions section says it was denied (never "nothing waits").
+    const member = await read(P.X, "/inbox");
+    const memberView = member.status === 200 ? decodeInbox(member.body) : null;
+    check(
+      "I4:a_member_without_rights_sees_none_of_the_store_and_a_denied_section",
+      memberView !== null &&
+        memberView.sections.questions === "denied" &&
+        memberView.items.length === 0 &&
+        !member.text.includes(S) &&
+        !member.text.includes(C),
+      { status: member.status, body: member.text.slice(0, 400) },
+    );
+    // Another organization's session gets no Inbox of this workspace, and its own holds
+    // nothing of it.
+    const foreign = await read(P.Y, "/inbox", { workspace: W });
+    const own = await read(P.Y, "/inbox");
+    check(
+      "I5:another_tenant_reads_nothing_of_this_workspace",
+      foreign.status === 401 &&
+        own.status === 200 &&
+        decodeInbox(own.body) !== null &&
+        !own.text.includes(S) &&
+        !own.text.includes(C),
+      { foreign: foreign.status, own: own.text.slice(0, 300) },
+    );
+    // The activity log: the owner sees the disconnect (theirs), the decisions and the
+    // gateway's results, ids and codes only; the person's reason never appears; a page of
+    // two continues with older records and the SPA decodes each page.
+    const log = await read(P.A, "/activity?limit=50");
+    const decoded = log.status === 200 ? decodeActivity(log.body) : null;
+    const kinds = new Set((decoded?.entries ?? []).map((e) => e.kind));
+    const first = await read(P.A, "/activity?limit=2");
+    const second =
+      first.status === 200 && first.body.next
+        ? await read(P.A, "/activity?limit=2&after=" + first.body.next)
+        : null;
+    check(
+      "I6:the_activity_log_lists_what_happened_in_codes_and_pages_back",
+      decoded !== null &&
+        ["store_disconnected", "approval_decided", "change_outcome", "drafts_requested"].every(
+          (k) => kinds.has(k),
+        ) &&
+        decoded.entries.some(
+          (e) =>
+            e.kind === "store_disconnected" &&
+            e.storeId === S &&
+            e.actor.kind === "person" &&
+            e.actor.principalId === P.A.principal,
+        ) &&
+        !log.text.includes("moving to a new owner") &&
+        !/<p>|descriptionHtml|product:/.test(log.text) &&
+        decodeActivity(first.body)?.entries.length === 2 &&
+        second?.status === 200 &&
+        decodeActivity(second.body) !== null &&
+        second.body.entries.every(
+          (e) =>
+            !first.body.entries.some((f) => f.id === e.id) &&
+            Date.parse(e.at) <= Date.parse(first.body.entries[1].at),
+        ),
+      {
+        status: log.status,
+        kinds: [...kinds],
+        body: log.text.slice(0, 600),
+        first: first.text.slice(0, 300),
+        second: second?.text.slice(0, 300),
+      },
+    );
+    // The member sees no record of the store's (each entry's own rule), and another tenant
+    // has no log of this workspace.
+    const memberLog = await read(P.X, "/activity?limit=50");
+    const foreignLog = await read(P.Y, "/activity", { workspace: W });
+    check(
+      "I7:a_member_without_rights_and_another_tenant_see_no_record_of_the_store",
+      memberLog.status === 200 &&
+        decodeActivity(memberLog.body)?.entries.length === 0 &&
+        foreignLog.status === 401,
+      { member: memberLog.text.slice(0, 300), foreign: foreignLog.status },
     );
   }
   return { checks, failures, retries };

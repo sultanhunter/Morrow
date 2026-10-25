@@ -5,6 +5,9 @@
 // fixture, axe-core, Playwright or runtime-validator module, and must describe this dist.
 // Each JS entry of @morrow/workspace-ui is also bundled for the browser on its own and
 // held to the same module denials (P05.T01y: the session keeper, before P14.T01a wires it).
+// Screens that load on first use (`createDeferred` for the project screens, `lazyScreen`
+// for Review, the applied history and Ask) must stay out of the entry chunk and arrive in
+// a chunk of their own: the budget counts the entry only.
 import {
   existsSync,
   mkdirSync,
@@ -48,14 +51,27 @@ const deniedModules = [
   ["runtime_validators", /runtime-validators/],
   ["validator_table_entry", /(^|\/)packages\/contracts\/src\/(validation|client)\.ts$/],
 ];
+// Modules that load on first use, each group with the module its `import()` names. None
+// may sit in an entry chunk, and the named module must be in a chunk of its own (a
+// non-entry chunk), so one static import cannot pull the group back into the entry.
+export const deferredModules = Object.freeze([
+  [
+    "project_screens",
+    "packages/workspace-ui/src/projects/screens.ts",
+    // Every project module but the wrappers the app routes to (`projects/deferred.tsx`).
+    /(^|\/)packages\/workspace-ui\/src\/projects\/(?!deferred\.tsx$)[^/]+$/,
+  ],
+]);
 const urlPattern = /https?:\/\/[^\s"'`)<>\\]+/g;
 // v1 PR 4: the screens that load as their own chunk (packages/workspace-ui/src/screens/
 // lazy.tsx) and keep the entry within its budget. A static import that pulls one into an
-// entry chunk is named here rather than surfacing later as an entry over its size.
+// entry chunk is named here rather than surfacing later as an entry over its size. v1 PR
+// 15's exception screen uses Review's OperationList, so it loads the same way.
 export const lazyModules = Object.freeze([
   "packages/workspace-ui/src/screens/review.tsx",
   "packages/workspace-ui/src/screens/ask.tsx",
   "packages/workspace-ui/src/screens/product-picker.tsx",
+  "packages/workspace-ui/src/screens/exception.tsx",
 ]);
 
 /** The web build's module report: each lazy screen is bundled, and never into an entry. */
@@ -111,6 +127,24 @@ export function inspectModuleReport(report, distScripts = null) {
       if (!reported.has(script)) problems.push("MODULE_REPORT_STALE:" + script);
     for (const name of reported)
       if (!distScripts.includes(name)) problems.push("MODULE_REPORT_STALE:" + name);
+  }
+  return problems;
+}
+
+/** The production build's split: each deferred group outside every entry chunk. */
+export function inspectDeferredModules(report) {
+  const chunks = Array.isArray(report?.chunks) ? report.chunks : [];
+  const problems = [];
+  for (const [label, root, pattern] of deferredModules) {
+    let rootChunk = null;
+    for (const chunk of chunks)
+      for (const id of Array.isArray(chunk.moduleIds) ? chunk.moduleIds : []) {
+        const name = String(id).replace(/^\0/, "");
+        if (name === root) rootChunk = chunk;
+        if (chunk.isEntry === true && pattern.test(name))
+          problems.push(`MODULE_NOT_DEFERRED:${label}:${name.slice(0, 160)}`);
+      }
+    if (!rootChunk || rootChunk.isEntry === true) problems.push(`DEFERRED_CHUNK_MISSING:${label}`);
   }
   return problems;
 }
@@ -288,7 +322,11 @@ export function verifyWorkspaceDist({
   else {
     const scripts = names.filter((n) => n.endsWith(".js"));
     const report = JSON.parse(readFileSync(modulesPath, "utf8"));
-    problems.push(...inspectModuleReport(report, scripts), ...inspectLazyChunks(report));
+    problems.push(
+      ...inspectModuleReport(report, scripts),
+      ...inspectDeferredModules(report),
+      ...inspectLazyChunks(report),
+    );
   }
   return { problems, entryGzipBytes, files: names.length };
 }
@@ -412,6 +450,52 @@ export function negativeChecks() {
       "stale_report",
       inspectModuleReport(report, ["assets/main.js", "assets/other.js"]).length === 1,
     ],
+    [
+      "deferred_split_passes",
+      inspectDeferredModules({
+        chunks: [
+          {
+            ...report.chunks[0],
+            moduleIds: [
+              "apps/workspace-web/src/main.tsx",
+              "packages/workspace-ui/src/projects/deferred.tsx",
+            ],
+          },
+          {
+            fileName: "assets/screens.js",
+            isEntry: false,
+            moduleIds: [
+              "packages/workspace-ui/src/projects/project-screen.tsx",
+              "packages/workspace-ui/src/projects/screens.ts",
+            ],
+          },
+        ],
+      }).length === 0,
+    ],
+    [
+      "deferred_module_in_entry",
+      inspectDeferredModules({
+        chunks: [
+          {
+            ...report.chunks[0],
+            moduleIds: [
+              "apps/workspace-web/src/main.tsx",
+              "packages/workspace-ui/src/projects/copy.ts",
+            ],
+          },
+          {
+            fileName: "assets/screens.js",
+            isEntry: false,
+            moduleIds: ["packages/workspace-ui/src/projects/screens.ts"],
+          },
+        ],
+      }).join() ===
+        "MODULE_NOT_DEFERRED:project_screens:packages/workspace-ui/src/projects/copy.ts",
+    ],
+    [
+      "deferred_chunk_missing",
+      inspectDeferredModules(report).join() === "DEFERRED_CHUNK_MISSING:project_screens",
+    ],
   ].map(([name, passed]) => ({ name, passed }));
 }
 
@@ -426,7 +510,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   writeArtifact("workspace-web/verify.json", {
     generated_at: new Date().toISOString(),
     scope:
-      "Production dist of apps/workspace-web: fixture isolation, URL allowlist, inline code, manifest, entry size and module report (P14.T01a AC13, AC19); each @morrow/workspace-ui JS entry bundled alone by esbuild against the same module denials, and the session keeper's size (P05.T01y). Not a browser or accessibility check.",
+      "Production dist of apps/workspace-web: fixture isolation, URL allowlist, inline code, manifest, entry size, module report and the deferred screens' own chunks (P14.T01a AC13, AC19); each @morrow/workspace-ui JS entry bundled alone by esbuild against the same module denials, and the session keeper's size (P05.T01y). Not a browser or accessibility check.",
     entry_gzip_bytes: result.entryGzipBytes,
     entry_gzip_limit: entryGzipLimit,
     files: result.files ?? 0,
