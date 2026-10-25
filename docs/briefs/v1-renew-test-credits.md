@@ -64,7 +64,7 @@ Non-goals: ADR-0026 item 7's `TestEntitlementSeed`, Shopify billing, any change 
 
 ## Open questions
 
-- Raising the owner's test credits is a staging `BillingTerms` revision. ADR-0039 (pull request 75, not yet accepted) names that mechanism. Under ADR-0035 item 4, each raise needs the owner's yes in chat before the revision is published. If the owner wants another raise mechanism, it needs its own decision; this PR builds none.
+- Raising the owner's test credits is a staging `BillingTerms` revision. ADR-0039 (pull request 75, accepted 2026-10-25 and on `main` since this branch was cut) names that mechanism under its Consequences. Under ADR-0035 item 4, each raise needs the owner's yes in chat before the revision is published. If the owner wants another raise mechanism, it needs its own decision; this PR builds none.
 
 ## Test checklist
 
@@ -82,5 +82,6 @@ Non-goals: ADR-0026 item 7's `TestEntitlementSeed`, Shopify billing, any change 
   - `tests/staging-deploy.test.mjs` lists the command.
 - [x] `lab:test-entitlement` (pg-http), 14 new checks (one S, thirteen N), 40 in all.
 - [x] `lab:tenant-conformance` (the new table and function registered), 17 of 17.
-- [ ] Tier 2 AI review (separate context, same model family) with the security lens.
+- [x] After F1's fix (2026-10-26, local): the four F1 unit tests fail against the pre-fix sources (`53548edd`) and pass at the fix; `lab:test-entitlement` 40 of 40; `lab:tenant-conformance` 16 of 17 on the first run, P3 (the goals route, untouched here) answering 503 under load, and P3 passing on its one rerun; format, typecheck, `typecheck:edge`, `edge:check`, `verify`, the graph check and `npm test` (4,634 of 4,634) pass.
+- [x] Tier 2 AI review (separate context, same model family) with the security lens: one finding, F1, fixed above. The fix has not had a second review.
 - [ ] Hosted CI on the PR head.
