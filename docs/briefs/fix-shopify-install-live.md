@@ -179,10 +179,19 @@ This change does three things:
   - it is absent at the top level and in production;
   - it moves with the region.
 - [x] `tests/shopify-hmac.test.mjs` and `tests/broker-shopify-read.test.mjs` are unchanged and pass.
-- [ ] `lab:shopify-install` (I10–I12) and `lab:shopify-connect-workers` (R2, O4): results under "Local results" below.
+- [x] `lab:shopify-install` (I10–I12) and `lab:shopify-connect-workers` (R2, O4): see "Local results" below.
 - [ ] Hosted CI on the PR head; one AI review (separate context, same model family) with the security lens.
 - [ ] After the deploy: the owner opens Morrow from Shopify admin once (owner step 2).
 
 ## Local results
 
-To be filled in from the local run of this branch.
+From the run on 2026-10-25, with host load between 100 and 1000:
+
+- `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` and `format:check` pass.
+- `npm test`: 4507 of 4507 pass.
+- `lab:shopify-connect-workers`: 28 checks pass, including R2 and O4. The replayed callback's stage line in workerd reads `claim`, `claim_replayed`, `vaultPhase: "done"`, 8 statements.
+- `lab:shopify-install`:
+  - The first run, at load about 1000, passed I0–I12. It then stopped in the unchanged link phase, where the racing issuers (L9) raised `WORKSPACE_LINKING_OUTCOME_UNKNOWN`.
+  - The rerun passed all 53 checks.
+  - Its broker printed closed stage lines only, among them `exchange`/`reply_expiring` and `identity`/`http_403`.
+- `edge:dry-run` was not run: it needs the workspace-web build first. Hosted CI runs it.
