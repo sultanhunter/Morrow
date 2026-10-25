@@ -41,8 +41,10 @@ Not here: tables, definers, the lease re-issue and lab rows (PRs 3 and 4); Morro
 - [x] `tests/agent-package.test.mjs` (41): depth 1 for first-party and workspace packages, item 5's exclusions, the role text's digest over instructions and skill text, exactly the derived grants (a wider scope, capability, verb, customer level or computer flag, or no result tool, fails), the origin of an id.
 - [x] `tests/agent-cards.test.mjs` (9) and `tests/teammates.test.mjs` (17): derivation, exclusions, edits and digests (a foreign editor refused), the document under the card's own digest (a card with grants its tools do not derive gets none), ineligible skills on a workspace package; results that fit and do not, paging, determinism, code outcomes, open checks, taint joins, the fakes' conformance (parallel and repeated calls, 32 children, the balance, the customer tag, the caller's taint carried).
 - [x] `tests/edge-config.test.mjs` (the two switches), `tests/plan-draft.test.mjs`, `tests/graph.test.mjs`.
-- [x] `npm run -s typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` (including `graph check`, 0 errors, and `verify:boundaries`), `format:check` and `npm test` (4,672 tests, 0 failures) on the Mac, 2026-10-25, at a load average near 660. No lab: none reads these contracts, and this PR adds none.
-- [ ] Hosted `foundation` on the PR head; AI review (separate context, same model family) with the security lens (authority, approvals, contracts).
+- [x] `npm run -s typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` (including `graph check`, 0 errors, and `verify:boundaries`), `format:check` and `npm test` (4,672 tests, 0 failures) on the Mac, 2026-10-25, at a load average near 660.
+- [x] After merging `main` at `410cabb3` and the review fixes, on the Mac, 2026-10-26, at load averages of 500 to 970: the same checks pass (`graph check` 0 errors), the targeted tests (270, 0 failures), `npm test` (4,684 tests, 0 failures) and `lab:plan-start` (9, 0 failures; it runs `plan-draft.ts` through `packages/work`), which passed on its second run after the first hit a 10-second `docker run` timeout before any test ran. This PR adds no lab.
+- [x] AI review (separate context, same model family) with the security lens (authority, approvals, contracts): five findings, F1 to F5, all fixed with tests (PR #79 lists each).
+- [ ] Hosted `foundation` on the PR head; the owner (Tier 3).
 
 ## Open questions
 
