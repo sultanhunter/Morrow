@@ -40,7 +40,11 @@ export interface EvalReport {
   readonly design: EvalDesign;
   readonly worldVersion: number;
   readonly cases: readonly EvalCaseReport[];
-  readonly totals: Readonly<Record<EvalCaseStatus, number>> & { readonly cases: number };
+  /** Credits: the eval world's fake prices in a replay, the workspace's real draw in a live round. */
+  readonly totals: Readonly<Record<EvalCaseStatus, number>> & {
+    readonly cases: number;
+    readonly creditsDrawn: number;
+  };
 }
 
 export function repetitionReport(repetition: number, score: EvalCaseScore): EvalRepetitionReport {
@@ -85,7 +89,19 @@ export function roundReport(
   design: EvalDesign,
   cases: readonly EvalCaseReport[],
 ): EvalReport {
-  const totals = { cases: cases.length, pass: 0, fail: 0, mixed: 0, error: 0, skipped: 0 };
+  const creditsDrawn = cases.reduce(
+    (sum, c) => sum + c.repetitions.reduce((n, r) => n + r.metrics.creditsDrawn, 0),
+    0,
+  );
+  const totals = {
+    cases: cases.length,
+    creditsDrawn,
+    pass: 0,
+    fail: 0,
+    mixed: 0,
+    error: 0,
+    skipped: 0,
+  };
   for (const c of cases) totals[c.status] += 1;
   return { schemaVersion: 1, kind, setId, design, worldVersion: evalWorldVersion, cases, totals };
 }
@@ -187,7 +203,7 @@ export function renderComparison(comparison: EvalComparison): string {
     (a, b) => order[a.flip] - order[b.flip] || (a.caseId < b.caseId ? -1 : 1),
   );
   const total = (t: EvalReport["totals"]) =>
-    `${t.pass} pass, ${t.fail} fail, ${t.mixed} mixed, ${t.error} error, ${t.skipped} skipped`;
+    `${t.pass} pass, ${t.fail} fail, ${t.mixed} mixed, ${t.error} error, ${t.skipped} skipped; ${t.creditsDrawn} credits drawn`;
   return [
     `# ${comparison.setId} (${comparison.kind}): ${comparison.baseline} against ${comparison.candidate}`,
     "",
