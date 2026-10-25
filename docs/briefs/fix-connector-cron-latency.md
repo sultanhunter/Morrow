@@ -76,6 +76,7 @@ The cause is distance, not a database or grant fault.
   - `apps/shopify-connector/worker/{cron.ts (new), index.ts, connector.ts, database.ts}`
   - `apps/shopify-connector/wrangler.jsonc`
   - `apps/shopify-connector/worker-configuration.d.ts` (generated)
+  - `apps/shopify-connector/tsconfig.json`: the app's program leaves the Worker's generated declarations to the Worker
   - `scripts/edge.mjs`
 - Tests:
   - `tests/connector-cron.test.mjs` (new)
@@ -83,7 +84,9 @@ The cause is distance, not a database or grant fault.
   - `tests/connector-worker.test.mjs`
   - `tests/edge-config.test.mjs`
   - `tests/orchestrator.test.mjs`: its `cloudflare:workers` stub gains `DurableObject`
-- Lab: `scripts/edge-workers-lab.mjs` (the CRON checks).
+- Labs:
+  - `scripts/edge-workers-lab.mjs` (the CRON checks);
+  - `scripts/shopify-connect-workers-lab.mjs` (W3's failure detail prints the stage lines).
 - Unchanged:
   - migrations, contracts, `broker-protocol.ts` and the broker;
   - the connector's routes, pages, ingress limits and placement;
@@ -175,10 +178,20 @@ Deploy only after the owner's answer and a green hosted CI on the PR head. Claud
   - `CONNECTOR_CRON` is the SQLite class;
   - `scheduled()` runs the re-drives in the object, which logs four refused steps, each with a closed stage, and the sync's reason;
   - without the binding, only `CRON_UNBOUND`, and nothing reaches the network.
+- [x] `lab:shopify-connect-workers`: the install, webhook and re-drive journey over the changed connector transport, 31 checks (see "Local results").
 - [ ] Hosted CI on the PR head; one AI review (separate context, same model family) with the security lens.
 - [ ] The owner's decision above.
 - [ ] After the deploy: the checks in "Deploy and check", step 2.
 
 ## Local results
 
-To be filled from the local run (see below).
+From the run on 2026-10-25, with host load between about 600 and 950:
+
+- These pass: `typecheck`, `typecheck:edge` (four Workers against the pinned runtime types), `edge:check` (12 Worker environments; types up to date), `edge:dry-run` (12 bundles), `verify` and `format:check`.
+  - `typecheck` first failed on the connector app's own `tsconfig.json`. Its `"*.ts"` include matched the generated `worker-configuration.d.ts`, which imports `worker/index.ts` and, now, `cloudflare:workers`. That file is now excluded from the React Router program, as the orchestrator's tsconfig already does. The Worker keeps its own `tsconfig.worker.json`, checked by `typecheck:edge`.
+- `npm test`: 4566 of 4566 pass.
+- `lab:edge-workers`: 40 cases and 282 checks pass, among them the 2 CRON cases. In workerd, the object's run reached the connector's database three times (all refused by the lab) and logged its stage lines.
+- `lab:shopify-connect-workers` (Docker, PostgreSQL 17):
+  - The first run failed one check, W3. The webhook redelivery got a 503 and the re-drive counted one step unavailable. Both are broker and database calls the change does not touch, and the host load was about 900.
+  - The rerun passed all 31 checks.
+  - W3's failure detail now prints the last stage lines, so a repeat would name its step.
