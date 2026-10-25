@@ -2462,9 +2462,11 @@ const loopRecorded = (r) => {
       evidence: "docs/evidence/live/2026-11-02-agent-loop-" + key.replaceAll("_", "-") + ".md",
     };
 };
-// A records() root holding the loop record (and, with `evidence`, its evidence files).
-const loopRecords = (edit, { model = false, evidence = true } = {}) => {
-  const paths = records(model ? { model: modelOn } : {});
+// A records() root holding the loop record (and, with `evidence`, its evidence files). The
+// model-provider record is the committed one (on since model-provider-on), or, with
+// `modelOffRecord`, its reverse commit's.
+const loopRecords = (edit, { modelOffRecord = false, evidence = true } = {}) => {
+  const paths = records(modelOffRecord ? { model: modelOff } : {});
   const loop = structuredClone(committedLoop);
   edit?.(loop);
   writeFileSync(join(paths.evidenceRoot, "agent-loop-staging.json"), JSON.stringify(loop));
@@ -2476,12 +2478,13 @@ const loopRecords = (edit, { model = false, evidence = true } = {}) => {
       }
   return { ...paths, agentLoopPath: join(paths.evidenceRoot, "agent-loop-staging.json") };
 };
-const loopTurnedOn = (model = modelTurnedOn) =>
-  model({
-    api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-    broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-    orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-  });
+// The loop's var on the staging api, broker and orchestrator, beside the committed (on)
+// model-provider vars.
+const loopTurnedOn = () => ({
+  api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+  broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+  orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+});
 
 test("PR 11: the committed agent-loop record is off with no prerequisite recorded, and the record rule", () => {
   assert.deepEqual({ ...reviewedAgentLoopRecord(committedLoop) }, { switch: "off" });
@@ -2556,18 +2559,16 @@ test("PR 11: switched off, the loop var anywhere is a mixed state; on needs its 
     const found = codes(await verify(tree(mutate)));
     assert.ok(found.includes("EDGE_AGENT_LOOP_SWITCH_MIXED"), index + ": " + found.join(","));
   }
-  // On, every prerequisite recorded, the model switch on and the three vars: clean.
-  const on = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)), { model: true });
+  // On, every prerequisite recorded, the model switch on (committed) and the three vars: clean.
+  const on = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)));
   assert.deepEqual((await verify(tree(loopTurnedOn()), undefined, on)).problems, []);
   // On with a Worker missing its var, or the var with another value: mixed or EDGE_VARS.
   const found = codes(
     await verify(
-      tree(
-        modelTurnedOn({
-          api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-          broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-        }),
-      ),
+      tree({
+        api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+        broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+      }),
       undefined,
       on,
     ),
@@ -2575,41 +2576,30 @@ test("PR 11: switched off, the loop var anywhere is a mixed state; on needs its 
   assert.ok(found.includes("EDGE_AGENT_LOOP_SWITCH_MIXED"), found.join(","));
   const yes = codes(
     await verify(
-      tree(
-        modelTurnedOn({
-          api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "yes"),
-          broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-          orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-        }),
-      ),
+      tree({
+        api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "yes"),
+        broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+        orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
+      }),
       undefined,
       on,
     ),
   );
   assert.ok(yes.includes("EDGE_VARS"), yes.join(","));
-  // On without the model-provider switch.
-  const noModel = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)));
-  const without = codes(
-    await verify(
-      tree({
-        api: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-        broker: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-        orchestrator: (c) => (c.env.staging.vars.MORROW_AGENT_LOOP = "on"),
-      }),
-      undefined,
-      noModel,
-    ),
-  );
+  // On without the model-provider switch (its reverse commit: the record and the vars off).
+  const noModel = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)), {
+    modelOffRecord: true,
+  });
+  const without = codes(await verify(tree(modelTurnedOff(loopTurnedOn())), undefined, noModel));
   assert.ok(without.includes("EDGE_AGENT_LOOP_WITHOUT_MODEL"), without.join(","));
   // On before its prerequisites, and a recorded prerequisite without its evidence file.
-  const early = loopRecords((r) => (r.switch = "on"), { model: true });
+  const early = loopRecords((r) => (r.switch = "on"));
   assert.ok(
     codes(await verify(tree(loopTurnedOn()), undefined, early)).includes(
       "EDGE_AGENT_LOOP_PREREQUISITES",
     ),
   );
   const noEvidence = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)), {
-    model: true,
     evidence: false,
   });
   assert.ok(
