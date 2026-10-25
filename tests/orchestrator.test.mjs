@@ -11,9 +11,11 @@ import { build } from "esbuild";
 // PR-3's product read exists since the two were integrated, so the switch, committed off, is
 // the only gate); ListingsRunWorkflow replaces MorrowWorkWorkflow. The connector
 // (M2 PR-2's worker/index.ts) is fail-closed without its reviewed identifiers. `cloudflare:*` modules are stubbed.
+// fix-connector-cron-latency: the connector's entry also extends DurableObject (ConnectorCron).
 const stubs = {
   "cloudflare:workers":
-    "export class WorkflowEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
+    "export class WorkflowEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }\n" +
+    "export class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
   "cloudflare:workflows":
     "export class NonRetryableError extends Error { constructor(message, name) { super(message); this.name = name ?? 'NonRetryableError'; } }",
 };

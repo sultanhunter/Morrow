@@ -1284,8 +1284,10 @@ export async function verifyEdgeConfig({
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
   const cronLocationHint =
-    connectorCronLocationHint ??
-    (await tsImport("../apps/shopify-connector/worker/cron.ts", here)).connectorCron.locationHint;
+    connectorCronLocationHint === undefined
+      ? (await tsImport("../apps/shopify-connector/worker/cron.ts", here)).connectorCron
+          .locationHint
+      : connectorCronLocationHint;
   const { selectedConfiguration } = await tsImport(
     "../packages/infrastructure/src/selected-stack.ts",
     here,
