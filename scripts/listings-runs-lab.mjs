@@ -10,10 +10,10 @@
 //      transaction creates the run, its products, manifest, credit and vendor reservations,
 //      run lease, child task T' (ready, owned by the human), envelope, hop, Coordinator grant
 //      and events; a replay returns the recorded run; pending_starts lists ids only;
-//   B  refusals persist nothing: entitlement, credits, the member ceiling, the run product
-//      limit (25 for every entry since catalogue version 4, ADR-0039: 26 Opus 5.5 high
-//      products refused, 25 at 149 credits refused for credits alone), an unknown selection,
-//      a foreign task and an inactive installation; run reads
+//   B  refusals persist nothing: entitlement, credits, the member ceiling, the product count
+//      (25 for every entry since catalogue version 4, ADR-0039: 26 Opus 5.5 high products
+//      refused by the request's own bound, 25 at 149 credits refused for credits alone), an
+//      unknown selection, a foreign task and an inactive installation; run reads
 //      need view on task.read and on the run's store (another tenant, a grantless member and
 //      a member without the store read see no run; the grantless member cannot reconcile);
 //   W  a run: products read, drafted through the gateway, checked in code, proposed as one
@@ -809,8 +809,11 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       above.body,
     );
     // B4 (ADR-0039 item 4): Opus high admits at most 25 products (catalogue version 4: no
-    // US$7 run cap lowers the limit), so 26 are refused; 25 cost 150 credits, refused at 149
-    // for credits alone (the wallet drained; sim), then restored. M5 admits 25 for 150.
+    // US$7 run cap lowers the limit). 26 are refused: since every entry's limit is now the
+    // request's own 25-product bound, the request check refuses them first (400, before any
+    // database access); SQL's run_product_limit is lab:run-credits C5's. 25 cost 150 credits,
+    // refused at 149 for credits alone (the wallet drained; sim), then restored. M5 admits 25
+    // for 150.
     const opusHigh = { selection: { model: "claude_opus_5_5", effort: "high" } };
     const products = (n) => Array.from({ length: n }, (_, i) => "product:" + (100 + i));
     const limit = await admit(P.A, T, admitBody(products(26), opusHigh));
@@ -823,9 +826,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       `UPDATE morrow_billing.credit_wallets SET available=${available} WHERE billing_account_id=${literal(account)};`,
     );
     check(
-      "B4:run_product_limit_409_at_26_and_insufficient_credits_at_149",
-      limit.status === 409 &&
-        limit.body.safeMessage === "Too many products for this model and effort." &&
+      "B4:twenty_six_products_refused_and_insufficient_credits_at_149",
+      limit.status === 400 &&
+        limit.body.code === "missing_input" &&
         short.status === 409 &&
         short.body.code === "budget_exhausted" &&
         short.body.safeMessage === "Not enough credits for this run." &&
