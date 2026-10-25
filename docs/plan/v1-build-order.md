@@ -297,7 +297,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
 - **Size:** M.
 - **Safety tests:**
   - Morrow's own rights are fixed: no store reads, no change proposals, no computer and no customer data.
-  - Only a person starts Morrow. Morrow may call teammates and hand work off as many times as the work needs, in sequence or in parallel, at depth 1: each call or hand-off is one child job under Morrow's permission envelope, checked in code on its own against your rights, the teammate's grants, the store connection, the rules and the stops; a teammate never calls, hands off to or creates an agent. A job's calls are bounded by its turn, tool-call and time limits, the workspace's credits and your stop, never by a money cap.
+  - Only a person starts Morrow. Morrow may call teammates and hand work off as many times as the work needs, in sequence or in parallel, at depth 1: each call or hand-off is one child job under Morrow's permission envelope, checked in code on its own against your rights, the teammate's grants, its owner's current rights, the store connection, the rules and the stops; a teammate never calls, hands off to or creates an agent. A job's calls are bounded by its turn, tool-call and time limits, the workspace's credits and your stop, never by a money cap.
   - Only the Owner can change a model, and Admins only for installed agents.
   - A model change never changes what an agent may do.
   - Each change is recorded.
@@ -487,7 +487,7 @@ Replaced on 2026-10-25. The temporary, weaker "specialist" is gone (ADR-0037): t
 - **Size:** ten PRs, S to L each (the plan has the sizes); the permission packet is L, as two PRs.
 - **Safety tests:**
   - Only a person approves a card, never an agent and never Morrow, and the approval covers that exact card. Any edit makes a new card, and a used, expired or foreign approval document does nothing.
-  - Adding a teammate is a permission change: alone, you type a confirmation phrase and wait 5 minutes, which you can cancel; in a team, a second person approves, never the person who asked for it or edited it.
+  - Adding a teammate is a permission change: alone, you type a confirmation phrase and wait 5 minutes, which you can cancel; in a team, a second person approves, never the person who asked for it or edited it, and you approve alone only while no one else holds the card's store permissions.
   - Nobody gives a teammate more than they hold themselves. A card that changes the store, reads orders, spends money or messages customers needs you, the Owner.
   - A card never gets customer names or emails, support tools, the right to bring in agents, or a stop control. Teammates never call, hand off to or create agents.
   - Every tool call of every teammate run, the first call and every later or parallel one alike, is checked in code against your rights, the teammate's grants, the store connection, the rules and the stops.
