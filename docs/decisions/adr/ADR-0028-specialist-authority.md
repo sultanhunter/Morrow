@@ -59,3 +59,9 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 What it approves: this record as written and each owner question above with its recommended answer.
 
 Its model part sets a specialist's default profile to Opus 5.5 at medium effort (ADR-0027 item 12).
+
+## Amendments
+
+### 2026-10-25: superseded by one agent kind (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3) supersedes this record's run-scoped kind; the text above is kept as approved. ADR-0037 replaces specialists with workspace-created agents: installations like the premade ones, drafted by Morrow as an agent card from the fixed tool catalogue, created only when a person approves the exact card, and kept until removed. ADR-0037 item 7 lists what stays from this record (the single-use document, the idempotent transaction, the checks before each tool call, workspace rules, the switches and the deletion registry) and what is retired (the `task_specialist` kind, the `morrow.specialist` release, the Specialist ceiling and its issuer, the 24-hour clock, the deadlines and the running limits).

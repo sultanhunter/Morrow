@@ -62,3 +62,13 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 > approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
 
 What it approves: this record as written and each owner question above with its recommended answer.
+
+## Amendments
+
+### 2026-10-25: uploads and workspace-created agents (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) ends the specialist kind, so item 6's "never a specialist at launch" lapses; the text above is kept as approved. A workspace-created agent opens an upload only as any installed agent does: in a sandbox, by its run the uploader's tags allow, and only when its approved card holds the computer tools. The owner confirmed this as recommended (OD-2026-10-25-4).
+
+### 2026-10-25: item 8's monthly runtime budget (ADR-0039)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes item 8; the text above is kept as approved. Morrow's monthly runtime budget below E2B's limit (staging US$10 of US$20) goes: E2B's usage limit in the owner's E2B account is the outside backstop, as the Anthropic monthly limit is for model calls, and E2B's refusal sets item 9's runtime hold, which only a person lifts. Each sandbox holds its worst case in credits from the workspace's wallet before the create, and its use is drawn after. The concurrency caps (half the tier's, and 3 per workspace), the session deadline and the cleanup rules stand.
