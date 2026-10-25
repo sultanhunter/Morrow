@@ -64,10 +64,69 @@ test("the decision is recorded: the owner's words, verbatim, in the decision nod
   const decision = read("docs/graph/decisions/OD-2026-10-25-1.md");
   assert.ok(decision.includes("> " + quote));
   const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
-  assert.match(adr, /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-1\)$/m);
+  assert.match(adr, /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-1\)/m);
   const approval = adr.slice(adr.indexOf("## Approval"));
   assert.ok(approval.includes("> " + quote));
   assert.ok(policy.catalogue.versions[2].owner_confirmation.includes(quote));
+});
+
+// Review F1: the owner's answer set the default and removed the cap; it did not set the default
+// member ceiling. Version 3's ceiling of 4 widens what a Member without
+// governance.model_default.revise may run (authority and money), so every record says it awaits
+// the owner, and the branch stays unmerged until then. When the owner answers, this test changes
+// with the records: the answer quoted in ADR-0036's Approval and in version 3's
+// owner_confirmation (a new digest), the question answered and the brief's item ticked.
+test("version 3's default member ceiling of 4 is recorded as awaiting the owner, never as confirmed", () => {
+  const v3 = policy.catalogue.versions[2];
+  assert.equal(v3.default_member_credit_ceiling, 4);
+  assert.ok(
+    v3.owner_confirmation.includes("Not confirmed by that answer: the default member ceiling of 4"),
+  );
+  assert.ok(v3.owner_confirmation.includes("awaits the owner's confirmation"));
+  // The wording the review found: the ceiling folded into the owner's confirmation.
+  assert.doesNotMatch(v3.owner_confirmation, /ceiling of 4 admits that default/);
+  const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
+  assert.match(
+    adr,
+    /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-1\), except item 2's default member ceiling of 4, which awaits the owner's confirmation \(Q-adr-0036-member-ceiling\); the change does not merge before it/m,
+  );
+  const approval = adr.slice(adr.indexOf("## Approval"));
+  assert.ok(approval.includes("so it awaits the owner's confirmation"));
+  assert.ok(approval.includes("so the change waits for the owner"));
+  // The widening, stated with the catalogue's own numbers: 12 products at Opus 5.5 medium
+  // (4 credits, US$0.544 worst case each) against 25 at a 1-credit entry (US$0.132).
+  const opusMedium = catalogueEntry(3, "claude_opus_5_5", "medium");
+  const sonnetHigh = catalogueEntry(3, "claude_sonnet_5_5", "high");
+  const sonnetLow = catalogueEntry(3, "claude_sonnet_5_5", "low");
+  const run = (entry) => [
+    entry.creditsPerProduct * entry.runProductLimit,
+    usd8Text(entry.worstCasePerProductUsd8 * BigInt(entry.runProductLimit)),
+  ];
+  assert.deepEqual(run(opusMedium), [48, usd8Text(parseUsd8("6.528"))]);
+  assert.equal(run(sonnetHigh)[0], 57);
+  assert.deepEqual(run(sonnetLow), [25, usd8Text(parseUsd8("3.30"))]);
+  assert.ok(approval.includes("up to 48 credits and US$6.528"));
+  assert.ok(approval.includes("57 credits at Sonnet 5.5 `high`"));
+  assert.ok(approval.includes("at most 25 credits and US$3.30 a run"));
+  const question = read("docs/graph/questions/Q-adr-0036-member-ceiling.md");
+  assert.match(question, /^status: open$/m);
+  assert.match(question, /^asked_of: owner$/m);
+  assert.match(question, /default member ceiling of 4/);
+  assert.ok(
+    read("docs/graph/decisions/OD-2026-10-25-1.md").includes("(Q-adr-0036-member-ceiling)"),
+  );
+  const brief = read("docs/briefs/adr-0036-model-defaults-cost-cap.md");
+  assert.ok(brief.includes("- [ ] Owner: confirm the default member ceiling of 4"));
+  assert.match(brief, /^- \*\*Merge gate:\*\* /m);
+});
+
+// Review F3: the CI job description no longer says lab:run-credits checks an unrecovered-cost
+// cap; C4 proves the ledger with no cap.
+test("ci.md describes lab:run-credits' unrecovered-cost ledger without a cap", () => {
+  const ci = read("docs/development/ci.md");
+  assert.doesNotMatch(ci, /unrecovered-cost caps/);
+  assert.ok(ci.includes("the unrecovered-cost ledger with no cap (ADR-0036;"));
+  assert.ok(read("scripts/run-credits-lab.mjs").includes('"C4:unrecovered_ledger_without_cap"'));
 });
 
 test("defaults: Morrow on Opus 5.5 at high, every other kind on Opus 5.5 at medium", () => {

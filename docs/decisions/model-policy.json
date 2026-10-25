@@ -136,7 +136,7 @@
     },
     "published_digests": {
       "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660",
-      "3": "5752f7e350749febd006d8c5a9b484bcb8e62c0cd484b18c544ff5216533b72b"
+      "3": "a162e95134acc2218bf86b40487fa1600c5e315a16f331d6c4d0b3d7392987d0"
     },
     "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while a per-product version stays active (ADR-0027 item 4). ADR-0036 removed the unrecovered-cost cap: version 1 keeps its published workspace_period_unrecovered_cost_cap_usd, which nothing enforces, and no later version carries one.",
     "versions": [
@@ -407,7 +407,7 @@
         "status": "active",
         "proposed_on": "2026-10-25",
         "decision": "ADR-0036 items 2 and 3",
-        "owner_confirmation": "Owner, 2026-10-25, in chat (OD-2026-10-25-1): \"use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost\". It sets the default selection to Opus 5.5 at medium and removes the unrecovered-cost cap; the default member ceiling of 4 admits that default, as version 1's ceiling of 1 admitted its own (ADR-0036 item 2). Every other value is version 1's, confirmed by the owner on 2026-10-19.",
+        "owner_confirmation": "Owner, 2026-10-25, in chat (OD-2026-10-25-1): \"use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost\". It sets the default selection to Opus 5.5 at medium and removes the unrecovered-cost cap. Not confirmed by that answer: the default member ceiling of 4, which ADR-0036 item 2 writes so that the ceiling admits the new default; it replaces the ceiling of 1 the owner confirmed on 2026-10-19 and awaits the owner's confirmation (ADR-0036 Approval) before this version merges. Every other value is version 1's, confirmed by the owner on 2026-10-19.",
         "effective_from": "2026-10-25",
         "default_selection": {
           "model": "claude_opus_5_5",

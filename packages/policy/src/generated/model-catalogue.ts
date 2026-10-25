@@ -80,7 +80,7 @@ export const generatedModelCatalogue = {
     {
       version: 3,
       status: "active",
-      digest: "5752f7e350749febd006d8c5a9b484bcb8e62c0cd484b18c544ff5216533b72b",
+      digest: "a162e95134acc2218bf86b40487fa1600c5e315a16f331d6c4d0b3d7392987d0",
       effectiveFrom: "2026-10-25",
       defaultSelection: {
         model: "claude_opus_5_5",

@@ -56,7 +56,7 @@ ALTER TABLE morrow_work.model_catalogue_versions ENABLE TRIGGER append_only;
 -- Version 3, active: exactly as scripts/generate-model-catalogue.mjs computes it.
 INSERT INTO morrow_work.model_catalogue_versions(version,status,digest,default_model,default_effort,default_member_credit_ceiling,
  max_products_per_run,run_cost_cap_usd,workspace_daily_cost_cap_usd,workspace_period_unrecovered_cost_cap_usd)
-VALUES (3,'active','5752f7e350749febd006d8c5a9b484bcb8e62c0cd484b18c544ff5216533b72b','claude_opus_5_5','medium',4,25,7.00000000,25.00000000,NULL);
+VALUES (3,'active','a162e95134acc2218bf86b40487fa1600c5e315a16f331d6c4d0b3d7392987d0','claude_opus_5_5','medium',4,25,7.00000000,25.00000000,NULL);
 INSERT INTO morrow_work.model_catalogue_entries(version,model_key,effort_key,credits_per_product,worst_case_per_product_usd,
  worst_case_per_attempt_usd,run_product_limit) VALUES
  (3,'claude_haiku_5_5','low',1,0.00660000,0.00330000,25),
