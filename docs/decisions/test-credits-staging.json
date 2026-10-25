@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "kind": "test_credits",
+  "environment": "staging",
+  "standingApproval": "adr-0035",
+  "workspace": null,
+  "grantApproval": null,
+  "raise": null
+}

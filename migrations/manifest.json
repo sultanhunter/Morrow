@@ -395,6 +395,13 @@
       "sha256": "b6172a6d874a69b2b6d40dadd948965201254e295b91e50664d19751e9fe3c9d",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0036-model-defaults-cost-cap.md"
+    },
+    {
+      "sequence": 52,
+      "file": "0052.staging-test-credits-renewal.sql",
+      "sha256": "0c5bce795a13da53ec45f54eb0126be33186272cb9d66c0b50acc5908a4d54c8",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-renew-test-credits.md"
     }
   ]
 }

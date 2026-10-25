@@ -1425,6 +1425,25 @@ export function testEntitlementReport(result, workspaceId) {
 // (STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE) before the definer runs.
 export const liveStoreWorkspaceStatement =
   "SELECT count(*)::int AS n FROM morrow_identity.shopify_apps WHERE live_store AND status = 'active' AND environment_id = $1::text AND invited_workspace_id = $2::text";
+// Inside the caller's open transaction: as morrow_identity_owner (granted for this step only
+// under the D4 SET-row protocol), exactly one active live-store app of this environment
+// invites `workspaceId`, or `code` is thrown before anything else runs.
+async function requireOwnerWorkspace(connection, administrator, workspaceId, code) {
+  const admin = administrator.name;
+  if (administrator.mode === "createrole")
+    await connection.exec(
+      `GRANT morrow_identity_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+    );
+  await connection.exec("SET LOCAL ROLE morrow_identity_owner");
+  const [owned] = await connection.query(liveStoreWorkspaceStatement, [
+    platformEnvironment,
+    workspaceId,
+  ]);
+  if (owned?.n !== 1) throw new StagingError(code);
+  await connection.exec("RESET ROLE");
+  if (administrator.mode === "createrole")
+    await connection.exec(`REVOKE morrow_identity_owner FROM ${admin} GRANTED BY ${admin}`);
+}
 export async function grantTestEntitlement({
   connect,
   binding,
@@ -1440,21 +1459,13 @@ export async function grantTestEntitlement({
     let outcome, report;
     try {
       await connection.exec("BEGIN");
-      if (requireLiveStoreWorkspace) {
-        if (administrator.mode === "createrole")
-          await connection.exec(
-            `GRANT morrow_identity_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
-          );
-        await connection.exec("SET LOCAL ROLE morrow_identity_owner");
-        const [owned] = await connection.query(liveStoreWorkspaceStatement, [
-          platformEnvironment,
+      if (requireLiveStoreWorkspace)
+        await requireOwnerWorkspace(
+          connection,
+          administrator,
           values[1],
-        ]);
-        if (owned?.n !== 1) throw new StagingError("STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE");
-        await connection.exec("RESET ROLE");
-        if (administrator.mode === "createrole")
-          await connection.exec(`REVOKE morrow_identity_owner FROM ${admin} GRANTED BY ${admin}`);
-      }
+          "STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE",
+        );
       if (administrator.mode === "createrole")
         await connection.exec(
           `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
@@ -1471,6 +1482,173 @@ export async function grantTestEntitlement({
       await connection.exec("COMMIT");
     } catch (error) {
       throw sqlFailure("STAGING_TEST_ENTITLEMENT_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return Object.freeze({ outcome, ...report });
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The renewal of the owner's test credits (`test-credits renew`; v1 build order PR 6;
+// ADR-0035 items 3 and 4; migration staging-test-credits-renewal). Until Shopify billing
+// exists, the owner's workspace keeps its test credits by renewing the operator grant once
+// per 30-day period: morrow_billing.operator_test_entitlement_renew, run as
+// morrow_work_owner under the D4 SET-row protocol after the same transaction has read, as
+// morrow_identity_owner, that the workspace is the one the environment's live-store app
+// invites. Its credits come only from the recorded grant (or a raise the owner approved in a
+// committed record); it tops the unspent credits up to them, writes the next snapshot and
+// never a payment row. Only `renewed` or `current` commits, after the closed result is
+// read; anything else commits nothing. A COMMIT that fails after `renewed` is an unknown
+// outcome: the rerun reads it back (`current` when it committed), never a blind retry.
+export const testCreditsOutcomes = Object.freeze([
+  "renewed",
+  "current",
+  "grant_missing",
+  "route_conflict",
+  "not_staging",
+  "invalid",
+  "denied",
+]);
+export const testCreditsRenewStatement =
+  "SELECT outcome, result FROM morrow_billing.operator_test_entitlement_renew($1, $2, $3, $4, $5, $6, $7)";
+const standingId = /^[a-z0-9][a-z0-9-]{0,40}$/;
+const creditText = /^[1-9][0-9]{0,17}$/;
+export function testCreditsRenewInput({
+  operatorId,
+  workspaceId,
+  grantApprovalRef,
+  standingApproval,
+  evidenceRef,
+  creditUnits,
+  raiseEvidenceRef,
+}) {
+  if (
+    typeof operatorId !== "string" ||
+    !recordId.test(operatorId) ||
+    typeof workspaceId !== "string" ||
+    !recordId.test(workspaceId) ||
+    typeof grantApprovalRef !== "string" ||
+    !testEntitlementApproval.test(grantApprovalRef) ||
+    typeof standingApproval !== "string" ||
+    !standingId.test(standingApproval) ||
+    typeof evidenceRef !== "string" ||
+    !liveEvidenceRef.test(evidenceRef) ||
+    (creditUnits === null) !== (raiseEvidenceRef === null) ||
+    (creditUnits !== null && (typeof creditUnits !== "string" || !creditText.test(creditUnits))) ||
+    (raiseEvidenceRef !== null &&
+      (typeof raiseEvidenceRef !== "string" || !liveEvidenceRef.test(raiseEvidenceRef)))
+  )
+    throw new StagingError("STAGING_USAGE");
+  return Object.freeze([
+    operatorId,
+    workspaceId,
+    grantApprovalRef,
+    standingApproval,
+    evidenceRef,
+    creditUnits,
+    raiseEvidenceRef,
+  ]);
+}
+const testCreditsResultKeys =
+  "addedUnits,available,billingAccountId,creditUnits,entitlementId,organizationId,period,periodEnd,periodStart,renewalId,snapshotRevision,walletRevision,workspaceId";
+const periodHours = 720;
+/** The definer's result for `workspaceId` and `outcome`, closed: ids, the period, credits. */
+export function testCreditsReport(outcome, result, workspaceId) {
+  let value;
+  try {
+    value = JSON.parse(result);
+  } catch {
+    value = null;
+  }
+  const count = /^(0|[1-9][0-9]{0,17})$/;
+  const valid =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).sort().join() === testCreditsResultKeys &&
+    Object.entries(value).every(
+      ([key, v]) => typeof v === "string" || (key === "renewalId" && v === null),
+    ) &&
+    uuidText.test(value.entitlementId) &&
+    uuidText.test(value.billingAccountId) &&
+    recordId.test(value.organizationId) &&
+    value.workspaceId === workspaceId &&
+    /^(0|[1-9][0-9]{0,5})$/.test(value.period) &&
+    // Period 0 is the grant's own, which only `current` reports; a renewal names its record.
+    (value.period === "0"
+      ? outcome === "current" && value.renewalId === null
+      : typeof value.renewalId === "string" && uuidText.test(value.renewalId)) &&
+    creditText.test(value.creditUnits) &&
+    count.test(value.addedUnits) &&
+    BigInt(value.addedUnits) <= BigInt(value.creditUnits) &&
+    count.test(value.available) &&
+    /^[1-9][0-9]{0,15}$/.test(value.snapshotRevision) &&
+    // The grant's snapshot is revision 1; every renewal's is a later one.
+    (value.snapshotRevision === "1") === (value.period === "0") &&
+    /^[1-9][0-9]{0,15}$/.test(value.walletRevision) &&
+    utcMs.test(value.periodStart) &&
+    utcMs.test(value.periodEnd) &&
+    Date.parse(value.periodEnd) > Date.parse(value.periodStart) &&
+    (value.period === "0" ||
+      Date.parse(value.periodEnd) - Date.parse(value.periodStart) === periodHours * 3600000);
+  if (!valid) throw new StagingError("STAGING_TEST_CREDITS_RESULT_INVALID");
+  return Object.freeze({
+    entitlementId: value.entitlementId,
+    organizationId: value.organizationId,
+    workspaceId: value.workspaceId,
+    billingAccountId: value.billingAccountId,
+    renewalId: value.renewalId,
+    period: value.period,
+    periodStart: value.periodStart,
+    periodEnd: value.periodEnd,
+    creditUnits: value.creditUnits,
+    addedUnits: value.addedUnits,
+    available: value.available,
+    snapshotRevision: value.snapshotRevision,
+    walletRevision: value.walletRevision,
+  });
+}
+export async function renewTestCredits({ connect, binding, administrator, input }) {
+  checkAdministrator(administrator);
+  const values = testCreditsRenewInput(input ?? {});
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  try {
+    let outcome, report;
+    try {
+      await connection.exec("BEGIN");
+      await requireOwnerWorkspace(
+        connection,
+        administrator,
+        values[1],
+        "STAGING_TEST_CREDITS_NOT_OWNER_WORKSPACE",
+      );
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      const [row] = await connection.query(testCreditsRenewStatement, [...values]);
+      outcome = testCreditsOutcomes.includes(row?.outcome) ? row.outcome : "unknown";
+      if (outcome !== "renewed" && outcome !== "current")
+        throw new StagingError("STAGING_TEST_CREDITS_REFUSED", { outcome });
+      report = testCreditsReport(outcome, row.result, values[1]);
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+    } catch (error) {
+      throw sqlFailure("STAGING_TEST_CREDITS_FAILED", error);
+    }
+    try {
+      await connection.exec("COMMIT");
+    } catch (error) {
+      // Nothing was written by `current`; a renewal's COMMIT that did not answer may have
+      // committed. Never reported as renewed: the rerun reads it back.
+      throw outcome === "renewed"
+        ? new StagingError("STAGING_TEST_CREDITS_OUTCOME_UNKNOWN", { period: report.period })
+        : sqlFailure("STAGING_TEST_CREDITS_FAILED", error);
     }
     await assertNoSetRows(connection);
     return Object.freeze({ outcome, ...report });
