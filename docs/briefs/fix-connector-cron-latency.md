@@ -209,3 +209,9 @@ From the run on 2026-10-25, with host load between about 600 and 950:
   - The first run failed one check, W3. The webhook redelivery got a 503 and the re-drive counted one step unavailable. Both are broker and database calls the change does not touch, and the host load was about 900.
   - The rerun passed all 31 checks.
   - W3's failure detail now prints the last stage lines, so a repeat would name its step.
+
+After the review fixes and a merge of `origin/main` at `3c08dc35` (PR #67; it touches the broker and the workspace, not the connector), on 2026-10-25:
+
+- These pass: `format:check`, `typecheck`, `typecheck:edge` (four Workers), `edge:check` (12 Worker environments; types up to date), `edge:dry-run` (12 bundles) and `verify` (`plan:check` and `graph:check` with ADR-0038 present).
+- `npm test`: 4602 of 4602 pass, among them `tests/edge-config.test.mjs` with the new Sao Paulo case.
+- The labs were not rerun: the fixes change only `edge:check`'s hint table and documents, and the merge brings no connector change. Hosted CI runs them.
