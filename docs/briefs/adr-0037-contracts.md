@@ -38,7 +38,7 @@ Not here: tables, definers, the lease re-issue and lab rows (PRs 3 and 4); Morro
 - [x] `tests/agent-package.test.mjs` (32): depth 1 for first-party and workspace packages, item 5's exclusions, the instructions' digest, the origin of an id.
 - [x] `tests/agent-cards.test.mjs` (8) and `tests/teammates.test.mjs` (15): derivation, exclusions, edits and digests, the document; results that fit and do not, paging, determinism, code outcomes, open checks, the fakes' conformance (parallel and repeated calls, 32 children, the balance, the customer tag).
 - [x] `tests/edge-config.test.mjs` (the two switches), `tests/plan-draft.test.mjs`, `tests/graph.test.mjs`.
-- [ ] `npm run -s typecheck`, `typecheck:edge`, `edge:check`, `verify`, `format:check`, `graph -- check`, `npm test` (results in the PR).
+- [x] `npm run -s typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` (including `graph check`, 0 errors, and `verify:boundaries`), `format:check` and `npm test` (4,672 tests, 0 failures) on the Mac, 2026-10-25, at a load average near 660. No lab: none reads these contracts, and this PR adds none.
 - [ ] Hosted `foundation` on the PR head; AI review (separate context, same model family) with the security lens (authority, approvals, contracts).
 
 ## Open questions
