@@ -1,6 +1,6 @@
 # Turn the model provider on (Claude, the owner's key)
 
-- Status: built, 2026-10-25. Branch `claude/model-provider-on`, one PR, cut from `12615ad6` and brought up to main `13e04367` (#71, the shop-specific webhooks) by a merge, so the reviewed head is the head that merges. The v1 build order's step 2 (ADR-0035 item 8.2): the model goes on with the owner's Anthropic key, after "Disconnect store" (#53, `ed5c70e5`; M3 owner decision 14).
+- Status: built, 2026-10-25. Branch `claude/model-provider-on`, one PR, cut from `12615ad6` and brought up to main `13e04367` (#71, the shop-specific webhooks) and then `3c08dc35` (#67, Undo and the product picker) by merges, so the reviewed head is the head that merges. The v1 build order's step 2 (ADR-0035 item 8.2): the model goes on with the owner's Anthropic key, after "Disconnect store" (#53, `ed5c70e5`; M3 owner decision 14).
 - Change class: material, already owner-approved. ADR-0022 items 7, 10 and 11 chose the provider, the broker custody and the caps in code. ADR-0035 items 4 and 8.2 approved turning it on, standing. No new decision is taken here. The Tier 2 review uses the security lens (credentials, provider effects, spend).
 - The owner's statement (chat, 2026-10-25), answering the request to tell Claude the monthly spend limit of the Anthropic Console workspace they use for Morrow's key, verbatim: "Anthropic limit 100$". The record takes it as US$100 a month, as stated by the owner and not observed by Claude: Claude did not open the Console. The tooling reads the key from the owner-only file `~/.config/morrow/staging/anthropic-api-key`; Claude does not read it.
 
@@ -68,7 +68,7 @@ The choice is option (a), the Stripe switch's protocol: one PR, merge, `put-secr
 
 1. **Merge** once `foundation` is green on the exact head and the Tier 2 AI review has passed.
 2. **The merge commit's `Deploy staging` run stops before any upload.**
-   - **Gate 3 may hold first.** This PR has no migration, but main now ends at 0049 (#71 added 0048 and 0049), and the activity log's last `staging:migrate` is ledger 46. If the staging schema head is behind main's manifest, the run stops with `"code":"STAGING_SCHEMA_HEAD_MISMATCH"` and `"next":"run_staging_migrate_then_gh_run_rerun"`. Run `npm run staging:migrate` from a clean checkout at reviewed `origin/main`, log it, then rerun the held run (`gh run rerun <run id> --repo sultanhunter/Morrow`). That rerun then stops at gate 6.
+   - **Gate 3 may hold first.** This PR has no migration, but main now ends at 0050 (#63 added 0047, #71 0048 and 0049, #67 0050), and the activity log's last `staging:migrate` is ledger 46. If the staging schema head is behind main's manifest, the run stops with `"code":"STAGING_SCHEMA_HEAD_MISMATCH"` and `"next":"run_staging_migrate_then_gh_run_rerun"`. Run `npm run staging:migrate` from a clean checkout at reviewed `origin/main`, log it, then rerun the held run (`gh run rerun <run id> --repo sultanhunter/Morrow`). That rerun then stops at gate 6.
    - **Gate 6.** With the schema current, the run reports `"code":"STAGING_BROKER_SECRETS_MISMATCH"`, `"missing":["ANTHROPIC_API_KEY"]` and `"next":"run_staging_put_secret_then_gh_run_rerun"`, with nothing uploaded.
 3. **Place the key from reviewed main.** Use a clean checkout at `origin/main` (the merge commit, with `foundation` green) and run `npm run staging:put-secret -- ANTHROPIC_API_KEY`. Expect `{"command":"put-secret","secret":"ANTHROPIC_API_KEY","versionId":"<uuid>"}`.
 4. **Rerun the held deploy:** `gh run rerun <run id> --repo sultanhunter/Morrow`.
@@ -143,6 +143,11 @@ No migration, contract, route, binding kind, provider resource or Worker code ch
   - `staging-secrets`, `staging-deploy`, `broker-model`, `orchestrator`, `managed-workspace-composition`, `broker-shopify-webhooks`, `connector-worker` and `broker-protocol` 124 of 124;
   - `format:check`, `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments, types up to date), `edge:dry-run` (12 bundles) and `verify` pass;
   - `npm test` 4562 of 4562.
+- [x] After the wording fix (the limit as the owner stated it) and the merge of main `3c08dc35` (#67; no conflicts), same day, load average up to about 380:
+  - `edge-config` 37 of 37; `staging-secrets`, `staging-deploy`, `broker` and `api-environment` 86 of 86;
+  - `broker-model`, `orchestrator`, `broker-challenge`, `managed-workspace-composition` and `broker-protocol` 44 of 44;
+  - `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments, types up to date), `edge:dry-run` (12 bundles), `verify` and `format:check` pass;
+  - `npm test` 4597 of 4597.
 - [ ] Hosted `foundation` on the PR head; Tier 2 AI review (separate context, same model family) with the security lens. The first review ran on the pre-merge head `cb496c44`; its confirmed findings F1 and F3 are fixed here, and the review runs again on the integrated head.
 
 ## Remaining gates
