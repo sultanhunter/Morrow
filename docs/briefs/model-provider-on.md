@@ -2,11 +2,11 @@
 
 - Status: built, 2026-10-25. Branch `claude/model-provider-on`, one PR, cut from `12615ad6` and brought up to main `13e04367` (#71, the shop-specific webhooks) by a merge, so the reviewed head is the head that merges. The v1 build order's step 2 (ADR-0035 item 8.2): the model goes on with the owner's Anthropic key, after "Disconnect store" (#53, `ed5c70e5`; M3 owner decision 14).
 - Change class: material, already owner-approved. ADR-0022 items 7, 10 and 11 chose the provider, the broker custody and the caps in code. ADR-0035 items 4 and 8.2 approved turning it on, standing. No new decision is taken here. The Tier 2 review uses the security lens (credentials, provider effects, spend).
-- The owner's facts (chat, 2026-10-25): the key is saved as `~/.config/morrow/staging/anthropic-api-key`. The Console workspace `Morrow` has a monthly spend limit, in the owner's words "Anthropic limit 100$". Claude did not read the file or open the Console.
+- The owner's statement (chat, 2026-10-25), answering the request to tell Claude the monthly spend limit of the Anthropic Console workspace they use for Morrow's key, verbatim: "Anthropic limit 100$". The record takes it as US$100 a month, as stated by the owner and not observed by Claude: Claude did not open the Console. The tooling reads the key from the owner-only file `~/.config/morrow/staging/anthropic-api-key`; Claude does not read it.
 
 ## Goal
 
-The owner's own Listings request in the workspace reaches Claude through the one gateway. It stays within the owner's US$100 Console limit and the caps in code: US$7 a run and US$25 a workspace a day (ADR-0022 item 11). Every other switch stays off: the agent loop, plan drafts, specialists, Shopify apply (writes), the runtime and Stripe.
+The owner's own Listings request in the workspace reaches Claude through the one gateway. It stays within the Console limit of US$100 a month, as stated by the owner, and the caps in code: US$7 a run and US$25 a workspace a day (ADR-0022 item 11). Every other switch stays off: the agent loop, plan drafts, specialists, Shopify apply (writes), the runtime and Stripe.
 
 ## Scope
 
@@ -15,7 +15,7 @@ The owner's own Listings request in the workspace reaches Claude through the one
   - `monthly_spend_limit_usd` `"100.00"`, as a decimal string like the runtime record's;
   - `observed_on` `"2026-10-25"`.
 
-  Its scope quotes the owner's words. It notes that the prerequisite is met on main (#53). It notes that ADR-0035 item 4's standing approval supersedes the old per-action approval of the first call. The record rule (`reviewedModelRecord`) is unchanged: "on" still needs a limit and its date.
+  Its scope quotes the owner's words and says the limit is as stated by the owner, not observed by Claude. It notes that the prerequisite is met on main (#53). It notes that ADR-0035 item 4's standing approval supersedes the old per-action approval of the first call. The record rule (`reviewedModelRecord`) is unchanged: "on" still needs a limit and its date.
 - **Vars and the secret.**
   - `MORROW_MODEL_PROVIDER: "anthropic"` goes into `env.staging.vars` of the api, the broker and the orchestrator.
   - The orchestrator also gets `MORROW_DATABASE_BINDING_JSON`, byte-equal to the api's.
@@ -49,7 +49,7 @@ The choice is option (a), the Stripe switch's protocol: one PR, merge, `put-secr
 
 - **(a) is the smallest safe design.** It is one PR, with no new flag and no new optional-secret path. Gate 6 is used as it stands, with the same merge-then-rerun shape as gate 3.
 - **Its only cost** is that the merge commit's `Deploy staging` run is red at gate 6, with nothing uploaded, until the rerun.
-- **Option (b) is larger.** Placing the key while the switch is off would need a `--while-model-off` flag on main before the key could be placed from reviewed main. That is a tooling PR, then the switch PR, plus a second optional name in gate 6 and `secrets-status`. It buys nothing here: the owner's key is already saved.
+- **Option (b) is larger.** Placing the key while the switch is off would need a `--while-model-off` flag on main before the key could be placed from reviewed main. That is a tooling PR, then the switch PR, plus a second optional name in gate 6 and `secrets-status`. It buys nothing here: placing the key right after the merge is enough.
 
 **The deploy never runs with the switch on and no key.** Three layers stop it:
 
@@ -113,12 +113,12 @@ No migration, contract, route, binding kind, provider resource or Worker code ch
   - the key missing from `secrets.required`;
   - any model name in development, in production or on the connector;
   - a production or invalid record, which counts as off.
-- **Spend.** The checks are in code, outside prompts: the per-run and per-workspace-day caps, reservations, the fence and the stops. The Console limit is the provider-side ceiling. No model call is made by this PR or its tests.
+- **Spend.** The checks are in code, outside prompts: the per-run and per-workspace-day caps, reservations, the fence and the stops. The Console limit, as stated by the owner and not observed by Claude, is the provider-side ceiling. No model call is made by this PR or its tests.
 
 ## Test checklist
 
 - [x] `tests/edge-config.test.mjs`:
-  - the committed record is on with the owner's limit, and the record rule (on without a limit or date, production, malformed);
+  - the committed record is on with the limit as the owner stated it, and the record rule (on without a limit or date, production, malformed);
   - the committed blocks verify on;
   - every mixed state on: a missing var per Worker, no key in `secrets.required`, the binding not the api's, the key on another Worker, development, production;
   - the reverse commit's off state, and mixed states while off;

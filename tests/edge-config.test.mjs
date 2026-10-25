@@ -2063,19 +2063,20 @@ test("model-provider-on: the committed record is on with the owner's limit, and 
   );
   // The owner's words, verbatim; the prerequisite on main; the approval that covers the calls.
   assert.ok(committedModel.scope.includes('verbatim "Anthropic limit 100$"'));
+  assert.ok(committedModel.scope.includes("as stated by the owner and not observed by Claude"));
   assert.ok(committedModel.scope.includes('"Disconnect store", merged in #53 (ed5c70e5)'));
   assert.ok(committedModel.scope.includes("ADR-0035 item 4's standing approval"));
   assert.deepEqual({ ...reviewedModelRecord(committedModel) }, { switch: "on" });
   const off = structuredClone(committedModel);
   modelOff(off);
   assert.deepEqual({ ...reviewedModelRecord(off) }, { switch: "off" });
-  // The reverse commit may keep the observed limit and its date.
+  // The reverse commit may keep the stated limit and its date.
   assert.deepEqual(
     { ...reviewedModelRecord({ ...committedModel, switch: "off" }) },
     { switch: "off" },
   );
   for (const edit of [
-    // On means a spend-limited Console workspace, with the date the limit was observed.
+    // On means a spend-limited Console workspace, with the date the limit was recorded.
     (r) => ((r.monthly_spend_limit_usd = null), (r.observed_on = null)),
     (r) => (r.observed_on = null),
     (r) => (r.monthly_spend_limit_usd = null),

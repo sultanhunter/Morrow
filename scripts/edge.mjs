@@ -707,8 +707,8 @@ const edgeModelNames = (worker) =>
     : [edgeModelProviderVar, ...edgeModelSecretNames];
 // The reviewed staging model-provider record (M3 PR-2; on since model-provider-on): provider
 // anthropic; `switch` "off" or "on", each changed only by one reviewed commit; the Anthropic
-// Console workspace's monthly spend limit (a decimal USD string, required while on) and the
-// date the owner observed it. Returns the switch, or throws.
+// Console workspace's monthly spend limit (a decimal USD string, required while on), as the
+// owner states it, and the date it was recorded. Returns the switch, or throws.
 export function reviewedModelRecord(record) {
   if (
     !record ||
