@@ -15,6 +15,7 @@
 | 4 | Runtime without the monthly budget | S | 1; 2 for the credit hold | `morrow_work.runtime_caps()` replaced without `monthly_budget_usd`, and `morrow_vault.runtime_operation_begin` no longer refuses `monthly_budget` (kept in the closed unions of `apps/broker/src/runtime-gateway.ts` and `runtime-ledger.ts` for old records); the twin in `packages/policy/src/runtime-computer.ts`; the sandbox's worst case is held in credits at the rate card's computer rate (PR 2); concurrency, the per-workspace limit, the deadline and cleanup unchanged; `tests/runtime-computer.test.mjs`, `tests/broker-runtime.test.mjs` and the runtime lab's budget case becomes "E2B's refusal sets the runtime hold" |
 | 5 | Copy and the Team page | S | 2 | `packages/workspace-ui/src/sunrise/copy.ts` (the model picker without "stays within its spending limit" and "doesn't fit the spending limit"; the agent page without "Spending limit: up to … a day and … a month"), `team-model.ts` (no daily limit), `apps/workspace-web/src/fixtures/team.ts`; new messages for `insufficient_credits` ("Not enough credits to start this job") and `credits_exhausted` ("Stopped: the workspace ran out of credits. Add credits to continue."); the picker still shows each choice's estimated credits for a typical job; "Credits today" stays as use, not a limit; `ui:check` cases follow |
 | 6 | The ADR-0037 check | S | pull request 72 merged | A check that ADR-0037 as merged still says the same: its item 6 sets no money cap and leaves the rule for every run to ADR-0039, and its plan's PR 4 refuses at once a call the wallet cannot cover. Nothing is appended to ADR-0037 unless it no longer says so |
+| 7 | An optional per-agent credit limit | S to M | 3 | An Owner-only setting per installation, none by default (OD-2026-10-26-1): credits per billing cycle that the agent's runs may draw, checked in code with the wallet at admission and before each turn; a run at the limit behaves as at an empty wallet (`insufficient_credits` at admission; otherwise its final turn from the reserve, then `credits_exhausted`). Recorded like every settings change; members see it on the agent page. **Tests:** admission and turn checks at the limit, the Owner-only edit, and a limit lowered mid-run |
 
 PR 1 starts now; 2 follows it; 3 waits on 2 and pull request 64; 4's budget removal can go with 1, and its credit hold and 5 follow 2.
 
@@ -22,10 +23,17 @@ PR 1 starts now; 2 follows it; 3 waits on 2 and pull request 64; 4's budget remo
 
 ADR-0037 at pull request 72's head already carries this record's rule for teammates: its item 6 sets no money cap, the specialist caps do not carry over, and a call the balance cannot cover is refused at once (its item 3(a)). PR 6 above only checks that the merged text still says so; ADR-0039 does not amend ADR-0037.
 
-## Readings put to the owner
+## The owner's answers (OD-2026-10-26-1)
 
-ADR-0039's final-turn reserve (items 2(d) and (e)), the draw of a failed loop run's turns (item 2(g)), keeping `UsageCap`'s platform ceiling, and having no per-agent credit limit (item 7) are put to the owner in Q-adr-0039-carried-out-values. PRs 2 and 3 build the reserve and the draw as proposed; until the owner answers they serve only the test credits on the owner's store, and rate card v1 does not publish before the answer. If the owner keeps failed loop runs free, PR 3's settlement releases a failed run's holds instead of drawing them. If the owner wants an optional per-agent limit, it is a later PR; every PR here removes the hardcoded caps either way. The runtime budget's removal (PR 4) is not among the readings: it falls under the lead's "any other hardcoded money ceiling".
+The owner answered the four readings on 2026-10-26, as recommended:
+
+- **Failed loop runs stay free.** PR 3's settlement releases a failed run's holds and draws nothing, its uncertain turns included, and records the metered cost as Morrow's own. A run that completes, that a person stops or that ends `credits_exhausted` draws what it metered. PR 3 fixes which end reasons count as failed: an error, or a turn, step or wall-time limit.
+- **The final-turn reserve stands.** PRs 2 and 3 build it.
+- **`UsageCap`'s platform ceiling stays** (ADR-0026 owner question 3). It is not in these PRs; it lands with the Shopify billing code.
+- **An optional per-agent credit limit** that the Owner sets, none by default, is PR 7.
+
+The runtime budget's removal (PR 4) was never among the readings: it falls under the lead's "any other hardcoded money ceiling".
 
 ## Not in these PRs
 
-Each needs its own decision: an optional credit limit that the Owner sets per agent or per workspace (Q-adr-0039-carried-out-values); a count limit on proactive runs, only if staging shows bursts (ADR-0039, Consequences); rate card v1's publication with the plan price and grant (ADR-0026 items 5 and 6); raising the owner's test credits (a staging BillingTerms revision); lifting `UsageCap`'s platform ceiling (ADR-0026 owner question 3).
+Each needs its own decision: an optional credit limit that the Owner sets per workspace (the per-agent one is PR 7); a count limit on proactive runs, only if staging shows bursts (ADR-0039, Consequences); rate card v1's publication with the plan price and grant (ADR-0026 items 5 and 6); raising the owner's test credits (a staging BillingTerms revision); lifting `UsageCap`'s platform ceiling (ADR-0026 owner question 3).

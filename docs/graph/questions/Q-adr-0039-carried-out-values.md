@@ -3,7 +3,7 @@ id: Q-adr-0039-carried-out-values
 type: question
 kind: decide
 title: Confirm ADR-0039's four readings that the owner's credits-only answer did not decide
-status: open
+status: answered
 asked_of: owner
 links:
   raised_by: [ADR-0039]
@@ -37,3 +37,7 @@ credits on the owner's store (ADR-0039 item 3), and rate card v1 does not publis
 answer, so no merchant is charged under them. The code PRs remove every hardcoded cap either way.
 The runtime's US$10 monthly budget is not among these: its removal falls under the lead's "any
 other hardcoded money ceiling".
+
+Answered 2026-10-26 (OD-2026-10-26-1), as recommended: 1, failed loop runs stay free; 2, the final-turn
+reserve stands; 3, the platform ceiling stays; 4, an optional per-agent credit limit that the
+Owner sets, none by default.
