@@ -63,7 +63,7 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
 
 - Source: `apps/broker/src/{shopify-webhooks,capabilities,index,vault-statements-shopify}.ts`, `apps/broker/wrangler.jsonc` and `worker-configuration.d.ts` (the staging broker's `CONNECTOR_CONFIGURATION_JSON`), `apps/shopify-connector/worker/{connector,webhooks}.ts`, `packages/identity/src/broker-protocol.ts` (the RPC, the topic split, the origin parser, the callback URL, the closed sync result), `scripts/edge.mjs` (the broker var, byte-equal to the connector's), `scripts/shopify-app.mjs`.
 - Migrations 0047 and 0048, `migrations/manifest.json`, `tests/tenant-conformance/registry.mjs`.
-- Tests: `tests/broker-shopify-webhooks.test.mjs` (new), `tests/shopify-webhook-registrations-migrations.test.mjs` (new), `tests/{shopify-app-script,connector-worker,broker,edge-config}.test.mjs`.
+- Tests: `tests/broker-shopify-webhooks.test.mjs` (new), `tests/shopify-webhook-registrations-migrations.test.mjs` (new), `tests/{shopify-app-script,connector-worker,broker,broker-challenge,edge-config,projects-migrations,redaction-handlers}.test.mjs` (the pinned method list, init line, staging vars, last migration and identity-table count follow).
 - Labs: `scripts/shopify-install-lab.mjs` (H1-H8), `scripts/shopify-connect-workers-lab.mjs` and `scripts/fixtures/shopify-connect-worker.ts` (H1-H2), `scripts/fixtures/shopify-oracle.mjs` (the two webhook documents).
 - Docs: `docs/contracts/shopify-sync.md`, `docs/briefs/v1-connect-store.md` (item 3 and owner step 3), `docs/briefs/M2-shopify-connect.md` (the TOML rows amended).
 
