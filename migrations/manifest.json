@@ -371,7 +371,7 @@
     {
       "sequence": 48,
       "file": "0048.model-defaults-cost-cap.sql",
-      "sha256": "6dc5178617339927022efd2c4d01e6d9acacd63f82193bac4e0e5a50bb90ae30",
+      "sha256": "309adba974aab64528dc8561c52ac29d21fc1f8c869686e07d23227bcfcd742d",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0036-model-defaults-cost-cap.md"
     }

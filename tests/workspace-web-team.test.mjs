@@ -148,6 +148,25 @@ test("the fixture: Team as the Owner, with Listings on the workspace model defau
   const catalogue = (await port.team.catalogue(ws)).value;
   for (const entry of catalogue.entries)
     assert.deepEqual(entry.startsOn, { model: "claude_opus_5_5", effort: "medium" }, entry.name);
+  // ADR-0036 changed the model only: each agent's default monthly credit limit is main's
+  // (review F2), and the usual range still ends at that limit.
+  assert.deepEqual(
+    catalogue.entries.map((e) => [e.name, e.defaultMonthlyLimit]),
+    [
+      ["Listings", 300],
+      ["Business Analyst", 200],
+      ["Inventory", 100],
+      ["Support", 300],
+      ["Marketing", 200],
+    ],
+  );
+  for (const entry of catalogue.entries)
+    assert.ok(
+      entry.usualCredits.endsWith(
+        ` to ${entry.defaultMonthlyLimit} credits a month on Opus 5.5 · Medium.`,
+      ),
+      entry.name,
+    );
   const page = await port.team.agent(ws, "agent-listings");
   assert.equal(page.kind, "ok");
   assert.equal(page.value.permission.grantedBy, "Maya Chen");

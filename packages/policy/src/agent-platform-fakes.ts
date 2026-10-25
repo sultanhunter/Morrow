@@ -601,7 +601,7 @@ export function fakeRateCard(): CurrentBilling_RateCard {
       installationDailyCredits: "30",
       installationMonthlyCredits: "300",
       workspaceDailyCredits: "60",
-      lookForWorkPassBasisPoints: 100,
+      lookForWorkDailyUsd: { amount: "1.12", currency: "USD" },
       specialistRunBasisPoints: 500,
       specialistWorkspaceDailyBasisPoints: 2000,
     },

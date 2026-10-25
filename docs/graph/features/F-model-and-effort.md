@@ -9,7 +9,7 @@ links:
   part_of: [V-morrow]
   includes: [P13.T01]
   governed_by: [ADR-0027, ADR-0036]
-  approved_by: [OD-2026-10-23-7, OD-2026-10-25-1]
+  approved_by: [OD-2026-10-23-7, OD-2026-10-25-1, OD-2026-10-25-2]
 ---
 
 Haiku, Sonnet or Opus 5.5 at low, medium or high, chosen by the Owner (an Admin for installed

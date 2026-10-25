@@ -1,10 +1,11 @@
 BEGIN;
--- ADR-0036 (OD-2026-10-25-1): model defaults and the AI cost cap. Executes AS
+-- ADR-0036 (OD-2026-10-25-1, OD-2026-10-25-2): model defaults and the AI cost cap. Executes AS
 -- morrow_work_owner, after 0047. No external effect: nothing here sends a request, reserves
 -- money or dispatches.
 --   * Catalogue version 3 (per product, listings-run@1), published: version 1's entries,
 --     credits, rates and caps, with the default selection Opus 5.5 at medium (four credits a
---     product), the default member ceiling 4 that admits it, and no unrecovered-cost cap
+--     product), the default member ceiling 4 that admits it (owner-confirmed, OD-2026-10-25-2),
+--     and no unrecovered-cost cap
 --     (docs/decisions/model-policy.json; the generated catalogue's version 3, drift-tested by
 --     tests/model-defaults-cost-cap.test.mjs). Version 1 is retired, not removed: a run
 --     recorded at version 1 is still booked at version 1. The append-only trigger is lifted
@@ -56,7 +57,7 @@ ALTER TABLE morrow_work.model_catalogue_versions ENABLE TRIGGER append_only;
 -- Version 3, active: exactly as scripts/generate-model-catalogue.mjs computes it.
 INSERT INTO morrow_work.model_catalogue_versions(version,status,digest,default_model,default_effort,default_member_credit_ceiling,
  max_products_per_run,run_cost_cap_usd,workspace_daily_cost_cap_usd,workspace_period_unrecovered_cost_cap_usd)
-VALUES (3,'active','a162e95134acc2218bf86b40487fa1600c5e315a16f331d6c4d0b3d7392987d0','claude_opus_5_5','medium',4,25,7.00000000,25.00000000,NULL);
+VALUES (3,'active','f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0','claude_opus_5_5','medium',4,25,7.00000000,25.00000000,NULL);
 INSERT INTO morrow_work.model_catalogue_entries(version,model_key,effort_key,credits_per_product,worst_case_per_product_usd,
  worst_case_per_attempt_usd,run_product_limit) VALUES
  (3,'claude_haiku_5_5','low',1,0.00660000,0.00330000,25),

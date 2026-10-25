@@ -94,3 +94,7 @@ The rest of the statement changes owner question 1: model and thinking effort ar
 ### 2026-10-25: items 6 and 12, the defaults and the cap for loop runs (ADR-0036)
 
 The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes these lines; the text above is kept as approved. Item 12's defaults: the Coordinator stays on Opus 5.5 at high, and every other agent kind, specialists, sub-agents and the five installed agents, runs Opus 5.5 at medium (an installed agent's worst-case turn US$0.56, turn limit 12, hold US$6.72). Item 6: loop runs before the rate card count toward no unrecovered-cost cap, which is removed; the US$7 and US$25 backstops, holds, `cost_budget` and `cap_below_turn` stand. Catalogue version 2's other values stay proposed.
+
+### 2026-10-25: item 12's look-for-work hold (ADR-0036 item 7)
+
+The owner's answers of 2026-10-25 (OD-2026-10-25-2, recorded in ADR-0036) change item 12's sentence on the look-for-work pass, kept as approved above: an installed agent's pass holds at most US$1.12 a day, two worst-case turns at its default, Opus 5.5 at medium, in place of the 1% cap (US$0.61 at US$149, US$0.41 at US$99). Catalogue version 2 carries it as `look_for_work_daily_cost_cap_usd`; its other values stay proposed.

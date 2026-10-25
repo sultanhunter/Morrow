@@ -12,7 +12,7 @@ export const generatedLoopCatalogue = {
     {
       version: 2,
       status: "proposed",
-      digest: "fc519d878a45eedb3c5d31d6101b663c06d10b540550d5e500ba63ce11b6b648",
+      digest: "76a46ba58a80dc700440c2308d9fa8b4d2d35032f021f281c7f72d41c4f16355",
       effectiveFrom: null,
       defaultProfiles: {
         coordinator: {
@@ -42,6 +42,7 @@ export const generatedLoopCatalogue = {
         toolResultMaxBytes: 8192,
         runCostCapUsd12: 7000000000000,
         workspaceDailyCostCapUsd12: 25000000000000,
+        lookForWorkDailyCostCapUsd12: 1120000000000,
       },
       expectedTurn: {
         inputTokens: 20000,

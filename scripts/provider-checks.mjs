@@ -198,15 +198,23 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     fail("the Coordinator's turn limit exceeds the run's");
   if (limits.specialist_default_run_minutes > limits.specialist_max_run_minutes)
     fail("the specialist default run exceeds its maximum");
-  // The per-run and per-day backstops (ADR-0026 item 4); no unrecovered-cost cap (ADR-0036).
-  const caps = [limits.run_cost_cap_usd, limits.workspace_daily_cost_cap_usd];
+  // The per-run and per-day backstops (ADR-0026 item 4) and the per-agent daily look-for-work
+  // cap (ADR-0036 item 7); no unrecovered-cost cap (ADR-0036).
+  const caps = [
+    limits.run_cost_cap_usd,
+    limits.workspace_daily_cost_cap_usd,
+    limits.look_for_work_daily_cost_cap_usd,
+  ];
   let runCap = null;
+  let lookCap = null;
   if (!caps.every(isDecimal) || caps.some((cap) => scaled(cap, 12) === 0n))
     fail("missing USD caps");
   else {
     runCap = scaled(limits.run_cost_cap_usd, 12);
+    lookCap = scaled(limits.look_for_work_daily_cost_cap_usd, 12);
     if (scaled(limits.workspace_daily_cost_cap_usd, 12) < runCap)
       fail("the daily cap is below the run cap");
+    if (lookCap > runCap) fail("the look-for-work cap is above the run cap");
   }
   if (Object.hasOwn(limits, unrecoveredCapField))
     fail("carries an unrecovered-cost cap, which ADR-0036 removed");
@@ -220,6 +228,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     fail("the expected turn must fit the input cap");
   const inputCap = limits.max_input_tokens_per_turn;
   const models = new Map();
+  const worstCase = new Map();
   for (const model of entry.models ?? []) {
     const price = model.rates_usd_per_million_tokens ?? {};
     if (!KEY.test(model.key ?? "") || models.has(model.key)) fail(`invalid model key ${model.key}`);
@@ -263,6 +272,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
         BigInt(effort.max_output_tokens) * scaled(price.output, 6);
       if (runCap !== null && worst * 2n > runCap)
         fail(`${model.key} at ${key}: two worst-case turns exceed the run backstop`);
+      worstCase.set(`${model.key} ${key}`, worst);
       selections.push({
         model: model.key,
         effort: key,
@@ -284,6 +294,11 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     )
       fail(`the ${kind} default profile must be an entry of this version`);
   }
+  // ADR-0036 item 7: a look-for-work pass is a mandate run, so it needs a tool turn and a
+  // final turn; the cap must hold two worst-case turns of the installed default.
+  const installed = worstCase.get(`${profiles.installed?.model} ${profiles.installed?.effort}`);
+  if (lookCap !== null && installed !== undefined && installed * 2n > lookCap)
+    fail("the look-for-work cap cannot hold two worst-case turns of the installed default");
   return { errors, selections };
 }
 

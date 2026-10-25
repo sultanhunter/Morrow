@@ -194,6 +194,9 @@ export function loopCatalogueVersionData(entry) {
       toolResultMaxBytes: count(limits.tool_result_max_bytes),
       runCostCapUsd12: usd12(limits.run_cost_cap_usd),
       workspaceDailyCostCapUsd12: usd12(limits.workspace_daily_cost_cap_usd),
+      // ADR-0036 item 7 (OD-2026-10-25-2): one look-for-work pass a day per agent, held
+      // within this cap in place of ADR-0026 item 4's 1% of the monthly grant.
+      lookForWorkDailyCostCapUsd12: usd12(limits.look_for_work_daily_cost_cap_usd),
     },
     expectedTurn: {
       inputTokens: count(entry.expected_turn.input_tokens),

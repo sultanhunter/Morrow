@@ -1,5 +1,6 @@
-// ADR-0036 (OD-2026-10-25-1): Opus 5.5 by default for every agent, and no unrecovered-cost
-// cap. Pure: no I/O beyond reading the repository files. lab:run-credits (C4, C12) and
+// ADR-0036 (OD-2026-10-25-1, OD-2026-10-25-2): Opus 5.5 by default for every agent, no
+// unrecovered-cost cap, the member ceiling of 4 and the look-for-work cap of US$1.12 a day.
+// Pure: no I/O beyond reading the repository files. lab:run-credits (C4, C12) and
 // lab:listings-runs (M1, U1) prove migration 0048 on PostgreSQL 17.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -19,11 +20,14 @@ import {
 import {
   defaultLoopProfile,
   fitsDailyBackstop,
+  lookForWorkDailyCapUsd12,
+  lookForWorkHold,
   loopEntries,
   loopEntry,
   runHold,
   turnLimit,
 } from "../packages/policy/src/loop-catalogue.ts";
+import { fakeRateCard } from "../packages/policy/src/agent-platform-fakes.ts";
 import {
   dailyCapAllows,
   failureBreaker,
@@ -64,35 +68,59 @@ test("the decision is recorded: the owner's words, verbatim, in the decision nod
   const decision = read("docs/graph/decisions/OD-2026-10-25-1.md");
   assert.ok(decision.includes("> " + quote));
   const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
-  assert.match(adr, /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-1\)/m);
+  assert.match(
+    adr,
+    /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-1 and OD-2026-10-25-2\)/m,
+  );
   const approval = adr.slice(adr.indexOf("## Approval"));
   assert.ok(approval.includes("> " + quote));
   assert.ok(policy.catalogue.versions[2].owner_confirmation.includes(quote));
 });
 
-// Review F1: the owner's answer set the default and removed the cap; it did not set the default
-// member ceiling. Version 3's ceiling of 4 widens what a Member without
-// governance.model_default.revise may run (authority and money), so every record says it awaits
-// the owner, and the branch stays unmerged until then. When the owner answers, this test changes
-// with the records: the answer quoted in ADR-0036's Approval and in version 3's
-// owner_confirmation (a new digest), the question answered and the brief's item ticked.
-test("version 3's default member ceiling of 4 is recorded as awaiting the owner, never as confirmed", () => {
-  const v3 = policy.catalogue.versions[2];
-  assert.equal(v3.default_member_credit_ceiling, 4);
-  assert.ok(
-    v3.owner_confirmation.includes("Not confirmed by that answer: the default member ceiling of 4"),
-  );
-  assert.ok(v3.owner_confirmation.includes("awaits the owner's confirmation"));
-  // The wording the review found: the ceiling folded into the owner's confirmation.
-  assert.doesNotMatch(v3.owner_confirmation, /ceiling of 4 admits that default/);
+// OD-2026-10-25-2: the owner's answers to the three questions the lead put after
+// OD-2026-10-25-1, each the question as put and the option chosen, verbatim.
+const answers = [
+  'Q1: "With Listings on Opus 5.5 medium, each product it drafts costs 4 credits instead of 1 (your 300 test credits = about 75 products). Who in a shop may run it at that default?" Answer: "Everyone, up to 4 (Recommended)"',
+  'Q2: "Each agent\'s daily \'look for useful work\' pass (read-only, proposes nothing) has a cost cap of about 1% of the plan price. One Opus 5.5 medium pass costs more than that cap, so these passes would never run. What should they use?" Answer: "Opus medium, raise the cap" (the option said: keep Opus 5.5 medium even for the daily check and raise its cap to fit, about US$1.12 per agent per day worst case)',
+  'Q3: "With the unbilled-AI-cost cap removed, the remaining safety limits are US$7 per run and US$25 per workspace per day, plus your Anthropic monthly limit. Keep those two?" Answer: "Keep US$7 / US$25 (Recommended)"',
+];
+
+test("OD-2026-10-25-2 is recorded verbatim in its node and in ADR-0036's Approval", () => {
+  const decision = read("docs/graph/decisions/OD-2026-10-25-2.md");
+  assert.match(decision, /^by: owner$/m);
+  assert.match(decision, /^channel: chat$/m);
+  assert.match(decision, /^ {2}answers: \[Q-adr-0036-member-ceiling\]$/m);
   const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
+  const approval = adr.slice(adr.indexOf("## Approval"));
+  for (const answer of answers) {
+    assert.ok(decision.includes("> " + answer + "\n"), answer.slice(0, 3));
+    assert.ok(approval.includes("> " + answer + "\n"), answer.slice(0, 3));
+  }
   assert.match(
     adr,
-    /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-1\), except item 2's default member ceiling of 4, which awaits the owner's confirmation \(Q-adr-0036-member-ceiling\); the change does not merge before it/m,
+    /^- Status: Accepted 2026-10-25 \(the owner, OD-2026-10-25-1 and OD-2026-10-25-2\)\.$/m,
   );
+});
+
+// Review F1, answered: the owner confirmed version 3's default member ceiling of 4 (Q1). Every
+// record says so; none still says it awaits the owner, and the merge gate is gone.
+test("version 3's default member ceiling of 4 is owner-confirmed (OD-2026-10-25-2, Q1)", () => {
+  const v3 = policy.catalogue.versions[2];
+  assert.equal(v3.default_member_credit_ceiling, 4);
+  assert.equal(defaultMemberCreditCeiling(), 4);
+  assert.ok(v3.owner_confirmation.includes("(OD-2026-10-25-2)"));
+  assert.ok(v3.owner_confirmation.includes(answers[0].slice(5, answers[0].indexOf('" Answer:'))));
+  assert.ok(v3.owner_confirmation.includes('answered "Everyone, up to 4 (Recommended)"'));
+  assert.doesNotMatch(v3.owner_confirmation, /Not confirmed|await/);
+  // The confirmation changed version 3's digest; the pin, the generated catalogue and
+  // migration 0048's seed follow it.
+  assert.equal(
+    policy.catalogue.published_digests["3"],
+    "f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0",
+  );
+  const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
   const approval = adr.slice(adr.indexOf("## Approval"));
-  assert.ok(approval.includes("so it awaits the owner's confirmation"));
-  assert.ok(approval.includes("so the change waits for the owner"));
+  assert.ok(approval.includes("Q1, item 2's default member ceiling of 4"));
   // The widening, stated with the catalogue's own numbers: 12 products at Opus 5.5 medium
   // (4 credits, US$0.544 worst case each) against 25 at a 1-credit entry (US$0.132).
   const opusMedium = catalogueEntry(3, "claude_opus_5_5", "medium");
@@ -109,15 +137,98 @@ test("version 3's default member ceiling of 4 is recorded as awaiting the owner,
   assert.ok(approval.includes("57 credits at Sonnet 5.5 `high`"));
   assert.ok(approval.includes("at most 25 credits and US$3.30 a run"));
   const question = read("docs/graph/questions/Q-adr-0036-member-ceiling.md");
-  assert.match(question, /^status: open$/m);
-  assert.match(question, /^asked_of: owner$/m);
-  assert.match(question, /default member ceiling of 4/);
-  assert.ok(
-    read("docs/graph/decisions/OD-2026-10-25-1.md").includes("(Q-adr-0036-member-ceiling)"),
-  );
+  assert.match(question, /^status: answered$/m);
+  assert.ok(question.includes("(OD-2026-10-25-2, Q1)"));
   const brief = read("docs/briefs/adr-0036-model-defaults-cost-cap.md");
-  assert.ok(brief.includes("- [ ] Owner: confirm the default member ceiling of 4"));
-  assert.match(brief, /^- \*\*Merge gate:\*\* /m);
+  assert.ok(brief.includes("- [x] Owner: confirm the default member ceiling of 4"));
+  assert.doesNotMatch(brief, /^- \*\*Merge gate:\*\* /m);
+  // No record still says the ceiling awaits the owner.
+  for (const path of [
+    "docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md",
+    "docs/decisions/adr/ADR-0022-mvp-contracts.md",
+    "docs/decisions/adr/README.md",
+    "docs/decisions/model-selection.md",
+    "docs/briefs/mvp-architecture.md",
+    "docs/briefs/adr-0036-model-defaults-cost-cap.md",
+    "docs/graph/branches/claude--adr-0036-model-defaults-cost-cap.md",
+  ])
+    assert.doesNotMatch(
+      read(path),
+      /(ceiling|value)[^.]*await|await[^.]*ceiling|stays unmerged until the owner/i,
+      path,
+    );
+});
+
+// OD-2026-10-25-2 Q2 (ADR-0036 item 7): the daily look-for-work pass keeps Opus 5.5 at medium,
+// and its cap is US$1.12 per agent per day, two worst-case turns at that default, in place of
+// 1% of the monthly grant. PR 21's admission takes lookForWorkHold; nothing admits a pass yet.
+test("the look-for-work cap: one pass a day at the installed default, within US$1.12", () => {
+  const v2 = policy.catalogue.versions[1];
+  assert.equal(v2.limits.look_for_work_daily_cost_cap_usd, "1.12");
+  const generated = generatedLoopCatalogue.versions.find((v) => v.version === 2);
+  assert.equal(generated.limits.lookForWorkDailyCostCapUsd12, 1_120_000_000_000);
+  assert.equal(lookForWorkDailyCapUsd12(2), usd12(1.12));
+  const installed = defaultLoopProfile(2, "installed");
+  const entry = loopEntry(2, installed.model, installed.effort);
+  assert.deepEqual([entry.model, entry.effort], ["claude_opus_5_5", "medium"]);
+  assert.equal(2n * entry.worstCaseTurnUsd12, usd12(1.12), "exactly two worst-case turns");
+  // The first pass of the day is admitted at the default: US$1.12 held, two turns.
+  const first = lookForWorkHold({ entry, passesToday: 0 });
+  assert.equal(first.ok, true);
+  assert.equal(first.holdUsd12, usd12(1.12));
+  assert.equal(first.worstCaseTurns, 2);
+  assert.equal(first.toolTurnsRequired, 2);
+  // A second pass the same day, or a costlier profile, is refused.
+  assert.deepEqual(lookForWorkHold({ entry, passesToday: 1 }), {
+    ok: false,
+    code: "trigger_used",
+  });
+  assert.deepEqual(
+    lookForWorkHold({ entry: loopEntry(2, "claude_opus_5_5", "high"), passesToday: 0 }),
+    { ok: false, code: "cap_below_turn" },
+  );
+  // The rate card's shape carries the same cap as a USD amount, not basis points.
+  const card = fakeRateCard();
+  assert.deepEqual(card.caps.lookForWorkDailyUsd, { amount: "1.12", currency: "USD" });
+  assert.equal(Object.hasOwn(card.caps, "lookForWorkPassBasisPoints"), false);
+  // The records: ADR-0036 item 7, ADR-0026's and ADR-0027's dated notes.
+  const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
+  assert.match(
+    adr,
+    /^7\. \*\*The look-for-work cap: US\$1\.12 per agent per day\*\* \(OD-2026-10-25-2;/m,
+  );
+  assert.ok(adr.includes("No code admits a pass yet. Build order PR 21's `admit_mandate_run`"));
+  assert.ok(
+    read("docs/decisions/adr/ADR-0026-billing-and-price.md").includes(
+      "### 2026-10-25: item 4's look-for-work cap becomes US$1.12 per agent per day (ADR-0036 item 7)",
+    ),
+  );
+  assert.ok(
+    read("docs/decisions/adr/ADR-0027-agent-loop-and-model.md").includes(
+      "### 2026-10-25: item 12's look-for-work hold (ADR-0036 item 7)",
+    ),
+  );
+});
+
+// OD-2026-10-25-2 Q3: the per-run US$7 and per-day US$25 backstops stay, reconfirmed.
+test("the US$7 and US$25 backstops are unchanged and recorded as reconfirmed", () => {
+  for (const index of [1, 2]) {
+    const { limits } = policy.catalogue.versions[index];
+    assert.equal(limits.run_cost_cap_usd, "7");
+    assert.equal(limits.workspace_daily_cost_cap_usd, "25");
+  }
+  const card = fakeRateCard();
+  assert.deepEqual(card.backstops, {
+    runUsd: { amount: "7", currency: "USD" },
+    workspaceDailyUsd: { amount: "25", currency: "USD" },
+  });
+  const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
+  assert.ok(
+    adr.includes(
+      "4. **What stays.** The per-run US$7 and per-day US$25 backstops, which the owner reconfirmed with the cap removed (OD-2026-10-25-2);",
+    ),
+  );
+  assert.ok(adr.includes("Q3, item 4's per-run US$7 and per-day US$25 backstops, kept unchanged."));
 });
 
 // Review F3: the CI job description no longer says lab:run-credits checks an unrecovered-cost

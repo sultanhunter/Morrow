@@ -26,6 +26,8 @@ import {
   loopEntries,
   loopEntry,
   loopVersions,
+  lookForWorkDailyCapUsd12,
+  lookForWorkHold,
   nextTurn,
   publishedLoopEntry,
   runHold,
@@ -202,39 +204,49 @@ test("ADR-0026 item 4: credit caps under the margin rule at US$149 and US$99", (
     assert.throws(() => creditCapUsd12(bad), LoopCatalogueError, JSON.stringify(bad));
 });
 
-test("ADR-0026 item 4: a look-for-work pass needs two worst-case turns inside its 1% cap", () => {
-  const pass = (model, effort, price) =>
-    runHold({ entry: entry(model, effort), kind: "mandate", creditCapUsd12: capAt(price, 100) });
-  // At US$149: Sonnet low holds a tool turn and a final turn, not a third.
-  const sonnet = pass("sonnet", "low", "149");
-  assert.equal(sonnet.ok, true);
-  assert.equal(sonnet.worstCaseTurns, 2);
-  for (const [model, effort] of [
-    ["haiku", "high"],
-    ["sonnet", "medium"],
-  ])
-    assert.equal(pass(model, effort, "149").ok, true, `${model} ${effort} at 149`);
-  for (const [model, effort] of [
-    ["sonnet", "high"],
-    ["opus", "low"],
-    ["opus", "medium"],
-    ["opus", "high"],
-  ])
-    assert.deepEqual(pass(model, effort, "149"), { ok: false, code: "cap_below_turn" });
-  // At US$99 only Haiku fits.
-  assert.deepEqual(pass("sonnet", "low", "99"), { ok: false, code: "cap_below_turn" });
-  for (const effort of ["low", "medium", "high"])
-    assert.equal(pass("haiku", effort, "99").ok, true);
-  // ADR-0036: at the installed default, Opus 5.5 at medium (two worst-case turns US$1.12), no
-  // pass is admitted at either price until the owner confirms the cap's value or floor.
+test("ADR-0036 item 7: one look-for-work pass a day per agent, within US$1.12, at the installed default", () => {
+  // OD-2026-10-25-2 Q2: the pass keeps Opus 5.5 at medium and its cap is two worst-case turns
+  // at that default, in place of ADR-0026 item 4's 1% of the grant (US$0.61 at US$149, US$0.41
+  // at US$99, which no Opus pass fits).
+  assert.equal(lookForWorkDailyCapUsd12(2), usd(1.12));
+  assert.equal(lookForWorkDailyCapUsd12(2), 2n * entry("opus", "medium").worstCaseTurnUsd12);
+  for (const price of ["149", "99"]) assert.ok(capAt(price, 100) < usd(1.12), price);
   const { model: m, effort: e } = defaultLoopProfile(2, "installed");
-  for (const price of ["149", "99"])
-    assert.deepEqual(
-      runHold({ entry: loopEntry(2, m, e), kind: "mandate", creditCapUsd12: capAt(price, 100) }),
-      { ok: false, code: "cap_below_turn" },
-      price,
-    );
-  // Opus 5.5 at high fits a specialist's two turns at either price.
+  const pass = (selected, passesToday = 0) => lookForWorkHold({ entry: selected, passesToday });
+  const first = pass(loopEntry(2, m, e));
+  assert.deepEqual(first, {
+    ok: true,
+    turnLimit: 12,
+    holdUsd12: usd(1.12),
+    binding: "credit_cap",
+    toolTurnsRequired: 2,
+    worstCaseTurns: 2,
+  });
+  // A second pass the same day is refused, whatever its profile.
+  for (const [model, effort] of [
+    ["opus", "medium"],
+    ["haiku", "low"],
+  ])
+    assert.deepEqual(pass(entry(model, effort), 1), { ok: false, code: "trigger_used" });
+  // A costlier profile does not fit: Opus 5.5 at high needs US$1.28 for two turns.
+  assert.deepEqual(pass(entry("opus", "high")), { ok: false, code: "cap_below_turn" });
+  // Cheaper profiles fit, with more turns inside the same cap.
+  for (const [model, effort, turns, binding] of [
+    ["opus", "low", 2, "credit_cap"],
+    ["sonnet", "high", 3, "credit_cap"],
+    ["sonnet", "medium", 4, "credit_cap"],
+    ["sonnet", "low", 5, "credit_cap"],
+    ["haiku", "high", 16, "turn_limit"],
+  ]) {
+    const h = pass(entry(model, effort));
+    assert.equal(h.ok, true, `${model} ${effort}`);
+    assert.equal(h.worstCaseTurns, turns, `${model} ${effort}`);
+    assert.equal(h.binding, binding, `${model} ${effort}`);
+    assert.ok(h.holdUsd12 <= usd(1.12));
+  }
+  for (const bad of [-1, 0.5, "0", null])
+    assert.throws(() => pass(entry("opus", "medium"), bad), LoopCatalogueError, String(bad));
+  // Opus 5.5 at high fits a specialist's two turns at either price (its 5% cap is unchanged).
   for (const price of ["149", "99"])
     assert.equal(
       runHold({
@@ -359,6 +371,31 @@ for (const [name, change, expected] of [
     "a missing daily backstop",
     (p) => delete v2(p).limits.workspace_daily_cost_cap_usd,
     /model catalogue v2: missing USD caps/,
+  ],
+  [
+    "a missing look-for-work cap (ADR-0036 item 7)",
+    (p) => delete v2(p).limits.look_for_work_daily_cost_cap_usd,
+    /model catalogue v2: missing USD caps/,
+  ],
+  [
+    "a look-for-work cap below two worst-case turns of the installed default",
+    (p) => (v2(p).limits.look_for_work_daily_cost_cap_usd = "1.11"),
+    /model catalogue v2: the look-for-work cap cannot hold two worst-case turns of the installed default/,
+  ],
+  [
+    "the 1% cap at US$149 with the installed default on Opus 5.5 medium",
+    (p) => (v2(p).limits.look_for_work_daily_cost_cap_usd = "0.611645"),
+    /the look-for-work cap cannot hold two worst-case turns of the installed default/,
+  ],
+  [
+    "a look-for-work cap above the run backstop",
+    (p) => (v2(p).limits.look_for_work_daily_cost_cap_usd = "7.01"),
+    /model catalogue v2: the look-for-work cap is above the run cap/,
+  ],
+  [
+    "an installed default on Opus 5.5 high under the US$1.12 cap",
+    (p) => (v2(p).default_profiles.installed.effort = "high"),
+    /the look-for-work cap cannot hold two worst-case turns of the installed default/,
   ],
   [
     "a fallback sent with the loop's requests",
