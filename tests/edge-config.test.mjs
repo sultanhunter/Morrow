@@ -1925,6 +1925,17 @@ test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allow
     "packages/policy/src/generated/model-catalogue.ts",
     // v1 PR 3: the snapshot's canonical text, shared with the broker's pre-send check.
     "packages/work/src/runs/listing-canonical.ts",
+    // Build order PR 11: AgentRunWorkflow's loop runner, its steps and its catalogues.
+    "packages/work/src/loop/runner.ts",
+    "packages/work/src/loop/steps.ts",
+    "packages/work/src/loop/authority.ts",
+    "packages/work/src/loop/conversation.ts",
+    "packages/work/src/loop/tools.ts",
+    "packages/policy/src/loop-catalogue.ts",
+    "packages/policy/src/generated/loop-catalogue.ts",
+    "packages/policy/src/tool-catalogue.ts",
+    "packages/policy/src/generated/tool-catalogue.ts",
+    "packages/policy/src/generated/specialist-ceiling.ts",
   ])
     assert.ok(orchestratorPackageAllowlist.includes(path), path);
   for (const path of [
@@ -1932,8 +1943,52 @@ test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allow
     "packages/work/src/runs/http.ts",
     "packages/work/src/runs/commands.ts",
     "packages/work/src/agents/commands.ts",
+    // Admission (the api's projects commands), its system text and the barrel stay out.
+    "packages/work/src/loop/admission.ts",
+    "packages/work/src/loop/index.ts",
+    "packages/work/src/projects/commands.ts",
+    "packages/policy/src/loop-prompts.ts",
   ])
     assert.ok(!orchestratorPackageAllowlist.includes(path), path);
+  // The list stays sorted and free of duplicates, so a reviewed addition reads as one line.
+  assert.deepEqual([...orchestratorPackageAllowlist].sort(), [...orchestratorPackageAllowlist]);
+  assert.equal(new Set(orchestratorPackageAllowlist).size, orchestratorPackageAllowlist.length);
+});
+
+// Build order PR 11: hosted run 40128143339 failed only in the workers job's `edge:dry-run`
+// (EDGE_BUNDLE_INCLUDES_PACKAGE_SOURCE:orchestrator) because AgentRunWorkflow's imports were
+// not on the list. The same rule over an esbuild metafile of the orchestrator's entry fails
+// here, in `npm test`, before any wrangler bundle; the dry run stays the authority.
+test("Build order PR 11 (AC05): the orchestrator's import graph stays on its packages/ allowlist", async () => {
+  const { build } = await import("esbuild");
+  const root = resolve(import.meta.dirname, "..");
+  const orchestrator = edgeWorkers.find((worker) => worker.key === "orchestrator");
+  const result = await build({
+    absWorkingDir: root,
+    entryPoints: [orchestrator.dir + "/" + orchestrator.entry],
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "neutral",
+    external: ["node:*", "cloudflare:*"],
+    mainFields: ["module", "main"],
+    conditions: ["workerd", "worker", "browser"],
+    metafile: true,
+    logLevel: "silent",
+  });
+  const inputs = Object.keys(result.metafile.inputs).map((input) => input.replaceAll("\\", "/"));
+  const packageInputs = inputs.filter((input) => input.startsWith("packages/"));
+  assert.deepEqual(
+    packageInputs.filter((input) => !orchestratorPackageAllowlist.includes(input)),
+    [],
+  );
+  assert.deepEqual(bundleExclusions(orchestrator, inputs, ""), []);
+  // The loop's runner is in the graph, and every allowlisted file is still used.
+  assert.ok(packageInputs.includes("packages/work/src/loop/runner.ts"));
+  assert.deepEqual(
+    orchestratorPackageAllowlist.filter((path) => !packageInputs.includes(path)),
+    [],
+  );
 });
 
 const modelOn = (r) => {

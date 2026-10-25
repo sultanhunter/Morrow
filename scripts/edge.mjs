@@ -468,8 +468,9 @@ export const connectorPackageAllowlist = Object.freeze([
 // P04.T02a's ban on all package source): ListingsRunWorkflow's logic (runs/), the run lease
 // steps (runtime/), the agent kernel and its SQL fact reader, M5's billing facts reader, the
 // review library the producer uses, the generated validators (the drafts are validated
-// against ListingDraft@1 and CatalogContentChangeSet@1) and the broker protocol. No api
-// handler, command definer client, pool of another login, Shopify library or broker source.
+// against ListingDraft@1 and CatalogContentChangeSet@1), the broker protocol and (build order
+// PR 11) AgentRunWorkflow's loop runner with its catalogues. No api handler, command definer
+// client, pool of another login, Shopify library or broker source.
 // A new import is a reviewed change to this list.
 export const orchestratorPackageAllowlist = Object.freeze([
   "packages/contracts/src/generated/runtime-validators.mjs",
@@ -482,22 +483,37 @@ export const orchestratorPackageAllowlist = Object.freeze([
   "packages/identity/src/workos-session-status-json.ts",
   "packages/policy/src/agent-authority.ts",
   "packages/policy/src/billing-state.ts",
+  // Build order PR 11: AgentRunWorkflow's pure policy. The loop catalogue (each turn's next
+  // step, caps and holds) and the tool catalogue (each tool's entry and input check) with
+  // their generated data and the Specialist ceiling. Prompts and admission stay the api's.
+  "packages/policy/src/generated/loop-catalogue.ts",
   // M3 PR-2 review: the catalogue's data only (each run's call budget from its effort's
   // max_tokens); the broker ships the same file.
   "packages/policy/src/generated/model-catalogue.ts",
+  "packages/policy/src/generated/specialist-ceiling.ts",
+  "packages/policy/src/generated/tool-catalogue.ts",
   "packages/policy/src/index.ts",
   "packages/policy/src/json-boundary.ts",
+  "packages/policy/src/loop-catalogue.ts",
   "packages/policy/src/paid-work.ts",
   "packages/policy/src/review-facts.ts",
   "packages/policy/src/review.ts",
   "packages/policy/src/store-link-template.ts",
   "packages/policy/src/store-resource.ts",
+  "packages/policy/src/tool-catalogue.ts",
   "packages/work/src/agents/delegation-reader.ts",
   "packages/work/src/approvals/digests.ts",
   "packages/work/src/billing-route.ts",
   "packages/work/src/billing/facts.ts",
   "packages/work/src/context.ts",
   "packages/work/src/digest.ts",
+  // Build order PR 11: the agent loop's runner, its steps' fixed SQL, the conversation, the
+  // tool seam and the authority adapter (no admission, no index barrel).
+  "packages/work/src/loop/authority.ts",
+  "packages/work/src/loop/conversation.ts",
+  "packages/work/src/loop/runner.ts",
+  "packages/work/src/loop/steps.ts",
+  "packages/work/src/loop/tools.ts",
   "packages/work/src/runs/drafting.ts",
   "packages/work/src/runs/html.ts",
   // v1 PR 3: the one canonical listing snapshot text drafting.ts builds its snapshots with
