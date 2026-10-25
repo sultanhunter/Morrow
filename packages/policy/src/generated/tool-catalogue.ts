@@ -6,7 +6,7 @@
 // a run manifest pins it.
 export const generatedToolCatalogue = {
   schemaVersion: 1,
-  version: 2,
+  version: 3,
   tools: [
     {
       name: "knowledge.search",
@@ -862,6 +862,86 @@ export const generatedToolCatalogue = {
         required: ["kind", "title", "why", "doneWhen", "goals", "steps", "target"],
       },
     },
+    {
+      name: "knowledge.propose",
+      wireName: "knowledge_propose",
+      family: "internal",
+      capabilityId: "workspace.knowledge.propose",
+      verb: "execute",
+      replayClass: "internal_write",
+      resultMaxBytes: 8192,
+      inputDefinition: "ToolInputKnowledgePropose",
+      contexts: ["routed", "mandate"],
+      description:
+        "Propose a new shop knowledge page, or a new version of a page this job may see (pageId), with its sources. It changes nothing by itself: a person accepts or rejects it. Never include customer details.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          pageId: {
+            anyOf: [
+              {
+                type: "string",
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+          kind: {
+            type: "string",
+            enum: ["brand_voice", "policy", "product_fact", "supplier", "decision"],
+          },
+          title: {
+            type: "string",
+          },
+          text: {
+            type: "string",
+          },
+          sources: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                kind: {
+                  type: "string",
+                  enum: ["product", "task", "note"],
+                },
+                value: {
+                  type: "string",
+                },
+              },
+              required: ["kind", "value"],
+            },
+          },
+        },
+        required: ["pageId", "kind", "title", "text", "sources"],
+      },
+    },
+    {
+      name: "notebook.write",
+      wireName: "notebook_write",
+      family: "internal",
+      capabilityId: "workspace.notebook.write",
+      verb: "execute",
+      replayClass: "internal_write",
+      resultMaxBytes: 8192,
+      inputDefinition: "ToolInputNotebookWrite",
+      contexts: ["routed", "mandate"],
+      description:
+        "Write one entry in your own notebook: what you learned or plan next, for your later jobs. People who can see you may read it. Never include customer details.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          text: {
+            type: "string",
+          },
+        },
+        required: ["text"],
+      },
+    },
   ],
-  digest: "789859bb9170c1d87d1d083103fc7687f9c9151dd0b4462cfdbd21eb006a5332",
+  digest: "5b0917b1ee27d4b4c6dd60ef5ece66033a665b520aa303d898d06a7ef15bd46e",
 } as const;

@@ -406,6 +406,7 @@ export const copy = {
       thinking: "a change to how a helper thinks",
       add_agent: "adding an agent",
       disconnect: "disconnecting a store",
+      knowledge: "a change to shop knowledge",
     },
     body: (kind: string) =>
       `A change you started earlier (${kind}) may have been saved. Check Projects before creating it again.`,

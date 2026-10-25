@@ -2,9 +2,10 @@
 // within its gzip budget (`entryGzipLimit`, scripts/workspace-web-checks.mjs, which also
 // fails if one of these modules is bundled into an entry): Review and the task's "Changes
 // applied" history (screens/review.tsx), Ask with its product picker (screens/ask.tsx,
-// screens/product-picker.tsx), and v1 PR 15's exception screen (screens/exception.tsx),
-// which shows one operation with Review's own OperationList and so loads with it. Nothing
-// else may import those modules statically.
+// screens/product-picker.tsx), v1 PR 15's exception screen (screens/exception.tsx),
+// which shows one operation with Review's own OperationList and so loads with it, and PR 20's
+// Shop knowledge page with Files (screens/library.tsx, one chunk; Sunrise screens, so their
+// states sit in the `sr` frame). Nothing else may import those modules statically.
 // While a chunk loads, its place shows the loading state. A chunk that cannot load shows
 // "This couldn't load" with Retry, which reloads the page: after a deploy the open tab's
 // chunks are gone, so only the new entry can load the screen again (the leave guard still
@@ -15,6 +16,7 @@ import { StateView } from "../components/feedback";
 type Frame = (state: ReactNode) => ReactNode;
 const pageFrame: Frame = (state) => <div className="page">{state}</div>;
 const bareFrame: Frame = (state) => <>{state}</>;
+const sunriseFrame: Frame = (state) => <div className="sr">{state}</div>;
 
 export function lazyScreen<P extends object>(
   load: () => Promise<ComponentType<P>>,
@@ -51,4 +53,12 @@ export const AskScreen = lazyScreen(() => import("./ask").then((m) => m.AskScree
 export const ExceptionScreen = lazyScreen(
   () => import("./exception").then((m) => m.ExceptionScreen),
   pageFrame,
+);
+export const ShopKnowledgeScreen = lazyScreen(
+  () => import("./library").then((m) => m.ShopKnowledgeScreen),
+  sunriseFrame,
+);
+export const FilesScreen = lazyScreen(
+  () => import("./library").then((m) => m.FilesScreen),
+  sunriseFrame,
 );

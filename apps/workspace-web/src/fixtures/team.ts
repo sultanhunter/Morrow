@@ -15,8 +15,12 @@ import type {
   Command,
   EmailAddressesView,
   FilesView,
+  KnowledgeItemView,
+  KnowledgePageKind,
+  KnowledgePageView,
   KnowledgeView,
   LibraryPort,
+  NotebookView,
   NotificationChoices,
   NotificationsView,
   Outcome,
@@ -40,6 +44,7 @@ import {
   summaryHours,
   thinkingEfforts,
   thinkingModels,
+  withKnowledgeTargets,
 } from "@morrow/workspace-ui";
 
 export interface TeamFixtureDeps {
@@ -629,13 +634,6 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
             },
           ]
         : entry.schedule.map((title) => ({ icon: "calendar" as const, title, detail: null })),
-      notes: listings
-        ? [
-            "Maya prefers ‘linen’ in lowercase in titles.",
-            "Size advice applies to shirts, not totes.",
-            "Next: photo descriptions for 12 Autumn photos.",
-          ]
-        : [],
       ownerName: owner,
     };
   };
@@ -770,6 +768,22 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           monthlyCreditLimit: document.monthlyCreditLimit,
         });
         return ok({ status: "added" as const, agentId });
+      }),
+    // PR 20: the notes Listings keeps between jobs (its notebook), newest first.
+    notebook: (ws, agentId) =>
+      reply<NotebookView>("team.notebook", () => {
+        const summary = addedAgents().find((a) => a.agentId === agentId);
+        if (!deps.isWorkspace(ws) || !summary) return notFound;
+        return ok({
+          entries:
+            summary.character === "listings" && !addedWith.has(summary.agentId)
+              ? [
+                  { id: "note-3", text: "Next: photo descriptions for 12 Autumn photos." },
+                  { id: "note-2", text: "Size advice applies to shirts, not totes." },
+                  { id: "note-1", text: "Maya prefers ‘linen’ in lowercase in titles." },
+                ]
+              : [],
+        });
       }),
   };
 
@@ -1020,61 +1034,124 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   };
 
   // ---- Shop knowledge and Files
-  const knowledge: KnowledgeView = {
-    items: empty
-      ? []
-      : [
-          {
-            id: "k-voice",
-            kind: "fact",
-            title: "Brand voice",
-            text: "Calm, plain and warm. Write ‘linen’ in lowercase.",
-            source: "Added by Maya Chen · Oct 6",
-          },
-          {
-            id: "k-shipping",
-            kind: "fact",
-            title: "Shipping",
-            text: "Free shipping in the US on orders over $75.",
-            source: "From your Shopify store · updated Oct 20",
-          },
-          {
-            id: "k-returns",
-            kind: "fact",
-            title: "Returns",
-            text: "30 days from delivery. Items must be unworn.",
-            source: "From your Shopify store · updated Oct 20",
-          },
-          {
-            id: "k-supplier",
-            kind: "fact",
-            title: "Supplier",
-            text: "Weave Co. makes our linen. A new order takes about 3 weeks.",
-            source: "Added by Maya Chen · Oct 9",
-          },
-          {
-            id: "k-shirt",
-            kind: "fact",
-            title: "Product facts: Linen Shirt",
-            text: "100% European flax linen, garment washed. Off white.",
-            source: "From your Shopify store · updated Oct 20",
-          },
-          {
-            id: "k-fit",
-            kind: "suggested",
-            title: "Fit complaints",
-            text: "When fit complaints rise, check the size chart first.",
-            source: "Suggested by Listings · Oct 22",
-          },
-          {
-            id: "k-sizes",
-            kind: "lesson",
-            title: "Size advice",
-            text: "Size advice applies to shirts, not totes.",
-            source: "Saved from Listings’ notes · Oct 16",
-          },
-        ],
-  };
+  // PR 20: pages a person adds, edits and deletes, and agents' suggestions a person accepts
+  // or declines, each bound to what the person saw (a version or a digest). The server's
+  // rule as the fixture models it: the Owner and Admins write and decide, the Owner deletes.
+  const may = { write: viewer === "owner" || viewer === "admin", delete: viewer === "owner" };
+  type Item = KnowledgeItemView;
+  const fact = (
+    id: string,
+    pageKind: KnowledgePageKind,
+    title: string,
+    text: string,
+    source: string,
+    version = 1,
+  ): Item => ({
+    id,
+    kind: "fact",
+    title,
+    text,
+    source,
+    pageKind,
+    version,
+    digest: null,
+    untrusted: false,
+    sources: [],
+    target: null,
+  });
+  let items: Item[] = empty
+    ? []
+    : [
+        fact(
+          "k-voice",
+          "brand_voice",
+          "Brand voice",
+          "Calm, plain and warm. Write ‘linen’ in lowercase.",
+          "Added by Maya Chen · Oct 6",
+          2,
+        ),
+        fact(
+          "k-shipping",
+          "policy",
+          "Shipping",
+          "Free shipping in the US on orders over $75.",
+          "Added by Maya Chen · Oct 20",
+        ),
+        fact(
+          "k-returns",
+          "policy",
+          "Returns",
+          "30 days from delivery. Items must be unworn.",
+          "Added by Maya Chen · Oct 20",
+        ),
+        fact(
+          "k-supplier",
+          "supplier",
+          "Supplier",
+          "Weave Co. makes our linen. A new order takes about 3 weeks.",
+          "Added by Maya Chen · Oct 9",
+        ),
+        fact(
+          "k-shirt",
+          "product_fact",
+          "Product facts: Linen Shirt",
+          "100% European flax linen, garment washed. Off white.",
+          "Accepted from Listings · Oct 20",
+        ),
+        {
+          id: "k-fit",
+          kind: "suggested",
+          title: "Fit complaints",
+          text: "When fit complaints rise, check the size chart first.",
+          source: "Suggested by Listings · Oct 22",
+          pageKind: "decision",
+          version: null,
+          digest: "f".repeat(64),
+          untrusted: true,
+          sources: [
+            { kind: "product", value: "product:4242" },
+            { kind: "note", value: "Three product reviews this week say the shirt runs small." },
+          ],
+          target: null,
+        },
+        // A suggested next version of an existing page: the row names that page, the version
+        // it replaces and what it says now (filled in by withKnowledgeTargets at each read).
+        {
+          id: "k-shipping-next",
+          kind: "suggested",
+          title: "Shipping",
+          text: "Free shipping in the US on orders over $75. Orders leave within 2 business days.",
+          source: "Suggested by Listings · Oct 23",
+          pageKind: "policy",
+          version: 1,
+          digest: "e".repeat(64),
+          untrusted: false,
+          sources: [{ kind: "note", value: "Our shipping page says 2 business days." }],
+          target: { pageId: "k-shipping", current: null },
+        },
+        {
+          id: "k-sizes",
+          kind: "lesson",
+          title: "Size advice",
+          text: "Size advice applies to shirts, not totes.",
+          source: "Saved from Listings’ notes · Oct 16",
+          pageKind: null,
+          version: null,
+          digest: null,
+          untrusted: false,
+          sources: [],
+          target: null,
+        },
+      ];
+  const notes = new Map<string, string>([["k-voice", "Written by the owner"]]);
+  // No store was disconnected in these scenarios: nothing is stranded (review R2).
+  const knowledgeView = (): KnowledgeView => ({
+    items: withKnowledgeTargets(items),
+    disconnected: [],
+    may,
+  });
+  const pageOf = (id: string) => items.find((i) => i.id === id && i.kind === "fact") ?? null;
+  let pageSeq = 0;
   const files: FilesView = {
     files: empty
       ? []
@@ -1134,8 +1211,118 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   const library: LibraryPort = {
     knowledge: (ws) =>
       reply<KnowledgeView>("library.knowledge", () =>
-        deps.isWorkspace(ws) ? ok(knowledge) : notFound,
+        deps.isWorkspace(ws) ? ok(knowledgeView()) : notFound,
       ),
+    knowledgePage: (ws, pageId) =>
+      reply<KnowledgePageView>("library.knowledgePage", () => {
+        const page = deps.isWorkspace(ws) ? pageOf(pageId) : null;
+        if (!page || page.pageKind === null || page.version === null) return notFound;
+        return ok({
+          id: page.id,
+          pageKind: page.pageKind,
+          title: page.title,
+          text: page.text,
+          note: notes.get(page.id) ?? "",
+          version: page.version,
+        });
+      }),
+    addKnowledge: (ws, c) =>
+      command("library.addKnowledge", c, () => {
+        if (!deps.isWorkspace(ws)) return notFound;
+        if (!may.write) return denied("You can’t change shop knowledge.");
+        const { pageKind, title, text, note } = c.body;
+        if (
+          pageKind === "brand_voice" &&
+          items.some((i) => i.kind === "fact" && i.pageKind === "brand_voice")
+        )
+          return changed("Your shop already has a brand voice page.");
+        const id = "k-new-" + ++pageSeq;
+        items = [
+          fact(
+            id,
+            pageKind,
+            title,
+            text,
+            "Added by " + (viewer === "owner" ? owner : teammate) + " · Oct 23",
+          ),
+          ...items,
+        ];
+        if (note) notes.set(id, note);
+        return ok({ pageId: id, version: 1 });
+      }),
+    editKnowledge: (ws, pageId, c) =>
+      command("library.editKnowledge", c, () => {
+        const page = deps.isWorkspace(ws) ? pageOf(pageId) : null;
+        if (!page || page.version === null) return notFound;
+        if (!may.write) return denied("You can’t change shop knowledge.");
+        if (c.body.expectedVersion !== page.version)
+          return changed("This changed since you opened it. Open it again.");
+        const version = page.version + 1;
+        items = items.map((i) =>
+          i.id === pageId ? { ...i, title: c.body.title, text: c.body.text, version } : i,
+        );
+        if (c.body.note) notes.set(pageId, c.body.note);
+        else notes.delete(pageId);
+        return ok({ version });
+      }),
+    deleteKnowledge: (ws, pageId, c) =>
+      command("library.deleteKnowledge", c, () => {
+        const page = deps.isWorkspace(ws) ? pageOf(pageId) : null;
+        if (!page) return notFound;
+        if (!may.delete) return denied("Only the shop owner can delete shop knowledge.");
+        if (c.body.expectedVersion !== page.version)
+          return changed("This changed since you opened it. Open it again.");
+        items = items.filter((i) => i.id !== pageId);
+        notes.delete(pageId);
+        return ok({ pageId });
+      }),
+    decideSuggestion: (ws, suggestionId, c) =>
+      command("library.decideSuggestion", c, () => {
+        const item = deps.isWorkspace(ws)
+          ? items.find((i) => i.id === suggestionId && i.kind === "suggested")
+          : undefined;
+        if (!item) return notFound;
+        if (!may.write) return denied("You can’t change shop knowledge.");
+        // The page it changes must still be there; an accept needs it at the suggestion's
+        // version (a page that changed since is stale), as the server decides.
+        const target = item.target ? pageOf(item.target.pageId) : null;
+        if (item.target && !target) return notFound;
+        if (item.digest !== c.body.digest)
+          return changed("This changed since you opened it. Open it again.");
+        if (c.body.decision === "accept" && target && target.version !== item.version)
+          return changed("This changed since you opened it. Open it again.");
+        items = items.filter((i) => i.id !== suggestionId);
+        const note = item.sources.find((x) => x.kind === "note")?.value;
+        if (c.body.decision === "accept" && target && target.version !== null) {
+          const version = target.version + 1;
+          items = items.map((i) =>
+            i.id === target.id
+              ? {
+                  ...i,
+                  title: item.title,
+                  text: item.text,
+                  version,
+                  source: "Accepted from Listings · Oct 23",
+                }
+              : i,
+          );
+          if (note) notes.set(target.id, note);
+          else notes.delete(target.id);
+        } else if (c.body.decision === "accept" && item.pageKind !== null) {
+          items = [
+            fact(
+              item.id + "-page",
+              item.pageKind,
+              item.title,
+              item.text,
+              "Accepted from Listings · Oct 23",
+            ),
+            ...items,
+          ];
+          if (note) notes.set(item.id + "-page", note);
+        }
+        return ok({ decision: c.body.decision });
+      }),
     files: (ws) =>
       reply<FilesView>("library.files", () => (deps.isWorkspace(ws) ? ok(files) : notFound)),
   };

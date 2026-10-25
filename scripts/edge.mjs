@@ -761,6 +761,41 @@ export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsP
     throw Error("EDGE_PLAN_DRAFTS_BEFORE_LOOP");
   return Object.freeze({ switch: record.switch, start_routes: record.start_routes });
 }
+// PR 20, the shop-knowledge switch (docs/briefs/shop-knowledge.md; committed off): the api
+// composes it from docs/decisions/shop-knowledge-staging.json (packages/policy's
+// shopKnowledgeRecord), so it carries no var or secret. `switch` (the person routes) may be on
+// only once a reviewed grant template issues the workspace.knowledge.* grants (none does yet:
+// the owner bootstrap templates hold none, so the routes would answer 403 to everyone), and
+// `agent_tools` (knowledge.propose, notebook.write and the brand voice in Listings) only once
+// the routes are on (a proposal needs a person to accept it) and the agent-loop switch (ADR-0027
+// item 11) is on. Neither prerequisite has a record yet, so both count as unmet here.
+export const edgeShopKnowledgePrerequisites = Object.freeze({
+  grantsIssued: false,
+  agentLoop: "off",
+});
+export function reviewedShopKnowledgeRecord(
+  record,
+  prerequisites = edgeShopKnowledgePrerequisites,
+) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "agent_tools,environment_kind,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    (record.agent_tools !== "off" && record.agent_tools !== "on") ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_SHOP_KNOWLEDGE_RECORD");
+  if (record.switch === "on" && prerequisites.grantsIssued !== true)
+    throw Error("EDGE_SHOP_KNOWLEDGE_BEFORE_GRANTS");
+  if (record.agent_tools === "on" && (record.switch !== "on" || prerequisites.agentLoop !== "on"))
+    throw Error("EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP");
+  return Object.freeze({ switch: record.switch, agent_tools: record.agent_tools });
+}
 // v1 PR 3, the apply switch (ADR-0022 items 7 and 9; committed off): its runtime image is
 // the var MORROW_SHOPIFY_WRITE ("on") on the staging api and broker; no secret (the store
 // tokens are already the vault's). Development's committed config never carries it, and
@@ -1235,6 +1270,7 @@ export async function verifyEdgeConfig({
   stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
   modelPath = join(repositoryRoot, "docs/decisions/model-provider-staging.json"),
   planDraftsPath = join(repositoryRoot, "docs/decisions/plan-drafts-staging.json"),
+  shopKnowledgePath = join(repositoryRoot, "docs/decisions/shop-knowledge-staging.json"),
   runtimePath = join(repositoryRoot, "docs/decisions/runtime-staging.json"),
   evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
@@ -1311,6 +1347,22 @@ export async function verifyEdgeConfig({
   if (shopifyWriteVar !== edgeApplyVar || shopifyWriteOn !== edgeApplyValue)
     problem("EDGE_APPLY_SWITCH_NAMES", "broker-protocol");
   // PR 18, the plan-drafts switch: refused on while the agent loop is off (ADR-0034 item 10).
+  // PR 20, the shop-knowledge switch: refused on before its grants, the tools before the loop.
+  const shopKnowledge = readJson(shopKnowledgePath);
+  if (shopKnowledge === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "shop-knowledge-staging.json");
+  else
+    try {
+      reviewedShopKnowledgeRecord(shopKnowledge);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      problem(
+        ["EDGE_SHOP_KNOWLEDGE_BEFORE_GRANTS", "EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP"].includes(code)
+          ? code
+          : "EDGE_STAGING_SHOP_KNOWLEDGE_RECORD",
+        "shop-knowledge-staging.json",
+      );
+    }
   const planDraftsRecord = readJson(planDraftsPath);
   if (planDraftsRecord === null)
     problem("EDGE_STAGING_RECORD_UNREADABLE", "plan-drafts-staging.json");

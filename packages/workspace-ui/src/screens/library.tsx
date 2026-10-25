@@ -1,24 +1,460 @@
-// T7 PR 16: simple Shop knowledge and Files pages. Read-only: adding and editing knowledge
-// come with PR 20, and uploads wait for their deletion path (P09.T05), so "Upload a file"
-// is marked "Coming soon" and nothing is sent. Fixture data only in this build.
-import { useState } from "react";
+// T7 PR 16: simple Shop knowledge and Files pages. PR 20 (shop knowledge): a person adds,
+// edits and deletes pages (typed text only, never customer details) and accepts or declines
+// agents' suggested notes, each bound to what the person saw (its version or digest; a
+// suggestion shows everything its digest covers, the page it changes and its sources too). The
+// HTTP build composes these methods only when the shop-knowledge switch goes on; until then
+// the screen reads its fixtures and nothing is sent. Uploads wait for their deletion path
+// (P09.T05), so "Upload a file" is marked "Coming soon" and nothing is sent.
+import { useId, useState, type FormEvent } from "react";
 import { outcomeState } from "../components/feedback";
+import { Button, Dialog, TextArea, TextField } from "../components/controls";
 import type { WorkspaceView } from "../model";
-import { useRead, useServices } from "../services";
-import type { FilesView, KnowledgeView } from "../team-model";
+import { useCommand, useRead, useServices } from "../services";
+import {
+  knowledgePageKinds,
+  type FilesView,
+  type KnowledgeItemView,
+  type KnowledgePageKind,
+  type KnowledgeSourceView,
+  type KnowledgeView,
+} from "../team-model";
 import { AgentAvatar, PersonAvatar } from "../sunrise/avatars";
 import { sunriseCopy } from "../sunrise/copy";
 import { Card, ComingSoon, PageHeader, SrIcon, SrTabs } from "../sunrise/parts";
+import { CommandFeedback } from "./entry";
 
 const k = sunriseCopy.knowledge;
 type Kind = KnowledgeView["items"][number]["kind"];
 const kinds: readonly Kind[] = ["fact", "suggested", "lesson"];
+const limits = Object.freeze({ title: 120, text: 8000, note: 200 });
+const textValid = (value: string, max: number) =>
+  value.trim() !== "" && [...value].length <= max && !value.includes("\0");
 
-function KnowledgeBody({ view }: { readonly view: KnowledgeView }) {
-  const [kind, setKind] = useState<Kind>("fact");
-  const items = view.items.filter((i) => i.kind === kind);
+type Editing =
+  | { readonly mode: "add" }
+  | { readonly mode: "edit"; readonly item: KnowledgeItemView }
+  | null;
+
+/** Add a page, or the next version of one (the version the person read). */
+function KnowledgeDialog({
+  workspaceId,
+  editing,
+  existingBrandVoice,
+  onClose,
+  onSaved,
+}: {
+  readonly workspaceId: string;
+  readonly editing: Exclude<Editing, null>;
+  readonly existingBrandVoice: boolean;
+  readonly onClose: () => void;
+  readonly onSaved: () => void;
+}) {
+  const services = useServices();
+  const ws = workspaceId;
+  const item = editing.mode === "edit" ? editing.item : null;
+  const [page, reloadPage] = useRead(`${ws}|library.knowledgePage|${item?.id ?? "new"}`, () =>
+    item
+      ? services.port.library.knowledgePage(ws, item.id)
+      : Promise.resolve({ kind: "not_found" as const }),
+  );
+  const loaded = page.kind === "ok" ? page.value : null;
+  const firstKind: KnowledgePageKind = existingBrandVoice ? "policy" : "brand_voice";
+  const [draft, setDraft] = useState<{
+    pageKind: KnowledgePageKind;
+    title: string;
+    text: string;
+    note: string;
+  } | null>(null);
+  const current = draft ?? {
+    pageKind: loaded?.pageKind ?? firstKind,
+    title: loaded?.title ?? "",
+    text: loaded?.text ?? "",
+    note: loaded?.note ?? "",
+  };
+  const set = (patch: Partial<typeof current>) => setDraft({ ...current, ...patch });
+  const [checked, setChecked] = useState(false);
+  const command = useCommand<
+    {
+      pageKind: KnowledgePageKind;
+      title: string;
+      text: string;
+      note: string;
+      expectedVersion: number | null;
+    },
+    unknown
+  >({
+    marker: { workspaceId: ws, kind: "knowledge" },
+    send: (c) => {
+      const { pageKind, title, text, note, expectedVersion } = c.body;
+      if (item === null || expectedVersion === null)
+        return services.port.library.addKnowledge(ws, {
+          key: c.key,
+          body: { pageKind, title, text, note },
+        });
+      return services.port.library.editKnowledge(ws, item.id, {
+        key: c.key,
+        body: { title, text, note, expectedVersion },
+      });
+    },
+    onOutcome: (outcome, sent) => {
+      if (outcome.kind === "ok" && sent.current) {
+        onSaved();
+        onClose();
+      }
+    },
+  });
+  const formId = useId();
+  const selectId = useId();
+  const valid =
+    textValid(current.title, limits.title) &&
+    textValid(current.text, limits.text) &&
+    (current.note === "" || textValid(current.note, limits.note)) &&
+    (item !== null || !(current.pageKind === "brand_voice" && existingBrandVoice));
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setChecked(true);
+    if (!valid || command.busy || (item && !loaded)) return;
+    void command.submit({
+      pageKind: current.pageKind,
+      title: current.title.trim(),
+      text: current.text.trim(),
+      note: current.note.trim(),
+      expectedVersion: item ? (loaded?.version ?? null) : null,
+    });
+  };
+  const close = () => {
+    if (command.busy) return;
+    command.reset();
+    onClose();
+  };
+  return (
+    <Dialog
+      open
+      title={item ? k.editTitle(item.title) : k.addTitle}
+      onClose={close}
+      footer={
+        <>
+          <Button onClick={close} disabled={command.busy}>
+            {k.cancel}
+          </Button>
+          <Button type="submit" variant="primary" form={formId} disabled={command.busy}>
+            {k.save}
+          </Button>
+        </>
+      }
+    >
+      {item && page.kind !== "ok" ? (
+        outcomeState(page, reloadPage)
+      ) : (
+        <form id={formId} onSubmit={submit} noValidate className="pj-form">
+          <p className="sr-help sr-with-icon">
+            <SrIcon name="lock" size={16} />
+            {k.typedOnly}
+          </p>
+          {item === null ? (
+            <div className="field">
+              <label htmlFor={selectId}>{k.kindLabel}</label>
+              <select
+                id={selectId}
+                value={current.pageKind}
+                disabled={command.busy}
+                aria-describedby={selectId + "-hint"}
+                onChange={(event) =>
+                  set({
+                    pageKind: knowledgePageKinds.find((x) => x === event.target.value) ?? firstKind,
+                  })
+                }
+              >
+                {knowledgePageKinds
+                  .filter((x) => !(x === "brand_voice" && existingBrandVoice))
+                  .map((x) => (
+                    <option key={x} value={x}>
+                      {k.pageKinds[x]}
+                    </option>
+                  ))}
+              </select>
+              <small id={selectId + "-hint"}>{k.brandVoiceHelp}</small>
+            </div>
+          ) : null}
+          <TextField
+            label={k.titleLabel}
+            value={current.title}
+            onChange={(title) => set({ title })}
+            error={checked && !textValid(current.title, limits.title) ? copyInvalid : null}
+            disabled={command.busy}
+            maxLength={limits.title}
+            required
+          />
+          <TextArea
+            label={k.textLabel}
+            value={current.text}
+            onChange={(text) => set({ text })}
+            error={checked && !textValid(current.text, limits.text) ? copyInvalid : null}
+            disabled={command.busy}
+            maxLength={limits.text}
+            required
+          />
+          <TextField
+            label={k.noteLabel}
+            value={current.note}
+            onChange={(note) => set({ note })}
+            hint={k.noteHelp}
+            disabled={command.busy}
+            maxLength={limits.note}
+          />
+          <CommandFeedback
+            phase={command.phase}
+            onCheckAgain={command.checkAgain}
+            onRetry={command.retry}
+            success={k.saved}
+            messages={{ conflict: () => k.changed }}
+          />
+        </form>
+      )}
+    </Dialog>
+  );
+}
+const copyInvalid = k.invalid;
+
+/** Deletes a page and all its versions, at the version the person read. */
+function DeleteDialog({
+  workspaceId,
+  item,
+  onClose,
+  onDeleted,
+}: {
+  readonly workspaceId: string;
+  readonly item: KnowledgeItemView;
+  readonly onClose: () => void;
+  readonly onDeleted: () => void;
+}) {
+  const services = useServices();
+  const command = useCommand<{ expectedVersion: number }, unknown>({
+    marker: { workspaceId, kind: "knowledge" },
+    send: (c) => services.port.library.deleteKnowledge(workspaceId, item.id, c),
+    onOutcome: (outcome, sent) => {
+      if (outcome.kind === "ok" && sent.current) {
+        onDeleted();
+        onClose();
+      }
+    },
+  });
+  const close = () => {
+    if (command.busy) return;
+    command.reset();
+    onClose();
+  };
+  return (
+    <Dialog
+      open
+      title={k.removeTitle}
+      onClose={close}
+      footer={
+        <>
+          <Button onClick={close} disabled={command.busy}>
+            {k.cancel}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={command.busy || item.version === null}
+            onClick={() => void command.submit({ expectedVersion: item.version ?? 0 })}
+          >
+            {k.removeConfirm}
+          </Button>
+        </>
+      }
+    >
+      <p dir="auto">{k.removeBody(item.title)}</p>
+      <CommandFeedback
+        phase={command.phase}
+        onCheckAgain={command.checkAgain}
+        onRetry={command.retry}
+        success={k.removed}
+        messages={{ conflict: () => k.changed }}
+      />
+    </Dialog>
+  );
+}
+
+/** A product source's value is `product:<id>`; the person reads the id. */
+const sourceText = (source: KnowledgeSourceView) =>
+  source.kind === "product" && source.value.startsWith("product:")
+    ? source.value.slice("product:".length)
+    : source.value;
+/** Whether a suggestion can be decided, and accepted, as this person sees it now. */
+function decidable(item: KnowledgeItemView) {
+  const current = item.target?.current ?? null;
+  const hidden = item.target !== null && current === null;
+  const changed = current !== null && current.version !== item.version;
+  return { decide: !hidden, accept: !hidden && !changed };
+}
+
+/**
+ * Everything accepting a suggestion binds that its title and text do not already show: the
+ * page it changes, the version it replaces and what that page says now, and every source the
+ * accepted version keeps (review F2).
+ */
+function SuggestionDetails({ item }: { readonly item: KnowledgeItemView }) {
+  const current = item.target?.current ?? null;
   return (
     <>
+      {item.target !== null && current === null ? (
+        <p className="sr-meta sr-with-icon">
+          <SrIcon name="alert" size={16} />
+          {k.targetHidden}
+        </p>
+      ) : null}
+      <dl className="sr-pairs">
+        {current !== null && item.version !== null ? (
+          <>
+            <div>
+              <dt>{k.target}</dt>
+              <dd dir="auto">{k.targetValue(current.title, item.version)}</dd>
+            </div>
+            <div>
+              <dt>{k.targetNow}</dt>
+              <dd className="sr-reading" dir="auto">
+                {current.excerpt}
+              </dd>
+            </div>
+          </>
+        ) : null}
+        <div>
+          <dt>{k.sources}</dt>
+          <dd>
+            {item.sources.length === 0 ? (
+              k.sourcesNone
+            ) : (
+              <ul className="sr-bullets">
+                {item.sources.map((source) => (
+                  <li key={`${source.kind}:${source.value}`} dir="auto">
+                    {k.sourceKinds[source.kind]}: {sourceText(source)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </dd>
+        </div>
+      </dl>
+      {current !== null && current.version !== item.version ? (
+        <p className="sr-meta sr-with-icon">
+          <SrIcon name="alert" size={16} />
+          {k.targetChanged(current.version)}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** Accept or decline one suggested note, bound to the digest the person saw. */
+function SuggestionActions({
+  workspaceId,
+  item,
+  onDecided,
+}: {
+  readonly workspaceId: string;
+  readonly item: KnowledgeItemView;
+  readonly onDecided: () => void;
+}) {
+  const allowed = decidable(item);
+  const services = useServices();
+  const command = useCommand<{ decision: "accept" | "reject"; digest: string }, unknown>({
+    marker: { workspaceId, kind: "knowledge" },
+    send: (c) => services.port.library.decideSuggestion(workspaceId, item.id, c),
+    onOutcome: (outcome) => {
+      if (outcome.kind === "ok" || (outcome.kind === "conflict" && outcome.recheck)) onDecided();
+    },
+  });
+  const decide = (decision: "accept" | "reject") =>
+    item.digest ? void command.submit({ decision, digest: item.digest }) : undefined;
+  return (
+    <div className="sr-list-text">
+      <div className="sr-actions">
+        <Button
+          variant="primary"
+          aria-label={k.accept(item.title)}
+          disabled={command.busy || item.digest === null || !allowed.accept}
+          onClick={() => decide("accept")}
+        >
+          {k.acceptLabel}
+        </Button>
+        <Button
+          aria-label={k.reject(item.title)}
+          disabled={command.busy || item.digest === null || !allowed.decide}
+          onClick={() => decide("reject")}
+        >
+          {k.rejectLabel}
+        </Button>
+      </div>
+      <CommandFeedback
+        phase={command.phase}
+        onCheckAgain={command.checkAgain}
+        onRetry={command.retry}
+        success={
+          command.phase.phase === "settled" &&
+          command.phase.outcome.kind === "ok" &&
+          (command.phase.outcome.value as { decision?: string }).decision === "reject"
+            ? k.rejected
+            : k.accepted
+        }
+        messages={{ conflict: () => k.changed }}
+      />
+    </div>
+  );
+}
+
+/** The Shop knowledge page's body over one read (exported for the markup tests). */
+export function KnowledgeBody({
+  workspaceId,
+  view,
+  reload,
+  initialKind = "fact",
+}: {
+  readonly workspaceId: string;
+  readonly view: KnowledgeView;
+  readonly reload: () => void;
+  /** The section first shown (the markup tests render the suggestions). */
+  readonly initialKind?: Kind;
+}) {
+  const [kind, setKind] = useState<Kind>(initialKind);
+  const [editing, setEditing] = useState<Editing>(null);
+  const [deleting, setDeleting] = useState<KnowledgeItemView | null>(null);
+  const items = view.items.filter((i) => i.kind === kind);
+  // A stranded brand voice (its store disconnected) still holds the shop's one brand voice
+  // until it is deleted.
+  const existingBrandVoice =
+    view.items.some((i) => i.kind === "fact" && i.pageKind === "brand_voice") ||
+    view.disconnected.some((d) => d.pageKind === "brand_voice");
+  // Pages a disconnected store left (review R2): no title or text, only what a deletion names.
+  const disconnected: readonly KnowledgeItemView[] = view.may.delete
+    ? view.disconnected.map((d) => ({
+        id: d.id,
+        kind: "fact",
+        title: k.disconnectedTitle(k.pageKinds[d.pageKind]),
+        text: k.disconnectedBody,
+        source: "",
+        pageKind: d.pageKind,
+        version: d.version,
+        digest: null,
+        untrusted: false,
+        sources: [],
+        target: null,
+      }))
+    : [];
+  return (
+    <>
+      <p className="sr-help sr-with-icon">
+        <SrIcon name="lock" size={16} />
+        {k.typedOnly}
+      </p>
+      {view.may.write ? (
+        <div className="sr-actions">
+          <Button variant="primary" onClick={() => setEditing({ mode: "add" })}>
+            <SrIcon name="plus" />
+            {k.add}
+          </Button>
+        </div>
+      ) : null}
       <SrTabs
         label={k.tabs}
         idPrefix="knowledge"
@@ -52,19 +488,99 @@ function KnowledgeBody({ view }: { readonly view: KnowledgeView }) {
                       {item.text}
                     </p>
                     <p className="sr-meta" dir="auto">
-                      {item.source}
+                      {[
+                        item.pageKind ? k.pageKinds[item.pageKind] : null,
+                        kind === "fact" && item.version !== null ? k.version(item.version) : null,
+                        kind === "suggested" && item.pageKind !== null && item.version === null
+                          ? k.newPage
+                          : null,
+                        item.source,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
+                    {kind === "suggested" ? <SuggestionDetails item={item} /> : null}
+                    {kind === "suggested" && item.untrusted ? (
+                      <p className="sr-meta sr-with-icon">
+                        <SrIcon name="alert" size={16} />
+                        {k.untrusted}
+                      </p>
+                    ) : null}
+                    {kind === "suggested" && view.may.write ? (
+                      <SuggestionActions workspaceId={workspaceId} item={item} onDecided={reload} />
+                    ) : null}
+                    {kind === "fact" && (view.may.write || view.may.delete) ? (
+                      <div className="sr-actions">
+                        {view.may.write ? (
+                          <Button
+                            aria-label={k.edit(item.title)}
+                            onClick={() => setEditing({ mode: "edit", item })}
+                          >
+                            {k.editLabel}
+                          </Button>
+                        ) : null}
+                        {view.may.delete ? (
+                          <Button
+                            aria-label={k.remove(item.title)}
+                            onClick={() => setDeleting(item)}
+                          >
+                            {k.removeConfirm}
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </li>
               ))}
             </ul>
           )}
         </Card>
+        {kind === "fact" && disconnected.length > 0 ? (
+          <Card title={k.disconnected} flush>
+            <ul className="sr-rows">
+              {disconnected.map((item) => (
+                <li key={item.id} className="sr-list-row">
+                  <SrIcon name="alert" />
+                  <div className="sr-list-text">
+                    <p className="sr-row-title" dir="auto">
+                      {item.title}
+                    </p>
+                    <p className="sr-reading" dir="auto">
+                      {item.text}
+                    </p>
+                    <div className="sr-actions">
+                      <Button aria-label={k.remove(item.title)} onClick={() => setDeleting(item)}>
+                        {k.removeConfirm}
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
       </div>
       <p className="sr-help sr-with-icon">
         <SrIcon name="clock" size={16} />
         {k.later}
       </p>
+      {editing ? (
+        <KnowledgeDialog
+          workspaceId={workspaceId}
+          editing={editing}
+          existingBrandVoice={existingBrandVoice}
+          onClose={() => setEditing(null)}
+          onSaved={reload}
+        />
+      ) : null}
+      {deleting ? (
+        <DeleteDialog
+          workspaceId={workspaceId}
+          item={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={reload}
+        />
+      ) : null}
     </>
   );
 }
@@ -79,7 +595,7 @@ export function ShopKnowledgeScreen({ workspace }: { readonly workspace: Workspa
     <div className="sr">
       <PageHeader workspaceId={ws} title={k.title} scope={k.intro} />
       {knowledge.kind === "ok" ? (
-        <KnowledgeBody view={knowledge.value} />
+        <KnowledgeBody workspaceId={ws} view={knowledge.value} reload={reload} />
       ) : (
         outcomeState(knowledge, reload)
       )}

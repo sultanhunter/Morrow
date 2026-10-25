@@ -691,9 +691,9 @@
       "required": [
         "revokedAt",
         "pendingOperations"
-        ],
-        "additionalProperties": false
-      },
+      ],
+      "additionalProperties": false
+    },
     "runtime.execution.use.input": {
       "description": "Build order PR 7 (ADR-0029 item 7): the grant-level request of one computer job under a run. The job itself is RuntimeJob@1, checked by hand in the broker (no command, template, network, environment or limit); its inputs are minimised extracts with fixed column allowlists.",
       "type": "object",
@@ -844,6 +844,72 @@
         "mandate",
         "goalId",
         "goalKey"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.knowledge.propose.input": {
+      "description": "PR 20: an installed agent proposes a new page (pageId null) or a new version of a page. It grants nothing; a person accepts or rejects it. The server sets read tags, taint, author and base version.",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableId"
+        },
+        "kind": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgePageKind"
+        },
+        "title": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgeTitle"
+        },
+        "text": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgeText"
+        },
+        "sources": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgeSources"
+        }
+      },
+      "required": [
+        "pageId",
+        "kind",
+        "title",
+        "text",
+        "sources"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.knowledge.propose.output": {
+      "type": "object",
+      "properties": {
+        "proposalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "proposalId"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.notebook.write.input": {
+      "description": "PR 20: one entry in the run's own installation's notebook. The server sets the installation, read tags and clock.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NotebookText"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.notebook.write.output": {
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "entryId"
       ],
       "additionalProperties": false
     }

@@ -395,6 +395,13 @@
       "sha256": "b6172a6d874a69b2b6d40dadd948965201254e295b91e50664d19751e9fe3c9d",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0036-model-defaults-cost-cap.md"
+    },
+    {
+      "sequence": 52,
+      "file": "0052.shop-knowledge.sql",
+      "sha256": "4597c094203277ee75c2416ea591676c24da7f8fddd83841e5eadb69b6378f0a",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/shop-knowledge.md"
     }
   ]
 }
