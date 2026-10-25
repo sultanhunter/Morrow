@@ -810,6 +810,9 @@ export async function fakeContext({
   stripe = "off",
   // Build order PR 7: the runtime switch, "off" (the committed state), "cleanup_only" or "on".
   runtime = "off",
+  // M3 PR-2's model-provider switch, "off" or "on" (committed on since model-provider-on;
+  // the fakes default to off, so every earlier world keeps its fourteen broker names).
+  model = "off",
   administrator = { name: "neondb_owner", mode: "createrole" },
   now = Date.parse("2026-10-20T12:00:00Z"),
   environment = {},
@@ -821,7 +824,7 @@ export async function fakeContext({
   );
   const { stagingFileSpecs, credentialDirectory } = await import("../../scripts/staging-files.mjs");
   const { loadMigrationChain } = await import("../../scripts/migration-chain.mjs");
-  const constants = await identityConstants({ stripe, runtime });
+  const constants = await identityConstants({ stripe, model, runtime });
   const realRoot = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
   const repoRoot = root ?? realRoot;
   const baseStaging = JSON.parse(

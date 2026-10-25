@@ -152,16 +152,17 @@ export function stagingRuntimeSwitch(root) {
 
 // `stripe` is the Stripe switch (stagingStripeSwitch): off by default, so a caller that
 // does not read the record never expects a Stripe secret. `model` is the model-provider
-// switch (stagingModelSwitch): while it is off the broker expects no model secret. The tooling
-// that places ANTHROPIC_API_KEY lands with the reviewed commit that turns it on, so "on" stops
-// every command here before any effect (STAGING_MODEL_SWITCH_UNSUPPORTED) instead of
-// deploying a broker without its key. `runtime` is the runtime switch (stagingRuntimeSwitch):
-// while it is not off the broker requires E2B_API_KEY; while it is off the key is optional
-// (brokerOptionalSecretsFor: the owner may place it ahead of the switch, explicitly).
+// switch (stagingModelSwitch), the Stripe switch's protocol (model-provider-on brief): while
+// it is off the broker expects no model secret and put-secret refuses ANTHROPIC_API_KEY
+// (STAGING_MODEL_OFF); while it is on the broker requires it, so gate 6 stops every deploy,
+// uploading nothing, until the owner's key is placed from reviewed main with
+// `staging:put-secret -- ANTHROPIC_API_KEY`. `runtime` is the runtime switch
+// (stagingRuntimeSwitch): while it is not off the broker requires E2B_API_KEY; while it is off
+// the key is optional (brokerOptionalSecretsFor: the owner may place it ahead of the switch,
+// explicitly).
 export async function identityConstants({ stripe = "off", model = "off", runtime = "off" } = {}) {
   if (stripe !== "off" && stripe !== "on") throw new StagingError("STAGING_STRIPE_RECORD_INVALID");
-  if (model === "on") throw new StagingError("STAGING_MODEL_SWITCH_UNSUPPORTED");
-  if (model !== "off") throw new StagingError("STAGING_MODEL_RECORD_INVALID");
+  if (model !== "off" && model !== "on") throw new StagingError("STAGING_MODEL_RECORD_INVALID");
   if (runtime !== "off" && runtime !== "cleanup_only" && runtime !== "on")
     throw new StagingError("STAGING_RUNTIME_RECORD_INVALID");
   const { tsImport } = await import("tsx/esm/api");
@@ -175,10 +176,11 @@ export async function identityConstants({ stripe = "off", model = "off", runtime
     // The broker's names (D1, AC02): WORKOS_API_KEY, P05.T01ab's TURNSTILE_SECRET_KEY, the
     // eleven role passwords and M2 PR-1's MORROW_VAULT_KEK_V1 (fourteen), and, only while
     // the Stripe switch is on, M5 PR-1's STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET
-    // (sixteen). brokerRequiredSecretsFor("staging", stripe) is the one list: the staging
+    // (sixteen); only while the model-provider switch is on, ANTHROPIC_API_KEY (one more).
+    // brokerRequiredSecretsFor("staging", stripe, model, runtime) is the one list: the staging
     // wrangler `secrets.required`, verify-config, gate 6, secrets-status and the
     // first-deploy file all use it (production requires its vault-free subset).
-    brokerSecrets: [...protocol.brokerRequiredSecretsFor("staging", stripe, "off", runtime)].sort(),
+    brokerSecrets: [...protocol.brokerRequiredSecretsFor("staging", stripe, model, runtime)].sort(),
     // Build order PR 7: names the staging broker may hold beyond those (E2B_API_KEY while the
     // runtime switch is off); gate 6 and secrets-status accept each present or absent.
     brokerOptionalSecrets: [...protocol.brokerOptionalSecretsFor("staging", runtime)].sort(),
@@ -189,6 +191,10 @@ export async function identityConstants({ stripe = "off", model = "off", runtime
     // owner files like the WorkOS key.
     stripe,
     stripeSecrets: stripe === "on" ? [...protocol.brokerStripeSecrets] : [],
+    // M3 PR-2's model-provider switch and the Anthropic key it requires (none while off),
+    // read from the owner file anthropic-api-key like the Stripe secrets.
+    model,
+    modelSecrets: model === "on" ? [...protocol.brokerModelSecrets] : [],
     // Build order PR 7: the runtime switch and its secret (read from its owner file).
     runtime,
     runtimeSecrets: [...protocol.brokerRuntimeSecrets],
@@ -662,6 +668,7 @@ command("provision-roles", {
       const expected = fileNames(constants.brokerSecrets);
       const kekNames = constants.vaultKekSecrets;
       const stripeNames = constants.stripeSecrets;
+      const modelNames = constants.modelSecrets ?? [];
       const planned = [
         "WORKOS_API_KEY",
         "TURNSTILE_SECRET_KEY",
@@ -670,21 +677,25 @@ command("provision-roles", {
         // M5 PR-1: the two Stripe secrets, from their owner files, only while the Stripe
         // switch is on (none while it is off: the owner files are then never read).
         ...stripeNames,
+        // M3 PR-2: the Anthropic key, from its owner file, only while the model-provider
+        // switch is on.
+        ...modelNames,
       ];
       if (
         new Set(planned).size !== planned.length ||
         fileNames(planned) !== expected ||
         !kekNames.every((name) => vaultKekFile(name) !== null) ||
-        !stripeNames.every((name) => Object.hasOwn(stripeSecretFiles, name))
+        !stripeNames.every((name) => Object.hasOwn(stripeSecretFiles, name)) ||
+        !modelNames.every((name) => Object.hasOwn(modelSecretFiles, name))
       )
         throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
       const workos = readCredentialFile(ctx.directory, "workos-api-key", specs);
       const turnstile = readCredentialFile(ctx.directory, "turnstile-secret", specs);
-      const stripeValues = Object.fromEntries(
-        stripeNames.map((name) => [
-          name,
-          readCredentialFile(ctx.directory, stripeSecretFiles[name], specs),
-        ]),
+      const switchValues = Object.fromEntries(
+        [
+          ...stripeNames.map((name) => [name, stripeSecretFiles[name]]),
+          ...modelNames.map((name) => [name, modelSecretFiles[name]]),
+        ].map(([name, file]) => [name, readCredentialFile(ctx.directory, file, specs)]),
       );
       // M2 PR-1: the owner's KEK files, read like the WorkOS key; the tool never makes one.
       const keks = Object.fromEntries(
@@ -711,7 +722,7 @@ command("provision-roles", {
       const secrets = {
         WORKOS_API_KEY: workos,
         TURNSTILE_SECRET_KEY: turnstile,
-        ...stripeValues,
+        ...switchValues,
         ...keks,
       };
       for (const role of roles)
@@ -797,10 +808,21 @@ const stripeSecretFiles = Object.freeze({
 // on or cleanup-only, where the key is simply required.
 const runtimeSecretFiles = Object.freeze({ E2B_API_KEY: "e2b-api-key" });
 const runtimeOffFlag = "--while-runtime-off";
+// M3 PR-2's model-provider switch, the Stripe switch's protocol (docs/briefs/
+// model-provider-on.md): the Anthropic key of the owner's Console workspace, from the owner's
+// chmod-600 file `anthropic-api-key` (written with morrow_put, never on a command line),
+// placed on the broker through `secret bulk` stdin like every other name. While the switch is
+// off put-secret refuses it (STAGING_MODEL_OFF) before reading the file or running any tool:
+// there is no flag to place it ahead of the switch. Once the reviewed commit that turns the
+// switch on has merged, gate 6 holds every deploy (uploading nothing) until this places the
+// key on the running broker, which never reads it before the switch's own deploy carries
+// MORROW_MODEL_PROVIDER; then the held deploy is rerun.
+const modelSecretFiles = Object.freeze({ ANTHROPIC_API_KEY: "anthropic-api-key" });
 const putSecretFiles = Object.freeze({
   WORKOS_API_KEY: "workos-api-key",
   TURNSTILE_SECRET_KEY: "turnstile-secret",
   ...stripeSecretFiles,
+  ...modelSecretFiles,
   ...runtimeSecretFiles,
 });
 // M2 PR-1: a vault KEK (MORROW_VAULT_KEK_V<n>) is re-placed from the owner's own file,
@@ -809,7 +831,7 @@ const putSecretFile = (name) =>
   Object.hasOwn(putSecretFiles, name) ? putSecretFiles[name] : vaultKekFile(name);
 command("put-secret", {
   usage:
-    "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|STRIPE_RESTRICTED_KEY|STRIPE_WEBHOOK_SECRET|MORROW_VAULT_KEK_V1|E2B_API_KEY [--while-runtime-off]",
+    "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|STRIPE_RESTRICTED_KEY|STRIPE_WEBHOOK_SECRET|ANTHROPIC_API_KEY|MORROW_VAULT_KEK_V1|E2B_API_KEY [--while-runtime-off]",
   parse(args) {
     const [name, flag] = args;
     if (
@@ -827,6 +849,8 @@ command("put-secret", {
       throw new StagingError("STAGING_USAGE");
     if (Object.hasOwn(stripeSecretFiles, name) && !constants.stripeSecrets.includes(name))
       throw new StagingError("STAGING_STRIPE_OFF");
+    if (Object.hasOwn(modelSecretFiles, name) && !(constants.modelSecrets ?? []).includes(name))
+      throw new StagingError("STAGING_MODEL_OFF");
     if (Object.hasOwn(runtimeSecretFiles, name)) {
       if (!constants.runtimeSecrets.includes(name)) throw new StagingError("STAGING_USAGE");
       if (constants.runtime === "off" && !whileRuntimeOff)
@@ -1536,6 +1560,11 @@ command("deploy", {
       names: staging.cloudflare.workers,
       brokerSecrets: constants.brokerSecrets,
       brokerOptionalSecrets: constants.brokerOptionalSecrets,
+      // The names `put-secret` places from an owner file: when they are all the deployed
+      // broker lacks (a switch's reviewed commit merged before its key was placed, as the
+      // model-provider switch's runbook does on purpose), gate 6 names put-secret and the
+      // rerun as the next step.
+      putSecretNames: [...Object.keys(putSecretFiles), ...constants.vaultKekSecrets],
       schemaHead: schemaHead(ctx.chain()),
       csp: committedCsp(ctx.root),
       checkpoint: writeReport,

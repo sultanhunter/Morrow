@@ -558,7 +558,8 @@ test("M2 PR-3: the deployed Worker binds the catalogue route (it reaches the dat
 // M3 PR-2 review: the api's run admission opens on the model-provider switch and M2 PR-3's
 // product read together, as the orchestrator's dispatch does, so no run, lease or credit
 // reservation exists without a Workflow to execute it. The read exists since M2 PR-3 and M3
-// PR-2 were integrated, so the switch (committed off) is the only gate.
+// PR-2 were integrated, so the switch (on in staging since model-provider-on, 2026-10-25) is the
+// only gate.
 test("M3 PR-2: run admission opens only with the model switch and the product read", () => {
   assert.equal(runtimeProductReadAvailable, true);
   for (const [mode, read, open] of [

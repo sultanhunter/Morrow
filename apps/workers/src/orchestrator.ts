@@ -25,8 +25,8 @@ import { keepRuntimeSweep } from "./runtime-sweep.js";
 // dispatch_disabled before any step, unless the reviewed model-provider switch is on with the
 // reviewed database binding and the RuntimeBroker and Workflow bindings (environment.ts).
 // M2 PR-3's product read exists since the integration of M2 PR-3 and M3 PR-2
-// (productReadAvailable, a reviewed constant), so the model-provider switch, committed off,
-// is the only gate. OperationWorkflow joins in M4.
+// (productReadAvailable, a reviewed constant), so the model-provider switch (on in staging
+// since model-provider-on, 2026-10-25) is the only gate. OperationWorkflow joins in M4.
 
 // M2 PR-3's RuntimeBroker.shopifyRead(productContent): the api's admission shares it. Not
 // exported: workerd refuses to start a module whose named export is neither a function nor
