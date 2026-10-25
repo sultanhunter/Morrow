@@ -19,9 +19,10 @@ Always release `morrow.specialist`, owned by the starter, scoped to the parent t
 mandate, trigger, schedule or routine; it ends `uninstalled` and is never re-activated (ADR-0028
 item 1). The Start transaction replaces stage-and-activate for this kind only.
 
-`may_hold` lists the 12 ids of the Specialist ceiling (ADR-0028 item 2), exactly as
-`docs/contracts/specialist-ceiling.json` holds them, plus `runtime.execution.use`, which joins only
-under the runtime switch (ADR-0029 item 7). The graph records ids, not verbs: the ceiling grants
-`catalog.content.publish` and `catalog.collection.publish` with the `propose` verb only, and never
-`approve` or `execute` on them. The SQL issuer's fixed allowlist stays the authority;
-`tests/graph.test.mjs` checks this node against the contract file.
+`may_hold` lists the 12 ids of the Specialist ceiling (ADR-0028 item 2) plus
+`runtime.execution.use`, which joined only under the runtime switch (ADR-0029 item 7). The graph
+records ids, not verbs: the ceiling granted `catalog.content.publish` and
+`catalog.collection.publish` with the `propose` verb only. ADR-0037 retired the specialist kind:
+its contracts PR removed `docs/contracts/specialist-ceiling.json` and the specialist switch, and its
+implementation plan's PR 1 drops this node. Until then `tests/graph.test.mjs` keeps it from holding
+delegation, order reads or `support.*`.

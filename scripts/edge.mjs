@@ -761,6 +761,55 @@ export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsP
     throw Error("EDGE_PLAN_DRAFTS_BEFORE_LOOP");
   return Object.freeze({ switch: record.switch, start_routes: record.start_routes });
 }
+// ADR-0037 item 9 (its implementation plan's PR 2): the teammate-calls and agent-cards
+// switches, committed off in place of the specialist switch. No Worker reads them yet:
+// packages/policy's coordinatorLaunchTools keeps agent.ask, agent.result.read and
+// agent.propose out of Morrow's turns while they are off. Each may go on only after G9 and
+// G10, the agent-loop switch (ADR-0027 item 11) and a passing eval round (ADR-0037 item 10);
+// agent cards also after the agent-card authority packet (G18). None of these has a reviewed
+// record yet, so all count as not done here, and an "on" record is a problem.
+export const edgeTeamSwitchFeatures = Object.freeze({
+  teammate_calls: "teammate-calls-staging.json",
+  agent_cards: "agent-cards-staging.json",
+});
+export const edgeTeamSwitchPrerequisites = Object.freeze({
+  agentLoop: "off",
+  g9: false,
+  g10: false,
+  evalRound: false,
+  agentCardPacket: false,
+});
+export function reviewedTeamSwitchRecord(
+  record,
+  feature,
+  prerequisites = edgeTeamSwitchPrerequisites,
+) {
+  if (
+    !Object.hasOwn(edgeTeamSwitchFeatures, feature) ||
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "environment_kind,feature,observed_on,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.feature !== feature ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    record.observed_on !== null ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_TEAM_SWITCH_RECORD");
+  if (
+    record.switch === "on" &&
+    (prerequisites.agentLoop !== "on" ||
+      prerequisites.g9 !== true ||
+      prerequisites.g10 !== true ||
+      prerequisites.evalRound !== true ||
+      (feature === "agent_cards" && prerequisites.agentCardPacket !== true))
+  )
+    throw Error("EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES");
+  return Object.freeze({ switch: record.switch });
+}
 // v1 PR 3, the apply switch (ADR-0022 items 7 and 9; committed off): its runtime image is
 // the var MORROW_SHOPIFY_WRITE ("on") on the staging api and broker; no secret (the store
 // tokens are already the vault's). Development's committed config never carries it, and
@@ -1238,6 +1287,8 @@ export async function verifyEdgeConfig({
   runtimePath = join(repositoryRoot, "docs/decisions/runtime-staging.json"),
   evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
+  teammateCallsPath = join(repositoryRoot, "docs/decisions/teammate-calls-staging.json"),
+  agentCardsPath = join(repositoryRoot, "docs/decisions/agent-cards-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -1325,6 +1376,27 @@ export async function verifyEdgeConfig({
         "plan-drafts-staging.json",
       );
     }
+  // ADR-0037 item 9: the teammate-calls and agent-cards switches, refused on before their
+  // prerequisites.
+  for (const [feature, path] of [
+    ["teammate_calls", teammateCallsPath],
+    ["agent_cards", agentCardsPath],
+  ]) {
+    const name = edgeTeamSwitchFeatures[feature];
+    const record = readJson(path);
+    if (record === null) problem("EDGE_STAGING_RECORD_UNREADABLE", name);
+    else
+      try {
+        reviewedTeamSwitchRecord(record, feature);
+      } catch (error) {
+        problem(
+          error instanceof Error && error.message === "EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES"
+            ? "EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES"
+            : "EDGE_STAGING_TEAM_SWITCH_RECORD",
+          name,
+        );
+      }
+  }
   if (
     modelProviderVar !== edgeModelProviderVar ||
     modelProviderAnthropic !== edgeModelProviderValue ||

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -40,8 +41,11 @@ import {
   orchestratorPackageAllowlist,
   resolvedEdgeConfig,
   edgePlanDraftsPrerequisites,
+  edgeTeamSwitchFeatures,
+  edgeTeamSwitchPrerequisites,
   reviewedModelRecord,
   reviewedPlanDraftsRecord,
+  reviewedTeamSwitchRecord,
   reviewedRuntimeRecord,
   reviewedStripeRecord,
   runWrangler,
@@ -50,7 +54,11 @@ import {
 } from "../scripts/edge.mjs";
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
-import { planDraftsSwitchAllowed } from "../packages/policy/src/projects/plan-draft.ts";
+import {
+  coordinatorLaunchTools,
+  planDraftsSwitchAllowed,
+} from "../packages/policy/src/projects/plan-draft.ts";
+import { teamSwitchState } from "../packages/policy/src/teammates.ts";
 
 // P04.T02a AC01, AC04, AC24 and the static half of AC22. Configuration is read
 // with the pinned wrangler (no account, credential or network).
@@ -2184,7 +2192,7 @@ test("model-provider-on: switched on, the full model set is required and every m
           worker.key + ":" + environment,
         );
   // Every other switch stays off: Stripe, the runtime and the Shopify apply (write) switch
-  // here, and the agent loop, plan drafts and specialists in their records.
+  // here, and the agent loop, plan drafts, teammate calls and agent cards in their records.
   assert.deepEqual(
     [verdict.stripeSwitch, verdict.runtimeSwitch, verdict.applySwitch],
     ["off", "off", "off"],
@@ -2193,7 +2201,8 @@ test("model-provider-on: switched on, the full model set is required and every m
     "agent-loop-staging.json",
     "plan-drafts-staging.json",
     "shopify-write-staging.json",
-    "specialists-staging.json",
+    "teammate-calls-staging.json",
+    "agent-cards-staging.json",
   ])
     assert.equal(
       JSON.parse(readFileSync(join("docs/decisions", name), "utf8")).switch,
@@ -2378,6 +2387,104 @@ test("the plan-drafts switch: committed off and held; on is refused while the lo
       }),
     );
     assert.deepEqual(found, [expected]);
+  }
+});
+
+// ADR-0037 item 9 (its implementation plan's PR 2): the teammate-calls and agent-cards
+// switches replace the specialist switch, committed off; edge:check refuses either on before
+// G9, G10, the agent-loop switch and a passing eval round (and, for agent cards, the
+// agent-card authority packet), none of which has a reviewed record yet.
+test("the teammate-calls and agent-cards switches: committed off; on is refused before their prerequisites", async () => {
+  assert.equal(existsSync("docs/decisions/specialists-staging.json"), false);
+  assert.deepEqual(
+    { ...edgeTeamSwitchFeatures },
+    {
+      teammate_calls: "teammate-calls-staging.json",
+      agent_cards: "agent-cards-staging.json",
+    },
+  );
+  assert.deepEqual(
+    { ...edgeTeamSwitchPrerequisites },
+    {
+      agentLoop: "off",
+      g9: false,
+      g10: false,
+      evalRound: false,
+      agentCardPacket: false,
+    },
+  );
+  const done = { agentLoop: "on", g9: true, g10: true, evalRound: true, agentCardPacket: true };
+  for (const [feature, name] of Object.entries(edgeTeamSwitchFeatures)) {
+    const committed = JSON.parse(readFileSync(join("docs/decisions", name), "utf8"));
+    assert.deepEqual({ ...reviewedTeamSwitchRecord(committed, feature) }, { switch: "off" });
+    const on = { ...committed, switch: "on" };
+    assert.throws(
+      () => reviewedTeamSwitchRecord(on, feature),
+      /EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES/,
+    );
+    for (const missing of ["agentLoop", "g9", "g10", "evalRound"])
+      assert.throws(
+        () =>
+          reviewedTeamSwitchRecord(on, feature, {
+            ...done,
+            [missing]: missing === "agentLoop" ? "off" : false,
+          }),
+        /EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES/,
+        feature + " " + missing,
+      );
+    assert.deepEqual({ ...reviewedTeamSwitchRecord(on, feature, done) }, { switch: "on" });
+    for (const edit of [
+      (r) => (r.switch = true),
+      (r) => (r.feature = feature === "agent_cards" ? "teammate_calls" : "agent_cards"),
+      (r) => (r.observed_on = "2026-10-26"),
+      (r) => (r.release = "morrow.specialist"),
+      (r) => (r.environment_kind = "production"),
+      (r) => (r.schema_version = 2),
+      (r) => (r.scope = null),
+    ]) {
+      const record = structuredClone(committed);
+      edit(record);
+      assert.throws(
+        () => reviewedTeamSwitchRecord(record, feature),
+        /EDGE_STAGING_TEAM_SWITCH_RECORD/,
+      );
+    }
+  }
+  // Agent cards also wait for the agent-card authority packet (G18).
+  const cards = JSON.parse(readFileSync("docs/decisions/agent-cards-staging.json", "utf8"));
+  assert.throws(
+    () =>
+      reviewedTeamSwitchRecord({ ...cards, switch: "on" }, "agent_cards", {
+        ...done,
+        agentCardPacket: false,
+      }),
+    /EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES/,
+  );
+  // The policy reads the same records: while off, Morrow's turns offer none of their tools.
+  assert.deepEqual(teamSwitchState(), { teammateCalls: "off", agentCards: "off" });
+  for (const tool of ["agent.ask", "agent.result.read", "agent.propose"])
+    assert.ok(!coordinatorLaunchTools().includes(tool), tool);
+  // Through verifyEdgeConfig: the committed records pass; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "team-switch-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [key, name] of [
+    ["teammateCallsPath", "teammate-calls-staging.json"],
+    ["agentCardsPath", "agent-cards-staging.json"],
+  ]) {
+    const committed = JSON.parse(readFileSync(join("docs/decisions", name), "utf8"));
+    for (const [value, expected] of [
+      [{ ...committed, switch: "on" }, "EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES"],
+      [{ ...committed, switch: "yes" }, "EDGE_STAGING_TEAM_SWITCH_RECORD"],
+      [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+    ]) {
+      const found = codes(await verify(resolve("."), undefined, { [key]: write(name, value) }));
+      assert.deepEqual(found, [expected], name);
+    }
   }
 });
 

@@ -1766,23 +1766,20 @@ test("this repository: phase 1 covers every plan task and holds the MVP's tracks
   );
 });
 
-test("this repository: the specialist ceiling node matches specialist-ceiling.json", () => {
+// ADR-0037's contracts PR retired the Specialist ceiling (docs/contracts/specialist-ceiling.json)
+// with the specialist kind; its implementation plan's PR 1 drops the IK-task-specialist node.
+// Until then the node never holds delegation, order reads or support.*.
+test("this repository: the retired specialist node holds no delegation, orders or support", () => {
   const graph = repo();
-  const contract = JSON.parse(readFileSync("docs/contracts/specialist-ceiling.json", "utf8"));
-  const ids = contract.capabilities.map((c) => c.capabilityId);
+  assert.equal(existsSync("docs/contracts/specialist-ceiling.json"), false);
   const held = (edge) =>
     graph.edges.filter((e) => e.from === "IK-task-specialist" && e.edge === edge).map((e) => e.to);
-  // The 12 ids exactly, plus runtime.execution.use, which joins only under the runtime switch.
-  assert.deepEqual(held("may_hold").sort(), [...ids, "runtime.execution.use"].sort());
+  const excluded = ["workspace.task.delegate", "orders.read", "support.case.read"];
+  for (const id of excluded) assert.ok(held("never_holds").includes(id), id);
   assert.deepEqual(
-    held("never_holds").filter((id) => ids.includes(id)),
+    held("may_hold").filter((id) => excluded.includes(id) || id.startsWith("support.")),
     [],
   );
-  for (const id of ["workspace.task.delegate", "orders.read", "support.case.read"])
-    assert.ok(held("never_holds").includes(id), id);
-  // Publish ids are held with propose only, never approve or execute (ADR-0028 item 2).
-  for (const c of contract.capabilities)
-    if (c.capabilityId.endsWith(".publish")) assert.deepEqual(c.verbs, ["propose"], c.capabilityId);
 });
 
 test("this repository: only agents with read_orders hold order aggregates, directly or by skill", () => {
