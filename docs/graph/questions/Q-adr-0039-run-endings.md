@@ -3,7 +3,7 @@ id: Q-adr-0039-run-endings
 type: question
 kind: decide
 title: Which loop-run endings count as failed (free), and a breaker for runs that keep failing
-status: open
+status: answered
 asked_of: owner
 links:
   raised_by: [ADR-0039]
@@ -25,3 +25,7 @@ publishes and before the first outside merchant:
    owner's Anthropic monthly limit is shared by every workspace. Proposed: after three failed
    loop runs in a row, an agent's runs and triggers in that workspace pause until a person resumes
    them, as Listings' breaker does for products. It is a stop condition, not a money cap.
+
+Answered 2026-10-26 (OD-2026-10-26-2): "recommended". Free: an ending caused by an error on Morrow's
+side or the AI provider's; charged: a run that still gives an answer, or that a person stops; the
+breaker, yes.
