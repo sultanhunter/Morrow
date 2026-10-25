@@ -13,6 +13,10 @@
 // COMMIT. Every failure is one fixed VaultError code. A COMMIT that was sent but whose
 // acknowledgement was lost is VAULT_OUTCOME_UNKNOWN: never retried, the caller reconciles
 // by its own ids. Nothing is logged; the password never appears in an error.
+// fix-shopify-install-live: an optional observer receives, once and after the close, where
+// the transaction ended (its phase, a closed cause, the statements acknowledged and two
+// durations). It carries no text, value or identifier, its throw is swallowed, and it never
+// changes the order, the deadline or the outcome.
 import { Client } from "@neondatabase/serverless";
 import { executorRoleMemberSql } from "../../../packages/identity/src/executor-role-preflight.js";
 import { brokerVaultRole } from "../../../packages/identity/src/broker-protocol.js";
@@ -29,6 +33,40 @@ export const vaultTransactionSql = Object.freeze({
   rollback: "ROLLBACK",
 });
 export const vaultTransactionLimits = Object.freeze({ budgetMinMs: 1, budgetMaxMs: 10000 });
+// Where a transaction ended: the step in progress, or "done" once COMMIT was acknowledged.
+export const vaultTransactionPhases = Object.freeze([
+  "connect",
+  "begin",
+  "role",
+  "settings",
+  "body",
+  "commit",
+  "done",
+] as const);
+export type VaultTransactionPhase = (typeof vaultTransactionPhases)[number];
+// Why it ended early: the budget ran out (before a send, or while one waited), the driver
+// failed or closed, the role preflight refused the session, a reply had no rows array, or
+// the body threw something that is not a VaultError. A VaultError the body throws itself
+// (a registry refusal, a record shape) has no cause: its code says it.
+export const vaultTransactionCauses = Object.freeze([
+  "deadline",
+  "driver",
+  "role_check",
+  "rows_shape",
+  "body",
+] as const);
+export type VaultTransactionCause = (typeof vaultTransactionCauses)[number];
+export interface VaultTransactionObservation {
+  readonly phase: VaultTransactionPhase;
+  readonly cause: VaultTransactionCause | null;
+  /** Statements acknowledged by the database, BEGIN and COMMIT included. */
+  readonly statements: number;
+  /** From the start until the connection was open; null when it never opened. */
+  readonly connectMs: number | null;
+  /** From the start until the outcome was fixed (before the close). */
+  readonly txMs: number;
+}
+export type VaultTransactionObserver = (observation: Readonly<VaultTransactionObservation>) => void;
 
 type SocketConstructor = new (url: string) => unknown;
 /** The driver seam: the Neon Client in Workers, a fake or a pg-wire bridge in tests. */
@@ -86,13 +124,22 @@ const neonDriver: VaultDriverFactory = (config) => {
   return client as unknown as VaultDriverClient;
 };
 
-// Races one operation against the deadline; the loser settles unobserved.
-function within<T>(pending: Promise<T>, deadlineMs: number, now: () => number): Promise<T> {
+// Races one operation against the deadline; the loser settles unobserved. `expired` runs
+// when the deadline wins.
+function within<T>(
+  pending: Promise<T>,
+  deadlineMs: number,
+  now: () => number,
+  expired: () => void = () => {},
+): Promise<T> {
   void pending.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
   const stopped = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () => reject(fail("VAULT_DATABASE_UNAVAILABLE")),
+      () => {
+        expired();
+        reject(fail("VAULT_DATABASE_UNAVAILABLE"));
+      },
       Math.max(0, deadlineMs - now()),
     );
   });
@@ -116,6 +163,7 @@ export async function runVaultTransactionWithDriver<T>(
   body: (query: VaultQuery) => Promise<T>,
   now: () => number = Date.now,
   nativeSocket?: SocketConstructor,
+  observe?: VaultTransactionObserver,
 ): Promise<T> {
   if (
     !Number.isSafeInteger(budgetMs) ||
@@ -127,7 +175,33 @@ export async function runVaultTransactionWithDriver<T>(
     typeof body !== "function"
   )
     throw fail("VAULT_INPUT_INVALID");
-  const deadline = now() + budgetMs;
+  const started = now();
+  const deadline = started + budgetMs;
+  // The observation (fix-shopify-install-live): set as the transaction goes, frozen once
+  // its outcome is fixed (`endedAt`), so the rollback and the close never change it.
+  let phase: VaultTransactionPhase = "connect";
+  let cause: VaultTransactionCause | null = null;
+  let statements = 0;
+  let connectMs: number | null = null;
+  let endedAt: number | null = null;
+  const note = (why: VaultTransactionCause) => {
+    if (cause === null && endedAt === null) cause = why;
+  };
+  const end = () => {
+    if (endedAt === null) endedAt = now();
+  };
+  // Called once, after the close; its throw is swallowed.
+  const emit = () => {
+    end();
+    if (typeof observe !== "function") return;
+    try {
+      observe(
+        Object.freeze({ phase, cause, statements, connectMs, txMs: (endedAt as number) - started }),
+      );
+    } catch {
+      /* The observation never changes the outcome. */
+    }
+  };
   const { hostname, database } = vault.binding;
   const expectedUrl = `wss://${hostname}/v2?address=${hostname}:5432`;
   const native = nativeSocket ?? (globalThis.WebSocket as unknown as SocketConstructor);
@@ -162,7 +236,9 @@ export async function runVaultTransactionWithDriver<T>(
       socket: Pinned,
     });
   } catch {
+    note("driver");
     shutdown();
+    emit();
     throw fail("VAULT_DATABASE_UNAVAILABLE");
   }
   client.on("error", shutdown);
@@ -170,16 +246,28 @@ export async function runVaultTransactionWithDriver<T>(
     inFlight = false,
     commitSent = false;
   const send = async (text: string, values: readonly string[] = []) => {
-    if (shut || inFlight || now() >= deadline) throw fail("VAULT_DATABASE_UNAVAILABLE");
+    if (shut || inFlight || now() >= deadline) {
+      note(shut || inFlight ? "driver" : "deadline");
+      throw fail("VAULT_DATABASE_UNAVAILABLE");
+    }
     inFlight = true;
     try {
       const pending = Promise.resolve().then(() =>
         values.length ? client.query(text, [...values]) : client.query(text),
       );
-      const reply = await within(pending, deadline, now);
+      const reply = await within(pending, deadline, now, () => note("deadline"));
       inFlight = false;
-      return rowsOf(reply);
+      let rows: readonly Record<string, unknown>[];
+      try {
+        rows = rowsOf(reply);
+      } catch (error) {
+        note("rows_shape");
+        throw error;
+      }
+      if (endedAt === null) statements++;
+      return rows;
     } catch (error) {
+      note("driver");
       shutdown();
       throw error instanceof VaultError ? error : fail("VAULT_DATABASE_UNAVAILABLE");
     }
@@ -198,9 +286,13 @@ export async function runVaultTransactionWithDriver<T>(
       Promise.resolve().then(() => client.connect()),
       deadline,
       now,
+      () => note("deadline"),
     );
+    connectMs = now() - started;
+    phase = "begin";
     await send(vaultTransactionSql.begin);
     open = true;
+    phase = "role";
     const role = await send(vaultTransactionSql.role);
     const r = role.length === 1 ? role[0] : undefined;
     if (
@@ -209,20 +301,30 @@ export async function runVaultTransactionWithDriver<T>(
       r.role !== brokerVaultRole ||
       r.login !== brokerVaultRole ||
       roleNames.slice(2).some((name) => r[name] !== false)
-    )
+    ) {
+      note("role_check");
       throw fail("VAULT_DATABASE_UNAVAILABLE");
+    }
+    phase = "settings";
     for (const setting of [
       vaultTransactionSql.statementTimeout,
       vaultTransactionSql.lockTimeout,
       vaultTransactionSql.idleTimeout,
     ])
       await send(setting);
+    phase = "body";
     const value = await body(query);
+    phase = "commit";
     commitSent = true;
     await send(vaultTransactionSql.commit);
     open = false;
+    end();
+    phase = "done";
     return value;
   } catch (error) {
+    // The connect's own failure, or a body's throw that is not a VaultError.
+    if (!(error instanceof VaultError)) note(phase === "body" ? "body" : "driver");
+    end();
     // A COMMIT sent without its acknowledgement: the outcome is unknown, never retried.
     if (commitSent && open) throw fail("VAULT_OUTCOME_UNKNOWN");
     if (open && !inFlight && !shut)
@@ -246,17 +348,28 @@ export async function runVaultTransactionWithDriver<T>(
       /* The socket is closed below either way. */
     }
     shutdown();
+    emit();
   }
 }
 
 /**
  * One transaction on the broker's own login. `body` receives the registry-checked query;
- * its result is returned after COMMIT. Throws a VaultError on every failure.
+ * its result is returned after COMMIT. Throws a VaultError on every failure. `observe`, when
+ * given, receives where it ended (VaultTransactionObservation) once, after the close.
  */
 export function runVaultTransaction<T>(
   vault: Readonly<BrokerVault>,
   budgetMs: number,
   body: (query: VaultQuery) => Promise<T>,
+  observe?: VaultTransactionObserver,
 ): Promise<T> {
-  return runVaultTransactionWithDriver(neonDriver, vault, budgetMs, body);
+  return runVaultTransactionWithDriver(
+    neonDriver,
+    vault,
+    budgetMs,
+    body,
+    Date.now,
+    undefined,
+    observe,
+  );
 }

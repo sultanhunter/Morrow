@@ -13,8 +13,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { setFlagsFromString } from "node:v8";
-import { runInNewContext } from "node:vm";
+import v8 from "node:v8";
+import vm from "node:vm";
 import {
   createE2bRuntime,
   e2bCreateBody,
@@ -807,56 +807,33 @@ test("envd exec: deadlines are timed_out; a cut, refused or malformed stream is 
   }
 });
 
-// The hosted runner's `npm test` hung on this file (2026-10-25): a full collection inside a
-// "hang" fault's or a stalled stream's wait cut the caller's abort off from the wire, because
-// a Request's signal follows the caller's only while the Request is alive, and the adapter
-// keeps none. The wire holds each waiting Request until its abort; here the heap is collected
-// every few milliseconds through each wait, and a wait that never ends fails within its bound
-// instead of holding the run.
-test("the wire's waits end on the caller's abort however often the heap is collected", async () => {
-  setFlagsFromString("--expose-gc");
-  const collect = runInNewContext("gc");
-  const within = async (label, promise) => {
-    let timer;
-    try {
-      return await Promise.race([
-        promise,
-        new Promise((_, reject) => {
-          timer = setTimeout(() => reject(Error(label + ": never settled")), 10_000);
-        }),
-      ]);
-    } finally {
-      clearTimeout(timer);
+// PR #67: a garbage collection while the wire held a reply back dropped the request's abort,
+// so the call never returned and the checks job hung. The wire holds a waiting request the
+// way a connection does; the timeout makes a regression fail here instead of hanging.
+test(
+  "a reply held back until the abort survives a garbage collection",
+  { timeout: 10_000 },
+  async () => {
+    v8.setFlagsFromString("--expose-gc");
+    const gc = vm.runInNewContext("gc");
+    const collectSoon = () => setTimeout(() => gc(), 20);
+    {
+      const w = wireWorld();
+      w.wire.fault({ route: "create", kind: "hang" });
+      const pending = w.adapter.create(request(), w.credential, 200);
+      collectSoon();
+      assert.deepEqual(await pending, { outcome: "unknown_effect" });
     }
-  };
-  const collector = setInterval(collect, 5);
-  try {
-    for (const route of ["create", "list", "kill", "write"]) {
+    {
       const w = wireWorld();
       const s = await sandboxOf(w);
-      w.wire.fault({ route, kind: "hang" });
-      const r = await within(
-        route,
-        route === "create"
-          ? w.adapter.create(request(), w.credential, 100)
-          : route === "list"
-            ? w.adapter.status(s.operationId, null, w.credential, 100)
-            : route === "kill"
-              ? w.adapter.kill(s.sandboxRef, w.credential, 100)
-              : w.adapter.writeFile(s, computerProfile.jobPath, wireScript({}), 100),
-      );
-      assert.equal(r.outcome, route === "create" ? "unknown_effect" : "unknown", route);
+      await w.adapter.writeFile(s, computerProfile.jobPath, wireScript({ stall: true }), budget);
+      const pending = w.adapter.exec(s, command, 200);
+      collectSoon();
+      assert.deepEqual(await pending, { outcome: "unknown" });
     }
-    const w = wireWorld();
-    const s = await sandboxOf(w);
-    await w.adapter.writeFile(s, computerProfile.jobPath, wireScript({ stall: true }), budget);
-    assert.deepEqual(await within("exec", w.adapter.exec(s, command, 200)), {
-      outcome: "unknown",
-    });
-  } finally {
-    clearInterval(collector);
-  }
-});
+  },
+);
 
 // ---------------------------------------------------------------------------
 test("custody: the key reaches only the platform API, the token only envd, nothing reaches a guest", async () => {

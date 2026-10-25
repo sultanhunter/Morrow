@@ -25,7 +25,7 @@
 //      unrecovered), an uncertain send booked at its worst case, a draft steered to another
 //      product (product_mismatch, twice);
 //   E  a spend limit ends the run (drafted work is still proposed); K the three-failure breaker;
-//   U  no unrecovered-cost cap (ADR-0036, migration 0048): past the former US$4.50 a run
+//   U  no unrecovered-cost cap (ADR-0036, migration 0051): past the former US$4.50 a run
 //      drafts every product and admission still admits;
 //   F  the fence as the broker's login: replay, in flight, one open call per run, attempts,
 //      digests, closed inputs, a reply from another model, cost overflow never dropped and the
@@ -1204,7 +1204,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   // ---------------------------------------------------------------------------
   phase("unrecovered_cap");
   {
-    // U1 (ADR-0036, migration 0048): no unrecovered-cost cap. With this period's unrecovered
+    // U1 (ADR-0036, migration 0051): no unrecovered-cost cap. With this period's unrecovered
     // cost raised far past the former US$4.50 (sim), a running run still drafts every product
     // and admission still admits; the ledger is restored after. The run limit, the daily cap
     // and the breaker still stop runs (K1, C1 and lab:run-credits C4).

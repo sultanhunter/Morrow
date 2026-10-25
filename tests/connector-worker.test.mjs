@@ -12,8 +12,12 @@ import {
   encodeShopifyCredentialResult,
   encodeShopifyInstallResult,
   encodeShopifyLaunchVerdict,
+  encodeShopifyWebhookSyncResult,
   encodeShopifyWebhookVerdict,
+  shopifyLimits,
+  shopifyWebhookSyncLimits,
 } from "../packages/identity/src/broker-protocol.ts";
+import { shopifyBrokerBudgets } from "../apps/broker/src/shopify-install.ts";
 import {
   connectorBudgets,
   createConnectorHandler,
@@ -251,6 +255,8 @@ function harness(answers = {}, limiters = undefined) {
   const broker = {
     async shopifyLaunchVerify(appKey, rawQuery) {
       calls.push(["launch", appKey, rawQuery]);
+      if (answers.launchDelayMs)
+        await new Promise((resolve) => setTimeout(resolve, answers.launchDelayMs));
       return (
         answers.launch ??
         encodeShopifyLaunchVerdict({
@@ -263,6 +269,8 @@ function harness(answers = {}, limiters = undefined) {
     },
     async shopifyInstallComplete(appKey, rawQuery, digest, budget) {
       calls.push(["install", appKey, rawQuery, digest, budget]);
+      if (answers.installDelayMs)
+        await new Promise((resolve) => setTimeout(resolve, answers.installDelayMs));
       if (answers.installThrows) throw new Error("BROKER_HELD");
       return answers.install;
     },
@@ -279,6 +287,23 @@ function harness(answers = {}, limiters = undefined) {
       calls.push(["destroy", installationId, reason]);
       if (answers.destroyThrows) throw new Error("BROKER_HELD");
       return encodeShopifyCredentialResult(answers.destroy ?? "destroyed");
+    },
+    // The shop-specific webhook subscriptions: a budget in, counts out.
+    async shopifyWebhookSubscriptionsSync(budgetMs) {
+      calls.push(["subscriptions", budgetMs]);
+      if (answers.syncThrows) throw new Error("BROKER_HELD");
+      if (answers.syncHangs) return new Promise(() => {});
+      return (
+        answers.sync ??
+        encodeShopifyWebhookSyncResult({
+          checked: 0,
+          registered: 0,
+          failed: 0,
+          unknown: 0,
+          unauthorized: 0,
+          skipped: 0,
+        })
+      );
     },
   };
   const database = {
@@ -408,6 +433,7 @@ test("callback: the cookie must equal the state before any broker call; the redi
       continuationToken: token,
     }),
   });
+  const refusedContext = context();
   for (const cookie of [
     null,
     "",
@@ -418,15 +444,19 @@ test("callback: the cookie must equal the state before any broker call; the redi
         origin + "/shopify/a/dev-app/callback?" + query,
         cookie === null ? {} : { headers: { cookie } },
       ),
+      refusedContext.ctx,
     );
     assert.equal(response.status, 403);
     assert.equal(response.headers.get("set-cookie"), stateCookieClear);
   }
   assert.deepEqual(ok.calls, []);
+  assert.equal(refusedContext.pending.length, 0);
+  const c = context();
   const response = await ok.handler.fetch(
     new Request(origin + "/shopify/a/dev-app/callback?" + query, {
       headers: { cookie: `__Host-morrow_shopify_state=${state}` },
     }),
+    c.ctx,
   );
   assert.equal(response.status, 303);
   assert.equal(
@@ -436,13 +466,21 @@ test("callback: the cookie must equal the state before any broker call; the redi
   assert.equal(response.headers.get("set-cookie"), stateCookieClear);
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
   assert.equal(response.headers.get("cache-control"), "no-store");
-  assert.deepEqual(ok.calls, [["install", "dev-app", query, sha(state), 9000]]);
+  // The store's shop-specific webhook subscriptions are asked for after the response
+  // (waitUntil), with the install's budget, and nothing else.
+  assert.equal(c.pending.length, 1);
+  await c.settle();
+  assert.deepEqual(ok.calls, [
+    ["install", "dev-app", query, sha(state), 10000],
+    ["subscriptions", connectorBudgets.subscriptionsMs],
+  ]);
   // A duplicate state parameter never matches.
   const twice = harness();
   const dup = await twice.handler.fetch(
     new Request(origin + `/shopify/a/dev-app/callback?state=${state}&state=${state}`, {
       headers: { cookie: `__Host-morrow_shopify_state=${state}` },
     }),
+    context().ctx,
   );
   assert.equal(dup.status, 403);
   assert.deepEqual(twice.calls, []);
@@ -454,7 +492,11 @@ test("callback outcomes map to fixed pages; a linked re-authorisation redirects 
     new Request(origin + `/shopify/a/dev-app/callback?state=${state}&shop=x`, {
       headers: { cookie: `__Host-morrow_shopify_state=${state}` },
     });
-  const page = async (answers) => harness(answers).handler.fetch(request());
+  let last;
+  const page = async (answers) => {
+    last = { ...context(), h: harness(answers) };
+    return last.h.handler.fetch(request(), last.ctx);
+  };
   const linked = await page({
     install: encodeShopifyInstallResult({
       outcome: "reauthorised",
@@ -464,6 +506,12 @@ test("callback outcomes map to fixed pages; a linked re-authorisation redirects 
   });
   assert.equal(linked.status, 303);
   assert.equal(linked.headers.get("location"), `${apiOrigin}/w/ws_1/connections`);
+  // A re-authorisation (a new token version) asks for the subscriptions too.
+  await last.settle();
+  assert.deepEqual(
+    last.h.calls.map((c) => c[0]),
+    ["install", "subscriptions"],
+  );
   for (const [outcome, status] of [
     ["refused", 403],
     ["state_invalid", 400],
@@ -478,9 +526,159 @@ test("callback outcomes map to fixed pages; a linked re-authorisation redirects 
     assert.equal(response.status, status, outcome);
     assert.equal(response.headers.get("set-cookie"), stateCookieClear, outcome);
     assert.equal(response.headers.get("location"), null, outcome);
+    // Nothing installed: no subscription sync.
+    assert.equal(last.pending.length, 0, outcome);
   }
   const held = await page({ installThrows: true });
   assert.equal(held.status, 503);
+  assert.equal(last.pending.length, 0);
+});
+
+test("callback: the install never waits for or depends on the subscription sync", async () => {
+  const state = randomBytes(32).toString("base64url");
+  const request = () =>
+    new Request(origin + `/shopify/a/dev-app/callback?state=${state}&shop=x`, {
+      headers: { cookie: `__Host-morrow_shopify_state=${state}` },
+    });
+  const install = encodeShopifyInstallResult({
+    outcome: "installed",
+    workspaceId: "ws_1",
+    continuationToken: randomBytes(32).toString("base64url"),
+  });
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  try {
+    // A sync that never answers: the redirect is already final; the RPC timer gives up
+    // after the budget and its slack (mock timers: no real wait), with one fixed line.
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      const c = context();
+      const hung = harness({ install, syncHangs: true });
+      const response = await hung.handler.fetch(request(), c.ctx);
+      assert.equal(response.status, 303);
+      assert.equal(c.pending.length, 1);
+      for (let i = 0; i < 20 && hung.calls.length < 2; i++) await new Promise(setImmediate);
+      mock.timers.tick(connectorBudgets.subscriptionsMs + connectorBudgets.subscriptionsSlackMs);
+      assert.equal(await c.pending[0], null);
+    } finally {
+      mock.timers.reset();
+    }
+    // A held broker: the same redirect, one fixed line.
+    const c = context();
+    const response = await harness({ install, syncThrows: true }).handler.fetch(request(), c.ctx);
+    assert.equal(response.status, 303);
+    await c.settle();
+    // A sync with counts logs them, never an id, shop or token.
+    const counted = context();
+    await harness({
+      install,
+      sync: encodeShopifyWebhookSyncResult({
+        checked: 3,
+        registered: 1,
+        failed: 1,
+        unknown: 0,
+        unauthorized: 0,
+        skipped: 1,
+      }),
+    }).handler.fetch(request(), counted.ctx);
+    await counted.settle();
+    // A malformed broker answer is unavailable too.
+    const garbled = context();
+    await harness({ install, sync: '{"schemaVersion":1}' }).handler.fetch(request(), garbled.ctx);
+    await garbled.settle();
+  } finally {
+    console.log = saved;
+  }
+  assert.deepEqual(
+    logged.filter((row) => row.event === "morrow_connector_webhooks"),
+    [
+      { event: "morrow_connector_webhooks", code: "SUBSCRIPTIONS_UNAVAILABLE" },
+      { event: "morrow_connector_webhooks", code: "SUBSCRIPTIONS_UNAVAILABLE" },
+      {
+        event: "morrow_connector_webhooks",
+        code: "SUBSCRIPTIONS_SYNCED",
+        checked: 3,
+        registered: 1,
+        failed: 1,
+        unknown: 0,
+        unauthorized: 0,
+        skipped: 1,
+      },
+      { event: "morrow_connector_webhooks", code: "SUBSCRIPTIONS_UNAVAILABLE" },
+    ],
+  );
+  // Both budgets sit inside the broker's closed range, and the after-response sync inside
+  // the platform's 30 seconds of waitUntil after a response.
+  for (const budget of [connectorBudgets.subscriptionsMs, connectorBudgets.subscriptionsCronMs])
+    assert.ok(
+      budget >= shopifyWebhookSyncLimits.budgetMinMs &&
+        budget <= shopifyWebhookSyncLimits.budgetMaxMs,
+    );
+  assert.ok(connectorBudgets.subscriptionsMs + connectorBudgets.subscriptionsSlackMs < 30000);
+});
+
+// fix-shopify-install-live: the connector's RPC timers cover the broker's budgets plus a
+// cold broker isolate, so a slow but successful broker answer is never "Unavailable" or
+// "Not confirmed" (mock timers: no real wait).
+test("budgets: the launch and install timers cover the broker's budgets and a cold isolate", async () => {
+  assert.ok(connectorBudgets.launchMs >= shopifyBrokerBudgets.launchMs + 1500);
+  assert.ok(
+    connectorBudgets.installMs >=
+      shopifyBrokerBudgets.claimMs + shopifyBrokerBudgets.storeReserveMs + 1000,
+  );
+  assert.ok(connectorBudgets.installMs <= shopifyLimits.budgetMaxMs);
+  assert.ok(connectorBudgets.stateOpenMs >= 5000, "a fresh connection while Neon wakes");
+  assert.ok(connectorBudgets.webhookMs > shopifyBrokerBudgets.ingressMs);
+  assert.ok(connectorBudgets.webhookMs < 5000, "inside Shopify's webhook timeout");
+  const timed = async (answers, request, waitMs) => {
+    const h = harness(answers);
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      const pending = h.handler.fetch(request(), context().ctx);
+      for (let i = 0; i < 20 && h.calls.length === 0; i++) await new Promise(setImmediate);
+      mock.timers.tick(waitMs);
+      for (let i = 0; i < 5; i++) await new Promise(setImmediate);
+      return { response: await pending, calls: h.calls };
+    } finally {
+      mock.timers.reset();
+    }
+  };
+  const launch = () => new Request(origin + "/shopify/a/dev-app/launch?shop=x");
+  // A cold broker isolate (1 s to start) that then spends its whole launch budget still
+  // reaches the authorize redirect; past the connector's timer it is "Unavailable".
+  const slow = shopifyBrokerBudgets.launchMs + 1000;
+  const ok = await timed({ launchDelayMs: slow }, launch, slow);
+  assert.equal(ok.response.status, 302);
+  assert.deepEqual(
+    ok.calls.map((c) => c[0]),
+    ["launch", "stateOpen"],
+  );
+  assert.equal(ok.calls[1][4], connectorBudgets.stateOpenMs);
+  const late = await timed(
+    { launchDelayMs: connectorBudgets.launchMs + 1 },
+    launch,
+    connectorBudgets.launchMs + 1,
+  );
+  assert.equal(late.response.status, 503);
+  // The install: the broker's whole budget plus the RPC's hops is still confirmed.
+  const state = randomBytes(32).toString("base64url");
+  const callbackRequest = () =>
+    new Request(origin + `/shopify/a/dev-app/callback?state=${state}&shop=x`, {
+      headers: { cookie: `__Host-morrow_shopify_state=${state}` },
+    });
+  const installed = encodeShopifyInstallResult({
+    outcome: "reauthorised",
+    workspaceId: "ws_1",
+    continuationToken: null,
+  });
+  const confirmed = await timed(
+    { install: installed, installDelayMs: connectorBudgets.installMs + 1000 },
+    callbackRequest,
+    connectorBudgets.installMs + 1000,
+  );
+  assert.equal(confirmed.response.status, 303);
+  assert.deepEqual(confirmed.calls[0].slice(-1), [connectorBudgets.installMs]);
 });
 
 // A request context recording what the handler leaves running after its response.
@@ -722,6 +920,9 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
         "destroy:installation_2:scopes_changed",
         "destroy:installation_3:uninstalled",
         "privacyOverdue:3000",
+        // Then the shop-specific webhook subscriptions of every active installation that
+        // lacks them, with the cron's budget.
+        "subscriptions:" + connectorBudgets.subscriptionsCronMs,
       ],
     );
     assert.deepEqual(
@@ -733,15 +934,18 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
         destroyed: 2,
         targetMissed: 0,
         dueMissed: 0,
+        subscriptionsChecked: 0,
+        subscriptionsRegistered: 0,
         unavailable: 0,
       },
     );
-    // An unavailable id read still runs the credential re-drive and the deadline check.
+    // An unavailable id read still runs the credential re-drive, the deadline check and the
+    // subscriptions.
     const down = harness({ pendingThrows: true });
     assert.equal((await down.handler.redrive()).unavailable, 1);
     assert.deepEqual(
       down.calls.map((c) => c[0]),
-      ["inboxPending", "credentialsPending", "privacyOverdue"],
+      ["inboxPending", "credentialsPending", "privacyOverdue", "subscriptions"],
     );
   } finally {
     console.log = saved;
@@ -780,6 +984,61 @@ test("cron: open privacy requests past their target or due time log fixed codes 
       { event: "morrow_connector_privacy", code: "PRIVACY_CHECK_UNAVAILABLE" },
     ],
   );
+});
+
+test("cron: the subscription sync's counts, an unavailable sync, and no sync without its whole budget", async () => {
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  let synced, held;
+  try {
+    synced = await harness({
+      sync: encodeShopifyWebhookSyncResult({
+        checked: 2,
+        registered: 1,
+        failed: 0,
+        unknown: 1,
+        unauthorized: 0,
+        skipped: 0,
+      }),
+    }).handler.redrive();
+    held = await harness({ syncThrows: true }).handler.redrive();
+  } finally {
+    console.log = saved;
+  }
+  assert.deepEqual(
+    [synced.subscriptionsChecked, synced.subscriptionsRegistered, synced.unavailable],
+    [2, 1, 0],
+  );
+  assert.deepEqual(
+    [held.subscriptionsChecked, held.subscriptionsRegistered, held.unavailable],
+    [0, 0, 1],
+  );
+  assert.deepEqual(
+    logged.filter((row) => row.event === "morrow_connector_webhooks").map((row) => row.code),
+    ["SUBSCRIPTIONS_SYNCED", "SUBSCRIPTIONS_UNAVAILABLE"],
+  );
+  // A run whose re-drives used its time leaves the sync to the next run: here 45 of the
+  // run's 60 seconds pass before the re-drives finish (mock clock), so less than the sync's
+  // budget and slack is left.
+  mock.timers.enable({ apis: ["Date"], now: 1_760_950_000_000 });
+  const quiet = console.log;
+  console.log = () => {};
+  try {
+    const h = harness();
+    const run = h.handler.redrive();
+    mock.timers.tick(45000);
+    const counts = await run;
+    assert.equal(counts.subscriptionsChecked, 0);
+    assert.equal(counts.unavailable, 0);
+    assert.deepEqual(
+      h.calls.map((c) => c[0]),
+      ["inboxPending", "credentialsPending", "privacyOverdue"],
+    );
+  } finally {
+    console.log = quiet;
+    mock.timers.reset();
+  }
 });
 
 test("ingress limits: counted per address before any broker call; 429 over, 503 without an address", async () => {

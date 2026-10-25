@@ -16,7 +16,12 @@ import {
   brokerShopifyWebhookVerify,
 } from "./shopify-install.js";
 import { brokerShopifyRead } from "./shopify-read.js";
-import { brokerShopifyProductApply, brokerShopifyProductReconcile } from "./shopify-write.js";
+import { brokerShopifyWebhookSubscriptionsSync } from "./shopify-webhooks.js";
+import {
+  brokerShopifyProductApply,
+  brokerShopifyProductReconcile,
+  brokerShopifyProductUndoCheck,
+} from "./shopify-write.js";
 import {
   brokerStripeCheckoutCreate,
   brokerStripeCustomerEnsure,
@@ -57,12 +62,13 @@ const runtimeGateway = createRuntimeGateway({
 // Each method checks its arity and forwards to a module-scope handler. Results are
 // strings or booleans only.
 
-// The api Worker's entrypoint: exactly twelve prototype methods (v0's four, ADR-0019 item 6
+// The api Worker's entrypoint: exactly thirteen prototype methods (v0's four, ADR-0019 item 6
 // added challengeVerify; M5 PR-1 adds the four Stripe methods, which take ids, strings and
 // budgets only, as v1 requires: the broker loads every Stripe parameter itself; M2 PR-3 adds
 // shopifyRead under a read lease; "Disconnect store" adds shopifyCredentialDestroy, the
 // disconnected installation's token, with its reason fixed; v1 PR 3 adds the gateway's
-// shopifyProductApply and shopifyProductReconcile, keyed by one operation id).
+// shopifyProductApply and shopifyProductReconcile, keyed by one operation id; v1 PR 4 adds
+// shopifyProductUndoCheck, keyed the same way).
 export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0 ? brokerHealth(this.env) : brokerInputInvalid("health");
@@ -148,6 +154,12 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
       ? brokerShopifyProductReconcile(this.env, operationId, budgetMs)
       : brokerInputInvalid("shopifyProductReconcile");
   }
+  // v1 PR 4: the undo check of one verified catalog_write operation (ids and a budget only).
+  shopifyProductUndoCheck(operationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerShopifyProductUndoCheck(this.env, operationId, budgetMs)
+      : brokerInputInvalid("shopifyProductUndoCheck");
+  }
 }
 
 // The connector Worker's entrypoint (M2 PR-1): its health and its own role lease. M2 PR-2
@@ -155,6 +167,8 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
 // webhook signature checks and the install's claim, exchange, identity read and vault
 // write. M2 PR-3 makes the webhook check record the delivery and adds the token's
 // destruction (shopifyRead is the api's and the orchestrator's, never the connector's).
+// The shop-specific webhook subscriptions add shopifyWebhookSubscriptionsSync, a budget only
+// (docs/briefs/shopify-shop-specific-webhooks.md).
 export class ConnectorBroker extends WorkerEntrypoint<unknown> implements ConnectorBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -194,6 +208,11 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
     return arguments.length === 2
       ? brokerShopifyCredentialDestroy(this.env, installationId, reason)
       : brokerInputInvalid("shopifyCredentialDestroy", "ConnectorBroker");
+  }
+  shopifyWebhookSubscriptionsSync(budgetMs: number): Promise<string> {
+    return arguments.length === 1
+      ? brokerShopifyWebhookSubscriptionsSync(this.env, budgetMs)
+      : brokerInputInvalid("shopifyWebhookSubscriptionsSync", "ConnectorBroker");
   }
 }
 

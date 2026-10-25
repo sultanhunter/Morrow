@@ -28,6 +28,28 @@ export const e2bWireOrigins = Object.freeze({
   sandbox: "https://sandbox.e2b.app",
 });
 const encoder = new TextEncoder();
+// A real connection holds its request while it is in flight; this fake must too. Node's
+// Request reaches its own abort controller from the caller's signal only through a WeakRef,
+// so a wait on request.signal that nothing else holds is lost at the next garbage
+// collection: the abort never arrives and the caller waits forever (PR #67's checks job
+// never finished this file on the Linux runner). A request waiting for its abort is held
+// here, at module scope, until the abort arrives.
+const waiting = new Set();
+function aborted(request) {
+  const { signal } = request;
+  return new Promise((_, reject) => {
+    if (signal.aborted) return reject(signal.reason ?? Error("aborted"));
+    waiting.add(request);
+    signal.addEventListener(
+      "abort",
+      () => {
+        waiting.delete(request);
+        reject(signal.reason ?? Error("aborted"));
+      },
+      { once: true },
+    );
+  });
+}
 const json = (status, value, headers = {}) =>
   new Response(JSON.stringify(value), {
     status,
@@ -54,32 +76,6 @@ function concat(parts) {
   return out;
 }
 const iso = (ms) => new Date(ms).toISOString();
-
-// A Request's own signal follows the signal it was made with only while the Request is alive:
-// undici holds the AbortController behind request.signal from the Request, and reaches it
-// from the caller's signal through a WeakRef. The adapter keeps no Request once `fetch` has
-// it, so a wait on request.signal alone ends with the next full collection: the caller's
-// abort no longer reaches it, and the wait (a "hang" fault, a stalled exec stream) and the
-// test awaiting it never settle. That hung `npm test` on the hosted runner, where a full GC
-// landed inside such a wait. Each Request waiting on its abort is held here, from module
-// scope, until the abort arrives.
-const awaitingAbort = new Set();
-function untilAborted(request, onAbort) {
-  const { signal } = request;
-  if (signal.aborted) {
-    onAbort(signal.reason ?? Error("aborted"));
-    return;
-  }
-  awaitingAbort.add(request);
-  signal.addEventListener(
-    "abort",
-    () => {
-      awaitingAbort.delete(request);
-      onAbort(signal.reason ?? Error("aborted"));
-    },
-    { once: true },
-  );
-}
 
 /**
  * @param {{credential: string, now: () => number, templates?: string[], domain?: string|null}} options
@@ -125,8 +121,6 @@ export function createE2bWire(options) {
     network: { allowPublicTraffic: false },
     lifecycle: { autoResume: false, onTimeout: "kill" },
   });
-  const hang = (request) =>
-    new Promise((_, reject) => untilAborted(request, (reason) => reject(reason)));
   // A fault either answers instead of the route, or (lost) after its effect.
   async function faulted(route, request, effect) {
     const f = take(route);
@@ -136,7 +130,7 @@ export function createE2bWire(options) {
       throw new TypeError("network connection lost");
     }
     if (f.kind === "drop") throw new TypeError("network connection lost");
-    if (f.kind === "hang") return { response: await hang(request) };
+    if (f.kind === "hang") return { response: await aborted(request) };
     if (f.kind === "redirect")
       return {
         response: new Response(null, {
@@ -396,7 +390,7 @@ export function createE2bWire(options) {
           const stream = new ReadableStream({
             start(controller) {
               controller.enqueue(frames[0]);
-              untilAborted(request, (reason) => controller.error(reason));
+              aborted(request).catch((reason) => controller.error(reason));
             },
           });
           return new Response(stream, { status: 200, headers });

@@ -1,7 +1,7 @@
 // M3 PR-1: the pure run money rules (P11.T04a minimum; ADR-0022 item 11). The SQL twins
 // (run_reserve, run_book_cost, run_settle, run_release) are proved under concurrency by
 // lab:run-credits. ADR-0036 removed the unrecovered-cost cap: unrecovered_allows (revised by
-// migration 0048) caps nothing, and its TypeScript twin is gone.
+// migration 0051) caps nothing, and its TypeScript twin is gone.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";

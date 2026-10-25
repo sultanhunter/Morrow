@@ -1,7 +1,7 @@
 // ADR-0036 (OD-2026-10-25-1, OD-2026-10-25-2): Opus 5.5 by default for every agent, no
 // unrecovered-cost cap, the member ceiling of 4 and the look-for-work cap of US$1.12 a day.
 // Pure: no I/O beyond reading the repository files. lab:run-credits (C4, C12) and
-// lab:listings-runs (M1, U1) prove migration 0048 on PostgreSQL 17.
+// lab:listings-runs (M1, U1) prove migration 0051 on PostgreSQL 17.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -40,7 +40,7 @@ const read = (path) => readFileSync(path, "utf8");
 const policy = JSON.parse(read("docs/decisions/model-policy.json"));
 const registry = JSON.parse(read("docs/decisions/providers.json"));
 const manifest = JSON.parse(read("migrations/manifest.json"));
-const file = "0048.model-defaults-cost-cap.sql";
+const file = "0051.model-defaults-cost-cap.sql";
 const sql = read("migrations/" + file);
 const credits = read("migrations/0033.run-credits.sql");
 const runs = read("migrations/0038.listings-runs.sql");
@@ -113,7 +113,7 @@ test("version 3's default member ceiling of 4 is owner-confirmed (OD-2026-10-25-
   assert.ok(v3.owner_confirmation.includes('answered "Everyone, up to 4 (Recommended)"'));
   assert.doesNotMatch(v3.owner_confirmation, /Not confirmed|await/);
   // The confirmation changed version 3's digest; the pin, the generated catalogue and
-  // migration 0048's seed follow it.
+  // migration 0051's seed follow it.
   assert.equal(
     policy.catalogue.published_digests["3"],
     "f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0",
@@ -332,7 +332,7 @@ test("the per-run and per-day backstops and the breaker still refuse (TypeScript
   assert.equal(day(18.29), false);
 });
 
-test("migration 0048 seeds catalogue version 3 exactly as the generated catalogue holds it", () => {
+test("migration 0051 seeds catalogue version 3 exactly as the generated catalogue holds it", () => {
   const v3 = generatedModelCatalogue.versions.find((v) => v.version === 3);
   const [version] = rows("INSERT INTO morrow_work.model_catalogue_versions(");
   assert.deepEqual(version, [
@@ -379,8 +379,13 @@ test("migration 0048 seeds catalogue version 3 exactly as the generated catalogu
   );
 });
 
-test("migration 0048: a forward work-owner migration that retires version 1 in place", () => {
+test("migration 0051: a forward work-owner migration that retires version 1 in place", () => {
   const row = manifest.migrations.find((m) => m.file === file);
+  // Row 51, after main's 0048-0050 (#71's webhook registrations, #67's catalog-undo), which
+  // read nothing this migration changes.
+  assert.equal(row.sequence, 51);
+  const undo = manifest.migrations.find((m) => m.file.endsWith(".catalog-undo.sql"));
+  assert.ok(undo.sequence < row.sequence);
   assert.equal(row.executeAs, "morrow_work_owner");
   assert.equal(row.sha256, createHash("sha256").update(sql).digest("hex"));
   assert.equal(row.reviewRef, "docs/briefs/adr-0036-model-defaults-cost-cap.md");

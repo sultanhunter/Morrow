@@ -5,7 +5,11 @@
 // operations carry ids, statuses and reason codes only.
 import type {
   ApplyResultView,
+  BatchDecidedView,
+  BatchDocumentView,
+  BatchItemView,
   FieldChangeView,
+  HistoryOperationView,
   ListingFieldName,
   OperationView,
   PendingApprovalView,
@@ -13,6 +17,9 @@ import type {
   RecordRefView,
   ReviewDecidedView,
   ReviewView,
+  UndoOfView,
+  UndoRequestedView,
+  UndoStateName,
 } from "@morrow/workspace-ui";
 import { isId } from "./client";
 import { isUtcTime } from "./work-decoders";
@@ -226,6 +233,7 @@ export function decodeReview(body: unknown, proposalId: string): ReviewView | nu
       "confirmation",
       "products",
       "claim",
+      "undoOf",
     ]) ||
     body.schemaVersion !== 1 ||
     !code(body.viewerRole) ||
@@ -324,6 +332,25 @@ export function decodeReview(body: unknown, proposalId: string): ReviewView | nu
     if (!list) return null;
     claim = { mine: k.mine, operations: list };
   }
+  let undoOf: UndoOfView | null = null;
+  if (body.undoOf !== null) {
+    const u = body.undoOf;
+    if (
+      !record(u) ||
+      !exactly(u, ["operationId", "proposalId", "productId", "appliedAt"]) ||
+      !operationId(u.operationId) ||
+      !isId(u.proposalId) ||
+      !productId(u.productId) ||
+      !(u.appliedAt === null || isUtcTime(u.appliedAt))
+    )
+      return null;
+    undoOf = {
+      operationId: u.operationId,
+      proposalId: u.proposalId,
+      productId: u.productId,
+      appliedAt: u.appliedAt as string | null,
+    };
+  }
   return {
     proposal: {
       id: p.id,
@@ -346,6 +373,7 @@ export function decodeReview(body: unknown, proposalId: string): ReviewView | nu
     confirmation: { required: c.required, phrase: c.phrase },
     products,
     claim,
+    undoOf,
   };
 }
 
@@ -389,15 +417,205 @@ export function decodeApplied(body: unknown): ApplyResultView | null {
   return list && list.length >= 1 ? { pending: body.pending, operations: list } : null;
 }
 
-/** GET /work/tasks/:taskId/operations (at most 100, newest first). */
+const undoStates: readonly UndoStateName[] = [
+  "none",
+  "available",
+  "requested",
+  "undone",
+  "changed",
+  "unavailable",
+];
+/**
+ * GET /work/tasks/:taskId/operations (at most 100, newest first), each change with its undo
+ * state (v1 PR 4: the `undo` list names exactly the same changes, in the same order).
+ */
 export function decodeOperationsOfTask(
   body: unknown,
   taskId: string,
-): readonly OperationView[] | null {
-  if (!record(body) || !exactly(body, ["schemaVersion", "operations"]) || body.schemaVersion !== 1)
+): readonly HistoryOperationView[] | null {
+  if (
+    !record(body) ||
+    !exactly(body, ["schemaVersion", "operations", "undo"]) ||
+    body.schemaVersion !== 1
+  )
     return null;
   const list = operations(body.operations, 100);
-  return list && list.every((o) => o.taskId === taskId) ? list : null;
+  if (!list || !list.every((o) => o.taskId === taskId)) return null;
+  if (!Array.isArray(body.undo) || body.undo.length !== list.length) return null;
+  const out: HistoryOperationView[] = [];
+  for (const [i, o] of list.entries()) {
+    const u = body.undo[i] as unknown;
+    if (
+      !record(u) ||
+      !exactly(u, [
+        "operationId",
+        "state",
+        "availableUntil",
+        "undoProposalId",
+        "undoOfOperationId",
+      ]) ||
+      u.operationId !== o.operationId ||
+      !undoStates.includes(u.state as UndoStateName) ||
+      !(u.availableUntil === null || isUtcTime(u.availableUntil)) ||
+      !(u.undoProposalId === null || isId(u.undoProposalId)) ||
+      !(u.undoOfOperationId === null || operationId(u.undoOfOperationId)) ||
+      (u.state === "available") !== (u.availableUntil !== null)
+    )
+      return null;
+    out.push({
+      ...o,
+      undo: {
+        state: u.state as UndoStateName,
+        availableUntil: u.availableUntil as string | null,
+        undoProposalId: u.undoProposalId as string | null,
+        undoOfOperationId: u.undoOfOperationId as string | null,
+      },
+    });
+  }
+  return out;
+}
+
+/** POST /work/operations/:operationId/undo (201 applied, 200 replayed): the new change. */
+export function decodeUndoRequested(body: unknown, id: string): UndoRequestedView | null {
+  if (
+    !record(body) ||
+    !exactly(body, [
+      "schemaVersion",
+      "outcome",
+      "proposalId",
+      "proposalDigest",
+      "approvalId",
+      "status",
+      "expiresAt",
+      "operationId",
+    ]) ||
+    body.schemaVersion !== 1 ||
+    (body.outcome !== "applied" && body.outcome !== "replayed") ||
+    !isId(body.proposalId) ||
+    !digest(body.proposalDigest) ||
+    !isId(body.approvalId) ||
+    !code(body.status) ||
+    !isUtcTime(body.expiresAt) ||
+    body.operationId !== id
+  )
+    return null;
+  return {
+    proposalId: body.proposalId,
+    approvalId: body.approvalId,
+    status: body.status,
+    expiresAt: body.expiresAt,
+    operationId: id,
+  };
+}
+
+/** GET /work/proposals/:proposalId/batch: the server-built batch document. */
+export function decodeBatchDocument(body: unknown, proposalId: string): BatchDocumentView | null {
+  if (
+    !record(body) ||
+    !exactly(body, [
+      "schemaVersion",
+      "proposalId",
+      "taskId",
+      "storeId",
+      "items",
+      "unavailable",
+      "confirmation",
+      "issuedAt",
+      "expiresAt",
+      "documentDigest",
+    ]) ||
+    body.schemaVersion !== 1 ||
+    body.proposalId !== proposalId ||
+    !isId(body.taskId) ||
+    !isId(body.storeId) ||
+    !(
+      body.unavailable === null ||
+      body.unavailable === "too_few" ||
+      body.unavailable === "cost_confirmation" ||
+      body.unavailable === "mixed_confirmation"
+    ) ||
+    !record(body.confirmation) ||
+    !exactly(body.confirmation, ["required", "phrase"]) ||
+    typeof body.confirmation.required !== "boolean" ||
+    !(
+      body.confirmation.phrase === null ||
+      (typeof body.confirmation.phrase === "string" &&
+        /^approve [1-9][0-9]{0,4} changes? for [0-9]{1,20} credits$/.test(body.confirmation.phrase))
+    ) ||
+    // A phrase is given exactly when one is required and the batch is offered.
+    (body.confirmation.phrase !== null) !==
+      (body.confirmation.required === true && body.unavailable === null) ||
+    !isUtcTime(body.issuedAt) ||
+    !isUtcTime(body.expiresAt) ||
+    !digest(body.documentDigest) ||
+    !Array.isArray(body.items) ||
+    body.items.length > 10
+  )
+    return null;
+  const items: BatchItemView[] = [];
+  for (const v of body.items as unknown[]) {
+    if (
+      !record(v) ||
+      !exactly(v, ["proposalId", "digest", "approvalId", "revision", "targetCount", "expiresAt"]) ||
+      !isId(v.proposalId) ||
+      !digest(v.digest) ||
+      !isId(v.approvalId) ||
+      !integer(v.revision, 1, Number.MAX_SAFE_INTEGER) ||
+      !integer(v.targetCount, 1, 100) ||
+      !isUtcTime(v.expiresAt) ||
+      items.some((x) => x.proposalId === v.proposalId)
+    )
+      return null;
+    items.push({
+      proposalId: v.proposalId,
+      digest: v.digest,
+      approvalId: v.approvalId,
+      revision: v.revision,
+      targetCount: v.targetCount,
+      expiresAt: v.expiresAt,
+    });
+  }
+  if (body.unavailable === "too_few" ? items.length >= 2 : items.length < 2) return null;
+  const confirmation = body.confirmation as { required: boolean; phrase: string | null };
+  return {
+    proposalId,
+    taskId: body.taskId,
+    items,
+    unavailable: body.unavailable as string | null,
+    confirmation: { required: confirmation.required, phrase: confirmation.phrase },
+    issuedAt: body.issuedAt,
+    expiresAt: body.expiresAt,
+    documentDigest: body.documentDigest,
+  };
+}
+
+/** POST /work/proposals/:proposalId/batch-decision (201 applied, 200 replayed). */
+export function decodeBatchDecided(body: unknown): BatchDecidedView | null {
+  if (
+    !record(body) ||
+    !exactly(body, ["schemaVersion", "outcome", "decided"]) ||
+    body.schemaVersion !== 1 ||
+    (body.outcome !== "applied" && body.outcome !== "replayed") ||
+    !Array.isArray(body.decided) ||
+    body.decided.length < 2 ||
+    body.decided.length > 10
+  )
+    return null;
+  const decided: ReviewDecidedView[] = [];
+  for (const v of body.decided as unknown[]) {
+    if (
+      !record(v) ||
+      !exactly(v, ["proposalRef", "approvalRef", "status", "expiresAt"]) ||
+      !code(v.status) ||
+      !isUtcTime(v.expiresAt)
+    )
+      return null;
+    const proposalRef = decodeRef(v.proposalRef, "proposal");
+    const approvalRef = decodeRef(v.approvalRef, "approval");
+    if (!proposalRef || !approvalRef) return null;
+    decided.push({ proposalRef, approvalRef, status: v.status, expiresAt: v.expiresAt });
+  }
+  return { decided };
 }
 
 /** POST /work/operations/:operationId/reconcile: the operation after the read-back. */
