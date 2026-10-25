@@ -1992,6 +1992,66 @@ test("this repository: ADR-0037's agent kinds, origins, launch slice and gate", 
     assert.equal(graph.nodes.get(id)?.type, "data_class", id);
 });
 
+test("this repository: the v1 build order's teammate safety tests keep ADR-0037's intersection and card exclusions", () => {
+  const order = readFileSync("docs/plan/v1-build-order.md", "utf8");
+  const section = (heading) => {
+    const start = order.indexOf(`\n### ${heading}`);
+    assert.ok(start >= 0, heading);
+    const end = order.slice(start + 1).search(/\n##+ /);
+    return end < 0 ? order.slice(start) : order.slice(start, start + 1 + end);
+  };
+  const bullet = (text, opening) => {
+    const lines = text.split("\n").filter((line) => line.trimStart().startsWith(`- ${opening}`));
+    assert.equal(lines.length, 1, opening);
+    return lines[0];
+  };
+  // CLAUDE.md and ADR-0037 item 2: the requester's grants, the installation's grants, the
+  // delegation envelope, connector scopes, live policy and stops, and the installation owner's
+  // current authority, in the owner's plain words (review F1).
+  const intersection = [
+    /your rights/,
+    /the teammate's grants/,
+    /Morrow's permission envelope/,
+    /the store connection/,
+    /the rules and the stops/,
+    /its owner's current rights|the current rights of the person who owns the teammate/,
+  ];
+  for (const line of [
+    bullet(section("PR 12."), "Only a person starts Morrow."),
+    bullet(section("PR 26."), "Every tool call of every teammate run"),
+  ])
+    for (const term of intersection) assert.match(line, term, line);
+  // ADR-0037 item 5: never human_only capabilities on a card, nor delegation or agent tools
+  // (review F2). Each plain word stands for human_only capabilities in the contract.
+  const card = bullet(section("PR 26."), "A card never gets");
+  assert.match(card, /anything only a person may do/);
+  const capabilities = JSON.parse(
+    readFileSync("docs/contracts/capabilities.json", "utf8"),
+  ).capabilities;
+  const humanOnly = (id) => {
+    const capability = capabilities.find((c) => c.id === id);
+    assert.equal(capability?.executor, "human_only", id);
+    return capability;
+  };
+  for (const [words, ids] of [
+    ["approving changes", ["governance.approval.decide"]],
+    [
+      "changing permissions or members",
+      ["governance.grants.revise", "governance.membership.invite"],
+    ],
+    ["billing", ["governance.billing.manage"]],
+    ["deleting data", ["governance.privacy.erase"]],
+    ["stop controls", ["agents.installation.disable", "ads.campaign.pause"]],
+  ]) {
+    assert.ok(card.includes(words), words);
+    for (const id of ids) humanOnly(id);
+  }
+  assert.ok(humanOnly("agents.installation.disable").kill_switch);
+  for (const words of ["customer names or emails", "support tools", "bring in or call agents"])
+    assert.ok(card.includes(words), words);
+  assert.ok(!/\ba stop control\b/.test(card), "the narrowed wording is gone");
+});
+
 test("this repository: P04.T01i shows its PRs, acceptance ids and the M-O1 evidence", () => {
   const graph = repo();
   const shown = show(graph, "P04.T01i");
