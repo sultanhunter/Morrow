@@ -5,8 +5,10 @@ import { listingFieldPaths } from "@morrow/policy/store-resource";
 import {
   decodeShopifyApplyResult,
   decodeShopifyReconcileResult,
+  decodeShopifyUndoCheckResult,
   shopifyWriteLimits,
   type ShopifyApplyResult,
+  type ShopifyUndoCheckResult,
 } from "../../../identity/src/broker-protocol.js";
 import { decideOn } from "../agents/commands.js";
 import {
@@ -48,6 +50,17 @@ import {
   type ApplyRefusal,
   type OperationRow,
 } from "./apply.js";
+import { BatchReject, buildBatch, decideBatch, parseBatchDecision } from "./batch.js";
+import {
+  UndoReject,
+  admitUndo,
+  prepareUndo,
+  replayedUndo,
+  undoOfProposal,
+  undoRequestDigest,
+  undoStatesOfTask,
+  type UndoAdmitted,
+} from "./undo.js";
 import { ReviewViewError, buildProductReviews, type ReviewSource } from "./view.js";
 
 // The review and apply routes of the workspace API (v1 PR 3): an internal JSON contract
@@ -62,6 +75,17 @@ import { ReviewViewError, buildProductReviews, type ReviewSource } from "./view.
 //   GET  /work/operations/:operationId          one operation, its transitions and read-backs
 //   POST /work/operations/:operationId/reconcile read the product back (an unknown outcome)
 //   POST /work/operations/:operationId/set-aside the claimant checked it in Shopify (uncertain)
+// v1 PR 4 adds:
+//   POST /work/operations/:operationId/undo     Undo: the broker reads the product, then a NEW
+//                                               exact change back to the values read before
+//                                               the apply, which a person approves and the
+//                                               gateway applies like any other (undo.ts)
+//   GET  /work/proposals/:proposalId/batch      "Approve several at once": the server-built
+//                                               document of the changes waiting on its task
+//   POST /work/proposals/:proposalId/batch-decision
+//                                               one confirmation of that document: one exact
+//                                               approval per change, all or none (batch.ts)
+// and the undo state of each change to the task's history and the review document.
 // Every read and command is one short transaction of its own (5 s), opened per step. While
 // the apply switch is off (MORROW_SHOPIFY_WRITE absent), apply answers 503 before any
 // database access: no claim, lease or operation exists without the gateway. The broker's
@@ -71,6 +95,8 @@ import { ReviewViewError, buildProductReviews, type ReviewSource } from "./view.
 export interface ApplyBrokerPort {
   apply(operationId: string, budgetMs: number, signal: AbortSignal): Promise<string>;
   reconcile(operationId: string, budgetMs: number, signal: AbortSignal): Promise<string>;
+  /** v1 PR 4: the undo check; a port without it answers the undo route 503. */
+  undoCheck?(operationId: string, budgetMs: number, signal: AbortSignal): Promise<string>;
 }
 export interface ReviewApiDependencies extends WorkApiDependencies {
   readonly environment: "development" | "staging" | "production";
@@ -87,7 +113,10 @@ type ReviewOp =
   | "operations.of_task"
   | "operations.get"
   | "operations.reconcile"
-  | "operations.set_aside";
+  | "operations.set_aside"
+  | "operations.undo"
+  | "review.batch"
+  | "review.batch_decide";
 interface ReviewRoute extends WorkspaceRouteSpec {
   readonly op: ReviewOp;
 }
@@ -102,10 +131,14 @@ export const reviewRoutes: readonly ReviewRoute[] = Object.freeze([
   route("GET", "/operations/:operationId", "operations.get"),
   route("POST", "/operations/:operationId/reconcile", "operations.reconcile"),
   route("POST", "/operations/:operationId/set-aside", "operations.set_aside"),
+  // v1 PR 4.
+  route("POST", "/operations/:operationId/undo", "operations.undo"),
+  route("GET", "/proposals/:proposalId/batch", "review.batch"),
+  route("POST", "/proposals/:proposalId/batch-decision", "review.batch_decide"),
 ]);
 /** The paths the api Worker sends to this handler (its dispatch row, ahead of the work API). */
 export const reviewPathPattern =
-  /^\/workspace\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\/work\/(?:approvals|proposals\/[^/]+\/(?:review|decision|apply)|tasks\/[^/]+\/operations|operations\/[^/]+(?:\/reconcile|\/set-aside)?)$/;
+  /^\/workspace\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\/work\/(?:approvals|proposals\/[^/]+\/(?:review|decision|apply|batch|batch-decision)|tasks\/[^/]+\/operations|operations\/[^/]+(?:\/reconcile|\/set-aside|\/undo)?)$/;
 // A request's whole budget: the apply runs several transactions and broker calls, product by
 // product; it starts no product with less than applyProductMinMs left (the rest stay
 // authorized and the same request, sent again, continues them).
@@ -115,6 +148,14 @@ export const reviewLimits = Object.freeze({
   applyRequestMs: 55_000,
   applyProductMinMs: 15_000,
   reconcileBudgetMs: 12_000,
+  // v1 PR 4: the undo request's whole budget (two transactions around one broker read) and
+  // the read's own.
+  undoRequestMs: 25_000,
+  undoCheckBudgetMs: 12_000,
+  // v1 PR 4: "Approve several at once" rebuilds the document and decides up to ten exact
+  // approvals in ONE transaction (all or none), so it has a longer transaction and request.
+  batchTransactionMs: 15_000,
+  batchRequestMs: 20_000,
 });
 
 type Context = Readonly<{ waitUntil(p: Promise<unknown>): void }>;
@@ -182,7 +223,90 @@ const applyRefusals: Readonly<Record<string, Mapped>> = Object.freeze({
     "recheck_before_retry",
     "Morrow is still waiting for Shopify's answer. Try again in a minute.",
   ],
+  // v1 PR 4: Undo.
+  not_applied: [
+    409,
+    "conflict",
+    "never",
+    "Only a change Morrow applied and confirmed in Shopify can be undone.",
+  ],
+  already_requested: [
+    409,
+    "conflict",
+    "never",
+    "An undo of this change is already waiting. Open it from the change's history.",
+  ],
+  already_undone: [409, "conflict", "never", "This change was already undone."],
+  changed_since_apply: [
+    409,
+    "conflict",
+    "never",
+    "This product changed after Morrow applied the change, so Undo stopped. Nothing was written.",
+  ],
+  undo_unavailable: [
+    409,
+    "conflict",
+    "never",
+    "Undo is no longer available for this change: it was applied more than 90 days ago, or the shop's data was deleted.",
+  ],
+  check_stale: [
+    409,
+    "conflict",
+    "recheck_before_retry",
+    "Morrow could not confirm the product in time. Try Undo again.",
+  ],
+  product_missing: [
+    409,
+    "conflict",
+    "never",
+    "This product is no longer in Shopify, so Undo stopped. Nothing was written.",
+  ],
+  not_reversible: [
+    409,
+    "conflict",
+    "never",
+    "Morrow can't undo this change on its own: an earlier value is longer than Morrow can write. Change it back in Shopify.",
+  ],
+  credential_unavailable: [
+    409,
+    "conflict",
+    "recheck_before_retry",
+    "Morrow can't read this store right now. Try again later.",
+  ],
+  // v1 PR 4: "Approve several at once".
+  batch_changed: [
+    409,
+    "conflict",
+    "recheck_before_retry",
+    "These changes are not the same as when you opened them. Review them again.",
+  ],
+  batch_expired: [
+    409,
+    "conflict",
+    "recheck_before_retry",
+    "This confirmation lasts 5 minutes and has expired. Review the changes again.",
+  ],
 });
+// The listing fields in plain words, for Undo's "what changed" message.
+const fieldWords: Readonly<Record<string, string>> = Object.freeze({
+  title: "the title",
+  descriptionHtml: "the description",
+  "seo.title": "the SEO title",
+  "seo.description": "the SEO description",
+  tags: "the tags",
+});
+/** Undo stopped because these fields changed after the apply (nothing was written). */
+export function changedMessage(fields: readonly string[]): string {
+  const words = fields.map((f) => fieldWords[f]).filter((w): w is string => !!w);
+  if (words.length === 0) return applyRefusals.changed_since_apply![3];
+  const list =
+    words.length === 1 ? words[0]! : words.slice(0, -1).join(", ") + " and " + words.at(-1)!;
+  return (
+    list[0]!.toUpperCase() +
+    list.slice(1) +
+    " changed in Shopify after Morrow applied this change, so Undo stopped. Nothing was written."
+  );
+}
 function envelope(
   status: number,
   code: Core_ErrorEnvelope["code"],
@@ -229,6 +353,35 @@ function refusalResponse(
     correlationId,
   );
 }
+/** An undo refusal as the route answers it (codes and fixed messages only). */
+function undoResponse(error: UndoReject, correlationId: string) {
+  switch (error.reason) {
+    case "not_found":
+    case "invalid":
+    case "limit_reached":
+    case "stale_authority":
+    case "command_conflict":
+      return workErrorResponse(error.reason, correlationId);
+    case "denied":
+      return envelope(403, "denied", "never", "This operation is not permitted.", correlationId);
+    case "changed_since_apply": {
+      const own = applyRefusals.changed_since_apply!;
+      return envelope(own[0], own[1], own[2], changedMessage(error.fields), correlationId);
+    }
+    default: {
+      const own = applyRefusals[error.reason === "unavailable" ? "undo_unavailable" : error.reason];
+      if (!own) return workErrorResponse("unavailable", correlationId);
+      return envelope(own[0], own[1], own[2], own[3], correlationId);
+    }
+  }
+}
+/** A batch refusal: its own two codes, else the approval refusal of the member that failed. */
+function batchResponse(error: BatchReject, correlationId: string) {
+  const own = applyRefusals[error.reason];
+  if (own && (error.reason === "batch_changed" || error.reason === "batch_expired"))
+    return envelope(own[0], own[1], own[2], own[3], correlationId);
+  return refusalResponse(error.reason as ApprovalRefusal, correlationId);
+}
 function guardKind(error: WorkGuardError) {
   if (error.status === 401) return "unauthenticated" as const;
   if (error.status === 400) return "invalid" as const;
@@ -248,7 +401,8 @@ function dependencies(value: ReviewApiDependencies): ReviewApiDependencies {
     (value.broker !== null &&
       (!value.broker ||
         typeof value.broker.apply !== "function" ||
-        typeof value.broker.reconcile !== "function"))
+        typeof value.broker.reconcile !== "function" ||
+        !(value.broker.undoCheck === undefined || typeof value.broker.undoCheck === "function")))
   )
     throw Error("REVIEW_API_CONFIGURATION_INVALID");
   const { connector, now, broker } = value;
@@ -264,6 +418,7 @@ function dependencies(value: ReviewApiDependencies): ReviewApiDependencies {
         : Object.freeze({
             apply: broker.apply.bind(broker),
             reconcile: broker.reconcile.bind(broker),
+            ...(broker.undoCheck ? { undoCheck: broker.undoCheck.bind(broker) } : {}),
           }),
   });
 }
@@ -412,6 +567,8 @@ async function reviewDocument(tx: WorkTx, g: Guarded) {
       : view.viewerRole !== "reviewer"
         ? "not_reviewer"
         : null;
+  // v1 PR 4: an undo proposal names the change it undoes (ids and the apply's time).
+  const undoOf = await undoOfProposal(tx, stored.familyRootId);
   return {
     proposal: {
       id: proposal.id,
@@ -453,6 +610,7 @@ async function reviewDocument(tx: WorkTx, g: Guarded) {
     confirmation: { required: confirmationRequired, phrase: confirmationPhrase(proposal) },
     products,
     claim,
+    undoOf,
   };
 }
 
@@ -469,7 +627,20 @@ async function operationsOfTask(tx: WorkTx, g: Guarded) {
     }
     if (ok) visible.push(operationView(o));
   }
-  return { operations: visible };
+  // v1 PR 4: each visible change's undo state (ids, codes and times), in the same order. The
+  // server decides whether Undo is offered; the screen only shows it.
+  const states = visible.length ? await undoStatesOfTask(tx, g.params.taskId!) : new Map();
+  const undo = visible.map((o) => {
+    const s = states.get(o.operationId);
+    return {
+      operationId: o.operationId,
+      state: s?.state ?? "none",
+      availableUntil: s?.availableUntil ?? null,
+      undoProposalId: s?.undoProposalId ?? null,
+      undoOfOperationId: s?.undoOfOperationId ?? null,
+    };
+  });
+  return { operations: visible, undo };
 }
 async function visibleOperation(tx: WorkTx, a: WorkAuthority, operationId: string) {
   const rows = await tx.run("operationById", [operationId]);
@@ -509,6 +680,25 @@ async function refusable<T>(tx: WorkTx, run: () => Promise<T>): Promise<T | Appl
     return error;
   }
 }
+// v1 PR 4: the same for Undo's and the batch's refusals.
+async function undoRefusable<T>(tx: WorkTx, run: () => Promise<T>): Promise<T | UndoReject> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof UndoReject)) throw error;
+    tx.rollbackOnly();
+    return error;
+  }
+}
+async function batchRefusable<T>(tx: WorkTx, run: () => Promise<T>): Promise<T | BatchReject> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof BatchReject)) throw error;
+    tx.rollbackOnly();
+    return error;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // The handler.
@@ -529,8 +719,12 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
     request.signal?.addEventListener("abort", stop, { once: true });
     let read = request.method === "GET";
     // One transaction on a connection of its own, within the request's deadline.
-    const transaction = async <T>(readOnly: boolean, body: (tx: WorkTx) => Promise<T>) => {
-      const deadlineMs = Math.min(configured.now() + reviewLimits.transactionMs, start + budget);
+    const transaction = async <T>(
+      readOnly: boolean,
+      body: (tx: WorkTx) => Promise<T>,
+      transactionMs: number = reviewLimits.transactionMs,
+    ) => {
+      const deadlineMs = Math.min(configured.now() + transactionMs, start + budget);
       let connection: WorkSqlConnection;
       try {
         connection = await configured.connector.open({
@@ -747,8 +941,172 @@ export function createReviewApiHandler(d?: ReviewApiDependencies) {
             response: json(200, { outcome: log.outcome, operation: operationView(op) }),
           };
         }
+        case "operations.undo": {
+          // Exactly an empty body and a command key; the undo's request digest names the
+          // operation only, so the same key repeats the same undo.
+          const body = g.body;
+          if (
+            !body ||
+            typeof body !== "object" ||
+            Array.isArray(body) ||
+            Object.keys(body).length ||
+            g.commandId === null
+          )
+            throw new WorkReject("invalid");
+          const operationId = g.params.operationId!;
+          const commandId = g.commandId;
+          const digest = await undoRequestDigest(g.workspaceId, operationId);
+          clearTimeout(timer);
+          budget = reviewLimits.undoRequestMs;
+          timer = setTimeout(() => abort.abort(), budget - (configured.now() - start));
+          const admittedBody = (u: UndoAdmitted) => ({
+            outcome: u.replayed ? "replayed" : "applied",
+            proposalId: u.proposalId,
+            proposalDigest: u.proposalDigest,
+            approvalId: u.approvalId,
+            status: u.status,
+            expiresAt: u.expiresAt,
+            operationId: u.operationId,
+          });
+          // 1. A replay of this person's own key, else their checks and the undo state.
+          const first = await transaction(true, async (tx) => {
+            const a = await context(tx, g);
+            return undoRefusable(tx, async () => {
+              const replayed = await replayedUndo(tx, a, commandId, digest);
+              if (replayed) return replayed;
+              await prepareUndo(tx, a, operationId);
+              return null;
+            });
+          });
+          if (first instanceof UndoReject) throw first;
+          if (first !== null) {
+            log.outcome = "replayed";
+            return { log, response: json(200, admittedBody(first)) };
+          }
+          // 2. The broker reads the product and records whether it still holds what the apply
+          // left (nothing is written to Shopify).
+          const check = configured.broker?.undoCheck;
+          if (!check) {
+            log.outcome = "unavailable";
+            return { log, response: workErrorResponse("unavailable", correlationId) };
+          }
+          let checked: ShopifyUndoCheckResult;
+          try {
+            checked = decodeShopifyUndoCheckResult(
+              await check(
+                operationId,
+                Math.min(reviewLimits.undoCheckBudgetMs, start + budget - configured.now() - 6000),
+                abort.signal,
+              ),
+            );
+          } catch {
+            log.outcome = "check_unavailable";
+            return { log, response: workErrorResponse("unavailable", correlationId) };
+          }
+          // too_soon: a check of this change was recorded under 10 seconds ago (this request's
+          // own when it is sent again after a lost reply, or another's) and nothing was read;
+          // step 3 builds on the change's latest check while it is recent (admitUndo).
+          if (checked.outcome !== "recorded" && checked.outcome !== "too_soon") {
+            log.outcome = "check_" + checked.outcome;
+            if (checked.outcome === "held")
+              return { log, response: workErrorResponse("unavailable", correlationId) };
+            throw new UndoReject(checked.outcome);
+          }
+          if (checked.verdict === "missing") throw new UndoReject("product_missing");
+          if (checked.outcome === "recorded" && checked.verdict !== "unchanged")
+            throw new UndoReject(
+              "changed_since_apply",
+              Object.entries(checked.fields ?? {})
+                .filter(([, v]) => v === "changed")
+                .map(([k]) => k),
+            );
+          const sequence = checked.outcome === "recorded" ? checked.sequence : null;
+          // 3. The new exact change, rechecked and stored in SQL.
+          const admitted = await transaction(false, async (tx) => {
+            const a = await context(tx, g);
+            return undoRefusable(tx, async () => {
+              const replayed = await replayedUndo(tx, a, commandId, digest);
+              if (replayed) return replayed;
+              const prepared = await prepareUndo(tx, a, operationId);
+              return admitUndo(tx, a, prepared, commandId, digest, sequence);
+            });
+          });
+          if (admitted instanceof UndoReject) throw admitted;
+          log.outcome = admitted.replayed ? "replayed" : "applied";
+          return {
+            log,
+            response: json(admitted.replayed ? 200 : 201, admittedBody(admitted)),
+          };
+        }
+        case "review.batch": {
+          const proposalId = g.params.proposalId!;
+          clearTimeout(timer);
+          budget = reviewLimits.batchRequestMs;
+          timer = setTimeout(() => abort.abort(), budget - (configured.now() - start));
+          const document = await transaction(
+            true,
+            async (tx) => {
+              const a = await context(tx, g);
+              return batchRefusable(tx, () => buildBatch(tx, a, g.sessionDigest, proposalId, null));
+            },
+            reviewLimits.batchTransactionMs,
+          );
+          if (document instanceof BatchReject) throw document;
+          log.outcome = "read";
+          return {
+            log,
+            response: json(200, {
+              proposalId: document.proposalId,
+              taskId: document.taskId,
+              storeId: document.storeId,
+              items: document.items,
+              unavailable: document.unavailable,
+              confirmation: document.confirmation,
+              issuedAt: document.issuedAt,
+              expiresAt: document.expiresAt,
+              documentDigest: document.documentDigest,
+            }),
+          };
+        }
+        case "review.batch_decide": {
+          const parsed = parseBatchDecision(g.body);
+          if (!parsed || g.commandId === null) throw new WorkReject("invalid");
+          const proposalId = g.params.proposalId!;
+          const batchKey = g.commandId;
+          clearTimeout(timer);
+          budget = reviewLimits.batchRequestMs;
+          timer = setTimeout(() => abort.abort(), budget - (configured.now() - start));
+          const result = await transaction(
+            false,
+            async (tx) => {
+              const a = await context(tx, g);
+              return batchRefusable(tx, () =>
+                decideBatch(tx, a, g.sessionDigest, proposalId, batchKey, parsed, correlationId),
+              );
+            },
+            reviewLimits.batchTransactionMs,
+          );
+          if (result instanceof BatchReject) throw result;
+          log.outcome = result.replayed ? "replayed" : "applied";
+          log.products = result.decided.length;
+          return {
+            log,
+            response: json(result.replayed ? 200 : 201, {
+              outcome: log.outcome,
+              decided: result.decided,
+            }),
+          };
+        }
       }
     } catch (error) {
+      if (error instanceof UndoReject) {
+        log.outcome = error.reason;
+        return { log, response: undoResponse(error, correlationId) };
+      }
+      if (error instanceof BatchReject) {
+        log.outcome = error.reason;
+        return { log, response: batchResponse(error, correlationId) };
+      }
       if (error instanceof ApplyReject) {
         log.outcome = error.reason;
         if (error.reason === "invalid")

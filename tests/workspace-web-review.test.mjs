@@ -111,6 +111,15 @@ const reviewBody = (over = {}) => ({
     },
   ],
   claim: null,
+  undoOf: null,
+  ...over,
+});
+const undoState = (over = {}) => ({
+  operationId: opId,
+  state: "available",
+  availableUntil: "2027-01-21T10:00:00.000Z",
+  undoProposalId: null,
+  undoOfOperationId: null,
   ...over,
 });
 
@@ -295,11 +304,17 @@ test("decoders: exactly the server's shapes; anything wider or foreign is null",
     null,
   );
   assert.equal(
-    decodeOperationsOfTask({ schemaVersion: 1, operations: [operation()] }, "task_root")?.length,
+    decodeOperationsOfTask(
+      { schemaVersion: 1, operations: [operation()], undo: [undoState()] },
+      "task_root",
+    )?.length,
     1,
   );
   assert.equal(
-    decodeOperationsOfTask({ schemaVersion: 1, operations: [operation()] }, "task_x"),
+    decodeOperationsOfTask(
+      { schemaVersion: 1, operations: [operation()], undo: [undoState()] },
+      "task_x",
+    ),
     null,
   );
   assert.equal(

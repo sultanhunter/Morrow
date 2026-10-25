@@ -1114,6 +1114,10 @@ test("the review routes and the api dispatch: review paths go to the review hand
       "GET /operations/:operationId",
       "POST /operations/:operationId/reconcile",
       "POST /operations/:operationId/set-aside",
+      // v1 PR 4 (tests/catalog-undo.test.mjs).
+      "POST /operations/:operationId/undo",
+      "GET /proposals/:proposalId/batch",
+      "POST /proposals/:proposalId/batch-decision",
     ],
   );
   for (const path of [
