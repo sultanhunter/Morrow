@@ -1,7 +1,7 @@
 # Connector cron fix: run the re-drives beside the database
 
-- Status: built, 2026-10-25. Branch `claude/fix-connector-cron-latency`. Not pushed, not deployed.
-- Change class: **the owner decides before merge.** The fix adds a Durable Object namespace to the existing connector Worker. Durable Objects are a Cloudflare product that is not in the settled stack line ("Workers, Workflows, Queues and R2"), and the M2 brief already recorded a Durable Object as "a provider selection". So the safe reading of ADR-0002 (ADR-0021 item 5: provider selection; creating provider resources) is material until the owner says otherwise. The question for the owner is below. If the owner prefers no new provider resource, the routine stopgap below is the alternative.
+- Status: built, 2026-10-25. Branch `claude/fix-connector-cron-latency`, pushed for review. Not merged, not deployed: it waits for ADR-0038.
+- Change class: **material; ADR-0038 (Proposed) before merge.** The fix adds a Durable Object namespace to the existing connector Worker. Durable Objects are a Cloudflare product that is not in the settled stack line ("Workers, Workflows, Queues and R2"), which CLAUDE.md lets only an owner-approved ADR change, and the M2 brief already recorded a Durable Object as "a provider selection". ADR-0002 (with ADR-0021 item 5: provider selection; deployment boundaries; creating provider resources) therefore needs an ADR approved by the owner in chat. `docs/decisions/adr/ADR-0038-connector-cron-durable-object.md` is that record, proposed with this branch. The branch stays unmerged and undeployed until the owner accepts it. If the owner prefers no new provider resource, the routine stopgap below is the alternative, and ADR-0038 is withdrawn.
 - The review uses the security lens: the change touches the connector's database transport, its broker RPC path and its deployment configuration.
 
 ## Goal
@@ -45,7 +45,8 @@ The cause is distance, not a database or grant fault.
 3. **edge:check** (`scripts/edge.mjs`):
    - the connector may carry `durable_objects` and `migrations`, exactly `edgeConnectorDurableObjects` and `edgeConnectorMigrations` (`EDGE_CONNECTOR_DURABLE_OBJECTS`, `EDGE_CONNECTOR_MIGRATIONS`);
    - every other Worker still refuses both (`EDGE_UNEXPECTED_BINDING_*`);
-   - the hint in `cron.ts` must be the hint of `infra/environments/staging.json`'s `neon.region_id` (`edgeDurableObjectLocationHint`; `EDGE_CONNECTOR_CRON_LOCATION`), so a database move moves the hint by a reviewed change, like the placement region.
+   - the hint in `cron.ts` must be the hint of `infra/environments/staging.json`'s `neon.region_id` (`edgeDurableObjectLocationHint`; `EDGE_CONNECTOR_CRON_LOCATION`), so a database move moves the hint by a reviewed change, like the placement region;
+   - only regions whose hint Cloudflare honours are mapped. Cloudflare's data-location reference says a `sam` (South America) object spawns in Eastern North America, and `afr` and `me` spawn elsewhere too, so Neon's `aws-sa-east-1` maps to nothing and fails the check (AI review F2). `aws-ap-southeast-1` takes the narrower `apac-se`.
 4. **The stage on every cron failure line** (`worker/database.ts`, `worker/connector.ts`). Closed values and durations only.
    - A failed connector transaction's error now carries where it ended (`connectorSqlObservation`). This is the vault transport's observation, for the connector's own login:
      - `phase`: `lease`, `connect`, `begin`, `role`, `settings`, `body` or `commit`;
@@ -121,14 +122,18 @@ The cause is distance, not a database or grant fault.
 
 ## Owner decision (before merge)
 
-> The connector's cron runs far from the database, so the shop webhooks never get registered. The fix moves the cron's work into a Cloudflare Durable Object, a small built-in Cloudflare feature, placed near the database inside the same connector Worker. It costs nothing at this size, stores nothing and adds no public address. Durable Objects are not in Morrow's agreed stack, so this may count as choosing a new provider feature. What should we do?
+The decision is ADR-0038's (`docs/decisions/adr/ADR-0038-connector-cron-durable-object.md`, Proposed). Its owner question:
+
+> The connector's five-minute check runs far from the database, so the shop webhooks never get registered. The fix moves the check into a Cloudflare Durable Object, a small built-in Cloudflare feature, created near the database inside the same connector Worker. It costs nothing at this size, stores nothing and adds no public address. Durable Objects are not in Morrow's agreed stack, so adding them needs a short decision record. What should we do?
 >
-> - **Allow it (Recommended).** Record it in this brief as a routine use of Cloudflare Workers, or in a short ADR if you prefer.
-> - **No new Cloudflare feature.** Use the stopgap: longer time limits on the cron path only.
+> - **Approve ADR-0038 (Recommended).** Durable Objects join the stack for this one connector object only, under the limits in its item 1. The fix merges and deploys after that.
+> - **No new Cloudflare feature.** Use the stopgap instead: longer time limits on the cron path only. ADR-0038 is withdrawn.
+
+On approval: the owner's words go into ADR-0038's Approval section, its status becomes Accepted, CLAUDE.md's and `docs/plan/build-plan.md`'s stack lines gain Durable Objects as the record proposes, and only then does the PR merge.
 
 ## Deploy and check
 
-Deploy only after the owner's answer and a green hosted CI on the PR head. Claude deploys under the standing approval (ADR-0035), the connector only, with one activity-log line.
+Deploy only after the owner accepts ADR-0038, the PR merges, and hosted CI is green on its head. Claude deploys under the standing approval (ADR-0035), the connector only, with one activity-log line.
 
 1. The connector's deploy applies migration `v1`, which creates the class. Staging rolls forward (E11 is suspended), and Cloudflare does not allow a version rollback across a Durable Object migration anyway. The way back is a forward deploy: `scheduled()` running locally again, with the class left unused or removed by a `deleted_classes` migration `v2`.
 2. Read the next cron in Workers Logs, within five minutes:
@@ -172,6 +177,7 @@ Deploy only after the owner's answer and a green hosted CI on the PR head. Claud
   - the binding and the migration are exact in all three environments;
   - ten mutations fail with the right code: a missing environment, another name, another script's class, a second binding, a KV class, a second migration, no migration, and a binding or migration on another Worker;
   - the hint table, and another hint fails;
+  - a database moved to Sao Paulo, with everything else moved too, fails `EDGE_CONNECTOR_CRON_LOCATION` whatever the hint names, `sam` included (AI review F2);
   - the placement-region cases now also move the hint.
 - [x] `tests/orchestrator.test.mjs`: the unconfigured connector entry still bundles and is deny-all.
 - [x] `lab:edge-workers` (workerd), using wrangler's own Miniflare options:
@@ -179,9 +185,17 @@ Deploy only after the owner's answer and a green hosted CI on the PR head. Claud
   - `scheduled()` runs the re-drives in the object, which logs four refused steps, each with a closed stage, and the sync's reason;
   - without the binding, only `CRON_UNBOUND`, and nothing reaches the network.
 - [x] `lab:shopify-connect-workers`: the install, webhook and re-drive journey over the changed connector transport, 31 checks (see "Local results").
-- [ ] Hosted CI on the PR head; one AI review (separate context, same model family) with the security lens.
-- [ ] The owner's decision above.
+- [ ] Hosted CI on the PR head.
+- [x] One AI review (separate context, same model family) with the security lens; see "AI review".
+- [ ] The owner's decision above: ADR-0038 accepted (then the stack lines updated), or the stopgap chosen and ADR-0038 withdrawn.
 - [ ] After the deploy: the checks in "Deploy and check", step 2.
+
+## AI review (separate context, same model family)
+
+Security lens included. Two findings, both fixed:
+
+- **F1 (medium): the recommended owner option would have recorded a stack change in this brief instead of an ADR.** CLAUDE.md lets only an owner-approved ADR change the settled stack, and ADR-0002 makes provider selection and creating provider resources material. Fixed: ADR-0038 (Proposed) carries the decision; the owner question has two choices (approve ADR-0038, or the stopgap); "routine use" is gone; the branch stays unmerged until the record is accepted; P04's note names ADR-0038.
+- **F2 (low): `aws-sa-east-1` mapped to the hint `sam`, which Cloudflare creates in Eastern North America.** A database move to Sao Paulo would have passed `edge:check` with a hint far from the database. Fixed: Sao Paulo is unmapped and fails `EDGE_CONNECTOR_CRON_LOCATION`; Singapore takes the narrower `apac-se`. Tests: the hint table, and a new case where everything moves to Sao Paulo and every hint, `sam` included, fails (it passes `sam` without the fix). The committed us-east-1 configuration was not affected.
 
 ## Local results
 

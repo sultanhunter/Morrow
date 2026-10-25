@@ -603,17 +603,20 @@ export const edgeConnectorMigrations = Object.freeze([
   Object.freeze({ tag: "v1", new_sqlite_classes: Object.freeze(["ConnectorCron"]) }),
 ]);
 // The Durable Object location hint of each Neon AWS region (Neon's `aws-<region>` ids;
-// Cloudflare's hints wnam, enam, sam, weur, eeur, apac, oc, afr, me). Any other region is
-// null and fails the check, so a move of the database moves the hint by a reviewed change.
+// Cloudflare's data-location reference, developers.cloudflare.com/durable-objects/reference/
+// data-location/). Any other region is null and fails the check, so a move of the database
+// moves the hint by a reviewed change. A hint only counts where Cloudflare creates the object
+// inside it: "sam" (South America) spawns in Eastern North America, and "afr" and "me" spawn
+// elsewhere too, so Sao Paulo (sa-east-1) and those regions stay unmapped (AI review F2).
+// Singapore takes the narrower documented "apac-se" rather than all of Asia-Pacific.
 const neonRegionLocationHints = Object.freeze({
   "us-east-1": "enam",
   "us-east-2": "enam",
   "us-west-2": "wnam",
   "eu-central-1": "weur",
   "eu-west-2": "weur",
-  "ap-southeast-1": "apac",
+  "ap-southeast-1": "apac-se",
   "ap-southeast-2": "oc",
-  "sa-east-1": "sam",
 });
 export function edgeDurableObjectLocationHint(regionId) {
   const region = neonAwsRegion(regionId);
@@ -1699,7 +1702,8 @@ export async function verifyEdgeConfig({
       problem("EDGE_PLACEMENT_REGION", worker + ":staging");
   // fix-connector-cron-latency: the cron object is created with the location hint of that
   // same region, so the cron's transactions and broker RPCs start beside the database too.
-  // (An unmapped region is already EDGE_PLACEMENT_REGION:staging.json.)
+  // (A region_id of another shape is already EDGE_PLACEMENT_REGION:staging.json; an AWS
+  // region with no honoured hint, such as aws-sa-east-1, fails here.)
   if (
     placementRegion !== null &&
     edgeDurableObjectLocationHint(staging?.neon?.region_id) !== cronLocationHint

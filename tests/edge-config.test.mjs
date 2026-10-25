@@ -1990,9 +1990,11 @@ test("fix-connector-cron-latency: the cron object's location hint is staging.jso
     ["aws-us-west-2", "wnam"],
     ["aws-eu-central-1", "weur"],
     ["aws-eu-west-2", "weur"],
-    ["aws-ap-southeast-1", "apac"],
+    ["aws-ap-southeast-1", "apac-se"],
     ["aws-ap-southeast-2", "oc"],
-    ["aws-sa-east-1", "sam"],
+    // AI review F2: Cloudflare creates a "sam" object in Eastern North America, so Sao
+    // Paulo has no honoured hint and stays unmapped.
+    ["aws-sa-east-1", null],
     ["aws-ap-northeast-1", null],
     ["azure-eastus2", null],
     ["aws:us-east-1", null],
@@ -2009,6 +2011,37 @@ test("fix-connector-cron-latency: the cron object's location hint is staging.jso
       ["EDGE_CONNECTOR_CRON_LOCATION:connector:cron.ts"],
       String(other),
     );
+});
+
+test("fix-connector-cron-latency (AI review F2): a database moved to Sao Paulo fails the cron object's hint, whatever it names", async () => {
+  // Everything else moves with the database: the three placements, region_id, the endpoint
+  // and both bindings. Only the hint is left to decide, and no hint passes, "sam" included,
+  // because Cloudflare creates a "sam" object in Eastern North America.
+  const host = "ep-hidden-mouse-b7e6ff6l.c-13.sa-east-1.aws.neon.tech";
+  const moved = {};
+  for (const worker of ["api", "broker", "connector"])
+    moved[worker] = (c) => {
+      c.env.staging.placement = targeted("aws:sa-east-1");
+      patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
+    };
+  const saoPaulo = records({
+    staging: (s) => {
+      s.neon.region_id = "aws-sa-east-1";
+      s.neon.endpoint_host = host;
+    },
+  });
+  for (const hint of ["sam", "enam", undefined]) {
+    const verdict = await verifyEdgeConfig({
+      root: tree(moved),
+      ...saoPaulo,
+      ...(hint === undefined ? {} : { connectorCronLocationHint: hint }),
+    });
+    assert.deepEqual(
+      verdict.problems,
+      ["EDGE_CONNECTOR_CRON_LOCATION:connector:cron.ts"],
+      String(hint),
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
