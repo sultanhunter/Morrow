@@ -1,6 +1,6 @@
 # ADR-0038 Cloudflare Durable Objects in the stack: one object that runs the connector's cron beside the database
 
-- Status: Accepted 2026-10-25 (the owner, OD-2026-10-25-4)
+- Status: Accepted 2026-10-25 (the owner, OD-2026-10-25-4; confirmed in so many words, OD-2026-10-25-5)
 - Date: 2026-10-25
 - Supersedes: nothing.
 - Amends: the settled stack line in CLAUDE.md ("Stack: … Cloudflare Workers, Workflows, Queues and R2 …") and `docs/plan/build-plan.md`'s stack lines (its Stack bullet and the selected-stack paragraph), which gain Durable Objects within item 1's limits. The wording of those lines changes in its own follow-up (see Approval).
@@ -64,5 +64,9 @@ The owner's statement in chat, verbatim, on 2026-10-25, in answer to the lead's 
 > for budget why we limiting anything? it should be very simple credit based system like suppose we give user 1000credits it will be spend on the agentic work so that creidt will bcome limit itself no need to hardcode all of that bullshit. and for one i want it to be truty multi agent system so the agents can be orchestrated by the main agent in any way no need to limit to a single agent call only. for 2 why we adding limit on characters? it might strip important information i think only needs to be structured. for other option use the recommded one
 
 The owner's words for this record are "for other option use the recommded one". The lead stated to the owner, in reply, that "use the recommended one" is taken as approval of the recommended option for this record: the Durable Object that runs the connector's scheduled jobs beside the database. The rest of the statement answers the agent architecture record's questions and is recorded in OD-2026-10-25-4.
+
+The owner then approved this record in so many words, in chat on 2026-10-25 (OD-2026-10-25-5):
+
+> approve ADR-0038 to use durable objects
 
 What it approves: this record as written, items 1 to 5. The longer time limits (the routine stopgap) are not taken. The CLAUDE.md and `docs/plan/build-plan.md` stack-line wording above is applied in its own follow-up; a change to CLAUDE.md's standing rules has needed the owner's own confirmation of the text before (OD-2026-10-23-10).
