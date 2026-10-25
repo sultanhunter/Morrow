@@ -186,6 +186,13 @@ test("P1: with no context both roles see zero rows and every api function is ine
       return `SELECT x.outcome FROM (SELECT '${doc}'::text AS c) d, morrow_work.cmd_plan_start_document('${uuid}','${digest}','corr','${id}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'${digest}','${digest}') x`;
     })(),
     "cmd_plan_start(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_plan_start('${uuid}','${digest}','corr','${digest}','${digest}','${digest}','{}')`,
+    // PR 20 (0052): the knowledge and notebook commands, every scalar well-formed.
+    "begin_knowledge_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_knowledge_command('knowledge.write','${uuid}','${digest}')`,
+    "cmd_knowledge_write(text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_write('${uuid}','${digest}','corr',NULL,'${randomUUID()}','policy',NULL,'Returns','Thirty days.','[]')`,
+    "cmd_knowledge_accept(text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_accept('${uuid}','${digest}','corr','${randomUUID()}','${digest}','${randomUUID()}')`,
+    "cmd_knowledge_reject(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_reject('${uuid}','${digest}','corr','${randomUUID()}','${digest}')`,
+    "cmd_knowledge_delete(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_delete('${uuid}','${digest}','corr','page_probe','1')`,
+    "cmd_notebook_clear(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_notebook_clear('${uuid}','${digest}','corr','installation_probe','1')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",

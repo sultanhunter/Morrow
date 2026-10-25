@@ -398,7 +398,14 @@
     },
     {
       "sequence": 52,
-      "file": "0052.staging-test-credits-renewal.sql",
+      "file": "0052.shop-knowledge.sql",
+      "sha256": "4597c094203277ee75c2416ea591676c24da7f8fddd83841e5eadb69b6378f0a",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/shop-knowledge.md"
+    },
+    {
+      "sequence": 53,
+      "file": "0053.staging-test-credits-renewal.sql",
       "sha256": "c658e3f81f03ca788d71a63bea4aa6d7b734704d3d34551d70d59d2dd62f8384",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-renew-test-credits.md"

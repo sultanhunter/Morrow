@@ -225,6 +225,20 @@ test("P04.T01i PR-D: the committed staging vars give the broker every capability
     ANTHROPIC_API_KEY: "sk-ant-api03-" + randomBytes(48).toString("hex"),
   });
   assert.equal(keyed.model?.provider, "anthropic");
+  // fix-anthropic-key-format: an identity-backed key (a three-letter type label) is admitted;
+  // an admin key or an OAuth token is not.
+  const identityBacked = await brokerCapabilities({
+    ...env,
+    ANTHROPIC_API_KEY: "sk-ant-abc-" + randomBytes(72).toString("base64url").slice(0, 95),
+  });
+  assert.equal(identityBacked.model?.provider, "anthropic");
+  for (const wrongType of ["sk-ant-admin01-", "sk-ant-oat01-"]) {
+    const refused = await brokerCapabilities({
+      ...env,
+      ANTHROPIC_API_KEY: wrongType + randomBytes(48).toString("hex"),
+    });
+    assert.equal(refused.model, null, wrongType);
+  }
   const malformed = await brokerCapabilities({ ...env, ANTHROPIC_API_KEY: marker("sk-ant-") });
   assert.equal(malformed.model, null);
   assert.equal(capabilities.challenge.hostname, "morrow-staging-api.sultanibneusman0.workers.dev");

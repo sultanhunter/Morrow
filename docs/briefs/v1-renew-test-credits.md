@@ -1,7 +1,7 @@
 # v1 PR 6: Credits for your own workspace (renew the test credits)
 
 - Status: brief, 2026-10-25. Build order PR 6 ([v1-build-order.md](../plan/v1-build-order.md)), under [ADR-0035](../decisions/adr/ADR-0035-build-v1-live.md) items 3 and 4 (the owner's workspace keeps getting test credits under the standing approval; more than 300 credits in 30 days is raising a limit) and [billing-entitlements R10](../contracts/billing-entitlements.md) (credits come only from the versioned `BillingTerms`). Branch `claude/v1-renew-test-credits`, from `main` `66689751`.
-- Migration `0052.staging-test-credits-renewal.sql` (work owner): the next free number on `main`. Open PRs already hold 0052 to 0054, so integration renumbers it.
+- Migration `0053.staging-test-credits-renewal.sql` (work owner): the next free number on `main` once PR 20's `0052.shop-knowledge.sql` merged (renumbered from 0052 when this branch took `main` `fd45f7cc` on 2026-10-26). Other open PRs may hold 0053 and above, so integration may renumber it again.
 
 ## Goal
 
@@ -13,7 +13,7 @@ npm run staging:test-credits -- renew --operator <id>
 
 ## Scope
 
-- **Migration 0052:**
+- **Migration 0053:**
   - `morrow_billing.operator_test_entitlement_renewals`: one row per renewed period of a grant, with the terms revision its credits came from. It is append-only, owner only, FORCE RLS, and holds one row per grant and period.
   - `wallet_guard` and `snapshot_guard` are replaced, and only when they still have 0035's exact bodies (md5 pins). The owner may fund the wallet revision a renewal names with exactly the units it added. An operator snapshot's successor must be the same grant's renewal for that revision, from the owner, and must start no earlier than the previous period ended. Everything 0035 refused is still refused.
   - `morrow_billing.operator_test_entitlement_renew(operator, workspace, grant approval, standing approval, evidence)`: five closed text values, none an amount. INVOKER, owned by the owner, granted to nobody. It returns `renewed`, `current` (the period that contains the clock is already written, so nothing is written), `grant_missing`, `route_conflict`, `terms_missing`, `not_staging`, `invalid` or `denied`.
@@ -33,7 +33,7 @@ Non-goals: ADR-0026 item 7's `TestEntitlementSeed`, Shopify billing, any change 
 
 ## Interfaces touched
 
-- `migrations/0052*` and the manifest.
+- `migrations/0053*` and the manifest.
 - `scripts/staging.mjs` (`test-credits`; shared `requireE13`, `labelledValues` and `committedBlob`).
 - `scripts/staging-runner.mjs` (`renewTestCredits`; the shared live-store check).
 - `package.json` (`staging:test-credits`).
@@ -52,7 +52,7 @@ Non-goals: ADR-0026 item 7's `TestEntitlementSeed`, Shopify billing, any change 
 
 ## Lead steps after merge
 
-1. Run `staging:migrate` to apply 0052.
+1. Run `staging:migrate` to apply 0053.
 2. Run the grant (`staging:test-entitlement`) if it has not run yet.
 3. Commit the record with the workspace id and the grant's approval reference.
 4. After the grant's period ends, run `staging:test-credits -- renew --operator <id>`.
