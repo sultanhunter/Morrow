@@ -237,7 +237,7 @@ export interface QuestionAnswer {
 }
 export type TurnOpen =
   | { readonly outcome: "opened" | "opened_before" }
-  | { readonly outcome: "stop"; readonly reason: "turn_limit" | "cost_budget" | "wall_time" }
+  | { readonly outcome: "stop"; readonly reason: "turn_limit" | "wall_time" }
   | { readonly outcome: "conflict" | "run_inactive" | "invalid" | "denied" };
 export type TurnSettle =
   | {
@@ -628,10 +628,10 @@ export function createAgentRunSteps(query: FixedSqlQuery): AgentRunSteps {
         ["outcome", "reason"],
       );
       if (r.outcome === "stop") {
-        if (!["turn_limit", "cost_budget", "wall_time"].includes(r.reason as string)) throw held();
+        if (!["turn_limit", "wall_time"].includes(r.reason as string)) throw held();
         return Object.freeze({
           outcome: "stop" as const,
-          reason: r.reason as "turn_limit" | "cost_budget" | "wall_time",
+          reason: r.reason as "turn_limit" | "wall_time",
         });
       }
       if (

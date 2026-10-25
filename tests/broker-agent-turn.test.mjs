@@ -687,7 +687,7 @@ test("gateway: closed inputs and a forged prefix refuse before the fence", async
     "in_flight",
     "call_open",
     "turn_state",
-    "cost_budget",
+    "attempt_invalid",
     "run_inactive",
     "stopped",
     "not_found",

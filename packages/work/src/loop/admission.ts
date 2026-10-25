@@ -13,9 +13,12 @@ import { generatedLoopCatalogue } from "../../../policy/src/generated/loop-catal
 import { WorkSqlUnavailable, type WorkTx } from "../connection.js";
 import { canonicalJson } from "../digest.js";
 
-// Agent-run admission in code (ADR-0027 items 1, 6, 9 and 12), the part the api composes
-// before cmd_agent_run_admit, which derives the same caps and hold itself and refuses a
-// manifest that differs (its CHECK proves the canonical text is exactly the run's). While
+// Agent-run admission in code (ADR-0027 items 1, 6, 9 and 12, as ADR-0036 and ADR-0039
+// amend them), the part the api composes before cmd_agent_run_admit, which derives the same
+// caps and hold itself and refuses a manifest that differs (its CHECK proves the canonical
+// text is exactly the run's). No money cap admits or refuses a run (ADR-0039 item 1): no
+// US$ per-run or per-day backstop, look-for-work or unrecovered-cost cap; the credit hold
+// that will admit one is ADR-0039's PR 3, and the switch stays off until it exists. While
 // the agent-loop switch (docs/decisions/agent-loop-staging.json, committed off) is off,
 // nothing here is reached: admission answers switch_off before any statement, and the plan
 // start's agent and specialist steps stay not_started with agent_loop_off.
@@ -46,19 +49,18 @@ const usd8Up = (units: bigint) => (units + 9_999n) / 10_000n;
 const usdText = (usd8: bigint) =>
   `${usd8 / 100_000_000n}.${String(usd8 % 100_000_000n).padStart(8, "0")}`;
 /**
- * A routed run's caps (ADR-0027 items 6 and 12): the version's turn limit lowered so that it
- * times the entry's worst-case turn (rounded up to the cent's millionth, as SQL stores it)
- * fits the run backstop; the hold the lower of that product and the backstop; a routed run
- * must afford one turn (cap_below_turn otherwise). The limits are the version's.
+ * A routed run's caps (ADR-0027 items 6 and 12, as ADR-0039 items 1 and 5 amend them): the
+ * version's turn limit, never lowered by a money value; the hold the turn limit times the
+ * entry's worst-case turn (rounded up to the cent's millionth, as SQL stores it): the most
+ * the run's turns can cost, which every counted turn is booked against, never a cap (no
+ * admission or turn is refused on it). The other limits are the version's.
  */
-export function routedRunCaps(entry: LoopEntry): RoutedRunCaps | "cap_below_turn" {
+export function routedRunCaps(entry: LoopEntry): RoutedRunCaps {
   const limits = loopLimits(entry.catalogueVersion);
   const worst8 = usd8Up(entry.worstCaseTurnUsd12);
-  const cap8 = BigInt(limits.runCostCapUsd12) / 10_000n;
-  if (worst8 <= 0n) return "cap_below_turn";
-  const turnLimit = Math.min(limits.maxTurnsPerRun, Number(cap8 / worst8));
-  const hold8 = BigInt(turnLimit) * worst8 < cap8 ? BigInt(turnLimit) * worst8 : cap8;
-  if (turnLimit < 1 || hold8 < worst8) return "cap_below_turn";
+  if (worst8 <= 0n) throw Error("LOOP_ENTRY_INVALID");
+  const turnLimit = limits.maxTurnsPerRun;
+  const hold8 = BigInt(turnLimit) * worst8;
   return Object.freeze({
     turnLimit,
     holdUsd: usdText(hold8),
@@ -113,7 +115,7 @@ export interface RoutedManifestInput {
 /**
  * A routed run's AgentRunManifest@1 and its RFC 8785 text, validated with the generated
  * contract: ids, digests, codes, caps and the hold only (no content). Refused: an entry the
- * catalogue lacks (entry_not_offered), caps below one turn (cap_below_turn), no tool.
+ * catalogue lacks (entry_not_offered), no tool.
  */
 export function routedManifest(input: RoutedManifestInput):
   | {
@@ -124,7 +126,7 @@ export function routedManifest(input: RoutedManifestInput):
     }
   | {
       readonly ok: false;
-      readonly code: "entry_not_offered" | "cap_below_turn" | "no_tools" | "invalid";
+      readonly code: "entry_not_offered" | "no_tools" | "invalid";
     } {
   const entry = loopEntry(
     input.profile.catalogueVersion,
@@ -133,7 +135,6 @@ export function routedManifest(input: RoutedManifestInput):
   );
   if (!entry) return Object.freeze({ ok: false as const, code: "entry_not_offered" as const });
   const caps = routedRunCaps(entry);
-  if (caps === "cap_below_turn") return Object.freeze({ ok: false as const, code: caps });
   if (input.tools.length === 0)
     return Object.freeze({ ok: false as const, code: "no_tools" as const });
   const manifest = {
@@ -244,11 +245,8 @@ const admitRefusals = [
   "denied",
   "catalogue_inactive",
   "entry_not_offered",
-  "cap_below_turn",
   "entitlement",
   "no_billing_period",
-  "daily_backstop",
-  "unrecovered_cost_cap",
 ] as const;
 export type RoutedAdmission =
   | {

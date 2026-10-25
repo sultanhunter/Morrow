@@ -2022,14 +2022,12 @@ test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allow
     "packages/policy/src/generated/model-catalogue.ts",
     // v1 PR 3: the snapshot's canonical text, shared with the broker's pre-send check.
     "packages/work/src/runs/listing-canonical.ts",
-    // Build order PR 11: AgentRunWorkflow's loop runner, its steps and its catalogues.
+    // Build order PR 11: AgentRunWorkflow's loop runner, its steps and the tool catalogue.
     "packages/work/src/loop/runner.ts",
     "packages/work/src/loop/steps.ts",
     "packages/work/src/loop/authority.ts",
     "packages/work/src/loop/conversation.ts",
     "packages/work/src/loop/tools.ts",
-    "packages/policy/src/loop-catalogue.ts",
-    "packages/policy/src/generated/loop-catalogue.ts",
     "packages/policy/src/tool-catalogue.ts",
     "packages/policy/src/generated/tool-catalogue.ts",
     "packages/policy/src/generated/specialist-ceiling.ts",
@@ -2045,6 +2043,9 @@ test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allow
     "packages/work/src/loop/index.ts",
     "packages/work/src/projects/commands.ts",
     "packages/policy/src/loop-prompts.ts",
+    // ADR-0039: the runner holds no money rule, so the loop catalogue's rules stay out.
+    "packages/policy/src/loop-catalogue.ts",
+    "packages/policy/src/generated/loop-catalogue.ts",
   ])
     assert.ok(!orchestratorPackageAllowlist.includes(path), path);
   // The list stays sorted and free of duplicates, so a reviewed addition reads as one line.

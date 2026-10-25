@@ -2,15 +2,16 @@
 // fake (tests/fixtures/agent-loop-world.mjs stands in for migration agent-runs and the
 // broker's turn fence; lab:agent-loop proves the same runner against PostgreSQL 17).
 //   * Admission: the caps and the hold in code equal the SQL formula for every catalogue v2
-//     entry and the policy kernel's; AgentRunManifest@1 is ids, digests, codes and caps only;
-//     the plan start admits nothing while the switch is off; the switch is exactly "on".
+//     entry, with no money cap (ADR-0039); AgentRunManifest@1 is ids, digests, codes and caps
+//     only; the plan start admits nothing while the switch is off; the switch is exactly "on".
 //   * The runner: completion; tool calls checked in code at call time (validation, ids in
 //     scope, the authority decision, the handler) and recorded; untrusted results only as
 //     wrapped data that taints the run; a final turn calls no tool; an unoffered tool ends
 //     the run; an uncertain turn is resent at most once; a throttle resends the attempt; a
 //     lost reply is read back from what SQL recorded, never sent again; the question waits
 //     durably and the answer reaches the next turn; a stop interrupts the next step; the caps
-//     (turns, cost, wall time) end the run in code; step results carry ids and codes only.
+//     (turns, wall time; no money cap) end the run in code; step results carry ids and codes
+//     only.
 //   * The tool seam: inbox.ask, the handler table, the operation each tool names, ids in
 //     scope, the authority's own refusals; the steps' SQL is source-fixed and its decoders
 //     accept only their closed shapes.
@@ -19,7 +20,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
-import { loopEntries, loopEntry, runHold } from "../packages/policy/src/loop-catalogue.ts";
+import {
+  defaultLoopProfile,
+  loopEntries,
+  loopEntry,
+} from "../packages/policy/src/loop-catalogue.ts";
 import {
   loopSystemTexts,
   routedSystemText,
@@ -32,6 +37,7 @@ import {
   toolCatalogueVersion,
 } from "../packages/policy/src/tool-catalogue.ts";
 import {
+  admitRoutedRun,
   agentLoopSwitchOf,
   installedProfile,
   planStepAdmitterOff,
@@ -138,42 +144,46 @@ test("the system text is pinned by its SHA-256 and is the only text the broker m
   assert.match(routedSystemText, /approves exactly/);
 });
 
-test("caps and holds: code equals the SQL formula and the policy kernel for every v2 entry", () => {
+test("caps and holds: code equals the SQL formula for every v2 entry, with no money cap (ADR-0039)", () => {
   const entries = loopEntries(2);
   assert.equal(entries.length, 9);
   const migration = readFileSync("migrations/0052.agent-runs.sql", "utf8");
-  // The SQL formula, as cmd_agent_run_admit derives it: least(16, floor(7 / worst)) turns and
-  // least(turns * worst, 7) held, the worst case rounded up to numeric(20,8).
-  assert.match(
-    migration,
-    /v_turn_limit:=least\(v\.max_turns_per_run,floor\(v\.run_cost_cap_usd\/e\.worst_case_turn_usd\)::integer\);/,
-  );
-  assert.match(
-    migration,
-    /v_hold:=least\(v_turn_limit\*e\.worst_case_turn_usd,v\.run_cost_cap_usd\);/,
-  );
+  // The SQL formula, as cmd_agent_run_admit derives it: the version's 16 turns (never lowered
+  // by a money value) and turns * worst held, the worst case rounded up to numeric(20,8).
+  assert.match(migration, /v_turn_limit:=v\.max_turns_per_run;/);
+  assert.match(migration, /v_hold:=v_turn_limit\*e\.worst_case_turn_usd;/);
+  // ADR-0039 item 1: no US$7 per run, no US$25 a day, no look-for-work or unrecovered cap.
+  for (const gone of [
+    "run_cost_cap_usd",
+    "workspace_daily_cost_cap_usd",
+    "workspace_period_unrecovered_cost_cap_usd",
+    "look_for_work_daily_cost_cap",
+    "'daily_backstop'",
+    "'cap_below_turn'",
+    "'unrecovered_cost_cap'",
+    "'cost_budget'::text",
+    "v_outcome:='cost_budget'",
+  ])
+    assert.ok(!migration.includes(gone), gone);
+  // Opus 5.5 at medium (every agent but Morrow, ADR-0036) gets its full 16 turns (was 12 under
+  // US$7), at high 16 (was 10): ADR-0039's Consequences.
   const expected = {
     "claude_sonnet_5_5/low": [16, "3.36000000"],
     "claude_sonnet_5_5/medium": [16, "4.48000000"],
     "claude_sonnet_5_5/high": [16, "5.12000000"],
     "claude_opus_5_5/low": [16, "6.72000000"],
-    "claude_opus_5_5/medium": [12, "6.72000000"],
-    "claude_opus_5_5/high": [10, "6.40000000"],
+    "claude_opus_5_5/medium": [16, "8.96000000"],
+    "claude_opus_5_5/high": [16, "10.24000000"],
   };
   for (const entry of entries) {
     const caps = routedRunCaps(entry);
     const worst8 = (entry.worstCaseTurnUsd12 + 9_999n) / 10_000n;
-    const turns = Math.min(16, Number(700_000_000n / worst8));
-    const hold8 = BigInt(turns) * worst8 < 700_000_000n ? BigInt(turns) * worst8 : 700_000_000n;
-    assert.equal(caps.turnLimit, turns, entry.model + entry.effort);
+    const hold8 = 16n * worst8;
+    assert.equal(caps.turnLimit, 16, entry.model + entry.effort);
     assert.equal(
       caps.holdUsd,
       `${hold8 / 100_000_000n}.${String(hold8 % 100_000_000n).padStart(8, "0")}`,
     );
-    const kernel = runHold({ entry, kind: "routed", creditCapUsd12: null });
-    assert.equal(kernel.ok, true);
-    assert.equal(kernel.turnLimit, caps.turnLimit);
-    assert.ok(BigInt(caps.holdUsd.replace(".", "")) * 10_000n >= kernel.holdUsd12);
     const want = expected[entry.model + "/" + entry.effort];
     if (want) assert.deepEqual([caps.turnLimit, caps.holdUsd], want, entry.model + entry.effort);
     // ADR-0027 item 6's limits, the effort's max_tokens and 30 minutes.
@@ -198,10 +208,19 @@ test("caps and holds: code equals the SQL formula and the policy kernel for ever
     routedRunCaps(loopEntry(2, "claude_opus_5_5", "high")).worstCaseTurnUsd,
     "0.64000000",
   );
-  // An installed agent's default profile (Sonnet 5.5 at low) until PR 12's picker.
+  // ADR-0036 item 1: Morrow (the Coordinator) on Opus 5.5 at high, every other agent kind on
+  // Opus 5.5 at medium; an installed agent's default until PR 12's picker.
   assert.deepEqual(
     { ...installedProfile(2) },
-    { model: "claude_sonnet_5_5", effort: "low", catalogueVersion: 2 },
+    { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
+  );
+  assert.deepEqual(
+    { ...defaultLoopProfile(2, "coordinator") },
+    { model: "claude_opus_5_5", effort: "high" },
+  );
+  assert.deepEqual(
+    { ...defaultLoopProfile(2, "specialist") },
+    { model: "claude_opus_5_5", effort: "medium" },
   );
 });
 
@@ -229,16 +248,17 @@ test("AgentRunManifest@1: ids, digests, codes and caps only; refusals substitute
   assert.equal(m.manifest.systemTextDigest, routedSystemTextDigest);
   assert.equal(m.manifest.toolCatalogueVersion, toolCatalogueVersion);
   assert.equal(m.manifest.toolCatalogueDigest, toolCatalogueDigest);
+  // The installed default, Opus 5.5 at medium (ADR-0036): 16 turns of US$0.56 at worst.
   assert.deepEqual(m.manifest.caps, {
     maxTurns: 16,
     maxToolCallsPerTurn: 4,
     maxToolCallsPerRun: 40,
     maxQuestions: 2,
     maxInputTokensPerTurn: 64000,
-    maxOutputTokensPerTurn: 5000,
+    maxOutputTokensPerTurn: 12000,
     wallTimeSeconds: 1800,
     deadline: null,
-    holdUsd: "3.36000000",
+    holdUsd: "8.96000000",
   });
   // No request text, objective or name anywhere: ids, digests, codes and amounts.
   assert.ok(!m.canonical.includes("Tidy"));
@@ -265,6 +285,85 @@ test("AgentRunManifest@1: ids, digests, codes and caps only; refusals substitute
     "products.read",
     "inbox.ask",
   ]);
+});
+
+test("admission: no money refusal is a known outcome (ADR-0039); the switch before any statement", async () => {
+  const input = {
+    runId: ids.run,
+    organizationId: ids.organization,
+    workspaceId: ids.workspace,
+    storeId: ids.store,
+    connectionId: ids.connection,
+    childTaskId: ids.child,
+    installationId: ids.installation,
+    requester: { principalId: ids.requester, membershipId: ids.membership },
+    release: { id: "morrow.listings", revision: 1, digest: "a".repeat(64) },
+    tools: ["inbox.ask"],
+    profile: installedProfile(2),
+    admittedAt: "2026-10-24T12:00:00.000Z",
+    commandId: "00000000-0000-4000-8000-0000000000d1",
+    requestDigest: "b".repeat(64),
+    correlationId: "corr_1",
+    parentTaskId: ids.task,
+    envelopeId: ids.envelope,
+    hopId: "00000000-0000-4000-8000-0000000000e2",
+    coordinatorPrincipalId: "agent_00000000-0000-4000-8000-0000000000c0",
+    grantId: "00000000-0000-4000-8000-0000000000a1",
+  };
+  const tx = (rows) => {
+    const t = {
+      sent: [],
+      rolledBack: false,
+      markSubmitted() {},
+      rollbackOnly() {
+        t.rolledBack = true;
+      },
+      async run(name, values) {
+        t.sent.push([name, values]);
+        return rows;
+      },
+    };
+    return t;
+  };
+  // Off: switch_off before any statement.
+  const off = tx([]);
+  assert.deepEqual(await admitRoutedRun(off, "off", input), { outcome: "switch_off" });
+  assert.equal(off.sent.length, 0);
+  // Applied: the caps and hold SQL derived are the code's (16 turns of Opus 5.5 at medium).
+  const applied = tx([
+    {
+      outcome: "applied",
+      result: JSON.stringify({
+        runId: ids.run,
+        childTaskId: ids.child,
+        status: "queued",
+        turnLimit: 16,
+        holdUsd: "8.96000000",
+      }),
+    },
+  ]);
+  assert.deepEqual(await admitRoutedRun(applied, "on", input), {
+    outcome: "applied",
+    runId: ids.run,
+    childTaskId: ids.child,
+    turnLimit: 16,
+    holdUsd: "8.96000000",
+  });
+  assert.deepEqual(
+    applied.sent.map(([name]) => name),
+    ["cmdAgentRunAdmit"],
+  );
+  // A refusal SQL returns rolls back; a money refusal is no longer one (ADR-0039 item 9):
+  // SQL never returns it, and the code would not take it as an answer.
+  const refused = tx([{ outcome: "entitlement", result: null }]);
+  assert.deepEqual(await admitRoutedRun(refused, "on", input), { outcome: "entitlement" });
+  assert.equal(refused.rolledBack, true);
+  for (const outcome of ["daily_backstop", "cap_below_turn", "unrecovered_cost_cap"])
+    await assert.rejects(
+      admitRoutedRun(tx([{ outcome, result: null }]), "on", input),
+      /WORK_SQL_UNAVAILABLE/,
+      outcome,
+    );
 });
 
 test('the plan start admits nothing while the switch is off; the switch is exactly "on"', async () => {
@@ -472,7 +571,7 @@ test("a reply is checked against what the run was given", () => {
   assert.equal(checkReply({ role: "assistant", content: [] }, "end_turn", offered, false), null);
 });
 
-test("the caps in code before every turn: turns, the hold, the final turn, wall time and the lease", () => {
+test("the caps in code before every turn: turns, the final turn, wall time and the lease; no money cap", () => {
   const w = agentWorld();
   const s = w.state();
   assert.deepEqual(turnCaps({ ...s, status: "running" }, 1), {
@@ -483,20 +582,22 @@ test("the caps in code before every turn: turns, the hold, the final turn, wall 
   // The last turn the limit allows is final; past it the run ends turn_limit.
   assert.equal(turnCaps(s, s.turnLimit).final, true);
   assert.deepEqual(turnCaps(s, s.turnLimit + 1), { kind: "end", reason: "turn_limit" });
-  // The hold left covers one worst-case turn but not two: the turn is final (cost_budget);
-  // under one: the run ends cost_budget; any overflow ends it too.
+  // No money cap (ADR-0039 item 1): the hold booked in full, under one worst-case turn left,
+  // or any overflow neither ends the run nor makes the turn final; only the limit does.
   const worst = BigInt(s.worstCaseTurnUsd.replace(".", ""));
   const hold = BigInt(s.holdUsd.replace(".", ""));
   const left = (n) => w.text8(hold - n);
-  assert.equal(turnCaps({ ...s, bookedUsd: left(worst + worst / 2n) }, 2).final, true);
-  assert.deepEqual(turnCaps({ ...s, bookedUsd: left(worst - 1n) }, 2), {
-    kind: "end",
-    reason: "cost_budget",
-  });
-  assert.deepEqual(turnCaps({ ...s, overflowUsd: "0.00000001" }, 2), {
-    kind: "end",
-    reason: "cost_budget",
-  });
+  for (const spent of [
+    { bookedUsd: left(worst + worst / 2n) },
+    { bookedUsd: left(worst - 1n) },
+    { bookedUsd: s.holdUsd, overflowUsd: "0.00000001" },
+    { bookedUsd: s.holdUsd, overflowUsd: "100.00000000" },
+  ])
+    assert.deepEqual(turnCaps({ ...s, ...spent }, 2), {
+      start: true,
+      final: false,
+      budgetMs: w.entry.callBudgetMs,
+    });
   // The call's whole budget plus the finish margin must fit the wall time and the lease.
   const budget = w.entry.callBudgetMs + agentRunTimings.finishMarginMs;
   assert.equal(turnCaps({ ...s, activeMs: s.wallTimeMs - budget }, 1).start, true);
@@ -1136,13 +1237,11 @@ test("a turn step replayed after its close committed keeps its recorded reply an
   const turnOf = (world) =>
     world.db.turns.map((t) => [t.turn, t.attempt, t.final, t.budgetMs, t.outcome]);
   const budget = agentWorld().entry.callBudgetMs;
-  // US$0.43 held, US$0.21 worst case (Sonnet low): turn 1 is not final. Its US$0.05 leaves
-  // US$0.38, under two worst-case turns: the caps worked out again from the run's state after
-  // that booking would make turn 1 final and reject its recorded tool_use reply.
+  // A tool_use turn replayed after its close committed: the same reply, one send, the caps
+  // it was opened with (not final: the limit allows more turns).
   const tools = await started(
     compose(
       agentWorld({
-        holdUsd: "0.43000000",
         turnCostUsd: "0.05000000",
         script: async (call) =>
           usageOk(call.final ? reply("Done.") : reply(null, read("tu_" + call.turn))),
@@ -1159,13 +1258,14 @@ test("a turn step replayed after its close committed keeps its recorded reply an
   assert.equal(tools.db.sends.length, 1);
   assert.deepEqual(turnOf(tools), [[1, 1, false, budget, "tool_use"]]);
   assert.equal(tools.text8(tools.db.run.booked8), "0.05000000");
-  // US$0.25 held: turn 1 starts (final); its US$0.05 leaves less than one worst-case turn,
-  // so the caps worked out again would end the run cost_budget over a recorded completion.
+  // The last turn the limit allows (final), whose booking passed the run's hold: replayed, it
+  // is still the recorded reply (an overflow is recorded, never a stop: ADR-0039 item 1).
   const last = await started(
     compose(
       agentWorld({
+        turnLimit: 1,
         holdUsd: "0.25000000",
-        turnCostUsd: "0.05000000",
+        turnCostUsd: "0.30000000",
         script: async () => usageOk(reply("Done.")),
       }),
     ),
@@ -1175,6 +1275,10 @@ test("a turn step replayed after its close committed keeps its recorded reply an
   assert.deepEqual(await runTurn(last.ports, ref, 1, 1), done);
   assert.equal(last.db.sends.length, 1);
   assert.deepEqual(turnOf(last), [[1, 1, true, budget, "end_turn"]]);
+  assert.deepEqual(
+    [last.text8(last.db.run.booked8), last.text8(last.db.run.overflow8)],
+    ["0.25000000", "0.05000000"],
+  );
   // The wall time and the lease's time ran out after the close committed: still the reply.
   const late = await started(compose(agentWorld({ script: async () => usageOk(reply("Done.")) })));
   const lateFirst = await runTurn(late.ports, ref, 1, 1);
@@ -1183,13 +1287,12 @@ test("a turn step replayed after its close committed keeps its recorded reply an
   assert.deepEqual(await runTurn(late.ports, ref, 1, 1), lateFirst);
   assert.equal(late.db.sends.length, 1);
   // A whole run whose turn-1 step result is lost once after its body committed: the replayed
-  // step returns the same reply, the tool runs once, and turn 2 is the final one.
+  // step returns the same reply, the tool runs once, and turn 2 answers.
   const run = compose(
     agentWorld({
-      holdUsd: "0.43000000",
       turnCostUsd: "0.05000000",
       script: async (call) =>
-        usageOk(call.final ? reply("Done.") : reply(null, read("tu_" + call.turn))),
+        usageOk(call.turn === 1 ? reply(null, read("tu_" + call.turn)) : reply("Done.")),
     }),
   );
   const d = lossyDurable({ "turn-1-1": null });
@@ -1204,7 +1307,7 @@ test("a turn step replayed after its close committed keeps its recorded reply an
     run.db.sends.map((s) => [s.call.turn, s.call.attempt, s.call.final, s.budgetMs]),
     [
       [1, 1, false, budget],
-      [2, 1, true, budget],
+      [2, 1, false, budget],
     ],
   );
   assert.deepEqual(run.db.dispatched, [["products.read", "tu_1", false]]);
@@ -1250,29 +1353,33 @@ test("a turn step replayed after its close committed keeps its recorded reply an
   assert.equal(ended.db.sends.length, 0);
 });
 
-test("the cost, turn and wall-time caps end the run in code", async () => {
-  // US$0.50 held, US$0.21 worst case (Sonnet low): turn 1 may be followed by a final turn,
-  // but it costs US$0.30, so the US$0.20 left cannot start another: cost_budget, in code,
-  // before any send.
+test("the turn and wall-time caps end the run in code; no money cap does (ADR-0039)", async () => {
+  // US$0.50 held, US$0.21 worst case (Sonnet low), each turn US$0.30: the turns go on past the
+  // hold (booked to it, the rest recorded as overflow, never dropped) and no turn is made
+  // final or refused for money; the run completes on its own answer.
   const costly = agentWorld({
     holdUsd: "0.50000000",
     turnCostUsd: "0.30000000",
-    script: async (call) => usageOk(reply(null, read("tu_" + call.turn))),
+    script: async (call) =>
+      usageOk(call.turn < 4 ? reply(null, read("tu_" + call.turn)) : reply("Done.")),
   });
   compose(costly);
   assert.deepEqual(await agentRun(costly.ports, costly.durable(), params), {
     kind: "ended",
-    status: "failed",
-    reason: "cost_budget",
+    status: "succeeded",
+    reason: "completed",
   });
   assert.deepEqual(
     costly.db.sends.map((s) => s.call.final),
-    [false],
+    [false, false, false, false],
   );
-  assert.equal(costly.text8(costly.db.run.booked8), "0.30000000");
-  // When the hold left covers one worst-case turn but not two, the next turn is final.
+  assert.deepEqual(
+    [costly.text8(costly.db.run.booked8), costly.text8(costly.db.run.overflow8)],
+    ["0.50000000", "0.70000000"],
+  );
+  // The last turn the limit allows is final (tool_choice none), whatever is left of the hold.
   const tight = agentWorld({
-    holdUsd: "0.50000000",
+    turnLimit: 2,
     turnCostUsd: "0.10000000",
     script: async (call) =>
       usageOk(call.final ? reply("Wrapping up.") : reply(null, read("tu_" + call.turn))),
@@ -1612,6 +1719,22 @@ test("the steps' SQL is source-fixed and each decoder accepts only its closed sh
       }),
       /RUNTIME_AGENT_RUN_HELD/,
     );
+  // A turn open stops only on the turn limit or the wall time: no money reason (ADR-0039).
+  const openWith = (row) =>
+    fake([row]).steps.turnOpen({
+      turn: 1,
+      attempt: 1,
+      final: false,
+      budgetMs: 196625,
+      inputCanonical: input,
+      inputDigest: sha(input),
+      untrusted: false,
+      readTagsCanonical: "[]",
+    });
+  for (const reason of ["turn_limit", "wall_time"])
+    assert.deepEqual(await openWith({ outcome: "stop", reason }), { outcome: "stop", reason });
+  for (const reason of ["cost_budget", "daily_backstop", "cap_below_turn", null])
+    await assert.rejects(openWith({ outcome: "stop", reason }), /RUNTIME_AGENT_RUN_HELD/);
   const turnRow = {
     turn: "1",
     attempt: "1",

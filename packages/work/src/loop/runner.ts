@@ -4,7 +4,6 @@ import type {
   Current_ModelResultV2,
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
-import { nextTurn, type LoopEntry } from "@morrow/policy/loop-catalogue";
 import { checkToolInput, toolEntry } from "@morrow/policy/tool-catalogue";
 import { modelCallBudgetMs } from "../../../identity/src/broker-protocol.js";
 import { canonicalJson, sha256Hex } from "../digest.js";
@@ -40,9 +39,9 @@ import type { ToolDispatch, ToolHandlers } from "./tools.js";
 // run lease, so a stop, a removed member or an ended lease stops the run at its next step.
 //   start      the run's current lease (agent_run_resume_lease, ids only), entered:
 //              queued -> running (agent_run_start).
-//   turn-n-a   one model turn: the caps in code first (the turn limit, the hold left
-//              against the entry's worst-case turn and the final turn, nextTurn; the wall
-//              time and the lease's time against the call's whole budget), then the input
+//   turn-n-a   one model turn: the caps in code first (the turn limit and the final turn,
+//              the last it allows; the wall time and the lease's time against the call's
+//              whole budget; no money cap, ADR-0039 item 1), then the input
 //              stored with its digest and the attempt's caps (agent_turn_open, which checks
 //              them again and fixes them: a replayed step takes the recorded final and
 //              budget, never the caps of the run's state after its own booking), then the
@@ -174,32 +173,14 @@ async function under<T>(
 const interrupted = (refusal: string) => Object.freeze({ kind: "interrupted" as const, refusal });
 const end = (reason: AgentRunEndReason) => Object.freeze({ kind: "end" as const, reason });
 
-// numeric(20,8) USD text as 10^-12 USD (the loop catalogue's unit).
-function usd12(text: string): bigint {
-  const m = /^(0|[1-9][0-9]{0,11})\.([0-9]{8})$/.exec(text);
-  if (!m) throw retry("amount");
-  return BigInt(m[1]!) * 10n ** 12n + BigInt(m[2]!) * 10n ** 4n;
-}
-/** The run's entry as its SQL facts pin it (the worst-case turn the hold is sized from). */
-function entryOf(run: AgentRunState): LoopEntry {
-  return Object.freeze({
-    catalogueVersion: run.catalogueVersion,
-    status: "active" as const,
-    model: run.model,
-    effort: run.effort,
-    maxOutputTokens: run.maxOutputTokens,
-    expectedOutputTokens: 0,
-    worstCaseTurnUsd12: usd12(run.worstCaseTurnUsd),
-    expectedFirstTurnUsd12: 0n,
-    expectedTurnUsd12: 0n,
-    callBudgetMs: modelCallBudgetMs(run.maxOutputTokens),
-  });
-}
 /**
- * The caps of the next turn, in code, before any send (ADR-0027 item 6): the turn limit,
- * the hold left (no overflow, one worst-case turn, a final turn when it cannot also cover a
- * final turn after it), the wall time (waits excluded) and the lease's own time, each
- * against the call's whole budget plus the finish margin.
+ * The caps of the next turn, in code, before any send (ADR-0027 item 6, as ADR-0039 items 1
+ * and 5 amend it): the turn limit (the last turn it allows is final, tool_choice none), the
+ * wall time (waits excluded) and the lease's own time, each against the call's whole budget
+ * (the effort's max_tokens) plus the finish margin. No money cap starts, shortens or ends a
+ * run: the hold and what is booked against it are records, and an overflow is recorded,
+ * never a stop. The credit hold before each turn is ADR-0039's PR 3; until it exists the
+ * agent-loop switch stays off (its `shared_wallet` prerequisite).
  */
 export function turnCaps(
   run: AgentRunState,
@@ -207,19 +188,18 @@ export function turnCaps(
 ):
   | { readonly start: true; readonly final: boolean; readonly budgetMs: number }
   | ReturnType<typeof end> {
-  const entry = entryOf(run);
-  const holdLeft = usd12(run.holdUsd) - usd12(run.bookedUsd);
-  if (usd12(run.overflowUsd) > 0n || holdLeft < 0n) return end("cost_budget");
-  const next = nextTurn({
-    entry,
-    turnLimit: run.turnLimit,
-    turnsTaken: turn - 1,
-    holdLeftUsd12: holdLeft,
-  });
-  if (!next.start) return end(next.reason);
-  const budgetMs = entry.callBudgetMs;
+  if (
+    !Number.isSafeInteger(turn) ||
+    turn < 1 ||
+    !Number.isSafeInteger(run.turnLimit) ||
+    run.turnLimit < 1 ||
+    run.turnLimit > 16
+  )
+    throw retry("caps");
+  if (turn > run.turnLimit) return end("turn_limit");
+  const budgetMs = modelCallBudgetMs(run.maxOutputTokens);
   if (!timeCovers(run, budgetMs)) return end("wall_time");
-  return Object.freeze({ start: true as const, final: next.final, budgetMs });
+  return Object.freeze({ start: true as const, final: turn === run.turnLimit, budgetMs });
 }
 /**
  * Whether the run's wall time (waits excluded) and its lease's own time still cover one

@@ -415,12 +415,13 @@ export function inspectSpecialistCeiling(ceiling, capabilities) {
  * The two switches stay committed off until their reviewed commits (ADR-0027 item 11, ADR-0028
  * item 8). Build order PR 11: the agent-loop record names its prerequisites; it may be on only
  * once every one is recorded (edge:check also checks each one's evidence file and the vars).
+ * `shared_wallet` is ADR-0039's credit holds (its PR 3): credits are the only spend limit.
  */
 export const agentLoopPrerequisites = Object.freeze([
   "catalogue_version_2_confirmed",
   "gateway_reservations_stops",
   "lab_agent_loop",
-  "shared_daily_backstop",
+  "shared_wallet",
   "store_content_cleanup",
 ]);
 export function inspectAgentPlatformSwitches(loop, specialists) {

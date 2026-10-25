@@ -1,7 +1,7 @@
 BEGIN;
--- Build order PR 11 (track T4), the agent loop's records (ADR-0027 items 1-7 and 11-12;
--- ADR-0026 item 4; ADR-0024 item 7; brief docs/briefs/t4-agent-loop.md). Executes AS
--- morrow_work_owner, after 0046. On the ADR-0010 tenant pattern: composite tenant keys,
+-- Build order PR 11 (track T4), the agent loop's records (ADR-0027 items 1-7 and 11-12, as
+-- ADR-0036 and ADR-0039 amend them; ADR-0024 item 7; brief docs/briefs/t4-agent-loop.md).
+-- Executes AS morrow_work_owner, after 0051. On the ADR-0010 tenant pattern: composite tenant keys,
 -- ENABLE and FORCE RLS, definers owned by morrow_work_command, INVOKER triggers and checks
 -- owned by the owner. No external effect: nothing here sends a request. Nothing here is
 -- reachable while the agent-loop switch (docs/decisions/agent-loop-staging.json) is off:
@@ -9,7 +9,7 @@ BEGIN;
 -- starts AgentRunWorkflow and the broker holds modelTurn.
 --   * Platform: loop_catalogue_versions and loop_catalogue_entries, the agent-loop
 --     catalogue (version 2: Haiku, Sonnet and Opus 5.5 at low, medium and high, ADR-0027
---     item 12's limits and prices) committed `proposed`: admission takes only an `active`
+--     item 12's limits and prices; no money cap, ADR-0039 item 1) committed `proposed`: admission takes only an `active`
 --     version, so no loop run is admitted until a later forward migration publishes it on
 --     the owner's recorded confirmation (drift-tested against the generated catalogue);
 --     tool_catalogue_entries, ToolCatalogue@1 version 2 (each tool's capability, verb,
@@ -30,14 +30,17 @@ BEGIN;
 --     agent_question_ask, agent_run_wait and agent_run_finish; the broker's
 --     morrow_vault.agent_turn_begin and agent_turn_end. Revisable owner helpers:
 --     agent_turn_close_uncertain, agent_run_end and agent_runs_close_stale.
--- Money (ADR-0026 item 4, ADR-0027 items 6 and 12): before the rate card a loop run earns
--- no credit and runs only under the operator test entitlement; its hold is the lowest of its
--- turn limit times its entry's worst-case turn and the US$7 backstop, computed here (the
--- code computes the same and admission refuses a mismatch); every counted turn books its
--- cost against the hold (an uncertain one at the worst case; what the hold cannot hold is
--- overflow, never dropped), and admission counts the day's listings and loop spend against
--- the daily backstop and the period's unrecovered cost against its cap. Listings' own
--- run_reserve does not yet count loop spend: the switch's prerequisites record that.
+-- Money (ADR-0039: credits are the only spend limit): no money cap here. No US$ per-run or
+-- per-day backstop, look-for-work or unrecovered-cost cap refuses an admission or stops a
+-- turn; the stop conditions are the turn limit (the version's, never lowered by a money
+-- value), the tool-call and question limits, the per-turn token caps and the wall time. A
+-- run's hold is the turn limit times its entry's worst-case turn, computed here (the code
+-- computes the same and admission refuses a mismatch): the most its turns can cost, not a
+-- cap. Every counted turn books its cost (an uncertain one at the worst case; past the hold
+-- it is overflow, recorded and never dropped). Admission still needs the operator test
+-- entitlement and a billing period. The credit holds and draws that replace the hold
+-- (ADR-0039 items 2 and 3) are ADR-0039's PR 3; the switch's `shared_wallet` prerequisite
+-- keeps it off until they exist, so no loop run runs without them.
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR NOT morrow_identity.morrow_memberships_closed()
@@ -46,8 +49,7 @@ DO $$ BEGIN
  OR to_regclass('morrow_work.runs') IS NULL OR to_regclass('morrow_work.agent_installations') IS NULL
  OR to_regclass('morrow_work.agent_releases') IS NULL OR to_regclass('morrow_work.work_envelopes') IS NULL
  OR to_regclass('morrow_work.delegation_hops') IS NULL OR to_regclass('morrow_work.work_leases') IS NULL
- OR to_regclass('morrow_billing.vendor_cost_reservations') IS NULL OR to_regclass('morrow_billing.run_cost_bookings') IS NULL
- OR to_regclass('morrow_billing.unrecovered_costs') IS NULL OR to_regclass('morrow_billing.entitlement_snapshots') IS NULL
+ OR to_regclass('morrow_billing.entitlement_snapshots') IS NULL
  OR to_regclass('morrow_work.goal_measure_values') IS NULL
  OR to_regclass('morrow_work.agent_runs') IS NOT NULL OR to_regclass('morrow_work.run_turns') IS NOT NULL
  OR to_regclass('morrow_work.loop_catalogue_versions') IS NOT NULL
@@ -194,7 +196,9 @@ END $$;
 -- Platform: the agent-loop catalogue (ADR-0027 items 6 and 12), drift-tested against
 -- packages/policy/src/generated/loop-catalogue.ts. Rates are exact integers of 10^-12 USD per
 -- token; a worst-case turn is the input cap at the cache-write rate plus the effort's whole
--- max_tokens at the output rate, rounded up to numeric(20,8). A new version, or the
+-- max_tokens at the output rate, rounded up to numeric(20,8). A version row carries its
+-- digest and its stop conditions only: no money cap (ADR-0039 item 1; the generated data's
+-- run, daily and look-for-work caps are read by nothing here). A new version, or the
 -- publication of a proposed one, is a new forward migration.
 CREATE TABLE morrow_work.loop_catalogue_versions (
  version integer NOT NULL PRIMARY KEY CHECK (version BETWEEN 2 AND 999),
@@ -207,10 +211,7 @@ CREATE TABLE morrow_work.loop_catalogue_versions (
  max_tool_calls_per_run integer NOT NULL CHECK (max_tool_calls_per_run BETWEEN 0 AND 40),
  max_questions_per_run integer NOT NULL CHECK (max_questions_per_run BETWEEN 0 AND 2),
  question_wait_hours integer NOT NULL CHECK (question_wait_hours BETWEEN 1 AND 72),
- wall_time_minutes integer NOT NULL CHECK (wall_time_minutes BETWEEN 1 AND 30),
- run_cost_cap_usd numeric(20,8) NOT NULL CHECK (run_cost_cap_usd>0),
- workspace_daily_cost_cap_usd numeric(20,8) NOT NULL CHECK (workspace_daily_cost_cap_usd>0),
- workspace_period_unrecovered_cost_cap_usd numeric(20,8) NOT NULL CHECK (workspace_period_unrecovered_cost_cap_usd>0)
+ wall_time_minutes integer NOT NULL CHECK (wall_time_minutes BETWEEN 1 AND 30)
 );
 CREATE UNIQUE INDEX loop_catalogue_versions_one_active ON morrow_work.loop_catalogue_versions (status) WHERE status='active';
 CREATE TABLE morrow_work.loop_catalogue_entries (
@@ -228,9 +229,8 @@ CREATE TABLE morrow_work.loop_catalogue_entries (
  PRIMARY KEY (version,model_key,effort_key)
 );
 INSERT INTO morrow_work.loop_catalogue_versions(version,status,digest,max_input_tokens_per_turn,max_turns_per_run,max_turns_per_coordinator_run,
- max_tool_calls_per_turn,max_tool_calls_per_run,max_questions_per_run,question_wait_hours,wall_time_minutes,run_cost_cap_usd,
- workspace_daily_cost_cap_usd,workspace_period_unrecovered_cost_cap_usd)
-VALUES (2,'proposed','ffbbafa67164cdb0ab6095d9c27f747659606387e0cec08ff3b0930614d3d538',64000,16,6,4,40,2,72,30,7.00000000,25.00000000,4.50000000);
+ max_tool_calls_per_turn,max_tool_calls_per_run,max_questions_per_run,question_wait_hours,wall_time_minutes)
+VALUES (2,'proposed','76a46ba58a80dc700440c2308d9fa8b4d2d35032f021f281c7f72d41c4f16355',64000,16,6,4,40,2,72,30);
 INSERT INTO morrow_work.loop_catalogue_entries(version,model_key,effort_key,provider,provider_model_id,max_output_tokens,input_usd12_per_token,
  output_usd12_per_token,cache_write_usd12_per_token,cache_read_usd12_per_token,worst_case_turn_usd)
 SELECT 2,m.model_key,e.effort_key,'anthropic',m.provider_model_id,e.max_output_tokens,m.input,m.output,m.cache_write,m.cache_read,
@@ -277,8 +277,10 @@ INSERT INTO morrow_work.tool_catalogue_entries(version,tool,capability_id,verb,r
 -- store, on the child task T' of the person's task T, under the delegation envelope on T and
 -- the Coordinator's hop T -> T' (decideDelegation re-checks every tool call against them).
 -- The manifest pins the release, the system text, the tool catalogue and offered tools, the
--- model profile, the caps and the hold; SQL keeps the counters every turn and tool call
--- checks. The current run lease changes once per answered question (the resume lease, whose
+-- model profile, the caps and the hold (the turn limit times the worst-case turn: what the
+-- turns are booked against, never a cap, ADR-0039); SQL keeps the counters every turn and
+-- tool call checks. period_start and created_day record the billing period and the day it
+-- was admitted in (facts; no daily or period cap reads them). The current run lease changes once per answered question (the resume lease, whose
 -- subject is the question). Status: queued -> running -> (waiting -> queued -> running)* ->
 -- succeeded, failed or cancelled; a terminal run never changes. Content class none.
 CREATE TABLE morrow_work.agent_runs (
@@ -918,24 +920,22 @@ END $$;
 -- connection with a published release; the loop catalogue's version is active and the
 -- entry exists; every tool is in the tool catalogue with the routed context. Derived here,
 -- never taken from the request: the caps and the hold (the turn limit is the version's,
--- lowered so that it times the entry's worst-case turn fits the run backstop; the hold the
--- lower of that product and the backstop; refused cap_below_turn under one worst-case
--- turn), the envelope's and the hop's capabilities and verbs (exactly the tools' pairs) and
--- scope (the run's store and exactly the tools' fields, loop_tool_fields), the workspace's
--- active Morrow-direct billing account, its operator test entitlement (before the rate card
--- no other entitlement admits a loop run, ADR-0027 item 6) and billing period, the
--- Coordinator's principal and its grant. Then, in order: the workspace's stale agent runs
--- close; the daily backstop (today's listings reservations and overflow, today's agent runs'
--- holds or bookings, and this hold) and the period's unrecovered cost (listings' plus every
--- loop run's, and this hold), under listings' run_reserve interlock; the run lease
--- (lease_open, refused under any stop); child task T' (draft -> ready, owned by the actor);
--- the envelope on T (the actor as requester and authorizer; 24 hours; depth 1, one child);
--- the Coordinator's workspace.task.delegate {delegate} grant on T; the hop T -> T'; the run
--- with its manifest (its CHECK proves the canonical text is exactly the run's); the task
--- events; the command. Outcomes: applied, invalid, ineligible, stale_authority,
+-- never lowered by a money value; the hold the turn limit times the entry's worst-case turn,
+-- not a cap: ADR-0039 item 1), the envelope's and the hop's capabilities and verbs (exactly
+-- the tools' pairs) and scope (the run's store and exactly the tools' fields,
+-- loop_tool_fields), the workspace's active Morrow-direct billing account, its operator test
+-- entitlement (before the rate card no other entitlement admits a loop run, ADR-0027 item 6)
+-- and billing period, the Coordinator's principal and its grant. No money cap is counted
+-- (no daily backstop, no unrecovered-cost cap; ADR-0039 item 1); the credit hold that admits
+-- a run is ADR-0039's PR 3. Then, in order: the workspace's stale agent runs close; the run
+-- lease (lease_open, refused under any stop); child task T' (draft -> ready, owned by the
+-- actor); the envelope on T (the actor as requester and authorizer; 24 hours; depth 1, one
+-- child); the Coordinator's workspace.task.delegate {delegate} grant on T; the hop T -> T';
+-- the run with its manifest (its CHECK proves the canonical text is exactly the run's); the
+-- task events; the command. Outcomes: applied, invalid, ineligible, stale_authority,
 -- command_conflict, not_found, state_conflict, stopped, denied, catalogue_inactive,
--- entry_not_offered, cap_below_turn, entitlement, no_billing_period, daily_backstop,
--- unrecovered_cost_cap. Every non-applied outcome is returned for rollback.
+-- entry_not_offered, entitlement, no_billing_period. Every non-applied outcome is returned
+-- for rollback.
 CREATE FUNCTION morrow_work.cmd_agent_run_admit(p_command_id text,p_request_digest text,p_correlation_id text,p_task_id text,p_store_id text,
  p_installation_id text,p_run_id text,p_child_task_id text,p_envelope_id text,p_hop_id text,p_coordinator_principal_id text,p_grant_id text,
  p_catalogue_version text,p_model text,p_effort text,p_tools text,p_tool_catalogue_version text,p_tool_catalogue_digest text,
@@ -946,7 +946,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp
 DECLARE
  p record; k record; s record; i record; v record; e record; a record; snap record; per record; l record; c record; g record; rel record;
  v_policy bigint; v_now timestamptz; v_admitted timestamptz; v_until timestamptz; v_tools text[]; v_caps text[]; v_verbs text[];
- v_turn_limit integer; v_hold numeric(20,8); v_today numeric; v_unrecovered numeric; v_scope jsonb; v_grant jsonb; v_actor jsonb;
+ v_turn_limit integer; v_hold numeric(20,8); v_scope jsonb; v_grant jsonb; v_actor jsonb;
  v_result jsonb; v_child_envelope text; v_day date;
 BEGIN
  IF p_correlation_id IS NULL OR p_correlation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -1020,10 +1020,10 @@ BEGIN
  SELECT array_agg(DISTINCT t.capability_id ORDER BY t.capability_id),array_agg(DISTINCT t.verb ORDER BY t.verb) INTO v_caps,v_verbs
   FROM morrow_work.tool_catalogue_entries t WHERE t.version=p_tool_catalogue_version::integer AND t.tool=ANY(v_tools);
  IF cardinality(v_caps)>16 THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
- -- The caps and the hold (ADR-0027 items 6 and 12): a routed run must afford one turn.
- v_turn_limit:=least(v.max_turns_per_run,floor(v.run_cost_cap_usd/e.worst_case_turn_usd)::integer);
- v_hold:=least(v_turn_limit*e.worst_case_turn_usd,v.run_cost_cap_usd);
- IF v_turn_limit<1 OR v_hold<e.worst_case_turn_usd THEN RETURN QUERY SELECT 'cap_below_turn'::text,NULL::text; RETURN; END IF;
+ -- The caps and the hold (ADR-0027 items 6 and 12, as ADR-0039 items 1 and 5 amend them):
+ -- the version's turn limit, and the hold the turn limit times the worst-case turn.
+ v_turn_limit:=v.max_turns_per_run;
+ v_hold:=v_turn_limit*e.worst_case_turn_usd;
  -- Billing, derived: the active Morrow-direct account, its operator test entitlement and period.
  SELECT x.id::text AS id INTO a FROM morrow_billing.billing_accounts x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
   AND x.route='morrow_direct' AND x.status='active';
@@ -1038,29 +1038,9 @@ BEGIN
   UNION ALL SELECT z.verified_at,z.valid_until,z.recorded_at FROM morrow_billing.entitlement_snapshots z WHERE z.organization_id=p.organization_id
   AND z.workspace_id=p.workspace_id AND z.subscription_key ~ '^morrow:operator_entitlement:') y ORDER BY y.period_end DESC,y.recorded_at DESC LIMIT 1;
  IF NOT FOUND OR per.period_end<=v_now OR per.period_start>v_now THEN RETURN QUERY SELECT 'no_billing_period'::text,NULL::text; RETURN; END IF;
- -- The workspace's stale agent runs close first, so their holds stop counting as open.
+ -- The workspace's stale agent runs close first (their open calls booked at the worst case).
+ -- No money cap follows (ADR-0039 item 1): no daily backstop, no unrecovered-cost cap.
  PERFORM morrow_work.agent_runs_close_stale(p.organization_id,p.workspace_id);
- -- The daily backstop and the period's unrecovered cost, under listings' interlock, so a
- -- listings admission and a loop admission of one workspace serialize.
- PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.billing.run_reserve',
-  p.organization_id,p.workspace_id)::text,0));
- SELECT COALESCE(sum(CASE WHEN x.status='reserved' THEN x.maximum_cost_usd ELSE x.booked_cost_usd END),0) INTO v_today
-  FROM morrow_billing.vendor_cost_reservations x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.created_day=v_day;
- v_today:=v_today+COALESCE((SELECT sum(b.amount_usd) FROM morrow_billing.run_cost_bookings b JOIN morrow_billing.vendor_cost_reservations x
-  ON x.organization_id=b.organization_id AND x.workspace_id=b.workspace_id AND x.id=b.vendor_reservation_id
-  WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.created_day=v_day AND b.kind='overflow'),0);
- v_today:=v_today+COALESCE((SELECT sum(CASE WHEN x.status IN ('queued','running','waiting') THEN greatest(x.hold_usd,x.booked_usd)+x.overflow_usd
-   ELSE x.booked_usd+x.overflow_usd END) FROM morrow_work.agent_runs x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
-   AND x.created_day=v_day),0);
- IF v_today+v_hold>v.workspace_daily_cost_cap_usd THEN RETURN QUERY SELECT 'daily_backstop'::text,NULL::text; RETURN; END IF;
- v_unrecovered:=COALESCE((SELECT u.amount_usd FROM morrow_billing.unrecovered_costs u WHERE u.organization_id=p.organization_id
-   AND u.workspace_id=p.workspace_id AND u.period_start=date_trunc('milliseconds',per.period_start)),0)
-  +COALESCE((SELECT sum(CASE WHEN x.status IN ('queued','running','waiting') THEN greatest(x.hold_usd,x.booked_usd)+x.overflow_usd
-   ELSE x.booked_usd+x.overflow_usd END) FROM morrow_work.agent_runs x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
-   AND x.period_start=date_trunc('milliseconds',per.period_start)),0);
- IF v_unrecovered+v_hold>v.workspace_period_unrecovered_cost_cap_usd THEN
-  RETURN QUERY SELECT 'unrecovered_cost_cap'::text,NULL::text; RETURN;
- END IF;
  SELECT * INTO l FROM morrow_work.lease_open('run',p_run_id,p_store_id,s.connection_id,i.id);
  IF l.outcome IS DISTINCT FROM 'opened' THEN RETURN QUERY SELECT CASE l.outcome WHEN 'stopped' THEN 'stopped' ELSE 'invalid' END,NULL::text; RETURN; END IF;
  -- The scope of the envelope and the hop: the run's store and exactly the offered tools' fields.
@@ -1332,15 +1312,14 @@ END $$;
 -- is the next turn (n = turns taken + 1) after a tool_use reply whose every tool call
 -- finished (or n = 1); attempt 2 only after attempt 1 of the same turn closed uncertain
 -- (resent at most once; an expired open call of attempt 1 is booked so first); the turn
--- limit, the hold (one more worst-case turn, no overflow) and the wall time are checked again
--- here after the code checked them. The attempt's caps are fixed here, with the input and
--- its digest, before any send: `final` must be what SQL derives (the last turn the limit
--- allows, or a hold left under two worst-case turns, nextTurn's rule) and `budget_ms` its
--- call's whole budget. The same input and caps again is opened_before (a replayed step,
--- which takes the caps recorded here and is never ended by the caps of the run's state
--- after its own booking); different ones are a conflict. Outcomes: opened, opened_before,
--- conflict, stop (reason turn_limit, cost_budget or wall_time), run_inactive, invalid,
--- denied.
+-- limit and the wall time are checked again here after the code checked them (no money cap:
+-- ADR-0039 item 1; the credit hold before each turn is ADR-0039's PR 3). The attempt's caps
+-- are fixed here, with the input and its digest, before any send: `final` must be what SQL
+-- derives (the last turn the limit allows) and `budget_ms` its call's whole budget. The same
+-- input and caps again is opened_before (a replayed step, which takes the caps recorded here
+-- and is never ended by the caps of the run's state after its own booking); different ones
+-- are a conflict. Outcomes: opened, opened_before, conflict, stop (reason turn_limit or
+-- wall_time), run_inactive, invalid, denied.
 CREATE FUNCTION morrow_work.agent_turn_open(p_turn text,p_attempt text,p_final text,p_budget_ms text,p_input text,p_input_digest text,
  p_untrusted text,p_read_tags text)
 RETURNS TABLE(outcome text,reason text)
@@ -1395,12 +1374,11 @@ BEGIN
    RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
   END IF;
  END IF;
- IF r.overflow_usd>0 OR r.hold_usd-r.booked_usd<r.worst_case_turn_usd THEN RETURN QUERY SELECT 'stop'::text,'cost_budget'::text; RETURN; END IF;
  v_now:=morrow_work.db_now();
  v_active:=r.active_ms+greatest((extract(epoch FROM v_now-r.segment_started_at)*1000)::bigint,0);
  IF v_active>=r.wall_time_ms THEN RETURN QUERY SELECT 'stop'::text,'wall_time'::text; RETURN; END IF;
- -- The final turn as SQL derives it (nextTurn's rule), compared with the code's.
- IF (p_final='true')<>(v_turn>=r.turn_limit OR r.hold_usd-r.booked_usd<2*r.worst_case_turn_usd) THEN
+ -- The final turn as SQL derives it (the last the turn limit allows), compared with the code's.
+ IF (p_final='true')<>(v_turn>=r.turn_limit) THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
  INSERT INTO morrow_work.run_turns(organization_id,workspace_id,run_id,turn,attempt,input,input_digest,untrusted,final,budget_ms,output,outcome,
@@ -1704,14 +1682,14 @@ END $$;
 -- with, and no outcome yet; the conversation's prefix is exactly the run's recorded one
 -- (null on turn 1), so the conversation is append-only (prefix_mismatch before any
 -- request); attempt 2 only after an uncertain attempt 1; the last turn the limit allows is
--- final (tool_choice none); one call per run is open; the hold covers one more worst-case
--- turn. The same fence again never sends: a closed
+-- final (tool_choice none); one call per run is open (no money cap: ADR-0039 item 1; the
+-- credit hold before each turn is ADR-0039's PR 3). The same fence again never sends: a closed
 -- one returns its recorded outcome, reply, digest and usage (`replay`), an open one in its
 -- budget is `in_flight`, an expired one is booked as uncertain and replayed. Returns the
 -- run's selection and its catalogue entry (provider model id, input and output caps), its
 -- offered tools and pinned system-text digest: never the caller's. Outcomes: begun, replay,
--- in_flight, call_open, prefix_mismatch, turn_state, attempt_invalid, cost_budget,
--- run_inactive, denied, invalid, and every resolve_call refusal.
+-- in_flight, call_open, prefix_mismatch, turn_state, attempt_invalid, run_inactive, denied,
+-- invalid, and every resolve_call refusal.
 CREATE FUNCTION morrow_vault.agent_turn_begin(p_lease_id text,p_generation text,p_turn text,p_attempt text,p_sequence text,p_final text,
  p_budget_ms text,p_prefix_digest text,p_input_digest text)
 RETURNS TABLE(outcome text,call_id text,model_key text,effort_key text,provider_model_id text,max_input_tokens text,max_output_tokens text,
@@ -1815,7 +1793,6 @@ BEGIN
   ELSIF v_attempt=2 AND NOT EXISTS(SELECT 1 FROM morrow_work.run_turns x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id
     AND x.run_id=r.id AND x.turn=v_turn AND x.attempt=1 AND x.outcome='uncertain') THEN v_outcome:='attempt_invalid';
   ELSIF v_turn=r.turn_limit AND p_final<>'true' THEN v_outcome:='invalid';
-  ELSIF r.overflow_usd>0 OR r.hold_usd-r.booked_usd<r.worst_case_turn_usd THEN v_outcome:='cost_budget';
   END IF;
  END IF;
  IF v_outcome IS NOT NULL THEN

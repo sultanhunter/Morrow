@@ -205,26 +205,20 @@ test("content lives only in run_turns and the questions; the rest is ids, digest
     assert.ok(workFunctions[name + "()"].grantees.join() === "morrow_runtime_executor", name);
 });
 
-test("catalogue v2 in SQL is the generated catalogue's, committed proposed (drift)", () => {
+test("catalogue v2 in SQL is the generated catalogue's, committed proposed (drift), with no money cap", () => {
   const v = generatedLoopCatalogue.versions.find((x) => x.version === 2);
   assert.equal(v.status, "proposed");
   assert.equal(generatedLoopCatalogue.activeVersion, null);
+  // The digest and the stop conditions only (ADR-0039 items 1 and 5): no run, daily,
+  // look-for-work or unrecovered-cost cap column, whatever the generated data still carries.
   const versionRow =
-    /VALUES \(2,'proposed','([a-f0-9]{64})',([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9.]+),([0-9.]+),([0-9.]+)\);/.exec(
+    /VALUES \(2,'proposed','([a-f0-9]{64})',([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\);/.exec(
       sql,
     );
   assert.ok(versionRow);
-  const usd12 = (t) => {
-    const [w, f = ""] = t.split(".");
-    return BigInt(w) * 10n ** 12n + BigInt(f.padEnd(12, "0"));
-  };
   const l = v.limits;
   assert.deepEqual(
-    [
-      versionRow[1],
-      ...versionRow.slice(2, 10).map(Number),
-      ...versionRow.slice(10).map((t) => usd12(t)),
-    ],
+    [versionRow[1], ...versionRow.slice(2).map(Number)],
     [
       v.digest,
       l.maxInputTokensPerTurn,
@@ -235,9 +229,24 @@ test("catalogue v2 in SQL is the generated catalogue's, committed proposed (drif
       l.maxQuestionsPerRun,
       l.questionWaitHours,
       l.wallTimeMinutes,
-      BigInt(l.runCostCapUsd12),
-      BigInt(l.workspaceDailyCostCapUsd12),
-      BigInt(l.workspacePeriodUnrecoveredCostCapUsd12),
+    ],
+  );
+  const versions = tableBody("loop_catalogue_versions");
+  assert.doesNotMatch(versions, /cost_cap|usd/);
+  assert.deepEqual(
+    [...versions.matchAll(/^ ([a-z_0-9]+) /gm)].map((m) => m[1]),
+    [
+      "version",
+      "status",
+      "digest",
+      "max_input_tokens_per_turn",
+      "max_turns_per_run",
+      "max_turns_per_coordinator_run",
+      "max_tool_calls_per_turn",
+      "max_tool_calls_per_run",
+      "max_questions_per_run",
+      "question_wait_hours",
+      "wall_time_minutes",
     ],
   );
   // The models and efforts, rates in 10^-12 USD per token, the worst case rounded up.
@@ -404,22 +413,66 @@ test("definers: command-owned, explicit ACLs, ids only; the runtime lookups and 
   for (const piece of [
     "y.status='active'",
     "'catalogue_inactive'",
-    "'cap_below_turn'",
     "subscription_key !~ '^morrow:operator_entitlement:'",
-    "'daily_backstop'",
-    "'unrecovered_cost_cap'",
+    "'no_billing_period'",
+    "morrow_work.agent_runs_close_stale(",
     "morrow_work.lease_open('run'",
     "morrow_work.stop_active(",
     "'routed'=ANY(t.contexts)",
+    "v_turn_limit:=v.max_turns_per_run;",
+    "v_hold:=v_turn_limit*e.worst_case_turn_usd;",
   ])
     assert.ok(admit.includes(piece), piece);
+});
+
+test("ADR-0039: no money cap in admission or at a turn's open; the stop conditions stay", () => {
+  // Admission counts no daily backstop or unrecovered cost and refuses nothing for money: it
+  // reads no listings reservation, booking or unrecovered ledger and takes no run_reserve lock.
+  const admit = code(fnBody("morrow_work", "cmd_agent_run_admit"));
+  for (const gone of [
+    "'cap_below_turn'",
+    "'daily_backstop'",
+    "'unrecovered_cost_cap'",
+    "run_cost_cap_usd",
+    "workspace_daily_cost_cap_usd",
+    "workspace_period_unrecovered_cost_cap_usd",
+    "vendor_cost_reservations",
+    "run_cost_bookings",
+    "unrecovered_costs",
+    "morrow.billing.run_reserve",
+  ])
+    assert.ok(!admit.includes(gone), gone);
+  assert.doesNotMatch(sql, /run_cost_cap_usd|workspace_daily_cost_cap_usd|unrecovered_cost/);
+  // A turn's open and the broker's fence check the turn limit, the wall time, the attempt and
+  // the fence; neither stops for the hold left or an overflow, and `final` is the limit's.
+  const open = code(fnBody("morrow_work", "agent_turn_open"));
+  const begin = code(fnBody("morrow_vault", "agent_turn_begin"));
+  for (const fn of [open, begin]) {
+    assert.doesNotMatch(fn, /cost_budget|hold_usd|booked_usd|r\.overflow_usd/);
+    assert.match(fn, /turn_limit/);
+  }
+  assert.match(open, /'stop'::text,'turn_limit'::text/);
+  assert.match(open, /'stop'::text,'wall_time'::text/);
+  assert.match(
+    open,
+    /IF \(p_final='true'\)<>\(v_turn>=r\.turn_limit\) THEN\s+RETURN QUERY SELECT 'invalid'/,
+  );
+  // Every counted turn is still booked, an uncertain one at its worst case, and what passes
+  // the hold is overflow: recorded, never dropped (and never a stop).
+  const end = fnBody("morrow_vault", "agent_turn_end");
+  assert.match(end, /v_booked:=least\(v_cost,greatest\(r\.hold_usd-r\.booked_usd,0\)\);/);
+  assert.match(end, /v_overflow:=v_cost-v_booked;/);
+  assert.match(end, /overflow_usd=x\.overflow_usd\+v_overflow/);
+  // The prerequisite: no loop run before the shared wallet's credit holds (ADR-0039 PR 3).
+  assert.ok(agentLoopPrerequisites.includes("shared_wallet"));
+  assert.ok(!agentLoopPrerequisites.includes("shared_daily_backstop"));
 });
 
 test("review fixes: settle before a resend, a replayable wait, the uncounted call, the scope, one open question", () => {
   // F1: attempt 2 books an expired open call of attempt 1 as uncertain before it checks
   // attempt 1's outcome (defence in depth: the runner settles against SQL first).
   const open = fnBody("morrow_work", "agent_turn_open");
-  const attempt2 = open.slice(open.indexOf(" ELSE\n"), open.indexOf("r.overflow_usd>0"));
+  const attempt2 = open.slice(open.indexOf(" ELSE\n"), open.indexOf("v_now:=morrow_work.db_now()"));
   assert.match(
     attempt2,
     /x\.attempt=1 AND x\.status='started'\s+AND x\.started_at\+make_interval\(secs=>x\.budget_ms\/1000\.0\+60\)<=pg_catalog\.clock_timestamp\(\) LOOP\s+PERFORM morrow_work\.agent_turn_close_uncertain\(/,
@@ -511,7 +564,8 @@ test("review R1: a turn attempt's caps are fixed at its open and the fence takes
   for (const column of ["final", "budget_ms"])
     assert.ok(!turnUpdate.split(",").includes(column), column);
   // The open stores them; the same input and caps again is opened_before, other caps a
-  // conflict; a new attempt's final must be SQL's own derivation (nextTurn's rule).
+  // conflict; a new attempt's final must be SQL's own derivation (the last turn the limit
+  // allows).
   const open = fnBody("morrow_work", "agent_turn_open");
   assert.match(
     open,
@@ -523,12 +577,11 @@ test("review R1: a turn attempt's caps are fixed at its open and the fence takes
   );
   assert.match(
     open,
-    /IF \(p_final='true'\)<>\(v_turn>=r\.turn_limit OR r\.hold_usd-r\.booked_usd<2\*r\.worst_case_turn_usd\) THEN\s+RETURN QUERY SELECT 'invalid'/,
+    /IF \(p_final='true'\)<>\(v_turn>=r\.turn_limit\) THEN\s+RETURN QUERY SELECT 'invalid'/,
   );
   assert.match(open, /p_untrusted='true',p_final='true',v_budget,NULL,NULL,/);
   // The found row is answered before any cap is checked again (a replayed step).
   assert.ok(open.indexOf("'opened_before'") < open.indexOf("'turn_limit'"));
-  assert.ok(open.indexOf("'opened_before'") < open.indexOf("'cost_budget'"));
   assert.ok(open.indexOf("'opened_before'") < open.indexOf("'wall_time'"));
   assert.match(
     fnBody("morrow_work", "agent_run_conversation"),

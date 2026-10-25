@@ -483,18 +483,17 @@ export const orchestratorPackageAllowlist = Object.freeze([
   "packages/identity/src/workos-session-status-json.ts",
   "packages/policy/src/agent-authority.ts",
   "packages/policy/src/billing-state.ts",
-  // Build order PR 11: AgentRunWorkflow's pure policy. The loop catalogue (each turn's next
-  // step, caps and holds) and the tool catalogue (each tool's entry and input check) with
-  // their generated data and the Specialist ceiling. Prompts and admission stay the api's.
-  "packages/policy/src/generated/loop-catalogue.ts",
   // M3 PR-2 review: the catalogue's data only (each run's call budget from its effort's
   // max_tokens); the broker ships the same file.
   "packages/policy/src/generated/model-catalogue.ts",
+  // Build order PR 11: AgentRunWorkflow's pure policy: the tool catalogue (each tool's entry
+  // and input check) with its generated data and the Specialist ceiling. The loop catalogue's
+  // rules left the runner with ADR-0039 (no money cap: a turn's caps are the turn limit and
+  // the time); prompts and admission stay the api's.
   "packages/policy/src/generated/specialist-ceiling.ts",
   "packages/policy/src/generated/tool-catalogue.ts",
   "packages/policy/src/index.ts",
   "packages/policy/src/json-boundary.ts",
-  "packages/policy/src/loop-catalogue.ts",
   "packages/policy/src/paid-work.ts",
   "packages/policy/src/review-facts.ts",
   "packages/policy/src/review.ts",
@@ -813,14 +812,16 @@ export function reviewedApplyRecord(record) {
 // beside the model-provider switch's var (the loop needs both: on without the model provider
 // is a problem); no secret. Development's committed config never carries it, and production
 // has no switch. It may be on only once every prerequisite its record names is recorded
-// ({recorded_on, evidence}, the evidence a docs/evidence/ file that exists).
+// ({recorded_on, evidence}, the evidence a docs/evidence/ file that exists). `shared_wallet`
+// (ADR-0039, its PR 3): loop turns and Listings' products hold and draw credits from the
+// workspace's one wallet; credits are the only spend limit, so no loop run runs before it.
 export const edgeAgentLoopVar = "MORROW_AGENT_LOOP";
 export const edgeAgentLoopValue = "on";
 export const edgeAgentLoopPrerequisites = Object.freeze([
   "catalogue_version_2_confirmed",
   "gateway_reservations_stops",
   "lab_agent_loop",
-  "shared_daily_backstop",
+  "shared_wallet",
   "store_content_cleanup",
 ]);
 export function edgeAgentLoopVarNames(worker, environment) {

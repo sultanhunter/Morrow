@@ -3,7 +3,8 @@
 // (packages/work/src/loop/runner.ts) through every branch without PostgreSQL. It follows the
 // definers' rules closely enough for the runner (the turn and attempt order, the tool-call
 // begin, finish and replay, the questions, the wait and the resume lease, the hold and the
-// booking at the worst case when uncertain); lab:agent-loop proves the real definers.
+// booking at the worst case when uncertain, never a money cap: ADR-0039); lab:agent-loop
+// proves the real definers.
 import { createHash } from "node:crypto";
 import { validateCurrentDefinition } from "../../packages/contracts/src/validation.ts";
 import { loopEntry } from "../../packages/policy/src/loop-catalogue.ts";
@@ -220,13 +221,9 @@ export function agentWorld({
         !db.turns.some((t) => t.turn === turn && t.attempt === 1 && t.outcome === "uncertain")
       )
         return { outcome: "invalid" };
-      if (db.run.overflow8 > 0n || db.run.hold8 - db.run.booked8 < db.run.worst8)
-        return { outcome: "stop", reason: "cost_budget" };
-      // SQL derives the final turn itself (nextTurn's rule) and compares it with the code's.
-      if (
-        final !== (turn >= db.run.turnLimit || db.run.hold8 - db.run.booked8 < 2n * db.run.worst8)
-      )
-        return { outcome: "invalid" };
+      // No money cap (ADR-0039 item 1). SQL derives the final turn itself (the last the turn
+      // limit allows) and compares it with the code's.
+      if (final !== turn >= db.run.turnLimit) return { outcome: "invalid" };
       if ((await messageDigest(JSON.parse(inputCanonical))) !== inputDigest)
         throw Error("WORLD_INPUT_DIGEST");
       db.turns.push({
