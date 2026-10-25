@@ -2524,7 +2524,7 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
     const memberAllowed = models.body.entries
       ?.filter((e) => e.allowedForMember)
       .map((e) => e.creditsPerProduct);
-    // Catalogue version 3 (ADR-0036, migration 0047): Opus 5.5 at medium by default, and the
+    // Catalogue version 3 (ADR-0036, migration 0048): Opus 5.5 at medium by default, and the
     // default member ceiling of 4 that admits it.
     check(
       "M1:catalogue_default_and_member_ceiling",

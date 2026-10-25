@@ -1,6 +1,6 @@
 // ADR-0036 (OD-2026-10-25-1): Opus 5.5 by default for every agent, and no unrecovered-cost
 // cap. Pure: no I/O beyond reading the repository files. lab:run-credits (C4, C12) and
-// lab:listings-runs (M1, U1) prove migration 0047 on PostgreSQL 17.
+// lab:listings-runs (M1, U1) prove migration 0048 on PostgreSQL 17.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -36,7 +36,7 @@ const read = (path) => readFileSync(path, "utf8");
 const policy = JSON.parse(read("docs/decisions/model-policy.json"));
 const registry = JSON.parse(read("docs/decisions/providers.json"));
 const manifest = JSON.parse(read("migrations/manifest.json"));
-const file = "0047.model-defaults-cost-cap.sql";
+const file = "0048.model-defaults-cost-cap.sql";
 const sql = read("migrations/" + file);
 const credits = read("migrations/0033.run-credits.sql");
 const runs = read("migrations/0038.listings-runs.sql");
@@ -221,7 +221,7 @@ test("the per-run and per-day backstops and the breaker still refuse (TypeScript
   assert.equal(day(18.29), false);
 });
 
-test("migration 0047 seeds catalogue version 3 exactly as the generated catalogue holds it", () => {
+test("migration 0048 seeds catalogue version 3 exactly as the generated catalogue holds it", () => {
   const v3 = generatedModelCatalogue.versions.find((v) => v.version === 3);
   const [version] = rows("INSERT INTO morrow_work.model_catalogue_versions(");
   assert.deepEqual(version, [
@@ -268,7 +268,7 @@ test("migration 0047 seeds catalogue version 3 exactly as the generated catalogu
   );
 });
 
-test("migration 0047: a forward work-owner migration that retires version 1 in place", () => {
+test("migration 0048: a forward work-owner migration that retires version 1 in place", () => {
   const row = manifest.migrations.find((m) => m.file === file);
   assert.equal(row.executeAs, "morrow_work_owner");
   assert.equal(row.sha256, createHash("sha256").update(sql).digest("hex"));

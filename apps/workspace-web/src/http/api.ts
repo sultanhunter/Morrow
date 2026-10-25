@@ -73,6 +73,7 @@ import {
   decodeSetAside,
   decodeReview,
 } from "./review-decoders";
+import { decodeActivity, decodeInbox, decodeOperationDetail } from "./inbox-decoders";
 
 export type HttpRequest =
   | { readonly method: "GET"; readonly path: string }
@@ -515,6 +516,22 @@ export const requests = {
   },
   operationsOfTask: (ws: string, taskId: string) =>
     ids(ws, taskId) ? get(workPath(ws, "tasks", taskId, "operations")) : null,
+  // v1 PR 15: the Inbox, one operation's document and the activity log (reads only).
+  inbox: (ws: string) => (ids(ws) ? get(workPath(ws, "inbox")) : null),
+  operation: (ws: string, operationId: string) =>
+    ids(ws) && operationIdPattern.test(operationId)
+      ? get(workPath(ws, "operations", operationId))
+      : null,
+  activity: (ws: string, after: string | null) =>
+    ids(ws) && cursor(after)
+      ? get(
+          workPath(ws, "activity") +
+            query([
+              ["limit", "25"],
+              ["after", after],
+            ]),
+        )
+      : null,
   recheck(ws: string, operationId: string, c: Command<Record<string, never>>) {
     if (!ids(ws) || !operationIdPattern.test(operationId) || Object.keys(c.body).length !== 0)
       return null;
@@ -734,12 +751,22 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       emailAddresses: unbuilt,
       notifications: unbuilt,
       reviseNotifications: unbuilt,
-      activity: unbuilt,
+    },
+    // v1 PR 15: the Inbox and activity reads (GET /work/inbox, /work/activity) and one
+    // operation's document (GET /work/operations/:id, the review routes' read).
+    inbox: {
+      read: gated("inbox.read", (ws: string) => read(requests.inbox(ws), decodeInbox)),
+      operation: gated("inbox.operation", (ws: string, operationId: string) =>
+        read(requests.operation(ws, operationId), (b) => decodeOperationDetail(b, operationId)),
+      ),
+      activity: gated("inbox.activity", (ws: string, after: string | null) =>
+        read(requests.activity(ws, after), decodeActivity),
+      ),
     },
     library: { knowledge: unbuilt, files: unbuilt },
-    // ADR-0032 Home preview: no backend, no route and no contract. Never composed over
-    // HTTP, so it answers not_in_build and sends nothing.
-    samples: { home: unbuilt },
+    // ADR-0032 Home preview and v1 PR 15's Inbox preview: no backend, no route and no
+    // contract. Never composed over HTTP, so they answer not_in_build and send nothing.
+    samples: { home: unbuilt, inbox: unbuilt },
     connections: {
       list: gated("connections.list", async (ws: string) => {
         const request = requests.connections(ws);

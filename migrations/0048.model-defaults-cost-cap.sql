@@ -1,6 +1,6 @@
 BEGIN;
 -- ADR-0036 (OD-2026-10-25-1): model defaults and the AI cost cap. Executes AS
--- morrow_work_owner, after 0046. No external effect: nothing here sends a request, reserves
+-- morrow_work_owner, after 0047. No external effect: nothing here sends a request, reserves
 -- money or dispatches.
 --   * Catalogue version 3 (per product, listings-run@1), published: version 1's entries,
 --     credits, rates and caps, with the default selection Opus 5.5 at medium (four credits a

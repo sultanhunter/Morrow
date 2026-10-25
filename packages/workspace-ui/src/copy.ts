@@ -266,16 +266,9 @@ export const copy = {
     conversationTitle: "Conversation",
     activityTitle: "Activity",
   },
+  // v1 PR 15: the Inbox's own words are in sunrise/inbox-copy.ts.
   inbox: {
     title: "Inbox",
-    questionsTitle: "Questions for you",
-    noQuestions: "No open questions for you.",
-    otherTitle: "Other updates",
-    // v1 PR 3: the pending approvals the person may review.
-    approvalsTitle: "Changes to approve",
-    noApprovals: "Nothing to approve.",
-    approvalItem: (n: number) => `${n} product ${n === 1 ? "change" : "changes"} from Listings`,
-    approvalExpires: "Approve by",
   },
   question: {
     title: "Question",
@@ -589,7 +582,7 @@ export const copy = {
         : `${n} ${n === 1 ? "run" : "runs"} closed; unused credits returned.`,
     endedReasons: {
       breaker: "Stopped after three products in a row failed",
-      // Runs that ended before ADR-0036 removed this limit (migration 0047).
+      // Runs that ended before ADR-0036 removed this limit (migration 0048).
       unrecovered_cost_cap: "Stopped: this period's limit for failed products is reached",
       spend_limit: "Stopped: the AI provider's spending limit is reached",
       provider_error: "Stopped: the AI provider returned an error",

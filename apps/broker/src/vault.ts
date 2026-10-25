@@ -59,7 +59,14 @@ export class VaultError extends Error {
 
 // The two record kinds of migration 0020. An app secret is a platform row keyed by its
 // app key; an offline token is a tenant row keyed by its credential id, and it keeps its
-// subject (the store installation) across versions.
+// subject (the store installation) across versions. Build order PR 8 (migration 0047) adds
+// a sandbox's envd token (ADR-0029 item 3): a tenant row in morrow_vault.credentials whose
+// id and subject are its runtime operation's id, at version 1 only, destroyed by the
+// operation's settlement. Its additional data binds that operation id (a platform-unique
+// UUID the ledger ties to exactly one tenant) in place of the tenant pair, which the broker
+// does not hold when it seals: the ledger's send mark returns the operation id alone. A row
+// moved to another operation or tenant still fails to open, because its operation id would
+// have to change with it.
 export type VaultRecordRef =
   | {
       readonly kind: "app_secret";
@@ -75,6 +82,12 @@ export type VaultRecordRef =
       readonly subjectId: string;
       readonly provider: "shopify";
       readonly version: number;
+    }
+  | {
+      readonly kind: "e2b_envd_token";
+      readonly operationId: string;
+      readonly provider: "e2b";
+      readonly version: 1;
     };
 export interface VaultEnvelope {
   readonly kekVersion: number;
@@ -93,6 +106,7 @@ const invalid = () => new VaultError("VAULT_INPUT_INVALID");
 const encoder = new TextEncoder();
 const appKeyPattern = /^[a-z0-9][a-z0-9-]{2,62}$/;
 const recordIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const operationPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 // A KEK secret is exactly 32 random bytes as 64 lowercase hex characters.
 const kekPattern = /^[0-9a-f]{64}$/;
 const exact = (pattern: RegExp, value: unknown): value is string =>
@@ -170,6 +184,19 @@ function parseRef(ref: unknown): VaultRecordRef {
       provider: "shopify",
       version: r.version,
     });
+  if (
+    r.kind === "e2b_envd_token" &&
+    names === "kind,operationId,provider,version" &&
+    exact(operationPattern, r.operationId) &&
+    r.provider === "e2b" &&
+    r.version === 1
+  )
+    return Object.freeze({
+      kind: "e2b_envd_token",
+      operationId: r.operationId,
+      provider: "e2b",
+      version: 1,
+    });
   throw invalid();
 }
 
@@ -191,8 +218,14 @@ export function vaultAdditionalData(
   )
     throw invalid();
   const r = parseRef(ref);
-  const tenant = r.kind === "app_secret" ? [null, null] : [r.organizationId, r.workspaceId];
-  const record = r.kind === "app_secret" ? [r.appKey, null] : [r.credentialId, r.subjectId];
+  const tenant =
+    r.kind === "shopify_offline_token" ? [r.organizationId, r.workspaceId] : [null, null];
+  const record =
+    r.kind === "app_secret"
+      ? [r.appKey, null]
+      : r.kind === "e2b_envd_token"
+        ? [r.operationId, r.operationId]
+        : [r.credentialId, r.subjectId];
   return owned(
     encoder.encode(
       JSON.stringify([

@@ -9,11 +9,11 @@
 //   C3 the US$25 daily cap counts open reservations at their maximum and settled ones at
 //      their booked cost;
 //   C4 the unrecovered-cost ledger accrues failed and uncertain bookings and caps nothing
-//      (ADR-0036, migration 0047): past the former US$4.50, admission still reserves,
+//      (ADR-0036, migration 0048): past the former US$4.50, admission still reserves,
 //      while the US$7 run limit and the US$25 daily cap still refuse;
 //   C5 Opus high reserves 6 credits per product and admits at most 9 products;
 //   C6 a reservation keeps its catalogue version after a newer one is active;
-//   C12 after 0047, version 3 is active (Opus 5.5 at medium, ceiling 4, no cap), version 1
+//   C12 after 0048, version 3 is active (Opus 5.5 at medium, ceiling 4, no cap), version 1
 //      is retired and refused for new runs, and no later version may carry a cap;
 //   C7 refusals: duplicate, no wallet, no billing period, another tenant;
 //   C8 the lease context: a run step books and settles its own run only;
@@ -501,7 +501,7 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
       `SELECT amount_usd::text FROM morrow_billing.unrecovered_costs WHERE organization_id=${literal(O)} AND workspace_id=${literal(accountOf("account_unrecovered").ws)} AND period_start=${period}`,
     )[0]?.amount_usd;
     const lost = accountOf("account_unrecovered");
-    // unrecovered_allows (0047) is true for a known version, a period and a non-negative worst
+    // unrecovered_allows (0048) is true for a known version, a period and a non-negative worst
     // case, whatever the period's total; false for an unknown version, no period or a negative.
     const allows = last(
       cmd(
@@ -599,7 +599,7 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
   phase("catalogue_version");
   {
     // C6: a reservation keeps its catalogue version; after version 4 is active (sim: the
-    // shape of a future catalogue migration, as 0047 published version 3), version 3 is
+    // shape of a future catalogue migration, as 0048 published version 3), version 3 is
     // refused for new runs but the open run books and settles at its own version.
     fund("account_version", 100);
     const before = reserve("account_version", "run_v3", "claude_sonnet_5_5", "low", 2, {
@@ -644,7 +644,7 @@ COMMIT;`);
   // -------------------------------------------------------------------------
   phase("adr_0036_catalogue");
   {
-    // C12: migration 0047 (ADR-0036). Version 3 is the active version with Opus 5.5 at medium
+    // C12: migration 0048 (ADR-0036). Version 3 is the active version with Opus 5.5 at medium
     // as its default, the default member ceiling 4 and no unrecovered-cost cap; version 1 is
     // retired with its published US$4.50 kept, and a reservation at version 1 is refused. No
     // version but 1 may carry a cap, and version 1 may not lose its own.
@@ -1132,7 +1132,7 @@ async function main() {
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, provider, payment or merchant data.",
       "The wallets are M5 PR-1's (one billing account per synthetic workspace); funding is superuser maintenance with wallet_guard disabled for that one update (sim), where M5 PR-1 funds them from verified payments (lab:billing).",
       "The run steps are stood in for by lab-only command-owned definers (lab_credits); M3 PR-2 lands the runtime definers.",
-      "Catalogue version 4 is installed by superuser maintenance (sim), the shape of a future catalogue migration such as 0047.",
+      "Catalogue version 4 is installed by superuser maintenance (sim), the shape of a future catalogue migration such as 0048.",
     ],
   });
   if (result.failures.length) {

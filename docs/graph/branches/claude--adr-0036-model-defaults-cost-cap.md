@@ -7,7 +7,8 @@ links:
   implements: [TRK-decisions]
 ---
 
-Building from 500e87dc: ADR-0036 (OD-2026-10-25-1), catalogue version 3 and migration 0047 (no
-unrecovered-cost cap). Its migration is renumbered at integration if the agent loop's 0047 lands
-first. It stays unmerged until the owner confirms version 3's default member ceiling of 4 or
-names another value (Q-adr-0036-member-ceiling).
+Built from 500e87dc and merged with main at 85cac200: ADR-0036 (OD-2026-10-25-1), catalogue
+version 3 and migration 0048 (no unrecovered-cost cap; built as 0047 and renumbered when main's
+build order PR 8 took 0047 for runtime-e2b). The agent loop's 0047 is renumbered at its own
+integration. It stays unmerged until the owner confirms version 3's default member ceiling of 4
+or names another value (Q-adr-0036-member-ceiling).

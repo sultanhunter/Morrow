@@ -22,6 +22,10 @@ import {
   type Composed,
   type GoalView,
   type HomeSamplesView,
+  type InboxSamplesView,
+  type InboxView,
+  type ActivityLogView,
+  type OperationDetailView,
   type Outcome,
   type Page,
   type PortMethod,
@@ -48,7 +52,10 @@ import {
 } from "./seed";
 import { createProjectsFixture } from "./projects";
 import {
+  activityPageSizeIn,
   changedMeanwhileIn,
+  inboxProblemsIn,
+  inboxSamplesComposedIn,
   listingsOnIn,
   projectsComposedIn,
   samplesComposedIn,
@@ -60,6 +67,7 @@ import {
   type ScenarioName,
 } from "./scenarios";
 import { createTeamFixture } from "./team";
+import { fixtureActivity, fixtureInbox, fixtureInboxSamples } from "./inbox";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -72,6 +80,8 @@ export function fixtureComposedFor(scenario: ScenarioName): Composed {
     ...(uncomposedIn[scenario] ?? []),
     // ADR-0032: the Home preview switch stays off outside its own scenario.
     ...(samplesComposedIn.includes(scenario) ? [] : (["samples.home"] as const)),
+    // v1 PR 15: the Inbox preview switch stays off outside its own scenario.
+    ...(inboxSamplesComposedIn.includes(scenario) ? [] : (["samples.inbox"] as const)),
     // T7 PR 19: the project screens' switch stays off outside its preview scenarios.
     ...(projectsComposedIn.includes(scenario) ? [] : projectPortMethods),
   ];
@@ -247,6 +257,60 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       operations: [],
     });
   addReview("proposal-sample-1", "task-titles", ["product:11", "product:12"]);
+  // v1 PR 15 (inbox_problems): an earlier change applied with one outcome unknown and one
+  // not applied, then the store disconnected, so the waiting change can't be applied.
+  if (inboxProblemsIn.includes(scenario)) {
+    addReview("proposal-sample-2", "task-source", ["product:21", "product:22"]);
+    const earlier = reviews.get("proposal-sample-2")!;
+    earlier.status = "approved";
+    earlier.approved = { proposalId: earlier.id, selected: null };
+    earlier.operations.push(
+      {
+        operationId: "00000000-0000-4000-9000-000000000201",
+        taskId: "task-source",
+        proposalId: earlier.id,
+        productId: "product:21",
+        targetIndex: 0,
+        status: "uncertain",
+        reason: "credential_gone",
+        uncertaintyReason: "unknown_submission",
+        verdict: null,
+        updatedAt: "2026-10-16T08:30:00.000Z",
+      },
+      {
+        operationId: "00000000-0000-4000-9000-000000000202",
+        taskId: "task-source",
+        proposalId: earlier.id,
+        productId: "product:22",
+        targetIndex: 1,
+        status: "conflict",
+        reason: "source_changed",
+        uncertaintyReason: null,
+        verdict: null,
+        updatedAt: "2026-10-16T08:31:00.000Z",
+      },
+    );
+    disconnect.stoppedAt = "2026-10-16T08:40:00.000Z";
+    seed.connections = {
+      ...seed.connections,
+      installations: seed.connections.installations.map((i) =>
+        i.storeId === fixtureStore.storeId ? { ...i, status: "suspended" } : i,
+      ),
+    };
+  }
+  const inboxState = () => ({
+    questions: seed.questions,
+    reviews: [...reviews.values()].map((r) => ({
+      id: r.id,
+      status: r.status,
+      productCount: r.productIds.length,
+      expiresAt: "2026-10-19T09:00:00.000Z",
+      operations: r.operations,
+    })),
+    storeLinked: storeLinked() && disconnect.stoppedAt === null,
+    disconnectedAt: disconnect.stoppedAt,
+  });
+  const activityPageSize = activityPageSizeIn[scenario] ?? 25;
   const digestOf = (id: string, selected: readonly number[] | null) =>
     ("0".repeat(64) + [id.length, ...(selected ?? [99])].join("")).slice(-64);
   const refOf = (kind: "proposal" | "approval", id: string, digest: string): RecordRefView => ({
@@ -540,6 +604,44 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     samples: {
       home: (id) =>
         reply<HomeSamplesView>("samples.home", () => (ws(id) ? ok(fixtureHomeSamples) : notFound)),
+      inbox: (id) =>
+        reply<InboxSamplesView>("samples.inbox", () =>
+          ws(id) ? ok(fixtureInboxSamples) : notFound,
+        ),
+    },
+    // v1 PR 15: the Inbox from the fixture's own state, one operation's document and the log.
+    inbox: {
+      read: (id) =>
+        reply<InboxView>("inbox.read", () =>
+          ws(id) ? ok(fixtureInbox(inboxState())) : { kind: "unauthenticated" },
+        ),
+      operation: (id, operationId) =>
+        reply<OperationDetailView>("inbox.operation", () => {
+          const operation = [...reviews.values()]
+            .flatMap((r) => r.operations)
+            .find((o) => o.operationId === operationId);
+          if (!ws(id) || !operation) return notFound;
+          return ok({
+            operation,
+            storeId: fixtureStore.storeId,
+            transitions: [],
+            readbacks:
+              operation.status === "verified" || operation.status === "uncertain"
+                ? [
+                    {
+                      sequence: 1,
+                      observedAt: operation.updatedAt,
+                      outcome: operation.status === "verified" ? "verified" : "unavailable",
+                      verdict: operation.verdict,
+                    },
+                  ]
+                : [],
+          });
+        }),
+      activity: (id, after) =>
+        reply<ActivityLogView>("inbox.activity", () =>
+          ws(id) ? ok(fixtureActivity(after, activityPageSize)) : notFound,
+        ),
     },
     connections: {
       list: (id) =>

@@ -3,6 +3,7 @@
 // a reply; `null` keeps the seed behaviour. Scripted, not simulated: there
 // are no permissions, digests or caps here; PR-2 proves those over HTTP.
 import type { Outcome, PersonRole, PortMethod } from "@morrow/workspace-ui";
+import { emptyInbox, questionsDeniedInbox } from "./inbox";
 
 export const scenarioNames = [
   "ready",
@@ -69,6 +70,9 @@ export const scenarioNames = [
   "home_preview",
   "listings_enable_reread_failed",
   "home_offline_retry",
+  "inbox_problems",
+  "inbox_preview",
+  "activity_more",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -98,9 +102,12 @@ const reads: readonly PortMethod[] = [
   "settings.plan",
   "settings.emailAddresses",
   "settings.notifications",
-  "settings.activity",
   "library.knowledge",
   "library.files",
+  // v1 PR 15.
+  "inbox.read",
+  "inbox.operation",
+  "inbox.activity",
 ];
 const creates: readonly PortMethod[] = [
   "work.createGoal",
@@ -138,10 +145,16 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   empty: {
     "work.listGoals": () => "empty_page",
     "work.listMyOpenQuestions": () => "empty_page",
+    "inbox.read": () => ({ kind: "ok", value: emptyInbox, replayed: false }),
+    "inbox.activity": () => ({ kind: "ok", value: { entries: [], next: null }, replayed: false }),
   },
   loading: { ...all(reads, () => "pending"), "account.overview": () => "pending" },
   denied: all(reads, () => denied),
-  home_partial_denied: { "work.listMyOpenQuestions": () => denied },
+  home_partial_denied: {
+    "work.listMyOpenQuestions": () => denied,
+    // The Inbox read answers, but its questions section was denied: never "all clear".
+    "inbox.read": () => ({ kind: "ok", value: questionsDeniedInbox, replayed: false }),
+  },
   session_expired: {
     "workspace.bootstrap": () => ({ kind: "unauthenticated" }),
     "account.overview": () => ({ kind: "unauthenticated" }),
@@ -415,7 +428,15 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   home_offline_retry: {
     "work.listMyOpenQuestions": (call) =>
       call === 0 ? { kind: "unavailable", offline: true } : null,
+    "inbox.read": (call) => (call === 0 ? { kind: "unavailable", offline: true } : null),
   },
+  // v1 PR 15: a change Morrow couldn't confirm, one it didn't apply, and the store
+  // disconnected, so the change waiting for review can't be applied (the adapter seeds it).
+  inbox_problems: {},
+  // The Inbox preview: the kinds whose backend isn't built yet, from `samples.inbox`.
+  inbox_preview: {},
+  // The activity log in pages of four, so "Show earlier" has more to load.
+  activity_more: {},
 };
 /**
  * T7 PR 19: the default-off project screens' switch. `projects.*` and `plans.*` are
@@ -447,6 +468,14 @@ export const teamViewerIn: Readonly<Partial<Record<ScenarioName, PersonRole>>> =
  * scenarios. Every other scenario, like the HTTP build, leaves it uncomposed.
  */
 export const samplesComposedIn: readonly ScenarioName[] = ["home_preview"];
+/** v1 PR 15: the default-off Inbox preview switch (`samples.inbox`), composed only here. */
+export const inboxSamplesComposedIn: readonly ScenarioName[] = ["inbox_preview"];
+/** v1 PR 15: these scenarios start with the Inbox's problems (see the adapter). */
+export const inboxProblemsIn: readonly ScenarioName[] = ["inbox_problems"];
+/** v1 PR 15: the activity log's page size where it isn't the HTTP build's 25. */
+export const activityPageSizeIn: Readonly<Partial<Record<ScenarioName, number>>> = {
+  activity_more: 4,
+};
 /** M2 PR-2: these scenarios start with the sample store installed but not linked. */
 export const unlinkedStoreIn: readonly ScenarioName[] = [
   "connections_unlinked",

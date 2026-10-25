@@ -1,6 +1,6 @@
 // The runtime port conformance suite (ADR-0029 item 2; build order PR 7). Every runtime
 // adapter must pass it: the deterministic fake today (tests/runtime-port-conformance.test.mjs)
-// and the E2B adapter of PR 8 against its wire fixture. An adapter is driven only through the
+// and the E2B adapter of PR 8 against its wire fixture (tests/runtime-e2b.test.mjs). An adapter is driven only through the
 // port (apps/broker/src/runtime-provider.ts); a harness supplies what only the provider side
 // can know:
 //   make()  -> {

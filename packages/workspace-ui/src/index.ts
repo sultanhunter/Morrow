@@ -4,6 +4,7 @@
 export * from "./port";
 export * from "./model";
 export * from "./team-model";
+export * from "./inbox-model";
 export { copy, statusLabel } from "./copy";
 export { breakpoints, referenceWidths, motionDurationMs, targetPx } from "./tokens";
 export * from "./services";
@@ -17,8 +18,8 @@ export {
   primaryStore,
   useConnections,
   useHomeSamples,
-  useOpenQuestions,
-  waitingCount,
+  useInbox,
+  useInboxSamples,
 } from "./workspace-data";
 export {
   AccountScreen,
@@ -33,10 +34,12 @@ export {
   WorkspaceUnavailableScreen,
 } from "./screens/entry";
 export { normalizeName, CommandFeedback } from "./screens/entry";
-export { HomeScreen, byRecent, byUrgency, homeDate, homeHeader } from "./screens/home";
+export { HomeScreen, byRecent, homeDate, homeHeader } from "./screens/home";
 export { WorkScreen } from "./screens/work";
 export { TaskScreen } from "./screens/task";
 export { InboxScreen, QuestionScreen } from "./screens/inbox";
+export { ExceptionScreen } from "./screens/exception";
+export { describeActivity, type ActivityLine } from "./screens/activity";
 export { UnavailableDestination } from "./screens/unavailable";
 export { ListingsAgentCard } from "./screens/agents";
 export { ModelDefaultScreen } from "./screens/settings-models";
@@ -60,9 +63,8 @@ export { documentBinds } from "./projects/plan-start";
 export { planEdits } from "./projects/plan-card";
 export { taskHomes } from "./projects/new-task";
 export { localToday, validAsk, validEnd, validGoal, validTitle } from "./projects/new-project";
-export { ProjectsScreen } from "./projects/projects-screen";
-export { ProjectScreen } from "./projects/project-screen";
-export { AskConversationScreen } from "./projects/ask-conversation";
+// The three screens load on first use, in their own chunk (`projects/deferred`).
+export { AskConversationScreen, ProjectScreen, ProjectsScreen } from "./projects/deferred";
 // T7 PR 16: Team, agent pages, Add agents, Settings, Shop knowledge and Files (Sunrise).
 export { TeamScreen } from "./screens/team";
 export { AgentScreen } from "./screens/agent-page";

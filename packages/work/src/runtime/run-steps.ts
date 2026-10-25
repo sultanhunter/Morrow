@@ -28,7 +28,7 @@ export const runStepSql = Object.freeze({
 
 export type RunEndReason =
   | "breaker"
-  // Only on runs that ended before migration 0047 (ADR-0036 removed the cap).
+  // Only on runs that ended before migration 0048 (ADR-0036 removed the cap).
   | "unrecovered_cost_cap"
   | "spend_limit"
   | "provider_error"

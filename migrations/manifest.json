@@ -363,8 +363,15 @@
     },
     {
       "sequence": 47,
-      "file": "0047.model-defaults-cost-cap.sql",
-      "sha256": "65bb8a5cb467cb5ade32569b3e5e4f64065e14003dd3059c94a3d54b121476e4",
+      "file": "0047.runtime-e2b.sql",
+      "sha256": "64661d10cbc9cc5eeb4cb78e92c715c118d7b985ef690963636f6da89c6af14c",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/e2b-adapter.md"
+    },
+    {
+      "sequence": 48,
+      "file": "0048.model-defaults-cost-cap.sql",
+      "sha256": "6dc5178617339927022efd2c4d01e6d9acacd63f82193bac4e0e5a50bb90ae30",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0036-model-defaults-cost-cap.md"
     }
