@@ -134,7 +134,10 @@ test("migration 0052: a forward work-owner migration that replaces 0035's guards
   assert.ok(after.startsWith(before.slice(0, before.indexOf("  END IF;\n END IF;\n RAISE"))));
   assert.match(added, /operator_test_entitlement_renewals r/);
   assert.match(added, /r\.funded_wallet_revision=NEW\.revision\s+AND r\.added_units=v_delta/);
-  assert.ok(after.indexOf("operator_test_entitlement_renewals") > after.indexOf("IF current_user='morrow_work_owner' THEN"));
+  assert.ok(
+    after.indexOf("operator_test_entitlement_renewals") >
+      after.indexOf("IF current_user='morrow_work_owner' THEN"),
+  );
   // The snapshot guard keeps 0035's grant check for revision 1 and refuses any successor
   // of an operator snapshot that is not the same grant's renewal.
   const snapshot = body(migration, "CREATE OR REPLACE FUNCTION morrow_billing.snapshot_guard()");
@@ -146,14 +149,23 @@ test("migration 0052: a forward work-owner migration that replaces 0035's guards
   assert.match(snapshot, /r\.snapshot_revision=NEW\.revision/);
   assert.match(snapshot, /g\.period_start=NEW\.verified_at AND g\.period_end=NEW\.valid_until/);
   // The table: owner only, FORCE RLS, append-only; the function: INVOKER, granted to nobody.
-  assert.match(migration, /ALTER TABLE morrow_billing\.operator_test_entitlement_renewals FORCE ROW LEVEL SECURITY;/);
-  assert.match(migration, /CREATE TRIGGER append_only BEFORE UPDATE OR DELETE ON morrow_billing\.operator_test_entitlement_renewals/);
+  assert.match(
+    migration,
+    /ALTER TABLE morrow_billing\.operator_test_entitlement_renewals FORCE ROW LEVEL SECURITY;/,
+  );
+  assert.match(
+    migration,
+    /CREATE TRIGGER append_only BEFORE UPDATE OR DELETE ON morrow_billing\.operator_test_entitlement_renewals/,
+  );
   assert.match(migration, /UNIQUE \(organization_id,workspace_id,entitlement_id,period_number\)/);
   assert.match(
     migration,
     /REVOKE ALL ON FUNCTION morrow_billing\.operator_test_entitlement_renew\(text,text,text,text,text,text,text\) FROM PUBLIC;/,
   );
-  assert.doesNotMatch(migration, /SECURITY DEFINER|GRANT |OWNER TO|\bDROP (TABLE|FUNCTION|TRIGGER)\b/);
+  assert.doesNotMatch(
+    migration,
+    /SECURITY DEFINER|GRANT |OWNER TO|\bDROP (TABLE|FUNCTION|TRIGGER)\b/,
+  );
   // No payment row: the function never writes a receipt, a payment event or a credit grant.
   const renew = body(migration, "CREATE FUNCTION morrow_billing.operator_test_entitlement_renew(");
   assert.doesNotMatch(
@@ -286,7 +298,10 @@ test("test-credits: the live-store app's workspace first, then the renewal as th
     assert.ok(!afterBegin(other).includes("COMMIT"));
   }
   // Every refusal and an unknown or malformed answer commits nothing.
-  for (const outcome of [...testCreditsOutcomes.filter((o) => !["renewed", "current"].includes(o)), "other"]) {
+  for (const outcome of [
+    ...testCreditsOutcomes.filter((o) => !["renewed", "current"].includes(o)),
+    "other",
+  ]) {
     const refused = renewWorld({ outcome, result: null });
     const error = await runRenew(refused);
     assert.equal(error.code, "STAGING_TEST_CREDITS_REFUSED", outcome);
@@ -310,7 +325,9 @@ test("test-credits: a COMMIT that fails after renewed is an unknown outcome, nev
   const unknown = await runRenew(renewWorld({ commitError: lost }));
   assert.equal(unknown.code, "STAGING_TEST_CREDITS_OUTCOME_UNKNOWN");
   assert.deepEqual(unknown.details, { period: "1" });
-  const quiet = await runRenew(renewWorld({ outcome: "current", result: current, commitError: lost }));
+  const quiet = await runRenew(
+    renewWorld({ outcome: "current", result: current, commitError: lost }),
+  );
   assert.equal(quiet.code, "STAGING_TEST_CREDITS_FAILED");
   assert.equal(quiet.details.sqlstate, "08006");
 });
@@ -333,7 +350,10 @@ test("test-credits: the committed record is closed, unset until the owner's gran
   assert.equal(testCreditsRecordPath, "docs/decisions/test-credits-staging.json");
   // As committed: closed, of the standing approval, unset (the grant has not run yet).
   const committed = read(testCreditsRecordPath);
-  assert.deepEqual(JSON.parse(committed), JSON.parse(recordText({ workspace: null, grantApproval: null })));
+  assert.deepEqual(
+    JSON.parse(committed),
+    JSON.parse(recordText({ workspace: null, grantApproval: null })),
+  );
   assert.equal(
     codeOf(() => testCreditsRecord(committed, standingApproval(), now)),
     "STAGING_TEST_CREDITS_UNSET",
@@ -541,7 +561,10 @@ test("cli: test-credits renew takes the workspace and grant from the committed r
       Object.values(input),
     );
     assert.equal(w.notices.length, 1);
-    assert.match(w.notices[0], /^\| 2026-11-25 \| `staging:test-credits -- renew` .* \| renewed period 1: 300 test credits/);
+    assert.match(
+      w.notices[0],
+      /^\| 2026-11-25 \| `staging:test-credits -- renew` .* \| renewed period 1: 300 test credits/,
+    );
     // The record, the standing record and nothing else were read from main's tree by blob
     // id; the owner URL and its password never reach any output.
     const lsTree = w.fake.calls.filter((c) => c.tool === "git" && c.args[0] === "ls-tree");
@@ -563,7 +586,10 @@ test("cli: a raise is passed to the database only with its committed record nami
     [testCreditsRecordPath]: { text: recordText({ raise }) },
     ...(text === null ? {} : { [raiseEvidence]: { text } }),
   });
-  const ok = await cliWorld({ files: files(raiseText), result: { ...renewed, creditUnits: "1000" } });
+  const ok = await cliWorld({
+    files: files(raiseText),
+    result: { ...renewed, creditUnits: "1000" },
+  });
   try {
     assert.equal(await main(argv, ok.ctx), 0, ok.err.join("\n"));
     assert.deepEqual(ok.db.statements.find((s) => s.text === testCreditsRenewStatement).params, [
@@ -577,7 +603,10 @@ test("cli: a raise is passed to the database only with its committed record nami
   }
   for (const [text, code] of [
     [null, "STAGING_EVIDENCE_MISSING"],
-    ["- **Workspace:** `ws_owner`\n- **Credits per period:** `2000`\n", "STAGING_EVIDENCE_MISMATCH"],
+    [
+      "- **Workspace:** `ws_owner`\n- **Credits per period:** `2000`\n",
+      "STAGING_EVIDENCE_MISMATCH",
+    ],
   ]) {
     const w = await cliWorld({ files: files(text) });
     try {
@@ -621,12 +650,15 @@ test("cli: test-credits is refused before any database statement without its pre
     [{ git: { head: fakeSha("feature") } }, "STAGING_NOT_MAIN"],
     [{ git: { status: " M docs/decisions/test-credits-staging.json\n" } }, "STAGING_TREE_DIRTY"],
     [{ record: null }, "STAGING_TEST_CREDITS_RECORD_MISSING"],
-    [{ record: recordText({ workspace: null, grantApproval: null }) }, "STAGING_TEST_CREDITS_UNSET"],
-    [{ record: recordText({ standingApproval: "staging-card-1" }) }, "STAGING_TEST_CREDITS_RECORD_INVALID"],
     [
-      { files: { [testCreditsRecordPath]: { text: recordText() } } },
-      "STAGING_EVIDENCE_MISSING",
+      { record: recordText({ workspace: null, grantApproval: null }) },
+      "STAGING_TEST_CREDITS_UNSET",
     ],
+    [
+      { record: recordText({ standingApproval: "staging-card-1" }) },
+      "STAGING_TEST_CREDITS_RECORD_INVALID",
+    ],
+    [{ files: { [testCreditsRecordPath]: { text: recordText() } } }, "STAGING_EVIDENCE_MISSING"],
     [
       {
         files: {
