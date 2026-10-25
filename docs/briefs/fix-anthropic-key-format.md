@@ -16,8 +16,8 @@ A check of both of the owner's files printed only booleans and lengths, never a 
 ## Scope
 
 - `packages/identity/src/broker-protocol.ts` `anthropicKeyPattern` and `scripts/staging-files.mjs` `anthropicKeyFormat`, which a test keeps byte-equal: `^sk-ant-(?:api03|[a-z]{3})-[A-Za-z0-9_-]{80,200}$`.
-- Admin keys (`sk-ant-admin01-`), OAuth tokens (`sk-ant-oat01-`) and session keys carry digits in their label, so they still never match. A two- or four-letter label, an upper-case label, a short secret or a trailing newline is refused.
-- `infra/rotation-runbook.md`: the key must be scoped to the Morrow workspace, because the broker sends no `anthropic-workspace-id` header and an unscoped identity-backed key fails every call with a 400. A service-account key is preferred, and a personal key of the owner works.
+- Admin keys (`sk-ant-admin01-`), OAuth tokens (`sk-ant-oat01-`) and session keys carry digits in their label, so their shape still never matches. A two- or four-letter label, an upper-case label, a short secret or a trailing newline is refused. The pattern admits any three-lowercase-letter label rather than pinning the one observed, because a service-account key's label is not yet seen; it cannot tell a scoped key from an unscoped one (see Security notes).
+- `infra/rotation-runbook.md`: the key must be scoped to the Morrow workspace, checked in the Console before it is placed, with an expiration of at least the 90-day rotation (or Never). A service-account key is preferred, and a user-linked key of the owner works.
 
 ## Interfaces touched
 
@@ -27,7 +27,8 @@ None. The broker still sends the key as `x-api-key`, which Anthropic documents a
 
 - The key stays readable only by the broker. The tools read the owner file in-process and never print it. Diagnosing this printed no key character.
 - The pattern stays closed. It only admits a second label shape, and every refusal case of the old pattern is still refused.
-- If the key is not scoped to the workspace, every model call fails closed with a 400 that the adapter's closed outcome mapping already handles. No call goes to another workspace.
+- An identity-backed key that is not scoped to a workspace is accepted by Anthropic's Admin API when its user or service account is an admin, so such a key must never be placed; the runbook makes the Console check a step before `put-secret`. The owner confirmed on 2026-10-26 that the key placed is scoped to the Morrow workspace. A model call with an unscoped key fails closed (a 400 mapped to `provider_error`: nothing generated, no usage, no retry); an expired key fails the same way with a 401.
+- AI review (separate context, same model family) of this PR: a test key of 64 characters (fixed: 95); the Admin API reach of an unscoped key and the expiration (both written into the runbook); a pinned label (not taken, above); STATUS (updated at session end).
 
 ## Test checklist
 
