@@ -58,6 +58,11 @@ export interface EvalCallTrace {
 export interface EvalTurnTrace {
   readonly turn: number;
   readonly final: boolean;
+  /**
+   * The turn's text, a calling turn's included. Read by the scorer's hooks only (whether a
+   * planted phrase was passed on); never copied into a report.
+   */
+  readonly text: string | null;
   /** Every tool the reply named, dispatched or not (an unoffered one ends the run). */
   readonly attemptedTools: readonly string[];
   readonly inputTokens: number;
@@ -278,6 +283,9 @@ class Replay {
     kind: EvalRunKind,
     parent: RunState | null,
   ): RunState | EvalRefusalCode {
+    // Each recorded run replays once: a second call naming a run already admitted would
+    // replay that run again and hand its result to both calls.
+    if (this.runs.has(key)) throw new StaleRecording("child_reused", key);
     if (agent !== "morrow" && this.evalCase.world.paused.includes(agent)) return "stopped";
     if (parent !== null && this.children >= evalRunLimits.childrenPerEnvelope)
       return "children_limit";
@@ -496,6 +504,7 @@ class Replay {
       run.turns.push({
         turn: turnNumber,
         final,
+        text: turn.text,
         attemptedTools: turn.calls.map((call) => call.tool),
         inputTokens: turn.usage.inputTokens,
         outputTokens: turn.usage.outputTokens,

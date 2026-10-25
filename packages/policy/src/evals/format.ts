@@ -10,8 +10,9 @@
 //                    by turn, with the outcome each tool call met when it was recorded, bound to
 //                    the digest of the case's inputs (a changed fixture makes it stale).
 // The repository holds case ids, synthetic fixtures, rubrics and recordings only: no store
-// data, customer data, secret or tenant id (tests/agent-evals.test.mjs scans every file). A
-// live round binds each case's live slots to Morrow ids from a file outside the repository.
+// data, customer data, secret or tenant id (tests/agent-evals.test.mjs scans every file). Every
+// parser refuses a store-shaped id anywhere in its file (`evalTextHasStoreId`). A live round
+// binds each case's live slots to Morrow ids from a file outside the repository.
 //
 // The ADR-0037 tools (`agent.ask`, `agent.result.read`, `agent.propose`), the structured
 // `agent.route` brief, TeammateResult and the codes `insufficient_credits`,
@@ -262,6 +263,34 @@ export const evalProductIdPattern = /^product:999999[0-9]{3}$/;
 /** Synthetic record ids: a reserved product id, or `_fake_` for every other kind. */
 export const evalRecordIdPattern =
   /^(?:product:999999[0-9]{3}|(?:thread|page|orders|stock)_fake_[0-9]{1,4})$/;
+const reservedProductIdInText = /product:999999[0-9]{3}(?![0-9])/g;
+const storeIdInText = /product:[0-9]|[0-9]{9}/;
+/**
+ * Whether a text holds a store-shaped id: a `product:<n>` outside the reserved range, or a run
+ * of nine or more digits outside a reserved product id (a store's numeric id, a gid's tail).
+ */
+export function evalTextHasStoreId(value: string): boolean {
+  return storeIdInText.test(value.replace(reservedProductIdInText, ""));
+}
+/**
+ * Every format refuses a store-shaped id anywhere in a file, not only in a fixture's record
+ * ids: in any text, tool input (keys included), brief, finding or reply, a string or a number.
+ * A recording captured from real model output can then never carry a real store's id into the
+ * repository. It runs after a file's own checks, so their more precise codes come first, and
+ * its error names the path only, never the id.
+ */
+function syntheticIdsOnly(value: unknown, path: string, depth = 0): void {
+  if (depth > 64) fail("EVAL_TOO_DEEP", path);
+  if (typeof value === "string" || typeof value === "number") {
+    if (evalTextHasStoreId(String(value))) fail("EVAL_STORE_ID", path);
+  } else if (Array.isArray(value))
+    value.forEach((entry, index) => syntheticIdsOnly(entry, path + "[" + index + "]", depth + 1));
+  else if (value !== null && typeof value === "object")
+    for (const [key, entry] of Object.entries(value)) {
+      if (evalTextHasStoreId(key)) fail("EVAL_STORE_ID", path);
+      syntheticIdsOnly(entry, path + "." + key, depth + 1);
+    }
+}
 const fixtureIdPattern = /^[a-z][a-z0-9_]{0,31}$/;
 const slotPattern = /^[a-z][a-z0-9_]{0,31}$/;
 const runKeyPattern = /^(?:root|[a-z][a-z0-9_]{0,23}-[1-9][0-9]?)$/;
@@ -297,8 +326,8 @@ export function parseEvalSet(value: unknown): EvalSet {
   const primaryDesign = oneOf(r.primaryDesign, "set.primaryDesign", evalDesigns);
   if (!designs.includes(primaryDesign)) fail("EVAL_PRIMARY_DESIGN", "set.primaryDesign");
   if (new Set(designs).size !== designs.length) fail("EVAL_DUPLICATE", "set.designs");
-  return deepFreeze({
-    schemaVersion: 1,
+  const parsed = {
+    schemaVersion: 1 as const,
     setId: text(r.setId, "set.setId", { pattern: evalSetIdPattern }),
     title: text(r.title, "set.title", { max: 160 }),
     primaryDesign,
@@ -313,7 +342,9 @@ export function parseEvalSet(value: unknown): EvalSet {
       (v, p) => text(v, p, { max: 64, pattern: evalCaseIdPattern }),
       { min: 10, unique: true },
     ),
-  });
+  };
+  syntheticIdsOnly(r, "set");
+  return deepFreeze(parsed);
 }
 
 // --- EvalCase@1 ---------------------------------------------------------------------------
@@ -737,8 +768,8 @@ export function parseEvalCase(value: unknown): EvalCase {
   const parsedWorld = world(r.world, "case.world");
   for (const teammate of [...parsedWorld.activeTeammates, ...parsedWorld.paused])
     if (!agents.includes(teammate)) fail("EVAL_WORLD_AGENT", "case.world");
-  return deepFreeze({
-    schemaVersion: 1,
+  const parsed = {
+    schemaVersion: 1 as const,
     caseId: text(r.caseId, "case.caseId", { max: 64, pattern: evalCaseIdPattern }),
     title: text(r.title, "case.title", { max: 160 }),
     category: oneOf(r.category, "case.category", evalCategories),
@@ -752,7 +783,9 @@ export function parseEvalCase(value: unknown): EvalCase {
     fixtures,
     world: parsedWorld,
     expect: expectation(r.expect, "case.expect", ids),
-  });
+  };
+  syntheticIdsOnly(r, "case");
+  return deepFreeze(parsed);
 }
 
 /**
@@ -831,12 +864,14 @@ export function parseEvalRubric(value: unknown): EvalRubric {
   );
   if (new Set(criteria.map((c) => c.criterionId)).size !== criteria.length)
     fail("EVAL_DUPLICATE", "rubric.criteria");
-  return deepFreeze({
-    schemaVersion: 1,
+  const parsed = {
+    schemaVersion: 1 as const,
     rubricId: text(r.rubricId, "rubric.rubricId", { pattern: evalRubricIdPattern }),
     title: text(r.title, "rubric.title", { max: 160 }),
     criteria,
-  });
+  };
+  syntheticIdsOnly(r, "rubric");
+  return deepFreeze(parsed);
 }
 
 // --- EvalRecording@1 ----------------------------------------------------------------------
@@ -990,14 +1025,30 @@ export function parseEvalRecording(value: unknown): EvalRecording {
     fail("EVAL_DUPLICATE", "recording.runs");
   const toolUseIds = runs.flatMap((run) => run.turns.flatMap((t) => t.calls.map((c) => c.id)));
   if (new Set(toolUseIds).size !== toolUseIds.length) fail("EVAL_DUPLICATE", "recording.calls.id");
-  return deepFreeze({
-    schemaVersion: 1,
+  // Each child run is started by one call only, and names a recorded teammate run: the replay
+  // never replays one run for two calls.
+  const children = runs.flatMap((run) =>
+    run.turns.flatMap((t) =>
+      t.calls.flatMap((c) => (c.expect.child === null ? [] : [c.expect.child])),
+    ),
+  );
+  if (new Set(children).size !== children.length)
+    fail("EVAL_CHILD_REUSED", "recording.calls.expect.child");
+  const teammateRuns = new Set(runs.slice(1).map((run) => run.runKey));
+  if (children.some((child) => !teammateRuns.has(child)))
+    fail("EVAL_CHILD_UNKNOWN", "recording.calls.expect.child");
+  const parsed = {
+    schemaVersion: 1 as const,
     caseId: text(r.caseId, "recording.caseId", { max: 64, pattern: evalCaseIdPattern }),
     design: oneOf(r.design, "recording.design", evalDesigns),
     origin: oneOf(r.origin, "recording.origin", ["authored"] as const),
     basisDigest: text(r.basisDigest, "recording.basisDigest", { pattern: digestPattern }),
     runs,
-  });
+  };
+  // The basis digest is hex (checked above), so it is left out of the store-id scan.
+  for (const [key, entry] of Object.entries(r))
+    if (key !== "basisDigest") syntheticIdsOnly(entry, "recording." + key);
+  return deepFreeze(parsed);
 }
 
 /** The recording file name of a case and design: `<caseId>--<design with @ as ->.json`. */
