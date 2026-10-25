@@ -478,7 +478,7 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods; M2
   // PR-3 shopifyRead (the catalogue routes' reads under a read lease); "Disconnect store"
   // shopifyCredentialDestroy (one argument: the reason is fixed to `disconnected`); v1 PR 3
-  // the gateway's apply and read-back of one operation.
+  // the gateway's apply and read-back of one operation; v1 PR 4 the undo check of one.
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
     "challengeVerify",
     "constructor",
@@ -487,6 +487,7 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
     "shopifyCredentialDestroy",
     "shopifyProductApply",
     "shopifyProductReconcile",
+    "shopifyProductUndoCheck",
     "shopifyRead",
     "stripeCheckoutCreate",
     "stripeCustomerEnsure",
@@ -559,9 +560,12 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   await failure(entry.shopifyProductApply(operation, 1000, 1));
   await failure(entry.shopifyProductReconcile(operation));
   await failure(entry.shopifyProductReconcile(operation, 1000, 1));
+  // v1 PR 4: the undo check takes exactly an operation id and a budget.
+  await failure(entry.shopifyProductUndoCheck(operation));
+  await failure(entry.shopifyProductUndoCheck(operation, 1000, 1));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    Array(18).fill("INPUT_INVALID"),
+    Array(20).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);

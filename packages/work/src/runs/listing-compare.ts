@@ -97,6 +97,36 @@ export function normalisedValue(field: ListingFieldPath, value: unknown): string
 }
 
 /**
+ * v1 PR 4's undo check: whether each of the five listing fields still holds what the apply
+ * left, under the same canonical comparison as a read-back. What the apply left is the
+ * product as drafted (`before`, the draft's snapshot: the gateway's pre-send read proved the
+ * product equal to it) with the approved set's fields replaced. `unchanged` only when the
+ * comparison proves equality; anything it cannot form is `changed` (fail-safe: an undo never
+ * overwrites a change someone made since the apply).
+ */
+export function appliedStateVerdicts(
+  current: ListingFieldsRead,
+  before: ListingFieldsRead,
+  approved: ApprovedSet,
+): {
+  readonly fields: Readonly<Record<ListingFieldPath, "unchanged" | "changed">>;
+  readonly verdict: "unchanged" | "changed";
+} {
+  const verdicts = {} as Record<ListingFieldPath, "unchanged" | "changed">;
+  for (const name of fieldPaths) {
+    const field = name as ListingFieldPath;
+    const set = approvedValue(approved, field);
+    const want = set === undefined ? rawValue(before, field) : set;
+    const got = normalisedValue(field, rawValue(current, field));
+    const expected = normalisedValue(field, want);
+    verdicts[field] =
+      got !== null && expected !== null && got === expected ? "unchanged" : "changed";
+  }
+  const verdict = Object.values(verdicts).every((v) => v === "unchanged") ? "unchanged" : "changed";
+  return Object.freeze({ fields: Object.freeze(verdicts), verdict });
+}
+
+/**
  * The per-field verdicts and the overall verdict of one read-back. `source` is the product as
  * drafted (null once its snapshot is gone: then nothing is `source`). Throws on a field outside
  * the listing fields or a set missing a sent field (a broken caller, never a verdict).

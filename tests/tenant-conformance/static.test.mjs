@@ -338,6 +338,15 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_catalog_tenant'::text, true)))",
     null,
   ],
+  // v1 PR 4 (catalog-undo): the broker's undo check stores its read of one product, as the
+  // broker's login only, for exactly the tenant, store and product its own transaction-local
+  // setting names (INSERT only; catalog_undo_record writes and clears it).
+  broker_undo_snapshot: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || product_id) = current_setting('morrow.vault_undo_product'::text, true)))",
+  ],
 };
 // The only restrictive policies; every other policy is permissive.
 const restrictivePolicies = new Set(["connector_content_delete_only"]);
