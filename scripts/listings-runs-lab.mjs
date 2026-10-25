@@ -11,15 +11,19 @@
 //      run lease, child task T' (ready, owned by the human), envelope, hop, Coordinator grant
 //      and events; a replay returns the recorded run; pending_starts lists ids only;
 //   B  refusals persist nothing: entitlement, credits, the member ceiling, the run product
-//      limit, an unknown selection, a foreign task and an inactive installation; run reads
+//      limit (25 for every entry since catalogue version 4, ADR-0039: 26 Opus 5.5 high
+//      products refused, 25 at 149 credits refused for credits alone), an unknown selection,
+//      a foreign task and an inactive installation; run reads
 //      need view on task.read and on the run's store (another tenant, a grantless member and
 //      a member without the store read see no run; the grantless member cannot reconcile);
 //   W  a run: products read, drafted through the gateway, checked in code, proposed as one
 //      catalog.content.publish Proposal@2 by the installation's agent on behalf of the
 //      requester, credits settled at the products proposed, cost booked from the catalogue's
 //      rates, the lease released; durable step results carry ids and codes only;
-//   M  the selection: none is the workspace default (catalogue version 3: Opus 5.5 at medium,
-//      ADR-0036); a member picks Opus high once the owner raises the ceiling; xhigh is refused;
+//   M  the selection: none is the workspace default (catalogue version 4: version 3's Opus 5.5
+//      at medium, ADR-0036 and ADR-0039); a member picks Opus high once the owner raises the
+//      ceiling; xhigh is refused; 25 Opus 5.5 high products are admitted for 150 credits and
+//      drafted (no US$7 run cap, ADR-0039 item 4);
 //   O  item 10's outcomes in one run: a refusal then a draft, a throttle resent within the
 //      attempt, an input over the cap never sent, invalid output twice (failed, accrued as
 //      unrecovered), an uncertain send booked at its worst case, a draft steered to another
@@ -34,7 +38,9 @@
 //   D  one lock order (the workspace stream, then the run, then the rest): a run finishing or
 //      starting while a session holds the stream as an admission or a stop does waits on
 //      the stream first, and neither deadlocks;
-//   C  the daily cap counts today's overflow bookings (real spend beyond a reservation);
+//   C  no daily cap (ADR-0039, migration 0052): an overflow booking (real spend beyond a
+//      reservation) is still booked and counted, and the next run is admitted past US$25 of
+//      the day's cost;
 //   P  the pending approvals cap: admission refuses a run whose proposals could not fit, and
 //      a proposal refused at the cap ends the run promptly (proposal_refused), never a
 //      retried step;
@@ -617,10 +623,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       `SELECT product_index::int AS i,status,attempts::int AS attempts,failure_code FROM morrow_work.run_products WHERE run_id=${literal(runId)} ORDER BY product_index`,
     );
   const rates = one(
-    "SELECT input_usd8_per_token::int AS input,output_usd8_per_token::int AS output FROM morrow_work.model_catalogue_rates WHERE version=3 AND model_key='claude_sonnet_5_5'",
+    "SELECT input_usd8_per_token::int AS input,output_usd8_per_token::int AS output FROM morrow_work.model_catalogue_rates WHERE version=4 AND model_key='claude_sonnet_5_5'",
   );
   const worst = one(
-    "SELECT worst_case_per_attempt_usd::text AS attempt,worst_case_per_product_usd::text AS product,credits_per_product::int AS credits FROM morrow_work.model_catalogue_entries WHERE version=3 AND model_key='claude_sonnet_5_5' AND effort_key='low'",
+    "SELECT worst_case_per_attempt_usd::text AS attempt,worst_case_per_product_usd::text AS product,credits_per_product::int AS credits FROM morrow_work.model_catalogue_entries WHERE version=4 AND model_key='claude_sonnet_5_5' AND effort_key='low'",
   );
   const completedUnits = 900 * rates.input + 300 * rates.output;
   const completedCost = usd8(completedUnits);
@@ -802,21 +808,29 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         footprint() === before3,
       above.body,
     );
-    // Opus high admits at most nine products (US$7 per run).
-    const limit = await admit(
-      P.A,
-      T,
-      admitBody(
-        Array.from({ length: 10 }, (_, i) => "product:" + (100 + i)),
-        { selection: { model: "claude_opus_5_5", effort: "high" } },
-      ),
+    // B4 (ADR-0039 item 4): Opus high admits at most 25 products (catalogue version 4: no
+    // US$7 run cap lowers the limit), so 26 are refused; 25 cost 150 credits, refused at 149
+    // for credits alone (the wallet drained; sim), then restored. M5 admits 25 for 150.
+    const opusHigh = { selection: { model: "claude_opus_5_5", effort: "high" } };
+    const products = (n) => Array.from({ length: n }, (_, i) => "product:" + (100 + i));
+    const limit = await admit(P.A, T, admitBody(products(26), opusHigh));
+    const available = wallet().available;
+    replica(
+      `UPDATE morrow_billing.credit_wallets SET available=149 WHERE billing_account_id=${literal(account)};`,
+    );
+    const short = await admit(P.A, T, admitBody(products(25), opusHigh));
+    replica(
+      `UPDATE morrow_billing.credit_wallets SET available=${available} WHERE billing_account_id=${literal(account)};`,
     );
     check(
-      "B4:run_product_limit_409",
+      "B4:run_product_limit_409_at_26_and_insufficient_credits_at_149",
       limit.status === 409 &&
         limit.body.safeMessage === "Too many products for this model and effort." &&
+        short.status === 409 &&
+        short.body.code === "budget_exhausted" &&
+        short.body.safeMessage === "Not enough credits for this run." &&
         footprint() === before3,
-      limit.body,
+      { limit: limit.body, short: short.body },
     );
     const unknown = await admit(
       P.A,
@@ -991,8 +1005,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   // ---------------------------------------------------------------------------
   phase("selection");
   {
-    // M1: no selection is the workspace default, catalogue version 3's Opus 5.5 at medium
-    // (4 credits a product, ADR-0036), within A1's default ceiling of 4.
+    // M1: no selection is the workspace default, catalogue version 4's (version 3's) Opus 5.5
+    // at medium (4 credits a product, ADR-0036), within A1's default ceiling of 4.
     const memberGoal = await work(P.A1, "/goals", {
       objective: "Member's runs",
       storeIds: [],
@@ -1007,7 +1021,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       defaulted.status === 201 &&
         defaulted.body.selection.model === "claude_opus_5_5" &&
         defaulted.body.selection.effort === "medium" &&
-        defaulted.body.catalogueVersion === 3 &&
+        defaulted.body.catalogueVersion === 4 &&
         defaulted.body.creditsReserved === 4,
       defaulted.body,
     );
@@ -1049,6 +1063,37 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     // 300-credit wallet (sim), so the later phases keep the budget they were written for.
     replica(
       `UPDATE morrow_billing.credit_wallets SET available=available+3 WHERE billing_account_id=${literal(account)};`,
+    );
+    // M5 (ADR-0039 item 4): the owner admits 25 Opus 5.5 high products in one run, 150 credits
+    // held up front (US$17.60 of worst case, past the former US$7), and the run drafts them
+    // all and settles 150. The 150 are returned to W's wallet (sim) for the later phases.
+    const many = Array.from({ length: 25 }, (_, i) => product(200 + i));
+    const before = wallet();
+    const big = await admit(
+      P.A,
+      T,
+      admitBody(many, { selection: { model: "claude_opus_5_5", effort: "high" } }),
+    );
+    const vendor = one(
+      `SELECT maximum_cost_usd::text AS maximum,catalogue_version::int AS version FROM morrow_billing.vendor_cost_reservations WHERE root_run_id=${literal(big.body.runId ?? "")}`,
+    );
+    const bigResult = big.status === 201 ? await execute(big.body.runId) : null;
+    check(
+      "M5:twenty_five_opus_high_products_admitted_for_150_credits_and_drafted",
+      big.status === 201 &&
+        big.body.catalogueVersion === 4 &&
+        big.body.creditsReserved === 150 &&
+        vendor?.maximum === "17.60000000" &&
+        vendor.version === 4 &&
+        bigResult?.kind === "ended" &&
+        bigResult.status === "succeeded" &&
+        runRow(big.body.runId).drafted === 25 &&
+        credit(big.body.runId)?.settled === 150 &&
+        wallet().consumed === before.consumed + 150,
+      { big: big.body, vendor, bigResult, run: big.body.runId && runRow(big.body.runId) },
+    );
+    replica(
+      `UPDATE morrow_billing.credit_wallets SET available=available+150 WHERE billing_account_id=${literal(account)};`,
     );
   }
 
@@ -1206,8 +1251,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   {
     // U1 (ADR-0036, migration 0051): no unrecovered-cost cap. With this period's unrecovered
     // cost raised far past the former US$4.50 (sim), a running run still drafts every product
-    // and admission still admits; the ledger is restored after. The run limit, the daily cap
-    // and the breaker still stop runs (K1, C1 and lab:run-credits C4).
+    // and admission still admits; the ledger is restored after. The run limit and the breaker
+    // still stop runs (B4, K1 and lab:run-credits C4); no daily cap does (C1, ADR-0039).
     const ids = [product(91), product(92)];
     const walletBefore = wallet();
     const admitted = await admit(P.A, T, admitBody(ids));
@@ -1402,39 +1447,49 @@ COMMIT;`,
   }
 
   // ---------------------------------------------------------------------------
-  phase("daily_cap");
+  phase("no_daily_cap");
   {
-    // C1: overflow is real spend: today's overflow bookings count against the workspace's
-    // US$25 daily cap. One overflow booking (sim) brings today's reservations and overflow
-    // exactly to the cap, so the next run's worst case would pass it: refused, nothing
-    // written. Without the overflow the same run would fit. The booking is then removed.
+    // C1 (ADR-0039, migration 0052): overflow is real spend and is still booked and counted,
+    // but no daily cap refuses on it. One overflow booking (sim) takes today's reservations
+    // and overflow past US$25, so the next run's worst case would have passed the former cap:
+    // it is admitted and drafted all the same, while the booking stays recorded. The booking
+    // is then removed and the run's credit returned to W's wallet (sim) for the later phases.
     const today = `(clock_timestamp() AT TIME ZONE 'UTC')::date`;
-    const spent = Number(
-      one(
-        `SELECT COALESCE(sum(CASE WHEN status='reserved' THEN maximum_cost_usd ELSE booked_cost_usd END),0)::text AS spent FROM morrow_billing.vendor_cost_reservations WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND created_day=${today}`,
-      ).spent,
-    );
+    const daySpent = () =>
+      Number(
+        one(
+          `SELECT (COALESCE((SELECT sum(CASE WHEN status='reserved' THEN maximum_cost_usd ELSE booked_cost_usd END) FROM morrow_billing.vendor_cost_reservations WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND created_day=${today}),0)+COALESCE((SELECT sum(b.amount_usd) FROM morrow_billing.run_cost_bookings b JOIN morrow_billing.vendor_cost_reservations x ON x.organization_id=b.organization_id AND x.workspace_id=b.workspace_id AND x.id=b.vendor_reservation_id WHERE x.organization_id=${literal(O)} AND x.workspace_id=${literal(W)} AND x.created_day=${today} AND b.kind='overflow'),0))::text AS spent`,
+        ).spent,
+      );
     const reservation = one(
       `SELECT id::text AS id,root_run_id::text AS run FROM morrow_billing.vendor_cost_reservations WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND created_day=${today} ORDER BY created_at DESC LIMIT 1`,
     );
-    const overflow = (25 - spent).toFixed(8);
+    const overflow = Math.max(1, 26 - daySpent()).toFixed(8);
     replica(
       `INSERT INTO morrow_billing.run_cost_bookings(organization_id,workspace_id,id,root_run_id,vendor_reservation_id,kind,amount_usd,booked_usd,unrecovered_usd,recorded_at) VALUES(${literal(O)},${literal(W)},'sim_overflow_daily',${literal(reservation.run)},${literal(reservation.id)},'overflow',${overflow},0,0,${ms});`,
     );
-    const before = footprint();
-    const capped = await admit(P.A, T, admitBody([product(121)]));
-    const after = footprint();
+    const spent = daySpent();
+    const admitted = await admit(P.A, T, admitBody([product(121)]));
+    const result = admitted.status === 201 ? await execute(admitted.body.runId) : null;
+    const booked = count(
+      "SELECT count(*) FROM morrow_billing.run_cost_bookings WHERE id='sim_overflow_daily' AND kind='overflow'",
+    );
     replica(
       `DELETE FROM morrow_billing.run_cost_bookings WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND id='sim_overflow_daily';`,
     );
+    replica(
+      `UPDATE morrow_billing.credit_wallets SET available=available+1 WHERE billing_account_id=${literal(account)};`,
+    );
     check(
-      "C1:overflow_counts_against_the_daily_cap",
-      spent + Number(worst.product) <= 25 &&
-        Number(overflow) > 0 &&
-        capped.status === 409 &&
-        capped.body.safeMessage === "Today's AI spending limit for this workspace is reached." &&
-        after === before,
-      { spent, overflow, capped: capped.body },
+      "C1:an_overflow_is_still_booked_with_no_daily_refusal",
+      spent > 25 &&
+        spent + Number(worst.product) > 25 &&
+        booked === 1 &&
+        admitted.status === 201 &&
+        result?.kind === "ended" &&
+        result.status === "succeeded" &&
+        credit(admitted.body.runId)?.settled === 1,
+      { spent, overflow, admitted: admitted.body, result },
     );
   }
 

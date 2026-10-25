@@ -674,8 +674,8 @@ test("the fixture adapter: a run on an enabled store, refusals, and the task's r
   );
   assert.equal(detail.value.credits.settled, 4);
   assert.deepEqual((await port.runs.reconcile(W, { key: key(), body: {} })).value, { closed: 0 });
-  // Above the product limit of Opus high (nine products).
-  const many = Array.from({ length: 10 }, (_, i) => "product:" + (i + 100));
+  // Above the product limit of Opus high (25 products since catalogue version 4, ADR-0039).
+  const many = Array.from({ length: 26 }, (_, i) => "product:" + (i + 100));
   assert.equal(
     (
       await port.runs.admit(W, taskId, {

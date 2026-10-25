@@ -11,7 +11,8 @@
 //      refuses (capability_missing) and nothing is written, booked or created;
 //   J  a job on a release that declares it: the send mark commits first (sending, booked at
 //      the worst case as sandbox_compute on the run's vendor reservation, the platform's open
-//      count and month moved), one create, the job, the checked outputs, the kill, settled
+//      count moved; no month's tally since migration 0052 removed the monthly budget), one
+//      create, the job, the checked outputs, the kill, settled
 //      killed; the result carries no sandbox id, token or key; the same run and call key
 //      again never creates (replay);
 //   U  a lost create is unknown_effect with a runtime hold that refuses every create; the
@@ -21,9 +22,11 @@
 //   N  not_found alone is never deletion: unqualified it stays unknown_effect, the definer
 //      refuses absent_verified before the deadline plus the grace (too_early), and only a
 //      qualified sweep past the grace settles absent_verified;
-//   K  the caps in SQL: three open sandboxes per workspace, the platform's concurrency, the
-//      monthly budget (a new month starts at zero) and the run's vendor reservation each
-//      refuse before any row; not_created settles only a `sending` operation;
+//   K  the caps in SQL: three open sandboxes per workspace, the platform's concurrency and the
+//      run's vendor reservation each refuse before any row; not_created settles only a
+//      `sending` operation; no monthly budget refuses (ADR-0039 item 6, migration 0052): E2B's
+//      own refusal (its usage limit) is unknown_effect with a runtime hold that refuses every
+//      create until a person lifts it;
 //   L  the lease: another generation is not_found, a queued run is run_inactive, and "Stop AI
 //      work" refuses the send mark while the sweep still kills a stopped run's sandbox;
 //   G  the guards and grants: the broker's login holds no table privilege, no other login
@@ -685,7 +688,9 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         booking.amount === "0.03000000" &&
         (Number(vendor().booked) - Number(vendorBefore.booked)).toFixed(8) === "0.03000000" &&
         cap.open === 0 &&
-        cap.committed === "0.03000000",
+        // Migration 0052 (ADR-0039 item 6): no monthly budget, so the month's tally no
+        // longer moves; the worst case is still booked on the run's vendor reservation.
+        cap.committed === "0.00000000",
       { row, booking, vendor: vendor(), vendorBefore, cap },
     );
     check(
@@ -887,27 +892,54 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
     const busy = begin("cap-busy");
     replica("UPDATE morrow_work.runtime_capacity SET open_operations=0;");
-    // sim: this month's committed worst cases leave less than one sandbox of the budget.
+    // ADR-0039 item 6 (migration 0052): no monthly budget. With this month's committed worst
+    // cases at the former US$10 (sim), a create is still admitted, and the month's tally does
+    // not move.
     const committed = capacity().committed;
-    replica("UPDATE morrow_work.runtime_capacity SET month_committed_usd=9.98;");
-    const spent = begin("cap-spent");
-    // A new month starts from zero.
-    replica(
-      "UPDATE morrow_work.runtime_capacity SET budget_month=(date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')-interval '1 month')::date,month_committed_usd=10.00;",
-    );
-    const fresh = begin("cap-new-month");
-    const afterMonth = capacity();
-    settle(fresh[1], "not_created");
+    replica("UPDATE morrow_work.runtime_capacity SET month_committed_usd=10.00;");
+    const past = begin("cap-past-budget");
+    const afterPast = capacity();
+    const pastSettled = settle(past[1], "not_created");
     replica(`UPDATE morrow_work.runtime_capacity SET month_committed_usd=${committed};`);
+    // E2B's usage limit is the outside backstop: its refusal (quota_exhausted) is recorded
+    // unknown_effect with a runtime hold of its class, and the hold refuses every create
+    // before any row until a person lifts it. Cleanup: past the deadline and the grace, the
+    // qualified sweep finds no sandbox (absent_verified); then the operator lifts the hold.
+    fake.fault({ op: "create", outcome: "quota_exhausted" });
+    const creates = fake.calls.filter((c) => c.op === "create").length;
+    const refused = await execute(job("cap-e2b-refused"));
+    const quota = ops().find((o) => o.call_key === "cap-e2b-refused");
+    const [quotaHold] = holds();
+    const held = await execute(job("cap-after-quota"));
+    const createsAfter = fake.calls.filter((c) => c.op === "create").length;
+    age(quota?.id ?? "", 1700);
+    const swept = await sweep(qualifiedGateway);
+    const holdsBeforeLift = holds().length;
+    liftAll();
     check(
-      "K2:the_platform_concurrency_and_the_monthly_budget_refuse_before_any_row",
+      "K2:the_platform_concurrency_refuses_and_e2bs_refusal_sets_the_runtime_hold",
       busy[0] === "concurrency_limit" &&
-        spent[0] === "monthly_budget" &&
-        fresh[0] === "begun" &&
-        afterMonth.committed === "0.03000000" &&
-        !ops().some((o) => ["cap-busy", "cap-spent"].includes(o.call_key)) &&
-        Number(runtimeCaps.monthlyBudgetUsd) < Number(runtimeCaps.providerUsageLimitUsd),
-      { busy, spent, fresh, afterMonth },
+        past[0] === "begun" &&
+        afterPast.committed === "10.00000000" &&
+        afterPast.open === 1 &&
+        pastSettled[0] === "settled" &&
+        refused.outcome === "unknown" &&
+        refused.code === "quota_exhausted" &&
+        quota?.status === "unknown_effect" &&
+        quota.reason === "quota_exhausted" &&
+        quotaHold?.reason === "quota_exhausted" &&
+        quotaHold.operation === quota.id &&
+        held.outcome === "refused" &&
+        held.code === "runtime_held" &&
+        createsAfter === creates + 1 &&
+        !ops().some((o) => ["cap-busy", "cap-after-quota"].includes(o.call_key)) &&
+        swept.absentVerified === 1 &&
+        op(quota.id).status === "absent_verified" &&
+        holdsBeforeLift === 1 &&
+        holds().length === 0 &&
+        capacity().open === 0 &&
+        !Object.hasOwn(runtimeCaps, "monthlyBudgetUsd"),
+      { busy, past, afterPast, refused, quota, quotaHold, held, swept },
     );
     // sim: the run's vendor reservation is spent.
     const before = vendor();
@@ -1354,7 +1386,7 @@ async function main() {
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The runtime gateway runs in Node over psql connectors (morrow_vault_broker, morrow_runtime_executor, morrow_api_worker), not in workerd over the Neon transport; the provider is the deterministic fake adapter, not E2B (build order PR 8's adapter is proved over E2B's recorded wire in tests/runtime-e2b.test.mjs, and on E2B itself only by PR 9's qualification).",
       "The computer release and the installation's move to it are owner-seeded with the guard off (sim): installations change release only through the upgrade flow, which lands later.",
-      "Staleness, the absent grace, the concurrency cap, the monthly budget and a spent vendor reservation are reached by owner-seeded clock and counter changes with the triggers off (sim).",
+      "Staleness, the absent grace, the concurrency cap, the former monthly budget's edge and a spent vendor reservation are reached by owner-seeded clock and counter changes with the triggers off (sim); E2B's usage-limit refusal is the fake adapter's quota_exhausted create fault.",
       "M5's billing records are owner-seeded with the triggers off (sim), as in lab:listings-runs; lab:billing proves the receipt path that writes them.",
     ],
   });
