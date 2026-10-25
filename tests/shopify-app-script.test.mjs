@@ -1,11 +1,17 @@
 // M2 PR-2: the owner-run Shopify app script (scripts/shopify-app.mjs). The TOML points the
 // app at the connector's exact launch and callback paths with the fixed scopes, the
-// authorization-code install flow, no embedding and (M2 PR-3) the five webhook topics;
+// authorization-code install flow, no embedding and the three compliance webhook topics
+// (the other two are the broker's shop-specific subscriptions);
 // the registration statement digests the intended shop and matches the 0026 operator
 // function; production, malformed values and paths inside the repository are refused.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shopifyWebhookTopics } from "../packages/identity/src/broker-protocol.ts";
+import {
+  shopifyComplianceWebhookTopics,
+  shopifyShopWebhookTopics,
+  shopifyWebhookTopics,
+} from "../packages/identity/src/broker-protocol.ts";
+import { shopifyApiVersion } from "../apps/broker/src/shopify.ts";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +21,7 @@ import {
   parseShopifyAppArguments,
   resolveTomlOptions,
   shopDigest,
+  shopifyAppApiVersion,
   shopifyAppLiveRegistration,
   shopifyAppPackageJson,
   shopifyAppRegisterStatement,
@@ -48,7 +55,7 @@ const code = (fn) => {
   return null;
 };
 
-test("toml: the connector's exact paths, fixed scopes, no embedding and the five webhook topics", () => {
+test("toml: the connector's exact paths, fixed scopes, no embedding and the compliance topics only", () => {
   const toml = shopifyAppToml(tomlOptions);
   const base = "https://morrow-staging-connector.example.workers.dev/shopify/a/beta-store-1";
   const lines = toml.split("\n").filter((l) => l !== "" && !l.startsWith("#"));
@@ -65,19 +72,29 @@ test("toml: the connector's exact paths, fixed scopes, no embedding and the five
     "[webhooks]",
     'api_version = "2026-10"',
     "[[webhooks.subscriptions]]",
-    'topics = [ "app/uninstalled", "app/scopes_update" ]',
-    `uri = "${base}/webhooks"`,
-    "[[webhooks.subscriptions]]",
     'compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]',
     `uri = "${base}/webhooks"`,
     "[build]",
     "automatically_update_urls_on_dev = false",
-    "include_config_on_deploy = true",
   ]);
-  // M2 PR-3: exactly the five topics of ADR-0022 item 4 (no product topic), the topics the
-  // broker accepts.
+  // Shopify CLI 4.9 refuses app-specific `topics` under use_legacy_install_flow and no
+  // longer supports build.include_config_on_deploy: the TOML subscribes only the three
+  // compliance topics. The broker registers the other two of ADR-0022 item 4 as
+  // shop-specific subscriptions to the same path, so together they are still exactly the
+  // five topics the broker accepts (no product topic).
+  assert.doesNotMatch(
+    lines.join("\n"),
+    /^topics =|include_config_on_deploy|app\/uninstalled|scopes_update/m,
+  );
   const topics = [...toml.matchAll(/"([a-z_]+\/[a-z_]+)"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(topics, [...shopifyWebhookTopics].sort());
+  assert.deepEqual(topics, [...shopifyComplianceWebhookTopics].sort());
+  assert.deepEqual(
+    [...topics, ...shopifyShopWebhookTopics].sort(),
+    [...shopifyWebhookTopics].sort(),
+  );
+  // The TOML's webhook api_version is the broker's pinned Admin API version, which the
+  // shop-specific subscriptions are created with (the version in the request URL).
+  assert.equal(shopifyAppApiVersion, shopifyApiVersion);
   // The paths are the connector's own route table.
   const route = /^\/shopify\/a\/([a-z0-9][a-z0-9-]{2,62})\/(launch|callback|webhooks|status)$/;
   for (const url of [`${base}/launch`, `${base}/callback`, `${base}/webhooks`])
@@ -267,7 +284,8 @@ test("toml (v1 PR 1): staging uses the committed connector origin, refuses anoth
     "SHOPIFY_APP_SCRIPT_USAGE",
   );
   // The live app's TOML: not embedded, the two product scopes, the callback and launch on
-  // the connector's own hostname, the uninstall, scope and compliance topics.
+  // the connector's own hostname and the compliance topics (the uninstall and scope topics
+  // are the broker's shop-specific subscriptions).
   const toml = shopifyAppToml(resolveTomlOptions(staging));
   const base = committed + "/shopify/a/beta-store-1";
   for (const line of [

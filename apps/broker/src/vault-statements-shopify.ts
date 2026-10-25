@@ -21,4 +21,13 @@ export const shopifyVaultStatements = Object.freeze({
   // v1 PR 1 (migration shopify-live-store-vault; ADR-0035 item 2): whether the app may
   // install a store that is not a development store (only the marked app's own shop).
   shopifyLiveStoreAdmission: "SELECT morrow_vault.shopify_live_store_admission($1,$2) AS outcome",
+  // Shop-specific webhook subscriptions (migration shopify-webhook-registrations-vault): the
+  // pending ids, one installation's target with its token's envelope, and the outcome record
+  // (an absent subscription id is the empty string, which the statement turns into NULL).
+  shopifyWebhookRegistrationsPending:
+    "SELECT installation_id FROM morrow_vault.shopify_webhook_registrations_pending()",
+  shopifyWebhookTarget:
+    "SELECT outcome,organization_id,workspace_id,app_key,shop_domain,credential_id,credential_version,kek_version,wrapped_key,sealed_value FROM morrow_vault.shopify_webhook_target($1)",
+  shopifyWebhookRegistrationRecord:
+    "SELECT morrow_vault.shopify_webhook_registration_record($1,$2,$3,NULLIF($4,''),NULLIF($5,'')) AS outcome",
 } as const);
