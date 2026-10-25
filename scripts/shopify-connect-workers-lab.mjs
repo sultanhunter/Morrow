@@ -18,7 +18,9 @@ import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
 import { sealVaultRecord, createVaultKeyring, vaultBytesHex } from "../apps/broker/src/vault.ts";
+import { shopifyStageKeys } from "../apps/broker/src/shopify-stage.ts";
 import { literal, withWorkDatabase } from "../tests/tenant-conformance/harness.mjs";
+import { shopifyIdToken } from "../tests/fixtures/shopify-live-shapes.mjs";
 import { createShopifyOracle } from "./fixtures/shopify-oracle.mjs";
 import { shopifyAppRegisterStatement } from "./shopify-app.mjs";
 import { writeArtifact } from "./artifacts.mjs";
@@ -62,6 +64,7 @@ const sourceDigests = Object.fromEntries(
     "apps/shopify-connector/worker/webhooks.ts",
     "apps/shopify-connector/worker/oauth-state.ts",
     "apps/broker/src/shopify-install.ts",
+    "apps/broker/src/shopify-stage.ts",
     "apps/broker/src/shopify.ts",
     "apps/broker/src/vault-database.ts",
     "packages/identity/src/shopify-link-issuer.ts",
@@ -590,6 +593,28 @@ await withWorkDatabase(
           relaunch.text.includes(`${apiOrigin}/w/${ids.ws}/connections`) &&
           !relaunch.text.includes("#handoff"),
       );
+      // fix-shopify-install-live: the admin's app-open launch of the installed app, with an
+      // embedded app's keys (embedded, id_token, locale, session) beside host, shop and
+      // timestamp: signed data, verified like any launch, through the deployed handlers.
+      const appOpen = await connector(
+        "launch",
+        oracle.launchQuery({
+          embedded: "1",
+          id_token: shopifyIdToken(shop, clientId, Math.trunc(Date.now() / 1000)),
+          locale: "en-GB",
+          session: randomBytes(32).toString("hex"),
+        }),
+      );
+      check(
+        "R2:an_admin_app_open_launch_with_embedded_keys_shows_status_with_no_oauth",
+        appOpen.status === 200 &&
+          appOpen.location === null &&
+          appOpen.cookies.length === 0 &&
+          owner("SELECT count(*)::int AS n FROM morrow_identity.shopify_oauth_states")[0].n ===
+            statesBefore &&
+          appOpen.text.includes(`${apiOrigin}/w/${ids.ws}/connections`),
+        { status: appOpen.status },
+      );
 
       // ---- W: the M2 PR-3 webhook inbox, in workerd.
       const uninstall = oracle.webhook("app/uninstalled", {
@@ -686,6 +711,47 @@ await withWorkDatabase(
       check(
         "O3:no_secret_token_or_continuation_in_worker_logs",
         privateMarkers.every((marker) => typeof marker === "string" && !logged.includes(marker)),
+      );
+      // fix-shopify-install-live: the broker's stage lines in workerd's own output. The
+      // replayed callback (E4) logged one, naming its claim; every line holds exactly the
+      // allow-listed keys and no shop, app key or long hex or base64url run.
+      const stageLines = logged
+        .split("\n")
+        .filter((line) => line.includes('"event":"morrow_broker_shopify_stage"'))
+        .map((line) => {
+          try {
+            return JSON.parse(line.slice(line.indexOf("{"), line.lastIndexOf("}") + 1));
+          } catch {
+            return null;
+          }
+        });
+      check(
+        "O4:failed_installs_log_one_closed_stage_line",
+        stageLines.length >= 1 &&
+          stageLines.every(
+            (line) => line !== null && Object.keys(line).join(",") === shopifyStageKeys.join(","),
+          ) &&
+          stageLines.some(
+            (line) =>
+              line?.method === "shopifyInstallComplete" &&
+              line.stage === "claim" &&
+              line.result === "state_invalid" &&
+              line.reason === "claim_replayed" &&
+              // The claim's transaction committed; the transport observed it in workerd.
+              line.vaultPhase === "done" &&
+              line.vaultCause === null &&
+              line.statements === 8 &&
+              line.vault === null,
+          ) &&
+          stageLines.every((line) => {
+            const text = JSON.stringify(line);
+            return (
+              !text.includes(shop) &&
+              !text.includes(appKey) &&
+              !/myshopify|shpat_|[a-f0-9]{32,}|[A-Za-z0-9_-]{40,}/i.test(text)
+            );
+          }),
+        { lines: stageLines.length, stages: stageLines.map((l) => l?.stage ?? null) },
       );
     } finally {
       await mf.dispose();
