@@ -5,8 +5,9 @@
 // fixture, axe-core, Playwright or runtime-validator module, and must describe this dist.
 // Each JS entry of @morrow/workspace-ui is also bundled for the browser on its own and
 // held to the same module denials (P05.T01y: the session keeper, before P14.T01a wires it).
-// Screens that load on first use (`createDeferred`) must stay out of the entry chunk and
-// arrive in a chunk of their own: the budget counts the entry only.
+// Screens that load on first use (`createDeferred` for the project screens, `lazyScreen`
+// for Review, the applied history and Ask) must stay out of the entry chunk and arrive in
+// a chunk of their own: the budget counts the entry only.
 import {
   existsSync,
   mkdirSync,
@@ -62,6 +63,28 @@ export const deferredModules = Object.freeze([
   ],
 ]);
 const urlPattern = /https?:\/\/[^\s"'`)<>\\]+/g;
+// v1 PR 4: the screens that load as their own chunk (packages/workspace-ui/src/screens/
+// lazy.tsx) and keep the entry within its budget. A static import that pulls one into an
+// entry chunk is named here rather than surfacing later as an entry over its size. v1 PR
+// 15's exception screen uses Review's OperationList, so it loads the same way.
+export const lazyModules = Object.freeze([
+  "packages/workspace-ui/src/screens/review.tsx",
+  "packages/workspace-ui/src/screens/ask.tsx",
+  "packages/workspace-ui/src/screens/product-picker.tsx",
+  "packages/workspace-ui/src/screens/exception.tsx",
+]);
+
+/** The web build's module report: each lazy screen is bundled, and never into an entry. */
+export function inspectLazyChunks(report) {
+  const chunks = Array.isArray(report?.chunks) ? report.chunks : [];
+  const problems = [];
+  for (const id of lazyModules) {
+    const holders = chunks.filter((c) => Array.isArray(c.moduleIds) && c.moduleIds.includes(id));
+    if (holders.length === 0) problems.push("MODULE_LAZY_MISSING:" + id);
+    else if (holders.some((c) => c.isEntry === true)) problems.push("MODULE_LAZY_IN_ENTRY:" + id);
+  }
+  return problems;
+}
 
 /** `files`: [{path (relative to dist), text}]. Returns problem codes. */
 export function inspectDistFiles(files) {
@@ -299,7 +322,11 @@ export function verifyWorkspaceDist({
   else {
     const scripts = names.filter((n) => n.endsWith(".js"));
     const report = JSON.parse(readFileSync(modulesPath, "utf8"));
-    problems.push(...inspectModuleReport(report, scripts), ...inspectDeferredModules(report));
+    problems.push(
+      ...inspectModuleReport(report, scripts),
+      ...inspectDeferredModules(report),
+      ...inspectLazyChunks(report),
+    );
   }
   return { problems, entryGzipBytes, files: names.length };
 }
@@ -402,6 +429,22 @@ export function negativeChecks() {
           },
         ],
       }).length === 0,
+    ],
+    [
+      "lazy_screen_in_entry",
+      (() => {
+        const split = { fileName: "assets/lazy.js", isEntry: false, moduleIds: [...lazyModules] };
+        const entry = report.chunks[0];
+        const inEntry = { ...entry, moduleIds: [...entry.moduleIds, lazyModules[0]] };
+        const missing = { ...split, moduleIds: lazyModules.slice(1) };
+        return (
+          inspectLazyChunks({ chunks: [entry, split] }).length === 0 &&
+          inspectLazyChunks({ chunks: [inEntry, split] }).join() ===
+            "MODULE_LAZY_IN_ENTRY:" + lazyModules[0] &&
+          inspectLazyChunks({ chunks: [entry, missing] }).join() ===
+            "MODULE_LAZY_MISSING:" + lazyModules[0]
+        );
+      })(),
     ],
     [
       "stale_report",

@@ -1,6 +1,6 @@
 // M3 PR-2: Ask (/w/:ws/ask). A merchant asks the Listings agent to draft better listings:
-// the request text, a linked store, up to 25 products (by product number until M2 PR-3
-// brings the catalog picker), the listing fields, and a model and thinking effort from the
+// the request text, a linked store, up to 25 products (by product number, or picked from the
+// store's catalogue: v1 PR 4's picker, product-picker.tsx), the listing fields, and a model and thinking effort from the
 // catalogue (the workspace default, or an entry within the member's ceiling; credits per
 // product and the run's product limit shown). Starting is three commands in order, each with
 // its own key and the usual uncertain handling: the goal, the task (the request is its
@@ -25,6 +25,7 @@ import { useCommand, useDirty, useRead, useServices } from "../services";
 import { Button, TextArea } from "../components/controls";
 import { outcomeState } from "../components/feedback";
 import { CommandFeedback } from "./entry";
+import { ProductPicker, listedProducts, withProduct, withoutProduct } from "./product-picker";
 import { useConnections } from "../workspace-data";
 
 const label = (key: string) => copy.models.labels[key] ?? key;
@@ -280,6 +281,21 @@ export function AskScreen({ workspace }: { readonly workspace: WorkspaceView }) 
             disabled={busy}
             required
           />
+          {storeId !== "" ? (
+            <ProductPicker
+              key={storeId}
+              ws={ws}
+              storeId={storeId}
+              picked={listedProducts(productsText)}
+              full={listedProducts(productsText).length >= 25}
+              disabled={busy}
+              onToggle={(product, add) =>
+                setProductsText((text) =>
+                  add ? withProduct(text, product.id) : withoutProduct(text, product.id),
+                )
+              }
+            />
+          ) : null}
           <fieldset className="field" aria-describedby={ids.fields}>
             <legend>{copy.ask.fields}</legend>
             {fieldChoices.map((c) => (

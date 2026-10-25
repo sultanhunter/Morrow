@@ -71,6 +71,8 @@ export type BrokerMethod =
   // v1 PR 3 (ApiBroker): the gateway's apply and read-back of one catalog_write operation.
   | "shopifyProductApply"
   | "shopifyProductReconcile"
+  // v1 PR 4 (ApiBroker): the undo check of one verified catalog_write operation.
+  | "shopifyProductUndoCheck"
   // ConnectorBroker: the shop-specific app/uninstalled and app/scopes_update subscriptions.
   | "shopifyWebhookSubscriptionsSync";
 export type BrokerFailureCode =

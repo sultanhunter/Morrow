@@ -30,10 +30,16 @@
 // shopifyProductReconcile: R1 catalog_reconcile_resolve (keyed by the operation; no lease; never
 // blocked by a stop or the switch), one ProductWriteState read, the per-field comparison
 // (listing-compare.ts) and R2 catalog_reconcile_record, which alone decides the status.
+// shopifyProductUndoCheck (v1 PR 4): U1 catalog_undo_resolve (keyed by a verified operation, as
+// the read-back is), one ProductWriteState read, the five listing fields compared with what the
+// apply left, and U2 catalog_undo_record, which stores the read as a product snapshot (the
+// undo proposal's "before") with the per-field codes. The undo itself is a new proposal that
+// a person approves and the gateway applies like any other.
 // Nothing here logs; the token, the envelope and Shopify's replies never cross the binding.
 import {
   encodeShopifyApplyResult,
   encodeShopifyReconcileResult,
+  encodeShopifyUndoCheckResult,
   shopifyOperationIdValid,
   shopifyShopPattern,
   shopifyWriteBudgetValid,
@@ -41,6 +47,7 @@ import {
   type OperationStatusName,
   type ShopifyApplyResult,
   type ShopifyReconcileResult,
+  type ShopifyUndoCheckResult,
 } from "../../../packages/identity/src/broker-protocol.js";
 import {
   changeItemText,
@@ -48,6 +55,7 @@ import {
   type ListingFieldsRead,
 } from "../../../packages/work/src/runs/listing-canonical.js";
 import {
+  appliedStateVerdicts,
   readbackVerdicts,
   type ApprovedSet,
 } from "../../../packages/work/src/runs/listing-compare.js";
@@ -789,8 +797,133 @@ export function createShopifyWriter(deps: Readonly<ShopifyWriteDependencies>) {
     });
   }
 
-  return Object.freeze({ apply, reconcile });
+  // v1 PR 4: the undo check of one verified operation. U1 catalog_undo_resolve (keyed by the
+  // operation; within 90 days of the send, the before values held, the store linked, at most
+  // once every 10 seconds), one ProductWriteState read, the five listing fields compared with
+  // what the apply left (appliedStateVerdicts: the draft's snapshot with the approved set
+  // applied, under the read-back's canonical comparison) and U2 catalog_undo_record, which
+  // stores the read as a product snapshot (the undo's "before") with the codes. Codes only
+  // cross the binding; never blocked by the switch (it writes nothing to Shopify).
+  async function undoCheck(env: unknown, operationId: unknown, budgetMs: unknown): Promise<string> {
+    if (!shopifyOperationIdValid(operationId)) throw new BrokerHold("INPUT_INVALID");
+    if (!shopifyWriteBudgetValid(budgetMs)) throw new BrokerHold("BUDGET_INVALID");
+    const capabilities = await brokerCapabilities(env);
+    const vault = capabilities.vault;
+    if (!vault) throw new BrokerHold("CAPABILITY_UNAVAILABLE");
+    const deadline = deps.now() + budgetMs;
+    const refused = (outcome: unknown) =>
+      encodeShopifyUndoCheckResult({
+        outcome: outcome as ShopifyUndoCheckRefusal,
+        sequence: null,
+        verdict: null,
+        fields: null,
+      });
+    return slot("read", async () => {
+      const r = await vaultCall(vault, deadline, async (query) =>
+        one(await query(vaultStatements.catalogUndoResolve, [operationId]), undoColumns),
+      );
+      if ((undoRefusals as readonly unknown[]).includes(r.outcome)) return refused(r.outcome);
+      if (r.outcome !== "resolved") throw new BrokerHold("STATE_INVALID");
+      const fields = parseFields(r.fields);
+      const productId = r.product_id;
+      if (!fields || !exact(productPattern, productId))
+        throw new VaultError("VAULT_RECORD_INVALID");
+      const item = parseItem(r.item, productId, fields);
+      const before = parseSnapshot(r.source, productId);
+      if (!item || !before) throw new VaultError("VAULT_RECORD_INVALID");
+      const productGid = "gid://shopify/Product/" + productPattern.exec(productId)![1];
+      return withToken(vault, r, async (token, shop) => {
+        const read = await shopifyAdminGraphql(
+          deps.fetch,
+          shop,
+          token,
+          shopifyWriteDocuments.productWriteState,
+          { id: productGid },
+          Math.min(deadline, deps.now() + shopifyWriteLimits.readMs),
+          deps.now,
+          sleep,
+          shopifyWriteLimits.replyMaxBytes,
+        );
+        // A read that proves nothing records nothing: the person asks again.
+        if (read.kind !== "data") return refused("held");
+        const state = writeState(read.data, productId);
+        if (state === null) return refused("held");
+        let values: string[];
+        let verdict: "unchanged" | "changed" | "missing";
+        let codes: Readonly<Record<string, "unchanged" | "changed">> | null = null;
+        if (state === "missing") {
+          verdict = "missing";
+          values = [operationId as string, "not_found", "", "", "missing"];
+        } else {
+          const snapshot = listingSnapshotText(state.product);
+          // The snapshot table holds at most 64 KiB; a larger listing cannot be the one the
+          // apply left (its draft's snapshot fitted), so it is not offered for undo.
+          if (new TextEncoder().encode(snapshot).byteLength > 65536) return refused("unavailable");
+          const compared = appliedStateVerdicts(state.product, before, item.set);
+          verdict = compared.verdict;
+          codes = compared.fields;
+          values = [
+            operationId as string,
+            "read",
+            snapshot,
+            JSON.stringify(compared.fields),
+            compared.verdict,
+          ];
+        }
+        const recorded = await vaultCall(
+          vault,
+          Math.max(deadline, deps.now() + vaultBudgetMs),
+          async (query) =>
+            one(await query(vaultStatements.catalogUndoRecord, values), [
+              "outcome",
+              "sequence",
+              "verdict",
+            ]),
+        );
+        if (recorded.outcome === "recorded") {
+          if (!exact(/^[1-9][0-9]{0,8}$/, recorded.sequence) || recorded.verdict !== verdict)
+            throw new VaultError("VAULT_RECORD_INVALID");
+          return encodeShopifyUndoCheckResult({
+            outcome: "recorded",
+            sequence: Number(recorded.sequence),
+            verdict,
+            fields: codes as ShopifyUndoCheckResult["fields"],
+          });
+        }
+        if ((undoRefusals as readonly unknown[]).includes(recorded.outcome))
+          return refused(recorded.outcome);
+        throw new BrokerHold("STATE_INVALID");
+      });
+    });
+  }
+
+  return Object.freeze({ apply, reconcile, undoCheck });
 }
+type ShopifyUndoCheckRefusal = Exclude<ShopifyUndoCheckResult["outcome"], "recorded">;
+// The undo definers' refusals that cross the binding as they are.
+const undoRefusals: readonly ShopifyUndoCheckRefusal[] = Object.freeze([
+  "not_applied",
+  "unavailable",
+  "too_soon",
+  "link_changed",
+  "credential_unavailable",
+]);
+const undoColumns = [
+  "outcome",
+  "organization_id",
+  "workspace_id",
+  "shop_domain",
+  "product_id",
+  "fields",
+  "item",
+  "source",
+  "store_installation_id",
+  "credential_id",
+  "credential_version",
+  "kek_version",
+  "wrapped_key",
+  "sealed_value",
+] as const;
 
 const live = createShopifyWriter({
   transaction: (vault, budgetMs, body) => runVaultTransaction(vault, budgetMs, body),
@@ -807,5 +940,14 @@ export function brokerShopifyProductReconcile(
 ) {
   return invokeBrokerMethod("shopifyProductReconcile", () =>
     live.reconcile(env, operationId, budgetMs),
+  );
+}
+export function brokerShopifyProductUndoCheck(
+  env: unknown,
+  operationId: unknown,
+  budgetMs: unknown,
+) {
+  return invokeBrokerMethod("shopifyProductUndoCheck", () =>
+    live.undoCheck(env, operationId, budgetMs),
   );
 }

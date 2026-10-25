@@ -801,7 +801,45 @@ export const fixtureCases = [
   }),
   fixtureCase("task", "applied_history", `/w/${ws}/work/task-titles`, {
     widths: [1440, 390],
-    setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),
+    // The history loads with Review's chunk (v1 PR 4): measure it once it has loaded.
+    setup: async (page) => {
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await settle(page);
+    },
+  }),
+  // v1 PR 4: "Approve several at once" with the solo owner's one phrase, and the history's
+  // Undo after an apply (the undo is a new change, waiting for approval).
+  fixtureCase("review", "batch", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_batch",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve several at once" }).click();
+      await page.getByRole("button", { name: "Approve these 2 changes" }).waitFor();
+    },
+  }),
+  // v1 PR 4: the product picker on Ask (a scenario whose Listings agent is on), one product
+  // ticked into the list.
+  fixtureCase("ask", "picker", `/w/${ws}/ask`, {
+    scenario: "stop_all",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("combobox", { name: "Store", exact: true }).selectOption({ index: 1 });
+      await page.getByRole("button", { name: "Show products" }).click();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).check();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).isChecked();
+    },
+  }),
+  fixtureCase("task", "undo_history", `/w/${ws}/review/proposal-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("heading", { name: "Changes applied" }).waitFor();
+      await page.getByRole("link", { name: "Open the task" }).click();
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await page.getByRole("button", { name: "Undo" }).first().click();
+      await page.getByText("Morrow made a change back to the earlier values.").waitFor();
+    },
   }),
   fixtureCase("overlay", "drawer", `/w/${ws}`, {
     widths: [390, 320],

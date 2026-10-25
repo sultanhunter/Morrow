@@ -506,7 +506,22 @@ export const copy = {
     noStores: "Connect a store and enable the Listings agent for it first.",
     products: "Products",
     productsHint:
-      "One product per line, as its Shopify product number or product:<number>. Up to 25. A product picker arrives with the catalog in a later build.",
+      "One product per line, as its Shopify product number or product:<number>. Up to 25. Or pick them below.",
+    // v1 PR 4: the product picker (the linked store's catalogue: ids and titles only).
+    picker: "Pick products",
+    pickerIntro: "Search this store's products, or show a collection's, and add them to the list.",
+    pickerSearch: "Search products",
+    pickerSearchHint: "Letters and numbers only, up to five words.",
+    pickerSearchInvalid: "Use letters and numbers only, up to five words and 64 characters.",
+    pickerCollection: "Collection",
+    pickerAllProducts: "All products",
+    pickerShow: "Show products",
+    pickerMore: "Show more",
+    pickerAdd: (title: string) => `Add ${title}`,
+    pickerEmpty: "No products match.",
+    pickerStatus: (status: string) =>
+      ({ active: "Active", draft: "Draft", archived: "Archived" })[status] ?? status,
+    pickerFull: "The list already has 25 products.",
     fields: "Fields to improve",
     fieldsHint: "SEO title and description are drafted together.",
     seoPair: "SEO title and description",
@@ -716,6 +731,42 @@ export const copy = {
     } as Readonly<Record<string, string>>,
     uncertain:
       "Needs your attention: Morrow can't tell yet whether Shopify applied it. It is never sent twice; check again to read the product back.",
+    // v1 PR 4: Undo. The server decides whether it is offered; the screen shows its state.
+    undo: "Undo",
+    undoAvailable: "You can undo this change until",
+    undoIntro:
+      "Undo reads the product first. If Shopify still shows what this change wrote, Morrow makes a new change back to the earlier values, which you review and approve like any other. Nothing is written until you apply it.",
+    undoRequested:
+      "Morrow made a change back to the earlier values. Review and approve it to apply it.",
+    undoWaiting: "An undo of this change is waiting.",
+    undoOpen: "Open the undo",
+    undone: "This change was undone.",
+    undoChanged: "Morrow changed this product again after this, so Undo isn't offered here.",
+    undoUnavailable:
+      "Undo is no longer available: it lasts 90 days, and ends early if the shop's data is deleted.",
+    undoOf: "This change undid an earlier change.",
+    undoBanner: (productId: string) =>
+      `This change undoes an earlier change to ${productId}. It sets each field back to the value Morrow read before that change. "Now" is what Shopify shows today.`,
+    undoBannerApplied: "The earlier change was applied",
+    // v1 PR 4: "Approve several at once" (ADR-0024 item 9).
+    batch: "Approve several at once",
+    batchTitle: "Changes waiting on this task",
+    batchIntro:
+      "One confirmation approves each of these exact changes. If any of them changed or can't be approved, none is approved. Each one is still applied on its own, and Morrow checks it again before it writes.",
+    batchItem: (n: number) => `${n} ${n === 1 ? "product" : "products"}`,
+    batchConfirm: (n: number) => `Approve these ${n} changes`,
+    batchCancel: "Cancel",
+    batchApproved: (n: number) =>
+      `Approved ${n} changes. Nothing has changed in Shopify yet; apply each one from its review.`,
+    batchUnavailable: {
+      too_few: "Only this change is waiting on this task, so approve it here.",
+      cost_confirmation:
+        "One of these changes has a cost that needs its own confirmation, so approve them one at a time.",
+      mixed_confirmation:
+        "Only some of these changes need your typed confirmation, so approve them one at a time.",
+    } as Readonly<Record<string, string>>,
+    batchConfirmLabel: "Type the confirmation to approve all of them",
+    batchExpires: "Confirm by",
   },
   leave: {
     title: "Leave this page?",
