@@ -63,3 +63,13 @@ What they approve: Q1, item 2's default member ceiling of 4; Q2, item 7, the loo
 Written after the answers, to carry them out: item 5's rule changes, and where item 7's value lives in data and code. Item 2's ceiling follows ADR-0022 item 16's rule that the default ceiling admits the default; it replaces the 1 the owner confirmed on 2026-10-19 (value 7). Item 7's US$1.12 is exactly two worst-case turns of Opus 5.5 at `medium` (US$0.56 each).
 
 What the ceiling widens: in a workspace with no stored ceiling (admission and `GET /models` fall back to the version's default ceiling), a Member without `governance.model_default.revise` may pick any entry of at most 4 credits a product (Opus 5.5 at `low` or `medium`, Sonnet 5.5 at `medium` or `high`), up to 48 credits and US$6.528 of worst-case vendor cost a run at Opus 5.5 `medium` (12 products) or 57 credits at Sonnet 5.5 `high` (19 products); under the ceiling of 1 that Member was held to 1-credit entries, at most 25 credits and US$3.30 a run. Version 3's `owner_confirmation` quotes Q1's answer, and Q-adr-0036-member-ceiling is answered.
+
+## Amendments
+
+### 2026-10-25: items 4, 5 and 7, no money caps (ADR-0039)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes these items; the text above is kept as approved.
+
+- **Item 4.** The per-run US$7 and per-day US$25 backstops, which OD-2026-10-25-2 kept, go: credits are the only spend limit. Credit holds and reservations, the breaker, the member ceiling, the Anthropic Console monthly limit and every authority rule stand. ADR-0027's turn limits are the version's, and `cap_below_turn` gives way to `insufficient_credits` and a final-turn reserve.
+- **Item 5.** A loop version no longer carries a per-run, per-day or look-for-work cap, and a per-product version after version 3 carries no run or daily cap. Catalogue version 4 is version 3 without them, with 25 products a run for every entry.
+- **Item 7.** The look-for-work pass's US$1.12 per agent per day goes. The pass stays read-only and once per agent a day, keeps the installed default and draws credits like any run; RateCard@1 loses `caps.lookForWorkDailyUsd` with the rest of its caps.

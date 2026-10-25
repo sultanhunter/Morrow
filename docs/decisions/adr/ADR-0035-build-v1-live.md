@@ -126,3 +126,9 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after the list of 
 - **The text (OD-2026-10-23-10),** after reading the record's summary and the CLAUDE.md change: "approve ADR-0035 and the CLAUDE.md change".
 
 What they approve: this record as written and its CLAUDE.md lines; this record's direction, the one environment, the owner's own store as the place v1 is built and tested, and the standing approval of item 4. The rules this record keeps (item 5) are the ones the owner's words do not touch.
+
+## Amendments
+
+### 2026-10-25: the US$7 and US$25 caps (ADR-0039)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes the "Does not change" line's "US$7 per run and US$25 per workspace per day, checked in code"; the text above is kept as approved. Both caps go. On the owner's store the workspace's credits, held and drawn in code under the wallet's row lock, are the only spend limit, beside the Anthropic monthly limit and E2B's usage limit in the owner's accounts. CLAUDE.md's "the caps in code" now reads as those credit checks and the stop conditions; its wording is unchanged. Broker custody (ADR-0022 item 7) is unchanged.

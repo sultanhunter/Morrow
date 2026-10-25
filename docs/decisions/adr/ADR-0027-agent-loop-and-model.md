@@ -98,3 +98,10 @@ The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) chang
 ### 2026-10-25: item 12's look-for-work hold (ADR-0036 item 7)
 
 The owner's answers of 2026-10-25 (OD-2026-10-25-2, recorded in ADR-0036) change item 12's sentence on the look-for-work pass, kept as approved above: an installed agent's pass holds at most US$1.12 a day, two worst-case turns at its default, Opus 5.5 at medium, in place of the 1% cap (US$0.61 at US$149, US$0.41 at US$99). Catalogue version 2 carries it as `look_for_work_daily_cost_cap_usd`; its other values stay proposed.
+
+### 2026-10-25: items 6 and 12, holds in credits and no money caps (ADR-0039)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes these items; the text above is kept as approved.
+
+- **Item 6.** The turn limit is the version's (16, and 6 for the Coordinator), no longer bounded by the per-run USD backstop. Before rate card v1 publishes, loop runs hold and draw test credits at its proposed values, on the owner's store only, instead of earning no credits; an entry the pinned rate card does not price is refused (`entry_unpriced`). A turn starts only if the wallet covers its worst case beside the run's final-turn reserve, and the resend of an uncertain turn needs the same.
+- **Item 12.** A run's hold is no longer the lowest of its turn limit times its worst-case turn, US$7 and a credit cap. It holds one worst-case turn as its final-turn reserve for the run's life and each turn's worst case before that turn, in credits, and draws what each turn metered. `cap_below_turn` and the daily backstop give way to `insufficient_credits`, and a run whose wallet cannot cover its next turn takes its final turn from the reserve and ends `credits_exhausted`. The look-for-work pass draws credits like any run, once a day. The table's run holds and the turn limits lowered to fit US$7 no longer apply; the worst-case and expected turn costs stand.
