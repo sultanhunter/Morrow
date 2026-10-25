@@ -504,6 +504,11 @@ async function pageVersion(
   if (replay) return replay;
   await allow(a, "workspace.knowledge.approve", "execute", knowledgeFields.approve);
   const page = await viewablePage(tx, a, g.params.pageId!);
+  // Bound to the version whose tags were just checked (review PR68-I1). Tags grow only with a
+  // version, so the definer's compare under its lock proves they are still the ones checked: a
+  // version made since (it may carry a tag this person may not view) is a conflict, never
+  // content overwritten unseen.
+  if (body.expectedVersion !== page.version) throw new WorkReject("revision_conflict");
   const result = await submit(tx, "cmdKnowledgeWrite", [
     g.commandId,
     prepared.digest,
@@ -511,7 +516,7 @@ async function pageVersion(
     page.id,
     null,
     null,
-    String(body.expectedVersion),
+    String(page.version),
     body.title,
     body.text,
     JSON.stringify(body.sources),
@@ -540,12 +545,15 @@ async function pageDelete(
   const viewer = await knowledgeViewer(tx, a, page.readTags);
   if (!viewable(viewer, page.readTags) && !stranded(viewer, page.readTags))
     throw new WorkReject("not_found");
+  // Erased only at the version whose tags were just checked (review PR68-I1), as above: a
+  // version made since is a conflict, never content erased unseen.
+  if (body.expectedVersion !== page.version) throw new WorkReject("revision_conflict");
   const result = await submit(tx, "cmdKnowledgeDelete", [
     g.commandId,
     prepared.digest,
     correlationId,
     page.id,
-    String(body.expectedVersion),
+    String(page.version),
   ]);
   return { status: 200, body: result, outcome: "applied" };
 }

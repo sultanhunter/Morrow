@@ -764,6 +764,50 @@ test("a notebook clear is bound to the revision its per-viewer check read (revie
   assert.match(body.slice(sent, body.indexOf("]);", sent)), /installationId,\s*expectedRevision,/);
 });
 
+test("a page is versioned or deleted only at the version whose tags were checked (review PR68-I1)", () => {
+  // The work API checks the tags of the page it read, compares the client's version with that
+  // page's, and sends the definer that page's version, never the client's number unchecked.
+  const source = readFileSync("packages/work/src/knowledge/commands.ts", "utf8");
+  const compare =
+    'if (body.expectedVersion !== page.version) throw new WorkReject("revision_conflict");';
+  for (const [name, check, statement] of [
+    ["pageVersion", "await viewablePage(tx, a, g.params.pageId!)", "cmdKnowledgeWrite"],
+    ["pageDelete", "!stranded(viewer, page.readTags)", "cmdKnowledgeDelete"],
+  ]) {
+    const start = source.indexOf(`async function ${name}(`);
+    const body = source.slice(start, source.indexOf("\nasync function ", start + 1));
+    const checked = body.indexOf(check);
+    const compared = body.indexOf(compare);
+    const sent = body.indexOf(`submit(tx, "${statement}"`);
+    assert.ok(
+      start > 0 && checked > 0 && compared > checked && sent > compared,
+      `${name}: tags checked, then the version compared, then the definer`,
+    );
+    const values = body.slice(sent, body.indexOf("]);", sent));
+    assert.match(values, /String\(page\.version\),/, name);
+    assert.doesNotMatch(values, /body\.expectedVersion/, name);
+  }
+  // Each definer compares that version under its lock, before it writes or erases anything.
+  for (const fn of ["cmd_knowledge_write", "cmd_knowledge_delete"]) {
+    const from = sql.indexOf(`CREATE FUNCTION morrow_work.${fn}(`);
+    const definer = sql.slice(from, sql.indexOf("END $$;", from));
+    const lock = definer.indexOf("FOR UPDATE;");
+    const versionCheck = definer.indexOf(
+      "IF g.current_version<>p_expected_version::integer THEN RETURN QUERY SELECT 'revision_conflict'",
+    );
+    assert.ok(lock > 0 && versionCheck > lock, fn);
+  }
+  // A page's tags change only with its next version: never in place, never at deletion.
+  assert.match(
+    sql,
+    /IF NEW\.deleted_at IS NULL AND NEW\.current_version<>OLD\.current_version\+1 THEN RAISE EXCEPTION 'KNOWLEDGE_PAGE_INVALID'/,
+  );
+  assert.match(
+    sql,
+    /IF NEW\.deleted_at IS NOT NULL AND \(NEW\.current_version<>OLD\.current_version OR NEW\.read_tags<>OLD\.read_tags\)/,
+  );
+});
+
 test("a proposal holds its page under a share lock: none lands pending on a page deleted under it (review R3)", () => {
   const propose = sql.slice(
     sql.indexOf("CREATE FUNCTION morrow_work.run_knowledge_propose("),

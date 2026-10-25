@@ -17,12 +17,14 @@
 // back their content's read tags, so a note or proposal based on them carries them (K11); a
 // proposal racing its page's deletion never lands pending on the deleted page (K12); after
 // "Disconnect store" its stranded pages stay deletable by a person who may delete them, which
-// frees the brand voice (K13). Synthetic fixtures only; no provider, credential or merchant
-// data. Run by `npm run lab:shop-knowledge` (CI's postgres `http` leg, last).
+// frees the brand voice (K13); a page is versioned or deleted only at the version whose tags the
+// API checked, so one accepted in between is a conflict (K14). Synthetic fixtures only; no
+// provider, credential or merchant data. Run by `npm run lab:shop-knowledge` (CI's postgres `http` leg, last).
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import { createKnowledgeApiHandler } from "../../packages/work/src/knowledge/http.ts";
+import { knowledgeStatements } from "../../packages/work/src/knowledge/sql.ts";
 import {
   knowledgeProposeStep,
   knowledgeSearchForRun,
@@ -1413,6 +1415,120 @@ SELECT ${literal(O)},${literal(W)},${literal(strandedId)},${literal(pageId)},1,'
   );
 });
 
+// K14 runs before K13, which disconnects the store; K13 then erases K14's two pages unseen.
+test("K14 a page is versioned or deleted only at the version whose tags the API checked: a version accepted in between is a 409, never overwritten or erased unseen (review PR68-I1)", async () => {
+  // The work API reads the page without a lock and checks its tags, then sends the definer,
+  // which compares the expected version under its lock and checks no tags. A client that names
+  // the next version, while an accept lands that version (adding orders.read, which A may not
+  // view) between the API's read and the definer, must get a conflict: never a new version over
+  // content A cannot see, never that content erased.
+  const lease = openRunLease("run_k14");
+  const hiddenTags = [{ storeId: STORE, capability: "orders.read" }];
+  for (const route of ["versions", "delete"]) {
+    const created = await send(open, P.A, "POST", "/knowledge/pages", {
+      kind: "policy",
+      title: "Coast shipping " + route,
+      text: "We ship to the coast within two days.",
+      sources: [],
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const pageId = created.body.pageId;
+    const proposed = await underLease(lease, (query) =>
+      knowledgeProposeStep(query, {
+        toolUseId: "toolu_k14_" + route,
+        input: {
+          pageId,
+          kind: "policy",
+          title: "Coast shipping " + route,
+          text: "Coast orders run a day late: three days to the coast. Sandpiper.",
+          sources: [],
+        },
+        run: runFacts({ readTags: hiddenTags, taint: "none" }),
+        viewer: allTags,
+      }),
+    );
+    assert.equal(proposed.outcome, "ok");
+    const pending = (await send(open, P.R, "GET", "/knowledge/proposals")).body.proposals.find(
+      (p) => p.id === proposed.record.id,
+    );
+    assert.ok(pending, "R may view it");
+    // R's accept commits right after the API's unlocked read of the page, before the definer.
+    let accepted = null;
+    const racing = {
+      async open(control) {
+        const inner = await connector.open(control);
+        return {
+          async query(sql, values, querySignal) {
+            const result = await inner.query(sql, values, querySignal);
+            if (accepted === null && sql === knowledgeStatements.knowledgePage)
+              accepted = await send(
+                open,
+                P.R,
+                "POST",
+                `/knowledge/proposals/${pending.id}/accept`,
+                {
+                  digest: pending.digest,
+                },
+              );
+            return result;
+          },
+          close: () => inner.close(),
+        };
+      },
+    };
+    const handler = createKnowledgeApiHandler({
+      origin: workFixtureOrigin,
+      connector: racing,
+      now: Date.now,
+      knowledge: "on",
+    });
+    // The next version, named by hand (the screen always sends the version it showed).
+    const raced = await send(
+      handler,
+      P.A,
+      "POST",
+      `/knowledge/pages/${pageId}/${route}`,
+      route === "delete"
+        ? { expectedVersion: 2 }
+        : { expectedVersion: 2, title: "Coast shipping", text: "Overwritten.", sources: [] },
+    );
+    assert.equal(accepted?.status, 201, "the accept committed before the definer could run");
+    assert.equal(accepted.body.version, 2);
+    assert.equal(raced.status, 409, JSON.stringify(raced.body));
+    assert.equal(raced.body.code, "conflict");
+    assert.equal(raced.body.retryClass, "recheck_before_retry");
+    // Nothing overwritten or erased: the accepted version is current, with its text, and hidden
+    // from A.
+    const [page] = db.rows(
+      `SELECT current_version,deleted_at,read_tags FROM morrow_work.knowledge_pages WHERE id=${literal(pageId)}`,
+    );
+    assert.equal(page.current_version, 2);
+    assert.equal(page.deleted_at, null);
+    assert.ok(page.read_tags.some((t) => t.storeId === STORE && t.capability === "orders.read"));
+    assert.equal(count("knowledge_versions", `page_id=${literal(pageId)} AND body IS NOT NULL`), 2);
+    assert.equal(count("knowledge_deletions", `page_id=${literal(pageId)}`), 0);
+    // Asked again, the page is hidden from A: the same 404 as an absent one, still unchanged.
+    const again = await send(
+      open,
+      P.A,
+      "POST",
+      `/knowledge/pages/${pageId}/${route}`,
+      route === "delete"
+        ? { expectedVersion: 2 }
+        : { expectedVersion: 2, title: "Coast shipping", text: "Overwritten.", sources: [] },
+    );
+    assert.equal(again.status, 404, JSON.stringify(again.body));
+    assert.equal(
+      count(
+        "knowledge_pages",
+        `id=${literal(pageId)} AND current_version=2 AND deleted_at IS NULL`,
+      ),
+      1,
+    );
+    pages["k14_" + route] = pageId;
+  }
+});
+
 test("K13 after Disconnect store, its pages stay deletable by a person who may delete them, and a new brand voice can be written (review R2)", async () => {
   // Before: a page hidden from A by a tag on the linked store is the same 404 for a deletion
   // (no blind deletion), and nothing is stranded.
@@ -1432,7 +1548,7 @@ test("K13 after Disconnect store, its pages stay deletable by a person who may d
   const listA = (await send(open, P.A, "GET", "/knowledge/pages")).body;
   assert.deepEqual(listA.pages, []);
   // A, who may delete knowledge, is told they exist: id, kind and version, nothing else.
-  const live = [pages.brand, pages.fact, pages.orders].sort();
+  const live = [pages.brand, pages.fact, pages.orders, pages.k14_versions, pages.k14_delete].sort();
   assert.deepEqual(listA.disconnectedPages.map((p) => p.id).sort(), live);
   for (const p of listA.disconnectedPages)
     assert.deepEqual(Object.keys(p).sort(), ["id", "kind", "version"]);
@@ -1494,15 +1610,21 @@ test("K13 after Disconnect store, its pages stay deletable by a person who may d
     ),
     0,
   );
-  // The order-derived page A could never see: stranded now, so A may erase it unseen.
-  assert.equal(
-    (
-      await send(open, P.A, "POST", `/knowledge/pages/${pages.orders}/delete`, {
-        expectedVersion: 1,
-      })
-    ).status,
-    200,
-  );
+  // The order-derived pages A could never see (K11's, and K14's two at the version accepted
+  // there): stranded now, so A may erase them unseen.
+  for (const [pageId, version] of [
+    [pages.orders, 1],
+    [pages.k14_versions, 2],
+    [pages.k14_delete, 2],
+  ])
+    assert.equal(
+      (
+        await send(open, P.A, "POST", `/knowledge/pages/${pageId}/delete`, {
+          expectedVersion: version,
+        })
+      ).status,
+      200,
+    );
   // The workspace has a brand voice again: tagged with no store, and A sees it.
   const voice = await send(open, P.A, "POST", "/knowledge/pages", {
     kind: "brand_voice",
