@@ -101,6 +101,9 @@
         "LOGOUT_CONFIGURATION_JSON": "{\"schemaVersion\":1,\"protocol\":\"morrow-self-logout-v1\",\"origin\":\"https://morrow-staging-api.sultanibneusman0.workers.dev\",\"providerId\":\"workos\",\"environmentId\":\"environment_01M4HG7FV7X8EFXE1J9S6GG00R\",\"applicationId\":\"app_01M4HG7GEJJWTKG4W16RB98VZE\",\"clientId\":\"client_01M4HG7GA0DX8C3PFSQHBP4BN3\",\"profileId\":\"workos_staging_profile\"}",
         "MORROW_DATABASE_BINDING_JSON": "{\"schemaVersion\":1,\"environment\":\"staging\",\"projectId\":\"sweet-sound-23947873\",\"branchId\":\"br-dark-recipe-b78ytwj9\",\"hostname\":\"ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech\",\"database\":\"morrow\"}",
         "LOGIN_CHALLENGE_JSON": "{\"schemaVersion\":1,\"provider\":\"turnstile\",\"siteKey\":\"0x4AAAAAAFdwF1eDox4vfBd2\",\"actions\":{\"login\":\"account_login\",\"signup\":\"organization_signup\"}}",
+        // M3 PR-2's model-provider switch, on (docs/decisions/model-provider-staging.json):
+        // run admission opens only with it (and the broker's product read).
+        "MORROW_MODEL_PROVIDER": "anthropic",
       },
       "services": [
         { "binding": "BROKER", "service": "morrow-staging-broker", "entrypoint": "ApiBroker" },

@@ -720,7 +720,8 @@ export function edgeVarNames(
         ...runtimeVars,
       ];
 }
-// M3 PR-2, the model-provider switch (ADR-0022 items 7 and 10; committed off): its runtime
+// M3 PR-2, the model-provider switch (ADR-0022 items 7 and 10; committed on in staging since
+// model-provider-on, 2026-10-25, docs/briefs/model-provider-on.md): its runtime
 // image is the var MORROW_MODEL_PROVIDER ("anthropic") on the staging api, broker and
 // orchestrator, the orchestrator's reviewed MORROW_DATABASE_BINDING_JSON (byte-equal to the
 // api's), and the broker's ANTHROPIC_API_KEY (brokerRequiredSecretsFor("staging", stripe,
@@ -747,10 +748,10 @@ const edgeModelNames = (worker) =>
   worker === "orchestrator"
     ? [edgeModelProviderVar, "MORROW_DATABASE_BINDING_JSON", ...edgeModelSecretNames]
     : [edgeModelProviderVar, ...edgeModelSecretNames];
-// The reviewed staging model-provider record (M3 PR-2; committed off): provider anthropic;
-// `switch` "off" until one reviewed commit turns it "on"; the Anthropic Console workspace's
-// monthly spend limit (a decimal USD string, required while on) and the date the owner
-// observed it. Returns the switch, or throws.
+// The reviewed staging model-provider record (M3 PR-2; on since model-provider-on): provider
+// anthropic; `switch` "off" or "on", each changed only by one reviewed commit; the Anthropic
+// Console workspace's monthly spend limit (a decimal USD string, required while on), as the
+// owner states it, and the date it was recorded. Returns the switch, or throws.
 export function reviewedModelRecord(record) {
   if (
     !record ||

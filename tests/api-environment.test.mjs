@@ -473,9 +473,10 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
   // M5: the committed staging api carries no MORROW_STRIPE_MODE while the switch is off.
   assert.equal(Object.hasOwn(vars, "MORROW_STRIPE_MODE"), false);
   assert.equal(mapped.stripe, "off");
-  // M3 PR-2: nor MORROW_MODEL_PROVIDER while the model-provider switch is off.
-  assert.equal(Object.hasOwn(vars, "MORROW_MODEL_PROVIDER"), false);
-  assert.equal(mapped.model, "off");
+  // M3 PR-2's model-provider switch is committed on in staging (model-provider-on): exactly
+  // "anthropic", which the mapper reads as on (run admission opens with the product read).
+  assert.equal(vars.MORROW_MODEL_PROVIDER, "anthropic");
+  assert.equal(mapped.model, "anthropic");
   assert.deepEqual(mapped.guard.challenge.actions, {
     login: "account_login",
     signup: "organization_signup",

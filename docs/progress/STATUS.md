@@ -14,7 +14,8 @@ Updated 2026-10-24. Rewrite this file in place (at most 80 lines). The pre-overh
 
 - Ledger 46 after `staging:migrate` of 0046 (`5541e430`); deploy flag on, so each green push to `main` deploys. A merge that carries migrations stops its deploy at gate 3 until `staging:migrate` (E3) runs; then rerun it.
 - Self-service sign-up is on (`staging:seed-platform -- --self-service`, terms revision 1). Nobody has signed in yet.
-- Switches committed off: the model provider (no Anthropic key placed), Shopify apply, the agent loop, plan drafts, specialists, the runtime (no E2B key placed), Stripe.
+- The model provider is committed on (model-provider-on, owner's Anthropic limit US$100 as stated); it is live once Claude places the key with `staging:put-secret` and reruns the deploy held at gate 6.
+- Switches committed off: Shopify apply, the agent loop, plan drafts, specialists, the runtime (no E2B key placed), Stripe.
 - Shopify: the live-store app exists in the owner's Dev Dashboard organization; its settings file lives outside the repository. Its first version is not released yet (the CLI's device login expired), so it is not installed or registered.
 - E2B: project `Morrow-staging`, US$20 usage limit and US$5 alert; no key, sandbox or template.
 
@@ -26,7 +27,7 @@ Updated 2026-10-24. Rewrite this file in place (at most 80 lines). The pre-overh
 
 1. The next build wave: review, CI and merge each PR in turn; `staging:migrate` and the held deploy after any merge with migrations.
 2. Connect the owner's store (with the owner, `docs/briefs/v1-connect-store.md`): the owner signs in and sends the workspace id; Claude reruns `shopify app deploy` for the device login while the owner is at the screen; custom distribution to the owner's store; the owner seals the client secret; `staging:shopify-app-register` and `staging:test-entitlement`; the owner installs and presses "Link store".
-3. Turn Claude on: the owner places the Anthropic key (`morrow_put`), Claude runs `staging:put-secret -- ANTHROPIC_API_KEY` and flips the model switch in a reviewed commit. Then the first drafts, review and, after the owner's yes, the apply switch.
+3. Turn Claude on: model-provider-on has merged with the switch on; Claude runs `npm run staging:put-secret -- ANTHROPIC_API_KEY` from `origin/main` (the owner's key file is placed) and reruns the deploy held at gate 6. Then the first drafts, review and, after the owner's yes, the apply switch.
 4. Then: Ask Morrow with per-agent model and effort (PR 12), computer tools (PR 13), proactive work (PR 21), check E2B and switch it on (PR 9), credits for the owner's workspace (PR 6), the other launch agents (PRs 22–26).
 5. Carried: the gate-3 polling fix; graph phase 1; a KEK fingerprint check in `staging:put-secret`; `providers.json`'s Shopify and E2B rows.
 
@@ -37,7 +38,7 @@ None for building. Live use waits on the owner's steps above. The catalogue vers
 ## Pending owner actions
 
 - Sign in at the api's workers.dev address and send the workspace id; be at the screen for the Shopify CLI login; seal the app's client secret.
-- Place the Anthropic key (workspace `Morrow`, monthly limit; tell Claude the limit, never the key) and the E2B key, both with `morrow_put`.
+- Place the E2B key with `morrow_put` (the Anthropic key is placed).
 - New Cloudflare tokens before 2026-11-18.
 - Old credential rotations: the Cloudflare Global API Key; a new WorkOS key that revokes the old ones; delete Neon project `cool-butterfly-64820147`; delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files; `tmutil addexclusion ~/.config/morrow`.
 - Housekeeping: mark the GitGuardian alert on `apps/shopify-connector/worker/database.ts` line 22 a false positive; keep or remove the public ChatGPT link in `docs/references/architecture.md` line 30.

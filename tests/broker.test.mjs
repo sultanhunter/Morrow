@@ -200,17 +200,33 @@ test("P04.T01i PR-D: the committed staging vars give the broker every capability
   const { vars } = await resolvedEdgeConfig("broker", "staging");
   // The shop-specific webhook subscriptions add the connector's own configuration
   // (docs/briefs/shopify-shop-specific-webhooks.md), byte-equal to the connector's.
+  // model-provider-on: the model-provider switch's var is committed on in staging.
   assert.deepEqual(Object.keys(vars).sort(), [
     "CONNECTOR_CONFIGURATION_JSON",
     "LOGIN_CONFIGURATION_JSON",
     "MORROW_DATABASE_BINDING_JSON",
     "MORROW_ENVIRONMENT",
+    "MORROW_MODEL_PROVIDER",
     "TURNSTILE_CONFIGURATION_JSON",
   ]);
+  assert.equal(vars.MORROW_MODEL_PROVIDER, "anthropic");
   const env = { ...brokerEnv("staging").env, ...vars };
   const capabilities = await brokerCapabilities(env);
   for (const name of ["sessions", "database", "connector", "runtime", "vault", "challenge"])
     assert.notEqual(capabilities[name], null, name);
+  // Before the owner's key is placed the broker fails closed on the model alone: the switch
+  // reads on, no model capability exists (modelRespond holds MODEL_UNAVAILABLE before any
+  // input, database or provider access), and every other capability and health stay as they
+  // were. With a well-formed key the model capability exists.
+  assert.equal(capabilities.modelMode, "anthropic");
+  assert.equal(capabilities.model, null);
+  const keyed = await brokerCapabilities({
+    ...env,
+    ANTHROPIC_API_KEY: "sk-ant-api03-" + randomBytes(48).toString("hex"),
+  });
+  assert.equal(keyed.model?.provider, "anthropic");
+  const malformed = await brokerCapabilities({ ...env, ANTHROPIC_API_KEY: marker("sk-ant-") });
+  assert.equal(malformed.model, null);
   assert.equal(capabilities.challenge.hostname, "morrow-staging-api.sultanibneusman0.workers.dev");
   assert.deepEqual(capabilities.challenge.actions, ["account_login", "organization_signup"]);
   // The broker builds each shop-specific subscription's URL from the connector's origin.

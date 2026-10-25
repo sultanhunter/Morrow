@@ -8,8 +8,9 @@ import { build } from "esbuild";
 
 // P04.T02a AC21 (its meaning revised by M3 PR-2, the ID kept): dispatch stays disabled in the
 // orchestrator Worker until the reviewed model-provider switch is on with every binding (M2
-// PR-3's product read exists since the two were integrated, so the switch, committed off, is
-// the only gate); ListingsRunWorkflow replaces MorrowWorkWorkflow. The connector
+// PR-3's product read exists since the two were integrated, so the switch, on in staging since
+// model-provider-on (2026-10-25), is the only gate); ListingsRunWorkflow replaces
+// MorrowWorkWorkflow. The connector
 // (M2 PR-2's worker/index.ts) is fail-closed without its reviewed identifiers. `cloudflare:*` modules are stubbed.
 // fix-connector-cron-latency: the connector's entry also extends DurableObject (ConnectorCron).
 const stubs = {
