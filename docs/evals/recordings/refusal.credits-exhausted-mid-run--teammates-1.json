@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "caseId": "refusal.credits-exhausted-mid-run",
+  "design": "teammates@1",
+  "origin": "authored",
+  "basisDigest": "3b0128e423bff089cdb4f483546dbd5d125ac832c0951092dcb6cb79dbb18701",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "listings",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999101",
+                  "product:999999102"
+                ],
+                "titleContains": null,
+                "limit": 2
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 1500,
+            "outputTokens": 100
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c2",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999101",
+                    "title": null,
+                    "descriptionHtml": "<p>An apron in washed linen with an adjustable neck strap and two front pockets. One size. Machine wash cold.</p>",
+                    "seo": {
+                      "title": "Washed Linen Apron with Two Pockets",
+                      "description": "A washed linen apron with an adjustable neck strap and two front pockets. One size, machine washable."
+                    },
+                    "tags": [
+                      "apron",
+                      "linen",
+                      "kitchen"
+                    ]
+                  },
+                  {
+                    "productId": "product:999999102",
+                    "title": null,
+                    "descriptionHtml": "<p>A solid oak serving board, 40 x 25 cm, with an oiled finish. Hand wash only.</p>",
+                    "seo": {
+                      "title": "Solid Oak Serving Board, 40 x 25 cm",
+                      "description": "A solid oak serving board with an oiled finish, 40 x 25 cm. Hand wash only."
+                    },
+                    "tags": [
+                      "kitchen",
+                      "oak",
+                      "serving board"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 3000,
+            "outputTokens": 900
+          }
+        },
+        {
+          "text": "I drafted new descriptions, SEO titles and tags for both products; they wait for your review. The workspace ran out of credits, so I stopped there.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 3500,
+            "outputTokens": 150
+          }
+        }
+      ]
+    }
+  ]
+}

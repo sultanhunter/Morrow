@@ -91,7 +91,8 @@ export function roundReport(
 }
 
 // --- Comparing designs task by task -------------------------------------------------------
-export type EvalFlip = "fixed" | "broke" | "same" | "changed" | "missing";
+/** `not_compared`: one side has no run (no recording, or a live slot left unbound). */
+export type EvalFlip = "fixed" | "broke" | "same" | "changed" | "not_compared";
 export interface EvalComparisonRow {
   readonly caseId: string;
   readonly baseline: EvalCaseStatus | "missing";
@@ -134,8 +135,8 @@ export function compareDesigns(baseline: EvalReport, candidate: EvalReport): Eva
     const sa = a?.status ?? "missing";
     const sb = b?.status ?? "missing";
     const flip: EvalFlip =
-      sa === "missing" || sb === "missing"
-        ? "missing"
+      sa === "missing" || sb === "missing" || sa === "skipped" || sb === "skipped"
+        ? "not_compared"
         : sa === sb
           ? "same"
           : sb === "pass"
@@ -175,7 +176,13 @@ const signed = (value: number | null) =>
   value === null ? "-" : value > 0 ? "+" + value : String(value);
 /** The comparison as a Markdown table for a person: one row per task, flips first. */
 export function renderComparison(comparison: EvalComparison): string {
-  const order: Record<EvalFlip, number> = { broke: 0, fixed: 1, changed: 2, missing: 3, same: 4 };
+  const order: Record<EvalFlip, number> = {
+    broke: 0,
+    fixed: 1,
+    changed: 2,
+    same: 3,
+    not_compared: 4,
+  };
   const rows = [...comparison.rows].sort(
     (a, b) => order[a.flip] - order[b.flip] || (a.caseId < b.caseId ? -1 : 1),
   );

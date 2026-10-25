@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "caseId": "refusal.credits-call-refused",
+  "design": "teammates@1",
+  "origin": "authored",
+  "basisDigest": "a1a687fa2ea71ff48cdd2f024d75ebc2975277e7b4c92a13b1180ae20bf9a34c",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_business_analyst",
+                "brief": {
+                  "objective": "Summarise units sold over the last 7 days.",
+                  "recordIds": [],
+                  "fields": [
+                    {
+                      "name": "period",
+                      "value": "last_7_days"
+                    }
+                  ]
+                }
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "insufficient_credits",
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 5600,
+            "outputTokens": 600
+          }
+        },
+        {
+          "text": "There are not enough credits left to ask Business Analyst about last week's sales. Add credits and ask again.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 5900,
+            "outputTokens": 150
+          }
+        }
+      ]
+    }
+  ]
+}

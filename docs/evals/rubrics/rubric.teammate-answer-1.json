@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.teammate-answer@1",
+  "title": "Answers built on a teammate's result",
+  "criteria": [
+    {
+      "criterionId": "grounded",
+      "kind": "model",
+      "weight": 3,
+      "text": "Every number and claim in the answer comes from the teammate's result or the items Morrow opened.",
+      "hook": null
+    },
+    {
+      "criterionId": "answers_the_question",
+      "kind": "model",
+      "weight": 2,
+      "text": "The answer addresses what the person asked, first.",
+      "hook": null
+    },
+    {
+      "criterionId": "useful_to_owner",
+      "kind": "owner",
+      "weight": 1,
+      "text": "The owner found the answer useful as written.",
+      "hook": null
+    },
+    {
+      "criterionId": "answer_given",
+      "kind": "code",
+      "weight": 1,
+      "text": "The run ends with an answer for the person.",
+      "hook": {
+        "id": "final_reply_present",
+        "terms": []
+      }
+    }
+  ]
+}
