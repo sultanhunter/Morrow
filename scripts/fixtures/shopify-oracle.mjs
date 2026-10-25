@@ -13,7 +13,13 @@
 // call is recorded with its operation and variables. Faults are opt-in: a lost exchange, a 5xx, THROTTLED once, an oversize
 // reply, a non-development store and another granted scope; `extraFields` adds keys no
 // document asked for (the broker's minimiser must drop them). Recorded development-store
-// fixtures replace or augment it after the owner-approved smoke.
+// fixtures replace or augment it after the owner-approved smoke. fix-shopify-install-live:
+// `tokenKind: "expiring"` answers the exchange as Shopify does for an app that must use
+// expiring offline tokens (expires_in 3600, refresh_token, refresh_token_expires_in
+// 7776000), and `publicApp: true` answers every Admin GraphQL call made with a
+// non-expiring token 403 (public apps created on or after 2026-04-01; the reply's body is
+// not documented, only its status is relied on); `launchQuery` and `callbackQuery` take
+// Shopify's other app-open keys (embedded, id_token, locale, session) as overrides.
 import { createHmac, randomBytes } from "node:crypto";
 
 export const shopifyOracleIdentityDocument =
@@ -39,6 +45,9 @@ export function createShopifyOracle({
     // The shop's webhook subscriptions ({id, topic, uri}); ids count up from 7001.
     subscriptions: [],
     nextSubscriptionId: 7001,
+    tokenKind: "non_expiring",
+    publicApp: false,
+    expiringTokens: [],
     // The synthetic catalogue: two collections, thirty products (the first five in Summer).
     catalog: {
       collections: [
@@ -250,12 +259,26 @@ export function createShopifyOracle({
         code.used = true;
         const token = "shpat_" + randomBytes(16).toString("hex");
         state.tokens.push(token);
+        if (state.tokenKind === "expiring") {
+          const refresh = "shprt_" + randomBytes(16).toString("hex");
+          state.expiringTokens.push(token, refresh);
+          return json({
+            access_token: token,
+            expires_in: 3600,
+            refresh_token: refresh,
+            refresh_token_expires_in: 7776000,
+            scope: state.scope,
+          });
+        }
         return json({ access_token: token, scope: state.scope });
       }
       if (target.pathname === "/admin/api/2026-10/graphql.json" && init.method === "POST") {
         const headers = new Headers(init.headers);
-        if (!state.tokens.includes(headers.get("x-shopify-access-token") ?? ""))
+        const presented = headers.get("x-shopify-access-token") ?? "";
+        if (!state.tokens.includes(presented))
           return json({ errors: "[API] Invalid API key or access token" }, 401);
+        if (state.publicApp && !state.expiringTokens.includes(presented))
+          return json({ errors: "[API] Non-expiring access token refused (synthetic)" }, 403);
         const request = JSON.parse(init.body);
         call.operation = /^(?:query|mutation) ([A-Za-z]+)/.exec(request.query ?? "")?.[1] ?? null;
         call.variables = request.variables ?? null;

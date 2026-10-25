@@ -17,8 +17,9 @@ import { createFixtureAdapter } from "../apps/workspace-web/src/fixtures/adapter
 import { scenarioNames } from "../apps/workspace-web/src/fixtures/scenarios.ts";
 import { fixtureWorkspace } from "../apps/workspace-web/src/fixtures/seed.ts";
 import { portMethods } from "../packages/workspace-ui/src/port.ts";
+import { activityCategory, activityFilters } from "../packages/workspace-ui/src/inbox-model.ts";
+import { describeActivity } from "../packages/workspace-ui/src/screens/activity.tsx";
 import {
-  activityFilters,
   isStopConfirmation,
   monthlyLimitRange,
   optionsFromCatalogue,
@@ -49,8 +50,8 @@ const h = React.createElement;
 const ws = fixtureWorkspace.id;
 const command = (body) => ({ key: randomUUID(), body });
 
-test("the port: thirteen methods, none composed over HTTP, and none sends a request", async () => {
-  assert.equal(teamPortMethods.length, 13);
+test("the port: twelve methods (Activity moved to the inbox group), none composed over HTTP, and none sends a request", async () => {
+  assert.equal(teamPortMethods.length, 12);
   for (const method of teamPortMethods) {
     assert.ok(portMethods.includes(method), method);
     assert.equal(composed[method], false, method);
@@ -98,11 +99,10 @@ test("the port: thirteen methods, none composed over HTTP, and none sends a requ
         expectedRevision: 1,
       }),
     ),
-    await port.settings.activity(ws),
   ];
   assert.deepEqual(
     outcomes.map((o) => o.kind),
-    Array(13).fill("not_in_build"),
+    Array(12).fill("not_in_build"),
   );
   assert.equal(recorded.calls.length, 0);
 });
@@ -670,18 +670,26 @@ test("notifications: a save the record moved past meets a real 409; the reread i
   assert.equal(second.kind, "ok");
 });
 
-test("activity: who did what, by day; filters are closed; no conversations", async () => {
-  const view = (await createFixtureAdapter("ready").settings.activity(ws)).value;
+test("activity: who did what, in plain words; filters are closed; no conversations", async () => {
+  // v1 PR 15: the log is the inbox namespace's (GET /work/activity); the fixture answers it.
+  const view = (await createFixtureAdapter("ready").inbox.activity(ws, null)).value;
   assert.ok(view.entries.length > 5);
-  const categories = new Set(view.entries.map((e) => e.category));
-  for (const c of categories) assert.ok([...activityFilters, "work"].includes(c), c);
+  const lines = view.entries.map((e) => describeActivity(e));
+  for (const line of lines) {
+    assert.ok([...activityFilters, "work"].includes(line.category), line.category);
+    assert.doesNotMatch(line.what + line.detail, /conversation/i);
+  }
   assert.ok(!activityFilters.includes("work"));
-  for (const e of view.entries) assert.doesNotMatch(e.what + e.detail, /conversation/i);
   // A person's stop reads as Stopped, the word the stop itself uses, never as Paused.
-  const stops = view.entries.filter((e) => /^stopped\b/.test(e.what));
+  const stops = lines.filter((l) => /^stopped\b/.test(l.what));
   assert.ok(stops.length > 0);
-  for (const e of stops) assert.deepEqual([e.badge, e.category], ["stopped", "access"]);
-  assert.equal((await createFixtureAdapter("empty").settings.activity(ws)).value.entries.length, 0);
+  for (const l of stops) assert.deepEqual([l.badge, l.category], ["stopped", "access"]);
+  assert.deepEqual(
+    view.entries.map((e) => activityCategory(e)),
+    lines.map((l) => l.category),
+  );
+  const empty = await createFixtureAdapter("empty").inbox.activity(ws, null);
+  assert.equal(empty.value.entries.length, 0);
 });
 
 const store = (storeId, shopDomain = `${storeId}.example`) => ({
@@ -860,7 +868,7 @@ test("every scenario's reads of the group settle without a request", async () =>
         () => port.settings.plan(ws),
         () => port.settings.emailAddresses(ws),
         () => port.settings.notifications(ws),
-        () => port.settings.activity(ws),
+        () => port.inbox.activity(ws, null),
         () => port.library.knowledge(ws),
         () => port.library.files(ws),
       ])

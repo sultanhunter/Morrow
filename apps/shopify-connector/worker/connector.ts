@@ -88,10 +88,16 @@ export interface ConnectorDependencies {
 // adds installSlackMs to the broker's budget: the broker returns by its deadline (its last
 // transaction's close never waits past it), and the slack covers the RPC's two hops, so a
 // committed install is not reported as "Not confirmed".
+// fix-shopify-install-live: the launch RPC's timer is the broker's launch budget
+// (shopifyBrokerBudgets.launchMs, 5 s) plus 1.5 s for a cold broker isolate's start and
+// the RPC's hops; the state's own transaction and the install get the same headroom for a
+// Neon compute waking from suspend. The staging connector runs in Neon's region (its
+// wrangler.jsonc placement), where each of these takes well under a second;
+// tests/connector-worker.test.mjs ties these numbers to the broker's.
 export const connectorBudgets = Object.freeze({
-  launchMs: 4000,
-  stateOpenMs: 3000,
-  installMs: 9000,
+  launchMs: 6500,
+  stateOpenMs: 5000,
+  installMs: 10000,
   installSlackMs: 1500,
   webhookMs: 4000,
   // M2 PR-3: one inbox row's applier transaction, the token's destruction, a re-drive's id

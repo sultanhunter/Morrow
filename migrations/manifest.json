@@ -363,14 +363,21 @@
     },
     {
       "sequence": 47,
-      "file": "0047.shopify-webhook-registrations-identity.sql",
+      "file": "0047.runtime-e2b.sql",
+      "sha256": "64661d10cbc9cc5eeb4cb78e92c715c118d7b985ef690963636f6da89c6af14c",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/e2b-adapter.md"
+    },
+    {
+      "sequence": 48,
+      "file": "0048.shopify-webhook-registrations-identity.sql",
       "sha256": "396126c06cc1b07159e3d7866d4cb2b7052d53e6b22fa6456a3f05e47279af12",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
     },
     {
-      "sequence": 48,
-      "file": "0048.shopify-webhook-registrations-vault.sql",
+      "sequence": 49,
+      "file": "0049.shopify-webhook-registrations-vault.sql",
       "sha256": "d962acdf1ec4b30b0fb2acee9856a3d9f459b4c1ad676303e5828fa5a158d15d",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"

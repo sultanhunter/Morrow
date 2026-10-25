@@ -664,6 +664,8 @@ export const workFunctions = Object.freeze({
   // Build order PR 7 (0043 runtime-operations): the ledger's guard, the caps in code (the
   // command role, inside the broker's vault definers) and the operator's hold lift (nobody).
   "runtime_guard()": { kind: "trigger", grantees: [] },
+  // Build order PR 8 (0047 runtime-e2b): any settlement destroys the operation's envd token.
+  "runtime_token_end()": { kind: "trigger", grantees: [] },
   "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "runtime_hold_lift(text,text,text)": { kind: "operator", grantees: [] },
   // v1 PR 3 (catalog-review, catalog-apply): the review screen's two reads, the claim and
@@ -1383,6 +1385,13 @@ export const vaultFunctions = Object.freeze({
   "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // Build order PR 8 (0047 runtime-e2b): the sandbox's envd token as a vault record, stored
+  // once and opened per call by the broker's login (any settlement destroys it, through the
+  // runtime_token_end trigger), and the sweep's list with stopped operations (the broker's
+  // registry no longer sends 0043's runtime_operations_open).
+  "runtime_token_put(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_token_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operations_sweep(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // v1 PR 3 (catalog-apply): the gateway's apply (resolve, fence, close) and read-back
   // (resolve, record), keyed by one operation id, and their revisable INVOKER helpers (the
   // context settings and the send refusal), which only the definers above call.
@@ -1536,6 +1545,10 @@ export const executorLogins = Object.freeze({
     "morrow_vault.runtime_operation_created(text,text)",
     "morrow_vault.runtime_operation_settle(text,text,text)",
     "morrow_vault.runtime_operations_open(text)",
+    // Build order PR 8 (0047 runtime-e2b).
+    "morrow_vault.runtime_operations_sweep(text)",
+    "morrow_vault.runtime_token_get(text)",
+    "morrow_vault.runtime_token_put(text,text,text,text)",
     // v1 PR 3 (catalog-apply).
     "morrow_vault.catalog_reconcile_record(text,text,text,text,text)",
     "morrow_vault.catalog_reconcile_resolve(text)",

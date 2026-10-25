@@ -31,6 +31,9 @@ const uncomposed: readonly PortMethod[] = [
   ...projectPortMethods,
   ...teamPortMethods,
   "samples.home",
+  // v1 PR 15: the Inbox preview of kinds whose backend isn't built yet (an agent's
+  // question from a run, Reconnect after a permission change): fixtures only.
+  "samples.inbox",
 ];
 export const composed: Composed = Object.freeze(
   Object.fromEntries(portMethods.map((method) => [method, !uncomposed.includes(method)])) as Record<

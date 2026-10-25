@@ -522,14 +522,24 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
 
 // Memoised per isolate (per env object) with one in-flight initialisation that
 // concurrent first calls share. It never rejects; a failure stays held.
+const initialised = new WeakSet<object>();
 export function brokerCapabilities(env: unknown): Promise<Readonly<BrokerCapabilities>> {
   if (!env || typeof env !== "object") return Promise.resolve(nothing);
   let pending = initialisations.get(env);
   if (!pending) {
-    pending = initialise(env).catch(() => nothing);
+    pending = initialise(env)
+      .catch(() => nothing)
+      .finally(() => initialised.add(env));
     initialisations.set(env, pending);
   }
   return pending;
+}
+/**
+ * Whether this isolate has finished initialising the capabilities of `env` (a call that
+ * finds false waits for the initialisation: a cold isolate, for the Shopify stage line).
+ */
+export function brokerCapabilitiesWarm(env: unknown): boolean {
+  return !!env && typeof env === "object" && initialised.has(env);
 }
 
 // Every failure becomes the single error BROKER_HELD plus one fixed log line naming the

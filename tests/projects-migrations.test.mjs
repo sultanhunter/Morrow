@@ -42,15 +42,12 @@ const body = (name) => {
   return sql.slice(start, sql.indexOf("$$", open + 2) + 2);
 };
 
-test("manifest: the last row, executeAs the work owner, its brief and digest, no prerequisites", () => {
+test("manifest: row 0046, executeAs the work owner, its brief and digest, no prerequisites", () => {
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
-  // The last row at integration (0046; the no-gap rule is migration-history's); the
-  // shop-specific webhook subscriptions' pair (0047-0048) appends after it, never between.
-  assert.deepEqual(
-    manifest.migrations.slice(row.sequence).map((m) => m.file.replace(/^\d{4}\./, "")),
-    ["shopify-webhook-registrations-identity.sql", "shopify-webhook-registrations-vault.sql"],
-  );
+  // 0046, applied live and immutable; later migrations (build order PR 8's runtime-e2b, ...)
+  // append after it, and the no-gap rule is migration-history's.
+  assert.equal(row.sequence, 46);
   assert.deepEqual(
     [row.executeAs, row.reviewRef],
     ["morrow_work_owner", "docs/briefs/projects-backend.md"],

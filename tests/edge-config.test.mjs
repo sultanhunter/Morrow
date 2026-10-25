@@ -1702,14 +1702,16 @@ test("M5: switched on, the full Stripe set is required and the reviewed configur
 });
 // ---------------------------------------------------------------------------
 // P04.T01i D1 (placement, 2026-10-21): the staging api and broker run in the region of the
-// committed Neon endpoint; no other Worker or environment has placement.
+// committed Neon endpoint; fix-shopify-install-live (2026-10-25): the staging connector
+// too, so the broker's ConnectorBroker RPC runs there; no other Worker or environment has
+// placement.
 const targeted = (region) => ({ mode: "targeted", region });
 
-test("P04.T01i D1: placement is targeted at staging.json's Neon region on the staging api and broker only", async () => {
+test("P04.T01i D1: placement is targeted at staging.json's Neon region on the staging api, broker and connector only", async () => {
   assert.equal(committedStaging.neon.region_id, "aws-us-east-1");
   assert.equal(edgePlacementRegion(committedStaging.neon.region_id), "aws:us-east-1");
   assert.ok(committedStaging.neon.endpoint_host.endsWith(".us-east-1.aws.neon.tech"));
-  assert.deepEqual([...edgePlacementWorkers], ["api", "broker"]);
+  assert.deepEqual([...edgePlacementWorkers], ["api", "broker", "connector"]);
   const verdict = await verify(resolve("."));
   assert.deepEqual(verdict.problems, []);
   for (const worker of edgeWorkers)
@@ -1750,6 +1752,10 @@ test("P04.T01i D1: a staging placement that is missing, not targeted or not exac
   const cases = [
     { api: (c) => delete c.env.staging.placement },
     { broker: (c) => delete c.env.staging.placement },
+    // fix-shopify-install-live: the staging connector must keep its placement.
+    { connector: (c) => delete c.env.staging.placement },
+    { connector: (c) => (c.env.staging.placement = { mode: "smart" }) },
+    { connector: (c) => (c.env.staging.placement = { mode: "off" }) },
     { api: (c) => (c.env.staging.placement = { mode: "smart" }) },
     { broker: (c) => (c.env.staging.placement = { mode: "smart", hint: "aws:us-east-1" }) },
     { api: (c) => (c.env.staging.placement = { mode: "off" }) },
@@ -1783,7 +1789,7 @@ test("P04.T01i D1: a staging placement that is missing, not targeted or not exac
 
 test("P04.T01i D1: the staging placement region is staging.json's neon.region_id, mapped", async () => {
   for (const region of ["aws:us-east-2", "aws:eu-central-1", "gcp:us-east4", "aws-us-east-1"]) {
-    for (const worker of ["api", "broker"]) {
+    for (const worker of ["api", "broker", "connector"]) {
       const verdict = await verify(
         tree({ [worker]: (c) => (c.env.staging.placement = targeted(region)) }),
       );
@@ -1803,6 +1809,7 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
     assert.deepEqual(verdict.problems.sort(), [
       "EDGE_PLACEMENT_REGION:api:staging",
       "EDGE_PLACEMENT_REGION:broker:staging",
+      "EDGE_PLACEMENT_REGION:connector:staging",
       "EDGE_PLACEMENT_REGION:staging.json",
     ]);
   }
@@ -1811,6 +1818,7 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
   const moved = {
     api: (c) => (c.env.staging.placement = targeted("aws:eu-central-1")),
     broker: (c) => (c.env.staging.placement = targeted("aws:eu-central-1")),
+    connector: (c) => (c.env.staging.placement = targeted("aws:eu-central-1")),
   };
   const stranded = await verify(
     tree(moved),
@@ -1827,9 +1835,12 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
       moved[worker](c);
       patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
     };
-  // v1 PR 1: the connector's copy of the binding moves with the api's.
-  all.connector = (c) =>
+  // v1 PR 1: the connector's copy of the binding moves with the api's (and, since
+  // fix-shopify-install-live, its placement with theirs).
+  all.connector = (c) => {
+    moved.connector(c);
     patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
+  };
   const relocated = await verify(
     tree(all),
     undefined,
@@ -1843,7 +1854,7 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
   assert.deepEqual(relocated.problems, []);
 });
 
-test("P04.T01i D1: no placement outside the staging api and broker, an explicit off included", async () => {
+test("P04.T01i D1: no placement outside the staging api, broker and connector, an explicit off included", async () => {
   const cases = [
     [{ api: (c) => (c.placement = { mode: "smart" }) }, "EDGE_PLACEMENT_ENVIRONMENT"],
     [
@@ -1856,16 +1867,16 @@ test("P04.T01i D1: no placement outside the staging api and broker, an explicit 
       { broker: (c) => (c.env.production.placement = { mode: "smart" }) },
       "EDGE_PLACEMENT_ENVIRONMENT",
     ],
+    [{ connector: (c) => (c.placement = targeted("aws:us-east-1")) }, "EDGE_PLACEMENT_ENVIRONMENT"],
     [
-      { connector: (c) => (c.env.staging.placement = targeted("aws:us-east-1")) },
-      "EDGE_PLACEMENT_WORKER",
+      { connector: (c) => (c.env.production.placement = { mode: "off" }) },
+      "EDGE_PLACEMENT_ENVIRONMENT",
     ],
     [
       { orchestrator: (c) => (c.env.staging.placement = targeted("aws:us-east-1")) },
       "EDGE_PLACEMENT_WORKER",
     ],
     [{ orchestrator: (c) => (c.placement = { mode: "smart" }) }, "EDGE_PLACEMENT_WORKER"],
-    [{ connector: (c) => (c.env.production.placement = { mode: "off" }) }, "EDGE_PLACEMENT_WORKER"],
   ];
   for (const [index, [mutate, expected]] of cases.entries()) {
     const found = codes(await verify(tree(mutate)));

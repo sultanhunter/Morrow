@@ -31,6 +31,7 @@ import {
   projectsPathPattern,
 } from "../../../packages/work/src/projects/http.js";
 import { planDraftsRecord } from "../../../packages/policy/src/projects/plan-draft.js";
+import { createInboxApiHandler, inboxPathPattern } from "../../../packages/work/src/inbox/http.js";
 import {
   createReviewApiHandler,
   reviewPathPattern,
@@ -58,6 +59,7 @@ type Handler = Readonly<{
 //   /workspace/:ws/work/{approvals, proposals/:id/(review|decision|apply),
 //     tasks/:taskId/operations, operations/:id(/reconcile, /set-aside)}
 //                                                review and apply (v1 PR 3), ahead of it too
+//   /workspace/:ws/work/{inbox, activity}       the Inbox and activity reads (v1 PR 15), too
 //   /workspace/:ws/work(/|$)                     work API (P06.T01a)
 //   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)
 //   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
@@ -79,6 +81,7 @@ type RowKey =
   | "runs"
   | "projects"
   | "review"
+  | "inbox"
   | "work"
   | "billing"
   | "stripe_webhook"
@@ -94,6 +97,8 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
     ["projects", (path: string) => projectsPathPattern.test(path)],
     // v1 PR 3: the review and apply routes (packages/work/src/review/http.ts), also ahead of it.
     ["review", (path: string) => reviewPathPattern.test(path)],
+    // v1 PR 15: the Inbox and activity reads (packages/work/src/inbox/http.ts), ahead of it too.
+    ["inbox", (path: string) => inboxPathPattern.test(path)],
     ["work", (path: string) => workPath.test(path)],
     ["billing", (path: string) => billingPath.test(path)],
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
@@ -133,6 +138,8 @@ export function createWorkspaceApiWorker(
       work === undefined ? undefined : { ...work, goals: false, planDrafts: planDraftsRecord },
     ),
     review: createReviewApiHandler(review),
+    // v1 PR 15: reads only, on the work dependencies; no switch.
+    inbox: createInboxApiHandler(work),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),

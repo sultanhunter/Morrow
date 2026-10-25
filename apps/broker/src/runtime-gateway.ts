@@ -56,6 +56,28 @@ import {
 // The sweep reconciles stale operations by their metadata alone: a sandbox still running is
 // killed, and one the provider does not find counts as absent only on a qualified profile
 // after its deadline plus the grace; it never creates and no hold or stop blocks it.
+// Build order PR 8 (ADR-0029 items 3 and 9; migration 0047):
+//   * The sandbox's envd token goes from the create's reply straight into a sealed vault
+//     record (ledger.tokenPut) before the job starts; each call to the sandbox opens that
+//     record (ledger.tokenGet); the operation's settlement, whatever it is, destroys it in the
+//     same transaction. A job whose token cannot be stored or opened stops there (unknown) and
+//     its sandbox is still killed. The open also reads the run's stops and lease: once a stop
+//     covers the run (or its lease has ended or expired) it answers `stopped`, so the job ends
+//     at its next call with the code `stopped` and its own kill follows at once.
+//   * A reply the adapter marks `broken` (the provider's documented protocol did not hold)
+//     records the operation `unknown_effect` with reason reply_invalid before the kill, so a
+//     runtime hold stays until a person lifts it, even when the kill then succeeds. Until
+//     that write commits (it is retried once after the kill) the operation is never settled
+//     `killed`: it stays open for the stale sweep, which records it unknown. A create's hold
+//     write is retried once too; if neither commits the operation stays `sending`, and the
+//     stale sweep records a `sending` operation create_unknown before it kills its sandbox
+//     (paused_found likewise for a paused one), never settling it `killed` before that hold
+//     has committed.
+//   * Stops: the sweep's list also carries operations a stop (platform, connection or
+//     installation), an ended lease or an expired one has cut off (`stopped`), stale or not.
+//     The sweep kills such a sandbox at once (its settlement destroys the token, so a job still
+//     running stops at its next call), and leaves one it cannot see yet to a later pass: only
+//     a stale operation is ever recorded unknown or absent.
 
 export type RuntimeOperationStatus =
   | "sending"
@@ -98,6 +120,8 @@ export interface RuntimeOpenOperation {
   readonly stale: boolean;
   /** Past its deadline plus the profile's absent grace. */
   readonly pastGrace: boolean;
+  /** A stop covers its run, or its lease ended or expired: its sandbox is killed now. */
+  readonly stopped: boolean;
 }
 /**
  * The operation ledger (migration 0043: morrow_work's tables behind morrow_vault's broker
@@ -121,10 +145,25 @@ export interface RuntimeLedger {
   ): Promise<boolean>;
   unknown(operationId: string, reason: RuntimeUnknownReason): Promise<boolean>;
   open(limit: number): Promise<readonly RuntimeOpenOperation[]>;
+  /**
+   * Seals the sandbox's envd token into its vault record: once per operation, only while it
+   * is `created`. False when it did not commit (the job then never starts).
+   */
+  tokenPut(operationId: string, token: string): Promise<boolean>;
+  /**
+   * Opens it for one call. `stopped` while a stop covers the run or its lease has ended or
+   * expired (the job ends there and its sandbox is killed at once); `unavailable` once the
+   * operation has settled, or on any doubt.
+   */
+  tokenGet(operationId: string): Promise<RuntimeTokenRead>;
 }
+export type RuntimeTokenRead =
+  | { readonly outcome: "active"; readonly token: string }
+  | { readonly outcome: "stopped" }
+  | { readonly outcome: "unavailable" };
 export interface RuntimeGatewaySeams {
   readonly ledger: (vault: Readonly<BrokerVault>) => RuntimeLedger;
-  /** The adapter of the configured provider, by name ("e2b"); none until PR 8. */
+  /** The adapter of the configured provider, by name ("e2b": runtime-e2b.ts since PR 8). */
   readonly providers: Readonly<Record<string, RuntimeProvider>>;
   readonly now: () => number;
   /** The pinned template the profile creates from (ADR-0029 item 1); null holds every create. */
@@ -168,6 +207,17 @@ async function safely<T>(call: () => Promise<T>, unknown: T): Promise<T> {
   } catch {
     return unknown;
   }
+}
+/** Records each hold in turn; answers the reasons whose write did not commit. */
+async function recordHolds(
+  ledger: RuntimeLedger,
+  operationId: string,
+  reasons: readonly RuntimeUnknownReason[],
+): Promise<RuntimeUnknownReason[]> {
+  const unrecorded: RuntimeUnknownReason[] = [];
+  for (const reason of reasons)
+    if (!(await ledger.unknown(operationId, reason))) unrecorded.push(reason);
+  return unrecorded;
 }
 
 interface ResultOutput {
@@ -304,37 +354,73 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
           ? "quota_exhausted"
           : created.outcome === "billing_blocked"
             ? "billing_blocked"
-            : created.outcome === "created"
+            : created.outcome === "created" ||
+                (created.outcome === "unknown_effect" && created.broken === true)
               ? "reply_invalid"
               : "create_unknown";
-      await ledger.unknown(operationId, reason);
+      // The hold is retried once (review PR8-R1). If neither write commits, nothing settles
+      // the operation: it stays `sending`, and the stale sweep records it unknown before it
+      // kills a sandbox it finds (create_unknown), or when it finds none (not_found_unverified).
+      if (!(await ledger.unknown(operationId, reason))) await ledger.unknown(operationId, reason);
       return runtimeResult({ outcome: "unknown", code: reason, operationId });
     }
-    const sandbox: SandboxHandle = Object.freeze({
-      sandboxRef: created.sandboxRef,
-      accessToken: created.accessToken,
-    });
+    const sandboxRef = created.sandboxRef;
+    const tokenHeld = created.accessToken !== null;
     // 5. The job; 6. the kill, whatever happened.
     let outcome: Parameters<typeof runtimeResult>[0] = {
       outcome: "unknown",
       code: "ledger_unrecorded",
       operationId,
     };
+    // False only while a broken reply's hold is not committed: the operation then never
+    // settles `killed` (which would end it with no hold), whatever the kill says.
+    let held = true;
     try {
-      if (await ledger.created(operationId, sandbox.sandboxRef))
-        outcome = await work(adapter, sandbox, job, inputs.files, script, operationId, left, slice);
+      if (await ledger.created(operationId, sandboxRef)) {
+        // The envd token's only home from here on is its vault record.
+        if (tokenHeld && !(await ledger.tokenPut(operationId, created.accessToken as string)))
+          outcome = { outcome: "unknown", code: "token_unrecorded", operationId };
+        else {
+          const sandbox = async (): Promise<SandboxHandle | "stopped" | null> => {
+            if (!tokenHeld) return Object.freeze({ sandboxRef, accessToken: null });
+            const read = await ledger.tokenGet(operationId);
+            if (read.outcome === "stopped") return "stopped";
+            return read.outcome === "active"
+              ? Object.freeze({ sandboxRef, accessToken: read.token })
+              : null;
+          };
+          outcome = await work(
+            adapter,
+            sandbox,
+            job,
+            inputs.files,
+            script,
+            operationId,
+            left,
+            slice,
+          );
+          // A reply that broke the provider's protocol leaves a hold, whatever the kill says.
+          if (outcome.code === "reply_invalid")
+            held = await ledger.unknown(operationId, "reply_invalid");
+        }
+      }
     } finally {
       const killed: RuntimeKillResult = await safely(
         () =>
           adapter.kill(
-            sandbox.sandboxRef,
+            sandboxRef,
             runtime.apiKey,
             Math.max(1_000, Math.min(runtimeTiming.statusMaxMs, left())),
           ),
         { outcome: "unknown" },
       );
-      if (killed.outcome === "killed") await ledger.settle(operationId, "killed");
-      else
+      if (killed.outcome === "killed") {
+        // The hold is retried once. If it still did not commit, the operation stays open
+        // (never `killed` without its hold), and the stale sweep, finding no sandbox, records
+        // it not_found_unverified, which holds.
+        if (!held) held = await ledger.unknown(operationId, "reply_invalid");
+        if (held) await ledger.settle(operationId, "killed");
+      } else
         await ledger.unknown(
           operationId,
           killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
@@ -345,7 +431,7 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
 
   async function work(
     adapter: RuntimeProvider,
-    sandbox: SandboxHandle,
+    sandbox: () => Promise<SandboxHandle | "stopped" | null>,
     job: RuntimeJob,
     files: readonly { readonly path: string; readonly bytes: Uint8Array }[],
     script: Uint8Array,
@@ -353,23 +439,36 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     left: () => number,
     slice: (ceiling: number) => number,
   ): Promise<Parameters<typeof runtimeResult>[0]> {
+    const broken = { outcome: "unknown" as const, code: "reply_invalid", operationId };
+    // The token is opened for each call; once a stop covers the run, or the operation has
+    // settled (a stop's sweep, say), there is none, and the job ends here.
+    const tokenGone = (handle: "stopped" | null) =>
+      handle === "stopped"
+        ? { outcome: "unknown" as const, code: "stopped", operationId }
+        : { outcome: "unknown" as const, code: "token_unavailable", operationId };
     for (const file of [...files, { path: computerProfile.jobPath, bytes: script }]) {
       if (left() < runtimeTiming.killReserveMs + 1_000)
         return { outcome: "unknown", code: "budget_spent", operationId };
+      const handle = await sandbox();
+      if (handle === null || handle === "stopped") return tokenGone(handle);
       const written: RuntimeWriteResult = await safely(
-        () => adapter.writeFile(sandbox, file.path, file.bytes, slice(runtimeTiming.writeMaxMs)),
+        () => adapter.writeFile(handle, file.path, file.bytes, slice(runtimeTiming.writeMaxMs)),
         { outcome: "unknown" },
       );
       if (written.outcome !== "written")
-        return { outcome: "unknown", code: "write_unknown", operationId };
+        return written.broken === true
+          ? broken
+          : { outcome: "unknown", code: "write_unknown", operationId };
     }
     const execBudget = computerProfile.execTimeoutSeconds * 1000 + runtimeTiming.execMarginMs;
     if (left() < runtimeTiming.killReserveMs + execBudget)
       return { outcome: "unknown", code: "budget_spent", operationId };
+    const runner = await sandbox();
+    if (runner === null || runner === "stopped") return tokenGone(runner);
     const ran: RuntimeExecResult = await safely(
       () =>
         adapter.exec(
-          sandbox,
+          runner,
           {
             argv: computerProfile.command,
             cwd: computerProfile.workDirectory,
@@ -381,6 +480,7 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
       { outcome: "unknown" },
     );
     if (ran.outcome === "timed_out") return { outcome: "timed_out", operationId };
+    if (ran.outcome === "unknown" && ran.broken === true) return broken;
     if (
       ran.outcome !== "exited" ||
       !Number.isSafeInteger(ran.exitCode) ||
@@ -407,11 +507,14 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
         rejected.push({ name: output.name, code: "budget_spent" });
         continue;
       }
+      const reader = await sandbox();
+      if (reader === null || reader === "stopped") return tokenGone(reader);
       const max = runtimeJobLimits.outputBytesMax[output.type];
       const read: RuntimeReadResult = await safely(
-        () => adapter.readFile(sandbox, outputPath(output), max, slice(runtimeTiming.readMaxMs)),
+        () => adapter.readFile(reader, outputPath(output), max, slice(runtimeTiming.readMaxMs)),
         { outcome: "unknown" },
       );
+      if (read.outcome === "unknown" && read.broken === true) return broken;
       if (read.outcome !== "read") {
         rejected.push({
           name: output.name,
@@ -470,7 +573,7 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
     const open = await ledger.open(runtimeGatewayLimits.sweepBatch);
     const counts = { examined: 0, killed: 0, absentVerified: 0, unknown: 0, skipped: 0 };
     for (const op of open) {
-      if (!op.stale) {
+      if (!op.stale && !op.stopped) {
         counts.skipped++;
         continue;
       }
@@ -486,19 +589,47 @@ export function createRuntimeGateway(seams: Readonly<RuntimeGatewaySeams>) {
           adapter.status(op.operationId, op.sandboxRef, runtime.apiKey, runtimeTiming.statusMaxMs),
         { outcome: "unknown" },
       );
+      // A stopped operation that is not stale yet may still have its create in flight or its
+      // job running: its sandbox is killed when the provider shows it, and anything else waits
+      // for a later pass (never recorded unknown or absent this early).
+      if (!op.stale && found.outcome !== "running" && found.outcome !== "paused") {
+        counts.skipped++;
+        continue;
+      }
       if (found.outcome === "running" || found.outcome === "paused") {
-        if (found.outcome === "paused") await ledger.unknown(op.operationId, "paused_found");
+        // The holds this operation owes before it may settle `killed` (review PR8-R1), each
+        // written before the kill and retried once after it:
+        //   * create_unknown: a stale operation still `sending` has a sandbox but no recorded
+        //     create (a lost worker, or an unknown, broken, quota or billing create whose hold
+        //     write did not commit). A stopped operation that is not stale yet never owes it:
+        //     its create may still be in flight.
+        //   * paused_found: a paused sandbox breaks the profile.
+        // Until every one has committed it is never settled `killed` (which would end it with
+        // no hold): it stays open, and a later pass, finding no sandbox, records it unknown.
+        const owed: RuntimeUnknownReason[] = [];
+        if (op.stale && op.status === "sending") owed.push("create_unknown");
+        if (found.outcome === "paused") owed.push("paused_found");
+        let unrecorded = await recordHolds(ledger, op.operationId, owed);
         const killed: RuntimeKillResult = await safely(
           () => adapter.kill(found.sandboxRef, runtime.apiKey, runtimeTiming.statusMaxMs),
           { outcome: "unknown" },
         );
-        if (killed.outcome === "killed" && (await ledger.settle(op.operationId, "killed")))
+        if (killed.outcome === "killed" && unrecorded.length > 0)
+          unrecorded = await recordHolds(ledger, op.operationId, unrecorded);
+        if (
+          killed.outcome === "killed" &&
+          unrecorded.length === 0 &&
+          (await ledger.settle(op.operationId, "killed"))
+        )
           counts.killed++;
         else {
-          await ledger.unknown(
-            op.operationId,
-            killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
-          );
+          // A confirmed kill whose owed hold still did not commit gets no other record: the
+          // kill's reason would be wrong, and the next pass finds no sandbox.
+          if (killed.outcome !== "killed" || unrecorded.length === 0)
+            await ledger.unknown(
+              op.operationId,
+              killed.outcome === "not_found" ? "kill_not_found" : "kill_unknown",
+            );
           counts.unknown++;
         }
       } else if (found.outcome === "not_found") {

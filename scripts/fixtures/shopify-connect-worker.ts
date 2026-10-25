@@ -126,7 +126,7 @@ export default {
 function connectorHandler(env: Env) {
   const binding = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
   const vaultDriver: VaultDriverFactory = (config) => bridgedClient(env, config.user);
-  const transaction: VaultTransaction = (vault, budgetMs, body) =>
+  const transaction: VaultTransaction = (vault, budgetMs, body, observe) =>
     runVaultTransactionWithDriver(
       vaultDriver,
       vault,
@@ -134,6 +134,7 @@ function connectorHandler(env: Env) {
       body,
       Date.now,
       NoSocket,
+      observe,
     );
   const brokerDependencies = {
     transaction,

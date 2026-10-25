@@ -14,8 +14,10 @@ import {
   encodeShopifyLaunchVerdict,
   encodeShopifyWebhookSyncResult,
   encodeShopifyWebhookVerdict,
+  shopifyLimits,
   shopifyWebhookSyncLimits,
 } from "../packages/identity/src/broker-protocol.ts";
+import { shopifyBrokerBudgets } from "../apps/broker/src/shopify-install.ts";
 import {
   connectorBudgets,
   createConnectorHandler,
@@ -253,6 +255,8 @@ function harness(answers = {}, limiters = undefined) {
   const broker = {
     async shopifyLaunchVerify(appKey, rawQuery) {
       calls.push(["launch", appKey, rawQuery]);
+      if (answers.launchDelayMs)
+        await new Promise((resolve) => setTimeout(resolve, answers.launchDelayMs));
       return (
         answers.launch ??
         encodeShopifyLaunchVerdict({
@@ -265,6 +269,8 @@ function harness(answers = {}, limiters = undefined) {
     },
     async shopifyInstallComplete(appKey, rawQuery, digest, budget) {
       calls.push(["install", appKey, rawQuery, digest, budget]);
+      if (answers.installDelayMs)
+        await new Promise((resolve) => setTimeout(resolve, answers.installDelayMs));
       if (answers.installThrows) throw new Error("BROKER_HELD");
       return answers.install;
     },
@@ -465,7 +471,7 @@ test("callback: the cookie must equal the state before any broker call; the redi
   assert.equal(c.pending.length, 1);
   await c.settle();
   assert.deepEqual(ok.calls, [
-    ["install", "dev-app", query, sha(state), 9000],
+    ["install", "dev-app", query, sha(state), 10000],
     ["subscriptions", connectorBudgets.subscriptionsMs],
   ]);
   // A duplicate state parameter never matches.
@@ -610,6 +616,69 @@ test("callback: the install never waits for or depends on the subscription sync"
         budget <= shopifyWebhookSyncLimits.budgetMaxMs,
     );
   assert.ok(connectorBudgets.subscriptionsMs + connectorBudgets.subscriptionsSlackMs < 30000);
+});
+
+// fix-shopify-install-live: the connector's RPC timers cover the broker's budgets plus a
+// cold broker isolate, so a slow but successful broker answer is never "Unavailable" or
+// "Not confirmed" (mock timers: no real wait).
+test("budgets: the launch and install timers cover the broker's budgets and a cold isolate", async () => {
+  assert.ok(connectorBudgets.launchMs >= shopifyBrokerBudgets.launchMs + 1500);
+  assert.ok(
+    connectorBudgets.installMs >=
+      shopifyBrokerBudgets.claimMs + shopifyBrokerBudgets.storeReserveMs + 1000,
+  );
+  assert.ok(connectorBudgets.installMs <= shopifyLimits.budgetMaxMs);
+  assert.ok(connectorBudgets.stateOpenMs >= 5000, "a fresh connection while Neon wakes");
+  assert.ok(connectorBudgets.webhookMs > shopifyBrokerBudgets.ingressMs);
+  assert.ok(connectorBudgets.webhookMs < 5000, "inside Shopify's webhook timeout");
+  const timed = async (answers, request, waitMs) => {
+    const h = harness(answers);
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      const pending = h.handler.fetch(request(), context().ctx);
+      for (let i = 0; i < 20 && h.calls.length === 0; i++) await new Promise(setImmediate);
+      mock.timers.tick(waitMs);
+      for (let i = 0; i < 5; i++) await new Promise(setImmediate);
+      return { response: await pending, calls: h.calls };
+    } finally {
+      mock.timers.reset();
+    }
+  };
+  const launch = () => new Request(origin + "/shopify/a/dev-app/launch?shop=x");
+  // A cold broker isolate (1 s to start) that then spends its whole launch budget still
+  // reaches the authorize redirect; past the connector's timer it is "Unavailable".
+  const slow = shopifyBrokerBudgets.launchMs + 1000;
+  const ok = await timed({ launchDelayMs: slow }, launch, slow);
+  assert.equal(ok.response.status, 302);
+  assert.deepEqual(
+    ok.calls.map((c) => c[0]),
+    ["launch", "stateOpen"],
+  );
+  assert.equal(ok.calls[1][4], connectorBudgets.stateOpenMs);
+  const late = await timed(
+    { launchDelayMs: connectorBudgets.launchMs + 1 },
+    launch,
+    connectorBudgets.launchMs + 1,
+  );
+  assert.equal(late.response.status, 503);
+  // The install: the broker's whole budget plus the RPC's hops is still confirmed.
+  const state = randomBytes(32).toString("base64url");
+  const callbackRequest = () =>
+    new Request(origin + `/shopify/a/dev-app/callback?state=${state}&shop=x`, {
+      headers: { cookie: `__Host-morrow_shopify_state=${state}` },
+    });
+  const installed = encodeShopifyInstallResult({
+    outcome: "reauthorised",
+    workspaceId: "ws_1",
+    continuationToken: null,
+  });
+  const confirmed = await timed(
+    { install: installed, installDelayMs: connectorBudgets.installMs + 1000 },
+    callbackRequest,
+    connectorBudgets.installMs + 1000,
+  );
+  assert.equal(confirmed.response.status, 303);
+  assert.deepEqual(confirmed.calls[0].slice(-1), [connectorBudgets.installMs]);
 });
 
 // A request context recording what the handler leaves running after its response.

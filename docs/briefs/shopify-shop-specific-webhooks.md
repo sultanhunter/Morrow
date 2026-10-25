@@ -55,7 +55,7 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
 5. **Webhook receipt** (unchanged code, now pinned by a test): deliveries from both kinds of subscription arrive at `POST /shopify/a/:appKey/webhooks`.
    - The connector forwards the same five headers. Other delivery headers, such as triggered-at, event id or subscription id, are neither forwarded nor signed.
    - The broker verifies the app secret's base64 HMAC over the raw body before any parse, then the topic allowlist, then records the delivery. An app-specific and a shop-specific delivery of either topic produce the same record.
-6. **Migrations** `0047.shopify-webhook-registrations-identity` (the identity owner) and `0048.shopify-webhook-registrations-vault` (the work owner), forward only:
+6. **Migrations** `0048.shopify-webhook-registrations-identity` (the identity owner) and `0049.shopify-webhook-registrations-vault` (the work owner), forward only. They were 0047 and 0048 until `main` took 0047 for `runtime-e2b` (build order PR 8); the merge renumbered them, and their digests are unchanged:
    - The table: ENABLE and FORCE RLS with the identity owner's policy only. Its guard: born at revision 1, one revision per change, tenant and installation fixed, the version never moving back, no delete or truncate.
    - Three identity bridges for `morrow_work_command`, and three vault definers. The definers are owned by the work command, guarded first by `work_executor_safe('morrow_vault_broker')` and executable by the broker's login only.
    - None takes a tenant. The tenant always comes from the installation row.
@@ -63,7 +63,7 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
 ## Interfaces touched
 
 - Source: `apps/broker/src/{shopify-webhooks,capabilities,index,vault-statements-shopify}.ts`, `apps/broker/wrangler.jsonc` and `worker-configuration.d.ts` (the staging broker's `CONNECTOR_CONFIGURATION_JSON`), `apps/shopify-connector/worker/{connector,webhooks}.ts`, `packages/identity/src/broker-protocol.ts` (the RPC, the topic split, the origin parser, the callback URL, the closed sync result), `scripts/edge.mjs` (the broker var, byte-equal to the connector's), `scripts/shopify-app.mjs`.
-- Migrations 0047 and 0048, `migrations/manifest.json`, `tests/tenant-conformance/registry.mjs`.
+- Migrations 0048 and 0049, `migrations/manifest.json`, `tests/tenant-conformance/registry.mjs`.
 - Tests: `tests/broker-shopify-webhooks.test.mjs` (new), `tests/shopify-webhook-registrations-migrations.test.mjs` (new), `tests/{shopify-app-script,connector-worker,broker,broker-challenge,edge-config,projects-migrations,redaction-handlers}.test.mjs` (the pinned method list, init line, staging vars, last migration and identity-table count follow).
 - Labs: `scripts/shopify-install-lab.mjs` (H1-H8), `scripts/shopify-connect-workers-lab.mjs` and `scripts/fixtures/shopify-connect-worker.ts` (H1-H2), `scripts/fixtures/shopify-oracle.mjs` (the two webhook documents).
 - Docs: `docs/contracts/shopify-sync.md`, `docs/briefs/v1-connect-store.md` (item 3 and owner step 3), `docs/briefs/M2-shopify-connect.md` (the TOML rows amended).
@@ -83,7 +83,7 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
 
 ## After the merge (Claude, standing approval; one activity-log line each)
 
-1. `npm run staging:migrate` (ledger 48).
+1. `npm run staging:migrate` (ledger 49; 0047 `runtime-e2b` goes first if it has not been applied yet).
 2. Deploy, with the broker's new `CONNECTOR_CONFIGURATION_JSON` var. The migration goes first: a sync before it answers `SUBSCRIPTIONS_UNAVAILABLE` and changes nothing.
 3. Within five minutes, the connector's cron line `morrow_connector_webhooks` should show `SUBSCRIPTIONS_SYNCED` with `registered: 1` for the owner's store. A later run shows `checked: 0`, and about a day later one run shows the re-check (`checked: 1`, `registered: 1`). Record it in the activity log (counts only, no shop).
 4. No owner action is needed. The owner never redeploys the TOML for this: v2 is already compliance-only.
@@ -125,11 +125,13 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
   Local run 2026-10-25: 58 of 58 checks. Two earlier runs under a load average near 900 failed in the install and link phases, before H; the hosted pg-linking leg is the authority. After the review fixes: 59 of 59, and H9 fails with the re-check clause removed.
 - [x] `lab:shopify-connect-workers` H1-H2 (workerd): the install's `waitUntil` registers both subscriptions and records version 1; the re-authorisation lists, creates nothing and records version 2; W3's re-drive counts include the sync. Local run 2026-10-25: 29 of 29 checks, again 29 of 29 after the review fixes; the hosted pg-work leg is the authority.
 - [x] `lab:tenant-conformance` with the new table, bridges and definers registered (`tests/tenant-conformance/registry.mjs`). Local run 2026-10-25: 17 of 17, again after the review fixes. Also run once, unchanged and green, because they share the oracle and the connector's re-drive: `lab:shopify-privacy` (39 checks) and `lab:disconnect-store` (28 checks).
+- [x] Merged `main` at 12615ad6 (2026-10-25). `main` had taken 0047 for `runtime-e2b`, so these migrations became 0048 and 0049 with unchanged digests. `fix-shopify-install-live`'s transaction `observe` argument now passes through the lab fixture's shared transaction, its connector budget test passes a request context (the callback's sync needs `waitUntil`), and the install budget in the callback test is its new 10000. `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` and `format:check` pass; `npm test` 4558 of 4558; `lab:shopify-connect-workers` 31 of 31; `lab:shopify-install` 62 of 62; `lab:tenant-conformance` 17 of 17.
+  - Merge note: `main` placed the connector's fetch handler in us-east-1, so the callback's sync runs near Neon. The connector's cron is not placed, and each of the sync's vault transactions keeps its 3 s budget. A slow cron run can therefore miss: it counts as unavailable or skipped and is tried again five minutes later, and every round lists before it creates. Watch the first cron lines after the deploy.
 - [ ] Owner gate: none for the code. The post-merge steps above run under the standing approval.
 
 ## Review findings applied (AI review, separate context, same model family)
 
-- **F1 (medium): registered rows were never checked again.** Shopify removes a shop-specific subscription after about four hours of failed deliveries, and the pending list never named a registered row at its current version again, so only a re-authorisation would have brought the subscriptions back. Fix: the identity bridge `work_shopify_webhook_registrations_pending` (0047, not yet applied anywhere, edited in place with the manifest digests) also lists a registered row 24 hours after its last record, after new or changed versions and retries. Tests: the migrations test pins the clause and the order; `lab:shopify-install` H9.
+- **F1 (medium): registered rows were never checked again.** Shopify removes a shop-specific subscription after about four hours of failed deliveries, and the pending list never named a registered row at its current version again, so only a re-authorisation would have brought the subscriptions back. Fix: the identity bridge `work_shopify_webhook_registrations_pending` (then 0047, now 0048; not yet applied anywhere, edited in place with the manifest digests) also lists a registered row 24 hours after its last record, after new or changed versions and retries. Tests: the migrations test pins the clause and the order; `lab:shopify-install` H9.
 - **F4 (low): two guards survived mutation.** Removing the equal-ids check in `registerShopWebhooks` or the record's 2 s reserve left every unit test green. Fix: two unit cases in `tests/broker-shopify-webhooks.test.mjs` (two topics with one subscription id; the record's reserve when Shopify uses all of its time). Each now fails under its mutant (checked on a scratch copy).
 
 ## Open questions
