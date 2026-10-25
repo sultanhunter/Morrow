@@ -1,9 +1,9 @@
 // The run money rules (P11.T04a minimum; ADR-0022 item 11; mvp-architecture §9). Pure: no
 // I/O, clock or randomness, and every amount is an exact bigint count of 10^-8 USD (the
 // numeric(20,8) of morrow_billing.vendor_cost_reservations). The SQL helpers of the
-// run-credits migration (run_reserve, run_book_cost, run_settle, run_release,
-// unrecovered_allows) enforce the same rules under a row lock; these are their TypeScript
-// twins for admission (M3 PR-2), the per-product step and the tests.
+// run-credits migration (run_reserve, run_book_cost, run_settle, run_release) enforce the
+// same rules under a row lock; these are their TypeScript twins for admission (M3 PR-2), the
+// per-product step and the tests.
 //
 // - A run reserves products × the selection's credits per product, and products × its
 //   worst case per product of vendor cost. The product count is at most the selection's
@@ -12,11 +12,11 @@
 //   a failed product earns no credit. The rest is released.
 // - The daily cap counts settled cost plus open reservations (UTC day).
 // - The unrecovered cost of a workspace's billing period (AI cost of products that earned
-//   no credit, `uncertain` bookings at their worst case included) plus the next product's
-//   worst case must stay within the cap; otherwise the run stops and admission refuses
-//   (`unrecovered_cost_cap`) until the next billing period.
-// - A run stops after three consecutive failed products; a good product resets the count,
-//   never the unrecovered cost.
+//   no credit, `uncertain` bookings at their worst case included) is recorded per period and
+//   caps nothing: ADR-0036 removed the unrecovered-cost cap, so `unrecovered_cost_cap` is
+//   never returned again. The per-run and per-day caps, the breaker and the provider's
+//   monthly limit bound failed products' cost.
+// - A run stops after three consecutive failed products; a good product resets the count.
 import type { CatalogueEntry, CatalogueLimits } from "./model-catalogue";
 
 export class RunCreditsError extends Error {
@@ -115,22 +115,7 @@ export function dailyCapAllows(
   );
 }
 
-/**
- * The unrecovered-cost cap of a workspace's billing period: the period's unrecovered cost
- * plus the next product's worst case stays within the cap. Admission checks it with the
- * first product's worst case; the step checks it before every product.
- */
-export function unrecoveredAllows(
-  limits: CatalogueLimits,
-  periodUnrecoveredUsd8: bigint,
-  nextWorstCaseUsd8: bigint,
-): boolean {
-  if (!limits || !nonNegative(periodUnrecoveredUsd8) || !nonNegative(nextWorstCaseUsd8))
-    throw invalid();
-  return periodUnrecoveredUsd8 + nextWorstCaseUsd8 <= limits.workspacePeriodUnrecoveredCostCapUsd8;
-}
-
-/** The ledger's period key: M5's billing period start. No period is no entitlement. */
+/** The unrecovered-cost ledger's period key: M5's billing period start. No period is no entitlement. */
 export function unrecoveredPeriodStart(
   billingPeriod: { readonly start: string; readonly end: string } | null,
 ): string | null {

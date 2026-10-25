@@ -7,8 +7,10 @@
 //   an unknown key, a retired version or an entry above the member's ceiling is refused
 //   before any run exists; a missing selection means the workspace default.
 // - A member without governance.model_default.revise may pick only entries whose credits
-//   per product are at most the workspace ceiling (default 1); holders may pick any entry,
+//   per product are at most the workspace ceiling (by default the default selection's
+//   credits: 4 for Opus 5.5 at medium since version 3, ADR-0036); holders may pick any entry,
 //   since they could raise the ceiling.
+// - No unrecovered-cost cap (ADR-0036): the per-run and per-day caps are the USD limits.
 // - A run is booked at its own recorded catalogue version, even after a newer one is active.
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { generatedModelCatalogue } from "./generated/model-catalogue";
@@ -49,7 +51,6 @@ export interface CatalogueLimits {
   readonly maxConsecutiveFailedProducts: number;
   readonly runCostCapUsd8: bigint;
   readonly workspaceDailyCostCapUsd8: bigint;
-  readonly workspacePeriodUnrecoveredCostCapUsd8: bigint;
 }
 export type SelectionRefusal =
   /** Not a ModelSelection@1 (a provider model string, an extra field, a non-key). */
@@ -92,7 +93,6 @@ export interface ModelCatalogueVersionData {
     readonly maxConsecutiveFailedProducts: number;
     readonly runCostCapUsd8: number;
     readonly workspaceDailyCostCapUsd8: number;
-    readonly workspacePeriodUnrecoveredCostCapUsd8: number;
   };
   readonly efforts: readonly { readonly key: string; readonly maxOutputTokens: number }[];
   readonly models: readonly {
@@ -138,7 +138,6 @@ function limitsOf(v: ModelCatalogueVersionData): CatalogueLimits {
     maxConsecutiveFailedProducts: v.limits.maxConsecutiveFailedProducts,
     runCostCapUsd8: BigInt(v.limits.runCostCapUsd8),
     workspaceDailyCostCapUsd8: BigInt(v.limits.workspaceDailyCostCapUsd8),
-    workspacePeriodUnrecoveredCostCapUsd8: BigInt(v.limits.workspacePeriodUnrecoveredCostCapUsd8),
   });
 }
 
@@ -250,7 +249,7 @@ export function createModelCatalogue(data: ModelCatalogueData) {
         ? Object.freeze({ model: v.defaultSelection.model, effort: v.defaultSelection.effort })
         : null;
     },
-    /** The default member ceiling of the active version (1 in version 1). */
+    /** The default member ceiling of the active version (1 in version 1, 4 in version 3). */
     defaultMemberCreditCeiling: (): number | null =>
       activeVersion()?.defaultMemberCreditCeiling ?? null,
     /**

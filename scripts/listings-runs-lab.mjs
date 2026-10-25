@@ -18,15 +18,15 @@
 //      catalog.content.publish Proposal@2 by the installation's agent on behalf of the
 //      requester, credits settled at the products proposed, cost booked from the catalogue's
 //      rates, the lease released; durable step results carry ids and codes only;
-//   M  the selection: none is the workspace default; a member picks Opus high once the owner
-//      raises the ceiling; xhigh is refused;
+//   M  the selection: none is the workspace default (catalogue version 3: Opus 5.5 at medium,
+//      ADR-0036); a member picks Opus high once the owner raises the ceiling; xhigh is refused;
 //   O  item 10's outcomes in one run: a refusal then a draft, a throttle resent within the
 //      attempt, an input over the cap never sent, invalid output twice (failed, accrued as
 //      unrecovered), an uncertain send booked at its worst case, a draft steered to another
 //      product (product_mismatch, twice);
 //   E  a spend limit ends the run (drafted work is still proposed); K the three-failure breaker;
-//   U  the unrecovered-cost cap stops a running run before its next product and refuses
-//      admission;
+//   U  no unrecovered-cost cap (ADR-0036, migration 0051): past the former US$4.50 a run
+//      drafts every product and admission still admits;
 //   F  the fence as the broker's login: replay, in flight, one open call per run, attempts,
 //      digests, closed inputs, a reply from another model, cost overflow never dropped and the
 //      run stopped, a spent reservation refused at the fence with no request, forged settings
@@ -617,10 +617,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       `SELECT product_index::int AS i,status,attempts::int AS attempts,failure_code FROM morrow_work.run_products WHERE run_id=${literal(runId)} ORDER BY product_index`,
     );
   const rates = one(
-    "SELECT input_usd8_per_token::int AS input,output_usd8_per_token::int AS output FROM morrow_work.model_catalogue_rates WHERE version=1 AND model_key='claude_sonnet_5_5'",
+    "SELECT input_usd8_per_token::int AS input,output_usd8_per_token::int AS output FROM morrow_work.model_catalogue_rates WHERE version=3 AND model_key='claude_sonnet_5_5'",
   );
   const worst = one(
-    "SELECT worst_case_per_attempt_usd::text AS attempt,worst_case_per_product_usd::text AS product,credits_per_product::int AS credits FROM morrow_work.model_catalogue_entries WHERE version=1 AND model_key='claude_sonnet_5_5' AND effort_key='low'",
+    "SELECT worst_case_per_attempt_usd::text AS attempt,worst_case_per_product_usd::text AS product,credits_per_product::int AS credits FROM morrow_work.model_catalogue_entries WHERE version=3 AND model_key='claude_sonnet_5_5' AND effort_key='low'",
   );
   const completedUnits = 900 * rates.input + 300 * rates.output;
   const completedCost = usd8(completedUnits);
@@ -779,7 +779,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       poor.status === 409 && poor.body.code === "budget_exhausted" && footprint() === before2,
       poor.body,
     );
-    // A member above the default ceiling (1 credit per product): Sonnet medium costs 2.
+    // A member above the default ceiling (4 credits per product since catalogue version 3,
+    // ADR-0036; 1 at version 1): Opus high costs 6.
     const memberGoal = await work(P.A1, "/goals", {
       objective: "Member's listings",
       storeIds: [],
@@ -792,7 +793,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const above = await admit(
       P.A1,
       memberTask,
-      admitBody(["product:1"], { selection: { model: "claude_sonnet_5_5", effort: "medium" } }),
+      admitBody(["product:1"], { selection: { model: "claude_opus_5_5", effort: "high" } }),
     );
     check(
       "B3:member_above_ceiling_403",
@@ -990,7 +991,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   // ---------------------------------------------------------------------------
   phase("selection");
   {
-    // M1: no selection is the workspace default (Sonnet low, 1 credit), within A1's ceiling.
+    // M1: no selection is the workspace default, catalogue version 3's Opus 5.5 at medium
+    // (4 credits a product, ADR-0036), within A1's default ceiling of 4.
     const memberGoal = await work(P.A1, "/goals", {
       objective: "Member's runs",
       storeIds: [],
@@ -1003,9 +1005,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     check(
       "M1:no_selection_is_the_workspace_default",
       defaulted.status === 201 &&
-        defaulted.body.selection.model === "claude_sonnet_5_5" &&
-        defaulted.body.selection.effort === "low" &&
-        defaulted.body.creditsReserved === 1,
+        defaulted.body.selection.model === "claude_opus_5_5" &&
+        defaulted.body.selection.effort === "medium" &&
+        defaulted.body.catalogueVersion === 3 &&
+        defaulted.body.creditsReserved === 4,
       defaulted.body,
     );
     // M2: the owner raises the ceiling to 6; the member may then pick Opus high.
@@ -1037,10 +1040,15 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     check(
       "M4:both_member_runs_draft_and_settle",
       ended.every((r) => r.kind === "ended" && r.status === "succeeded") &&
-        credit(defaulted.body.runId)?.settled === 1 &&
+        credit(defaulted.body.runId)?.settled === 4 &&
         credit(opus.body.runId)?.settled === 6 &&
         oracle.requests.some((r) => r.model === "claude-opus-5-5"),
       { ended },
+    );
+    // The default now costs 4 credits, not version 1's 1: the 3 more are returned to W's
+    // 300-credit wallet (sim), so the later phases keep the budget they were written for.
+    replica(
+      `UPDATE morrow_billing.credit_wallets SET available=available+3 WHERE billing_account_id=${literal(account)};`,
     );
   }
 
@@ -1196,35 +1204,47 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
   // ---------------------------------------------------------------------------
   phase("unrecovered_cap");
   {
-    // U1: once this period's unrecovered cost plus one product's worst case would pass the
-    // cap (US$4.50), a running run stops before its next product and admission refuses new
-    // runs until the next period. The ledger is raised near the cap (sim), then restored.
+    // U1 (ADR-0036, migration 0051): no unrecovered-cost cap. With this period's unrecovered
+    // cost raised far past the former US$4.50 (sim), a running run still drafts every product
+    // and admission still admits; the ledger is restored after. The run limit, the daily cap
+    // and the breaker still stop runs (K1, C1 and lab:run-credits C4).
     const ids = [product(91), product(92)];
+    const walletBefore = wallet();
     const admitted = await admit(P.A, T, admitBody(ids));
     const runId = admitted.body.runId;
     const saved = one(
       `SELECT period_start::text AS period,amount_usd::text AS amount FROM morrow_billing.unrecovered_costs WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)}`,
     );
     replica(
-      `UPDATE morrow_billing.unrecovered_costs SET amount_usd=4.45 WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};`,
+      `UPDATE morrow_billing.unrecovered_costs SET amount_usd=1000 WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};`,
     );
     const result = await execute(runId);
-    const refused = await admit(P.A, T, admitBody([product(93)]));
+    const next = await admit(P.A, T, admitBody([product(93)]));
+    const nextResult = next.status === 201 ? await execute(next.body.runId) : null;
     replica(
       `UPDATE morrow_billing.unrecovered_costs SET amount_usd=${saved.amount} WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};`,
     );
     check(
-      "U1:the_unrecovered_cost_cap_stops_the_run_and_refuses_admission",
-      result.kind === "ended" &&
-        result.status === "failed" &&
-        runRow(runId).ended_reason === "unrecovered_cost_cap" &&
-        oracle.sends(ids[0]) === 0 &&
-        credit(runId)?.status === "released" &&
-        refused.status === 409 &&
-        refused.body.safeMessage ===
-          "Too many products failed this billing period. Drafting resumes next period.",
-      { result, run: runRow(runId), refused: refused.body },
+      "U1:no_unrecovered_cost_cap_past_the_former_limit",
+      admitted.status === 201 &&
+        result.kind === "ended" &&
+        result.status === "succeeded" &&
+        runRow(runId).ended_reason === null &&
+        runRow(runId).drafted === 2 &&
+        oracle.sends(ids[0]) === 1 &&
+        oracle.sends(ids[1]) === 1 &&
+        next.status === 201 &&
+        nextResult?.kind === "ended" &&
+        nextResult.status === "succeeded",
+      { result, run: runRow(runId), next: next.body, nextResult },
     );
+    // The cap stopped these runs before ADR-0036, so they spent no credits; the 3 they now
+    // spend are returned to W's wallet (sim), so the later phases keep their budget.
+    const spent = walletBefore.available - wallet().available;
+    if (spent > 0)
+      replica(
+        `UPDATE morrow_billing.credit_wallets SET available=available+${spent} WHERE billing_account_id=${literal(account)};`,
+      );
   }
 
   // ---------------------------------------------------------------------------
@@ -1911,7 +1931,13 @@ COMMIT;`,
   const noFlags = { newUrls: 0, newEmails: 0, newPhones: 0, tagsAdded: 0, tagsRemoved: 0 };
   async function prepared(storeId, n, through) {
     const id = product(n);
-    const runId = (await admit(P.A, T, admitBody([id], { storeId }))).body.runId;
+    const admitted = await admit(P.A, T, admitBody([id], { storeId }));
+    // A refused admission names its refusal here, not as a missing lease further on.
+    if (!admitted.body.runId)
+      throw new Error(
+        `prepared ${storeId} ${n}: ${admitted.status} ${JSON.stringify(admitted.body)}`,
+      );
+    const runId = admitted.body.runId;
     const ref = leaseOf(runId);
     const canonical = snapshotCanonical(catalog.get(id));
     const steps = await ports.lease(ref, async (step) => {

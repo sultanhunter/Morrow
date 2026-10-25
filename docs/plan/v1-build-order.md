@@ -289,7 +289,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
 - **Delivers:**
   - **Morrow, the main agent, runs on a model.** It answers, asks a clarifying question when it needs one, and hands work to the right agent.
   - **"Model" and "Thinking effort"** on each agent's page and in Settings.
-  - **Defaults:** Morrow on Opus 5.5 at high, specialists on Opus 5.5 at medium, installed agents on Sonnet 5.5 at low. A change applies from the next job.
+  - **Defaults:** Morrow on Opus 5.5 at high; specialists, sub-agents and installed agents on Opus 5.5 at medium (ADR-0036). A change applies from the next job.
 - **Needs from you:** nothing.
 - **Size:** M.
 - **Safety tests:**

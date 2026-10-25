@@ -1028,7 +1028,7 @@ export function projectDetails(): Map<string, ProjectDetailView> {
     members: [
       {
         member: m.inventory,
-        note: "Does the work here. Asks you before anything is ordered. Sonnet 5.5 · Thinking effort: Low",
+        note: "Does the work here. Asks you before anything is ordered. Opus 5.5 · Thinking effort: Medium",
       },
       { member: m.morrow, note: "Answers when someone writes @Morrow here." },
       { member: m.maya, note: null },

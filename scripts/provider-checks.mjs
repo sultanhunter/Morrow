@@ -95,8 +95,13 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
 // The model catalogue (ADR-0022 items 10, 11 and 16): opaque keys, adaptive
 // thinking only, a broker-held adapter for every provider, caps that fit at
 // least one product, no selection whose worst case per product exceeds the
-// margin of its credits' net revenue, an unrecovered-cost cap within the rest,
-// and published versions that never change.
+// margin of its credits' net revenue, and published versions that never change.
+// ADR-0036 removed the unrecovered-cost cap: only version 1, published before it,
+// carries `workspace_period_unrecovered_cost_cap_usd` (pinned, still within the
+// rest of the plan revenue, and enforced nowhere); any other version that carries
+// one is refused.
+export const UNRECOVERED_CAP_VERSIONS = Object.freeze([1]);
+const unrecoveredCapField = "workspace_period_unrecovered_cost_cap_usd";
 const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
 const VERSION_STATUSES = ["proposed", "active", "retired"];
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -193,19 +198,26 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     fail("the Coordinator's turn limit exceeds the run's");
   if (limits.specialist_default_run_minutes > limits.specialist_max_run_minutes)
     fail("the specialist default run exceeds its maximum");
+  // The per-run and per-day backstops (ADR-0026 item 4) and the per-agent daily look-for-work
+  // cap (ADR-0036 item 7); no unrecovered-cost cap (ADR-0036).
   const caps = [
     limits.run_cost_cap_usd,
     limits.workspace_daily_cost_cap_usd,
-    limits.workspace_period_unrecovered_cost_cap_usd,
+    limits.look_for_work_daily_cost_cap_usd,
   ];
   let runCap = null;
+  let lookCap = null;
   if (!caps.every(isDecimal) || caps.some((cap) => scaled(cap, 12) === 0n))
     fail("missing USD caps");
   else {
     runCap = scaled(limits.run_cost_cap_usd, 12);
+    lookCap = scaled(limits.look_for_work_daily_cost_cap_usd, 12);
     if (scaled(limits.workspace_daily_cost_cap_usd, 12) < runCap)
       fail("the daily cap is below the run cap");
+    if (lookCap > runCap) fail("the look-for-work cap is above the run cap");
   }
+  if (Object.hasOwn(limits, unrecoveredCapField))
+    fail("carries an unrecovered-cost cap, which ADR-0036 removed");
   const expected = entry.expected_turn ?? {};
   if (
     !isCount(expected.input_tokens) ||
@@ -216,6 +228,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     fail("the expected turn must fit the input cap");
   const inputCap = limits.max_input_tokens_per_turn;
   const models = new Map();
+  const worstCase = new Map();
   for (const model of entry.models ?? []) {
     const price = model.rates_usd_per_million_tokens ?? {};
     if (!KEY.test(model.key ?? "") || models.has(model.key)) fail(`invalid model key ${model.key}`);
@@ -259,6 +272,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
         BigInt(effort.max_output_tokens) * scaled(price.output, 6);
       if (runCap !== null && worst * 2n > runCap)
         fail(`${model.key} at ${key}: two worst-case turns exceed the run backstop`);
+      worstCase.set(`${model.key} ${key}`, worst);
       selections.push({
         model: model.key,
         effort: key,
@@ -280,6 +294,11 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     )
       fail(`the ${kind} default profile must be an entry of this version`);
   }
+  // ADR-0036 item 7: a look-for-work pass is a mandate run, so it needs a tool turn and a
+  // final turn; the cap must hold two worst-case turns of the installed default.
+  const installed = worstCase.get(`${profiles.installed?.model} ${profiles.installed?.effort}`);
+  if (lookCap !== null && installed !== undefined && installed * 2n > lookCap)
+    fail("the look-for-work cap cannot hold two worst-case turns of the installed default");
   return { errors, selections };
 }
 
@@ -320,18 +339,20 @@ function inspectCatalogueVersion(entry, adapters) {
     limits.max_consecutive_failed_products > maxProducts
   )
     fail("the failure breaker must stop a run within its product limit");
-  const caps = [
-    limits.run_cost_cap_usd,
-    limits.workspace_daily_cost_cap_usd,
-    limits.workspace_period_unrecovered_cost_cap_usd,
-  ];
+  // The per-run and per-day caps; version 1 alone also carries its unrecovered-cost cap,
+  // pinned and checked as published, and enforced nowhere since ADR-0036.
+  const carriesUnrecoveredCap = UNRECOVERED_CAP_VERSIONS.includes(entry.version);
+  const caps = [limits.run_cost_cap_usd, limits.workspace_daily_cost_cap_usd];
+  if (carriesUnrecoveredCap) caps.push(limits[unrecoveredCapField]);
+  else if (Object.hasOwn(limits, unrecoveredCapField))
+    fail("carries an unrecovered-cost cap, which ADR-0036 removed");
   let runCap = null;
   let unrecoveredCap = null;
   if (!caps.every(isDecimal) || caps.some((cap) => scaled(cap, 12) === 0n))
     fail("missing USD caps");
   else {
     runCap = scaled(limits.run_cost_cap_usd, 12);
-    unrecoveredCap = scaled(limits.workspace_period_unrecovered_cost_cap_usd, 12);
+    if (carriesUnrecoveredCap) unrecoveredCap = scaled(limits[unrecoveredCapField], 12);
     if (scaled(limits.workspace_daily_cost_cap_usd, 12) < runCap)
       fail("the daily cap is below the run cap");
   }
@@ -437,14 +458,24 @@ function inspectCatalogueVersion(entry, adapters) {
     }
   }
   if (models.size === 0) fail("no models");
+  // The default selection is an entry of its version. It cost one credit until ADR-0036 made
+  // Opus 5.5 at medium the default (four credits). The default member ceiling admits it and is
+  // exactly its credits, so the ceiling follows the default and is never raised on its own.
   const preset = entry.default_selection ?? {};
   const presetCredits = models.get(preset.model)?.credits_per_product?.[preset.effort];
-  if (presetCredits !== 1) fail("the default selection must exist and cost one credit");
+  if (
+    JSON.stringify(Object.keys(preset).sort()) !== '["effort","model"]' ||
+    !efforts.has(preset.effort) ||
+    !isCount(presetCredits)
+  )
+    fail("the default selection must be an entry of this version");
   if (
     !isCount(entry.default_member_credit_ceiling) ||
     entry.default_member_credit_ceiling < (presetCredits ?? 1)
   )
     fail("the default member ceiling must admit the default selection");
+  else if (isCount(presetCredits) && entry.default_member_credit_ceiling !== presetCredits)
+    fail("the default member ceiling must be the default selection's credits");
   return { errors, selections };
 }
 

@@ -37,12 +37,25 @@ test("the generator is deterministic and the committed file reproduces exactly (
   assert.doesNotMatch(first, /\bimport\b|\bfunction\b|=>|\beval\b|new Function/);
 });
 
-test("the pinned digest of version 1 is unchanged and generated with the data", () => {
+test("the pinned digests of versions 1 and 3 are unchanged and generated with the data", () => {
   const v1 = policy.catalogue.versions[0];
   assert.equal(policy.catalogue.published_digests["1"], pinnedDigest(v1));
   assert.equal(generatedModelCatalogue.versions[0].digest, policy.catalogue.published_digests["1"]);
   assert.equal(catalogueVersionDigest(1), policy.catalogue.published_digests["1"]);
-  assert.equal(activeCatalogueVersion(), 1);
+  // ADR-0036: version 3 is active and version 1 retired (a run recorded at 1 is booked at 1).
+  const v3 = policy.catalogue.versions[2];
+  assert.equal(v3.version, 3);
+  assert.equal(policy.catalogue.published_digests["3"], pinnedDigest(v3));
+  assert.equal(generatedModelCatalogue.versions[1].digest, policy.catalogue.published_digests["3"]);
+  assert.equal(catalogueVersionDigest(3), policy.catalogue.published_digests["3"]);
+  assert.deepEqual(
+    generatedModelCatalogue.versions.map((v) => [v.version, v.status]),
+    [
+      [1, "retired"],
+      [3, "active"],
+    ],
+  );
+  assert.equal(activeCatalogueVersion(), 3);
 });
 
 test("the generator refuses a rate or cap it cannot represent at 10^-8 USD", () => {
@@ -57,28 +70,33 @@ test("the generator refuses a rate or cap it cannot represent at 10^-8 USD", () 
   assert.throws(() => catalogueVersionData(key), /MODEL_CATALOGUE_KEY_INVALID/);
 });
 
-test("the ADR-0022 item 11 table: credits, worst case and run limits", () => {
+test("the ADR-0022 item 11 table: credits, worst case and run limits, the same in versions 1 and 3", () => {
   const expected = {
     claude_haiku_5_5: { low: [1, 0.0066, 25], medium: [1, 0.0136, 25], high: [1, 0.0176, 25] },
     claude_sonnet_5_5: { low: [1, 0.132, 25], medium: [2, 0.272, 25], high: [3, 0.352, 19] },
     claude_opus_5_5: { low: [2, 0.264, 25], medium: [4, 0.544, 12], high: [6, 0.704, 9] },
   };
-  for (const [model, efforts] of Object.entries(expected))
-    for (const [effort, [credits, worst, limit]] of Object.entries(efforts)) {
-      const entry = catalogueEntry(1, model, effort);
-      assert.equal(entry.creditsPerProduct, credits, `${model} ${effort} credits`);
-      assert.equal(usd(entry.worstCasePerProductUsd8), worst, `${model} ${effort} worst case`);
-      assert.equal(entry.runProductLimit, limit, `${model} ${effort} run limit`);
-      // Exact BigInt arithmetic: two attempts at the input cap and the effort's max_tokens.
-      assert.equal(entry.worstCasePerProductUsd8, 2n * entry.worstCasePerAttemptUsd8);
-    }
+  for (const version of [1, 3])
+    for (const [model, efforts] of Object.entries(expected))
+      for (const [effort, [credits, worst, limit]] of Object.entries(efforts)) {
+        const entry = catalogueEntry(version, model, effort);
+        const at = `v${version} ${model} ${effort}`;
+        assert.equal(entry.creditsPerProduct, credits, `${at} credits`);
+        assert.equal(usd(entry.worstCasePerProductUsd8), worst, `${at} worst case`);
+        assert.equal(entry.runProductLimit, limit, `${at} run limit`);
+        // Exact BigInt arithmetic: two attempts at the input cap and the effort's max_tokens.
+        assert.equal(entry.worstCasePerProductUsd8, 2n * entry.worstCasePerAttemptUsd8);
+      }
   assert.equal(catalogueEntry(1, "claude_sonnet_5_5", "low").worstCasePerProductUsd8, 13_200_000n);
   assert.equal(catalogueEntry(1, "claude_opus_5_5", "high").worstCasePerProductUsd8, 70_400_000n);
-  const limits = catalogueLimits(1);
-  assert.equal(limits.runCostCapUsd8, 700_000_000n);
-  assert.equal(limits.workspaceDailyCostCapUsd8, 2_500_000_000n);
-  assert.equal(limits.workspacePeriodUnrecoveredCostCapUsd8, 450_000_000n);
-  assert.equal(limits.maxConsecutiveFailedProducts, 3);
+  for (const version of [1, 3]) {
+    const limits = catalogueLimits(version);
+    assert.equal(limits.runCostCapUsd8, 700_000_000n);
+    assert.equal(limits.workspaceDailyCostCapUsd8, 2_500_000_000n);
+    assert.equal(limits.maxConsecutiveFailedProducts, 3);
+    // No unrecovered-cost cap in any generated version (ADR-0036).
+    assert.equal(Object.hasOwn(limits, "workspacePeriodUnrecoveredCostCapUsd8"), false);
+  }
 });
 
 test("keys are opaque: provider model strings, unknown keys, xhigh and retired versions give no entry", () => {
@@ -86,12 +104,14 @@ test("keys are opaque: provider model strings, unknown keys, xhigh and retired v
   assert.equal(findCatalogueEntry(1, "claude_opus_5_5", "xhigh"), null);
   assert.equal(findCatalogueEntry(1, "claude_opus_5_5", "max"), null);
   assert.equal(findCatalogueEntry(1, "gpt_5", "low"), null);
+  // Version 2 is the proposed loop version: no per-product entry.
   assert.equal(findCatalogueEntry(2, "claude_opus_5_5", "high"), null);
+  assert.equal(findCatalogueEntry(4, "claude_opus_5_5", "high"), null);
   assert.equal(findCatalogueEntry(0, "claude_opus_5_5", "high"), null);
   assert.throws(() => catalogueEntry(1, "claude-opus-5-5", "high"), ModelCatalogueError);
   // The listing carries no provider, provider model ID, rate or cost.
   const listing = catalogueListing();
-  assert.equal(listing.catalogueVersion, 1);
+  assert.equal(listing.catalogueVersion, 3);
   assert.equal(listing.entries.length, 9);
   const text = JSON.stringify(listing);
   assert.doesNotMatch(text, /anthropic|claude-|Usd|usd|rate/i);
@@ -104,25 +124,43 @@ test("keys are opaque: provider model strings, unknown keys, xhigh and retired v
     ]);
 });
 
-test("selection: refusals, the default and the member ceiling (ADR-0022 item 16)", () => {
-  const member = { workspaceDefault: null, ceiling: 1, holdsRevise: false };
+test("selection: refusals, the default and the member ceiling (ADR-0022 item 16, ADR-0036)", () => {
+  const member = { workspaceDefault: null, ceiling: 4, holdsRevise: false };
   // Refusals before any run exists.
   for (const [selection, code] of [
     [{ model: "claude-opus-5-5", effort: "high" }, "selection_invalid"],
-    [{ model: "claude_opus_5_5", effort: "high", catalogueVersion: 1 }, "selection_invalid"],
+    [{ model: "claude_opus_5_5", effort: "high", catalogueVersion: 3 }, "selection_invalid"],
     ["claude_opus_5_5", "selection_invalid"],
     [{ model: "claude_opus_5_5", effort: "xhigh" }, "selection_unknown"],
     [{ model: "claude_unknown_9", effort: "low" }, "selection_unknown"],
   ])
     assert.deepEqual(resolveSelection({ ...member, selection }), { ok: false, code }, code);
-  // A missing selection is the workspace default (Sonnet low, one credit).
+  // A missing selection is the workspace default: Opus 5.5 at medium, four credits (ADR-0036),
+  // which the default member ceiling of 4 admits.
   const defaulted = resolveSelection({ ...member, selection: null });
   assert.equal(defaulted.ok, true);
   assert.equal(defaulted.defaulted, true);
-  assert.deepEqual([defaulted.entry.model, defaulted.entry.effort], ["claude_sonnet_5_5", "low"]);
-  assert.deepEqual(defaultSelection(), { model: "claude_sonnet_5_5", effort: "low" });
-  assert.equal(defaultMemberCreditCeiling(), 1);
-  // A member without governance.model_default.revise picking Opus high under ceiling 1.
+  assert.deepEqual([defaulted.entry.model, defaulted.entry.effort], ["claude_opus_5_5", "medium"]);
+  assert.equal(defaulted.entry.catalogueVersion, 3);
+  assert.equal(defaulted.entry.creditsPerProduct, 4);
+  assert.equal(defaulted.entry.runProductLimit, 12);
+  assert.deepEqual(defaultSelection(), { model: "claude_opus_5_5", effort: "medium" });
+  assert.equal(defaultMemberCreditCeiling(), 4);
+  // A workspace that stored a ceiling of 1 (version 1's default) keeps it: its members are
+  // refused the new default and may still pick a one-credit entry.
+  assert.deepEqual(resolveSelection({ ...member, ceiling: 1, selection: null }), {
+    ok: false,
+    code: "selection_above_ceiling",
+  });
+  assert.equal(
+    resolveSelection({
+      ...member,
+      ceiling: 1,
+      selection: { model: "claude_sonnet_5_5", effort: "low" },
+    }).ok,
+    true,
+  );
+  // A member without governance.model_default.revise picking Opus high under ceiling 4.
   const opusHigh = { model: "claude_opus_5_5", effort: "high" };
   assert.deepEqual(resolveSelection({ ...member, selection: opusHigh }), {
     ok: false,
@@ -142,7 +180,15 @@ test("selection: refusals, the default and the member ceiling (ADR-0022 item 16)
     selection: undefined,
     workspaceDefault: { model: "claude_retired_4", effort: "low" },
   });
-  assert.equal(stale.ok && stale.entry.model, "claude_sonnet_5_5");
+  assert.equal(stale.ok && stale.entry.model, "claude_opus_5_5");
+  // A stored default of version 1 that version 3 also lists (Sonnet 5.5 at low) is kept.
+  const kept = resolveSelection({
+    ...member,
+    selection: null,
+    workspaceDefault: { model: "claude_sonnet_5_5", effort: "low" },
+  });
+  assert.equal(kept.ok && kept.entry.model, "claude_sonnet_5_5");
+  assert.equal(kept.ok && kept.entry.catalogueVersion, 3);
   assert.equal(memberMayPick(6, 6, false), true);
   assert.equal(memberMayPick(6, 5, false), false);
   assert.equal(memberMayPick(6, 1, true), true);

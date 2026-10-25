@@ -94,10 +94,13 @@ for (const [name, change, expected] of [
 test("the model catalogue is adapter-backed, within its margin and never loses money on a selection", () =>
   assert.deepEqual(validateModelPolicy(modelPolicy, registry), []));
 test("the catalogue derives each selection's worst case and run limit", () => {
-  const [v1] = inspectModelPolicy(modelPolicy, registry).versions;
+  const versions = inspectModelPolicy(modelPolicy, registry).versions;
+  const [v1, v3] = [versions[0], versions[2]];
+  assert.deepEqual([v1.version, v1.status, v3.version, v3.status], [1, "retired", 3, "active"]);
+  // Version 3 keeps every entry of version 1 (ADR-0036 changes its default, not its prices).
+  assert.deepEqual(v3.selections, v1.selections);
   const row = (model, effort) =>
-    v1.selections.find((s) => s.model === model && s.effort === effort);
-  assert.equal(v1.status, "active");
+    v3.selections.find((s) => s.model === model && s.effort === effort);
   assert.deepEqual(row("claude_sonnet_5_5", "low"), {
     model: "claude_sonnet_5_5",
     effort: "low",
@@ -105,25 +108,68 @@ test("the catalogue derives each selection's worst case and run limit", () => {
     worst_case_usd: "0.132000",
     products_per_run: 25,
   });
+  assert.deepEqual(row("claude_opus_5_5", "medium"), {
+    model: "claude_opus_5_5",
+    effort: "medium",
+    credits_per_product: 4,
+    worst_case_usd: "0.544000",
+    products_per_run: 12,
+  });
   assert.equal(row("claude_opus_5_5", "high").worst_case_usd, "0.704000");
   assert.equal(row("claude_opus_5_5", "high").products_per_run, 9);
   assert.equal(row("claude_sonnet_5_5", "high").products_per_run, 19);
 });
 // Catalogue v1 was published on the owner's confirmation (2026-10-19); its digest is pinned.
-test("catalogue v1 is active with the owner's confirmation, an effective date and its pinned digest", () => {
+// ADR-0036 (OD-2026-10-25-1) published version 3 and retired version 1.
+test("catalogue v1 is retired and v3 active, each with the owner's confirmation and its pinned digest", () => {
   const v1 = modelPolicy.catalogue.versions[0];
-  assert.equal(v1.status, "active");
-  assert.equal(modelPolicy.catalogue.active_versions.per_product, 1);
+  assert.equal(v1.status, "retired");
   assert.match(v1.owner_confirmation, /Confirm all \(Recommended\)/);
   assert.equal(v1.effective_from, "2026-10-19");
   assert.equal(modelPolicy.catalogue.published_digests["1"], catalogueVersionDigest(v1));
+  // Version 1 keeps its published US$4.50, which nothing enforces any more.
+  assert.equal(v1.limits.workspace_period_unrecovered_cost_cap_usd, "4.50");
+  const v3 = modelPolicy.catalogue.versions[2];
+  assert.equal(v3.version, 3);
+  assert.equal(v3.status, "active");
+  assert.equal(v3.run_shape, undefined);
+  assert.equal(modelPolicy.catalogue.active_versions.per_product, 3);
+  assert.ok(
+    v3.owner_confirmation.includes(
+      "use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost",
+    ),
+  );
+  assert.match(v3.owner_confirmation, /OD-2026-10-25-1/);
+  assert.equal(v3.effective_from, "2026-10-25");
+  assert.equal(modelPolicy.catalogue.published_digests["3"], catalogueVersionDigest(v3));
+  assert.deepEqual(v3.default_selection, { model: "claude_opus_5_5", effort: "medium" });
+  assert.equal(v3.default_member_credit_ceiling, 4);
+  assert.equal(Object.hasOwn(v3.limits, "workspace_period_unrecovered_cost_cap_usd"), false);
+  // Everything else is version 1's.
+  const strip = (v) => {
+    const {
+      version: _v,
+      status: _s,
+      proposed_on: _p,
+      decision: _d,
+      owner_confirmation: _o,
+      effective_from: _e,
+      default_selection: _ds,
+      default_member_credit_ceiling: _c,
+      ...rest
+    } = structuredClone(v);
+    delete rest.limits.workspace_period_unrecovered_cost_cap_usd;
+    delete rest.economics.rule;
+    return rest;
+  };
+  assert.deepEqual(strip(v3), strip(v1));
 });
 // The rule cases start from v1 as it stood before publication: proposed, nothing pinned. They
-// are the per-product shape's, so the proposed loop version (v2, PR 10) is left out here;
-// tests/loop-catalogue.test.mjs has its rule cases.
+// are the per-product shape's, so the proposed loop version (v2, PR 10) and the later
+// per-product version 3 are left out here; tests/loop-catalogue.test.mjs has the loop cases.
 const proposedBase = () => {
   const p = structuredClone(modelPolicy);
-  p.catalogue.versions = p.catalogue.versions.filter((entry) => entry.run_shape === undefined);
+  p.catalogue.versions = p.catalogue.versions.filter((entry) => entry.version === 1);
   const v1 = p.catalogue.versions[0];
   v1.status = "proposed";
   v1.owner_confirmation = null;
@@ -278,19 +324,43 @@ for (const [name, change, expected] of [
     /unrecovered-cost cap exceeds/,
   ],
   [
-    "a default that costs two credits",
+    "a two-credit default that the one-credit ceiling does not admit",
     (p) => (latest(p).default_selection.effort = "medium"),
-    /default selection/,
+    /the default member ceiling must admit the default selection/,
   ],
   [
     "a default outside the catalogue",
     (p) => (latest(p).default_selection.model = "gpt_6_1_sol"),
-    /default selection/,
+    /the default selection must be an entry of this version/,
+  ],
+  [
+    "a default at an effort the version does not list",
+    (p) => (latest(p).default_selection.effort = "xhigh"),
+    /the default selection must be an entry of this version/,
   ],
   [
     "a member ceiling below the default",
     (p) => (latest(p).default_member_credit_ceiling = 0),
     /default member ceiling/,
+  ],
+  [
+    "a default member ceiling above the default's credits",
+    (p) => (latest(p).default_member_credit_ceiling = 2),
+    /the default member ceiling must be the default selection's credits/,
+  ],
+  [
+    "an unrecovered-cost cap on a version after 1 (ADR-0036)",
+    (p) => {
+      const next = structuredClone(latest(p));
+      next.version = 2;
+      p.catalogue.versions.push(next);
+    },
+    /model catalogue v2: carries an unrecovered-cost cap, which ADR-0036 removed/,
+  ],
+  [
+    "version 1 without its published unrecovered-cost cap",
+    (p) => delete latest(p).limits.workspace_period_unrecovered_cost_cap_usd,
+    /model catalogue v1: missing USD caps/,
   ],
   [
     "an edited published version",

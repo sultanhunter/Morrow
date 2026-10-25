@@ -55,6 +55,7 @@ export type RunRefusal =
   | "entitlement"
   | "insufficient_credits"
   | "daily_cap"
+  // Never returned since migration 0051 (ADR-0036 removed the cap); kept for the closed set.
   | "unrecovered_cost_cap"
   | "run_product_limit"
   | "selection_invalid"

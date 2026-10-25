@@ -597,6 +597,7 @@ export const copy = {
         : `${n} ${n === 1 ? "run" : "runs"} closed; unused credits returned.`,
     endedReasons: {
       breaker: "Stopped after three products in a row failed",
+      // Runs that ended before ADR-0036 removed this limit (migration 0051).
       unrecovered_cost_cap: "Stopped: this period's limit for failed products is reached",
       spend_limit: "Stopped: the AI provider's spending limit is reached",
       provider_error: "Stopped: the AI provider returned an error",
