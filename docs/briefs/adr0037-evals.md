@@ -1,7 +1,7 @@
 # ADR-0037 PR 9: agent evals (the case format, the CI replay and the first golden set)
 
-- Status: brief, built 2026-10-25 on `claude/adr0037-evals` from `main` at `66689751` (#72, ADR-0037 merged). Decisions: [ADR-0037](../decisions/adr/ADR-0037-main-agent-and-scoped-subagents.md) item 10 (evals before folding or splitting; designs compared task by task) and item 9 (no switch goes on before a passing eval round), ADR-0027 (the loop's checks in code, the run limits, "each release passing its recorded evals"), ADR-0035 item 4 (live rounds under the standing approval) and ADR-0039 (credits are the only spend limit; PR #75, accepted, not yet merged). Plan: [adr-0037-implementation.md](../plan/adr-0037-implementation.md) row 9.
-- Change class: routine (ADR-0002). A test harness, data files and one operator command; no migration (the next free number on `main` stays 0052), contract, capability, grant, provider, retention or Worker change. One new switch, `docs/decisions/agent-evals-live.json`, committed off with an `edge:check` guard. No live provider is called.
+- Status: brief, built 2026-10-25 on `claude/adr0037-evals` from `main` at `66689751` (#72, ADR-0037 merged). Decisions: [ADR-0037](../decisions/adr/ADR-0037-main-agent-and-scoped-subagents.md) item 10 (evals before folding or splitting; designs compared task by task) and item 9 (no switch goes on before a passing eval round), ADR-0027 (the loop's checks in code, the run limits, "each release passing its recorded evals"), ADR-0035 item 4 (live rounds under the standing approval) and [ADR-0039](../decisions/adr/ADR-0039-credits-only-spend-limit.md) (credits are the only spend limit; merged in #75 and taken in with `origin/main` on 2026-10-26). Plan: [adr-0037-implementation.md](../plan/adr-0037-implementation.md) row 9.
+- Change class: routine (ADR-0002). A test harness, data files and one operator command; no migration (none on this branch; `main` holds 0001 to 0052 since #68), contract, capability, grant, provider, retention or Worker change. One new switch, `docs/decisions/agent-evals-live.json`, committed off with an `edge:check` guard. No live provider is called.
 
 ## Goal
 
@@ -36,7 +36,9 @@ New: `packages/policy/src/evals/{format,canonical,world,replay,score,report,roun
 - [x] `npm run evals -- replay`: `teammates@1` 16 of 16; `handoff_only@1` 2 pass, 3 fail, 11 without a recording.
 - [x] Local, 2026-10-25 (load 300 to 400): `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify` (graph check 0 errors), `format:check`, `graph -- check` all pass; `npm test` 4,637 of 4,637. No lab: nothing here touches PostgreSQL or a Worker.
 - [x] Local, 2026-10-26, after the review fixes (load 300 to 1,000): `tests/agent-evals.test.mjs` and `tests/edge-config.test.mjs` 57 of 57; `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify`, `format:check`, `graph -- check` (0 errors) all pass; `npm run evals -- replay`: `teammates@1` 16 of 16, `handoff_only@1` 2 pass, 3 fail, 11 without a recording; `npm test` 4,639 of 4,640, the one failure a 5-second timing check in `tests/standalone-login-http.test.mjs` (untouched here) that passed 40 of 40 on its rerun.
-- [ ] Hosted CI `foundation`; Tier 2 AI review (separate context, same model family).
+- [x] Local, 2026-10-26, after merging `origin/main` at `fd45f7cc` (#68 shop knowledge, #76 plan graph, #77 key format; `scripts/edge.mjs` and `tests/edge-config.test.mjs` conflicted, and both switch records and their tests are kept; load 330 to 840): `tests/agent-evals.test.mjs` and `tests/edge-config.test.mjs` 58 of 58; `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments), `verify`, `format:check`, `graph -- check` (0 errors) all pass; `npm run contracts:generate` changes nothing; `npm run evals -- replay`: `teammates@1` 16 of 16, `handoff_only@1` 2 pass, 3 fail, 11 without a recording; `npm test` 4,683 of 4,683. No lab applies.
+- [x] Tier 2 AI review (separate context, same model family): see below.
+- [ ] Hosted CI `foundation`.
 
 ## Review findings (AI review, separate context, same model family) and fixes
 
