@@ -1,6 +1,6 @@
 # Turn the model provider on (Claude, the owner's key)
 
-- Status: built, 2026-10-25. Branch `claude/model-provider-on`, one PR. The v1 build order's step 2 (ADR-0035 item 8.2): the model goes on with the owner's Anthropic key, after "Disconnect store" (#53, `ed5c70e5`; M3 owner decision 14).
+- Status: built, 2026-10-25. Branch `claude/model-provider-on`, one PR, cut from `12615ad6` and brought up to main `13e04367` (#71, the shop-specific webhooks) by a merge, so the reviewed head is the head that merges. The v1 build order's step 2 (ADR-0035 item 8.2): the model goes on with the owner's Anthropic key, after "Disconnect store" (#53, `ed5c70e5`; M3 owner decision 14).
 - Change class: material, already owner-approved. ADR-0022 items 7, 10 and 11 chose the provider, the broker custody and the caps in code. ADR-0035 items 4 and 8.2 approved turning it on, standing. No new decision is taken here. The Tier 2 review uses the security lens (credentials, provider effects, spend).
 - The owner's facts (chat, 2026-10-25): the key is saved as `~/.config/morrow/staging/anthropic-api-key`. The Console workspace `Morrow` has a monthly spend limit, in the owner's words "Anthropic limit 100$". Claude did not read the file or open the Console.
 
@@ -20,6 +20,7 @@ The owner's own Listings request in the workspace reaches Claude through the one
   - `MORROW_MODEL_PROVIDER: "anthropic"` goes into `env.staging.vars` of the api, the broker and the orchestrator.
   - The orchestrator also gets `MORROW_DATABASE_BINDING_JSON`, byte-equal to the api's.
   - `ANTHROPIC_API_KEY` goes into the broker's `env.staging` `secrets.required`, making 15 names.
+  - The staging broker keeps #71's `CONNECTOR_CONFIGURATION_JSON` beside the new var, so it holds 21 bindings (25 with Stripe on).
   - The Worker types are regenerated (`edge:types`).
   - Development and production are unchanged. They carry no switch.
 - **Key placement.** `npm run staging:put-secret -- ANTHROPIC_API_KEY` has the same safeguards as every other name:
@@ -66,7 +67,9 @@ The choice is option (a), the Stripe switch's protocol: one PR, merge, `put-secr
 ## Operator runbook
 
 1. **Merge** once `foundation` is green on the exact head and the Tier 2 AI review has passed.
-2. **The merge commit's `Deploy staging` run stops at gate 6.** It reports `"code":"STAGING_BROKER_SECRETS_MISMATCH"`, `"missing":["ANTHROPIC_API_KEY"]` and `"next":"run_staging_put_secret_then_gh_run_rerun"`, with nothing uploaded. This PR has no migration, so gate 3 passes first.
+2. **The merge commit's `Deploy staging` run stops before any upload.**
+   - **Gate 3 may hold first.** This PR has no migration, but main now ends at 0049 (#71 added 0048 and 0049), and the activity log's last `staging:migrate` is ledger 46. If the staging schema head is behind main's manifest, the run stops with `"code":"STAGING_SCHEMA_HEAD_MISMATCH"` and `"next":"run_staging_migrate_then_gh_run_rerun"`. Run `npm run staging:migrate` from a clean checkout at reviewed `origin/main`, log it, then rerun the held run (`gh run rerun <run id> --repo sultanhunter/Morrow`). That rerun then stops at gate 6.
+   - **Gate 6.** With the schema current, the run reports `"code":"STAGING_BROKER_SECRETS_MISMATCH"`, `"missing":["ANTHROPIC_API_KEY"]` and `"next":"run_staging_put_secret_then_gh_run_rerun"`, with nothing uploaded.
 3. **Place the key from reviewed main.** Use a clean checkout at `origin/main` (the merge commit, with `foundation` green) and run `npm run staging:put-secret -- ANTHROPIC_API_KEY`. Expect `{"command":"put-secret","secret":"ANTHROPIC_API_KEY","versionId":"<uuid>"}`.
 4. **Rerun the held deploy:** `gh run rerun <run id> --repo sultanhunter/Morrow`.
    - If `main` has moved on, rerun the newest main commit's held run instead; the older one reports `superseded`.
@@ -96,8 +99,8 @@ For an immediate stop, use "Stop AI work", the platform stop or the kill switch,
 - `scripts/staging-files.mjs`: `anthropicKeyFormat` and the `anthropic-api-key` spec.
 - `scripts/staging-deploy.mjs`: gate 6's `missing` and `next`.
 - Tests: `edge-config`, `staging-secrets`, `staging-deploy`, `broker`, `api-environment` and the staging fakes.
-- `infra/rotation-runbook.md`, and a note in `docs/briefs/M3-listings-agent.md`.
-- Comments only, where they said the switch is committed off: `scripts/edge.mjs`, `packages/identity/src/broker-protocol.ts` and `apps/workers/src/orchestrator.ts`.
+- `infra/rotation-runbook.md`, and notes in `docs/briefs/M3-listings-agent.md` (the switch was committed off until 2026-10-25, in the past tense) and the AC21 row of `docs/acceptance/P04.md`.
+- Comments only, where they said the switch is committed off: `scripts/edge.mjs`, `packages/identity/src/broker-protocol.ts`, `apps/workers/src/orchestrator.ts`, `apps/api/src/deployed-worker.ts`, `tests/orchestrator.test.mjs` and `tests/managed-workspace-composition.test.mjs`. They now say "on in staging since model-provider-on (2026-10-25)".
 
 No migration, contract, route, binding kind, provider resource or Worker code changes. The api, broker and orchestrator code already reads the switch.
 
@@ -135,7 +138,12 @@ No migration, contract, route, binding kind, provider resource or Worker code ch
   - `broker-model`, `broker-challenge` and `orchestrator` pass;
   - `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments, types up to date), `build`, `edge:dry-run` (12 bundles), `verify` and `format:check` pass;
   - `npm test` 4539 of 4539.
-- [ ] Hosted `foundation` on the PR head; Tier 2 AI review (separate context, same model family) with the security lens.
+- [x] After the merge of main `13e04367` (review finding F1), same day, load average up to about 670:
+  - `edge-config`, `broker`, `broker-challenge` and `api-environment` 75 of 75;
+  - `staging-secrets`, `staging-deploy`, `broker-model`, `orchestrator`, `managed-workspace-composition`, `broker-shopify-webhooks`, `connector-worker` and `broker-protocol` 124 of 124;
+  - `format:check`, `typecheck`, `typecheck:edge`, `edge:check` (12 Worker environments, types up to date), `edge:dry-run` (12 bundles) and `verify` pass;
+  - `npm test` 4562 of 4562.
+- [ ] Hosted `foundation` on the PR head; Tier 2 AI review (separate context, same model family) with the security lens. The first review ran on the pre-merge head `cb496c44`; its confirmed findings F1 and F3 are fixed here, and the review runs again on the integrated head.
 
 ## Remaining gates
 
