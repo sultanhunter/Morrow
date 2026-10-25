@@ -11,8 +11,11 @@
 //   workspace.task.delegate or an agents.* capability.
 // - A workspace package (origin workspace, id workspace.*) holds nothing ADR-0037 item 5
 //   excludes: no human_only capability with any verb, no support.*, no Level 2, no inbound
-//   mail; its roleTextDigest is its instructions' digest. A first-party package never takes a
-//   workspace id.
+//   mail. It asks for exactly the capabilities, verbs, Shopify scopes, customer-data level and
+//   computer flag its tools derive (item 4), the teammate result tool among them; it pins only
+//   skills eligible for workspace agents; its roleTextDigest binds its instructions and skill
+//   text (any change to either is a new card). A first-party package never takes a workspace
+//   id.
 // - A tool's capability and verb are among those the package asks for (the install screen
 //   shows them); an agent never asks for a human_only capability except to propose it.
 // - Only Support (morrow.support) asks for support.* or Level 2; Level 1 and orders.read need
@@ -23,6 +26,7 @@
 import type { Current_AgentPackage, Current_SkillManifest } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import catalogue from "../../../docs/contracts/capabilities.json";
+import { heldGrantsDerived, workspaceRoleText } from "./agent-cards";
 import { defaultLoopProfile, loopEntry } from "./loop-catalogue";
 import { canonicalDigest } from "./review";
 import { isAgentTool, toolEntry, toolsForContext } from "./tool-catalogue";
@@ -33,6 +37,7 @@ export type AgentPackageCode =
   | "PACKAGE_ID_ORIGIN_MISMATCH"
   | "AGENT_AUTHORITY_OUTSIDE_COORDINATOR"
   | "WORKSPACE_EXCLUDED"
+  | "WORKSPACE_GRANTS_NOT_DERIVED"
   | "ROLE_TEXT_DIGEST_MISMATCH"
   | "TOOL_NOT_FOR_KIND"
   | "COORDINATOR_TOOLS_NOT_FIXED"
@@ -47,6 +52,7 @@ export type AgentPackageCode =
   | "SKILL_MANIFEST_MISSING"
   | "SKILL_DIGEST_MISMATCH"
   | "SKILL_ADDS_TOOL"
+  | "SKILL_NOT_FOR_WORKSPACE"
   | "PROFILE_NOT_IN_CATALOGUE"
   | "PROFILE_DEFAULT_NOT_OFFERED"
   | "KIND_DEFAULT_NOT_OFFERED";
@@ -134,9 +140,19 @@ export function inspectAgentPackage(
       pkg.triggerKinds.includes("inbound_mail"))
   )
     codes.add("WORKSPACE_EXCLUDED");
+  // ADR-0037 item 4: code derives a workspace agent's grants from its tools, so the package
+  // asks for exactly those (a wider capability, verb or scope, read_customers included, fails).
+  if (pkg.origin === "workspace") {
+    const derived = heldGrantsDerived(pkg);
+    if (derived === "card_tool_excluded") codes.add("WORKSPACE_EXCLUDED");
+    if (derived !== "ok") codes.add("WORKSPACE_GRANTS_NOT_DERIVED");
+  }
   if (
     pkg.origin === "workspace" &&
-    (pkg.instructions === null || canonicalDigest(pkg.instructions) !== pkg.roleTextDigest)
+    (pkg.instructions === null ||
+      canonicalDigest(
+        workspaceRoleText({ instructions: pkg.instructions, skillTexts: pkg.skillTexts }),
+      ) !== pkg.roleTextDigest)
   )
     codes.add("ROLE_TEXT_DIGEST_MISMATCH");
   // Customer data, orders and the computer.
@@ -160,6 +176,8 @@ export function inspectAgentPackage(
     }
     if (skillDigest(manifest) !== pinned.digest) codes.add("SKILL_DIGEST_MISMATCH");
     if (manifest.tools.some((name) => !pkg.tools.includes(name))) codes.add("SKILL_ADDS_TOOL");
+    if (pkg.origin === "workspace" && !manifest.eligibleForWorkspaceAgents)
+      codes.add("SKILL_NOT_FOR_WORKSPACE");
   }
   // Model entries (ADR-0027 item 12): each offered entry exists, the default is offered, and
   // a first-party release offers its kind's default. A workspace package offers the entry its
@@ -182,6 +200,7 @@ export function inspectAgentPackage(
     "TOOL_NOT_FOR_KIND",
     "AGENT_AUTHORITY_OUTSIDE_COORDINATOR",
     "WORKSPACE_EXCLUDED",
+    "WORKSPACE_GRANTS_NOT_DERIVED",
     "ROLE_TEXT_DIGEST_MISMATCH",
     "COORDINATOR_TOOLS_NOT_FIXED",
     "TOOL_CAPABILITY_NOT_REQUESTED",
@@ -195,6 +214,7 @@ export function inspectAgentPackage(
     "SKILL_MANIFEST_MISSING",
     "SKILL_DIGEST_MISMATCH",
     "SKILL_ADDS_TOOL",
+    "SKILL_NOT_FOR_WORKSPACE",
     "PROFILE_NOT_IN_CATALOGUE",
     "PROFILE_DEFAULT_NOT_OFFERED",
     "KIND_DEFAULT_NOT_OFFERED",

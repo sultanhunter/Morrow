@@ -12,6 +12,8 @@
 // - Morrow opens an item only when it belongs to a result its own run received; a called
 //   teammate only when it is also named in its brief. Nothing customer-tagged enters Morrow's
 //   context. A model-written id is never authority to read.
+// - Taint only joins (ADR-0037 item 3(a), ADR-0034 item 3): a call a tainted run makes starts
+//   tainted, and the called run's items and result carry that taint with their own.
 import type {
   Current_AgentRunEndReason,
   Current_ReadTag,
@@ -23,6 +25,7 @@ import type {
   Current_TeammateFinding,
   Current_TeammateOutcome,
   Current_TeammateResult,
+  Current_TaintSource,
   Current_TeammateText,
   Current_ToolInputResultSubmit,
 } from "@morrow/contracts";
@@ -66,6 +69,29 @@ export class TeammateResultError extends Error {
 const encoder = new TextEncoder();
 const bytes = (text: string) => encoder.encode(text).length;
 const jsonBytes = (value: unknown) => bytes(JSON.stringify(value));
+
+// --- Taint ----------------------------------------------------------------------------------
+/** RunTaint's bound on listed sources. */
+export const runTaintSourceLimit = 24;
+/**
+ * The join of taints (ADR-0027 item 5, ADR-0034 item 3, ADR-0037 item 3(a)): untrusted_external
+ * when any is, never cleared, with every distinct source in order (the first taint's first).
+ * The flag never drops; past RunTaint's 24 sources the list keeps the first 24.
+ */
+export function joinRunTaint(...taints: readonly Current_RunTaint[]): Current_RunTaint {
+  const sources: Current_TaintSource[] = [];
+  const seen = new Set<string>();
+  for (const taint of taints)
+    for (const s of taint.sources) {
+      const key = JSON.stringify([s.source, s.sourceId]);
+      if (seen.has(key) || sources.length >= runTaintSourceLimit) continue;
+      seen.add(key);
+      sources.push({ source: s.source, sourceId: s.sourceId });
+    }
+  return taints.some((t) => t.contextTaint === "untrusted_external")
+    ? { contextTaint: "untrusted_external", sources }
+    : { contextTaint: "none", sources: [] };
+}
 
 // --- Paging -----------------------------------------------------------------------------------
 /** A table as stored: column headings and rows of text cells, one cell per column. */

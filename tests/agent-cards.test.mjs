@@ -10,16 +10,19 @@ import {
   addToTeamDocumentLive,
   agentCardDigest,
   cardCapabilityAllowed,
+  cardGrantsDerived,
   cardSkillsWithinTools,
   cardToolAllowed,
   cardTriggerKinds,
   deriveCardGrants,
   draftAgentCard,
+  heldGrantsDerived,
   reviseAgentCard,
   workspaceAgentLimit,
   workspacePackageFromCard,
+  workspaceRoleText,
 } from "../packages/policy/src/agent-cards.ts";
-import { inspectAgentPackage } from "../packages/policy/src/agent-package.ts";
+import { inspectAgentPackage, skillDigest } from "../packages/policy/src/agent-package.ts";
 import {
   fakeAddToTeamDocument,
   fakeAgentProposal,
@@ -28,6 +31,7 @@ import {
   fakeDigest,
   fakeIds,
   fakeOwner,
+  fakeSkillManifest,
   fakeTaint,
 } from "../packages/policy/src/agent-platform-fakes.ts";
 import { canonicalDigest } from "../packages/policy/src/review.ts";
@@ -240,6 +244,16 @@ test("the digest binds every field; an edit is a new revision that keeps the tai
       { ok: false, refusal: "input_invalid" },
       name,
     );
+  // Review F5: an editor outside the card's organization or workspace is never recorded
+  // (editors join item 5's conflict set), the same tenancy rule as the Add to team document.
+  for (const foreign of [
+    { ...member(), workspaceId: "ws_other" },
+    { ...member(), organizationId: "org_other" },
+  ])
+    assert.deepEqual(reviseAgentCard(tainted, { name: "Restock Watcher" }, foreign, at, skills), {
+      ok: false,
+      refusal: "input_invalid",
+    });
   // A kept skill still declares only tools the card holds.
   const withSkill = input();
   withSkill.skillIds = ["seo-audit"];
@@ -270,9 +284,9 @@ test("Add to team: a document bound to the digest, actor and session, for five m
     review: "solo_owner_phrase",
     issuedAt: "2026-10-26T09:00:00.000Z",
   };
-  const document = addToTeamDocument(card, fakeDigest("card"), binding);
-  assert.deepEqual(document, fakeAddToTeamDocument());
-  const bound = addToTeamDocument(card, digest, binding);
+  const bound = await addToTeamDocument(card, binding);
+  // The fake's digest is a placeholder; code computes the card's own (review F2).
+  assert.deepEqual({ ...bound, cardDigest: fakeDigest("card") }, fakeAddToTeamDocument());
   assert.equal(bound.cardDigest, digest);
   assert.equal(bound.expiresAt, "2026-10-26T09:05:00.000Z");
   assert.ok(addToTeamDocumentLive(bound, "2026-10-26T09:04:59.999Z"));
@@ -280,20 +294,38 @@ test("Add to team: a document bound to the digest, actor and session, for five m
   assert.equal(addToTeamDocumentLive(bound, "2026-10-26T08:59:59.000Z"), false);
   // A person of another workspace, or an unreadable time, gets no document.
   assert.equal(
-    addToTeamDocument(card, digest, {
+    await addToTeamDocument(card, {
       ...binding,
       actor: { ...fakeOwner(), workspaceId: "ws_other" },
     }),
     null,
   );
-  assert.equal(addToTeamDocument(card, digest, { ...binding, issuedAt: "soon" }), null);
-  assert.equal(addToTeamDocument(card, "not-a-digest", binding), null);
-  // The tainted card's document shows the taint above Add to team.
+  assert.equal(await addToTeamDocument(card, { ...binding, issuedAt: "soon" }), null);
+  // The tainted card's document shows the taint above Add to team, under its own digest: the
+  // binding and the grants it lists come from one card and cannot drift apart (review F2).
   const tainted = draft(
     input(),
     facts((f) => (f.taint = structuredClone(fakeTaint()))),
   ).card;
-  assert.deepEqual(addToTeamDocument(tainted, digest, binding).taint, fakeTaint());
+  const taintedDocument = await addToTeamDocument(tainted, binding);
+  assert.deepEqual(taintedDocument.taint, fakeTaint());
+  assert.equal(taintedDocument.cardDigest, await agentCardDigest(tainted));
+  assert.notEqual(taintedDocument.cardDigest, digest);
+  // A card whose grants are not those its tools derive, or outside AgentProposal@1, gets none.
+  for (const change of [
+    (c) => c.capabilities.push({ capabilityId: "catalog.products.read", verbs: ["view"] }),
+    (c) => c.optionalScopes.push("read_customers"),
+    (c) => (c.ownerOnly = []),
+    (c) => (c.dataClasses = ["inventory.levels.read"]),
+    (c) => (c.customerData = "none"),
+  ]) {
+    const widened = structuredClone(card);
+    change(widened);
+    assert.equal(cardGrantsDerived(widened), false);
+    assert.equal(await addToTeamDocument(widened, binding), null);
+  }
+  assert.ok(cardGrantsDerived(card));
+  assert.equal(await addToTeamDocument({ ...structuredClone(card), cardId: "" }, binding), null);
 });
 
 test("an approved card becomes a workspace package that passes the package checks", async () => {
@@ -301,9 +333,37 @@ test("an approved card becomes a workspace package that passes the package check
   const pkg = await workspacePackageFromCard(card, "workspace.restock_watch");
   assert.ok(validateCurrentDefinition("AgentPackage", pkg));
   assert.equal(pkg.origin, "workspace");
-  assert.equal(pkg.roleTextDigest, canonicalDigest(card.instructions));
+  // Review F3: the digest binds the instructions and the skill text.
+  assert.equal(pkg.roleTextDigest, canonicalDigest(workspaceRoleText(card)));
+  assert.equal(
+    pkg.roleTextDigest,
+    canonicalDigest({ instructions: card.instructions, skillTexts: card.skillTexts }),
+  );
   assert.equal(pkg.evalDigest, null);
   assert.deepEqual(inspectAgentPackage(pkg, [], 2), []);
+  assert.equal(heldGrantsDerived(pkg), "ok");
   for (const id of ["morrow.restock", "workspace.", "workspace.Restock", "store_fake"])
     assert.equal(await workspacePackageFromCard(card, id), null, id);
+  const widened = structuredClone(card);
+  widened.optionalScopes.push("read_customers");
+  assert.equal(await workspacePackageFromCard(widened, "workspace.restock_watch"), null);
+});
+
+test("review F3: a workspace package pins only skills eligible for workspace agents", async () => {
+  const eligible = fakeSkillManifest();
+  const ineligible = { ...structuredClone(eligible), eligibleForWorkspaceAgents: false };
+  const withSkill = input();
+  withSkill.skillIds = ["seo-audit"];
+  withSkill.tools = ["knowledge.search", "products.read", "report.write", "proposal.listing"];
+  for (const [manifest, expected] of [
+    [eligible, []],
+    [ineligible, ["SKILL_NOT_FOR_WORKSPACE"]],
+  ]) {
+    // The server's facts pin the manifest's digest; an ineligible skill.json still fails the
+    // package check even when stale facts let a card pick it.
+    const pinnedFacts = facts((f) => (f.skills[0].digest = skillDigest(manifest)));
+    const card = draft(structuredClone(withSkill), pinnedFacts).card;
+    const pkg = await workspacePackageFromCard(card, "workspace.seo_watch");
+    assert.deepEqual(inspectAgentPackage(pkg, [manifest], 2), expected);
+  }
 });

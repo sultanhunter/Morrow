@@ -10617,7 +10617,7 @@
       "additionalProperties": false
     },
     "SkillManifest": {
-      "description": "SkillManifest@1 (ADR-0023 decision 11d; PR 10): the closed skill.json beside a first-party skills/<id>/SKILL.md, pinned by its release's digest. A skill declares the tools its instructions use and the data classes it reads; it never grants a tool or a capability. eligibleForWorkspaceAgents: an agent card may pick it by id (ADR-0037 item 4), pinned by its digest.",
+      "description": "SkillManifest@1 (ADR-0023 decision 11d; PR 10): the closed skill.json beside a first-party skills/<id>/SKILL.md, pinned by its release's digest. A skill declares the tools its instructions use and the data classes it reads; it never grants a tool or a capability. eligibleForWorkspaceAgents: an agent card may pick it by id and a workspace package may pin it (ADR-0037 item 4), pinned by its digest.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -10685,7 +10685,7 @@
       "additionalProperties": false
     },
     "AgentPackage": {
-      "description": "AgentPackage@1 (ADR-0023 decisions 6 and 11d, ADR-0027 items 3 and 12, ADR-0037 item 4; PR 10, generalised in ADR-0037 PR 2): one release of an agent as data, of either origin: its role text (first-party: by digest; workspace: the approved card's instructions, whose digest roleTextDigest is) and pinned skills, a workspace agent's skill text, the tools it declares, the capabilities it asks for, optional Shopify scopes, trigger kinds, customer-data level, whether it uses the computer, and the model entries it offers with its default. All agents share one tool catalogue, loop and gateway; they differ only in this. Code checks what JSON Schema cannot (agent-package.ts): every tool's capability is asked for, no package but the Coordinator's holds an agent.* tool, workspace.task.delegate or an agents.* capability, only Support asks for support.* or level 2, a workspace package holds nothing ADR-0037 item 5 excludes, and no package declares both customer reads and the computer.",
+      "description": "AgentPackage@1 (ADR-0023 decisions 6 and 11d, ADR-0027 items 3 and 12, ADR-0037 item 4; PR 10, generalised in ADR-0037 PR 2): one release of an agent as data, of either origin: its role text (first-party: by digest; workspace: the approved card's instructions and skill text, both bound by roleTextDigest, the SHA-256 of the RFC 8785 text of {instructions, skillTexts}) and pinned skills, a workspace agent's skill text, the tools it declares, the capabilities it asks for, optional Shopify scopes, trigger kinds, customer-data level, whether it uses the computer, and the model entries it offers with its default. All agents share one tool catalogue, loop and gateway; they differ only in this. Code checks what JSON Schema cannot (agent-package.ts): every tool's capability is asked for, no package but the Coordinator's holds an agent.* tool, workspace.task.delegate or an agents.* capability, only Support asks for support.* or level 2, a workspace package holds nothing ADR-0037 item 5 excludes, asks for exactly the capabilities, verbs, scopes, customer-data level and computer flag its tools derive (item 4) and pins only skills eligible for workspace agents, and no package declares both customer reads and the computer.",
       "type": "object",
       "properties": {
         "schemaVersion": {

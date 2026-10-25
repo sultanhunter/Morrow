@@ -4,7 +4,8 @@
 // page, so joining the pages gives back exactly what the teammate wrote. Morrow opens only
 // items of results its own run received; a teammate only those named in its brief that its
 // calling run received; nothing customer-tagged reaches Morrow; each call is admitted alone
-// under the kernel's 32 children and the balance (credits only, no money cap).
+// under the kernel's 32 children and the balance (credits only, no money cap). Review F4: a
+// tainted calling run's taint carries into the called run, its items and its result.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -13,10 +14,12 @@ import {
   codeOutcome,
   coordinatorMayOpen,
   csvText,
+  joinRunTaint,
   receivedItemIds,
   resultItemPage,
   resultItemPageBytes,
   resultSubmitValid,
+  runTaintSourceLimit,
   tableItemDraft,
   tablePages,
   teammateMayOpen,
@@ -75,6 +78,7 @@ const memorySink = () => {
   return { stored, sink };
 };
 const bytes = (value) => Buffer.byteLength(JSON.stringify(value), "utf8");
+const untainted = () => ({ contextTaint: "none", sources: [] });
 const joined = (pages) => pages.join("");
 
 test("the team switches are committed off", () => {
@@ -351,11 +355,19 @@ const world = (options = {}) => {
     created: [],
   }));
   const paused = { ...scripted(fakeIds.inventoryInstallationId, listings.respond), active: false };
+  // A teammate whose own run reads nothing untrusted.
+  const clean = scripted("inst_clean", (brief) => ({
+    submit: submit((s) => (s.summary = brief.objective)),
+    endReason: "completed",
+    readTags: [{ storeId: null, capability: "workspace.knowledge.read" }],
+    taint: untainted(),
+    created: [],
+  }));
   let balance = options.balance ?? Infinity;
   const runner = createFakeTeammateRunner({
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
-    teammates: [listings, support, paused],
+    teammates: [listings, support, paused, clean],
     store,
     coversCall: () => balance-- > 0,
     now,
@@ -366,6 +378,7 @@ let nextToolUse = 1;
 const ask = (runner, change = {}) =>
   runner.call({
     parentRunId: fakeIds.runId,
+    callerTaint: untainted(),
     toolUseId: "toolu_" + nextToolUse++,
     installationId: fakeIds.listingsInstallationId,
     brief: fakeTeammateBrief(),
@@ -410,6 +423,12 @@ test("refusals: a paused or unknown teammate, the 32-children bound, the balance
     refusal: "teammate_unavailable",
   });
   assert.deepEqual(await ask(runner, { brief: "do it" }), { ok: false, refusal: "input_invalid" });
+  for (const callerTaint of [
+    undefined,
+    { contextTaint: "untrusted_external", sources: [] },
+    { contextTaint: "none", sources: [{ source: "product", sourceId: null }] },
+  ])
+    assert.deepEqual(await ask(runner, { callerTaint }), { ok: false, refusal: "input_invalid" });
   assert.deepEqual(await ask(runner, { installationId: fakeIds.supportInstallationId }), {
     ok: false,
     refusal: "result_customer_tagged",
@@ -496,4 +515,54 @@ test("the fake store: items read page by page by the run that received them, ref
       refusal: "item_not_received",
     },
   );
+});
+
+test("taint only joins: untrusted when any is, distinct sources in order, never cleared", () => {
+  const product = { source: "product", sourceId: "product:1001" };
+  const mail = { source: "teammate_result", sourceId: "run_call_fake_1" };
+  const tainted = (...sources) => ({ contextTaint: "untrusted_external", sources });
+  assert.deepEqual(joinRunTaint(untainted(), untainted()), untainted());
+  assert.deepEqual(joinRunTaint(untainted(), tainted(product)), tainted(product));
+  assert.deepEqual(joinRunTaint(tainted(product), untainted()), tainted(product));
+  assert.deepEqual(
+    joinRunTaint(tainted(mail), tainted(product, mail), tainted(product)),
+    tainted(mail, product),
+  );
+  // A null source id is its own source, distinct from any id.
+  assert.deepEqual(
+    joinRunTaint(tainted({ source: "upload", sourceId: null }), tainted(product)),
+    tainted({ source: "upload", sourceId: null }, product),
+  );
+  // RunTaint lists at most 24 sources: the flag stays and the first 24 are kept.
+  const many = Array.from({ length: 30 }, (_, i) => ({ source: "product", sourceId: `p:${i}` }));
+  const joinedTaint = joinRunTaint(tainted(...many.slice(0, 20)), tainted(...many.slice(20)));
+  assert.equal(joinedTaint.contextTaint, "untrusted_external");
+  assert.equal(joinedTaint.sources.length, runTaintSourceLimit);
+  assert.deepEqual(joinedTaint.sources, many.slice(0, 24));
+  assert.ok(validateCurrentDefinition("RunTaint", joinedTaint));
+});
+
+test("review F4: a tainted Morrow run's call starts tainted; its items and result carry the taint", async () => {
+  const { store, runner } = world();
+  const callerTaint = {
+    contextTaint: "untrusted_external",
+    sources: [{ source: "teammate_result", sourceId: "run_call_earlier" }],
+  };
+  // The called teammate reads nothing untrusted, yet its result carries its caller's taint.
+  const brief = { ...fakeTeammateBrief(), objective: "Long brief. ".repeat(1200) };
+  const clean = await ask(runner, { installationId: "inst_clean", callerTaint, brief });
+  assert.ok(clean.ok);
+  assert.deepEqual(clean.result.taint, callerTaint);
+  assert.ok(clean.result.items.length > 0);
+  for (const item of clean.result.items)
+    assert.deepEqual(store.item(item.itemId).taint, callerTaint);
+  // An untainted caller's call to the same teammate stays untainted.
+  const plain = await ask(runner, { installationId: "inst_clean" });
+  assert.deepEqual(plain.result.taint, untainted());
+  // Both taints join when the teammate's own run reads untrusted content too.
+  const both = await ask(runner, { callerTaint });
+  assert.deepEqual(both.result.taint, {
+    contextTaint: "untrusted_external",
+    sources: [...callerTaint.sources, ...fakeTaint().sources],
+  });
 });

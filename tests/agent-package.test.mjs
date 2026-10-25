@@ -3,7 +3,9 @@
 // no customer reads with the computer, pinned skills that add no tool, offered model entries.
 // ADR-0037 PR 2: one kind with two origins (a workspace package carries its instructions and
 // skill text), depth 1 (no agent.*, delegation or agents.* outside the Coordinator) and item
-// 5's exclusions for workspace packages; the specialist kind retired.
+// 5's exclusions for workspace packages; the specialist kind retired. Review F1 and F3: a
+// workspace package asks for exactly the grants its tools derive, its roleTextDigest binds its
+// instructions and skill text, and it pins only skills eligible for workspace agents.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { canonicalDigest } from "../packages/policy/src/review.ts";
@@ -205,7 +207,10 @@ test("built-in kinds: the Coordinator holds exactly its tools; neither built-in 
 // ADR-0037 items 4 and 5: a workspace package, as an approved card becomes.
 const workspace = () => {
   const pkg = structuredClone(fakeWorkspacePackage());
-  pkg.roleTextDigest = canonicalDigest(pkg.instructions);
+  pkg.roleTextDigest = canonicalDigest({
+    instructions: pkg.instructions,
+    skillTexts: pkg.skillTexts,
+  });
   return pkg;
 };
 const workspaceChanged = (change) => {
@@ -213,7 +218,7 @@ const workspaceChanged = (change) => {
   change(pkg);
   return pkg;
 };
-test("ADR-0037 item 4: a workspace package passes with its instructions' digest and one offered model", () => {
+test("ADR-0037 item 4: a workspace package passes with its role text's digest and one offered model", () => {
   assert.ok(validateCurrentDefinition("AgentPackage", workspace()));
   assert.deepEqual(inspectAgentPackage(workspace(), [], 2), []);
   // Its model is the workspace's default for new teammates, even when that is not the kind's.
@@ -234,6 +239,60 @@ for (const [name, change, expected] of [
     "edited instructions",
     (p) => (p.instructions += " Also change prices."),
     "ROLE_TEXT_DIGEST_MISMATCH",
+  ],
+  // Review F3: skill text is bound too; a change or an addition after approval fails.
+  [
+    "edited skill text",
+    (p) => (p.skillTexts[0].body += " Also change prices."),
+    "ROLE_TEXT_DIGEST_MISMATCH",
+  ],
+  [
+    "added skill text",
+    (p) => p.skillTexts.push({ title: "Prices", body: "Lower every price by half." }),
+    "ROLE_TEXT_DIGEST_MISMATCH",
+  ],
+  [
+    "the instructions' digest alone",
+    (p) => (p.roleTextDigest = canonicalDigest(p.instructions)),
+    "ROLE_TEXT_DIGEST_MISMATCH",
+  ],
+  // Review F1: exactly the grants the tools derive (item 4), no wider.
+  [
+    "a scope no tool needs (read_customers)",
+    (p) => p.optionalScopes.push("read_customers"),
+    "WORKSPACE_GRANTS_NOT_DERIVED",
+  ],
+  [
+    "a capability no tool needs",
+    (p) => p.capabilities.push({ capabilityId: "catalog.products.read", verbs: ["view"] }),
+    "WORKSPACE_GRANTS_NOT_DERIVED",
+  ],
+  [
+    "a verb no tool needs",
+    (p) =>
+      (p.capabilities.find((c) => c.capabilityId === "inventory.levels.read").verbs = [
+        "view",
+        "propose",
+      ]),
+    "WORKSPACE_GRANTS_NOT_DERIVED",
+  ],
+  [
+    "a customer-data level no tool needs",
+    (p) => {
+      p.tools = p.tools.filter((t) => t !== "orders.summary");
+      p.capabilities = p.capabilities.filter((c) => c.capabilityId !== "orders.read");
+    },
+    "WORKSPACE_GRANTS_NOT_DERIVED",
+  ],
+  [
+    "the computer with no computer tool",
+    (p) => (p.computer = true),
+    "WORKSPACE_GRANTS_NOT_DERIVED",
+  ],
+  [
+    "no teammate result tool",
+    (p) => (p.tools = p.tools.filter((t) => t !== "result.submit")),
+    "WORKSPACE_GRANTS_NOT_DERIVED",
   ],
   ["a first-party id", (p) => (p.id = "morrow.restock"), "PACKAGE_ID_ORIGIN_MISMATCH"],
   [

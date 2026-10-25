@@ -161,6 +161,78 @@ export class AgentCardError extends Error {
   }
 }
 
+/** Grants as a card or a workspace package holds them. */
+export interface HeldGrants {
+  readonly tools: readonly string[];
+  readonly capabilities: readonly {
+    readonly capabilityId: string;
+    readonly verbs: readonly string[];
+  }[];
+  readonly optionalScopes: readonly string[];
+  readonly customerData: string;
+  readonly computer: boolean;
+}
+const sameSet = (held: readonly string[], derived: readonly string[]) =>
+  held.length === derived.length &&
+  new Set(held).size === held.length &&
+  held.every((x) => derived.includes(x));
+const capabilityKey = (rows: HeldGrants["capabilities"]) =>
+  rows
+    .map((row) => row.capabilityId + "=" + [...row.verbs].sort().join("+"))
+    .sort()
+    .join(",");
+const heldAgainstDerived = (
+  held: HeldGrants,
+): { readonly check: "ok" | "card_tool_excluded" | "grants_not_derived"; grants?: CardGrants } => {
+  let grants: CardGrants;
+  try {
+    grants = deriveCardGrants(held.tools.filter((name) => name !== teammateResultTool));
+  } catch (error) {
+    if (!(error instanceof AgentCardError)) throw error;
+    return { check: error.code === "card_tool_excluded" ? error.code : "grants_not_derived" };
+  }
+  const same =
+    sameSet(held.tools, grants.tools) &&
+    capabilityKey(held.capabilities) === capabilityKey(grants.capabilities) &&
+    sameSet(held.optionalScopes, grants.optionalScopes) &&
+    held.customerData === grants.customerData &&
+    held.computer === grants.computer;
+  return { check: same ? "ok" : "grants_not_derived", grants };
+};
+/**
+ * Whether held grants are exactly what code derives from the tools (item 4): the teammate
+ * result tool among them, and the same capabilities and verbs, Shopify scopes, customer-data
+ * level and computer flag, no more and no fewer. card_tool_excluded when a tool may never be
+ * on a card (item 5). The package checks run it on every workspace package.
+ */
+export function heldGrantsDerived(
+  held: HeldGrants,
+): "ok" | "card_tool_excluded" | "grants_not_derived" {
+  return heldAgainstDerived(held).check;
+}
+/** Whether a card's grants, data classes and Owner-only kinds are those its tools derive. */
+export function cardGrantsDerived(card: Current_AgentProposal): boolean {
+  const { check, grants } = heldAgainstDerived(card);
+  return (
+    check === "ok" &&
+    grants !== undefined &&
+    sameSet(card.dataClasses, grants.dataClasses) &&
+    sameSet(card.ownerOnly, grants.ownerOnly)
+  );
+}
+
+/**
+ * What a workspace package's roleTextDigest binds (item 4: any change to instructions or skills
+ * is a new card): its instructions and its skill text, in order.
+ */
+export const workspaceRoleText = (value: {
+  readonly instructions: string;
+  readonly skillTexts: readonly { readonly title: string; readonly body: string }[];
+}) => ({
+  instructions: value.instructions,
+  skillTexts: value.skillTexts.map((s) => ({ title: s.title, body: s.body })),
+});
+
 /** A first-party skill a card may pick, as the server knows it. */
 export interface CardSkill {
   readonly id: string;
@@ -292,11 +364,13 @@ const editKeys = new Set([
   "removeSkillTexts",
 ]);
 /**
- * The next revision of a card after a person's edit, or input_invalid: a key outside CardEdit
- * (there is no edit that adds: an addition is a new card and a new approval), removing a tool
- * the card does not hold, the teammate result tool, every picked tool, or a tool a kept skill
- * declares; or a value outside AgentProposal@1. Grants are derived again from the remaining
- * tools, so an edit only narrows; the taint, store, limits and model stay.
+ * The next revision of a card after a person's edit, or input_invalid: an editor outside the
+ * card's organization and workspace (editors join item 5's conflict set, so a foreign
+ * principal is never recorded), a key outside CardEdit (there is no edit that adds: an
+ * addition is a new card and a new approval), removing a tool the card does not hold, the
+ * teammate result tool, every picked tool, or a tool a kept skill declares; or a value outside
+ * AgentProposal@1. Grants are derived again from the remaining tools, so an edit only narrows;
+ * the taint, store, limits and model stay.
  */
 export function reviseAgentCard(
   card: Current_AgentProposal,
@@ -308,6 +382,10 @@ export function reviseAgentCard(
   | { readonly ok: true; readonly card: Current_AgentProposal }
   | { readonly ok: false; readonly refusal: CardRefusal } {
   if (
+    !editor ||
+    typeof editor !== "object" ||
+    editor.organizationId !== card.organizationId ||
+    editor.workspaceId !== card.workspaceId ||
     !edit ||
     typeof edit !== "object" ||
     Object.keys(edit).some((key) => !editKeys.has(key)) ||
@@ -374,12 +452,14 @@ export function cardSkillsWithinTools(
 
 /**
  * The "Add to team" document (AddToTeamDocument@1, item 4): the card's digest, revision and
- * derived grants, bound to the actor and a standalone-workspace session, for 5 minutes. The
- * actor must be a person in the card's workspace; the review path is PR 3's to decide.
+ * derived grants, bound to the actor and a standalone-workspace session, for 5 minutes. Code
+ * computes the digest from the card itself, so the document's binding and the grants it lists
+ * cannot drift apart (an approval binds the exact proposal's digest). Null for a card outside
+ * AgentProposal@1 or whose grants are not those its tools derive, an actor outside the card's
+ * workspace, or an unreadable time; the review path is PR 3's to decide.
  */
-export function addToTeamDocument(
+export async function addToTeamDocument(
   card: Current_AgentProposal,
-  cardDigest: string,
   binding: {
     readonly documentId: string;
     readonly actor: Current_HumanActorRef;
@@ -387,14 +467,17 @@ export function addToTeamDocument(
     readonly review: Current_AddToTeamDocument["review"];
     readonly issuedAt: string;
   },
-): Current_AddToTeamDocument | null {
+): Promise<Current_AddToTeamDocument | null> {
   const issued = Date.parse(binding.issuedAt);
   if (
+    !validateCurrentDefinition("AgentProposal", card) ||
+    !cardGrantsDerived(card) ||
     binding.actor.organizationId !== card.organizationId ||
     binding.actor.workspaceId !== card.workspaceId ||
     !Number.isFinite(issued)
   )
     return null;
+  const cardDigest = await agentCardDigest(card);
   const document: Current_AddToTeamDocument = {
     schemaVersion: 1,
     documentId: binding.documentId,
@@ -438,15 +521,16 @@ export function addToTeamDocumentLive(document: Current_AddToTeamDocument, now: 
 export const workspacePackageId = /^workspace\.[a-z][a-z0-9_]{0,40}$/;
 /**
  * The AgentPackage@1 an approved card becomes (origin workspace, kind installed): its
- * instructions and skill text, roleTextDigest the SHA-256 of the instructions' RFC 8785 text,
- * the card's tools, capabilities, scopes, triggers and customer-data level, and the card's
- * model as the one offered entry. No eval digest: the review gate stays (item 4).
+ * instructions and skill text, roleTextDigest the SHA-256 of the RFC 8785 text of both
+ * (workspaceRoleText), the card's tools, capabilities, scopes, triggers and customer-data
+ * level, and the card's model as the one offered entry. No eval digest: the review gate stays
+ * (item 4). Null for a bad id or a card whose grants are not those its tools derive.
  */
 export async function workspacePackageFromCard(
   card: Current_AgentProposal,
   packageId: string,
 ): Promise<Current_AgentPackage | null> {
-  if (!workspacePackageId.test(packageId)) return null;
+  if (!workspacePackageId.test(packageId) || !cardGrantsDerived(card)) return null;
   const profile = { model: card.modelProfile.model, effort: card.modelProfile.effort };
   const pkg: Current_AgentPackage = {
     schemaVersion: 1,
@@ -455,7 +539,7 @@ export async function workspacePackageFromCard(
     kind: "installed",
     origin: "workspace",
     title: card.name,
-    roleTextDigest: await sha256Hex(canonicalText(card.instructions)),
+    roleTextDigest: await sha256Hex(canonicalText(workspaceRoleText(card))),
     instructions: card.instructions,
     skillTexts: card.skillTexts.map((s) => ({ ...s })),
     skills: card.skills.map((s) => ({ ...s })),

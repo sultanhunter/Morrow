@@ -11,9 +11,10 @@
 // - The fake teammate runner admits each call alone: an active teammate, the kernel's 32
 //   children per envelope, and the workspace balance (credits only: the caller's coversCall
 //   answers whether the call's hold fits at once; there is no money cap). Each call is a
-//   fresh run, the same teammate again included; parallel calls each get their own run. It
-//   builds TeammateResult@1 with buildTeammateResult, so large output becomes items, and a
-//   customer-tagged result never reaches Morrow.
+//   fresh run, the same teammate again included; parallel calls each get their own run. The
+//   called run starts with the calling run's taint and joins its own (joinRunTaint), so its
+//   items and its result carry both. It builds TeammateResult@1 with buildTeammateResult, so
+//   large output becomes items, and a customer-tagged result never reaches Morrow.
 import type {
   Current_AgentRunEndReason,
   Current_ReadTag,
@@ -34,6 +35,7 @@ import {
   type ItemOpenRefusal,
   type ResultItemContent,
   type ResultItemSink,
+  joinRunTaint,
   resultItemPage,
   teammateMayOpen,
 } from "./teammates";
@@ -180,6 +182,8 @@ export interface FakeTeammateRunner {
   /** agent.ask: one call, admitted and checked alone. */
   call(request: {
     readonly parentRunId: string;
+    /** The calling Morrow run's taint at the call: it carries into the called run. */
+    readonly callerTaint: Current_RunTaint;
     readonly toolUseId: string;
     readonly installationId: string;
     readonly brief: Current_TeammateBrief;
@@ -204,8 +208,11 @@ export function createFakeTeammateRunner(options: {
   let next = 1;
   return {
     children: (parentRunId) => children.get(parentRunId) ?? 0,
-    async call({ parentRunId, toolUseId, installationId, brief }) {
-      if (!validateCurrentDefinition("ToolInputAgentAsk", { installationId, brief }))
+    async call({ parentRunId, callerTaint, toolUseId, installationId, brief }) {
+      if (
+        !validateCurrentDefinition("ToolInputAgentAsk", { installationId, brief }) ||
+        !validateCurrentDefinition("RunTaint", callerTaint)
+      )
         return { ok: false, refusal: "input_invalid" };
       const teammate = options.teammates.find((t) => t.installationId === installationId);
       if (!teammate || !teammate.active) return { ok: false, refusal: "teammate_unavailable" };
@@ -217,6 +224,8 @@ export function createFakeTeammateRunner(options: {
       children.set(parentRunId, count + 1);
       const n = next++;
       const run = teammate.respond(structuredClone(brief) as Current_TeammateBrief);
+      // The call starts tainted when its caller is (ADR-0037 item 3(a)): taint only joins.
+      const taint = joinRunTaint(callerTaint, run.taint);
       const facts = {
         organizationId: options.organizationId,
         workspaceId: options.workspaceId,
@@ -228,13 +237,13 @@ export function createFakeTeammateRunner(options: {
         endReason: run.endReason,
         created: run.created,
         readTags: run.readTags,
-        taint: run.taint,
+        taint,
         completedAt: options.now(),
       };
       const result = await buildTeammateResult(
         facts,
         run.submit,
-        options.store.sinkFor({ runId: facts.runId, readTags: run.readTags, taint: run.taint }),
+        options.store.sinkFor({ runId: facts.runId, readTags: run.readTags, taint }),
       );
       const accepted = acceptTeammateResult(result);
       if (accepted === "result_customer_tagged") return { ok: false, refusal: accepted };

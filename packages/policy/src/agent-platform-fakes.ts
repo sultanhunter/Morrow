@@ -410,7 +410,11 @@ export function fakeAgentProposal(): Current_AgentProposal {
     revisedAt: at,
   });
 }
-/** The Add to team document for that card: the owner, a standalone session, 5 minutes. */
+/**
+ * The Add to team document for that card: the owner, a standalone session, 5 minutes. Its
+ * cardDigest is a placeholder (addToTeamDocument computes the card's own digest, a hash this
+ * module avoids).
+ */
 export function fakeAddToTeamDocument(): Current_AddToTeamDocument {
   const card = fakeAgentProposal();
   return freeze({
@@ -769,7 +773,7 @@ export function fakeListingsPackage(): Current_AgentPackage {
 
 /**
  * The workspace package an approved card becomes (origin workspace). Its roleTextDigest is a
- * placeholder; a test re-pins it with the instructions' digest.
+ * placeholder; a test re-pins it with the digest of its instructions and skill text.
  */
 export function fakeWorkspacePackage(): Current_AgentPackage {
   const card = fakeAgentProposal();
