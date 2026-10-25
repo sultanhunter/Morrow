@@ -55,6 +55,32 @@ function concat(parts) {
 }
 const iso = (ms) => new Date(ms).toISOString();
 
+// A Request's own signal follows the signal it was made with only while the Request is alive:
+// undici holds the AbortController behind request.signal from the Request, and reaches it
+// from the caller's signal through a WeakRef. The adapter keeps no Request once `fetch` has
+// it, so a wait on request.signal alone ends with the next full collection: the caller's
+// abort no longer reaches it, and the wait (a "hang" fault, a stalled exec stream) and the
+// test awaiting it never settle. That hung `npm test` on the hosted runner, where a full GC
+// landed inside such a wait. Each Request waiting on its abort is held here, from module
+// scope, until the abort arrives.
+const awaitingAbort = new Set();
+function untilAborted(request, onAbort) {
+  const { signal } = request;
+  if (signal.aborted) {
+    onAbort(signal.reason ?? Error("aborted"));
+    return;
+  }
+  awaitingAbort.add(request);
+  signal.addEventListener(
+    "abort",
+    () => {
+      awaitingAbort.delete(request);
+      onAbort(signal.reason ?? Error("aborted"));
+    },
+    { once: true },
+  );
+}
+
 /**
  * @param {{credential: string, now: () => number, templates?: string[], domain?: string|null}} options
  */
@@ -99,15 +125,10 @@ export function createE2bWire(options) {
     network: { allowPublicTraffic: false },
     lifecycle: { autoResume: false, onTimeout: "kill" },
   });
-  const hang = (signal) =>
-    new Promise((_, reject) => {
-      if (signal.aborted) reject(signal.reason ?? Error("aborted"));
-      signal.addEventListener("abort", () => reject(signal.reason ?? Error("aborted")), {
-        once: true,
-      });
-    });
+  const hang = (request) =>
+    new Promise((_, reject) => untilAborted(request, (reason) => reject(reason)));
   // A fault either answers instead of the route, or (lost) after its effect.
-  async function faulted(route, signal, effect) {
+  async function faulted(route, request, effect) {
     const f = take(route);
     if (!f) return { response: await effect() };
     if (f.kind === "lost") {
@@ -115,7 +136,7 @@ export function createE2bWire(options) {
       throw new TypeError("network connection lost");
     }
     if (f.kind === "drop") throw new TypeError("network connection lost");
-    if (f.kind === "hang") return { response: await hang(signal) };
+    if (f.kind === "hang") return { response: await hang(request) };
     if (f.kind === "redirect")
       return {
         response: new Response(null, {
@@ -184,7 +205,7 @@ export function createE2bWire(options) {
         return error(400, "request body has an error: doesn't match schema");
       }
       return (
-        await faulted("create", request.signal, () => {
+        await faulted("create", request, () => {
           guest.creates.push({
             template: parsed.templateID,
             timeoutSeconds: parsed.timeout,
@@ -227,7 +248,7 @@ export function createE2bWire(options) {
     }
     if (request.method === "GET" && path === "/v2/sandboxes") {
       return (
-        await faulted("list", request.signal, (f) => {
+        await faulted("list", request, (f) => {
           const filter = new URLSearchParams(url.searchParams.get("metadata") ?? "");
           const states = (url.searchParams.get("state") ?? "running").split(",");
           const items = [...sandboxes.values()]
@@ -242,14 +263,14 @@ export function createE2bWire(options) {
     const match = /^\/sandboxes\/([^/]+)$/.exec(path);
     if (match && request.method === "GET")
       return (
-        await faulted("detail", request.signal, () => {
+        await faulted("detail", request, () => {
           const s = live(decodeURIComponent(match[1]));
           return s ? json(200, detailOf(s)) : notFound(decodeURIComponent(match[1]));
         })
       ).response;
     if (match && request.method === "DELETE")
       return (
-        await faulted("kill", request.signal, () => {
+        await faulted("kill", request, () => {
           const s = live(decodeURIComponent(match[1]));
           if (!s) return notFound(decodeURIComponent(match[1]));
           s.killed = true;
@@ -281,7 +302,7 @@ export function createE2bWire(options) {
       return error(404, "not found");
     }
     return (
-      await faulted(route, request.signal, (f) => {
+      await faulted(route, request, (f) => {
         const s = live(id);
         if (!s) return json(502, { sandboxId: id, message: "The sandbox was not found", code: 502 });
         if (request.headers.get("x-access-token") !== s.token)
@@ -372,13 +393,10 @@ export function createE2bWire(options) {
           return new Response(concat(frames), { status: 200, headers });
         }
         if (verb === "stall") {
-          const signal = request.signal;
           const stream = new ReadableStream({
             start(controller) {
               controller.enqueue(frames[0]);
-              signal.addEventListener("abort", () => controller.error(signal.reason), {
-                once: true,
-              });
+              untilAborted(request, (reason) => controller.error(reason));
             },
           });
           return new Response(stream, { status: 200, headers });

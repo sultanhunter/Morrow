@@ -13,6 +13,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import {
   createE2bRuntime,
   e2bCreateBody,
@@ -802,6 +804,57 @@ test("envd exec: deadlines are timed_out; a cut, refused or malformed stream is 
     const s = await sandboxOf(w);
     await w.adapter.writeFile(s, computerProfile.jobPath, wireScript({ stall: true }), budget);
     assert.deepEqual(await w.adapter.exec(s, command, 200), { outcome: "unknown" });
+  }
+});
+
+// The hosted runner's `npm test` hung on this file (2026-10-25): a full collection inside a
+// "hang" fault's or a stalled stream's wait cut the caller's abort off from the wire, because
+// a Request's signal follows the caller's only while the Request is alive, and the adapter
+// keeps none. The wire holds each waiting Request until its abort; here the heap is collected
+// every few milliseconds through each wait, and a wait that never ends fails within its bound
+// instead of holding the run.
+test("the wire's waits end on the caller's abort however often the heap is collected", async () => {
+  setFlagsFromString("--expose-gc");
+  const collect = runInNewContext("gc");
+  const within = async (label, promise) => {
+    let timer;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(Error(label + ": never settled")), 10_000);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const collector = setInterval(collect, 5);
+  try {
+    for (const route of ["create", "list", "kill", "write"]) {
+      const w = wireWorld();
+      const s = await sandboxOf(w);
+      w.wire.fault({ route, kind: "hang" });
+      const r = await within(
+        route,
+        route === "create"
+          ? w.adapter.create(request(), w.credential, 100)
+          : route === "list"
+            ? w.adapter.status(s.operationId, null, w.credential, 100)
+            : route === "kill"
+              ? w.adapter.kill(s.sandboxRef, w.credential, 100)
+              : w.adapter.writeFile(s, computerProfile.jobPath, wireScript({}), 100),
+      );
+      assert.equal(r.outcome, route === "create" ? "unknown_effect" : "unknown", route);
+    }
+    const w = wireWorld();
+    const s = await sandboxOf(w);
+    await w.adapter.writeFile(s, computerProfile.jobPath, wireScript({ stall: true }), budget);
+    assert.deepEqual(await within("exec", w.adapter.exec(s, command, 200)), {
+      outcome: "unknown",
+    });
+  } finally {
+    clearInterval(collector);
   }
 });
 

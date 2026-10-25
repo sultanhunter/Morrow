@@ -1106,7 +1106,8 @@ fixtureCases.push(
     },
   }),
   // A real 409 (a teammate's change landed first): the dialog shows the reread choice, and
-  // the next save, of the reread revision, goes through.
+  // the next save, of the reread revision, goes through. Business Analyst starts on Opus 5.5
+  // at Medium (ADR-0036), so the first pick is Sonnet 5.5: an unchanged choice can't be saved.
   fixtureCase("team", "thinking_conflict", `/w/${ws}/agents`, {
     widths: [1440],
     scenario: "team_thinking_conflict",
@@ -1114,7 +1115,7 @@ fixtureCases.push(
       const name = "Change how Business Analyst thinks";
       await page.getByRole("button", { name }).click();
       const dialog = page.getByRole("dialog", { name });
-      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("radio", { name: /Sonnet 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
       await dialog.getByText("This changed since you opened it.").waitFor();
       // The reread lands a few renders after the 409's message (as on notifications_conflict).
@@ -1134,7 +1135,7 @@ fixtureCases.push(
     },
   }),
   // An unknown outcome doesn't trap the dialog: Escape closes it, and the shell says the
-  // change may have been saved.
+  // change may have been saved. (Sonnet 5.5: Opus 5.5 at Medium is already the choice.)
   fixtureCase("team", "thinking_uncertain_closed", `/w/${ws}/agents`, {
     widths: [1440],
     scenario: "team_thinking_uncertain",
@@ -1142,7 +1143,7 @@ fixtureCases.push(
       const name = "Change how Business Analyst thinks";
       await page.getByRole("button", { name }).click();
       const dialog = page.getByRole("dialog", { name });
-      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("radio", { name: /Sonnet 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
       await dialog.getByRole("button", { name: "Check again" }).waitFor();
       await page.keyboard.press("Escape");
@@ -1162,11 +1163,13 @@ fixtureCases.push(
     },
   }),
   // The Listings agent's choice is the workspace default: above the member ceiling it
-  // can't be saved here.
+  // can't be saved here. The default is Opus 5.5 at Medium (4 credits a product) under a
+  // ceiling of 4 (ADR-0036), so High (6) is the choice above it.
   fixtureCase("team", "agent_over_limit", `/w/${ws}/agents/agent-listings`, {
     widths: two,
     setup: async (page) => {
       await page.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await page.getByRole("radio", { name: /^High/ }).check();
       await page.getByText("doesn’t fit the spending limit").waitFor();
       expect(await page.getByRole("button", { name: "Save" }).isDisabled(), "save_held");
     },
