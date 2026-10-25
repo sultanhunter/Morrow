@@ -19,7 +19,9 @@
 // reads one target with its envelope and records one outcome for the version it used; the
 // real sync registers both stores' app/uninstalled and app/scopes_update to the connector's
 // path against the synthetic Shopify, idempotently, through a failure's backoff and a
-// re-authorisation's new version; an ended installation is never pending.
+// re-authorisation's new version; an ended installation is never pending; a registered
+// store is listed again after 24 hours and only a subscription Shopify removed is created
+// again.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import canonicalize from "canonicalize";
@@ -1733,6 +1735,82 @@ ROLLBACK;`,
           JSON.stringify(["pending:0", "target:not_found", "record:stale"]) &&
         tenantOf(devId) !== undefined,
       { ok: endedPending.ok, endedLines, stderr: endedPending.stderr?.slice(0, 300) },
+    );
+    // Shopify removes a shop-specific subscription whose deliveries keep failing (eight
+    // retries over about four hours), and only a new create brings it back. A registered row
+    // is not pending for 24 hours after its record; then the sync lists the store again. The
+    // development store lost its app/scopes_update subscription: exactly that one is
+    // created again, the other one and another app path's are left alone. The live store
+    // still has both: one list, no create. Both are recorded registered again (a new
+    // revision and time, so the next re-check is a day later).
+    const before = {
+      dev: registrationRows().find((r) => r.installation === devId),
+      live: registrationRows().find((r) => r.installation === liveId),
+    };
+    const ageBoth = (interval) =>
+      db.sql(
+        `SET session_replication_role=replica; UPDATE morrow_identity.shopify_webhook_registrations SET updated_at=updated_at-interval '${interval}',created_at=created_at-interval '${interval}' WHERE installation_id IN (${literal(devId)},${literal(liveId)}); SET session_replication_role=origin;`,
+      );
+    const removedAt = oracle.state.subscriptions.findIndex(
+      (w) => w.uri === hookPath(appKey) && w.topic === "APP_SCOPES_UPDATE",
+    );
+    const [removed] = removedAt >= 0 ? oracle.state.subscriptions.splice(removedAt, 1) : [];
+    ageBoth("23 hours");
+    const pendingWithinDay = pendingIds();
+    ageBoth("90 minutes");
+    const pendingAfterDay = pendingIds();
+    const webhookOps = (o) =>
+      o.state.calls.filter((c) => /^WebhookSubscription/.test(c.operation ?? "")).length;
+    const opsBefore = { dev: webhookOps(oracle), live: webhookOps(liveOracle) };
+    const devCreatesBefore = oracle.state.calls.filter(
+      (c) => c.operation === "WebhookSubscriptionCreate",
+    ).length;
+    const rechecks = await syncUntilDone();
+    const devNewCreates = oracle.state.calls
+      .filter((c) => c.operation === "WebhookSubscriptionCreate")
+      .slice(devCreatesBefore);
+    const after = {
+      dev: registrationRows().find((r) => r.installation === devId),
+      live: registrationRows().find((r) => r.installation === liveId),
+    };
+    const devOurs = ours(oracle, appKey);
+    const reRegistered = (b, a) =>
+      b?.status === "registered" &&
+      a?.status === "registered" &&
+      a.version === b.version &&
+      a.attempts === 0 &&
+      a.revision === b.revision + 1;
+    check(
+      "H9:a_registered_row_is_rechecked_after_24_hours_and_only_a_removed_subscription_is_created_again",
+      removed !== undefined &&
+        pendingWithinDay.length === 0 &&
+        JSON.stringify(pendingAfterDay) === JSON.stringify([devId, liveId].sort()) &&
+        rechecks.reduce((n, t) => n + t.registered, 0) === 2 &&
+        rechecks.every((t) => t.failed + t.unknown + t.unauthorized + t.skipped === 0) &&
+        devNewCreates.length === 1 &&
+        devNewCreates[0].variables?.topic === "APP_SCOPES_UPDATE" &&
+        devNewCreates[0].variables?.uri === hookPath(appKey) &&
+        webhookOps(oracle) - opsBefore.dev === 2 &&
+        webhookOps(liveOracle) - opsBefore.live === 1 &&
+        reRegistered(before.dev, after.dev) &&
+        reRegistered(before.live, after.live) &&
+        after.dev.uninstalled === before.dev.uninstalled &&
+        after.dev.scopes !== removed.id &&
+        after.dev.scopes === devOurs.find((w) => w.topic === "APP_SCOPES_UPDATE")?.id &&
+        devOurs.length === 2 &&
+        after.live.uninstalled === before.live.uninstalled &&
+        after.live.scopes === before.live.scopes &&
+        JSON.stringify(oracle.state.subscriptions[0]) === JSON.stringify(foreignSubscription) &&
+        pendingIds().length === 0,
+      {
+        removed: removed?.topic,
+        pendingWithinDay,
+        pendingAfterDay,
+        rechecks,
+        devNewCreates: devNewCreates.map((c) => c.variables?.topic),
+        before,
+        after,
+      },
     );
   },
   { administrator: "createrole" },

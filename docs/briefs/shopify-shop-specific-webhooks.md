@@ -16,6 +16,7 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
   - Main has no reconnect-after-scope-change path: a scope change suspends the installation, a terminal state in this release. A re-authorisation adds a credential version, so its installation is pending again and the sync lists with the new token.
 - **No operator command.** The broker has no public route. Its entrypoints are service bindings, so a local `npm run` command could not reach it without a new public surface. A command that held the token itself would break custody. The cron covers the catch-up within five minutes of the deploy and migration.
 - **A small record, so failures can be retried with a backoff.** `morrow_identity.shopify_webhook_registrations` holds one row per installation. Each row has the closed outcome for the credential version used and, once registered, Shopify's two subscription ids. It holds ids, codes, counts and times only. Without it, a failing store would be retried on every run with no backoff and no closed status.
+- **A daily re-check of registered stores.** Shopify removes a shop-specific subscription whose deliveries keep failing: it retries up to eight times over about four hours, and a removed subscription gets no deliveries until it is created again. A broker, vault or Neon outage that long (the connector answers 503), or a mis-sealed app secret (401), would remove both while the row still said registered. So a registered row is pending again 24 hours after its last record. The round is the same one: it lists first and creates only what is missing, so a store whose subscriptions still exist costs one list and one record a day. Recording registered again moves the row's time, so the next re-check is a day later.
 - **Rejected alternatives.**
   - Calling Shopify inside the install transaction: the install has a 9-second budget, and a Shopify fault would fail the install.
   - A cron with no record: no status, no backoff, and a Shopify list on every run for every store.
@@ -25,7 +26,7 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
 
 1. **Generator** (`scripts/shopify-app.mjs`): emits only the compliance subscription (one `[[webhooks.subscriptions]]` with `compliance_topics`) and no `include_config_on_deploy`. The scopes, URLs, `use_legacy_install_flow`, `api_version = "2026-10"` and `automatically_update_urls_on_dev = false` are unchanged. `tests/shopify-app-script.test.mjs` pins it.
 2. **Broker** (`apps/broker/src/shopify-webhooks.ts`; `ConnectorBroker.shopifyWebhookSubscriptionsSync(budgetMs)`; held as `WEBHOOKS_UNAVAILABLE` without the vault or the connector's origin, and `WEBHOOKS_BUSY` while this isolate's one sync runs):
-   1. One vault transaction, committed alone: the pending ids, at most 10. These are active installations of an active app whose current credential version has no registered row. A missing row or an older version comes first. A failed, unknown or unauthorized outcome waits 4 minutes per consecutive attempt, at most 6 hours.
+   1. One vault transaction, committed alone: the pending ids, at most 10. These are active installations of an active app whose current credential version has no registered row, or whose registered row was recorded 24 hours ago. A missing row or an older version comes first. A failed, unknown or unauthorized outcome waits 4 minutes per consecutive attempt, at most 6 hours, and comes next. A registered row's re-check comes last. Within each class the oldest comes first.
    2. Per installation, while at least 4 s of the budget is left:
       - One vault transaction: the target (its tenant, app key and shop from the installation row) and the active envelope of its current version, opened with the KEK.
       - The callback URL, built only from the broker's reviewed `CONNECTOR_CONFIGURATION_JSON` origin and the app key: `<connector origin>/shopify/a/<appKey>/webhooks`. This is the connector's signed path, the same one the TOML's compliance subscription uses. `edge:check` holds the broker's copy byte-equal to the connector's.
@@ -76,14 +77,15 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
 - **Store effect.** The only change on a store is the app's own two webhook subscriptions to Morrow's own path, which ADR-0022 item 4 already specifies. Nothing touches products, other apps' subscriptions or customer data. On the owner's store this runs under ADR-0035's standing approval (provider setup inside Morrow's own flow), not the exact-proposal approval for store content. Open question 1 asks the owner to confirm this reading.
 - **Failure modes.**
   - Until the subscriptions exist, an uninstall or scope change is not delivered. `shop/redact` (app-specific, about 48 hours after an uninstall) still ends the installation first, and an `unauthorized` count in the cron line shows a revoked token.
+  - If Shopify removes the subscriptions after about four hours of failed deliveries, the next daily re-check creates them again, so the gap is at most about a day. A re-check that fails records `failed` and is retried with the usual backoff.
   - A 401 is never treated as an uninstall, because the webhook is the state change.
-  - The cron sync is bounded: at most 10 ids per run and 20 s, about four stores per run. New installs are covered at once by the callback.
+  - The cron sync is bounded: at most 10 ids per run and 20 s, about four stores per run. New installs are covered at once by the callback. The daily re-checks come after new versions and retries, so at about four stores per five-minute run the cron re-checks about 1,100 stores a day before re-checks start to lag.
 
 ## After the merge (Claude, standing approval; one activity-log line each)
 
 1. `npm run staging:migrate` (ledger 48).
 2. Deploy, with the broker's new `CONNECTOR_CONFIGURATION_JSON` var. The migration goes first: a sync before it answers `SUBSCRIPTIONS_UNAVAILABLE` and changes nothing.
-3. Within five minutes, the connector's cron line `morrow_connector_webhooks` should show `SUBSCRIPTIONS_SYNCED` with `registered: 1` for the owner's store. A later run shows `checked: 0`. Record it in the activity log (counts only, no shop).
+3. Within five minutes, the connector's cron line `morrow_connector_webhooks` should show `SUBSCRIPTIONS_SYNCED` with `registered: 1` for the owner's store. A later run shows `checked: 0`, and about a day later one run shows the re-check (`checked: 1`, `registered: 1`). Record it in the activity log (counts only, no shop).
 4. No owner action is needed. The owner never redeploys the TOML for this: v2 is already compliance-only.
 
 ## Test checklist
@@ -95,6 +97,8 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
   - the list's 401, 429, 5xx, 302, timeout, GraphQL error, non-JSON, oversize, malformed node and partial page; THROTTLED once;
   - the create's 429, THROTTLED twice, ACCESS_DENIED, no time and 401; `userErrors` from a concurrent create; lost replies (5xx after creating, timeouts, a lost connection, malformed, 404, another uri or topic) reconciled by listing; `unknown` only when that list fails or is partial;
   - the sync's transaction order (the pending ids alone, the target before any request, the record after);
+  - two topics with one subscription id (in a list, or a second create naming the first's) never registered, and recorded failed with no ids;
+  - the record keeps its 2 s reserve when Shopify takes all of its time (each request's abort timer is the budget less the reserve);
   - each installation's own app path; a gone target skipped; an unusable token recorded failed;
   - stale and unknown records skipped;
   - the budget's closed range, `WEBHOOKS_UNAVAILABLE` (no or bad connector configuration, no vault) and `WEBHOOKS_BUSY`;
@@ -102,25 +106,31 @@ Morrow must still learn when a store uninstalls the app or changes its scopes. T
   - the per-installation time floor;
   - the protocol's origin parser equal to the connector's, and the callback URL and closed counts;
   - receipt of both topics, app-specific or shop-specific, on one path with one verification.
-- [x] Migrations (`tests/shopify-webhook-registrations-migrations.test.mjs`): the runner contract, FORCE RLS and the guard, content-free columns, grants and guards, and the constants shared with TypeScript.
+- [x] Migrations (`tests/shopify-webhook-registrations-migrations.test.mjs`): the runner contract, FORCE RLS and the guard, content-free columns, grants and guards, the pending list's classes and order (the 24-hour re-check last), and the constants shared with TypeScript.
 - [x] Connector (`tests/connector-worker.test.mjs`):
   - the sync after `installed` and `reauthorised` only, after the response; a hung, held or garbled sync never touches the redirect;
   - the cron's counts, its unavailable count, and no sync without its whole budget;
   - both budgets inside the broker's range and inside `waitUntil`'s 30 s.
 - [x] Entrypoint and configuration: `ConnectorBroker` gains exactly the one method with its arity check (`tests/broker.test.mjs`). The staging broker's `CONNECTOR_CONFIGURATION_JSON` is required, staging only and byte-equal to the connector's, and the connector's hostname is admitted in that var only (`tests/edge-config.test.mjs`).
-- [x] `lab:shopify-install` H1-H8 (PostgreSQL 17, createrole administrator):
+- [x] `lab:shopify-install` H1-H9 (PostgreSQL 17, createrole administrator):
   - only the broker lists, reads targets and records;
   - the target's tenant, app, shop and current envelope;
   - the real sync registers both stores against the oracle, leaving another path's subscription alone;
   - idempotent; the record's closed inputs and current version only;
   - a failure's backoff, then registered again without a create;
   - a re-authorisation's new version without a create;
-  - an ended installation never pending.
+  - an ended installation never pending;
+  - a registered row not pending within 24 hours, then re-checked: the store that lost its app/scopes_update subscription gets exactly that one created again, the store that still has both gets one list and no create, and both rows are registered again with a new revision.
 
-  Local run 2026-10-25: 58 of 58 checks. Two earlier runs under a load average near 900 failed in the install and link phases, before H; the hosted pg-linking leg is the authority.
-- [x] `lab:shopify-connect-workers` H1-H2 (workerd): the install's `waitUntil` registers both subscriptions and records version 1; the re-authorisation lists, creates nothing and records version 2; W3's re-drive counts include the sync. Local run 2026-10-25: 29 of 29 checks; the hosted pg-work leg is the authority.
-- [x] `lab:tenant-conformance` with the new table, bridges and definers registered (`tests/tenant-conformance/registry.mjs`). Local run 2026-10-25: 17 of 17. Also run once, unchanged and green, because they share the oracle and the connector's re-drive: `lab:shopify-privacy` (39 checks) and `lab:disconnect-store` (28 checks).
+  Local run 2026-10-25: 58 of 58 checks. Two earlier runs under a load average near 900 failed in the install and link phases, before H; the hosted pg-linking leg is the authority. After the review fixes: 59 of 59, and H9 fails with the re-check clause removed.
+- [x] `lab:shopify-connect-workers` H1-H2 (workerd): the install's `waitUntil` registers both subscriptions and records version 1; the re-authorisation lists, creates nothing and records version 2; W3's re-drive counts include the sync. Local run 2026-10-25: 29 of 29 checks, again 29 of 29 after the review fixes; the hosted pg-work leg is the authority.
+- [x] `lab:tenant-conformance` with the new table, bridges and definers registered (`tests/tenant-conformance/registry.mjs`). Local run 2026-10-25: 17 of 17, again after the review fixes. Also run once, unchanged and green, because they share the oracle and the connector's re-drive: `lab:shopify-privacy` (39 checks) and `lab:disconnect-store` (28 checks).
 - [ ] Owner gate: none for the code. The post-merge steps above run under the standing approval.
+
+## Review findings applied (AI review, separate context, same model family)
+
+- **F1 (medium): registered rows were never checked again.** Shopify removes a shop-specific subscription after about four hours of failed deliveries, and the pending list never named a registered row at its current version again, so only a re-authorisation would have brought the subscriptions back. Fix: the identity bridge `work_shopify_webhook_registrations_pending` (0047, not yet applied anywhere, edited in place with the manifest digests) also lists a registered row 24 hours after its last record, after new or changed versions and retries. Tests: the migrations test pins the clause and the order; `lab:shopify-install` H9.
+- **F4 (low): two guards survived mutation.** Removing the equal-ids check in `registerShopWebhooks` or the record's 2 s reserve left every unit test green. Fix: two unit cases in `tests/broker-shopify-webhooks.test.mjs` (two topics with one subscription id; the record's reserve when Shopify uses all of its time). Each now fails under its mutant (checked on a scratch copy).
 
 ## Open questions
 

@@ -5,7 +5,8 @@ BEGIN;
 -- below, guarded by work_executor_safe('morrow_vault_broker') and executable by the broker's
 -- own login only (ConnectorBroker.shopifyWebhookSubscriptionsSync, apps/broker/src/shopify-webhooks.ts):
 --   * shopify_webhook_registrations_pending: the identity bridge's ids-only list of active
---     installations whose current credential version is not registered;
+--     installations whose current credential version is not registered, or whose
+--     registration is due for its 24-hour re-check;
 --   * shopify_webhook_target: one such installation's tenant, app key, shop domain and the
 --     active envelope of its current credential version, whose subject is the installation
 --     (the broker opens it with the KEK; the additional data binds the tenant, the
@@ -29,7 +30,8 @@ DO $$ BEGIN
  THEN RAISE EXCEPTION 'SHOPIFY_WEBHOOK_REGISTRATIONS_VAULT_PREREQUISITES_INVALID'; END IF;
 END $$;
 
--- At most 10 installation ids, oldest due first. Nothing for any other login.
+-- At most 10 installation ids, in the identity bridge's order (new or changed versions, then
+-- retries past their backoff, then 24-hour re-checks). Nothing for any other login.
 CREATE FUNCTION morrow_vault.shopify_webhook_registrations_pending()
 RETURNS TABLE(installation_id text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$

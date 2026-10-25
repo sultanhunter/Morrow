@@ -191,6 +191,34 @@ test("authority: bridges for the work command only, vault definers for the broke
       assert.doesNotMatch(params, /p_org|p_ws|p_organization|p_workspace/, params);
 });
 
+test("the pending list: new or changed versions, retries past their backoff, then 24-hour re-checks of registered rows", () => {
+  const pending = code(
+    identity.slice(
+      identity.indexOf(
+        "CREATE FUNCTION morrow_identity.work_shopify_webhook_registrations_pending()",
+      ),
+      identity.indexOf(
+        "REVOKE ALL ON FUNCTION morrow_identity.shopify_webhook_registration_guard()",
+      ),
+    ),
+  );
+  // Due: no row or an older version at once; any other outcome after its backoff; a
+  // registered row again 24 hours after its last record (Shopify removes a shop-specific
+  // subscription whose deliveries keep failing, and only a new create brings it back).
+  assert.match(
+    pending,
+    /AND \(w\.installation_id IS NULL OR w\.credential_version<>i\.credential_version\n {4}OR \(w\.status<>'registered'\n {5}AND w\.updated_at<=pg_catalog\.clock_timestamp\(\)-least\(interval '4 minutes'\*w\.attempts,interval '6 hours'\)\)\n {4}OR \(w\.status='registered' AND w\.updated_at<=pg_catalog\.clock_timestamp\(\)-interval '24 hours'\)\)\n/,
+  );
+  // Re-checks come last, after new or changed versions and retries; oldest first in each.
+  assert.match(
+    pending,
+    /ORDER BY CASE WHEN w\.installation_id IS NULL OR w\.credential_version<>i\.credential_version THEN 0\n {3}WHEN w\.status<>'registered' THEN 1 ELSE 2 END,COALESCE\(w\.updated_at,i\.updated_at\),i\.id\n/,
+  );
+  // The record of a re-check moves the row's time, so the next re-check is 24 hours later.
+  const record = body(identity, "morrow_identity.work_shopify_webhook_registration_record(");
+  assert.match(record, /revision=x\.revision\+1,updated_at=greatest\(v_at,x\.updated_at\)/);
+});
+
 test("constants SQL shares with TypeScript", () => {
   const record = body(identity, "morrow_identity.work_shopify_webhook_registration_record(");
   const statuses = /p_status NOT IN \(([^)]*)\)/.exec(record)[1];

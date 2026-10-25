@@ -364,14 +364,14 @@
     {
       "sequence": 47,
       "file": "0047.shopify-webhook-registrations-identity.sql",
-      "sha256": "0f0ec373efcc76e2058504ebc361aef107f9e7934f2b9f6f07a9f527dfa6cd73",
+      "sha256": "396126c06cc1b07159e3d7866d4cb2b7052d53e6b22fa6456a3f05e47279af12",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
     },
     {
       "sequence": 48,
       "file": "0048.shopify-webhook-registrations-vault.sql",
-      "sha256": "5b0a1c72e78d86a63d02a9db7700a873410a2222b7845a67e7927e4a76a6211b",
+      "sha256": "d962acdf1ec4b30b0fb2acee9856a3d9f459b4c1ad676303e5828fa5a158d15d",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
     }

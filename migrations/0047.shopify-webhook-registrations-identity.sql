@@ -20,11 +20,17 @@ BEGIN;
 --     current credential), the record of one outcome for the credential version the broker
 --     used, and the ids-only, cross-tenant list of active installations whose current
 --     version is not registered (a missing row, an older version, or a failed, unknown or
---     unauthorized outcome past its backoff), at most 10.
+--     unauthorized outcome past its backoff) or was registered more than 24 hours ago (a
+--     list-only re-check), at most 10.
 -- An active installation is unlinked or linked, of an active app, not redacted, with its
 -- credential's destruction not recorded. A re-authorisation adds a credential version, so the
 -- installation is listed again and its subscriptions are listed and completed with the new
--- token. The tenant always comes from the installation row, never from a caller (invariant 1).
+-- token. Shopify removes a shop-specific subscription whose deliveries keep failing (eight
+-- retries over about four hours, for example a broker or vault outage that long), and only a
+-- new create brings it back, so a registered row is listed again 24 hours after its record:
+-- the broker lists first and creates only a missing subscription, so a re-check of a store
+-- whose subscriptions still exist is one list and one record. The tenant always comes from
+-- the installation row, never from a caller (invariant 1).
 DO $$ BEGIN
  IF current_user<>'morrow_identity_owner'
  OR NOT morrow_identity.morrow_memberships_closed()
@@ -170,10 +176,14 @@ BEGIN
 END $$;
 
 -- The broker's re-drive (ids only, across tenants): active installations whose current
--- credential version has no registered row. A missing row or an older version comes first
--- and at once; a failed, unknown or unauthorized outcome waits 4 minutes per consecutive
--- attempt, at most 6 hours, so the connector's five-minute cron retries it without
--- spending Shopify's or the vault login's budget on a store that keeps failing. At most 10.
+-- credential version has no registered row, or whose registered row is due for its re-check.
+-- A missing row or an older version comes first and at once; a failed, unknown or
+-- unauthorized outcome waits 4 minutes per consecutive attempt, at most 6 hours, so the
+-- connector's five-minute cron retries it without spending Shopify's or the vault login's
+-- budget on a store that keeps failing; a registered row comes back 24 hours after its last
+-- record, last, so the broker lists the store again and re-creates a subscription Shopify
+-- removed after failed deliveries (recording registered again moves the row's time). Within
+-- each class the oldest first. At most 10.
 CREATE FUNCTION morrow_identity.work_shopify_webhook_registrations_pending()
 RETURNS TABLE(installation_id text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
@@ -184,8 +194,10 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,
   WHERE i.status IN ('unlinked','linked') AND i.redacted_at IS NULL AND i.credential_destroyed_at IS NULL
    AND (w.installation_id IS NULL OR w.credential_version<>i.credential_version
     OR (w.status<>'registered'
-     AND w.updated_at<=pg_catalog.clock_timestamp()-least(interval '4 minutes'*w.attempts,interval '6 hours')))
-  ORDER BY (w.installation_id IS NULL OR w.credential_version<>i.credential_version) DESC,COALESCE(w.updated_at,i.updated_at),i.id
+     AND w.updated_at<=pg_catalog.clock_timestamp()-least(interval '4 minutes'*w.attempts,interval '6 hours'))
+    OR (w.status='registered' AND w.updated_at<=pg_catalog.clock_timestamp()-interval '24 hours'))
+  ORDER BY CASE WHEN w.installation_id IS NULL OR w.credential_version<>i.credential_version THEN 0
+   WHEN w.status<>'registered' THEN 1 ELSE 2 END,COALESCE(w.updated_at,i.updated_at),i.id
   LIMIT 10
 $$;
 

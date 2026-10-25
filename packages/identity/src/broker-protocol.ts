@@ -263,10 +263,12 @@ export interface ConnectorBrokerRpc {
   shopifyCredentialDestroy(installationId: string, reason: string): Promise<string>;
   // Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md): a
   // budget only. The broker takes the active installations whose app/uninstalled and
-  // app/scopes_update subscriptions are not registered from its own vault login, lists each
-  // store's subscriptions of those topics with its token and creates only a missing one, to
-  // the connector's webhook path built from its own configuration; counts only come back
-  // (encodeShopifyWebhookSyncResult). Held without the vault or that configuration.
+  // app/scopes_update subscriptions are not registered, or were registered 24 hours ago
+  // (a re-check: Shopify removes a subscription whose deliveries keep failing), from its
+  // own vault login, lists each store's subscriptions of those topics with its token and
+  // creates only a missing one, to the connector's webhook path built from its own
+  // configuration; counts only come back (encodeShopifyWebhookSyncResult). Held without the
+  // vault or that configuration.
   shopifyWebhookSubscriptionsSync(budgetMs: number): Promise<string>;
 }
 export interface RuntimeBrokerRpc {

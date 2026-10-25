@@ -11,7 +11,12 @@
 // (WEBHOOKS_BUSY), held without the vault or the connector's origin (WEBHOOKS_UNAVAILABLE):
 //   1. One vault transaction, alone: the pending installations (at most
 //      shopifyWebhookSyncLimits.batch): active, of an active app, whose current credential
-//      version has no registered row (shopify-webhook-registrations-identity).
+//      version has no registered row, or whose registered row was recorded 24 hours ago
+//      (shopify-webhook-registrations-identity). That re-check is the same round: Shopify
+//      removes a shop-specific subscription whose deliveries keep failing (for example
+//      through a broker or vault outage of about four hours), so the list finds what is
+//      gone and only that is created again; a store whose subscriptions still exist costs
+//      one list and one record.
 //   2. Per installation, while the budget allows:
 //      a. one vault transaction: its tenant, app key, shop domain and the active envelope of
 //         its current credential version, opened with the KEK (the additional data binds the

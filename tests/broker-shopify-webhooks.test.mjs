@@ -304,6 +304,53 @@ test("register: both present is one list; one present creates only the other", a
   assert.deepEqual(one.operations, ["list", "create:APP_SCOPES_UPDATE"]);
 });
 
+test("register: two topics with one subscription id are never registered", async () => {
+  // A list naming the same subscription for both topics: not both registered, and nothing
+  // is created (both topics show). The record refuses equal ids, so returning them as
+  // registered would be skipped and retried on every run with no backoff.
+  const listed = await register({
+    subscriptions: [
+      { id: "10", topic: "APP_UNINSTALLED", uri: callbackUrl },
+      { id: "10", topic: "APP_SCOPES_UPDATE", uri: callbackUrl },
+    ],
+  });
+  assert.deepEqual(listed.outcome, { status: "failed" });
+  assert.deepEqual(listed.operations, ["list"]);
+  // A second create whose reply names the first create's subscription.
+  const created = await register({
+    script: {
+      3: () =>
+        json({
+          data: {
+            webhookSubscriptionCreate: {
+              webhookSubscription: {
+                id: gid(9001),
+                topic: "APP_SCOPES_UPDATE",
+                uri: callbackUrl,
+              },
+              userErrors: [],
+            },
+          },
+        }),
+    },
+  });
+  assert.deepEqual(created.operations, [
+    "list",
+    "create:APP_UNINSTALLED",
+    "create:APP_SCOPES_UPDATE",
+  ]);
+  assert.deepEqual(created.outcome, { status: "failed" });
+  // The sync records it failed, with no ids, so it waits for its backoff.
+  const h = await syncHarness({
+    subscriptions: [
+      { id: "10", topic: "APP_UNINSTALLED", uri: callbackUrl },
+      { id: "10", topic: "APP_SCOPES_UPDATE", uri: callbackUrl },
+    ],
+  });
+  assert.equal(decodeShopifyWebhookSyncResult(await h.sync.sync(env(), 15000)).failed, 1);
+  assert.deepEqual(h.records, [[ids.installation, "2", "failed", "", ""]]);
+});
+
 test("register: a list that fails or is partial creates nothing", async () => {
   const fault = (response) => ({ 1: () => response() });
   const cases = [
@@ -769,6 +816,8 @@ async function syncHarness(options = {}) {
   const fetch = async (url, init) => {
     vault.events.push("fetch");
     if (options.fetchAdvancesMs) c.clock.ms += options.fetchAdvancesMs;
+    // `onFetch(clock, n)` before the n-th request (1-based), to slow that one request.
+    options.onFetch?.(c.clock, shopify.state.requests.length + 1);
     return shopify.fetch(url, init);
   };
   const sync = createShopifyWebhookSync({
@@ -987,6 +1036,37 @@ test("sync: an installation starts only with a whole round's time left", async (
     ],
   );
   assert.ok(h.budgets.every((b) => b >= 1 && b <= 3000));
+});
+
+test("sync: the record keeps its 2 s reserve when Shopify takes all of its time", async () => {
+  // Shopify gets the budget less the record's reserve: each request's abort timer is set to
+  // what is left of that. The last create's reply arrives just as its timer would fire, so
+  // Shopify created both subscriptions; the record still has 2 s, so that registration is
+  // recorded rather than left to a 1 ms transaction.
+  const realTimeout = AbortSignal.timeout;
+  const timeouts = [];
+  AbortSignal.timeout = (ms) => {
+    timeouts.push(ms);
+    return realTimeout.call(AbortSignal, ms);
+  };
+  try {
+    let start = null;
+    const h = await syncHarness({
+      onFetch: (clock, n) => {
+        start ??= clock.ms;
+        if (n === 3) clock.ms += timeouts.at(-1);
+      },
+    });
+    const counts = decodeShopifyWebhookSyncResult(await h.sync.sync(env(), 15000));
+    assert.equal(counts.registered, 1);
+    assert.deepEqual(h.records, [[ids.installation, "2", "registered", "9001", "9002"]]);
+    // Each request may use at most the budget less 2 s; the last one used all of it.
+    assert.deepEqual(timeouts, [13000, 13000, 13000]);
+    assert.equal(h.clock.ms - start, 13000);
+    assert.ok(h.budgets.at(-1) >= 2000, String(h.budgets.at(-1)));
+  } finally {
+    AbortSignal.timeout = realTimeout;
+  }
 });
 
 test("protocol: the connector origin, the callback URL and the closed counts", () => {
