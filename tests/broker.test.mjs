@@ -229,7 +229,7 @@ test("P04.T01i PR-D: the committed staging vars give the broker every capability
   // an admin key or an OAuth token is not.
   const identityBacked = await brokerCapabilities({
     ...env,
-    ANTHROPIC_API_KEY: "sk-ant-abc-" + randomBytes(48).toString("base64url").slice(0, 95),
+    ANTHROPIC_API_KEY: "sk-ant-abc-" + randomBytes(72).toString("base64url").slice(0, 95),
   });
   assert.equal(identityBacked.model?.provider, "anthropic");
   for (const wrongType of ["sk-ant-admin01-", "sk-ant-oat01-"]) {
