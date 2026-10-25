@@ -4,6 +4,7 @@ type: agent
 kind: installable
 title: Marketing and Promotions
 status: planned
+origin: first-party
 slip_rank: "1"
 scopes_optional: [write_discounts]
 customer_data: none

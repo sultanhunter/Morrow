@@ -3,12 +3,12 @@ id: SK-listing-content
 type: skill
 title: Product titles and descriptions, with AI-answer readiness checks
 status: proposed
-specialist_eligible: "yes"
+card_eligible: "yes"
 runtime: none
 job_tags: [listings, content]
 links:
   holds: [DC-product-content-read, DC-product-content-drafted]
-  governed_by: [ADR-0023]
+  governed_by: [ADR-0023, ADR-0037]
 ---
 
 Drafts titles and descriptions with a source for each factual sentence; wording-only sentences may
