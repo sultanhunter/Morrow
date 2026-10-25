@@ -20,7 +20,7 @@
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
     "docs/contracts/schemas/v1.1/core.schema.json": "ae61958d9114b18f9cc03e8bb407e64fdae3fbb969ee579367e562559c63b12d",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "4248429dfa207dbe56b6e21685b243519bfc77b3c8bbb1a87d9d62a7d4f59dfc",
-    "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206",
+    "docs/contracts/schemas/v1.1/billing.schema.json": "a513b52a94b2654f2fabebdcc05a7b6dbbc10cdf046e9d4fec69f11e51c70dc2",
     "docs/contracts/event-registry.json": "3187243efde263c6de85f11bce2984ee818e48b4fb18d1a216c9473ef68d07ba"
   },
   "compiler": {
@@ -30,7 +30,7 @@
   },
   "output": {
     "path": "packages/contracts/src/generated/runtime-validators.mjs",
-    "sha256": "00937e1411ae36c3454ed7c97156b0463e6b23723a67b5ddda4108e9f018f1ed"
+    "sha256": "32252d4e06b0fb598a2ce5e8967b7c5f1033a68f1e20ecde3f2fcde8a08a0d54"
   },
   "browser_validators": {
     "SessionRotationResult": {

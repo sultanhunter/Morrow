@@ -4,9 +4,7 @@
 // change how a helper thinks, a revision conflict, an add document bound to its fingerprint
 // and used once) so the screens can be checked; the server proves the real ones.
 import type {
-  ActivityEntryView,
   ActivityLineView,
-  ActivityView,
   AddDocumentView,
   AddResultView,
   AgentCharacter,
@@ -120,12 +118,13 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
   // any helper thinks; an Admin only added agents'; a member none.
   const mayChange = (target: Target) =>
     viewer === "owner" || (viewer === "admin" && target === "agent");
+  // ADR-0036's defaults: Morrow on Opus 5.5 at high, every other helper on Opus 5.5 at medium.
   const own: Record<string, { choice: ThinkingChoice; revision: number }> = {
     morrow: { choice: opusHigh, revision: 1 },
     specialists: { choice: opusMedium, revision: 1 },
-    "agent-analyst": { choice: sonnetLow, revision: 1 },
-    "agent-inventory": { choice: sonnetLow, revision: 1 },
-    "agent-support": { choice: sonnetLow, revision: 1 },
+    "agent-analyst": { choice: opusMedium, revision: 1 },
+    "agent-inventory": { choice: opusMedium, revision: 1 },
+    "agent-support": { choice: opusMedium, revision: 1 },
   };
   const ownThinking = (
     key: string,
@@ -147,7 +146,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       model: d.model,
       effort: d.effort,
       source: "workspace_default",
-      usual: sonnetLow,
+      usual: opusMedium,
       revision: d.revision,
       // models.list's canRevise decides on the page; the fixture's reviser is the Owner.
       canChange: viewer === "owner",
@@ -181,8 +180,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 150 to 300 credits a month on Sonnet 5.5 · Low.",
+      startsOn: opusMedium,
+      usualCredits: "Usually 150 to 300 credits a month on Opus 5.5 · Medium.",
       defaultMonthlyLimit: 300,
       example: null,
       reviewer: null,
@@ -205,8 +204,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 100 to 200 credits a month on Sonnet 5.5 · Low.",
+      startsOn: opusMedium,
+      usualCredits: "Usually 100 to 200 credits a month on Opus 5.5 · Medium.",
       defaultMonthlyLimit: 200,
       example: null,
       reviewer: null,
@@ -229,8 +228,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 50 to 100 credits a month on Sonnet 5.5 · Low.",
+      startsOn: opusMedium,
+      usualCredits: "Usually 50 to 100 credits a month on Opus 5.5 · Medium.",
       defaultMonthlyLimit: 100,
       example: null,
       reviewer: null,
@@ -253,8 +252,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       },
       shopifyAccess: [],
       accessNote: null,
-      startsOn: sonnetLow,
-      usualCredits: "Usually 150 to 300 credits a month on Sonnet 5.5 · Low.",
+      startsOn: opusMedium,
+      usualCredits: "Usually 150 to 300 credits a month on Opus 5.5 · Medium.",
       defaultMonthlyLimit: 300,
       example: null,
       reviewer: null,
@@ -297,8 +296,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       shopifyAccess: ["Create and end discount codes, only after you approve"],
       accessNote:
         "Shopify asks you to allow this once. It can’t see customer names, emails or addresses.",
-      startsOn: sonnetLow,
-      usualCredits: "Usually 100 to 200 credits a month on Sonnet 5.5 · Low.",
+      startsOn: opusMedium,
+      usualCredits: "Usually 100 to 200 credits a month on Opus 5.5 · Medium.",
       defaultMonthlyLimit: 200,
       example: {
         title: "Sample plan: Weekend offer on slow sellers",
@@ -361,7 +360,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Morning summary · Sat, Oct 24, 8:00 am"),
         ],
         credits: { used: 118, limit: 200 },
-        thinking: ownThinking("agent-analyst", "agent", sonnetLow, agentDailyLimit),
+        thinking: ownThinking("agent-analyst", "agent", opusMedium, agentDailyLimit),
       },
       {
         agentId: "agent-inventory",
@@ -379,7 +378,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Daily stock check · Mon, Oct 26, 6:00 am"),
         ],
         credits: { used: 58, limit: 100 },
-        thinking: ownThinking("agent-inventory", "agent", sonnetLow, agentDailyLimit),
+        thinking: ownThinking("agent-inventory", "agent", opusMedium, agentDailyLimit),
       },
       {
         agentId: "agent-support",
@@ -394,7 +393,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
           line("next", "Drafts a reply when the next customer email comes in."),
         ],
         credits: { used: 196, limit: 300 },
-        thinking: ownThinking("agent-support", "agent", sonnetLow, agentDailyLimit),
+        thinking: ownThinking("agent-support", "agent", opusMedium, agentDailyLimit),
       },
     ];
     // The empty scenario starts with none: its catalogue lists none as added either.
@@ -964,172 +963,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     (quietUntilHours as readonly number[]).includes(c.quiet.until) &&
     (shopTimeZones as readonly string[]).includes(c.timeZone) &&
     Number.isSafeInteger(c.expectedRevision);
-  // ---- Activity (the board's sample day). Conversations with Morrow are not listed.
-  const today = "Today, Friday, October 23";
-  const earlier = "Earlier this month";
-  const maya = { kind: "person" as const, name: owner, initials: "MC" };
-  const leo = { kind: "person" as const, name: teammate, initials: "LM" };
-  const helper = (name: string, character: AgentCharacter, prop: SpecialistProp | null = null) => ({
-    kind: "helper" as const,
-    name,
-    character,
-    prop,
-  });
-  const entries: readonly ActivityEntryView[] = empty
-    ? []
-    : [
-        {
-          id: "a-support-reply",
-          day: today,
-          time: "1:52 pm",
-          actor: helper("Support", "support"),
-          what: "started a reply to a new customer email",
-          detail: "Customer emails · Nothing is sent until a person approves it",
-          category: "work",
-          badge: "working",
-        },
-        {
-          id: "a-morrow-repeat",
-          day: today,
-          time: "1:40 pm",
-          actor: helper("Morrow", "morrow"),
-          what: "drafted a repeating task for Maya: products that stopped selling",
-          detail: "Stock · Not turned on",
-          category: "work",
-          badge: "suggested",
-        },
-        {
-          id: "a-approve-tote",
-          day: today,
-          time: "11:52 am",
-          actor: maya,
-          what: "approved 4 changes to the Everyday Tote",
-          detail: "Written by Listings · Saved in Shopify and checked",
-          category: "approvals",
-          badge: "updated_in_shopify",
-        },
-        {
-          id: "a-checkup-done",
-          day: today,
-          time: "11:12 am",
-          actor: helper("AI answers check-up", "specialist", "magnifier"),
-          what: "finished checking the Everyday Tote page",
-          detail: "One-time specialist · 16 credits used, 24 came back",
-          category: "work",
-          badge: "done",
-        },
-        {
-          id: "a-checkup-start",
-          day: today,
-          time: "10:33 am",
-          actor: maya,
-          what: "started the AI answers check-up, a one-time specialist",
-          detail: "Limit 40 credits · Its access ends Sat, Oct 24, 10:33 am",
-          category: "access",
-          badge: null,
-        },
-        {
-          id: "a-sale-question",
-          day: today,
-          time: "9:52 am",
-          actor: helper("Sale planner", "specialist", "calendar"),
-          what: "asked Maya: Should the sale leave out the Autumn collection?",
-          detail: "One-time specialist · Black Friday sale",
-          category: "work",
-          badge: "needs_you",
-        },
-        {
-          id: "a-summary",
-          day: today,
-          time: "8:00 am",
-          actor: helper("Business Analyst", "business_analyst"),
-          what: "sent the morning summary",
-          detail: "Sales and numbers · 4 credits",
-          category: "work",
-          badge: null,
-        },
-        {
-          id: "a-stock",
-          day: today,
-          time: "6:04 am",
-          actor: helper("Inventory", "inventory"),
-          what: "checked stock: 3 best sellers have less than 2 weeks left",
-          detail: "Stock · Daily stock check",
-          category: "work",
-          badge: null,
-        },
-        {
-          id: "a-reply-sent",
-          day: earlier,
-          time: "Oct 22",
-          actor: leo,
-          what: "approved a reply to a customer about order #10388",
-          detail: "Written by Support · Sent from your shop’s Morrow address",
-          category: "approvals",
-          badge: "sent",
-        },
-        {
-          id: "a-undo-tags",
-          day: earlier,
-          time: "Oct 21",
-          actor: maya,
-          what: "undid a tag change on the Utility Overshirt",
-          detail: "Morrow put back the tags it read before the change, then checked them",
-          category: "store",
-          badge: "updated_in_shopify",
-        },
-        {
-          id: "a-renew",
-          day: earlier,
-          time: "Oct 20",
-          actor: maya,
-          what: "renewed Listings’ permission for 90 days",
-          detail: "Ends Mon, Jan 18",
-          category: "access",
-          badge: null,
-        },
-        {
-          id: "a-listings-on",
-          day: earlier,
-          time: "Oct 14",
-          actor: maya,
-          what: "turned Listings back on",
-          detail: "Read what Listings may do, then confirmed",
-          category: "access",
-          badge: null,
-        },
-        {
-          id: "a-stop-all",
-          day: earlier,
-          time: "Oct 14",
-          actor: maya,
-          what: "stopped all AI work",
-          detail: "Listings on Linen & Form · Changes waiting in the Inbox were kept",
-          category: "access",
-          badge: "stopped",
-        },
-        {
-          id: "a-leo-approve",
-          day: earlier,
-          time: "Oct 2",
-          actor: maya,
-          what: "let Leo Martin approve product changes and customer replies",
-          detail: "Typed to confirm",
-          category: "access",
-          badge: null,
-        },
-        {
-          id: "a-linked",
-          day: earlier,
-          time: "Oct 2",
-          actor: maya,
-          what: "linked Linen & Form to Morrow",
-          detail: "Morrow can see products and change them after a person approves",
-          category: "store",
-          badge: null,
-        },
-      ];
-  const activity: ActivityView = { shopName: "Linen & Form", entries };
+  // v1 PR 15: Activity's log moved to the Inbox fixture (fixtures/inbox.ts).
 
   const settings: SettingsPort = {
     notifications: (ws) =>
@@ -1162,10 +996,6 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
         prefs.revision += 1;
         return ok({ revision: prefs.revision });
       }),
-    activity: (ws) =>
-      reply<ActivityView>("settings.activity", () =>
-        deps.isWorkspace(ws) ? ok(activity) : notFound,
-      ),
     plan: (ws) =>
       reply<PlanView>("settings.plan", () => (deps.isWorkspace(ws) ? ok(plan()) : notFound)),
     emailAddresses: (ws) =>

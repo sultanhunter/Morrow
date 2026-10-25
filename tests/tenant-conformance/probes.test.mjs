@@ -151,12 +151,12 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_listings_enable_document(text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"createdAt":"2026-10-20T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_listings_enable_document('${uuid}','${digest}','corr','store_probe','enable','installation_probe','${randomUUID()}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'${digest}') x`,
     "cmd_listings_enable(text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_listings_enable('${uuid}','${digest}','corr','store_probe','${digest}','${digest}',NULL,NULL,NULL,NULL)`,
     "cmd_stop_ai_work(text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"record_probe","createdAt":"2026-10-20T00:00:00.000Z"}'::text AS c) d, morrow_work.cmd_stop_ai_work('${uuid}','${digest}','corr','store_probe','installation_probe',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex')) x`,
-    "cmd_model_default_revise(text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_model_default_revise('${uuid}','${digest}','corr','1','claude_sonnet_5_5','low','1',NULL)`,
+    "cmd_model_default_revise(text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_model_default_revise('${uuid}','${digest}','corr','3','claude_sonnet_5_5','low','1',NULL)`,
     // M2 PR-3: the catalogue routes' read lease.
     "catalog_read_lease(text,text)": `SELECT outcome FROM morrow_work.catalog_read_lease('store_probe','connection_probe')`,
     // M3 PR-2: run admission and reconciliation, every scalar well-formed.
     "begin_run_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_run_command('run.admit','${uuid}','${digest}')`,
-    "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','1','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
+    "cmd_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"schemaVersion":1}'::text AS c) d, morrow_work.cmd_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','3','claude_sonnet_5_5','low','false','["product:1"]','["title"]',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'agent_${randomUUID()}','${randomUUID()}','listings-run@1') x`,
     "cmd_runs_reconcile(text,text,text)": `SELECT outcome FROM morrow_work.cmd_runs_reconcile('${uuid}','${digest}','corr')`,
     // v1 PR 2: "Disconnect store", every scalar and the record well-formed.
     "begin_connection_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_connection_command('connection.disconnect','${uuid}','${digest}')`,
@@ -165,6 +165,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_catalog_apply(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_apply('${uuid}','${digest}','approval_absent','1','${digest}','proposal_absent','${digest}','{"evaluatedAt":"2026-10-23T00:00:00.000Z","reviewers":[]}','[{"targetIndex":0,"canonical":"{}","digest":"${digest}"}]')`,
     "cmd_catalog_dispatch(text,text)": `SELECT outcome FROM morrow_work.cmd_catalog_dispatch('${randomUUID()}',NULL)`,
     "cmd_catalog_set_aside(text)": `SELECT outcome FROM morrow_work.cmd_catalog_set_aside('${randomUUID()}')`,
+    // v1 PR 4: the undo, with well-formed scalars, parameters and proposal document.
+    "cmd_catalog_undo(text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT x.outcome FROM (SELECT '{"id":"proposal_probe","parametersRef":{"id":"params_probe"},"createdAt":"2026-10-24T00:00:00.000Z","expiresAt":"2026-10-27T00:05:00.000Z"}'::text AS c) d, morrow_work.cmd_catalog_undo('${uuid}','${digest}','${randomUUID()}','1','${randomUUID()}','${digest}','{}',encode(sha256(convert_to('{}','UTF8')),'hex'),d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'{}','${digest}') x`,
     // PR 18 (0046): the goal and plan-start commands, every scalar and document well-formed.
     "begin_project_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_project_command('plan.start','${uuid}','${digest}')`,
     "cmd_goal_revise(text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_goal_revise('${uuid}','${digest}','corr','${records.A.goal}','1','own','x',NULL,'[{"description":"d","verificationCapabilityId":null,"evidenceRequired":false}]')`,
@@ -184,7 +186,7 @@ test("P1: with no context both roles see zero rows and every api function is ine
       return `SELECT x.outcome FROM (SELECT '${doc}'::text AS c) d, morrow_work.cmd_plan_start_document('${uuid}','${digest}','corr','${id}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'${digest}','${digest}') x`;
     })(),
     "cmd_plan_start(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_plan_start('${uuid}','${digest}','corr','${digest}','${digest}','${digest}','{}')`,
-    // PR 20 (0047): the knowledge and notebook commands, every scalar well-formed.
+    // PR 20 (0052): the knowledge and notebook commands, every scalar well-formed.
     "begin_knowledge_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_knowledge_command('knowledge.write','${uuid}','${digest}')`,
     "cmd_knowledge_write(text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_write('${uuid}','${digest}','corr',NULL,'${randomUUID()}','policy',NULL,'Returns','Thirty days.','[]')`,
     "cmd_knowledge_accept(text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_accept('${uuid}','${digest}','corr','${randomUUID()}','${digest}','${randomUUID()}')`,
@@ -229,6 +231,10 @@ test("P1: with no context both roles see zero rows and every api function is ine
         // v1 PR 3.
         "catalog_review_sources(text)": "morrow_work.catalog_review_sources('proposal_absent')",
         "catalog_claim_of(text)": "morrow_work.catalog_claim_of('proposal_absent')",
+        // v1 PR 4.
+        "catalog_undo_states(text)": "morrow_work.catalog_undo_states('task_probe')",
+        "catalog_undo_source(text)": `morrow_work.catalog_undo_source('${randomUUID()}')`,
+        "catalog_undo_proposer(text)": `morrow_work.catalog_undo_proposer('${randomUUID()}')`,
         // PR 18: the actor's own start document.
         "plan_start_document(text)": `morrow_work.plan_start_document('${"a".repeat(64)}')`,
       }[signature];

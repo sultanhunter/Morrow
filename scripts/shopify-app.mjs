@@ -15,9 +15,12 @@
 //       with use_legacy_install_flow = true (the authorization-code grant the connector's
 //       callback completes, for a non-expiring offline token); application_url the
 //       connector's launch path and the one redirect URL its callback path; the webhooks
-//       api_version 2026-10 and, since M2 PR-3 added the inbox, the five topics of ADR-0022
-//       item 4 to the connector's webhook path: app/uninstalled and app/scopes_update, and
-//       the three compliance topics (no product topics).
+//       api_version 2026-10 and the three compliance topics to the connector's webhook path.
+//       Shopify CLI 4.9 refuses app-specific topics under use_legacy_install_flow, so the
+//       other two topics of ADR-0022 item 4 (app/uninstalled and app/scopes_update) are
+//       shop-specific subscriptions the broker registers for each installation, to the same
+//       path (apps/broker/src/shopify-webhooks.ts). No build.include_config_on_deploy (the
+//       CLI removed it).
 //   npm run shopify-app -- register --environment <development|staging> --app-key <key>
 //       --client-id <32 hex> --shop <name>.myshopify.com --organization <id>
 //       --workspace <id> --install-url <custom distribution link> --out <file>
@@ -166,19 +169,16 @@ export function shopifyAppToml(options) {
     "[webhooks]",
     `api_version = "${shopifyAppApiVersion}"`,
     "",
-    "# ADR-0022 item 4: the app topics and the three compliance topics, to the connector's",
-    "# signed webhook path (M2 PR-3: the broker records each delivery before the 200).",
-    "[[webhooks.subscriptions]]",
-    'topics = [ "app/uninstalled", "app/scopes_update" ]',
-    `uri = "${base}/webhooks"`,
-    "",
+    "# ADR-0022 item 4: the three compliance topics, to the connector's signed webhook path",
+    "# (M2 PR-3: the broker records each delivery before the 200). The legacy install flow",
+    "# admits no app-specific topics, so the broker registers app/uninstalled and",
+    "# app/scopes_update for each installation as shop-specific subscriptions to that path.",
     "[[webhooks.subscriptions]]",
     'compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]',
     `uri = "${base}/webhooks"`,
     "",
     "[build]",
     "automatically_update_urls_on_dev = false",
-    "include_config_on_deploy = true",
     "",
   ].join("\n");
 }

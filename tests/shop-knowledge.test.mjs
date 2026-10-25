@@ -654,7 +654,7 @@ test("the committed switch answers 503 on every route before any connection; unb
   );
 });
 
-const sql = readFileSync("migrations/0047.shop-knowledge.sql", "utf8");
+const sql = readFileSync("migrations/0052.shop-knowledge.sql", "utf8");
 const tables = [
   "knowledge_pages",
   "knowledge_proposals",
@@ -664,15 +664,19 @@ const tables = [
   "agent_notebooks",
   "agent_notebook_entries",
 ];
-test("migration 0047: forward only, FORCE RLS, no customer tag, clocked notebooks, no runtime DELETE", () => {
+test("migration 0052: forward only, FORCE RLS, no customer tag, clocked notebooks, no runtime DELETE", () => {
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8")).migrations;
-  const row = manifest.find((m) => m.file === "0047.shop-knowledge.sql");
+  const row = manifest.find((m) => m.file === "0052.shop-knowledge.sql");
   assert.deepEqual(
     { sequence: row.sequence, executeAs: row.executeAs, reviewRef: row.reviewRef },
-    { sequence: 47, executeAs: "morrow_work_owner", reviewRef: "docs/briefs/shop-knowledge.md" },
+    { sequence: 52, executeAs: "morrow_work_owner", reviewRef: "docs/briefs/shop-knowledge.md" },
   );
   assert.equal(row.sha256, createHash("sha256").update(sql).digest("hex"));
-  assert.equal(manifest.at(-1).file, "0047.shop-knowledge.sql");
+  // After 0051 (the applied chain); any later migration appends after it, never between, and
+  // the no-gap rule is migration-history's.
+  const at = manifest.indexOf(row);
+  assert.ok(manifest.slice(0, at).every((m) => m.sequence < row.sequence));
+  assert.ok(manifest.slice(at + 1).every((m) => m.sequence > row.sequence));
   assert.match(sql, /^BEGIN;\n/);
   assert.match(sql, /\nCOMMIT;\n$/);
   assert.match(sql, /SHOP_KNOWLEDGE_PREREQUISITES_INVALID/);

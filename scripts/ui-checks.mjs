@@ -629,10 +629,139 @@ export const fixtureCases = [
   ),
   fixtureCase("work", "conflict", `/w/${ws}/work`, { scenario: "conflict", setup: fillGoal }),
   fixtureCase("work", "uncertain", `/w/${ws}/work`, { scenario: "uncertain", setup: fillGoal }),
-  fixtureCase("inbox", "inbox", `/w/${ws}/inbox`),
+  // v1 PR 15: the Sunrise Inbox (the Inbox, EmptyStates, Phone boards): one read, each
+  // item linking to its own screen; the count is the open items, the same as the sidebar's.
+  fixtureCase("inbox", "inbox", `/w/${ws}/inbox`, {
+    setup: async (page) => {
+      const items = page.locator('[data-testid="inbox-items"] > li');
+      await items.first().waitFor();
+      expect((await items.count()) === 3, "three_items");
+      expect(
+        (await page.getByRole("button", { name: /^All/ }).getAttribute("aria-pressed")) === "true",
+        "all_pressed",
+      );
+      await page.getByText("Your Inbox count is 3:").waitFor();
+    },
+  }),
+  fixtureCase("inbox", "empty", `/w/${ws}/inbox`, {
+    scenario: "empty",
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "You’re all caught up" }).waitFor();
+      expect((await page.locator("main .ask-morrow").count()) >= 1, "ask_morrow");
+    },
+  }),
+  // A store that isn't connected, a change Morrow couldn't confirm and one it didn't apply.
+  fixtureCase("inbox", "problems", `/w/${ws}/inbox`, {
+    scenario: "inbox_problems",
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "Your Shopify store isn’t connected" }).waitFor();
+      await page.getByText("Needs attention").first().waitFor();
+      await page.getByText("Can’t apply").first().waitFor();
+      // Not applied and Can't apply are listed, not counted: the store, the unknown change
+      // and the two questions make four.
+      await page.getByText("Your Inbox count is 4:").waitFor();
+    },
+  }),
+  fixtureCase("inbox", "filter_problems", `/w/${ws}/inbox`, {
+    scenario: "inbox_problems",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: /^Problems/ }).click();
+      const items = page.locator('[data-testid="inbox-items"] > li');
+      await page.waitForFunction(
+        () => document.querySelectorAll('[data-testid="inbox-items"] > li').length === 3,
+      );
+      expect((await items.locator('[data-kind="question"]').count()) === 0, "no_questions");
+    },
+  }),
+  fixtureCase("inbox", "filter_empty", `/w/${ws}/inbox`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: /^Problems/ }).click();
+      await page.getByRole("heading", { name: "Nothing here right now" }).waitFor();
+      await page.getByRole("button", { name: "Show everything" }).click();
+      await page.locator('[data-testid="inbox-items"] > li').first().waitFor();
+    },
+  }),
+  fixtureCase("inbox", "loading", `/w/${ws}/inbox`, {
+    scenario: "loading",
+    widths: [1440, 390],
+    setup: (page) => page.getByText("Loading your Inbox").waitFor(),
+  }),
+  fixtureCase("inbox", "unavailable", `/w/${ws}/inbox`, {
+    scenario: "unavailable",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "We couldn’t load your Inbox" }).waitFor();
+      await page.getByRole("button", { name: "Retry" }).waitFor();
+    },
+  }),
+  fixtureCase("inbox", "offline", `/w/${ws}/inbox`, {
+    scenario: "offline",
+    widths: [1440, 390],
+    setup: (page) => page.getByRole("heading", { name: "You’re offline" }).waitFor(),
+  }),
+  // A denied section is never an all-clear.
+  fixtureCase("inbox", "part_denied", `/w/${ws}/inbox`, {
+    scenario: "home_partial_denied",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "Some of your Inbox can’t be shown" }).waitFor();
+      expect((await page.getByText("You’re all caught up").count()) === 0, "no_false_all_clear");
+    },
+  }),
+  // The default-off preview of kinds whose backend isn't built yet: every row says so.
+  fixtureCase("inbox", "preview", `/w/${ws}/inbox`, {
+    scenario: "inbox_preview",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "Coming soon to your Inbox" }).waitFor();
+      expect(
+        (await page.locator(".inbox-samples .nav-sample-tag").count()) === 2,
+        "samples_labelled",
+      );
+    },
+  }),
+  fixtureCase(
+    "inbox",
+    "exception_uncertain",
+    `/w/${ws}/inbox/exceptions/00000000-0000-4000-9000-000000000201`,
+    {
+      scenario: "inbox_problems",
+      setup: async (page) => {
+        await page.getByRole("heading", { name: "Morrow couldn’t confirm this change" }).waitFor();
+        await page.getByRole("button", { name: "Check again" }).waitFor();
+      },
+    },
+  ),
+  fixtureCase(
+    "inbox",
+    "exception_failed",
+    `/w/${ws}/inbox/exceptions/00000000-0000-4000-9000-000000000202`,
+    {
+      scenario: "inbox_problems",
+      widths: [1440, 390],
+      setup: async (page) => {
+        await page.getByRole("heading", { name: "This change wasn’t applied" }).waitFor();
+        // Review F1: a change that wasn't applied is never read back; no line says it was or will be.
+        expect(
+          (await page.getByText(/checked the product|Last checked/).count()) === 0,
+          "no_readback_line",
+        );
+      },
+    },
+  ),
+  fixtureCase(
+    "inbox",
+    "exception_missing",
+    `/w/${ws}/inbox/exceptions/00000000-0000-4000-9000-000000000999`,
+    {
+      widths: [1440, 390],
+      setup: (page) => page.getByRole("heading", { name: "A change to check" }).waitFor(),
+    },
+  ),
   fixtureCase("inbox", "question_open", `/w/${ws}/inbox/questions/q-source`),
   fixtureCase("inbox", "question_answered", `/w/${ws}/inbox/questions/q-titles`),
-  fixtureCase("inbox", "empty", `/w/${ws}/inbox`, { scenario: "empty" }),
   fixtureCase("inbox", "question_expired", `/w/${ws}/inbox/questions/q-source`, {
     scenario: "question_expired",
   }),
@@ -672,7 +801,45 @@ export const fixtureCases = [
   }),
   fixtureCase("task", "applied_history", `/w/${ws}/work/task-titles`, {
     widths: [1440, 390],
-    setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),
+    // The history loads with Review's chunk (v1 PR 4): measure it once it has loaded.
+    setup: async (page) => {
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await settle(page);
+    },
+  }),
+  // v1 PR 4: "Approve several at once" with the solo owner's one phrase, and the history's
+  // Undo after an apply (the undo is a new change, waiting for approval).
+  fixtureCase("review", "batch", `/w/${ws}/review/proposal-sample-1`, {
+    scenario: "review_batch",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve several at once" }).click();
+      await page.getByRole("button", { name: "Approve these 2 changes" }).waitFor();
+    },
+  }),
+  // v1 PR 4: the product picker on Ask (a scenario whose Listings agent is on), one product
+  // ticked into the list.
+  fixtureCase("ask", "picker", `/w/${ws}/ask`, {
+    scenario: "stop_all",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("combobox", { name: "Store", exact: true }).selectOption({ index: 1 });
+      await page.getByRole("button", { name: "Show products" }).click();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).check();
+      await page.getByRole("checkbox", { name: "Add Linen shirt 15" }).isChecked();
+    },
+  }),
+  fixtureCase("task", "undo_history", `/w/${ws}/review/proposal-sample-1`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Approve all" }).click();
+      await page.getByRole("button", { name: "Apply to Shopify" }).click();
+      await page.getByRole("heading", { name: "Changes applied" }).waitFor();
+      await page.getByRole("link", { name: "Open the task" }).click();
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await page.getByRole("button", { name: "Undo" }).first().click();
+      await page.getByText("Morrow made a change back to the earlier values.").waitFor();
+    },
   }),
   fixtureCase("overlay", "drawer", `/w/${ws}`, {
     widths: [390, 320],
@@ -977,7 +1144,8 @@ fixtureCases.push(
     },
   }),
   // A real 409 (a teammate's change landed first): the dialog shows the reread choice, and
-  // the next save, of the reread revision, goes through.
+  // the next save, of the reread revision, goes through. Business Analyst starts on Opus 5.5
+  // at Medium (ADR-0036), so the first pick is Sonnet 5.5: an unchanged choice can't be saved.
   fixtureCase("team", "thinking_conflict", `/w/${ws}/agents`, {
     widths: [1440],
     scenario: "team_thinking_conflict",
@@ -985,7 +1153,7 @@ fixtureCases.push(
       const name = "Change how Business Analyst thinks";
       await page.getByRole("button", { name }).click();
       const dialog = page.getByRole("dialog", { name });
-      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("radio", { name: /Sonnet 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
       await dialog.getByText("This changed since you opened it.").waitFor();
       // The reread lands a few renders after the 409's message (as on notifications_conflict).
@@ -1005,7 +1173,7 @@ fixtureCases.push(
     },
   }),
   // An unknown outcome doesn't trap the dialog: Escape closes it, and the shell says the
-  // change may have been saved.
+  // change may have been saved. (Sonnet 5.5: Opus 5.5 at Medium is already the choice.)
   fixtureCase("team", "thinking_uncertain_closed", `/w/${ws}/agents`, {
     widths: [1440],
     scenario: "team_thinking_uncertain",
@@ -1013,7 +1181,7 @@ fixtureCases.push(
       const name = "Change how Business Analyst thinks";
       await page.getByRole("button", { name }).click();
       const dialog = page.getByRole("dialog", { name });
-      await dialog.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await dialog.getByRole("radio", { name: /Sonnet 5\.5/ }).check();
       await dialog.getByRole("button", { name: "Save" }).click();
       await dialog.getByRole("button", { name: "Check again" }).waitFor();
       await page.keyboard.press("Escape");
@@ -1033,11 +1201,13 @@ fixtureCases.push(
     },
   }),
   // The Listings agent's choice is the workspace default: above the member ceiling it
-  // can't be saved here.
+  // can't be saved here. The default is Opus 5.5 at Medium (4 credits a product) under a
+  // ceiling of 4 (ADR-0036), so High (6) is the choice above it.
   fixtureCase("team", "agent_over_limit", `/w/${ws}/agents/agent-listings`, {
     widths: two,
     setup: async (page) => {
       await page.getByRole("radio", { name: /Opus 5\.5/ }).check();
+      await page.getByRole("radio", { name: /^High/ }).check();
       await page.getByText("doesn’t fit the spending limit").waitFor();
       expect(await page.getByRole("button", { name: "Save" }).isDisabled(), "save_held");
     },
@@ -1164,8 +1334,29 @@ fixtureCases.push(
       expect(await page.getByLabel("Linen & Form’s time zone").isDisabled(), "zone_held");
     },
   }),
-  // Activity: Stop all AI work on top, wired to the Listings agent's own stop.
-  fixtureCase("settings", "activity", `/w/${ws}/settings/governance`),
+  // Activity: Stop all AI work on top, wired to the Listings agent's own stop; v1 PR 15's
+  // log below it, a page at a time.
+  fixtureCase("settings", "activity", `/w/${ws}/settings/governance`, {
+    setup: (page) => page.locator('[data-testid="activity-entries"] > li').first().waitFor(),
+  }),
+  fixtureCase("settings", "activity_more", `/w/${ws}/settings/governance`, {
+    widths: [1440, 390],
+    scenario: "activity_more",
+    setup: async (page) => {
+      const entries = page.locator('[data-testid="activity-entries"] > li');
+      await entries.first().waitFor();
+      expect((await entries.count()) === 4, "first_page");
+      await page.getByRole("button", { name: "Show earlier" }).click();
+      await page.waitForFunction(
+        () => document.querySelectorAll('[data-testid="activity-entries"] > li').length === 8,
+      );
+    },
+  }),
+  fixtureCase("settings", "activity_empty", `/w/${ws}/settings/governance`, {
+    widths: [1440, 390],
+    scenario: "empty",
+    setup: (page) => page.getByText("Nothing here yet.").waitFor(),
+  }),
   fixtureCase("settings", "activity_on", `/w/${ws}/settings/governance`, {
     widths: two,
     scenario: "stop_all",
@@ -1266,6 +1457,33 @@ const expect = (condition, code) => {
   if (!condition) throw Error(code);
 };
 export const keyboardWalks = [
+  // v1 PR 15: the Inbox by keyboard: the filters are pressed buttons; Problems shows what
+  // went wrong; its first row opens the exception screen, whose Check again is reachable.
+  {
+    name: "inbox_filters",
+    path: `/w/${ws}/inbox`,
+    scenario: "inbox_problems",
+    run: async (page) => {
+      await page.locator('[data-testid="inbox-items"] > li').first().waitFor();
+      const problems = await tabTo(
+        page,
+        (a) => a.tag === "BUTTON" && a.text.startsWith("Problems"),
+        80,
+      );
+      expect(problems.tag === "BUTTON", "filter_reached");
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        () =>
+          document
+            .querySelector(".inbox-filter[aria-pressed='true']")
+            ?.textContent?.startsWith("Problems") === true,
+      );
+      await tabTo(page, (a) => a.tag === "A" && a.text.startsWith("Morrow couldn’t confirm"), 20);
+      await page.keyboard.press("Enter");
+      await page.getByRole("heading", { name: "Morrow couldn’t confirm this change" }).waitFor();
+      await tabTo(page, (a) => a.tag === "BUTTON" && a.text === "Check again", 40);
+    },
+  },
   // T7 PR 16: "Change" on Team keeps focus in its dialog and returns it on Escape; adding
   // an agent by keyboard reaches the server-built document and confirms it.
   {
@@ -1608,14 +1826,16 @@ export const keyboardWalks = [
               .waitFor({ state: "attached" }),
           ),
         );
-      await counts(2);
+      // v1 PR 15: the count is the Inbox read's open items: two questions and the change
+      // waiting for review.
+      await counts(3);
       await tabTo(page, (a) => a.tag === "TEXTAREA");
       await page.keyboard.type("Cite the supplier certificate.");
       await tabTo(page, (a) => a.text === "Send answer");
       await page.keyboard.press("Enter");
       await page.getByText("Answer sent.").waitFor();
       await page.getByText("Cite the supplier certificate.").waitFor();
-      await counts(1);
+      await counts(2);
     },
   },
   {

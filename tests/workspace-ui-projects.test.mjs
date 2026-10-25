@@ -22,6 +22,7 @@ import {
 } from "../apps/workspace-web/src/fixtures/scenarios.ts";
 import { fixtureWorkspace } from "../apps/workspace-web/src/fixtures/seed.ts";
 import { portMethods, projectPortMethods } from "../packages/workspace-ui/src/port.ts";
+import { StateView } from "../packages/workspace-ui/src/components/feedback.tsx";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import {
   bucketRows,
@@ -739,4 +740,89 @@ test("screens: an Everyday work area shows its goal, alerts and repeating tasks"
   const dated = render(h(ProjectOverview, { ws, project: tote }));
   for (const text of ["Since you were last here", "Goals", "Plan", "Latest update", "Credits"])
     assert.ok(dated.includes(text), text);
+});
+
+// The entry script's budget (P14.T01a AC19, 150 KB gzip): the three project screens load
+// on first use from their own chunk (`verify:workspace-web` checks the build's split).
+test("the project screens load on first use, then render exactly as the screens themselves", async () => {
+  const index = readFileSync("packages/workspace-ui/src/index.ts", "utf8");
+  assert.match(
+    index,
+    /export \{ AskConversationScreen, ProjectScreen, ProjectsScreen \} from "\.\/projects\/deferred";/,
+  );
+  assert.doesNotMatch(
+    index,
+    /projects\/(projects-screen|project-screen|ask-conversation|screens)"/,
+  );
+  const deferred = readFileSync("packages/workspace-ui/src/projects/deferred.tsx", "utf8");
+  assert.match(deferred, /^import type \* as Screens from "\.\/screens";$/m, "a type import only");
+  assert.deepEqual(deferred.match(/import\("[^"]+"\)/g), ['import("./screens")']);
+  const lazy = await import("../packages/workspace-ui/src/projects/deferred.tsx");
+  const screens = await import("../packages/workspace-ui/src/projects/screens.ts");
+  const cases = [
+    [lazy.ProjectsScreen, screens.ProjectsScreen, { workspace: fixtureWorkspace }],
+    [
+      lazy.ProjectScreen,
+      screens.ProjectScreen,
+      { workspace: fixtureWorkspace, projectId: "project-tote" },
+    ],
+    [
+      lazy.AskConversationScreen,
+      screens.AskConversationScreen,
+      { workspace: fixtureWorkspace, conversationId: "conv-sample" },
+    ],
+  ];
+  // Before the chunk arrives: only the loading state, and a server render asks for nothing.
+  const loading = renderToStaticMarkup(h(StateView, { kind: "loading" }));
+  assert.equal(lazy.projectScreens.loaded(), null);
+  for (const [Lazy, , props] of cases) assert.equal(render(h(Lazy, props)), loading);
+  assert.equal(lazy.projectScreens.loaded(), null);
+  const loaded = await lazy.projectScreens.load();
+  assert.equal(loaded.ProjectsScreen, screens.ProjectsScreen);
+  assert.equal(lazy.projectScreens.loaded(), loaded);
+  for (const [Lazy, Screen, props] of cases) {
+    const html = render(h(Lazy, props));
+    assert.notEqual(html, loading);
+    assert.equal(html, render(h(Screen, props)), Screen.name);
+  }
+});
+
+test("a deferred chunk is asked for once; a failed load shows Retry and is asked for again", async () => {
+  const { createDeferred, deferredView } = await import(
+    "../packages/workspace-ui/src/components/deferred.tsx"
+  );
+  let calls = 0;
+  let fail = true;
+  const chunk = createDeferred(async () => {
+    calls += 1;
+    if (fail) throw new Error("chunk failed");
+    return { Screen: ({ word }) => h("p", null, word) };
+  });
+  const first = chunk.load();
+  assert.equal(chunk.load(), first, "one request while it is pending");
+  await assert.rejects(first, /chunk failed/);
+  assert.equal(calls, 1);
+  assert.equal(chunk.loaded(), null);
+  fail = false;
+  const second = chunk.load();
+  assert.notEqual(second, first, "a failed load is forgotten");
+  await second;
+  await chunk.load();
+  assert.equal(calls, 2, "a loaded chunk is never asked for again");
+  const children = (m) => h(m.Screen, { word: "loaded" });
+  assert.equal(renderToStaticMarkup(h(chunk.View, null, children)), "<p>loaded</p>");
+  // The states the browser shows: loading, then the screen or "couldn't load" with Retry.
+  const view = (state) =>
+    renderToStaticMarkup(
+      h(
+        "div",
+        null,
+        deferredView(state, children, () => {}),
+      ),
+    );
+  assert.match(view("loading"), /state-loading/);
+  const failed = view("failed");
+  assert.match(failed, /data-state="unavailable"/);
+  assert.ok(failed.includes("Nothing was changed.") && failed.includes(">Retry</button>"), failed);
+  assert.equal(view({ module: chunk.loaded() }), "<div><p>loaded</p></div>");
 });

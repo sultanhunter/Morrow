@@ -11,9 +11,10 @@
 // - A run's turn limit is its kind's (6 for the Coordinator, 16 otherwise), lowered so that
 //   it times the worst-case turn fits the US$7 run backstop.
 // - A run holds the lowest of its turn limit times its worst-case turn, US$7 and its credit
-//   cap (a specialist's 5%, a look-for-work pass's 1% of the grant). A run whose hold cannot
-//   cover one worst-case turn, or two for a run that must call a tool (a specialist or a
-//   mandate run, look-for-work included), is not admitted: cap_below_turn.
+//   cap (a specialist's 5% of the grant; a look-for-work pass's per-agent daily cap, US$1.12
+//   in version 2, ADR-0036 item 7). A run whose hold cannot cover one worst-case turn, or two
+//   for a run that must call a tool (a specialist or a mandate run, look-for-work included),
+//   is not admitted: cap_below_turn.
 // - A turn starts only if the hold left covers it; it is the final turn (tool_choice none)
 //   when the hold left cannot also cover a final turn after it (cost_budget) or it is the
 //   last the limit allows.
@@ -248,7 +249,9 @@ export function expectedRunUsd12(entry: LoopEntry, turns: number): bigint {
 /**
  * The vendor cost a share of the monthly grant buys under the margin rule (ADR-0026 items 4
  * and 5): the plan price after the fee, times the vendor share, times the cap's share. With
- * the 17.9% fee and the 50% share, 5% at US$149 is about US$3.06 and 1% about US$0.61.
+ * the 17.9% fee and the 50% share, 5% at US$149 is about US$3.06 (a specialist's cap) and 1%
+ * about US$0.61 (the look-for-work cap until ADR-0036 item 7 replaced it with
+ * lookForWorkDailyCapUsd12).
  */
 export function creditCapUsd12(input: {
   readonly planPriceUsd: string;
@@ -285,6 +288,34 @@ export function creditCapUsd12(input: {
       BigInt(capBasisPoints)) /
     10n ** 12n
   );
+}
+/** A version's per-agent daily look-for-work cap (ADR-0036 item 7), in 10^-12 USD. */
+export function lookForWorkDailyCapUsd12(version: number): bigint {
+  return usd12(limitsOf(version).lookForWorkDailyCostCapUsd12);
+}
+export type LookForWorkHoldResult =
+  | RunHoldResult
+  | { readonly ok: false; readonly code: "trigger_used" };
+/**
+ * A look-for-work pass's hold (ADR-0024 item 6; ADR-0026 item 4 as ADR-0036 item 7 amends
+ * it). One pass per agent a day: a second the same day is trigger_used (one run per trigger
+ * key). The pass is a mandate run held under the version's per-agent daily cap, US$1.12 in
+ * version 2, two worst-case turns at the installed default (Opus 5.5 at medium), in place of
+ * 1% of the monthly grant: a profile whose two worst-case turns exceed it is cap_below_turn.
+ * Build order PR 21's admission (admit_mandate_run) takes this rule; nothing admits a pass yet.
+ */
+export function lookForWorkHold(input: {
+  readonly entry: LoopEntry;
+  readonly passesToday: number;
+}): LookForWorkHoldResult {
+  const { entry, passesToday } = input;
+  if (!entry || !Number.isSafeInteger(passesToday) || passesToday < 0) throw invalid();
+  if (passesToday > 0) return Object.freeze({ ok: false, code: "trigger_used" });
+  return runHold({
+    entry,
+    kind: "mandate",
+    creditCapUsd12: lookForWorkDailyCapUsd12(entry.catalogueVersion),
+  });
 }
 /** Whether a new hold fits the workspace's daily backstop (settled cost plus open holds). */
 export function fitsDailyBackstop(input: {

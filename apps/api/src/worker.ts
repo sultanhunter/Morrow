@@ -31,6 +31,7 @@ import {
   projectsPathPattern,
 } from "../../../packages/work/src/projects/http.js";
 import { planDraftsRecord } from "../../../packages/policy/src/projects/plan-draft.js";
+import { createInboxApiHandler, inboxPathPattern } from "../../../packages/work/src/inbox/http.js";
 import {
   createKnowledgeApiHandler,
   knowledgePathPattern,
@@ -65,6 +66,7 @@ type Handler = Readonly<{
 //   /workspace/:ws/work/{approvals, proposals/:id/(review|decision|apply),
 //     tasks/:taskId/operations, operations/:id(/reconcile, /set-aside)}
 //                                                review and apply (v1 PR 3), ahead of it too
+//   /workspace/:ws/work/{inbox, activity}       the Inbox and activity reads (v1 PR 15), too
 //   /workspace/:ws/work(/|$)                     work API (P06.T01a)
 //   /workspace/:ws/billing(/|$)                  billing API (M5 PR-1)
 //   POST /api/billing/stripe/webhook (exact)     Stripe webhook (M5 PR-1)
@@ -77,7 +79,7 @@ type Handler = Readonly<{
 //                                                other /connections path stays the P05
 //                                                handler's (the WorkspaceConnections@1 read)
 // The api's per-address session limit (session-limit.ts) runs before this table and answers
-// a path of the runs, projects, knowledge, review, work, billing, agents, catalog or
+// a path of the runs, projects, knowledge, review, inbox, work, billing, agents, catalog or
 // connections row in that family's ErrorEnvelope, through `apiDispatch` itself, so there is
 // one matcher.
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
@@ -88,6 +90,7 @@ type RowKey =
   | "projects"
   | "knowledge"
   | "review"
+  | "inbox"
   | "work"
   | "billing"
   | "stripe_webhook"
@@ -106,6 +109,8 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
     ["knowledge", (path: string) => knowledgePathPattern.test(path)],
     // v1 PR 3: the review and apply routes (packages/work/src/review/http.ts), also ahead of it.
     ["review", (path: string) => reviewPathPattern.test(path)],
+    // v1 PR 15: the Inbox and activity reads (packages/work/src/inbox/http.ts), ahead of it too.
+    ["inbox", (path: string) => inboxPathPattern.test(path)],
     ["work", (path: string) => workPath.test(path)],
     ["billing", (path: string) => billingPath.test(path)],
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
@@ -149,6 +154,8 @@ export function createWorkspaceApiWorker(
       work === undefined ? undefined : { ...work, knowledge: shopKnowledgeRecord.switch },
     ),
     review: createReviewApiHandler(review),
+    // v1 PR 15: reads only, on the work dependencies; no switch.
+    inbox: createInboxApiHandler(work),
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),

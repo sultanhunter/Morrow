@@ -1,4 +1,4 @@
-// Every statement the knowledge and notebook routes send (PR 20; migration 0047), merged into
+// Every statement the knowledge and notebook routes send (PR 20; migration 0052), merged into
 // workStatements so WorkTx.run accepts no other text. Source fixed: values travel only as bind
 // parameters, and every selected column is text. Reads run as morrow_work_api under tenant_read;
 // the work API filters every row per viewer by its read tags in code (ADR-0031 item 6) before

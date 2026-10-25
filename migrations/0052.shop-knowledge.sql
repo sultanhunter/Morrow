@@ -1,11 +1,11 @@
 BEGIN;
 -- PR 20 shop knowledge and notebooks (docs/briefs/shop-knowledge.md; ADR-0031 items 1, 2, 4 and
--- 6; ADR-0024 for who may accept). Executes AS morrow_work_owner, as 0047 after PR 18's 0046
--- (the commands CHECKs it widens are asserted below exactly as 0046 left them, so a revision
--- by any earlier file stops it). Forward only: no published migration is edited. On the
--- ADR-0010 tenant pattern: composite tenant keys, ENABLE and FORCE RLS, definers owned by
--- morrow_work_command, INVOKER triggers and checks owned by the owner. No external effect:
--- nothing here sends a request, reserves money, admits a run or writes to a store.
+-- 6; ADR-0024 for who may accept). Executes AS morrow_work_owner, as 0052 after 0051 (the
+-- commands CHECKs it widens are asserted below exactly as PR 18's 0046, their last writer, left
+-- them, so a revision by any earlier file stops it). Forward only: no published migration is
+-- edited. On the ADR-0010 tenant pattern: composite tenant keys, ENABLE and FORCE RLS, definers
+-- owned by morrow_work_command, INVOKER triggers and checks owned by the owner. No external
+-- effect: nothing here sends a request, reserves money, admits a run or writes to a store.
 --   * knowledge_pages: one row per page (brand voice, policy, product fact, supplier,
 --     decision), at most one live brand_voice page and 500 live pages per workspace. Its read
 --     tags are computed here (knowledge_read_tags: one workspace.knowledge.read tag per linked

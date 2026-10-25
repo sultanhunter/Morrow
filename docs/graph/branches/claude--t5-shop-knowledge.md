@@ -8,3 +8,4 @@ links:
 ---
 
 Building from 5541e430. Shop knowledge is T9 in docs/plan/mvp.md, whatever the branch's name says.
+Merged origin/main at ad4700a4, where its migration became 0052.shop-knowledge behind 0047-0051.

@@ -51,6 +51,14 @@
       "name": "morrow-staging-connector",
       "workers_dev": true,
       "preview_urls": false,
+      // fix-shopify-install-live (2026-10-25): the api's and the broker's placement, in the
+      // committed Neon endpoint's region (staging.json neon.region_id aws-us-east-1). The
+      // launch and the callback ran at the edge nearest the merchant, and so did the
+      // broker's ConnectorBroker RPC they make, so each vault transaction's sequential round
+      // trips crossed to us-east-1 and the first live launches ran out of their 3 s budget.
+      // A performance setting: no binding, route, secret or trust boundary changes; the
+      // client address (CF-Connecting-IP) the ingress limits count is kept.
+      "placement": { "mode": "targeted", "region": "aws:us-east-1" },
       "observability": {
         "enabled": true,
         "head_sampling_rate": 1,

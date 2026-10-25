@@ -7,7 +7,7 @@
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
     "docs/contracts/schemas/v1.1/core.schema.json": "ae61958d9114b18f9cc03e8bb407e64fdae3fbb969ee579367e562559c63b12d",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "4248429dfa207dbe56b6e21685b243519bfc77b3c8bbb1a87d9d62a7d4f59dfc",
-    "docs/contracts/schemas/v1.1/billing.schema.json": "902760e137ce7b96edb55e141bb392219b6a8448b5515e988cb19c27fe1c3206"
+    "docs/contracts/schemas/v1.1/billing.schema.json": "a513b52a94b2654f2fabebdcc05a7b6dbbc10cdf046e9d4fec69f11e51c70dc2"
   },
   "event_registry": "3187243efde263c6de85f11bce2984ee818e48b4fb18d1a216c9473ef68d07ba",
   "replacements": [
@@ -152,5 +152,5 @@
   "capabilities": 122,
   "capability_body_overrides": 45,
   "event_types": 23,
-  "generated_sha256": "26d4ebc837249981c1f6e276bd8d765b068a4c3c2beced265662495035e1cdb5"
+  "generated_sha256": "2c05f8566a2d74c6a616a94b7f11b27cc21d557f2a72ff06f700341ecd87bc04"
 }

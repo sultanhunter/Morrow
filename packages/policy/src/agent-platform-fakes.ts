@@ -91,7 +91,10 @@ export function fakeMandateRequester(): Current_MandateActorRef {
 }
 
 // --- Model profiles (ADR-0027 item 12) ---------------------------------------------------
-/** Each agent's profile at the proposed version 2 defaults, as Settings lists them. */
+/**
+ * Each agent's profile at the proposed version 2 defaults, as Settings lists them: Morrow on
+ * Opus 5.5 at high, every other kind on Opus 5.5 at medium (ADR-0036).
+ */
 export function fakeModelProfiles(): readonly {
   readonly target: Current_ModelProfileTarget;
   readonly profile: Current_ModelProfile;
@@ -107,11 +110,11 @@ export function fakeModelProfiles(): readonly {
     },
     {
       target: { kind: "installation", installationId: fakeIds.listingsInstallationId },
-      profile: { model: "claude_sonnet_5_5", effort: "low", catalogueVersion: 2 },
+      profile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
     },
     {
       target: { kind: "installation", installationId: fakeIds.supportInstallationId },
-      profile: { model: "claude_sonnet_5_5", effort: "low", catalogueVersion: 2 },
+      profile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
     },
   ]);
 }
@@ -122,8 +125,8 @@ export function fakeModelProfileChange(): Current_ModelProfileChange {
     workspaceId: fakeIds.workspaceId,
     actor: fakeOwner(),
     target: { kind: "installation", installationId: fakeIds.listingsInstallationId },
-    from: { model: "claude_sonnet_5_5", effort: "low" },
-    to: { model: "claude_opus_5_5", effort: "medium" },
+    from: { model: "claude_opus_5_5", effort: "medium" },
+    to: { model: "claude_sonnet_5_5", effort: "low" },
     catalogueVersion: 2,
     revision: 2,
     at,
@@ -275,7 +278,8 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
     maxToolCallsPerRun: 40,
     maxQuestions: 2,
     maxInputTokensPerTurn: 64000,
-    maxOutputTokensPerTurn: kind === "coordinator" ? 16000 : kind === "specialist" ? 12000 : 5000,
+    // The kind's default effort (ADR-0036): high for Morrow, medium for every other kind.
+    maxOutputTokensPerTurn: kind === "coordinator" ? 16000 : 12000,
     wallTimeSeconds: deadline === null ? 1800 : null,
     deadline,
     holdUsd,
@@ -327,8 +331,9 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
           "suggestion.create",
           "proposal.listing",
         ],
-        modelProfile: { model: "claude_sonnet_5_5", effort: "low", catalogueVersion: 2 },
-        caps: caps(16, "3.36000000", null),
+        // The installed default, Opus 5.5 at medium: 12 turns and US$6.72 under US$7.
+        modelProfile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
+        caps: caps(12, "6.72000000", null),
         specDigest: null,
         dataClasses: null,
       });
@@ -567,7 +572,7 @@ export function fakeListingsPackage(): Current_AgentPackage {
       { model: "claude_sonnet_5_5", effort: "medium" },
       { model: "claude_opus_5_5", effort: "medium" },
     ],
-    defaultProfile: { model: "claude_sonnet_5_5", effort: "low" },
+    defaultProfile: { model: "claude_opus_5_5", effort: "medium" },
     evalDigest: fakeDigest("listings evals"),
   });
 }
@@ -596,7 +601,7 @@ export function fakeRateCard(): CurrentBilling_RateCard {
       installationDailyCredits: "30",
       installationMonthlyCredits: "300",
       workspaceDailyCredits: "60",
-      lookForWorkPassBasisPoints: 100,
+      lookForWorkDailyUsd: { amount: "1.12", currency: "USD" },
       specialistRunBasisPoints: 500,
       specialistWorkspaceDailyBasisPoints: 2000,
     },

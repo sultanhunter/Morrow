@@ -16,7 +16,18 @@
 //
 // Every adapter passes tests/runtime-port-conformance.test.mjs (the suite in
 // tests/fixtures/runtime-conformance.mjs). The deterministic fake (runtime-fake.ts) is the
-// reference; the E2B adapter (build order PR 8, hand-written fetch with no SDK) joins it.
+// reference; the E2B adapter (runtime-e2b.ts, build order PR 8, hand-written fetch with no
+// SDK) passes it over its wire fixture (tests/runtime-e2b.test.mjs).
+//
+// Build order PR 8 adds one optional mark to the unknown outcomes: `broken`, the provider's
+// reply broke its documented protocol (a redirect, an unexpected status, a malformed body, the
+// sandbox's token refused). The outcome stays unknown; the gateway also raises a runtime hold
+// that only a person lifts (ADR-0029's "wire fixtures and the canary set the hold on a
+// break"), where a plain unknown (a timeout, a 5xx) during a job only ends the job.
+/** Set on an unknown outcome whose reply broke the provider's documented protocol. */
+export interface Broken {
+  readonly broken?: true;
+}
 
 /** One create, exactly as the gateway builds it from the profile; nothing comes from a caller. */
 export interface SandboxCreateRequest {
@@ -34,8 +45,10 @@ export interface SandboxCreateRequest {
 export interface SandboxHandle {
   readonly sandboxRef: string;
   /**
-   * The sandbox's own access token (E2B's envd token), held by the broker only for the
-   * life of one job and never written into the guest (ADR-0029 item 3).
+   * The sandbox's own access token (E2B's envd token), never written into the guest
+   * (ADR-0029 item 3). From build order PR 8 the gateway seals it into a broker vault record
+   * as soon as the create is recorded, opens that record for each call to the sandbox, and
+   * the operation's settlement destroys it (migration 0047).
    */
   readonly accessToken: string | null;
 }
@@ -60,7 +73,7 @@ export type RuntimeCreateResult =
   /** The provider answered that the account's billing blocks creates (a runtime hold). */
   | { readonly outcome: "billing_blocked" }
   /** Anything else after the send: a sandbox may exist. */
-  | { readonly outcome: "unknown_effect" };
+  | ({ readonly outcome: "unknown_effect" } & Broken);
 export type RuntimeStatusResult =
   | { readonly outcome: "running"; readonly sandboxRef: string }
   /** The profile never pauses; a paused sandbox is a profile violation, killed at once. */
@@ -72,7 +85,9 @@ export type RuntimeKillResult =
   | { readonly outcome: "killed" }
   | { readonly outcome: "not_found" }
   | { readonly outcome: "unknown" };
-export type RuntimeWriteResult = { readonly outcome: "written" } | { readonly outcome: "unknown" };
+export type RuntimeWriteResult =
+  | { readonly outcome: "written" }
+  | ({ readonly outcome: "unknown" } & Broken);
 export type RuntimeExecResult =
   | {
       readonly outcome: "exited";
@@ -82,12 +97,12 @@ export type RuntimeExecResult =
       readonly stderr: string;
     }
   | { readonly outcome: "timed_out" }
-  | { readonly outcome: "unknown" };
+  | ({ readonly outcome: "unknown" } & Broken);
 export type RuntimeReadResult =
   | { readonly outcome: "read"; readonly bytes: Uint8Array }
   | { readonly outcome: "missing" }
   | { readonly outcome: "too_large" }
-  | { readonly outcome: "unknown" };
+  | ({ readonly outcome: "unknown" } & Broken);
 
 export interface RuntimeProvider {
   /** The ledger's provider name ("e2b"; "fake" only in tests). */

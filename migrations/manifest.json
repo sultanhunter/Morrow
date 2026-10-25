@@ -363,8 +363,43 @@
     },
     {
       "sequence": 47,
-      "file": "0047.shop-knowledge.sql",
-      "sha256": "e73d6675a77a2c7a75c34bc4312bee38ab3ef2e63608b0ef2e008e9eab9b1553",
+      "file": "0047.runtime-e2b.sql",
+      "sha256": "64661d10cbc9cc5eeb4cb78e92c715c118d7b985ef690963636f6da89c6af14c",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/e2b-adapter.md"
+    },
+    {
+      "sequence": 48,
+      "file": "0048.shopify-webhook-registrations-identity.sql",
+      "sha256": "396126c06cc1b07159e3d7866d4cb2b7052d53e6b22fa6456a3f05e47279af12",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
+    },
+    {
+      "sequence": 49,
+      "file": "0049.shopify-webhook-registrations-vault.sql",
+      "sha256": "d962acdf1ec4b30b0fb2acee9856a3d9f459b4c1ad676303e5828fa5a158d15d",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/shopify-shop-specific-webhooks.md"
+    },
+    {
+      "sequence": 50,
+      "file": "0050.catalog-undo.sql",
+      "sha256": "824a922b46d9d0c196a1d89b117f665f2431a599106494bf0f74b05f72c373aa",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-undo-history-picker.md"
+    },
+    {
+      "sequence": 51,
+      "file": "0051.model-defaults-cost-cap.sql",
+      "sha256": "b6172a6d874a69b2b6d40dadd948965201254e295b91e50664d19751e9fe3c9d",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/adr-0036-model-defaults-cost-cap.md"
+    },
+    {
+      "sequence": 52,
+      "file": "0052.shop-knowledge.sql",
+      "sha256": "4597c094203277ee75c2416ea591676c24da7f8fddd83841e5eadb69b6378f0a",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/shop-knowledge.md"
     }

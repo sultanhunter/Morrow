@@ -280,3 +280,7 @@ The owner's answer to the 2026-10-26 decision sheet (OD-2026-10-23-7, quoted in 
 - **Decision 11b's last sentence and the ADR-0005 entry under "Does not change"** (ADR-0024 owner question 1, answered (b)): installed agents keep stage-and-activate, but in a team the Owner installs an agent and issues or renews its mandate with no second reviewer while no other member holds the mandate's store grants. This amends ADR-0005 item 3; kill switches stay `human_only`.
 
 Members choosing a model per run stays dropped.
+
+### 2026-10-25: decision 7's defaults (ADR-0036)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes decision 7's defaults as restated above: the Coordinator runs Opus 5.5 at high effort and every other agent, specialists and the five installed agents included, Opus 5.5 at medium.

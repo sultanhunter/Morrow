@@ -3,10 +3,11 @@
 //   connector  createConnectorHandler (launch, callback, status, webhooks and the waitUntil
 //              apply; the cron's redrive on the lab path "lab:redrive") with its own login's
 //              transport (createConnectorDatabase, morrow_connector_ingress);
-//   broker     createShopifyBroker (the ConnectorBroker methods' handlers) on the vault
-//              login's transport (runVaultTransactionWithDriver, morrow_vault_broker), with
-//              the broker's own capabilities (the vault keyring from its bindings) and its
-//              outbound fetch to the synthetic Shopify;
+//   broker     createShopifyBroker (the ConnectorBroker methods' handlers) and the
+//              shop-specific webhook subscriptions' sync (createShopifyWebhookSync) on the
+//              vault login's transport (runVaultTransactionWithDriver, morrow_vault_broker),
+//              with the broker's own capabilities (the vault keyring and the connector's
+//              origin from its bindings) and its outbound fetch to the synthetic Shopify;
 //   api        the store-link guard with the P09.T02a issuer in preview, apply and status,
 //              and GET /workspace/:ws/connections, on the linking login, with the policy
 //              package's connection kernel (as apps/api/src/deployed-worker.ts wires it).
@@ -19,7 +20,8 @@ import {
   createConnectorDatabase,
   type ConnectorDriverFactory,
 } from "../../apps/shopify-connector/worker/database";
-import { createShopifyBroker } from "../../apps/broker/src/shopify-install";
+import { createShopifyBroker, type VaultTransaction } from "../../apps/broker/src/shopify-install";
+import { createShopifyWebhookSync } from "../../apps/broker/src/shopify-webhooks";
 import {
   runVaultTransactionWithDriver,
   type VaultDriverFactory,
@@ -35,6 +37,7 @@ interface Env {
   readonly SQL: { fetch(request: Request): Promise<Response> };
   readonly MORROW_ENVIRONMENT: string;
   readonly MORROW_DATABASE_BINDING_JSON: string;
+  readonly CONNECTOR_CONFIGURATION_JSON: string;
   readonly LAB_CONNECTOR_ORIGIN: string;
   readonly LAB_API_ORIGIN: string;
   readonly LAB_LEASE_PASSWORD: string;
@@ -123,19 +126,23 @@ export default {
 function connectorHandler(env: Env) {
   const binding = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
   const vaultDriver: VaultDriverFactory = (config) => bridgedClient(env, config.user);
-  const shopify = createShopifyBroker({
-    transaction: (vault, budgetMs, body) =>
-      runVaultTransactionWithDriver(
-        vaultDriver,
-        vault,
-        Math.min(10000, budgetMs * 3),
-        body,
-        Date.now,
-        NoSocket,
-      ),
-    fetch: (target, init) => fetch(target, init),
+  const transaction: VaultTransaction = (vault, budgetMs, body, observe) =>
+    runVaultTransactionWithDriver(
+      vaultDriver,
+      vault,
+      Math.min(10000, budgetMs * 3),
+      body,
+      Date.now,
+      NoSocket,
+      observe,
+    );
+  const brokerDependencies = {
+    transaction,
+    fetch: (target: string, init: RequestInit) => fetch(target, init),
     now: () => Date.now(),
-  });
+  };
+  const shopify = createShopifyBroker(brokerDependencies);
+  const subscriptions = createShopifyWebhookSync(brokerDependencies);
   const connectorDriver: ConnectorDriverFactory = (config) => bridgedClient(env, config.user);
   return createConnectorHandler({
     configuration: { origin: env.LAB_CONNECTOR_ORIGIN, apiOrigin: env.LAB_API_ORIGIN },
@@ -147,6 +154,7 @@ function connectorHandler(env: Env) {
         shopify.webhookVerify(env, appKey, headersJson, rawBodyBase64),
       shopifyCredentialDestroy: (installationId, reason) =>
         shopify.credentialDestroy(env, installationId, reason),
+      shopifyWebhookSubscriptionsSync: (budgetMs) => subscriptions.sync(env, budgetMs),
     },
     // The ConnectorBroker lease: the lab's login takes any password, so the grant is
     // the one fixed lab value (the real lease is proved by lab:edge-workers).

@@ -88,8 +88,9 @@ for (const [name, change, expected] of [
   ],
   [
     "no installed-agent default on offer",
+    // ADR-0036: the installed agents' default is Opus 5.5 at medium.
     (p) => {
-      p.offeredProfiles = p.offeredProfiles.filter((s) => s.model !== "claude_sonnet_5_5");
+      p.offeredProfiles = p.offeredProfiles.filter((s) => s.model !== "claude_opus_5_5");
       p.defaultProfile = { model: "claude_haiku_5_5", effort: "low" };
     },
     "KIND_DEFAULT_NOT_OFFERED",
