@@ -132,9 +132,9 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | --- | --- | --- | --- | --- |
 | vision | `V-<slug>` | hand-written (`docs/graph/vision/`) | active | none |
 | feature | `F-<slug>` | hand-written (`docs/graph/features/`) | proposed, planned, active, done, dropped | `area`; `must` (yes, later) |
-| agent | `AG-<slug>` | hand-written; later `agents/<id>/agent.json` (`docs/graph/agents/`) | proposed, planned, built, released, dropped | **`kind` (builtin, installable, task_specialist)**; `slip_rank` (`^[0-9]$`); `scopes_required` (list of Shopify scopes); `scopes_optional` (list of Shopify scopes); `customer_data` (none, level1, level2); `computer` (yes, no, fallback); `depth` (0, 1) |
-| skill | `SK-<slug>` | hand-written until `skills/<id>/skill.json` exists (`docs/graph/skills/`) | proposed, planned, built, released, revoked, dropped | **`specialist_eligible` (yes, no)**; `runtime` (none, computer, computer-optional, fallback); `output_contract`; `job_tags` (list) |
-| installation_kind | `IK-<slug>` | hand-written (`docs/graph/installation-kinds/`) | proposed, planned, built, dropped | `lifetime`; **`mandate` (yes, no)**; **`triggers` (yes, no)**; `started_by` (owner-admin-install, owner-start, member-start); **`routable` (yes, no)**; `authority_records` |
+| agent | `AG-<slug>` | hand-written; later `agents/<id>/agent.json` (`docs/graph/agents/`) | proposed, planned, built, released, dropped | **`kind` (builtin, installable, task_specialist)**; `origin` (first-party, workspace); `slip_rank` (`^[0-9]$`); `scopes_required` (list of Shopify scopes); `scopes_optional` (list of Shopify scopes); `customer_data` (none, level1, level2); `computer` (yes, no, fallback); `depth` (0, 1) |
+| skill | `SK-<slug>` | hand-written until `skills/<id>/skill.json` exists (`docs/graph/skills/`) | proposed, planned, built, released, revoked, dropped | **`card_eligible` (yes, no)**; `runtime` (none, computer, computer-optional, fallback); `output_contract`; `job_tags` (list) |
+| installation_kind | `IK-<slug>` | hand-written (`docs/graph/installation-kinds/`) | proposed, planned, built, dropped | `lifetime`; **`mandate` (yes, no)**; **`triggers` (yes, no)**; `started_by` (list of: owner-admin-install, card-approval, owner-start, member-start); **`routable` (yes, no)**; `authority_records`; `origins` (list of: first-party, workspace) |
 | track | `TRK-<slug>` | hand-written or brief frontmatter (`docs/graph/tracks/`) | proposed, active, done, dropped | **`label` (`^T[0-9]{1,2}$`)**; `weeks`; `agents` (list) |
 | gate | `GATE-<slug>` | hand-written (`docs/graph/gates/`) | open, passed, waived, dropped | **`label` (`^G[0-9]{1,2}$`)**; `owner_kind` (owner, shopify, provider, ci, claude); `due_week` (`^W[0-9]{1,2}$`); `due_when` |
 | data_class | `DC-<slug>` | hand-written (`docs/graph/data/`) | planned, deletion-ready, live, retired | `retention`; `deletion`; `customer` (yes, no) |
@@ -213,9 +213,9 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | `GRAPH_TASK_STATUS_DRIFT` | Parent task statuses equal tasks.json, and both list the same tasks | error |
 | `GRAPH_GATE_FIELDS` | An open gate has owner_kind, and due_week or (when the plan sets no week) due_when | error |
 | `GRAPH_DATA_CLASS` | A live data class has a deleted_by link to a merged PR (without history, a PR link is a warning) | error |
-| `GRAPH_SKILL_ELIGIBLE` | A skill a task_specialist composes is specialist_eligible and holds no customer data class | error |
-| `GRAPH_AGENT_KIND` | delegates_to starts at a builtin agent; a task_specialist delegates nothing and never_holds workspace.task.delegate; bundles starts at an installable agent | error |
-| `GRAPH_INSTALLATION_KIND` | triggers need a mandate; routable needs triggers or a mandate; IK-task-specialist is not routable | error |
+| `GRAPH_SKILL_ELIGIBLE` | A skill a workspace-created agent composes is card_eligible, and a card_eligible skill holds no customer data class | error |
+| `GRAPH_AGENT_KIND` | delegates_to runs from a builtin agent to an active teammate (an installable agent); a teammate names its origin and never_holds workspace.task.delegate, directly or by its installation kind; bundles starts at a first-party teammate and composes at a workspace-created one; only a dropped agent keeps the retired task_specialist kind | error |
+| `GRAPH_INSTALLATION_KIND` | triggers need a mandate; routable needs triggers or a mandate; a teammate installs as a kind whose origins include its own; an active agent never installs as a dropped kind | error |
 | `GRAPH_TENANT_RECORD` | No node id or field, and nothing in a hand-written graph file, looks like a tenant record id | error |
 | `GRAPH_DECISION_QUOTE` | An owner decision has a date, a channel and a blockquote | error |
 | `GRAPH_EVIDENCE_AUTH` | Evidence with a header has authorized_by and an unknown_outcome value | error |

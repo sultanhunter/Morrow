@@ -1484,60 +1484,100 @@ function applyRules(graph, report) {
       else if (!merged)
         report("GRAPH_DATA_CLASS", where, `${node.id} is live without deleted_by a merged PR`);
     }
+    // Agents (ADR-0037): Morrow, the one builtin agent, calls and hands off to teammates, and
+    // a teammate is an installation of either origin that never delegates (depth 1). The
+    // run-scoped task_specialist kind is retired: only a dropped node keeps it.
     if (node.type === "agent") {
       const kind = field(node, "kind");
+      const origin = field(node, "origin");
+      const inactive = schema.INACTIVE_STATUSES.includes(node.status);
       for (const e of typedOut(graph, node.id, "delegates_to")) {
+        const to = nodes.get(e.to);
         if (kind !== "builtin")
           report("GRAPH_AGENT_KIND", where, `${node.id} (${kind}) delegates to ${e.to}`);
-        else if (!["task_specialist", "installable"].includes(field(nodes.get(e.to), "kind")))
+        else if (
+          to &&
+          (field(to, "kind") !== "installable" || schema.INACTIVE_STATUSES.includes(to.status))
+        )
           report(
             "GRAPH_AGENT_KIND",
             where,
-            `${node.id} delegates to ${e.to}, which is not a specialist or installable agent`,
+            `${node.id} delegates to ${e.to}, which is not an active teammate`,
           );
       }
-      if (
-        kind === "task_specialist" &&
-        !typedOut(graph, node.id, "never_holds").some((e) => e.to === "workspace.task.delegate")
-      )
+      if (kind === "task_specialist" && !inactive)
         report(
           "GRAPH_AGENT_KIND",
           where,
-          `${node.id} is a task_specialist without never_holds workspace.task.delegate`,
+          `${node.id} keeps the task_specialist kind, which ADR-0037 retired; only a dropped node may`,
         );
-      if (typedOut(graph, node.id, "bundles").length && kind !== "installable")
-        report(
-          "GRAPH_AGENT_KIND",
-          where,
-          `${node.id} (${kind}) bundles skills; only installable agents do`,
+      if (kind === "installable" && !origin)
+        report("GRAPH_AGENT_KIND", where, `${node.id} is a teammate without an origin`);
+      if (origin && kind !== "installable")
+        report("GRAPH_AGENT_KIND", where, `${node.id} (${kind}) names an origin; only teammates do`);
+      if (kind === "installable") {
+        const holders = [node.id, ...typedOut(graph, node.id, "installs_as").map((e) => e.to)];
+        const denied = holders.some((id) =>
+          typedOut(graph, id, "never_holds").some((e) => e.to === "workspace.task.delegate"),
         );
-      if (typedOut(graph, node.id, "composes").length && kind !== "task_specialist")
+        if (!denied)
+          report(
+            "GRAPH_AGENT_KIND",
+            where,
+            `${node.id} is a teammate without never_holds workspace.task.delegate, directly or by its installation kind`,
+          );
+      }
+      if (typedOut(graph, node.id, "bundles").length && origin !== "first-party")
         report(
           "GRAPH_AGENT_KIND",
           where,
-          `${node.id} (${kind}) composes skills; only the task_specialist release does`,
+          `${node.id} bundles skills; only a first-party teammate does`,
+        );
+      if (typedOut(graph, node.id, "composes").length && origin !== "workspace")
+        report(
+          "GRAPH_AGENT_KIND",
+          where,
+          `${node.id} composes skills; only a workspace-created teammate does`,
         );
       if (field(node, "depth") !== undefined && kind !== "builtin")
         report("GRAPH_AGENT_KIND", where, `${node.id} sets depth, which only a builtin agent has`);
-      if (kind === "task_specialist")
+      if (origin === "workspace")
         for (const e of typedOut(graph, node.id, "composes")) {
           const skill = nodes.get(e.to);
-          if (field(skill, "specialist_eligible") !== "yes")
+          if (skill && field(skill, "card_eligible") !== "yes")
             report(
               "GRAPH_SKILL_ELIGIBLE",
               where,
-              `${node.id} composes ${e.to}, which is not specialist_eligible`,
-            );
-          const customer = typedOut(graph, e.to, "holds").filter(
-            (h) => field(nodes.get(h.to), "customer") === "yes",
-          );
-          if (customer.length)
-            report(
-              "GRAPH_SKILL_ELIGIBLE",
-              where,
-              `${node.id} composes ${e.to}, which holds ${customer.map((h) => h.to).join(", ")}`,
+              `${node.id} composes ${e.to}, which is not card_eligible`,
             );
         }
+      for (const e of typedOut(graph, node.id, "installs_as")) {
+        const ik = nodes.get(e.to);
+        if (!ik) continue;
+        if (!inactive && schema.INACTIVE_STATUSES.includes(ik.status))
+          report(
+            "GRAPH_INSTALLATION_KIND",
+            where,
+            `${node.id} installs as ${e.to}, which is ${ik.status}`,
+          );
+        if (origin && !(field(ik, "origins") ?? []).includes(origin))
+          report(
+            "GRAPH_INSTALLATION_KIND",
+            where,
+            `${node.id} (${origin}) installs as ${e.to}, whose origins do not include ${origin}`,
+          );
+      }
+    }
+    if (node.type === "skill" && field(node, "card_eligible") === "yes") {
+      const customer = typedOut(graph, node.id, "holds").filter(
+        (h) => field(nodes.get(h.to), "customer") === "yes",
+      );
+      if (customer.length)
+        report(
+          "GRAPH_SKILL_ELIGIBLE",
+          where,
+          `${node.id} is card_eligible but holds ${customer.map((h) => h.to).join(", ")}`,
+        );
     }
     if (node.type === "installation_kind") {
       if (field(node, "triggers") === "yes" && field(node, "mandate") !== "yes")
@@ -1552,8 +1592,6 @@ function applyRules(graph, report) {
           where,
           `${node.id} is routable without triggers or a mandate`,
         );
-      if (node.id === "IK-task-specialist" && field(node, "routable") !== "no")
-        report("GRAPH_INSTALLATION_KIND", where, `${node.id} must have routable: no`);
     }
     // Headers: tenant records, owner quotes, evidence and ADR approvals. A hand-written
     // file under docs/graph/ is scanned whole, body included, with the secrets below.
@@ -1745,7 +1783,10 @@ export function replaceBlock(text, name, content) {
 export function renderSchemaBlock() {
   const describe = ([name, rule]) => {
     if (rule.kind === "enum") return `\`${name}\` (${rule.values.join(", ")})`;
-    if (rule.kind === "enum_list") return `\`${name}\` (list of Shopify scopes)`;
+    if (rule.kind === "enum_list")
+      return rule.values === schema.SHOPIFY_SCOPES
+        ? `\`${name}\` (list of Shopify scopes)`
+        : `\`${name}\` (list of: ${rule.values.join(", ")})`;
     if (rule.kind === "list") return `\`${name}\` (list)`;
     if (rule.kind === "date") return `\`${name}\` (date)`;
     if (rule.kind === "pattern") return `\`${name}\` (\`${rule.pattern.source}\`)`;
@@ -2205,7 +2246,7 @@ export function query(graph, name, args, flags) {
         const skill = nodes.get(e.to);
         const held = typedOut(graph, e.to, "holds").map((h) => h.to);
         lines.push(
-          `${e.edge.padEnd(9)} ${line(skill, `  runtime ${skill.fields.runtime ?? "-"}; eligible ${skill.fields.specialist_eligible ?? "-"}; holds ${held.join(", ") || "none"}`)}`,
+          `${e.edge.padEnd(9)} ${line(skill, `  runtime ${skill.fields.runtime ?? "-"}; card_eligible ${skill.fields.card_eligible ?? "-"}; holds ${held.join(", ") || "none"}`)}`,
         );
       }
       if (!lines.length) lines.push(`${args[0]} bundles or composes no skill.`);

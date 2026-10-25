@@ -4,6 +4,7 @@ type: agent
 kind: installable
 title: Listings
 status: built
+origin: first-party
 scopes_required: [read_products, write_products]
 scopes_optional: [write_files]
 customer_data: none

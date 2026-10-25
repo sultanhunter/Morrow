@@ -8,9 +8,11 @@ owner_kind: claude
 due_week: W4
 links:
   depends_on: [V1-PR01, V1-PR02, V1-PR03]
-  governed_by: [ADR-0023, ADR-0035]
+  governed_by: [ADR-0023, ADR-0035, ADR-0037]
 ---
 
 By Wednesday 2026-11-25. Under ADR-0035 the demo runs on the owner's store: it is v1's milestone 1,
 "Listings suggests changes to my real products, and I apply one I approve". If it is missed,
-Marketing, Inventory's computer forecast and specialists are cut at once.
+Marketing, Inventory's computer forecast and agent cards are cut at once; agent cards move to the
+first fast follow, while teammate calls and hand-offs to first-party agents stay (ADR-0037 item 9,
+in place of the specialists).
