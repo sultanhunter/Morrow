@@ -32,6 +32,9 @@ import {
   withoutProduct,
 } from "../packages/workspace-ui/src/screens/product-picker.tsx";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
+import { lazyScreen } from "../packages/workspace-ui/src/screens/lazy.tsx";
+import { readFileSync } from "node:fs";
+import { inspectLazyChunks, lazyModules } from "../scripts/workspace-web-checks.mjs";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -590,4 +593,72 @@ test("the history's undo line: Undo only where the server offers it; every state
     ),
   );
   assert.ok(!off.includes(">" + copy.review.undo + "<"));
+});
+
+// CI (run 40135757823): this PR's screens took the workspace entry past its 150 KB gzip
+// budget, so Review, the task's history and Ask with its picker load as their own chunks.
+test("a lazy screen shows the loading state, then the screen; a chunk that fails offers Retry", async () => {
+  const tick = () => new Promise((r) => setImmediate(r));
+  const page = (state) => React.createElement("div", { className: "page" }, state);
+  const render = (Screen) => renderToStaticMarkup(React.createElement(Screen, { name: "Linen" }));
+  let release;
+  const chunk = new Promise((r) => (release = r));
+  let loads = 0;
+  const Lazy = lazyScreen(() => (loads++, chunk), page);
+  assert.equal(loads, 0, "nothing is fetched before the screen is shown");
+  const loading = render(Lazy);
+  assert.match(loading, /^<div class="page"><div class="state-view state-loading" role="status"/);
+  release(({ name }) => React.createElement("h1", null, "Review " + name));
+  await tick();
+  assert.equal(render(Lazy), "<h1>Review Linen</h1>");
+  assert.equal(render(Lazy), "<h1>Review Linen</h1>");
+  assert.equal(loads, 1, "a loaded chunk is fetched once");
+
+  // A chunk that cannot load (offline, or a deploy replaced the tab's chunks): "This couldn't
+  // load" with Retry, inside the same frame, never the screen and never a thrown error.
+  let attempts = 0;
+  const Failing = lazyScreen(
+    () => (attempts++, Promise.reject(new Error("chunk fetch failed"))),
+    page,
+    () => {},
+  );
+  assert.match(render(Failing), /state-loading/);
+  await tick();
+  const failed = render(Failing);
+  assert.match(failed, /^<div class="page"><div class="state-view state-unavailable"/);
+  assert.ok(failed.includes(copy.states.unavailable.replaceAll("'", "&#x27;")));
+  assert.ok(failed.includes(">" + copy.states.retry + "<"));
+  assert.equal(render(Failing), failed);
+  assert.equal(attempts, 1, "Retry reloads the page; a render never refetches");
+});
+
+test("Review, the history and Ask are reached only through the lazy screens", () => {
+  const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
+  const lazyNames = lazyModules.map((m) =>
+    m
+      .split("/")
+      .at(-1)
+      .replace(/\.tsx$/, ""),
+  );
+  assert.deepEqual(lazyNames, ["review", "ask", "product-picker"]);
+  const statics = (text) =>
+    [...text.matchAll(/^(?:import|export)\b[^;]*?from "([^"]+)";/gms)].map((m) => m[1]);
+  // The barrel and the task screen import none of them statically.
+  for (const [path, prefix] of [
+    ["packages/workspace-ui/src/index.ts", "./screens/"],
+    ["packages/workspace-ui/src/screens/task.tsx", "./"],
+  ])
+    for (const name of lazyNames)
+      assert.ok(!statics(read(path)).includes(prefix + name), `${path} imports ${name}`);
+  // The dist check names a lazy screen bundled into an entry, or one missing from the build.
+  const entry = { fileName: "assets/main.js", isEntry: true, moduleIds: ["apps/x.tsx"] };
+  const split = { fileName: "assets/review.js", isEntry: false, moduleIds: [...lazyModules] };
+  assert.deepEqual(inspectLazyChunks({ chunks: [entry, split] }), []);
+  assert.deepEqual(
+    inspectLazyChunks({ chunks: [{ ...entry, moduleIds: [lazyModules[2]] }, split] }),
+    ["MODULE_LAZY_IN_ENTRY:" + lazyModules[2]],
+  );
+  assert.deepEqual(inspectLazyChunks({ chunks: [entry] }), [
+    ...lazyModules.map((m) => "MODULE_LAZY_MISSING:" + m),
+  ]);
 });

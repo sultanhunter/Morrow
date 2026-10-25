@@ -672,7 +672,11 @@ export const fixtureCases = [
   }),
   fixtureCase("task", "applied_history", `/w/${ws}/work/task-titles`, {
     widths: [1440, 390],
-    setup: (page) => page.getByRole("tab", { name: "Changes applied" }).click(),
+    // The history loads with Review's chunk (v1 PR 4): measure it once it has loaded.
+    setup: async (page) => {
+      await page.getByRole("tab", { name: "Changes applied" }).click();
+      await settle(page);
+    },
   }),
   // v1 PR 4: "Approve several at once" with the solo owner's one phrase, and the history's
   // Undo after an apply (the undo is a new change, waiting for approval).

@@ -40,23 +40,11 @@ export { InboxScreen, QuestionScreen } from "./screens/inbox";
 export { UnavailableDestination } from "./screens/unavailable";
 export { ListingsAgentCard } from "./screens/agents";
 export { ModelDefaultScreen } from "./screens/settings-models";
-export { AskScreen, parseProducts } from "./screens/ask";
-export {
-  ProductPicker,
-  listedProducts,
-  normaliseSearch,
-  withProduct,
-  withoutProduct,
-} from "./screens/product-picker";
 export { RunsPanel } from "./screens/runs";
-export {
-  AppliedPanel,
-  BatchApprove,
-  OperationList,
-  ReviewScreen,
-  UndoLine,
-  operationNote,
-} from "./screens/review";
+// v1 PR 4: Review, the task's history and Ask (with its product picker) load as their own
+// chunks (screens/lazy.tsx). Nothing here re-exports screens/review, screens/ask or
+// screens/product-picker, which would bundle them into the entry.
+export { AppliedPanel, AskScreen, ReviewScreen } from "./screens/lazy";
 export { ConnectionScreen, ConnectionsScreen } from "./screens/connections";
 // T7 PR 19 (ADR-0033, ADR-0034): the project screens, behind the default-off `projects.*`
 // and `plans.*` port methods.

@@ -13,7 +13,8 @@ import { CommandFeedback } from "./entry";
 import { Answer } from "./inbox";
 import { usePaged } from "./work";
 import { RunsPanel } from "./runs";
-import { AppliedPanel } from "./review";
+// The history loads with Review's chunk (./lazy): never import ./review here.
+import { AppliedPanel } from "./lazy";
 
 function MarkReady({
   ws,
