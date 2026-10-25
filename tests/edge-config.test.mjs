@@ -42,8 +42,10 @@ import {
   edgePlanDraftsPrerequisites,
   edgeLiveEvalsPrerequisites,
   reviewedLiveEvalsRecord,
+  edgeShopKnowledgePrerequisites,
   reviewedModelRecord,
   reviewedPlanDraftsRecord,
+  reviewedShopKnowledgeRecord,
   reviewedRuntimeRecord,
   reviewedStripeRecord,
   runWrangler,
@@ -53,6 +55,10 @@ import {
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
 import { planDraftsSwitchAllowed } from "../packages/policy/src/projects/plan-draft.ts";
+import {
+  shopKnowledgeRecord,
+  shopKnowledgeSwitchAllowed,
+} from "../packages/policy/src/knowledge/rules.ts";
 
 // P04.T02a AC01, AC04, AC24 and the static half of AC22. Configuration is read
 // with the pinned wrangler (no account, credential or network).
@@ -2378,6 +2384,92 @@ test("the plan-drafts switch: committed off and held; on is refused while the lo
     const found = codes(
       await verify(resolve("."), undefined, {
         planDraftsPath: write("plan-drafts-staging.json", value),
+      }),
+    );
+    assert.deepEqual(found, [expected]);
+  }
+});
+
+// PR 20: the shop-knowledge switch is committed off with its agent tools off; edge:check refuses
+// the routes on before a reviewed template issues the workspace.knowledge.* grants, and the
+// tools on before the routes and the agent loop are on (neither prerequisite has a record yet).
+test("the shop-knowledge switch: committed off; on is refused before its grants, the tools before the loop", async () => {
+  const committed = JSON.parse(readFileSync("docs/decisions/shop-knowledge-staging.json", "utf8"));
+  assert.deepEqual(
+    { ...reviewedShopKnowledgeRecord(committed) },
+    { switch: "off", agent_tools: "off" },
+  );
+  assert.deepEqual({ ...shopKnowledgeRecord }, { switch: "off", agent_tools: "off" });
+  assert.deepEqual(
+    { ...edgeShopKnowledgePrerequisites },
+    { grantsIssued: false, agentLoop: "off" },
+  );
+  const on = { ...committed, switch: "on" };
+  assert.throws(() => reviewedShopKnowledgeRecord(on), /EDGE_SHOP_KNOWLEDGE_BEFORE_GRANTS/);
+  assert.deepEqual(
+    { ...reviewedShopKnowledgeRecord(on, { grantsIssued: true, agentLoop: "off" }) },
+    { switch: "on", agent_tools: "off" },
+  );
+  const tools = { ...committed, switch: "on", agent_tools: "on" };
+  assert.throws(
+    () => reviewedShopKnowledgeRecord(tools, { grantsIssued: true, agentLoop: "off" }),
+    /EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP/,
+  );
+  assert.throws(
+    () =>
+      reviewedShopKnowledgeRecord(
+        { ...committed, agent_tools: "on" },
+        { grantsIssued: true, agentLoop: "on" },
+      ),
+    /EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP/,
+  );
+  // The edge check and the policy rule agree on every combination.
+  for (const routes of ["off", "on"])
+    for (const agentTools of ["off", "on"])
+      for (const grantsIssued of [false, true])
+        for (const agentLoop of ["off", "on"]) {
+          const record = { ...committed, switch: routes, agent_tools: agentTools };
+          let edge = true;
+          try {
+            reviewedShopKnowledgeRecord(record, { grantsIssued, agentLoop });
+          } catch {
+            edge = false;
+          }
+          assert.equal(
+            edge,
+            shopKnowledgeSwitchAllowed({ routes, agentTools, grantsIssued, agentLoop }),
+          );
+        }
+  for (const edit of [
+    (r) => (r.switch = true),
+    (r) => (r.agent_tools = "yes"),
+    (r) => delete r.agent_tools,
+    (r) => (r.extra = 1),
+    (r) => (r.environment_kind = "production"),
+    (r) => (r.schema_version = 2),
+    (r) => (r.scope = null),
+  ]) {
+    const record = structuredClone(committed);
+    edit(record);
+    assert.throws(() => reviewedShopKnowledgeRecord(record), /EDGE_STAGING_SHOP_KNOWLEDGE_RECORD/);
+  }
+  // Through verifyEdgeConfig: the committed record passes; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "shop-knowledge-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [value, expected] of [
+    [on, "EDGE_SHOP_KNOWLEDGE_BEFORE_GRANTS"],
+    [{ ...committed, agent_tools: "on" }, "EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP"],
+    [{ ...committed, switch: "yes" }, "EDGE_STAGING_SHOP_KNOWLEDGE_RECORD"],
+    [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+  ]) {
+    const found = codes(
+      await verify(resolve("."), undefined, {
+        shopKnowledgePath: write("shop-knowledge-staging.json", value),
       }),
     );
     assert.deepEqual(found, [expected]);

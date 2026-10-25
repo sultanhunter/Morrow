@@ -2,20 +2,22 @@
 id: AG-specialist
 type: agent
 kind: task_specialist
-title: Specialist (the morrow.specialist release, run-scoped)
-status: planned
-slip_rank: "1"
+title: Specialist (the morrow.specialist release, run-scoped), retired by ADR-0037
+status: dropped
 customer_data: none
 computer: "yes"
 links:
-  composes: [SK-listing-content, SK-seo-metadata, SK-tags-and-collections, SK-image-alt-text, SK-discount-proposals]
   installs_as: [IK-task-specialist]
   never_holds: [workspace.task.delegate, workspace.task.create, workspace.task.assign, orders.read, support.case.read]
-  governed_by: [ADR-0028, ADR-0027, ADR-0023]
+  governed_by: [ADR-0037, ADR-0028, ADR-0027, ADR-0023]
 ---
 
-One bounded piece of work on one task, composed from 1 to 3 eligible skills; reports back and
-proposes. Only the Owner starts one at launch. Read, internal, propose and compute tools only (the
-computer under the runtime switch); no order reads, customer data or support tools (ADR-0028 item
-2). By default Opus 5.5 at medium. Cut with Marketing if G11 is missed; moved to the first fast
-follow if G18 is missed.
+Dropped on 2026-10-25. ADR-0037 (OD-2026-10-25-3) retires the run-scoped specialist kind and the
+`morrow.specialist` release (item 7): there is one agent kind with two origins, and an agent Morrow
+creates is a teammate like a first-party one (AG-workspace-created). The id is kept and never
+reused.
+
+What it was: one bounded piece of work on one task, composed from 1 to 3 eligible skills, started
+by the Owner under a 24-hour clock, with the Specialist ceiling's read, internal, propose and
+compute tools and no customer data (ADR-0028). Its skills and slip rank moved to
+AG-workspace-created.

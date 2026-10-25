@@ -7,9 +7,10 @@ status: open
 asked_of: claude
 links:
   raised_by: [ADR-0023]
-  about: [TRK-launch-agents, AG-specialist]
+  about: [TRK-launch-agents, AG-workspace-created]
 ---
 
 ADR-0023 decision 11d sets 12 first-party job skills; only `listing-content` is named in the
 repository (`docs/plan/mvp.md`, T12). The SK nodes name the other eleven from the agents' jobs as
-working names. When `skills/<id>/skill.json` exists, each SK node takes its id or is dropped.
+working names. When `skills/<id>/skill.json` exists, each SK node takes its id or is dropped. An
+agent card picks first-party skills by these ids, pinned by digest (ADR-0037 item 4).

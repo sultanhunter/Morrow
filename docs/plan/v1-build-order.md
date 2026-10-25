@@ -2,6 +2,7 @@
 
 - Record: the owner-facing order of v1's PRs 1 to 26 under [ADR-0035](../decisions/adr/ADR-0035-build-v1-live.md) (build v1 live, accepted 2026-10-23). It runs side by side with the tracks of [mvp.md](mvp.md), which stay the plan from v1 to the public launch.
 - Written 2026-10-23 from `main` at `86cd845`, for the owner; added to the repository on 2026-10-24 with its words unchanged below this header and the progress table.
+- Changed 2026-10-25 for [ADR-0037](../decisions/adr/ADR-0037-main-agent-and-scoped-subagents.md) (Morrow as the main agent with scoped teammates; OD-2026-10-25-3 and OD-2026-10-25-4) and ADR-0039 (credits are the only spend limit, pull request 75), without changing either record: PR 26 ("Specialists") is replaced by ADR-0037's follow-up PRs ([adr-0037-implementation.md](adr-0037-implementation.md)); PR 12's "one active agent, once" becomes Morrow orchestrating teammates in any way at depth 1; PR 11's and PR 21's money caps become credit holds; PRs 2, 7, 10 and 18, already merged, gain notes where the later records change what they built.
 - Graph: each PR is a milestone node, `V1-PR01` to `V1-PR26` (`docs/graph/milestones/`), part of its tracks, delivering its features, waiting on its gates; a merged pull request whose title starts "v1 PR <n>:" implements it.
 
 ## Progress
@@ -12,7 +13,8 @@ At `main` `2455dc80`, 2026-10-24.
 | --- | --- |
 | Merged | 1 (#50; its decision record ADR-0035 in #48), 2 (#53, "Disconnect store"; the Claude switch goes on with the owner's key), 3 (#54), 7 (#51), 10 (#52), 14 (#55), 16 (#56), 17 (#49, ADR-0033 and ADR-0034), 18 (#58), 19 (#57) |
 | Building now | 4, 5, 8, 11, 15, 20 |
-| Not started | 6, 9, 12, 13, 21 to 26 |
+| Not started | 6, 9, 12, 13, 21 to 25 |
+| Replaced (2026-10-25) | 26, by ADR-0037's follow-up PRs 1 to 10 ([adr-0037-implementation.md](adr-0037-implementation.md)) |
 
 ---
 
@@ -73,7 +75,7 @@ PR 1 records these rules in a one-page decision. Nothing below starts until you 
 | D. Sunrise screens | 14 to 16 | now with 14 |
 | E. Projects | 17 to 19 | now with 17 (decision only) |
 | F. Knowledge and proactive work | 20, 21 | after 10 and 11 |
-| G. The other agents | 22 to 26 | after 5, 11, 13 and 21 |
+| G. The other agents | 22 to 25, and ADR-0037's follow-up PRs in place of 26 | after 5, 11, 13 and 21; the follow-up PRs as their plan says |
 
 ## Milestone 1: "Listings suggests changes to my real products, and I apply one I approve" (PRs 1, 2, 3)
 
@@ -116,6 +118,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - Existing links gain the disconnect right through a forward database change, and nothing else.
   - The switch is all on or all off across the Workers. The key is only a broker secret (the config and boundary checks).
   - Every run reserves credits first and stays under US$7 per run and US$25 a day. "Stop AI work" ends a run before its next product.
+    *2026-10-25: ADR-0039 removes both caps in its first code PR; the workspace's credits become the only spend limit, with your Anthropic monthly limit as the outside backstop.*
   - Product text cannot change the model, the fields or the product (the existing injection cases).
 - **Runs in parallel with:** PR 1 while it is built. It goes live after PR 1.
 
@@ -206,7 +209,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - **One door for every computer job:** the runtime port, with a fake for tests.
   - **A record for each sandbox.**
   - **The on and off switch,** committed off.
-  - **Spending caps:** a monthly computer budget below E2B's US$20 limit, and at most 3 sandboxes per workspace.
+  - **Spending caps:** a monthly computer budget below E2B's US$20 limit, and at most 3 sandboxes per workspace. *2026-10-25: ADR-0039's runtime PR removes the monthly budget, so computer time holds credits like any step and E2B's own usage limit is the outside backstop; the sandbox limits stay.*
   - **A credit hold** for computer time.
 - **Needs from you:** nothing.
 - **Size:** M.
@@ -255,7 +258,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
 
 ### PR 10. Contracts for the agent platform
 - **Delivers:**
-  - **The formats:** the fixed list of tools, the agent package, the new model call, mandates (an agent's standing permission), specialist cards and Inbox item kinds.
+  - **The formats:** the fixed list of tools, the agent package, the new model call, mandates (an agent's standing permission), specialist cards and Inbox item kinds. *2026-10-25: ADR-0037's contracts PR retires the specialist cards in favour of agent cards and teammate results.*
   - **A fake for each,** so that the screens and the loop can be built against them.
   - It may become two PRs.
 - **Needs from you:** nothing.
@@ -281,20 +284,20 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - Text from products, email or uploads enters only as marked data. It can never choose tools, recipients or limits, and a change built from it needs your approval of the exact change.
   - An unknown model turn is booked at its worst-case cost and sent again at most once.
   - Conversation text lives only in a tenant-isolated table. Job records and logs hold ids only.
-  - The caps per turn, per job, on time and on money are checked in code.
+  - The limits per turn and per job and on time, and each step's credit hold, are checked in code. Credits are the only spend limit: a job holds and draws credits from the workspace's balance as it works and stops when the balance cannot cover its next step, with no money cap per job or per day (ADR-0039).
   - The switch stays committed off until all of these pass.
 - **Runs in parallel with:** lanes A, B and D. It starts after PR 10.
 
 ### PR 12. "Ask Morrow", and model and effort for each agent
 - **Delivers:**
-  - **Morrow, the main agent, runs on a model.** It answers, asks a clarifying question when it needs one, and hands work to the right agent.
+  - **Morrow, the main agent, runs on a model.** It answers, asks a clarifying question when it needs one, and keeps the conversation while it uses its teammates in any way the work needs (ADR-0037): it can ask several teammates, one after another or at the same time, ask the same one again, and pass what one found to the next; it hands the work over when a teammate must talk with you itself. Teammates never bring in other agents. Asking teammates for answers comes with ADR-0037's follow-up PRs 4 and 5.
   - **"Model" and "Thinking effort"** on each agent's page and in Settings.
-  - **Defaults:** Morrow on Opus 5.5 at high; specialists, sub-agents and installed agents on Opus 5.5 at medium (ADR-0036). A change applies from the next job.
+  - **Defaults:** Morrow on Opus 5.5 at high; every teammate, the installed agents and those Morrow creates, on Opus 5.5 at medium (ADR-0036). A change applies from the next job.
 - **Needs from you:** nothing.
 - **Size:** M.
 - **Safety tests:**
   - Morrow's own rights are fixed: no store reads, no change proposals, no computer and no customer data.
-  - Only a person starts Morrow. It hands each job to one active agent, once.
+  - Only a person starts Morrow. Morrow may call teammates and hand work off as many times as the work needs, in sequence or in parallel, at depth 1: each call or hand-off is one child job under Morrow's permission envelope, checked in code on its own against your rights, the teammate's grants, its owner's current rights, the store connection, the rules and the stops; a teammate never calls, hands off to or creates an agent. A job's calls are bounded by its turn, tool-call and time limits, the workspace's credits and your stop, never by a money cap.
   - Only the Owner can change a model, and Admins only for installed agents.
   - A model change never changes what an agent may do.
   - Each change is recorded.
@@ -364,7 +367,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
 - **Needs from you:** nothing.
 - **Size:** L.
 - **Safety tests:**
-  - Only Morrow hands work to agents, once per job.
+  - Only Morrow hands work to agents, once per job. *2026-10-25: ADR-0037 lifts "once per job" for the later PRs: Morrow may use teammates in any way at depth 1 (its follow-up PRs 4 and 5).*
   - Every store change inside a project still needs your approval of the exact change.
   - Each person sees only what they may see.
   - Every new table is isolated per tenant.
@@ -407,13 +410,13 @@ Target: about a week and a half, early November, if reviews and your steps are q
 - **Size:** L.
 - **Safety tests:**
   - Jobs start only from Morrow's own trigger records, never from text.
-  - Each job checks the permission, the stops, quiet hours and the caps, and runs once per trigger.
+  - Each job checks the permission, the stops, quiet hours and the workspace's credits, and runs once per trigger. There is no money cap per agent, per day or on the daily look: each job holds and draws credits as it works, and a trigger the balance cannot cover waits until it can, never dropped (ADR-0039). One look for work per agent a day stays.
   - Only you can revoke, and revoking voids pending approvals.
   - The daily look cannot propose changes or use the computer.
   - Nothing reaches your store without your approval. The apply step, the credit holds and the stops are already in place from PRs 2 and 3.
 - **Runs in parallel with:** lanes D and E. It starts after PRs 3, 5 and 11.
 
-## The other launch agents (PRs 22 to 26)
+## The other launch agents (PRs 22 to 25) and new teammates (PR 26, replaced)
 
 Each new Shopify permission needs one "Reconnect" approval in your Shopify admin, which works after PR 5. Order and customer data each need their own deletion path first.
 
@@ -474,16 +477,28 @@ Each new Shopify permission needs one "Reconnect" approval in your Shopify admin
   - The deletion paths for email and customer data come first.
 - **Runs in parallel with:** PRs 22 to 24. It starts after PRs 5 and 21.
 
-### PR 26. Specialists
-- **Delivers:** when no installed agent fits, Morrow proposes a temporary specialist. You start it; it works on one task for up to 8 hours and reports back.
-- **Needs from you:** nothing beyond starting one.
-- **Size:** L.
+### PR 26. Teammates Morrow creates (replaced by ADR-0037's follow-up PRs)
+Replaced on 2026-10-25. The temporary, weaker "specialist" is gone (ADR-0037): there is one kind of agent, either built by our team and installed in one click, or created by Morrow when you approve it. The work is now ADR-0037's ten follow-up PRs, in [adr-0037-implementation.md](adr-0037-implementation.md): plan and graph; contracts with fakes; the agent-card permission packet; teammate calls in the agent loop; Morrow's new tools; the Team page and the agent card; deleting their data; plan steps that name a teammate; evals; then the switches.
+- **Delivers:**
+  - **Morrow asks its teammates for answers,** and gets a structured answer back with nothing cut: a large table or file comes as an item Morrow opens page by page. It can ask several at once, ask one again, and pass what one found to the next (follow-up PRs 4 and 5).
+  - **New teammates on the go:** when no teammate fits, Morrow drafts one as an agent card: its name, job, instructions, the skills it uses and the tools it may use, with the permissions and Shopify access code works out from those tools. You review the exact card and press "Add to team". It then works like any other teammate, with its own permissions, notebook and model, until you remove it.
+  - **One Team page:** every teammate under Morrow, marked "Built by the Morrow team" or "Made by Morrow" with the date and who approved it; pause and remove; a setting "Let Morrow suggest new teammates".
+- **Needs from you:** approve each agent card you want; in a team, a second person approves it. Later, the eval round on your store.
+- **Size:** ten PRs, S to L each (the plan has the sizes); the permission packet is L, as two PRs.
 - **Safety tests:**
-  - Only you start a specialist: at most one per task and two per workspace, under a 24-hour permission clock.
-  - It gets no customer data, and only reading, internal, proposal and computer tools.
-  - Its report never goes back into Morrow's own context.
-  - The switch stays off until all of these pass.
-- **Runs in parallel with:** lanes D, E and G. It starts after PR 12.
+  - Only a person approves a card, never an agent and never Morrow, and the approval covers that exact card. Any edit makes a new card, and a used, expired or foreign approval document does nothing.
+  - Adding a teammate is a permission change: alone, you type a confirmation phrase and wait 5 minutes, which you can cancel; in a team, a second person approves, never the person who asked for it or edited it, and you approve alone only while no one else holds the card's store permissions.
+  - Nobody gives a teammate more than they hold themselves. A card that changes the store, reads orders, spends money or messages customers needs you, the Owner.
+  - A card never gets anything only a person may do (approving changes, changing permissions or members, billing, deleting data, stop controls), customer names or emails, support tools, or the right to bring in or call agents. Teammates never call, hand off to or create agents.
+  - Every tool call of every teammate run, the first call and every later or parallel one alike, is checked in code against your rights, the teammate's grants, Morrow's permission envelope, the store connection, the rules and the stops, and the current rights of the person who owns the teammate.
+  - A teammate that read outside text marks its answer, and the mark carries into anything Morrow drafts after it; your approval never clears it. An answer that holds customer data never reaches Morrow.
+  - Morrow opens only items from answers its own job received. A teammate opens only items named in its brief that came to the same Morrow job, never another person's private Ask.
+  - No money cap: each teammate job holds its own credits from the workspace's balance, and a call the balance cannot cover is refused at once. Your stop ends any job.
+  - At most 10 teammates Morrow creates per workspace; Morrow may suggest removing one idle for 30 days and never removes one itself.
+  - Each new kind of data has its deletion path first. Every new table is isolated per tenant.
+  - The switches stay off until the deletion paths, the gateway, reservations and stops, the agent-loop switch and a passing eval round are in place.
+- **If it slips:** if the checkpoint (G11) is missed, or the permission packet is not merged by 2026-12-04 (G18), agent cards move to the first fast follow after launch; asking and handing off to the teammates we build stays.
+- **Runs in parallel with:** lanes D, E and G. Follow-up PRs 2 and 9 start now; teammate calls wait for PR 11 and Morrow's tools for PR 12.
 
 ## Later, when you need it
 

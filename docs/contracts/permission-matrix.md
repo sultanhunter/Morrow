@@ -45,6 +45,8 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | workspace.routine.revoke | human_or_bounded_installation_with_explicit_capability_grant | mandate state, pending mandate approvals | Grant checks | human_only | No |
 | workspace.goal.revise | human_or_bounded_installation_with_explicit_capability_grant | objective, end date, targets, check questions, assistant | Grant checks | human_only | No |
 | workspace.goal.measure.record | human_or_bounded_installation_with_explicit_capability_grant | goal, product row, assistant, answers | Grant checks | human_only | No |
+| workspace.knowledge.propose | human_or_bounded_installation_with_explicit_capability_grant | page, kind, title, text, sources | Grant checks | agent_direct_write | No |
+| workspace.notebook.write | human_or_bounded_installation_with_explicit_capability_grant | notebook entry | Grant checks | agent_direct_write | No |
 | catalog.products.read | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO, variants, media, tags | Grant checks | agent_direct_read | No |
 | catalog.audit.create | human_or_bounded_installation_with_explicit_capability_grant | catalog facts, approved claims | Grant checks | agent_direct_write | No |
 | catalog.content.propose | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description, tags | Grant checks | agent_direct_write | No |

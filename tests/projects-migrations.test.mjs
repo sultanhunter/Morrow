@@ -46,8 +46,8 @@ test("manifest: row 0046, executeAs the work owner, its brief and digest, no pre
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
   // 0046, applied live and immutable; later migrations (build order PR 8's runtime-e2b,
-  // v1 PR 4's catalog-undo, ...) append after it, never between, and the no-gap rule is
-  // migration-history's.
+  // v1 PR 4's catalog-undo, PR 20's shop-knowledge, ...) append after it, never between, and
+  // the no-gap rule is migration-history's.
   assert.equal(row.sequence, 46);
   assert.ok(
     manifest.migrations

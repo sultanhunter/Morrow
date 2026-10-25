@@ -22,7 +22,8 @@
     "./run-credits": "./src/run-credits.ts",
     "./store-resource": "./src/store-resource.ts",
     "./store-link-template": "./src/store-link-template.ts",
-    "./projects": "./src/projects/index.ts"
+    "./projects": "./src/projects/index.ts",
+    "./knowledge": "./src/knowledge/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
