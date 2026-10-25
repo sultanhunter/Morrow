@@ -770,8 +770,10 @@ class Replay {
         const brief =
           spec.source === "provisional" ? (input.brief as { recordIds: string[] }) : null;
         const named = brief?.recordIds ?? [];
-        // Ids in a brief: only what Morrow's run received (ADR-0037 item 3(a)).
-        if (named.some((id) => !run.scope.has(id))) return refused("id_out_of_scope", target);
+        // A result item named in a brief must belong to a result Morrow's own run received;
+        // any other record the teammate opens only under its own grants (ADR-0037 item 3(a)).
+        if (named.some((id) => id.startsWith("item_") && !run.items.has(id)))
+          return refused("id_out_of_scope", target);
         if (!authorized()) return refused("authority_denied", target);
         const mode = spec.name === "agent.ask" ? "ask" : "route";
         // Catalogue version 2's agent.route: once per run (handoff_only@1).

@@ -40,7 +40,6 @@ export const evalTeammateTools: Readonly<Record<EvalTeammateRef, readonly EvalTo
     business_analyst: Object.freeze([
       "knowledge.search",
       "products.read",
-      "inventory.read",
       "orders.summary",
       "message.post",
       "suggestion.create",

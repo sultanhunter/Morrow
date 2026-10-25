@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "set_id": "golden@1",
+  "switch": "off",
+  "scope": "The live-evals switch (ADR-0037 item 10; its implementation plan's PR 9, docs/briefs/adr0037-evals.md). Committed off: `npm run evals -- live` refuses before it reads a bindings file or sends anything. A live round runs the golden set in the deployed environment, each task at least twice, on the workspace's credits within the owner's Anthropic monthly limit, under ADR-0035's standing approval; it never runs in CI. edge:check refuses it on until the agent-loop switch (ADR-0027 item 11) is on and a deployed driver for teammate calls exists (ADR-0037 plan PRs 4 and 5); then one reviewed commit turns it on. No Worker reads it; identifiers only; no provider, key or tenant."
+}

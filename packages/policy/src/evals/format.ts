@@ -253,8 +253,15 @@ const deepFreeze = <T>(value: T): T => {
 export const evalCaseIdPattern = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+){1,7}$/;
 export const evalRubricIdPattern = /^rubric\.[a-z0-9]+(?:-[a-z0-9]+)*@[1-9][0-9]{0,2}$/;
 export const evalSetIdPattern = /^[a-z][a-z0-9-]{0,31}@[1-9][0-9]{0,2}$/;
-/** Synthetic record ids: always `_fake_`, so no fixture can carry a real store id. */
-export const evalRecordIdPattern = /^(?:prod|thread|page|orders|stock)_fake_[0-9]{1,4}$/;
+/**
+ * Synthetic product ids: Morrow's product id shape (ListingProductId, `product:<n>`) in a
+ * reserved, obviously invented range, so the tools' own definitions accept them and no
+ * fixture can carry a real store's product.
+ */
+export const evalProductIdPattern = /^product:999999[0-9]{3}$/;
+/** Synthetic record ids: a reserved product id, or `_fake_` for every other kind. */
+export const evalRecordIdPattern =
+  /^(?:product:999999[0-9]{3}|(?:thread|page|orders|stock)_fake_[0-9]{1,4})$/;
 const fixtureIdPattern = /^[a-z][a-z0-9_]{0,31}$/;
 const slotPattern = /^[a-z][a-z0-9_]{0,31}$/;
 const runKeyPattern = /^(?:root|[a-z][a-z0-9_]{0,23}-[1-9][0-9]?)$/;
@@ -394,8 +401,15 @@ export interface EvalExpect {
     readonly called: readonly EvalTeammateRef[];
     readonly sameTeammateMin: { readonly agent: EvalTeammateRef; readonly calls: number } | null;
   } | null;
-  /** Every refusal the case meets, exactly (a multiset): an unexpected refusal fails. */
-  readonly refusals: readonly EvalRefusalExpectation[];
+  /**
+   * Refusals: each `required` one must be met (a multiset); any refusal met that is neither
+   * required nor `allowed` fails. `allowed` covers a refusal a better model may not provoke
+   * (it never tried), whose outcome the recording still pins.
+   */
+  readonly refusals: {
+    readonly required: readonly EvalRefusalExpectation[];
+    readonly allowed: readonly EvalRefusalExpectation[];
+  };
   readonly proposals: {
     readonly count: number;
     readonly byAgent: EvalTeammateRef | null;
@@ -442,13 +456,13 @@ function fixture(value: unknown, path: string): EvalFixture {
   const kind = oneOf(r.kind, path + ".kind", evalFixtureKinds);
   const recordId = text(r.recordId, path + ".recordId", { pattern: evalRecordIdPattern });
   const prefix = {
-    product: "prod",
-    order_summary: "orders",
-    inventory: "stock",
-    knowledge_page: "page",
-    support_thread: "thread",
+    product: "product:",
+    order_summary: "orders_",
+    inventory: "stock_",
+    knowledge_page: "page_",
+    support_thread: "thread_",
   }[kind];
-  if (!recordId.startsWith(prefix + "_")) fail("EVAL_RECORD_KIND", path + ".recordId");
+  if (!recordId.startsWith(prefix)) fail("EVAL_RECORD_KIND", path + ".recordId");
   const base = {
     fixtureId: text(r.fixtureId, path + ".fixtureId", { pattern: fixtureIdPattern }),
     marking: oneOf(r.marking, path + ".marking", ["synthetic"] as const),
@@ -462,7 +476,7 @@ function fixture(value: unknown, path: string): EvalFixture {
     }),
   };
   const d = path + ".data";
-  const rowId = (v: unknown, p: string) => text(v, p, { pattern: /^prod_fake_[0-9]{1,4}$/ });
+  const rowId = (v: unknown, p: string) => text(v, p, { pattern: evalProductIdPattern });
   switch (kind) {
     case "product": {
       const x = record(r.data, d, ["title", "body", "tags"]);
@@ -634,14 +648,21 @@ function expectation(value: unknown, path: string, fixtureIds: readonly string[]
         }),
       };
     }),
-    refusals: list(r.refusals, path + ".refusals", 16, (v, p) => {
-      const x = record(v, p, ["agent", "tool", "code"]);
-      return {
-        agent: oneOf(x.agent, p + ".agent", evalAgentRefs),
-        tool: nullable(x.tool, p + ".tool", (t, q) => oneOf(t, q, evalToolNames)),
-        code: oneOf(x.code, p + ".code", evalRefusalCodes),
+    refusals: (() => {
+      const x = record(r.refusals, path + ".refusals", ["required", "allowed"]);
+      const row = (v: unknown, p: string): EvalRefusalExpectation => {
+        const y = record(v, p, ["agent", "tool", "code"]);
+        return {
+          agent: oneOf(y.agent, p + ".agent", evalAgentRefs),
+          tool: nullable(y.tool, p + ".tool", (t, q) => oneOf(t, q, evalToolNames)),
+          code: oneOf(y.code, p + ".code", evalRefusalCodes),
+        };
       };
-    }),
+      return {
+        required: list(x.required, path + ".refusals.required", 16, row),
+        allowed: list(x.allowed, path + ".refusals.allowed", 16, row, { unique: true }),
+      };
+    })(),
     proposals: {
       count: integer(proposals.count, path + ".proposals.count", 0, 25),
       byAgent: nullable(proposals.byAgent, path + ".proposals.byAgent", (v, p) =>
@@ -726,11 +747,40 @@ export function parseEvalCase(value: unknown): EvalCase {
     agents,
     request: {
       marking: oneOf(request.marking, "case.request.marking", ["synthetic"] as const),
-      text: text(request.text, "case.request.text", { max: 2000 }),
+      text: requestText(request.text, fixtures),
     },
     fixtures,
     world: parsedWorld,
     expect: expectation(r.expect, "case.expect", ids),
+  });
+}
+
+/**
+ * The person's request may name a fixture's record as `{{fixture:<fixtureId>}}`; the replay
+ * renders its synthetic id, a live round the Morrow id bound to its live slot. Only a fixture
+ * with a live slot may be named, so a live round can always render the request.
+ */
+const placeholder = /\{\{fixture:([a-z][a-z0-9_]{0,31})\}\}/g;
+function requestText(value: unknown, fixtures: readonly EvalFixture[]): string {
+  const result = text(value, "case.request.text", { max: 2000 });
+  for (const match of result.matchAll(placeholder))
+    if (!fixtures.some((f) => f.fixtureId === match[1] && f.liveSlot !== null))
+      fail("EVAL_REQUEST_PLACEHOLDER", "case.request.text");
+  if (result.replace(placeholder, "").includes("{{"))
+    fail("EVAL_REQUEST_PLACEHOLDER", "case.request.text");
+  return result;
+}
+/** The request with each placeholder rendered: from `ids` (slot to Morrow id) or the fixture's. */
+export function renderRequest(
+  evalCase: EvalCase,
+  ids: Readonly<Record<string, string>> | null = null,
+): string {
+  return evalCase.request.text.replace(placeholder, (_all, fixtureId: string) => {
+    const fixture = evalCase.fixtures.find((f) => f.fixtureId === fixtureId)!;
+    if (ids === null) return fixture.recordId;
+    const bound = ids[fixture.liveSlot!];
+    if (bound === undefined) throw new EvalFormatError("EVAL_SLOT_UNBOUND", fixture.liveSlot!);
+    return bound;
   });
 }
 
@@ -919,7 +969,8 @@ export function parseEvalRecording(value: unknown): EvalRecording {
             };
           });
           const textValue = nullable(turn.text, q + ".text", (x, y) => text(x, y, { max: 32000 }));
-          if (textValue === null && calls.length === 0) fail("EVAL_EMPTY_TURN", q);
+          if (textValue === null && calls.length === 0 && turn.result === null)
+            fail("EVAL_EMPTY_TURN", q);
           return {
             text: textValue,
             calls,

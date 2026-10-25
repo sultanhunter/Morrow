@@ -761,6 +761,35 @@ export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsP
     throw Error("EDGE_PLAN_DRAFTS_BEFORE_LOOP");
   return Object.freeze({ switch: record.switch, start_routes: record.start_routes });
 }
+// ADR-0037 plan PR 9, the live-evals switch (ADR-0037 item 10; committed off): the operator
+// command `npm run evals -- live` reads docs/decisions/agent-evals-live.json through this
+// rule and refuses while it is off. No Worker reads it, so it carries no var or secret. A
+// live round needs the agent loop on in the deployed environment (ADR-0027 item 11) and a
+// deployed driver for teammate calls (ADR-0037 plan PRs 4 and 5). Neither exists yet: until
+// each lands with its own reviewed change, both count as off here, so an "on" record is a
+// problem. `set_id` names the golden set the switch admits.
+export const edgeLiveEvalsPrerequisites = Object.freeze({ agentLoop: "off", liveDriver: false });
+export function reviewedLiveEvalsRecord(record, prerequisites = edgeLiveEvalsPrerequisites) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== "environment_kind,schema_version,scope,set_id,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.set_id !== "string" ||
+    !/^[a-z][a-z0-9-]{0,31}@[1-9][0-9]{0,2}$/.test(record.set_id) ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_LIVE_EVALS_RECORD");
+  if (
+    record.switch === "on" &&
+    (prerequisites.agentLoop !== "on" || prerequisites.liveDriver !== true)
+  )
+    throw Error("EDGE_LIVE_EVALS_BEFORE_LOOP");
+  return Object.freeze({ switch: record.switch, set_id: record.set_id });
+}
 // v1 PR 3, the apply switch (ADR-0022 items 7 and 9; committed off): its runtime image is
 // the var MORROW_SHOPIFY_WRITE ("on") on the staging api and broker; no secret (the store
 // tokens are already the vault's). Development's committed config never carries it, and
@@ -1238,6 +1267,7 @@ export async function verifyEdgeConfig({
   runtimePath = join(repositoryRoot, "docs/decisions/runtime-staging.json"),
   evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
+  liveEvalsPath = join(repositoryRoot, "docs/decisions/agent-evals-live.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -1323,6 +1353,20 @@ export async function verifyEdgeConfig({
           ? "EDGE_PLAN_DRAFTS_BEFORE_LOOP"
           : "EDGE_STAGING_PLAN_DRAFTS_RECORD",
         "plan-drafts-staging.json",
+      );
+    }
+  // ADR-0037 plan PR 9, the live-evals switch: refused on before the loop and the driver.
+  const liveEvalsRecord = readJson(liveEvalsPath);
+  if (liveEvalsRecord === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "agent-evals-live.json");
+  else
+    try {
+      reviewedLiveEvalsRecord(liveEvalsRecord);
+    } catch (error) {
+      problem(
+        error instanceof Error && error.message === "EDGE_LIVE_EVALS_BEFORE_LOOP"
+          ? "EDGE_LIVE_EVALS_BEFORE_LOOP"
+          : "EDGE_STAGING_LIVE_EVALS_RECORD",
+        "agent-evals-live.json",
       );
     }
   if (
