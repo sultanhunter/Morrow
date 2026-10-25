@@ -9,12 +9,18 @@
 //     refused rather than joined.
 //   * Webhook HMAC: base64 HMAC-SHA256 over the raw body bytes, before any parse.
 //   * The authorization-code exchange: POST https://{shop}/admin/oauth/access_token with a
-//     non-expiring offline token requested; never retried (a code is single use).
+//     non-expiring offline token requested (`expiring: "0"`; ADR-0022 item 4: custom
+//     distribution, which Shopify exempts from expiring offline tokens; refresh arrives with
+//     public distribution as a new vault credential kind); never retried (a code is single
+//     use). An expiring reply (expires_in, refresh_token or refresh_token_expires_in) or an
+//     online one (associated_user) is refused with its own closed reason, never stored.
 //   * Fixed Admin GraphQL documents (API version 2026-10): ShopIdentity at the install, and
 //     M2 PR-3's reads (shopifyReadDocuments: the shop identity, a collections page, a
 //     products page, one collection's products page and one product's listing fields).
 // Replies are bounded, redirects are never followed, and every failure is a fixed code:
-// no provider text, token, secret or value reaches a log, an error or a verdict.
+// no provider text, token, secret or value reaches a log, an error or a verdict. Refusals
+// carry a closed `reason` (fix-shopify-install-live) that the broker's stage line names;
+// `kind` alone decides every outcome.
 
 export const shopifyApiVersion = "2026-10";
 export const shopifyRequestedScopes = Object.freeze(["read_products", "write_products"] as const);
@@ -101,36 +107,59 @@ export function parseShopifyQuery(raw: unknown, maxBytes = 2048): ShopifyQuery |
   return Object.freeze({ params, message });
 }
 
+/** Why a query is not shaped like a Shopify-signed one, in the order the checks run. */
+export const shopifyQueryShapeReasons = Object.freeze([
+  "query_parse",
+  "hmac_shape",
+  "timestamp_shape",
+  "timestamp_skew",
+  "shop_param",
+  "signature_param",
+] as const);
+export type ShopifyQueryShapeReason = (typeof shopifyQueryShapeReasons)[number];
+function queryShape(
+  raw: unknown,
+  nowSeconds: number,
+  toleranceSeconds: number,
+): { query: ShopifyQuery; reason: null } | { query: null; reason: ShopifyQueryShapeReason } {
+  const query = parseShopifyQuery(raw);
+  if (!query) return { query: null, reason: "query_parse" };
+  const hmac = query.params.get("hmac");
+  const timestamp = query.params.get("timestamp");
+  const shop = query.params.get("shop");
+  if (hmac === undefined || !/^[a-f0-9]{64}$/.test(hmac))
+    return { query: null, reason: "hmac_shape" };
+  if (timestamp === undefined || !/^[1-9][0-9]{0,11}$/.test(timestamp))
+    return { query: null, reason: "timestamp_shape" };
+  if (Math.abs(nowSeconds - Number(timestamp)) > toleranceSeconds)
+    return { query: null, reason: "timestamp_skew" };
+  if (shop === undefined || !shopPattern.test(shop)) return { query: null, reason: "shop_param" };
+  if (query.params.has("signature")) return { query: null, reason: "signature_param" };
+  return { query, reason: null };
+}
 /**
  * The checks of a Shopify-signed admin query that need no secret: hmac is 64 lowercase
  * hex, the timestamp is an integer within the tolerance, the shop is a *.myshopify.com
  * domain, and there is no signature parameter. The broker runs this before it opens any
  * vault transaction, so an unsigned or stale request costs no database work (an attacker
- * can still forge the shape; the edge limiter bounds that). Returns the parsed query, or
- * null.
+ * can still forge the shape; the edge limiter bounds that). Every other lowercase key
+ * Shopify adds (host, embedded, locale, session, id_token, ...) is data: it is signed with
+ * the rest and grants nothing. Returns the parsed query, or null.
  */
 export function shopifyQueryShape(
   raw: unknown,
   nowSeconds: number,
   toleranceSeconds = 90,
 ): ShopifyQuery | null {
-  const query = parseShopifyQuery(raw);
-  if (!query) return null;
-  const hmac = query.params.get("hmac");
-  const timestamp = query.params.get("timestamp");
-  const shop = query.params.get("shop");
-  if (
-    hmac === undefined ||
-    !/^[a-f0-9]{64}$/.test(hmac) ||
-    timestamp === undefined ||
-    !/^[1-9][0-9]{0,11}$/.test(timestamp) ||
-    Math.abs(nowSeconds - Number(timestamp)) > toleranceSeconds ||
-    shop === undefined ||
-    !shopPattern.test(shop) ||
-    query.params.has("signature")
-  )
-    return null;
-  return query;
+  return queryShape(raw, nowSeconds, toleranceSeconds).query;
+}
+/** The first check `shopifyQueryShape` fails; null exactly when it returns the query. */
+export function shopifyQueryShapeReason(
+  raw: unknown,
+  nowSeconds: number,
+  toleranceSeconds = 90,
+): ShopifyQueryShapeReason | null {
+  return queryShape(raw, nowSeconds, toleranceSeconds).reason;
 }
 
 /**
@@ -180,6 +209,37 @@ export function shopifyScopesExact(granted: unknown): readonly string[] | null {
 }
 
 export type ShopifyFetch = (url: string, init: RequestInit) => Promise<Response>;
+// The closed reasons of a refused or uncertain call (fix-shopify-install-live): the input,
+// an HTTP status class, the transport, the reply's shape. Never a provider text or value.
+export const shopifyHttpReasons = Object.freeze([
+  "input_shape",
+  "http_401",
+  "http_403",
+  "http_429",
+  "http_4xx",
+  "http_5xx",
+  "http_other",
+  "transport",
+  "timeout",
+  "reply_json",
+] as const);
+export type ShopifyHttpReason = (typeof shopifyHttpReasons)[number];
+const statusReason = (status: number): ShopifyHttpReason =>
+  status === 401
+    ? "http_401"
+    : status === 403
+      ? "http_403"
+      : status === 429
+        ? "http_429"
+        : status >= 500
+          ? "http_5xx"
+          : status >= 400
+            ? "http_4xx"
+            : "http_other";
+// An AbortSignal.timeout() abort rejects with a TimeoutError; any other throw of fetch is
+// the transport's.
+const thrownReason = (error: unknown): ShopifyHttpReason =>
+  (error as { name?: unknown } | null)?.name === "TimeoutError" ? "timeout" : "transport";
 // The body, at most `limit` bytes, or null.
 async function boundedJson(response: Response, limit: number): Promise<unknown> {
   const declared = response.headers.get("content-length");
@@ -220,14 +280,26 @@ const own = (value: unknown, key: string): unknown =>
     ? (value as Record<string, unknown>)[key]
     : undefined;
 
+export const shopifyExchangeReasons = Object.freeze([
+  ...shopifyHttpReasons,
+  "reply_token_shape",
+  "reply_scope_type",
+  "reply_expiring",
+  "reply_online",
+] as const);
+export type ShopifyExchangeReason = (typeof shopifyExchangeReasons)[number];
 export type ShopifyExchange =
   | Readonly<{ kind: "token"; token: string; scopes: string }>
-  | Readonly<{ kind: "refused" }>
-  | Readonly<{ kind: "uncertain" }>;
+  | Readonly<{ kind: "refused"; reason: ShopifyExchangeReason }>
+  | Readonly<{ kind: "uncertain"; reason: ShopifyExchangeReason }>;
 /**
  * The authorization-code exchange for a non-expiring offline token. Sent once and never
  * retried. A transport failure, a timeout or a 5xx after sending is `uncertain` (the code
  * may have been consumed); a 4xx or a malformed, online or expiring reply is `refused`.
+ * Reply keys other than the ones read here are ignored. An expiring reply (Shopify's
+ * `expires_in`, `refresh_token`, `refresh_token_expires_in`) is `reply_expiring`: its
+ * one-hour token cannot be refreshed by this broker, so it is never stored (ADR-0022 item
+ * 4); an online one (`associated_user`) is `reply_online`.
  */
 export async function exchangeShopifyCode(
   fetcher: ShopifyFetch,
@@ -237,12 +309,16 @@ export async function exchangeShopifyCode(
   code: string,
   timeoutMs: number,
 ): Promise<ShopifyExchange> {
+  const refused = (reason: ShopifyExchangeReason) =>
+    Object.freeze({ kind: "refused" as const, reason });
+  const uncertain = (reason: ShopifyExchangeReason) =>
+    Object.freeze({ kind: "uncertain" as const, reason });
   if (
     !shopPattern.test(shop) ||
     !/^[a-f0-9]{32}$/.test(clientId) ||
     !/^[A-Za-z0-9_-]{1,256}$/.test(code)
   )
-    return Object.freeze({ kind: "refused" });
+    return refused("input_shape");
   let response: Response;
   try {
     response = await fetcher(`https://${shop}/admin/oauth/access_token`, {
@@ -252,36 +328,48 @@ export async function exchangeShopifyCode(
       body: JSON.stringify({ client_id: clientId, client_secret: secret, code, expiring: "0" }),
       signal: AbortSignal.timeout(Math.max(1, timeoutMs)),
     });
-  } catch {
-    return Object.freeze({ kind: "uncertain" });
+  } catch (error) {
+    return uncertain(thrownReason(error));
   }
   if (response.status >= 500) {
     await response.body?.cancel().catch(() => {});
-    return Object.freeze({ kind: "uncertain" });
+    return uncertain("http_5xx");
   }
   if (response.status !== 200) {
     await response.body?.cancel().catch(() => {});
-    return Object.freeze({ kind: "refused" });
+    return refused(statusReason(response.status));
   }
   const reply = await boundedJson(response, 8192);
+  if (reply === null || typeof reply !== "object" || Array.isArray(reply))
+    return refused("reply_json");
+  // An online reply carries expires_in too; associated_user names it first.
+  if (own(reply, "associated_user") !== undefined) return refused("reply_online");
+  if (
+    own(reply, "expires_in") !== undefined ||
+    own(reply, "refresh_token") !== undefined ||
+    own(reply, "refresh_token_expires_in") !== undefined
+  )
+    return refused("reply_expiring");
   const token = own(reply, "access_token");
   const scope = own(reply, "scope");
-  if (
-    typeof token !== "string" ||
-    !/^[\x21-\x7e]{16,512}$/.test(token) ||
-    typeof scope !== "string" ||
-    own(reply, "expires_in") !== undefined ||
-    own(reply, "associated_user") !== undefined ||
-    own(reply, "refresh_token") !== undefined
-  )
-    return Object.freeze({ kind: "refused" });
+  if (typeof token !== "string" || !/^[\x21-\x7e]{16,512}$/.test(token))
+    return refused("reply_token_shape");
+  if (typeof scope !== "string") return refused("reply_scope_type");
   return Object.freeze({ kind: "token", token, scopes: scope });
 }
 
+export const shopifyAdminReasons = Object.freeze([
+  ...shopifyHttpReasons,
+  "deadline",
+  "graphql_errors",
+  "throttled",
+  "reply_shape",
+] as const);
+export type ShopifyAdminReason = (typeof shopifyAdminReasons)[number];
 export type ShopifyAdminReply =
   | Readonly<{ kind: "data"; data: unknown }>
-  | Readonly<{ kind: "refused" }>
-  | Readonly<{ kind: "unauthorized" }>;
+  | Readonly<{ kind: "refused"; reason: ShopifyAdminReason }>
+  | Readonly<{ kind: "unauthorized"; reason: "http_401" }>;
 /**
  * One fixed Admin GraphQL document with its variables. A THROTTLED reply waits once, within
  * the deadline, until the bucket holds the query's cost again: Shopify's
@@ -303,11 +391,12 @@ export async function shopifyAdminGraphql(
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
   limit: number = shopifyReplyMaxBytes,
 ): Promise<ShopifyAdminReply> {
-  const refused = Object.freeze({ kind: "refused" as const });
-  if (!shopPattern.test(shop)) return refused;
+  const refused = (reason: ShopifyAdminReason) =>
+    Object.freeze({ kind: "refused" as const, reason });
+  if (!shopPattern.test(shop)) return refused("input_shape");
   for (let attempt = 0; attempt < 2; attempt++) {
     const remaining = deadlineMs - now();
-    if (remaining <= 0) return refused;
+    if (remaining <= 0) return refused("deadline");
     let response: Response;
     try {
       response = await fetcher(`https://${shop}/admin/api/${shopifyApiVersion}/graphql.json`, {
@@ -326,21 +415,25 @@ export async function shopifyAdminGraphql(
         ),
         signal: AbortSignal.timeout(remaining),
       });
-    } catch {
-      return refused;
+    } catch (error) {
+      return refused(thrownReason(error));
     }
     if (response.status !== 200) {
       await response.body?.cancel().catch(() => {});
-      return response.status === 401 ? Object.freeze({ kind: "unauthorized" }) : refused;
+      return response.status === 401
+        ? Object.freeze({ kind: "unauthorized" as const, reason: "http_401" as const })
+        : refused(statusReason(response.status));
     }
     const reply = await boundedJson(response, limit);
+    if (reply === null) return refused("reply_json");
     const errors = own(reply, "errors");
     if (errors !== undefined) {
       const throttled =
         Array.isArray(errors) &&
         errors.length > 0 &&
         errors.every((e) => own(own(e, "extensions"), "code") === "THROTTLED");
-      if (!throttled || attempt > 0) return refused;
+      if (!throttled) return refused("graphql_errors");
+      if (attempt > 0) return refused("throttled");
       const cost = own(own(reply, "extensions"), "cost");
       const status = own(cost, "throttleStatus");
       const available = own(status, "currentlyAvailable");
@@ -358,20 +451,21 @@ export async function shopifyAdminGraphql(
         rate > 0
           ? Math.ceil((Math.max(0, requested - Math.max(0, available)) / rate) * 1000)
           : 1000;
-      if (now() + wait >= deadlineMs) return refused;
+      if (now() + wait >= deadlineMs) return refused("throttled");
       await sleep(wait);
       continue;
     }
     const data = own(reply, "data");
-    if (data === undefined || data === null || typeof data !== "object") return refused;
+    if (data === undefined || data === null || typeof data !== "object")
+      return refused("reply_shape");
     return Object.freeze({ kind: "data", data });
   }
-  return refused;
+  return refused("throttled");
 }
 
 export type ShopifyIdentity =
   | Readonly<{ kind: "identity"; shopId: string; domain: string; development: boolean }>
-  | Readonly<{ kind: "refused" }>;
+  | Readonly<{ kind: "refused"; reason: ShopifyAdminReason }>;
 const shopGid = /^gid:\/\/shopify\/Shop\/([1-9][0-9]{0,19})$/;
 /**
  * The one fixed Admin GraphQL read of the install (ShopIdentity): the shop's numeric id,
@@ -386,7 +480,6 @@ export async function readShopifyIdentity(
   now: () => number = Date.now,
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<ShopifyIdentity> {
-  const refused = Object.freeze({ kind: "refused" as const });
   const reply = await shopifyAdminGraphql(
     fetcher,
     shop,
@@ -397,14 +490,14 @@ export async function readShopifyIdentity(
     now,
     sleep,
   );
-  if (reply.kind !== "data") return refused;
+  if (reply.kind !== "data") return Object.freeze({ kind: "refused", reason: reply.reason });
   const s = own(reply.data, "shop");
   const id = own(s, "id");
   const domain = own(s, "myshopifyDomain");
   const development = own(own(s, "plan"), "partnerDevelopment");
   const match = typeof id === "string" ? shopGid.exec(id) : null;
   if (!match || typeof domain !== "string" || domain !== shop || typeof development !== "boolean")
-    return refused;
+    return Object.freeze({ kind: "refused", reason: "reply_shape" });
   return Object.freeze({ kind: "identity", shopId: match[1]!, domain, development });
 }
 

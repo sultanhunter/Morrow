@@ -124,7 +124,7 @@ function connectorHandler(env: Env) {
   const binding = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
   const vaultDriver: VaultDriverFactory = (config) => bridgedClient(env, config.user);
   const shopify = createShopifyBroker({
-    transaction: (vault, budgetMs, body) =>
+    transaction: (vault, budgetMs, body, observe) =>
       runVaultTransactionWithDriver(
         vaultDriver,
         vault,
@@ -132,6 +132,7 @@ function connectorHandler(env: Env) {
         body,
         Date.now,
         NoSocket,
+        observe,
       ),
     fetch: (target, init) => fetch(target, init),
     now: () => Date.now(),

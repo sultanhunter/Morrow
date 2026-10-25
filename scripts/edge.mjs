@@ -609,8 +609,12 @@ export const edgeWorkersDev = (worker, environment) =>
 // region instead of crossing from the edge nearest the caller (the first deploy's
 // SMOKE_DATABASE_PATH). It is a performance setting and changes no binding, route, secret
 // or trust boundary. Development has no hosted database and production waits for its own,
-// so neither has placement; the orchestrator and the connector never have it.
-export const edgePlacementWorkers = Object.freeze(["api", "broker"]);
+// so neither has placement. fix-shopify-install-live (2026-10-25): the staging connector
+// too. Placement moves a Worker's fetch handler, and the broker's ConnectorBroker RPC runs
+// beside its caller, so the unplaced connector held the broker's vault transactions at the
+// merchant's edge and the first live launches ran out of their budget. The orchestrator
+// never has it: its queue, workflow and cron handlers are not placed.
+export const edgePlacementWorkers = Object.freeze(["api", "broker", "connector"]);
 // Neon's AWS region id ("aws-us-east-1") and its Cloudflare targeted-placement region
 // ("aws:us-east-1"). Any other shape, another cloud included, is null and fails the check.
 const neonAwsRegion = (regionId) =>
@@ -1377,9 +1381,9 @@ export async function verifyEdgeConfig({
       if (canonicalJson(config.observability) !== canonicalJson(edgeObservability(environment)))
         problem("EDGE_FLAG_OBSERVABILITY", where);
       if (!emptyValue(config.routes) || !emptyValue(config.route)) problem("EDGE_ROUTES", where);
-      // Placement (P04.T01i D1): exactly {mode: "targeted", region} on the staging api and
-      // broker, its region checked against staging.json below; absent everywhere else, an
-      // explicit `{mode: "off"}` included.
+      // Placement (P04.T01i D1): exactly {mode: "targeted", region} on the staging api,
+      // broker and (fix-shopify-install-live) connector, its region checked against
+      // staging.json below; absent everywhere else, an explicit `{mode: "off"}` included.
       const placement = config.placement;
       if (!edgePlacementWorkers.includes(worker.key)) {
         if (placement !== undefined) problem("EDGE_PLACEMENT_WORKER", where);
@@ -1608,7 +1612,7 @@ export async function verifyEdgeConfig({
   problems.push(...checked.problems);
   // The placement region is the region of staging.json's Neon project (`neon.region_id`,
   // Neon's `aws-<region>`), and the committed endpoint lies in that region, so the staging
-  // api and broker run beside the database the binding names.
+  // api, broker and connector run beside the database the binding names.
   const placementRegion = edgePlacementRegion(staging?.neon?.region_id);
   const endpointHost = staging?.neon?.endpoint_host;
   if (

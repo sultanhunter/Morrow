@@ -36,6 +36,7 @@ import { storeLinkGrantTemplate } from "../packages/policy/src/store-link-templa
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 import { createConnectorDatabase } from "../apps/shopify-connector/worker/database.ts";
 import { literal, withWorkDatabase } from "../tests/tenant-conformance/harness.mjs";
+import { shopifyIdToken } from "../tests/fixtures/shopify-live-shapes.mjs";
 import { createShopifyOracle } from "./fixtures/shopify-oracle.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 
@@ -466,7 +467,7 @@ const report = await withWorkDatabase(
     };
     // Loaded hosts: each transaction's budget is stretched (the transport caps it at 10 s).
     const broker = createShopifyBroker({
-      transaction: (vault, budgetMs, body) =>
+      transaction: (vault, budgetMs, body, observe) =>
         runVaultTransactionWithDriver(
           vaultDriver,
           vault,
@@ -476,6 +477,7 @@ const report = await withWorkDatabase(
           class {
             close() {}
           },
+          observe,
         ),
       fetch: (url, init) => oracle.fetch(url, init),
       now: () => Date.now(),
@@ -689,6 +691,60 @@ ROLLBACK;`,
         )[0]?.status === "active" &&
         identityCounts().installations === 1,
       shopUniqueness,
+    );
+    // fix-shopify-install-live: Shopify's other answers, over the real definers. An
+    // expiring offline-token reply (an app that must use them) and a public app's
+    // non-expiring token refused by the Admin API each store nothing and leave credential v2
+    // as it was; the state was claimed, so the merchant relaunches.
+    const vaultBefore = JSON.stringify(vaultRows());
+    const claimedState = (state) =>
+      db.rows(
+        `SELECT claimed_at IS NOT NULL AS claimed FROM morrow_identity.shopify_oauth_states WHERE state_digest=${literal(sha(state))}`,
+        { role: "morrow_identity_owner" },
+      )[0]?.claimed;
+    oracle.state.tokenKind = "expiring";
+    const expiringReply = await install();
+    oracle.state.tokenKind = "non_expiring";
+    check(
+      "I10:an_expiring_offline_token_reply_stores_nothing",
+      expiringReply.result.outcome === "refused" &&
+        oracle.state.expiringTokens.length === 2 &&
+        claimedState(expiringReply.state) === true &&
+        identityCounts().installations === 1 &&
+        JSON.stringify(vaultRows()) === vaultBefore,
+      { outcome: expiringReply.result.outcome },
+    );
+    oracle.state.publicApp = true;
+    const publicApp = await install();
+    oracle.state.publicApp = false;
+    check(
+      "I11:a_public_apps_refused_non_expiring_token_stores_nothing",
+      publicApp.result.outcome === "refused" &&
+        claimedState(publicApp.state) === true &&
+        identityCounts().installations === 1 &&
+        JSON.stringify(vaultRows()) === vaultBefore,
+      { outcome: publicApp.result.outcome },
+    );
+    // The admin's app-open launch of an installed app, with an embedded app's keys
+    // (embedded, id_token, locale, session): signed data, verified like any launch.
+    const appOpen = decodeShopifyLaunchVerdict(
+      await broker.launchVerify(
+        brokerEnv,
+        appKey,
+        oracle.launchQuery({
+          embedded: "1",
+          id_token: shopifyIdToken(shop, clientId, Math.trunc(Date.now() / 1000)),
+          locale: "en-GB",
+          session: randomBytes(32).toString("hex"),
+        }),
+      ),
+    );
+    check(
+      "I12:an_admin_app_open_launch_with_embedded_keys_verifies",
+      appOpen.verdict === "verified" &&
+        appOpen.installation === "unlinked" &&
+        appOpen.workspaceId === ids.ws,
+      appOpen,
     );
 
     // -------------------------------------------------------------------------
