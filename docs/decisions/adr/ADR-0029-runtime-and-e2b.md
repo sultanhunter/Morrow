@@ -68,3 +68,7 @@ What it approves: this record as written and each owner question above with its 
 ### 2026-10-25: uploads and workspace-created agents (ADR-0037)
 
 The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) ends the specialist kind, so item 6's "never a specialist at launch" lapses; the text above is kept as approved. A workspace-created agent opens an upload only as any installed agent does: in a sandbox, by its run the uploader's tags allow, and only when its approved card holds the computer tools. The owner confirmed this as recommended (OD-2026-10-25-4).
+
+### 2026-10-25: item 8's monthly runtime budget (ADR-0039)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes item 8; the text above is kept as approved. Morrow's monthly runtime budget below E2B's limit (staging US$10 of US$20) goes: E2B's usage limit in the owner's E2B account is the outside backstop, as the Anthropic monthly limit is for model calls, and E2B's refusal sets item 9's runtime hold, which only a person lifts. Each sandbox holds its worst case in credits from the workspace's wallet before the create, and its use is drawn after. The concurrency caps (half the tier's, and 3 per workspace), the session deadline and the cleanup rules stand.
