@@ -843,12 +843,13 @@ export function decodeShopifyCredentialResult(text: unknown): ShopifyCredentialO
 // Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md). One
 // sync takes at most `batch` installations from the vault's pending list (the identity
 // bridge's LIMIT) within its budget. Each installation ends in one closed outcome:
-// registered (both subscriptions exist with exactly the connector's callback URL), failed
-// (nothing was created, or Shopify refused it), unknown (a create whose outcome the broker
-// could not prove and the reconciling list did not settle), unauthorized (Shopify refused
-// the token), or skipped (the installation ended, its credential changed, or the outcome
-// could not be recorded). The first four are what the vault records; the result carries
-// only the counts.
+// registered (both subscriptions exist with exactly the connector's webhook path as their
+// uri), failed (not both registered, and nothing unproven: a list or create that failed or
+// was refused, a reconciled create, or a token the broker cannot use), unknown (a create
+// whose outcome the broker could not prove and the reconciling list did not settle),
+// unauthorized (Shopify refused the token), or skipped (the installation ended, its
+// credential changed, or the outcome could not be recorded). The first four are what the
+// vault records; the result carries only the counts.
 export const shopifyWebhookSyncLimits = Object.freeze({
   budgetMinMs: 2000,
   budgetMaxMs: 25000,
