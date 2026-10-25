@@ -127,6 +127,18 @@ const runtimeFileSpec = (required) => ({
   secret: "E2B_API_KEY",
   format: (v) => e2bKeyFormat.test(v),
 });
+// M3 PR-2's model-provider switch (ADR-0022 items 7 and 10; ADR-0035 items 4 and 8.2): the
+// Anthropic Console API key of the owner's workspace `Morrow`, placed by the owner with
+// morrow_put as `anthropic-api-key`. Required only while the switch is on (ANTHROPIC_API_KEY
+// among the broker's names); while it is off there is no spec, so the tools neither require
+// nor read the file, as for Stripe. The format is packages/identity/src/broker-protocol.ts
+// anthropicKeyPattern (drift-tested), the shape the broker itself admits.
+export const anthropicKeyFormat = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
+const modelFileSpec = Object.freeze({
+  required: true,
+  secret: "ANTHROPIC_API_KEY",
+  format: (v) => anthropicKeyFormat.test(v),
+});
 export const shopifyAppSecretFile = "shopify-app-secret";
 export function stagingFileSpecs({ brokerSecretNames, optionalSecretNames = [] }) {
   return Object.freeze({
@@ -143,6 +155,9 @@ export function stagingFileSpecs({ brokerSecretNames, optionalSecretNames = [] }
     ...Object.fromEntries(
       Object.entries(stripeFileSpecs).filter(([, spec]) => brokerSecretNames.includes(spec.secret)),
     ),
+    ...(brokerSecretNames.includes(modelFileSpec.secret)
+      ? { "anthropic-api-key": modelFileSpec }
+      : {}),
     ...(brokerSecretNames.includes("E2B_API_KEY")
       ? { "e2b-api-key": runtimeFileSpec(true) }
       : optionalSecretNames.includes("E2B_API_KEY")
