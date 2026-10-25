@@ -67,3 +67,12 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 > approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
 
 What it approves: this record as written and each owner question above with its recommended answer.
+
+## Amendments
+
+### 2026-10-25: workspace-created agents (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) changes these items; the text above is kept as approved.
+
+- **Item 1.** A workspace-created agent is an installed agent: it may have a mandate, issued when a person approves an agent card that names trigger kinds (ADR-0037 item 4). The Coordinator still never has one.
+- **Item 2.** Approving an agent card, or a later change to one, is an install confirmation: a server-built document bound to the card's digest, the actor and a standalone-workspace session, valid for 5 minutes and consumed once, by a holder of `agents.installation.activate` who holds each capability on the card with its verbs and `delegate`. A card with a store-effect capability, order or customer reads, or a capability in the spend or communication class needs the Owner, even when another member holds those grants (ADR-0037 item 5). No agent approves a card.

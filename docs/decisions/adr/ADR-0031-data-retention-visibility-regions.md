@@ -76,3 +76,9 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 > approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
 
 What it approves: this record as written and each owner question above with its recommended answer.
+
+## Amendments
+
+### 2026-10-25: the specialist rows (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037 item 8) maps item 1's three specialist rows to the records that replace them, on the same clocks; the text above is kept as approved. Agent cards and their revisions are kept 90 days after approval, dismissal or expiry (for "Specialist specs"); "Add to team" documents 24 hours after use or expiry (as "Start documents"); a removed agent's principal, installation, grants, envelopes and hops as owner question 1 (a) answered for retired run-scoped rows. A workspace-created agent's instructions and skill text are deleted with its notebook and run turns when it is removed (item 3).

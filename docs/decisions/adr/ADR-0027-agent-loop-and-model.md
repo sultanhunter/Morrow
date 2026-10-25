@@ -88,3 +88,13 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 What it approves: this record as written and each owner question above with its recommended answer.
 
 The rest of the statement changes owner question 1: model and thinking effort are chosen per agent, with the Coordinator on Opus 5.5 at high effort and specialists on Opus 5.5 at medium by default, and the five installed agents keep the recommended Sonnet 5.5 at low. Item 12 records the change.
+
+## Amendments
+
+### 2026-10-25: teammates in place of specialists (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) changes these items; the text above is kept as approved.
+
+- **Item 8.** Morrow's fixed grant set replaces `specialist.draft` with `agent.propose` (an agent card, granting nothing) and adds `agent.ask`, a teammate call that returns a closed, typed TeammateResult@1 as wrapped, tainting data. `agent.route` names one active teammate of either origin and is used only when the teammate must own the conversation. One call or hand-off per run at launch. Morrow still has no store reads, proposals, computer or support tools.
+- **Item 10** is superseded: SpecialistSpec@1 and specialist child runs give way to AgentProposal@1 (ADR-0037 item 4) and the teammate call (ADR-0037 item 3).
+- **Items 1, 2, 3, 6, 9 and 12, where they name specialists.** A called or handed-off teammate's run is a routed run: `decideDelegation`, and an installed agent's lease, wall time and turn limit. The catalogue drops `specialist.draft`. The workspace's specialist profile becomes the default for new teammates, shown on each agent card, where a holder of `governance.model_default.revise` may pick another offered entry.

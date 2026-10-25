@@ -280,3 +280,10 @@ The owner's answer to the 2026-10-26 decision sheet (OD-2026-10-23-7, quoted in 
 - **Decision 11b's last sentence and the ADR-0005 entry under "Does not change"** (ADR-0024 owner question 1, answered (b)): installed agents keep stage-and-activate, but in a team the Owner installs an agent and issues or renews its mandate with no second reviewer while no other member holds the mandate's store grants. This amends ADR-0005 item 3; kill switches stay `human_only`.
 
 Members choosing a model per run stays dropped.
+
+### 2026-10-25: one agent kind in place of specialists (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) changes these lines; the text above is kept as approved.
+
+- **Decision 1.** The Coordinator line becomes: Morrow answers from knowledge, asks clarifying questions, ranks suggestions, calls a teammate as a tool for a typed result or hands work to one, and creates only tasks, questions, messages, plan cards and agent cards. The owner's addition becomes one level of teammates under Morrow: Morrow may propose a new teammate, a person approves its exact card, and teammates cannot create, call or hand off to agents. "Installable agents" gains a second origin: agents Morrow creates from the fixed tool catalogue, which are installations like the premade ones.
+- **Decision 11.** Its specialist parts (11a to 11c, 11e, "One clock", "Rules and model", "Reports", "Switch and slip rules" and 11f) are superseded by ADR-0037 items 3 to 9. 11d stays, except that a workspace-created agent carries instruction and skill text Morrow writes for it, shown in full on its card and bound by its digest; there is still no skill registry and no skill tool.

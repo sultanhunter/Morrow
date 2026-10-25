@@ -84,3 +84,14 @@ The owner's statement in chat, verbatim, on 2026-10-24 (IST), after reading the 
 > approve ADR-0033 and ADR-0034 as recommended
 
 What it approves: this record as written and each owner question above with its recommended answer. It follows the owner's approval of the UX flow recommendation (OD-2026-10-23-8), which asked for this record.
+
+## Amendments
+
+### 2026-10-25: teammates in place of specialists (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) changes these items; the text above is kept as approved.
+
+- **Item 2.** A plan card's specialist step becomes a step that names an active teammate or "a new teammate", with only a title and purpose, so `agent.propose` is the only agent-card drafter. `report_in_context` no longer refuses a turn holding a TeammateResult@1; a card drafted in that turn carries the result's taint and sources.
+- **Item 6(a).** Tapping a new-teammate step starts one Morrow run limited to `knowledge.search`, `work.read`, `message.post` and `agent.propose`; "Start check-up" becomes "Add to team", and the step is a ready agent step once its card is approved.
+- **Item 7.** In a private Ask, `agent.route`'s read-only answer becomes the teammate call (`agent.ask`), read-only under the Ask-bound envelope, returning a typed result to Morrow; there is no hand-off from an Ask. The list of what Morrow never uses there keeps `task.create`, `inbox.ask` and mentions, with `agent.propose` in place of `specialist.draft`.
+- **Item 9.** `checkup_done` is built from TeammateResult@1's typed counts and next-step codes.
