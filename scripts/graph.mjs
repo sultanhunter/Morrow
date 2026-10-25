@@ -1514,7 +1514,11 @@ function applyRules(graph, report) {
       if (kind === "installable" && !origin)
         report("GRAPH_AGENT_KIND", where, `${node.id} is a teammate without an origin`);
       if (origin && kind !== "installable")
-        report("GRAPH_AGENT_KIND", where, `${node.id} (${kind}) names an origin; only teammates do`);
+        report(
+          "GRAPH_AGENT_KIND",
+          where,
+          `${node.id} (${kind}) names an origin; only teammates do`,
+        );
       if (kind === "installable") {
         const holders = [node.id, ...typedOut(graph, node.id, "installs_as").map((e) => e.to)];
         const denied = holders.some((id) =>

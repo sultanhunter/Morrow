@@ -193,28 +193,31 @@ Connect, under ADR-0001.
       'id: DC-customer-mail\ntype: data_class\ntitle: Customer mail\nstatus: planned\nretention: 90 days\ndeletion: the privacy sweep\ncustomer: "yes"\nlinks:\n  deleted_by: [TRK-privacy]',
     ),
     "docs/graph/agents/AG-coordinator.md": node(
-      'id: AG-coordinator\ntype: agent\nkind: builtin\ntitle: Coordinator\nstatus: planned\ndepth: "1"\nlinks:\n  delegates_to: [AG-specialist, AG-listings]',
+      'id: AG-coordinator\ntype: agent\nkind: builtin\ntitle: Coordinator\nstatus: planned\ndepth: "1"\nlinks:\n  delegates_to: [AG-workspace-created, AG-listings]',
     ),
-    "docs/graph/agents/AG-specialist.md": node(
-      'id: AG-specialist\ntype: agent\nkind: task_specialist\ntitle: Specialist\nstatus: proposed\nslip_rank: "1"\nlinks:\n  composes: [SK-listing-content]\n  installs_as: [IK-task-specialist]\n  never_holds: [workspace.task.delegate]',
+    // ADR-0037: one agent kind with two origins. A teammate Morrow creates composes skills
+    // from an agent card; a first-party release bundles them.
+    "docs/graph/agents/AG-workspace-created.md": node(
+      'id: AG-workspace-created\ntype: agent\nkind: installable\ntitle: Teammates Morrow creates\nstatus: proposed\norigin: workspace\nslip_rank: "1"\nlinks:\n  composes: [SK-listing-content]\n  installs_as: [IK-installed-agent]',
     ),
     "docs/graph/agents/AG-listings.md": node(
-      'id: AG-listings\ntype: agent\nkind: installable\ntitle: Listings\nstatus: planned\nslip_rank: "0"\nscopes_required: [read_products, write_products]\nlinks:\n  needs: [catalog.content.publish]\n  bundles: [SK-listing-content]\n  installs_as: [IK-installed-agent]',
+      'id: AG-listings\ntype: agent\nkind: installable\ntitle: Listings\nstatus: planned\norigin: first-party\nslip_rank: "0"\nscopes_required: [read_products, write_products]\nlinks:\n  needs: [catalog.content.publish]\n  bundles: [SK-listing-content]\n  installs_as: [IK-installed-agent]',
     ),
     "docs/graph/agents/AG-support.md": node(
-      "id: AG-support\ntype: agent\nkind: installable\ntitle: Support\nstatus: planned\ncustomer_data: level2\nscopes_optional: [read_orders, read_customers]\nlinks:\n  bundles: [SK-support-replies]\n  holds: [DC-customer-mail]\n  waits_on: [GATE-launch]",
+      "id: AG-support\ntype: agent\nkind: installable\ntitle: Support\nstatus: planned\norigin: first-party\ncustomer_data: level2\nscopes_optional: [read_orders, read_customers]\nlinks:\n  bundles: [SK-support-replies]\n  holds: [DC-customer-mail]\n  installs_as: [IK-installed-agent]\n  waits_on: [GATE-launch]",
     ),
     "docs/graph/skills/SK-listing-content.md": node(
-      'id: SK-listing-content\ntype: skill\ntitle: Listing content\nstatus: planned\nspecialist_eligible: "yes"\nruntime: none',
+      'id: SK-listing-content\ntype: skill\ntitle: Listing content\nstatus: planned\ncard_eligible: "yes"\nruntime: none',
     ),
     "docs/graph/skills/SK-support-replies.md": node(
-      'id: SK-support-replies\ntype: skill\ntitle: Support replies\nstatus: planned\nspecialist_eligible: "no"\nlinks:\n  holds: [DC-customer-mail]',
+      'id: SK-support-replies\ntype: skill\ntitle: Support replies\nstatus: planned\ncard_eligible: "no"\nlinks:\n  holds: [DC-customer-mail]',
     ),
+    // The run-scoped specialist kind that ADR-0037 retired: kept, dropped.
     "docs/graph/installation-kinds/IK-task-specialist.md": node(
-      'id: IK-task-specialist\ntype: installation_kind\ntitle: Run-scoped specialist\nstatus: proposed\nmandate: "no"\ntriggers: "no"\nstarted_by: owner-start\nroutable: "no"\nlinks:\n  never_holds: [workspace.task.delegate]',
+      'id: IK-task-specialist\ntype: installation_kind\ntitle: Run-scoped specialist\nstatus: dropped\nmandate: "no"\ntriggers: "no"\nstarted_by: [owner-start]\nroutable: "no"\nlinks:\n  never_holds: [workspace.task.delegate]',
     ),
     "docs/graph/installation-kinds/IK-installed-agent.md": node(
-      'id: IK-installed-agent\ntype: installation_kind\ntitle: Installed agent\nstatus: planned\nmandate: "yes"\ntriggers: "yes"\nroutable: "yes"\nlinks:\n  may_hold: [catalog.content.publish]',
+      'id: IK-installed-agent\ntype: installation_kind\ntitle: Installed agent\nstatus: planned\nmandate: "yes"\ntriggers: "yes"\nstarted_by: [owner-admin-install, card-approval]\nroutable: "yes"\norigins: [first-party, workspace]\nlinks:\n  may_hold: [catalog.content.publish]\n  never_holds: [workspace.task.delegate]',
     ),
   };
   files["docs/graph/README.md"] =
@@ -372,11 +375,11 @@ const PLANTED = {
     edit(f, "docs/graph/data/DC-customer-mail.md", "status: planned", "status: live"),
   GRAPH_SKILL_ELIGIBLE: (f) => {
     f["docs/graph/skills/SK-alt-text.md"] = node(
-      'id: SK-alt-text\ntype: skill\ntitle: Alt text\nstatus: planned\nspecialist_eligible: "no"',
+      'id: SK-alt-text\ntype: skill\ntitle: Alt text\nstatus: planned\ncard_eligible: "no"',
     );
     edit(
       f,
-      "docs/graph/agents/AG-specialist.md",
+      "docs/graph/agents/AG-workspace-created.md",
       "composes: [SK-listing-content]",
       "composes: [SK-listing-content, SK-alt-text]",
     );
@@ -386,7 +389,7 @@ const PLANTED = {
       f,
       "docs/graph/agents/AG-listings.md",
       "  needs:",
-      "  delegates_to: [AG-specialist]\n  needs:",
+      "  delegates_to: [AG-workspace-created]\n  needs:",
     ),
   GRAPH_INSTALLATION_KIND: (f) =>
     edit(
@@ -464,6 +467,124 @@ for (const [code, plant] of Object.entries(PLANTED))
       assert.ok(codes(relaxed, "warning").includes(code));
     }
   });
+
+// ADR-0037: Morrow is the one builtin agent; every teammate is an installation of either
+// origin that never delegates (depth 1); first-party releases bundle skills and agents Morrow
+// creates compose card-eligible ones; the run-scoped specialist kind is retired. Each broken
+// rule returns its code and no other.
+const SPECIALIST =
+  "id: AG-specialist\ntype: agent\nkind: task_specialist\ntitle: Specialist\nstatus: dropped\nlinks:\n  installs_as: [IK-task-specialist]";
+const AGENT_RULES = {
+  "a teammate without an origin": [
+    "GRAPH_AGENT_KIND",
+    (f) => edit(f, "docs/graph/agents/AG-listings.md", "origin: first-party\n", ""),
+  ],
+  "an origin on the builtin agent": [
+    "GRAPH_AGENT_KIND",
+    (f) =>
+      edit(
+        f,
+        "docs/graph/agents/AG-coordinator.md",
+        "status: planned",
+        "status: planned\norigin: workspace",
+      ),
+  ],
+  "a first-party teammate that composes skills": [
+    "GRAPH_AGENT_KIND",
+    (f) =>
+      edit(
+        f,
+        "docs/graph/agents/AG-listings.md",
+        "  bundles:",
+        "  composes: [SK-listing-content]\n  bundles:",
+      ),
+  ],
+  "a workspace-created teammate that bundles skills": [
+    "GRAPH_AGENT_KIND",
+    (f) =>
+      edit(
+        f,
+        "docs/graph/agents/AG-workspace-created.md",
+        "  composes:",
+        "  bundles: [SK-listing-content]\n  composes:",
+      ),
+  ],
+  "teammates whose kind no longer denies workspace.task.delegate": [
+    "GRAPH_AGENT_KIND",
+    (f) =>
+      edit(
+        f,
+        "docs/graph/installation-kinds/IK-installed-agent.md",
+        "\n  never_holds: [workspace.task.delegate]",
+        "",
+      ),
+  ],
+  "Morrow delegating to the retired specialist": [
+    "GRAPH_AGENT_KIND",
+    (f) => {
+      f["docs/graph/agents/AG-specialist.md"] = node(SPECIALIST);
+      edit(
+        f,
+        "docs/graph/agents/AG-coordinator.md",
+        "delegates_to: [AG-workspace-created,",
+        "delegates_to: [AG-specialist, AG-workspace-created,",
+      );
+    },
+  ],
+  "an active agent of the retired task_specialist kind": [
+    "GRAPH_AGENT_KIND",
+    (f) => {
+      f["docs/graph/agents/AG-specialist.md"] = node(
+        "id: AG-specialist\ntype: agent\nkind: task_specialist\ntitle: Specialist\nstatus: planned",
+      );
+    },
+  ],
+  "a card-eligible skill that holds customer data": [
+    "GRAPH_SKILL_ELIGIBLE",
+    (f) =>
+      edit(
+        f,
+        "docs/graph/skills/SK-support-replies.md",
+        'card_eligible: "no"',
+        'card_eligible: "yes"',
+      ),
+  ],
+  "a workspace-created teammate on a kind without the workspace origin": [
+    "GRAPH_INSTALLATION_KIND",
+    (f) =>
+      edit(
+        f,
+        "docs/graph/installation-kinds/IK-installed-agent.md",
+        "origins: [first-party, workspace]",
+        "origins: [first-party]",
+      ),
+  ],
+  "an active teammate on the retired kind": [
+    "GRAPH_INSTALLATION_KIND",
+    (f) =>
+      edit(
+        f,
+        "docs/graph/agents/AG-workspace-created.md",
+        "installs_as: [IK-installed-agent]",
+        "installs_as: [IK-installed-agent, IK-task-specialist]",
+      ),
+  ],
+};
+for (const [name, [code, plant]] of Object.entries(AGENT_RULES))
+  test(`ADR-0037 agent rules: ${name} returns only ${code}`, () => {
+    const files = baseFiles();
+    plant(files);
+    const errors = graphOf(files).issues.filter((i) => i.severity === "error");
+    assert.ok(errors.length > 0, name);
+    assert.deepEqual([...new Set(errors.map((i) => i.code))], [code], JSON.stringify(errors));
+  });
+
+test("ADR-0037 agent rules: the dropped specialist on its dropped kind is clean", () => {
+  const files = baseFiles();
+  files["docs/graph/agents/AG-specialist.md"] = node(SPECIALIST);
+  for (const strict of [false, true])
+    assert.deepEqual(codes(graphOf(files, { strict }), "error"), [], `strict ${strict}`);
+});
 
 test("ids: every shape belongs to exactly one type", () => {
   const samples = {
@@ -995,10 +1116,9 @@ test("mentions: unambiguous ids, ranges, [[wiki]] links and paths; fences and ge
   );
   assert.ok(edgeIn(graph, "V-morrow", "mentions", "docs/plan/build-plan.md"), "a path");
   assert.ok(!graph.issues.some((i) => /Q-not-a-link|P09\.T09/.test(i.message)), "fenced code");
-  assert.ok(
-    !edgeIn(graph, "docs/graph/README.md", "mentions", "IK-task-specialist"),
-    "the generated block",
-  );
+  // V-morrow appears in the fixture README only inside the generated schema block.
+  assert.ok(renderSchemaBlock().includes("V-morrow"));
+  assert.ok(!edgeIn(graph, "docs/graph/README.md", "mentions", "V-morrow"), "the generated block");
   // An unresolved id is an error in a doc with a header and a warning in one without.
   const files = baseFiles();
   files["docs/graph/risks/RISK-drift.md"] += "\nSee Q-unknown.\n";
@@ -1070,15 +1190,19 @@ test("queries: open, ready, gates, critical, slip, data, skills, ceiling, uncove
     q("critical"),
     /Critical chain to GATE-launch \(3 nodes\):\n {2}Q-scope[^\n]*\n {2}F-gateway[^\n]*\n {2}GATE-launch/,
   );
-  assert.match(q("slip"), /^0 {2}AG-listings[\s\S]*\n1 {2}AG-specialist/);
+  assert.match(q("slip"), /^0 {2}AG-listings[\s\S]*\n1 {2}AG-workspace-created/);
   assert.match(
     q("data"),
     /DC-customer-mail[\s\S]*deleted_by TRK-privacy[\s\S]*held by AG-support, SK-support-replies/,
   );
-  assert.match(q("skills", ["AG-specialist"]), /composes {2}SK-listing-content/);
   assert.match(
-    q("ceiling", ["AG-specialist"]),
-    /IK-task-specialist {5,}never_holds +workspace\.task\.delegate/,
+    q("skills", ["AG-workspace-created"]),
+    /composes {2}SK-listing-content .*card_eligible yes/,
+  );
+  assert.match(q("skills", ["AG-listings"]), /bundles {3}SK-listing-content/);
+  assert.match(
+    q("ceiling", ["AG-workspace-created"]),
+    /IK-installed-agent {5,}never_holds +workspace\.task\.delegate/,
   );
   assert.match(q("uncovered"), /Every plan task is included or deferred by name/);
   assert.match(
@@ -1689,14 +1813,17 @@ test("this repository: phase 1 covers every plan task and holds the MVP's tracks
     assert.equal(nodes.find((g) => g.type === "gate" && g.label === label)?.status, "dropped");
   for (const id of [
     "AG-coordinator",
-    "AG-specialist",
     "AG-listings",
     "AG-business-analyst",
     "AG-inventory",
     "AG-support",
     "AG-marketing",
+    "AG-workspace-created",
   ])
     assert.equal(graph.nodes.get(id)?.type, "agent", id);
+  // ADR-0037 retired the run-scoped specialist; its ids are kept, dropped.
+  for (const id of ["AG-specialist", "IK-task-specialist"])
+    assert.equal(graph.nodes.get(id)?.status, "dropped", id);
   assert.equal(nodes.filter((n) => n.type === "skill").length, 12);
   // The v1 build order: 26 steps, each part of a track; the merged ones are implemented by
   // their PRs (from the "v1 PR <n>:" title or through the branch node).
@@ -1766,8 +1893,11 @@ test("this repository: phase 1 covers every plan task and holds the MVP's tracks
   );
 });
 
-test("this repository: the specialist ceiling node matches specialist-ceiling.json", () => {
+// The retired kind's node keeps its history until ADR-0037's contracts PR retires the ceiling
+// file (docs/plan/adr-0037-implementation.md, PR 2), which then updates this test.
+test("this repository: the retired specialist ceiling node matches specialist-ceiling.json", () => {
   const graph = repo();
+  assert.equal(graph.nodes.get("IK-task-specialist").status, "dropped");
   const contract = JSON.parse(readFileSync("docs/contracts/specialist-ceiling.json", "utf8"));
   const ids = contract.capabilities.map((c) => c.capabilityId);
   const held = (edge) =>
@@ -1795,7 +1925,9 @@ test("this repository: only agents with read_orders hold order aggregates, direc
     const agents =
       graph.nodes.get(id)?.type === "agent"
         ? [id]
-        : graph.edges.filter((e) => e.edge === "bundles" && e.to === id).map((e) => e.from);
+        : graph.edges
+            .filter((e) => ["bundles", "composes"].includes(e.edge) && e.to === id)
+            .map((e) => e.from);
     assert.ok(agents.length, `${id} belongs to an agent`);
     for (const agent of agents)
       assert.ok(
@@ -1804,6 +1936,60 @@ test("this repository: only agents with read_orders hold order aggregates, direc
       );
   }
   assert.ok(!holders.includes("SK-promotion-plan"));
+});
+
+// ADR-0037 (docs/plan/adr-0037-implementation.md, PR 1): one agent kind with two origins.
+test("this repository: ADR-0037's agent kinds, origins, launch slice and gate", () => {
+  const graph = repo();
+  const out = (id, edge) =>
+    graph.edges.filter((e) => e.from === id && e.edge === edge).map((e) => e.to);
+  const agents = [...graph.nodes.values()].filter(
+    (n) => n.type === "agent" && !schema.INACTIVE_STATUSES.includes(n.status),
+  );
+  const teammates = agents.filter((n) => n.fields.kind === "installable");
+  // Morrow is the one builtin agent and may call or hand off to every active teammate.
+  assert.deepEqual(
+    agents.filter((n) => n.fields.kind === "builtin").map((n) => n.id),
+    ["AG-coordinator"],
+  );
+  assert.deepEqual(out("AG-coordinator", "delegates_to").sort(), teammates.map((n) => n.id).sort());
+  assert.ok(out("AG-coordinator", "needs").includes("agents.builder.describe"));
+  // Every teammate is an installed agent, whichever its origin, and never delegates.
+  assert.deepEqual(graph.nodes.get("IK-installed-agent").fields.origins, [
+    "first-party",
+    "workspace",
+  ]);
+  assert.ok(out("IK-installed-agent", "never_holds").includes("workspace.task.delegate"));
+  for (const n of teammates)
+    assert.deepEqual(out(n.id, "installs_as"), ["IK-installed-agent"], n.id);
+  assert.deepEqual(
+    teammates.filter((n) => n.fields.origin === "workspace").map((n) => n.id),
+    ["AG-workspace-created"],
+  );
+  // A card never carries Level 2 customer data or support.* (ADR-0037 item 5).
+  const created = graph.nodes.get("AG-workspace-created");
+  assert.notEqual(created.fields.customer_data, "level2");
+  for (const id of ["workspace.task.delegate", "agents.installation.activate", "support.case.read"])
+    assert.ok(out("AG-workspace-created", "never_holds").includes(id), id);
+  assert.ok(!out("AG-workspace-created", "composes").includes("SK-support-replies"));
+  // The launch slice of the builder: P16.T02a comes into launch; P16.T02 stays deferred.
+  assert.equal(graph.nodes.get("P16.T02a")?.type, "task");
+  assert.ok(out("F-specialists", "includes").includes("P16.T02a"));
+  assert.ok(out("TRK-specialists", "includes").includes("P16.T02a"));
+  assert.ok(out("F-agent-builder", "defers").includes("P16.T02"));
+  assert.ok(!out("F-agent-builder", "defers").includes("P16.T02a"));
+  // G18 is the agent-card authority packet; the retired specialist's data classes are retired.
+  assert.match(graph.nodes.get("GATE-specialist-packet").title, /agent-card authority packet/);
+  for (const id of ["DC-specialist-specs", "DC-start-documents", "DC-retired-run-principals"])
+    assert.equal(graph.nodes.get(id).status, "retired", id);
+  for (const id of [
+    "DC-agent-cards",
+    "DC-add-to-team-documents",
+    "DC-workspace-agent-text",
+    "DC-removed-agent-authority",
+    "DC-result-items",
+  ])
+    assert.equal(graph.nodes.get(id)?.type, "data_class", id);
 });
 
 test("this repository: P04.T01i shows its PRs, acceptance ids and the M-O1 evidence", () => {
