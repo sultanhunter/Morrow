@@ -4,18 +4,20 @@
 // checks the live-store app's workspace first and commits only `renewed` or `current`; the
 // CLI is refused in CI, without the standing approval, off main and on any database but
 // the staging binding, prints one closed JSON line and the activity-log line, and never the
-// owner database URL. PostgreSQL behaviour of migration 0052 is qualified by
-// lab:test-entitlement (N cases); this file also pins the migration's shape.
+// owner database URL. No input names an amount: the credits are the current terms'
+// operator entry (P01.T04a R10), read as 0035's grant reads it, and a raise is a new
+// staging BillingTerms revision (review F1). PostgreSQL behaviour of migration 0052 is
+// qualified by lab:test-entitlement (N cases); this file also pins the migration's shape.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as stagingTools from "../scripts/staging.mjs";
 import {
   commands,
   main,
-  requireTestCreditsRaiseRecord,
   testCreditsActivityLine,
   testCreditsRecord,
   testCreditsRecordPath,
@@ -64,8 +66,6 @@ const input = Object.freeze({
   grantApprovalRef: grantRef,
   standingApproval: "adr-0035",
   evidenceRef: standingEvidence,
-  creditUnits: null,
-  raiseEvidenceRef: null,
 });
 const renewed = Object.freeze({
   entitlementId: "00000000-0000-4000-8000-0000000000e1",
@@ -77,6 +77,7 @@ const renewed = Object.freeze({
   periodStart: "2026-11-23T12:00:00.000Z",
   periodEnd: "2026-12-23T12:00:00.000Z",
   creditUnits: "300",
+  termsRevision: "1",
   addedUnits: "120",
   available: "300",
   snapshotRevision: "2",
@@ -160,7 +161,7 @@ test("migration 0052: a forward work-owner migration that replaces 0035's guards
   assert.match(migration, /UNIQUE \(organization_id,workspace_id,entitlement_id,period_number\)/);
   assert.match(
     migration,
-    /REVOKE ALL ON FUNCTION morrow_billing\.operator_test_entitlement_renew\(text,text,text,text,text,text,text\) FROM PUBLIC;/,
+    /REVOKE ALL ON FUNCTION morrow_billing\.operator_test_entitlement_renew\(text,text,text,text,text\) FROM PUBLIC;/,
   );
   assert.doesNotMatch(
     migration,
@@ -178,12 +179,56 @@ test("migration 0052: a forward work-owner migration that replaces 0035's guards
   assert.match(renew, /v_added:=greatest\(0,v_units-\(w\.available\+w\.reserved\)\)/);
 });
 
+test("migration 0052: credits come only from the current terms' operator entry, read as 0035's grant reads it (R10; review F1)", () => {
+  const renew = body(migration, "CREATE FUNCTION morrow_billing.operator_test_entitlement_renew(");
+  const grant = body(
+    read("migrations/0035.staging-test-entitlement.sql"),
+    "CREATE FUNCTION morrow_billing.operator_test_entitlement_grant(",
+  );
+  // The five closed text values: none is an amount or a raise record.
+  assert.match(
+    migration,
+    /CREATE FUNCTION morrow_billing\.operator_test_entitlement_renew\(p_operator_id text,p_workspace_id text,p_grant_approval_ref text,\n p_standing_approval text,p_evidence_ref text\)\n/,
+  );
+  assert.match(
+    migration,
+    /REVOKE ALL ON FUNCTION morrow_billing\.operator_test_entitlement_renew\(text,text,text,text,text\) FROM PUBLIC;/,
+  );
+  assert.doesNotMatch(migration, /p_credit_units|p_raise_evidence_ref|raise_evidence_ref/);
+  // The terms read is 0035's, statement for statement, and it is the only source of units.
+  const termsRead = grant.slice(
+    grant.indexOf(" SELECT x.terms_revision::bigint AS terms_revision,x.terms INTO v_terms"),
+    grant.indexOf(" v_at:=greatest("),
+  );
+  assert.match(termsRead, /ORDER BY x\.terms_revision DESC LIMIT 1/);
+  assert.match(termsRead, /v_units:=\(v_entry->>'creditUnits'\)::bigint;/);
+  assert.ok(renew.includes(termsRead), "the renewal reads the terms exactly as the grant does");
+  assert.equal(renew.match(/v_units:=/g).length, 1);
+  assert.doesNotMatch(renew, /v_units:=[^;]*g\.credit_units/);
+  // The renewal records the terms revision its credits came from, in its row, its digest
+  // and its result.
+  assert.match(
+    migration,
+    / terms_revision morrow_work\.revision NOT NULL REFERENCES morrow_billing\.billing_terms\(terms_revision\),\n/,
+  );
+  assert.match(renew, /'test',v_units,v_terms\.terms_revision,v_added/);
+  assert.match(renew, /v_k::text,v_units::text,v_terms\.terms_revision::text,v_added::text/);
+  assert.match(renew, /'termsRevision',v_terms\.terms_revision::text/);
+  assert.match(renew, /'termsRevision',COALESCE\(n\.terms_revision,g\.terms_revision\)::text/);
+  assert.match(migration, /to_regclass\('morrow_billing\.billing_terms'\) IS NULL/);
+});
+
 // ---------------------------------------------------------------------------
 // The runner.
-test("test-credits: closed input; a raise needs both its credits and its record", () => {
+test("test-credits: closed input of five values, none an amount (review F1)", () => {
   assert.deepEqual(testCreditsRenewInput(input), Object.values(input));
-  const raised = { ...input, creditUnits: "1000", raiseEvidenceRef: raiseEvidence };
-  assert.deepEqual(testCreditsRenewInput(raised), Object.values(raised));
+  assert.equal(Object.values(input).length, 5);
+  for (const given of [null, undefined, "ws_owner", [], Object.values(input)])
+    assert.equal(
+      codeOf(() => testCreditsRenewInput(given)),
+      "STAGING_USAGE",
+      String(given),
+    );
   for (const change of [
     { operatorId: "" },
     { operatorId: "has space" },
@@ -193,12 +238,13 @@ test("test-credits: closed input; a raise needs both its credits and its record"
     { grantApprovalRef: "adr-0035" },
     { standingApproval: "ADR-0035" },
     { evidenceRef: "docs/evidence/activity-log.md" },
+    // No caller value can name the credits, with or without a record of the owner's yes.
     { creditUnits: "1000" },
+    { creditUnits: null },
     { raiseEvidenceRef: raiseEvidence },
-    { creditUnits: "0", raiseEvidenceRef: raiseEvidence },
-    { creditUnits: 1000, raiseEvidenceRef: raiseEvidence },
-    { creditUnits: "1000", raiseEvidenceRef: "docs/raise.md" },
-    { creditUnits: undefined },
+    { creditUnits: "1000", raiseEvidenceRef: raiseEvidence },
+    { credits: "1000" },
+    { termsRevision: "2" },
   ])
     assert.equal(
       codeOf(() => testCreditsRenewInput({ ...input, ...change })),
@@ -220,6 +266,9 @@ test("test-credits: the definer's result is closed, period 0 only as current, a 
     ["renewed", { ...renewed, period: "01" }],
     ["renewed", { ...renewed, addedUnits: "301" }],
     ["renewed", { ...renewed, creditUnits: "0" }],
+    ["renewed", { ...renewed, termsRevision: "0" }],
+    ["renewed", { ...renewed, termsRevision: 2 }],
+    ["renewed", (({ termsRevision, ...rest }) => rest)(renewed)],
     ["renewed", { ...renewed, snapshotRevision: "1" }],
     ["renewed", { ...renewed, periodEnd: "2026-12-24T12:00:00.000Z" }],
     ["renewed", { ...renewed, periodStart: "2026-11-23T12:00:00Z" }],
@@ -333,7 +382,7 @@ test("test-credits: a COMMIT that fails after renewed is an unknown outcome, nev
 });
 
 // ---------------------------------------------------------------------------
-// The committed record and the raise record.
+// The committed record.
 const recordText = (overrides = {}) =>
   JSON.stringify({
     schemaVersion: 1,
@@ -342,7 +391,6 @@ const recordText = (overrides = {}) =>
     standingApproval: "adr-0035",
     workspace: "ws_owner",
     grantApproval: grantRef,
-    raise: null,
     ...overrides,
   });
 const now = Date.parse("2026-11-25T12:00:00Z");
@@ -365,10 +413,8 @@ test("test-credits: the committed record is closed, unset until the owner's gran
   assert.deepEqual(testCreditsRecord(recordText(), standingApproval(), now), {
     workspaceId: "ws_owner",
     grantApprovalRef: grantRef,
-    raise: null,
   });
   const raise = { credits: "1000", approvedOn: "2026-11-25", evidence: raiseEvidence };
-  assert.deepEqual(testCreditsRecord(recordText({ raise }), standingApproval(), now).raise, raise);
   for (const [text, label] of [
     ["not json", "json"],
     ["[]", "array"],
@@ -384,13 +430,10 @@ test("test-credits: the committed record is closed, unset until the owner's gran
     [recordText({ grantApproval: "adr-0035.e13.2026-10-22.1" }), "before E13"],
     [recordText({ grantApproval: "adr-0035.e13.2026-11-26.1" }), "after today"],
     [recordText({ grantApproval: "adr-0035.e13.2026-02-30.1" }), "no such day"],
-    [recordText({ raise: { ...raise, credits: "0" } }), "raise zero"],
-    [recordText({ raise: { ...raise, credits: 1000 } }), "raise number"],
-    [recordText({ raise: { ...raise, approvedOn: "2026-11-26" } }), "raise after today"],
-    [recordText({ raise: { ...raise, approvedOn: "2026-10-22" } }), "raise before the approval"],
-    [recordText({ raise: { ...raise, evidence: "docs/raise.md" } }), "raise record path"],
-    [recordText({ raise: { ...raise, extra: true } }), "raise extra key"],
-    [recordText({ raise: "1000" }), "raise shape"],
+    // The record names no amount (review F1): a raise is a new staging terms revision.
+    [recordText({ raise }), "a raise"],
+    [recordText({ raise: null }), "a raise member, even unset"],
+    [recordText({ credits: "1000" }), "credits"],
   ])
     assert.equal(
       codeOf(() => testCreditsRecord(text, standingApproval(), now)),
@@ -403,28 +446,8 @@ test("test-credits: the committed record is closed, unset until the owner's gran
   );
 });
 
-test("test-credits: a raise's record names the workspace and the credits exactly, once each", () => {
-  const named = { workspaceId: "ws_owner", credits: "1000" };
-  requireTestCreditsRaiseRecord(
-    "- **Approval.** yes\n- **Workspace:** `ws_owner`\n- **Credits per period:** `1000`\n",
-    named,
-  );
-  requireTestCreditsRaiseRecord("Workspace: ws_owner\nCredits per period: 1000\n", named);
-  for (const text of [
-    "- Workspace: `ws_owner`\n",
-    "- Credits per period: `1000`\n",
-    "- Workspace: `ws_owner_2`\n- Credits per period: `1000`\n",
-    "- Workspace: `ws_owner`\n- Credits per period: `10000`\n",
-    "- Workspace: `ws_owner`\n- Credits per period: `100`\n",
-    "- Workspace: `ws_owner`\n- Credits per period: `1000` a month\n",
-    "- Workspace: `ws_owner`\n- Workspace: `ws_owner`\n- Credits per period: `1000`\n",
-    "- Workspace: `ws_owner`\n- Credits per period: `1000`\n- Credits per period: `1000`\n",
-  ])
-    assert.equal(
-      codeOf(() => requireTestCreditsRaiseRecord(text, named)),
-      "STAGING_EVIDENCE_MISMATCH",
-      text,
-    );
+test("test-credits: the staging tools have no raise reader (review F1)", () => {
+  assert.equal(stagingTools.requireTestCreditsRaiseRecord, undefined);
 });
 
 test("test-credits: the activity-log line is one table row of closed values, with no workspace id", () => {
@@ -435,22 +458,23 @@ test("test-credits: the activity-log line is one table row of closed values, wit
     outcome: "renewed",
     standingApproval: "adr-0035",
     commit,
-    raise: null,
   });
   assert.equal(
     line,
-    `| 2026-11-25 | \`staging:test-credits -- renew\` for the owner's workspace under the standing approval \`adr-0035\` (main \`${commit.slice(0, 8)}\`) | renewed period 1: 300 test credits for 2026-11-23 to 2026-12-23, 120 added, 300 available | US$0 | none |`,
+    `| 2026-11-25 | \`staging:test-credits -- renew\` for the owner's workspace under the standing approval \`adr-0035\` (main \`${commit.slice(0, 8)}\`) | renewed period 1: 300 test credits (terms revision 1) for 2026-11-23 to 2026-12-23, 120 added, 300 available | US$0 | none |`,
   );
   assert.ok(!line.includes("ws_owner") && !line.includes("org_owner"));
-  const raised = testCreditsActivityLine({
-    now,
-    report: { ...renewed, creditUnits: "1000" },
-    outcome: "renewed",
-    standingApproval: "adr-0035",
-    commit,
-    raise: { credits: "1000", approvedOn: "2026-11-25", evidence: raiseEvidence },
-  });
-  assert.match(raised, new RegExp("raise record `" + raiseEvidence.replaceAll(".", "\\.") + "`"));
+  // A raise shows as the terms revision the credits came from.
+  assert.match(
+    testCreditsActivityLine({
+      now,
+      report: { ...renewed, creditUnits: "1000", termsRevision: "2" },
+      outcome: "renewed",
+      standingApproval: "adr-0035",
+      commit,
+    }),
+    /\| renewed period 1: 1000 test credits \(terms revision 2\) for /,
+  );
   assert.match(
     testCreditsActivityLine({
       now,
@@ -458,9 +482,8 @@ test("test-credits: the activity-log line is one table row of closed values, wit
       outcome: "current",
       standingApproval: "adr-0035",
       commit,
-      raise: null,
     }),
-    /\| current: period 0 \(2026-10-24 to 2026-11-23\) already renewed, nothing written \| US\$0 \| none \|$/,
+    /\| current: period 0 \(2026-10-24 to 2026-11-23, terms revision 1\) already renewed, nothing written \| US\$0 \| none \|$/,
   );
   // A value outside the closed grammar never reaches the line.
   assert.equal(
@@ -471,7 +494,6 @@ test("test-credits: the activity-log line is one table row of closed values, wit
         outcome: "renewed",
         standingApproval: "adr-0035",
         commit,
-        raise: null,
       }),
     ),
     "STAGING_TEST_CREDITS_RESULT_INVALID",
@@ -490,7 +512,6 @@ test("cli: test-credits is one subcommand of the staging tools with its npm scri
 
 const argv = ["test-credits", "renew", "--operator", "operator_claude"];
 const standingText = "- **Standing approval:** `adr-0035`\n";
-const raiseText = "- **Workspace:** `ws_owner`\n- **Credits per period:** `1000`\n";
 async function cliWorld({
   record = recordText(),
   files,
@@ -552,7 +573,6 @@ test("cli: test-credits renew takes the workspace and grant from the committed r
       ...renewed,
       grantApprovalRef: grantRef,
       standingApproval: "adr-0035",
-      raiseRecord: null,
       record: testCreditsRecordPath,
       recordCommit: fakeSha("main"),
     });
@@ -579,40 +599,24 @@ test("cli: test-credits renew takes the workspace and grant from the committed r
   }
 });
 
-test("cli: a raise is passed to the database only with its committed record naming the workspace and the credits", async () => {
+test("cli: a committed record that names an amount is refused before any database statement (review F1)", async () => {
   const raise = { credits: "1000", approvedOn: "2026-11-25", evidence: raiseEvidence };
-  const files = (text) => ({
-    [standingEvidence]: { text: standingText },
-    [testCreditsRecordPath]: { text: recordText({ raise }) },
-    ...(text === null ? {} : { [raiseEvidence]: { text } }),
-  });
-  const ok = await cliWorld({
-    files: files(raiseText),
-    result: { ...renewed, creditUnits: "1000" },
-  });
-  try {
-    assert.equal(await main(argv, ok.ctx), 0, ok.err.join("\n"));
-    assert.deepEqual(ok.db.statements.find((s) => s.text === testCreditsRenewStatement).params, [
-      ...Object.values(input).slice(0, 5),
-      "1000",
-      raiseEvidence,
-    ]);
-    assert.equal(JSON.parse(ok.out[0]).raiseRecord, raiseEvidence);
-  } finally {
-    ok.cleanup();
-  }
-  for (const [text, code] of [
-    [null, "STAGING_EVIDENCE_MISSING"],
-    [
-      "- **Workspace:** `ws_owner`\n- **Credits per period:** `2000`\n",
-      "STAGING_EVIDENCE_MISMATCH",
-    ],
-  ]) {
-    const w = await cliWorld({ files: files(text) });
+  for (const record of [recordText({ raise }), recordText({ raise: null })]) {
+    const w = await cliWorld({
+      files: {
+        [standingEvidence]: { text: standingText },
+        [testCreditsRecordPath]: { text: record },
+        [raiseEvidence]: {
+          text: "- **Workspace:** `ws_owner`\n- **Credits per period:** `1000`\n",
+        },
+      },
+    });
     try {
       assert.equal(await main(argv, w.ctx), 1);
-      assert.equal(JSON.parse(w.err.at(-1)).code, code);
-      assert.equal(w.db.statements.length, 0, code);
+      assert.equal(JSON.parse(w.err.at(-1)).code, "STAGING_TEST_CREDITS_RECORD_INVALID");
+      assert.equal(w.db.statements.length, 0);
+      // The raise's record is never read.
+      assert.ok(!w.fake.calls.some((c) => c.args.includes(raiseEvidence)));
     } finally {
       w.cleanup();
     }
@@ -694,6 +698,7 @@ test("cli: the database refuses another workspace and every refusal outcome, pri
     [{ n: 0 }, "STAGING_TEST_CREDITS_NOT_OWNER_WORKSPACE", undefined],
     [{ outcome: "grant_missing" }, "STAGING_TEST_CREDITS_REFUSED", "grant_missing"],
     [{ outcome: "not_staging" }, "STAGING_TEST_CREDITS_REFUSED", "not_staging"],
+    [{ outcome: "terms_missing" }, "STAGING_TEST_CREDITS_REFUSED", "terms_missing"],
   ]) {
     const w = await cliWorld(options);
     try {
@@ -712,7 +717,10 @@ test("cli: the database refuses another workspace and every refusal outcome, pri
   try {
     assert.equal(await main(argv, again.ctx), 0);
     assert.equal(JSON.parse(again.out[0]).outcome, "current");
-    assert.match(again.notices[0], /\| current: period 0 .* nothing written \| US\$0 \| none \|$/);
+    assert.match(
+      again.notices[0],
+      /\| current: period 0 \(.*, terms revision 1\) already renewed, nothing written \| US\$0 \| none \|$/,
+    );
   } finally {
     again.cleanup();
   }

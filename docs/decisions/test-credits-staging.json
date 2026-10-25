@@ -4,6 +4,5 @@
   "environment": "staging",
   "standingApproval": "adr-0035",
   "workspace": null,
-  "grantApproval": null,
-  "raise": null
+  "grantApproval": null
 }

@@ -139,10 +139,8 @@ export function psqlConnector(
             text +
             ") staging_lab_row"
           : text;
-        // A null parameter binds SQL NULL, as the Neon driver sends it (v1 build order PR 6's
-        // renewal passes NULL for "no raise").
         const statement = params.length
-          ? `PREPARE staging_lab_q AS ${body};\nEXECUTE staging_lab_q(${params.map((v) => (v === null ? "NULL" : literal(v))).join(",")});\nDEALLOCATE staging_lab_q;`
+          ? `PREPARE staging_lab_q AS ${body};\nEXECUTE staging_lab_q(${params.map(literal).join(",")});\nDEALLOCATE staging_lab_q;`
           : body + ";";
         const lines = await run(statement);
         if (!select) return [];

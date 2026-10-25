@@ -399,7 +399,7 @@
     {
       "sequence": 52,
       "file": "0052.staging-test-credits-renewal.sql",
-      "sha256": "0c5bce795a13da53ec45f54eb0126be33186272cb9d66c0b50acc5908a4d54c8",
+      "sha256": "c658e3f81f03ca788d71a63bea4aa6d7b734704d3d34551d70d59d2dd62f8384",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-renew-test-credits.md"
     }

@@ -33,8 +33,11 @@
 //      by the superuser with triggers off), it writes the renewal record, tops the unspent
 //      credits up to the grant's and never above them, and writes the next snapshot, with no
 //      payment row; a second run in the period writes nothing; lapsed periods skip to the
-//      one that contains the clock; a raise needs its record and must exceed the grant; the
-//      billing view reads the renewed period; forged successors, fundings and edits fail.
+//      one that contains the clock; the billing view reads the renewed period; no caller
+//      value names the credits: they are the current terms' (R10), so a new staging terms
+//      revision, published by the seed, changes the next renewal's credits and not the
+//      current period's, and terms without the operator entry refuse (terms_missing);
+//      forged successors, fundings and edits fail.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
@@ -47,6 +50,7 @@ import {
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
 import { stagingBillingTermsRows } from "./staging.mjs";
 import {
+  billingTermsSeedRows,
   grantTestEntitlement,
   registerShopifyApp,
   renewTestCredits,
@@ -60,6 +64,7 @@ import {
 } from "./fixtures/createrole-administrator.mjs";
 import { labBinding } from "../tests/fixtures/staging-fakes.mjs";
 import { createBillingApiHandler } from "../packages/work/src/billing/index.ts";
+import { parseTermsDocument, termsDocumentDigest } from "../packages/work/src/billing/terms.ts";
 
 const checks = [];
 const failures = [];
@@ -101,8 +106,7 @@ await withWorkDatabase(
       });
     const callSql = (input) =>
       `SELECT outcome FROM morrow_billing.operator_test_entitlement_grant(${lit(input.operatorId)},${lit(input.workspaceId)},${lit(input.approvalRef)},${lit(input.evidenceRef)});`;
-    // The renewal's operator function called directly (N cases); null arguments as NULL.
-    const sqlValue = (v) => (v === null ? "NULL" : lit(v));
+    // The renewal's operator function called directly (N cases).
     const renewSql = (input) =>
       `SELECT outcome FROM morrow_billing.operator_test_entitlement_renew(${[
         input.operatorId,
@@ -110,20 +114,16 @@ await withWorkDatabase(
         input.grantApprovalRef,
         input.standingApproval,
         input.evidenceRef,
-        input.creditUnits,
-        input.raiseEvidenceRef,
       ]
-        .map(sqlValue)
+        .map(lit)
         .join(",")});`;
     const standingEvidence = ["docs/evidence/live/2026-10-23-standing-approval", "md"].join(".");
-    const renewInput = (p, grantApprovalRef, raise = null) => ({
+    const renewInput = (p, grantApprovalRef) => ({
       operatorId: "operator_lab",
       workspaceId: p.workspace,
       grantApprovalRef,
       standingApproval: "adr-0035",
       evidenceRef: standingEvidence,
-      creditUnits: raise?.credits ?? null,
-      raiseEvidenceRef: raise?.evidence ?? null,
     });
     const counts = () =>
       db.rows(`SELECT
@@ -722,16 +722,16 @@ INSERT INTO morrow_billing.stripe_event_receipts(organization_id,workspace_id,id
     // -------------------------------------------------------------------------------
     // N. Renewing the owner's test credits (v1 build order PR 6).
     const ownerGrant = "adr-0035.e13.2026-10-23.3";
-    const renew = (p, grantApprovalRef, raise) =>
+    const renew = (p, grantApprovalRef) =>
       renewTestCredits({
         connect: runner().connect,
         binding: labBinding,
         administrator,
-        input: renewInput(p, grantApprovalRef, raise),
+        input: renewInput(p, grantApprovalRef),
       });
     const renewals = () =>
       db.rows(
-        `SELECT r.id::text AS id,r.entitlement_id::text AS entitlement,r.period_number::text AS period,r.standing_approval,r.operator_id,r.evidence_ref AS record,r.raise_evidence_ref AS raise,r.mode,
+        `SELECT r.id::text AS id,r.entitlement_id::text AS entitlement,r.period_number::text AS period,r.standing_approval,r.operator_id,r.evidence_ref AS record,r.terms_revision::text AS terms,r.mode,
  r.credit_units::text AS units,r.added_units::text AS added,r.funded_wallet_revision::text AS funded,r.snapshot_revision::text AS snapshot,
  morrow_work.utc_text(r.period_start) AS period_start,morrow_work.utc_text(r.period_end) AS period_end,r.evidence_digest::text AS digest
  FROM morrow_billing.operator_test_entitlement_renewals r WHERE r.workspace_id=${lit(V.workspace)} ORDER BY r.period_number`,
@@ -815,6 +815,7 @@ SET session_replication_role = origin;`);
         within.periodStart === granted.periodStart &&
         within.periodEnd === granted.periodEnd &&
         within.creditUnits === "300" &&
+        within.termsRevision === "1" &&
         within.snapshotRevision === "1" &&
         renewals().length === 0 &&
         same(counts(), beforeRenewals) &&
@@ -847,6 +848,7 @@ SET session_replication_role = origin;`);
         Date.parse(first1.periodStart) <= Date.now() &&
         Date.now() < Date.parse(first1.periodEnd) &&
         first1.creditUnits === "300" &&
+        first1.termsRevision === "1" &&
         first1.addedUnits === "100" &&
         first1.available === "280" &&
         first1.snapshotRevision === "2" &&
@@ -857,7 +859,7 @@ SET session_replication_role = origin;`);
         r1.standing_approval === "adr-0035" &&
         r1.operator_id === "operator_lab" &&
         r1.record === standingEvidence &&
-        r1.raise === null &&
+        r1.terms === "1" &&
         r1.mode === "test" &&
         r1.units === "300" &&
         r1.added === "100" &&
@@ -933,31 +935,114 @@ SET session_replication_role = origin;`);
           .map((r) => r.period)
           .join() === "1,2,5",
     );
-    // A raise: above the grant only, with its record; the database refuses one without it.
+    // No caller value names the credits (R10): the function takes five closed text values,
+    // none an amount, and the renewal record has no raise column; the old raise call (an
+    // amount and its record) does not exist, and the runner refuses an amount before it
+    // connects.
     const raiseRecord = ["docs/evidence/live/2026-10-25-test-credits-raise", "md"].join(".");
-    const unrecorded = db.tryRun(
-      `SET ROLE morrow_work_owner; ${renewSql({ ...renewInput(V, ownerGrant), creditUnits: "1000" })}`,
+    const amountCall = db.tryRun(
+      `SET ROLE morrow_work_owner; SELECT outcome FROM morrow_billing.operator_test_entitlement_renew(${[
+        ...Object.values(renewInput(V, ownerGrant)),
+        "1000",
+        raiseRecord,
+      ]
+        .map(lit)
+        .join(",")});`,
     );
-    const notAbove = db.tryRun(
-      `SET ROLE morrow_work_owner; ${renewSql(renewInput(V, ownerGrant, { credits: "300", evidence: raiseRecord }))}`,
+    const amountInput = await rejection(
+      renewTestCredits({
+        connect: runner().connect,
+        binding: labBinding,
+        administrator,
+        input: { ...renewInput(V, ownerGrant), creditUnits: "1000", raiseEvidenceRef: raiseRecord },
+      }),
     );
-    travel(V, 720);
-    const raisedRenewal = await renew(V, ownerGrant, { credits: "1000", evidence: raiseRecord });
-    const [, , , r6] = renewals();
     check(
-      "N_a_raise_needs_its_record_and_must_exceed_the_grant",
-      unrecorded.ok &&
-        unrecorded.stdout.split("\n").at(-1) === "invalid" &&
-        notAbove.ok &&
-        notAbove.stdout.split("\n").at(-1) === "invalid" &&
+      "N_no_caller_value_names_the_credits",
+      scalar(
+        "SELECT pg_catalog.pg_get_function_identity_arguments('morrow_billing.operator_test_entitlement_renew(text,text,text,text,text)'::regprocedure);",
+      ) ===
+        "p_operator_id text, p_workspace_id text, p_grant_approval_ref text, p_standing_approval text, p_evidence_ref text" &&
+        scalar(
+          "SELECT count(*) FROM pg_catalog.pg_proc WHERE proname='operator_test_entitlement_renew';",
+        ) === "1" &&
+        scalar(
+          "SELECT count(*) FROM pg_catalog.pg_attribute WHERE attrelid='morrow_billing.operator_test_entitlement_renewals'::regclass AND attname ~ 'raise' AND NOT attisdropped;",
+        ) === "0" &&
+        !amountCall.ok &&
+        /does not exist/.test(amountCall.stderr) &&
+        amountInput?.code === "STAGING_USAGE" &&
+        renewals().length === 3,
+    );
+    // The owner's raise is a new staging terms revision (ADR-0035 item 4), parsed by the
+    // billing module and written by the same seed as revision 1: revision 2's operator entry
+    // carries 1,000 credits. The current period keeps the credits it was written with; the
+    // next renewal reads revision 2 and tops the wallet up to 1,000.
+    const [publishedRow] = await stagingBillingTermsRows(repositoryRoot, "staging");
+    const published = {
+      terms: JSON.parse(publishedRow[1]),
+      offers: JSON.parse(publishedRow[2]),
+      digest: publishedRow[3],
+    };
+    const raisedTerms = {
+      ...published.terms,
+      termsRevision: 2,
+      entries: published.terms.entries.map((e) =>
+        e.kind === "operator_test_entitlement" ? { ...e, creditUnits: "1000" } : e,
+      ),
+    };
+    parseTermsDocument(raisedTerms, published.offers);
+    const raisedRevision = {
+      terms: raisedTerms,
+      offers: published.offers,
+      digest: await termsDocumentDigest(raisedTerms, published.offers),
+    };
+    const reseededTerms = await seedBillingTerms({
+      connect: runner().connect,
+      binding: labBinding,
+      administrator,
+      rows: billingTermsSeedRows([published, raisedRevision]),
+    });
+    const sameRaisedPeriod = await renew(V, ownerGrant);
+    const walletBeforeRaise = walletOf(V);
+    travel(V, 720);
+    const raisedRenewal = await renew(V, ownerGrant);
+    const r6 = renewals().at(-1);
+    check(
+      "N_a_new_terms_revision_changes_the_next_renewals_credits_and_not_the_current_period",
+      reseededTerms.termsInserted === 1 &&
+        sameRaisedPeriod.outcome === "current" &&
+        sameRaisedPeriod.period === "5" &&
+        sameRaisedPeriod.creditUnits === "300" &&
+        sameRaisedPeriod.termsRevision === "1" &&
+        same(walletOf(V), walletBeforeRaise) &&
         raisedRenewal.outcome === "renewed" &&
         raisedRenewal.period === "6" &&
         raisedRenewal.creditUnits === "1000" &&
+        raisedRenewal.termsRevision === "2" &&
         raisedRenewal.addedUnits === "700" &&
         raisedRenewal.available === "980" &&
-        r6?.raise === raiseRecord &&
+        r6?.period === "6" &&
         r6.units === "1000" &&
-        paymentRows() === paymentsBefore,
+        r6.terms === "2" &&
+        r6.added === "700" &&
+        paymentRows() === paymentsBefore &&
+        fixedRows(V) === fixedBefore,
+    );
+    // Terms without the one operator entry: a due period is refused (terms_missing) and
+    // nothing is written (revision 3 is rolled back with the call).
+    travel(V, 720);
+    const noOperatorTerms = JSON.stringify({ ...raisedTerms, termsRevision: 3, entries: [] });
+    const termsMissing = db.tryRun(
+      `SET ROLE morrow_work_owner; BEGIN; INSERT INTO morrow_billing.billing_terms VALUES(3,${lit(noOperatorTerms)}::jsonb,'[]'::jsonb,repeat('e',64),date_trunc('milliseconds',clock_timestamp())); ${renewSql(renewInput(V, ownerGrant))} ROLLBACK;`,
+    );
+    check(
+      "N_terms_without_the_operator_entry_refuse_a_due_period",
+      termsMissing.ok &&
+        termsMissing.stdout.split("\n").at(-1) === "terms_missing" &&
+        scalar("SELECT count(*) FROM morrow_billing.billing_terms;") === "2" &&
+        renewals().length === 4 &&
+        latestSnapshot(V).revision === "5",
     );
     // Forgeries: a successor snapshot with no renewal record (even one copying the last
     // period forward), a wallet funding with no renewal, a Stripe successor, an edit of a

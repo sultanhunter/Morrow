@@ -1306,7 +1306,7 @@ export const billingFunctions = Object.freeze({
   "operator_test_entitlement_grant(text,text,text,text)": { kind: "operator", grantees: [] },
   // v1 build order PR 6: the renewal of that grant, INVOKER, owned by the owner, granted to
   // nobody.
-  "operator_test_entitlement_renew(text,text,text,text,text,text,text)": {
+  "operator_test_entitlement_renew(text,text,text,text,text)": {
     kind: "operator",
     grantees: [],
   },

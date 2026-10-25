@@ -1497,9 +1497,10 @@ export async function grantTestEntitlement({
 // per 30-day period: morrow_billing.operator_test_entitlement_renew, run as
 // morrow_work_owner under the D4 SET-row protocol after the same transaction has read, as
 // morrow_identity_owner, that the workspace is the one the environment's live-store app
-// invites. Its credits come only from the recorded grant (or a raise the owner approved in a
-// committed record); it tops the unspent credits up to them, writes the next snapshot and
-// never a payment row. Only `renewed` or `current` commits, after the closed result is
+// invites. Its credits come only from the current terms' operator entry (P01.T04a R10, the
+// source of the grant's own credits): no input names an amount, and a raise is a new
+// staging BillingTerms revision. It tops the unspent credits up to them, writes the next
+// snapshot and never a payment row. Only `renewed` or `current` commits, after the closed result is
 // read; anything else commits nothing. A COMMIT that fails after `renewed` is an unknown
 // outcome: the rerun reads it back (`current` when it committed), never a blind retry.
 export const testCreditsOutcomes = Object.freeze([
@@ -1507,24 +1508,23 @@ export const testCreditsOutcomes = Object.freeze([
   "current",
   "grant_missing",
   "route_conflict",
+  "terms_missing",
   "not_staging",
   "invalid",
   "denied",
 ]);
 export const testCreditsRenewStatement =
-  "SELECT outcome, result FROM morrow_billing.operator_test_entitlement_renew($1, $2, $3, $4, $5, $6, $7)";
+  "SELECT outcome, result FROM morrow_billing.operator_test_entitlement_renew($1, $2, $3, $4, $5)";
 const standingId = /^[a-z0-9][a-z0-9-]{0,40}$/;
 const creditText = /^[1-9][0-9]{0,17}$/;
-export function testCreditsRenewInput({
-  operatorId,
-  workspaceId,
-  grantApprovalRef,
-  standingApproval,
-  evidenceRef,
-  creditUnits,
-  raiseEvidenceRef,
-}) {
+// Closed: exactly these five members. None is an amount; the credits are the terms'.
+const testCreditsInputKeys = "evidenceRef,grantApprovalRef,operatorId,standingApproval,workspaceId";
+export function testCreditsRenewInput(input) {
+  if (input === null || typeof input !== "object" || Array.isArray(input))
+    throw new StagingError("STAGING_USAGE");
+  const { operatorId, workspaceId, grantApprovalRef, standingApproval, evidenceRef } = input;
   if (
+    Object.keys(input).sort().join() !== testCreditsInputKeys ||
     typeof operatorId !== "string" ||
     !recordId.test(operatorId) ||
     typeof workspaceId !== "string" ||
@@ -1534,27 +1534,16 @@ export function testCreditsRenewInput({
     typeof standingApproval !== "string" ||
     !standingId.test(standingApproval) ||
     typeof evidenceRef !== "string" ||
-    !liveEvidenceRef.test(evidenceRef) ||
-    (creditUnits === null) !== (raiseEvidenceRef === null) ||
-    (creditUnits !== null && (typeof creditUnits !== "string" || !creditText.test(creditUnits))) ||
-    (raiseEvidenceRef !== null &&
-      (typeof raiseEvidenceRef !== "string" || !liveEvidenceRef.test(raiseEvidenceRef)))
+    !liveEvidenceRef.test(evidenceRef)
   )
     throw new StagingError("STAGING_USAGE");
-  return Object.freeze([
-    operatorId,
-    workspaceId,
-    grantApprovalRef,
-    standingApproval,
-    evidenceRef,
-    creditUnits,
-    raiseEvidenceRef,
-  ]);
+  return Object.freeze([operatorId, workspaceId, grantApprovalRef, standingApproval, evidenceRef]);
 }
 const testCreditsResultKeys =
-  "addedUnits,available,billingAccountId,creditUnits,entitlementId,organizationId,period,periodEnd,periodStart,renewalId,snapshotRevision,walletRevision,workspaceId";
+  "addedUnits,available,billingAccountId,creditUnits,entitlementId,organizationId,period,periodEnd,periodStart,renewalId,snapshotRevision,termsRevision,walletRevision,workspaceId";
 const periodHours = 720;
-/** The definer's result for `workspaceId` and `outcome`, closed: ids, the period, credits. */
+/** The definer's result for `workspaceId` and `outcome`, closed: ids, the period, credits and
+ * the terms revision they came from. */
 export function testCreditsReport(outcome, result, workspaceId) {
   let value;
   try {
@@ -1581,6 +1570,7 @@ export function testCreditsReport(outcome, result, workspaceId) {
       ? outcome === "current" && value.renewalId === null
       : typeof value.renewalId === "string" && uuidText.test(value.renewalId)) &&
     creditText.test(value.creditUnits) &&
+    /^[1-9][0-9]{0,15}$/.test(value.termsRevision) &&
     count.test(value.addedUnits) &&
     BigInt(value.addedUnits) <= BigInt(value.creditUnits) &&
     count.test(value.available) &&
@@ -1604,6 +1594,7 @@ export function testCreditsReport(outcome, result, workspaceId) {
     periodStart: value.periodStart,
     periodEnd: value.periodEnd,
     creditUnits: value.creditUnits,
+    termsRevision: value.termsRevision,
     addedUnits: value.addedUnits,
     available: value.available,
     snapshotRevision: value.snapshotRevision,

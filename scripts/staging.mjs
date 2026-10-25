@@ -1031,26 +1031,20 @@ export function requireTestEntitlementApproval(card, approvalRef, now) {
 // never matches (approval .1 is not named by a record of .10, nor a workspace id by a
 // longer one), and a labelled line whose value is not one delimited token, or a second
 // line with the same label, refuses the run.
+const recordLabel =
+  /^(?:[-*] +)?(?:\*\*(Approval reference|Workspace):\*\*|(Approval reference|Workspace):)(.*)$/;
 // A well-formed stand-in for parse's grammar check when --record is omitted (the standing
 // approval's own record replaces it in run).
 const standingEvidencePlaceholder = ["docs/evidence/live/2026-10-23-standing", "md"].join(".");
 const recordValue = /^ +(?:`([^`\s]+)`|([^`\s]+)) *$/;
-// Every value of each label (letters and spaces only), in order; null for a labelled line
-// whose value is not one delimited token.
-function labelledValues(text, labels) {
-  const names = labels.join("|");
-  const pattern = new RegExp(`^(?:[-*] +)?(?:\\*\\*(${names}):\\*\\*|(${names}):)(.*)$`);
-  const named = Object.fromEntries(labels.map((label) => [label, []]));
+export function requireTestEntitlementRecord(text, { approvalRef, workspaceId }) {
+  const named = { "Approval reference": [], Workspace: [] };
   for (const line of String(text).split(/\r?\n/)) {
-    const label = pattern.exec(line.trim());
+    const label = recordLabel.exec(line.trim());
     if (!label) continue;
     const value = recordValue.exec(label[3]);
     named[label[1] ?? label[2]].push(value ? (value[1] ?? value[2]) : null);
   }
-  return named;
-}
-export function requireTestEntitlementRecord(text, { approvalRef, workspaceId }) {
-  const named = labelledValues(text, ["Approval reference", "Workspace"]);
   const approvals = named["Approval reference"];
   const workspaces = named.Workspace;
   if (
@@ -1177,10 +1171,11 @@ command("test-entitlement", {
 // never from an argument:
 //   - workspace: the owner's workspace id (the one the live-store app invites, linked to
 //     the owner's store), from the grant's printed result;
-//   - grantApproval: the grant's approval reference (`adr-0035.e13.<date>.<n>`);
-//   - raise: null, or the owner's approval of more credits a period than the grant's
-//     ({credits, approvedOn, evidence}: raising a limit, ADR-0035 item 4), whose committed
-//     live record names the workspace and the credits on labelled lines.
+//   - grantApproval: the grant's approval reference (`adr-0035.e13.<date>.<n>`).
+// It names no amount: each period's credits come only from the current terms' operator
+// entry (P01.T04a R10). Raising them (ADR-0035 item 4) is a new staging BillingTerms
+// revision in docs/decisions/billing-terms.json, published with the owner's per-use
+// approval; this command never takes an amount.
 // Refused in CI, without the standing approval, on any database but staging's binding, off
 // verified main, and (in the database) for any workspace the live-store app does not
 // invite, under any other grant, or in a database not marked staging. Prints one closed
@@ -1190,12 +1185,10 @@ const testCreditsKeys = [
   "environment",
   "grantApproval",
   "kind",
-  "raise",
   "schemaVersion",
   "standingApproval",
   "workspace",
 ];
-const raiseKeys = "approvedOn,credits,evidence";
 const workspaceIdText = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 /** The committed record's closed values under `card`, the standing approval, at `now`. */
 export function testCreditsRecord(text, card, now) {
@@ -1234,51 +1227,7 @@ export function testCreditsRecord(text, card, now) {
     grant[3] > today
   )
     throw new StagingError("STAGING_TEST_CREDITS_RECORD_INVALID");
-  const raise = record.raise;
-  if (
-    raise !== null &&
-    (typeof raise !== "object" ||
-      Array.isArray(raise) ||
-      Object.keys(raise).sort().join() !== raiseKeys ||
-      typeof raise.credits !== "string" ||
-      !/^[1-9][0-9]{0,17}$/.test(raise.credits) ||
-      typeof raise.approvedOn !== "string" ||
-      !day.test(raise.approvedOn) ||
-      !Number.isFinite(Date.parse(raise.approvedOn + "T00:00:00Z")) ||
-      raise.approvedOn < card.approvedOn ||
-      raise.approvedOn > today ||
-      typeof raise.evidence !== "string" ||
-      !liveEvidenceRef.test(raise.evidence))
-  )
-    throw new StagingError("STAGING_TEST_CREDITS_RECORD_INVALID");
-  return Object.freeze({
-    workspaceId: record.workspace,
-    grantApprovalRef: record.grantApproval,
-    raise:
-      raise === null
-        ? null
-        : Object.freeze({
-            credits: raise.credits,
-            approvedOn: raise.approvedOn,
-            evidence: raise.evidence,
-          }),
-  });
-}
-// A raise's live record names the workspace and the period's credits, each exactly once
-// (the labelled-line rule of requireTestEntitlementRecord):
-//   - Workspace: `ws_...`
-//   - Credits per period: `1000`
-export function requireTestCreditsRaiseRecord(text, { workspaceId, credits }) {
-  const named = labelledValues(text, ["Workspace", "Credits per period"]);
-  const workspaces = named.Workspace;
-  const amounts = named["Credits per period"];
-  if (
-    workspaces.length !== 1 ||
-    workspaces[0] !== workspaceId ||
-    amounts.length !== 1 ||
-    amounts[0] !== credits
-  )
-    throw new StagingError("STAGING_EVIDENCE_MISMATCH");
+  return Object.freeze({ workspaceId: record.workspace, grantApprovalRef: record.grantApproval });
 }
 // The one line to append to docs/evidence/activity-log.md (ADR-0035 item 4): the UTC day,
 // the action, the result, the cost (none: no money changes hands) and no unknown outcome.
@@ -1286,13 +1235,13 @@ export function requireTestCreditsRaiseRecord(text, { workspaceId, credits }) {
 // not the workspace id.
 const activityLine =
   /^\| \d{4}-\d{2}-\d{2} \| [A-Za-z0-9 `:().,'/_-]{1,400} \| [A-Za-z0-9 `:().,'/_-]{1,400} \| US\$0 \| none \|$/;
-export function testCreditsActivityLine({ now, report, outcome, standingApproval, commit, raise }) {
+export function testCreditsActivityLine({ now, report, outcome, standingApproval, commit }) {
   const dayOf = (iso) => iso.slice(0, 10);
   const action = `\`staging:test-credits -- renew\` for the owner's workspace under the standing approval \`${standingApproval}\` (main \`${commit.slice(0, 8)}\`)`;
   const result =
     outcome === "renewed"
-      ? `renewed period ${report.period}: ${report.creditUnits} test credits for ${dayOf(report.periodStart)} to ${dayOf(report.periodEnd)}, ${report.addedUnits} added, ${report.available} available${raise ? `, raise record \`${raise.evidence}\`` : ""}`
-      : `current: period ${report.period} (${dayOf(report.periodStart)} to ${dayOf(report.periodEnd)}) already renewed, nothing written`;
+      ? `renewed period ${report.period}: ${report.creditUnits} test credits (terms revision ${report.termsRevision}) for ${dayOf(report.periodStart)} to ${dayOf(report.periodEnd)}, ${report.addedUnits} added, ${report.available} available`
+      : `current: period ${report.period} (${dayOf(report.periodStart)} to ${dayOf(report.periodEnd)}, terms revision ${report.termsRevision}) already renewed, nothing written`;
   const line = `| ${new Date(now).toISOString().slice(0, 10)} | ${action} | ${result} | US$0 | none |`;
   if (!activityLine.test(line)) throw new StagingError("STAGING_TEST_CREDITS_RESULT_INVALID");
   return line;
@@ -1332,19 +1281,12 @@ command("test-credits", {
       config.card,
       ctx.now(),
     );
-    if (record.raise !== null)
-      requireTestCreditsRaiseRecord(
-        await committedRecord(ctx, sourceCommit, record.raise.evidence),
-        { workspaceId: record.workspaceId, credits: record.raise.credits },
-      );
     const input = {
       operatorId,
       workspaceId: record.workspaceId,
       grantApprovalRef: record.grantApprovalRef,
       standingApproval: config.card.id,
       evidenceRef: config.card.evidence,
-      creditUnits: record.raise?.credits ?? null,
-      raiseEvidenceRef: record.raise?.evidence ?? null,
     };
     testCreditsRenewInput(input);
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
@@ -1361,7 +1303,6 @@ command("test-credits", {
         outcome: renewed.outcome,
         standingApproval: config.card.id,
         commit: sourceCommit,
-        raise: record.raise,
       }),
     );
     return {
@@ -1369,7 +1310,6 @@ command("test-credits", {
       ...renewed,
       grantApprovalRef: record.grantApprovalRef,
       standingApproval: config.card.id,
-      raiseRecord: record.raise?.evidence ?? null,
       record: testCreditsRecordPath,
       recordCommit: sourceCommit,
     };

@@ -6,10 +6,10 @@ BEGIN;
 -- file lets the owner's audited script renew that grant once per 30-day period, with no
 -- payment of any kind:
 --   * operator_test_entitlement_renewals: one row per renewed period of one grant (the
---     grant, the period's number, its credits, what the renewal added to the wallet, the
---     snapshot and wallet revisions it wrote, the standing approval, the operator, the
---     live record, an optional raise record and a digest); append-only, owner only, one per
---     grant and period; no runtime role holds anything.
+--     grant, the period's number, its credits and the terms revision they came from, what
+--     the renewal added to the wallet, the snapshot and wallet revisions it wrote, the
+--     standing approval, the operator, the live record and a digest); append-only, owner
+--     only, one per grant and period; no runtime role holds anything.
 --   * wallet_guard and snapshot_guard (0035), replaced with the same signatures: the owner
 --     may fund the wallet revision a renewal names with exactly the units it added, and an
 --     operator snapshot takes a successor only of the same grant, from the owner, naming
@@ -19,13 +19,16 @@ BEGIN;
 --     owner, INVOKER, granted to nobody; only staging:test-credits runs it, as
 --     morrow_work_owner inside the administrator's own transaction under the D4 SET-row
 --     protocol).
--- Credits come only from the recorded grant: a period's credits are the grant's units,
--- unless the caller names a higher amount together with the committed record of the
--- owner's approval of it (raising a limit: ADR-0035 item 4). A renewal tops the wallet's
--- unspent credits (available plus reserved) up to the period's credits and never above
--- them; it adds nothing when they are already there. Periods follow one grid: the grant's
--- period is period 0; period k (k >= 1) starts 720 hours times (k - 1) after the grant's
--- period ended and lasts 720 hours. A renewal writes only the period that contains the
+-- Credits come only from the versioned terms (P01.T04a R10), read exactly as 0035's grant
+-- reads them: a period's credits are the units of the current terms revision's one
+-- operator_test_entitlement entry, the source the grant's own credits came from, and the
+-- renewal records that revision. No argument names an amount. Raising them (ADR-0035 item
+-- 4) is a new staging BillingTerms revision, published only with the owner's per-use
+-- approval; the next renewal reads it. A renewal tops the wallet's unspent credits
+-- (available plus reserved) up to the period's credits and never above them; it adds
+-- nothing when they are already there. Periods follow one grid: the grant's period is
+-- period 0; period k (k >= 1) starts 720 hours times (k - 1) after the grant's period
+-- ended and lasts 720 hours. A renewal writes only the period that contains the
 -- database's clock, so a second run in the same period writes nothing (current). No
 -- receipt, verified payment event or credit_grants row is written, and the route, the
 -- account and the grant record are never changed.
@@ -33,13 +36,14 @@ DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR NOT morrow_identity.morrow_memberships_closed()
  OR to_regclass('morrow_billing.operator_test_entitlements') IS NULL OR to_regclass('morrow_billing.platform_environment') IS NULL
+ OR to_regclass('morrow_billing.billing_terms') IS NULL
  OR to_regclass('morrow_billing.credit_wallets') IS NULL OR to_regclass('morrow_billing.entitlement_snapshots') IS NULL
  OR to_regclass('morrow_billing.billing_accounts') IS NULL OR to_regclass('morrow_billing.workspace_billing_routes') IS NULL
  OR to_regprocedure('morrow_billing.operator_test_entitlement_grant(text,text,text,text)') IS NULL
  OR to_regprocedure('morrow_work.sha256_text(text)') IS NULL OR to_regprocedure('morrow_work.utc_text(timestamp with time zone)') IS NULL
  OR to_regprocedure('morrow_work.append_only()') IS NULL
  OR to_regclass('morrow_billing.operator_test_entitlement_renewals') IS NOT NULL
- OR to_regprocedure('morrow_billing.operator_test_entitlement_renew(text,text,text,text,text,text,text)') IS NOT NULL
+ OR to_regprocedure('morrow_billing.operator_test_entitlement_renew(text,text,text,text,text)') IS NOT NULL
  -- The two guards this file replaces, exactly as 0035 wrote them (a later revision is
  -- never overwritten blind).
  OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure('morrow_billing.wallet_guard()'))
@@ -50,10 +54,10 @@ DO $$ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- One renewed period of one operator grant. Fixed grammars only; no free text. The raise
--- record is present only when the period's credits exceed the grant's (the function checks
--- that against the grant). funded_wallet_revision is the wallet revision the renewal
--- funded, absent when it added nothing.
+-- One renewed period of one operator grant. Fixed grammars only; no free text. credit_units
+-- are the operator entry's units in terms_revision, the current revision when the renewal
+-- ran. funded_wallet_revision is the wallet revision the renewal funded, absent when it
+-- added nothing.
 CREATE TABLE morrow_billing.operator_test_entitlement_renewals (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -64,9 +68,9 @@ CREATE TABLE morrow_billing.operator_test_entitlement_renewals (
  standing_approval text NOT NULL CHECK (standing_approval ~ '^[a-z0-9][a-z0-9-]{0,40}$'),
  operator_id text NOT NULL CHECK (operator_id ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
  evidence_ref text NOT NULL CHECK (evidence_ref ~ '^docs/evidence/live/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}[.]md$'),
- raise_evidence_ref text CHECK (raise_evidence_ref ~ '^docs/evidence/live/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}[.]md$'),
  mode text NOT NULL CHECK (mode='test'),
  credit_units bigint NOT NULL CHECK (credit_units BETWEEN 1 AND 999999999999999999),
+ terms_revision morrow_work.revision NOT NULL REFERENCES morrow_billing.billing_terms(terms_revision),
  added_units bigint NOT NULL CHECK (added_units>=0 AND added_units<=credit_units),
  funded_wallet_revision morrow_work.revision,
  snapshot_revision morrow_work.revision NOT NULL CHECK (snapshot_revision>=2),
@@ -186,27 +190,28 @@ END $$;
 -- inside the administrator's own transaction under the D4 SET-row protocol, after that
 -- transaction has read, as morrow_identity_owner, that the workspace is the one the
 -- environment's live-store app invites. The workspace and the grant come from the
--- committed record the script reads at verified main, never from a client value.
+-- committed record the script reads at verified main, never from a client value, and no
+-- argument names an amount: the credits are the current terms' (R10).
 --   refuses: any work session, lease or receipt context, any Morrow login as session user
---   (denied); a malformed value, or a raise without its record or a raise that is not
---   above the grant (invalid); a database not marked staging (not_staging); no grant under
---   that approval reference, or one of another workspace (grant_missing); a route, account,
---   wallet or latest snapshot that is not the grant's own (route_conflict).
+--   (denied); a malformed value (invalid); a database not marked staging (not_staging); no
+--   grant under that approval reference, or one of another workspace (grant_missing); a
+--   route, account, wallet or latest snapshot that is not the grant's own (route_conflict);
+--   no single operator entry in the current terms when a period is due (terms_missing).
 --   current: the latest snapshot's period still contains the clock; writes nothing and
---   reports that period.
+--   reports that period with the credits and terms revision it was written with.
 --   renewed, in this order and this one transaction: the renewal record, the wallet's
 --   top-up when it adds anything, and the next snapshot (active for the period).
--- The result names ids, the period, credits, units added and the revisions; never store
--- data.
+-- The result names ids, the period, credits, the terms revision, units added and the
+-- revisions; never store data.
 CREATE FUNCTION morrow_billing.operator_test_entitlement_renew(p_operator_id text,p_workspace_id text,p_grant_approval_ref text,
- p_standing_approval text,p_evidence_ref text,p_credit_units text,p_raise_evidence_ref text)
+ p_standing_approval text,p_evidence_ref text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
 #variable_conflict use_column
 DECLARE
- g record; r record; a record; w record; s record; n record; v_environment text; v_units bigint; v_now timestamptz;
- v_k integer; v_start timestamptz; v_end timestamptz; v_added bigint; v_funded bigint; v_wallet_revision bigint;
- v_available bigint; v_id text; v_key text; v_digest text;
+ g record; r record; a record; w record; s record; n record; v_environment text; v_terms record; v_entry jsonb;
+ v_count integer; v_units bigint; v_now timestamptz; v_k integer; v_start timestamptz; v_end timestamptz; v_added bigint;
+ v_funded bigint; v_wallet_revision bigint; v_available bigint; v_id text; v_key text; v_digest text;
 BEGIN
  IF current_user<>'morrow_work_owner' OR session_user::text LIKE 'morrow\_%'
   OR COALESCE(pg_catalog.current_setting('morrow.work_session_digest',true),'')<>''
@@ -219,10 +224,7 @@ BEGIN
   OR p_workspace_id IS NULL OR p_workspace_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_grant_approval_ref IS NULL OR p_grant_approval_ref !~ '^[a-z0-9][a-z0-9-]{0,40}[.]e[1-9][0-9]{0,2}[.][0-9]{4}-[0-9]{2}-[0-9]{2}[.][1-9][0-9]{0,2}$'
   OR p_standing_approval IS NULL OR p_standing_approval !~ '^[a-z0-9][a-z0-9-]{0,40}$'
-  OR p_evidence_ref IS NULL OR p_evidence_ref !~ '^docs/evidence/live/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}[.]md$'
-  OR (p_credit_units IS NULL)<>(p_raise_evidence_ref IS NULL)
-  OR COALESCE(p_credit_units !~ '^[1-9][0-9]{0,17}$',false)
-  OR COALESCE(p_raise_evidence_ref !~ '^docs/evidence/live/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}[.]md$',false) THEN
+  OR p_evidence_ref IS NULL OR p_evidence_ref !~ '^docs/evidence/live/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}[.]md$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
  SELECT x.environment INTO v_environment FROM morrow_billing.platform_environment x;
@@ -232,7 +234,7 @@ BEGIN
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
   pg_catalog.jsonb_build_array('morrow.billing.operator_test_entitlement_renew',p_workspace_id)::text,0));
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.id::text AS id,
-  x.billing_account_id::text AS billing_account_id,x.credit_units,x.period_end INTO g
+  x.billing_account_id::text AS billing_account_id,x.credit_units,x.terms_revision::bigint AS terms_revision,x.period_end INTO g
   FROM morrow_billing.operator_test_entitlements x WHERE x.approval_ref=p_grant_approval_ref;
  IF NOT FOUND OR g.workspace_id<>p_workspace_id THEN RETURN QUERY SELECT 'grant_missing'::text,NULL::text; RETURN; END IF;
  v_key:='morrow:operator_entitlement:'||g.id;
@@ -251,20 +253,19 @@ BEGIN
   OR w.revision IS NULL OR s.subscription_key IS DISTINCT FROM v_key THEN
   RETURN QUERY SELECT 'route_conflict'::text,NULL::text; RETURN;
  END IF;
- -- Credits come only from the recorded grant; a higher amount only with its raise record.
- v_units:=COALESCE(p_credit_units::bigint,g.credit_units);
- IF p_credit_units IS NOT NULL AND v_units<=g.credit_units THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
  v_now:=date_trunc('milliseconds',clock_timestamp());
  IF v_now<s.valid_until THEN
   -- The period that contains the clock is already written: the grant's (period 0) or a
   -- renewal's. Nothing is written.
-  SELECT x.id::text AS id,x.period_number,x.credit_units,x.added_units INTO n FROM morrow_billing.operator_test_entitlement_renewals x
+  SELECT x.id::text AS id,x.period_number,x.credit_units,x.terms_revision::bigint AS terms_revision,x.added_units INTO n
+   FROM morrow_billing.operator_test_entitlement_renewals x
    WHERE x.organization_id=g.organization_id AND x.workspace_id=g.workspace_id AND x.billing_account_id=g.billing_account_id
     AND x.snapshot_revision=s.revision;
   RETURN QUERY SELECT 'current'::text,jsonb_build_object('entitlementId',g.id,'organizationId',g.organization_id,
    'workspaceId',g.workspace_id,'billingAccountId',g.billing_account_id,'renewalId',n.id,
    'period',COALESCE(n.period_number,0)::text,'periodStart',morrow_work.utc_text(s.verified_at),
    'periodEnd',morrow_work.utc_text(s.valid_until),'creditUnits',COALESCE(n.credit_units,g.credit_units)::text,
+   'termsRevision',COALESCE(n.terms_revision,g.terms_revision)::text,
    'addedUnits',COALESCE(n.added_units,g.credit_units)::text,'snapshotRevision',s.revision::text,
    'walletRevision',w.revision::text,'available',w.available::text)::text;
   RETURN;
@@ -276,6 +277,17 @@ BEGIN
  IF v_k<1 OR v_k>100000 OR v_start<s.valid_until OR v_now<v_start OR v_now>=v_end THEN
   RETURN QUERY SELECT 'route_conflict'::text,NULL::text; RETURN;
  END IF;
+ -- R10: the period's credits come only from the current terms' one operator entry, read
+ -- exactly as 0035's grant reads it. A later staging terms revision (the owner's raise)
+ -- reaches the next renewal; nothing the caller passes does.
+ SELECT x.terms_revision::bigint AS terms_revision,x.terms INTO v_terms FROM morrow_billing.billing_terms x
+  ORDER BY x.terms_revision DESC LIMIT 1;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'terms_missing'::text,NULL::text; RETURN; END IF;
+ SELECT count(*)::integer,(array_agg(e))[1] INTO v_count,v_entry FROM jsonb_array_elements(v_terms.terms->'entries') e
+  WHERE e->>'kind'='operator_test_entitlement' AND e->>'route'='morrow_direct' AND e->>'mode'='test';
+ IF v_count<>1 THEN RETURN QUERY SELECT 'terms_missing'::text,NULL::text; RETURN; END IF;
+ v_units:=(v_entry->>'creditUnits')::bigint;
+ IF v_units<=0 THEN RETURN QUERY SELECT 'terms_missing'::text,NULL::text; RETURN; END IF;
  -- Top up the unspent credits (available plus reserved) to the period's credits, never
  -- above them.
  v_added:=greatest(0,v_units-(w.available+w.reserved));
@@ -283,13 +295,13 @@ BEGIN
  v_id:=gen_random_uuid()::text;
  v_digest:=morrow_work.sha256_text(array_to_json(ARRAY['morrow.billing.operator_test_entitlement_renewal','1',v_id,g.organization_id,
   g.workspace_id,g.billing_account_id,g.id,p_grant_approval_ref,p_standing_approval,p_operator_id,p_evidence_ref,
-  COALESCE(p_raise_evidence_ref,''),v_k::text,v_units::text,v_added::text,morrow_work.utc_text(v_start),
+  v_k::text,v_units::text,v_terms.terms_revision::text,v_added::text,morrow_work.utc_text(v_start),
   morrow_work.utc_text(v_end)])::text);
  INSERT INTO morrow_billing.operator_test_entitlement_renewals(organization_id,workspace_id,id,entitlement_id,billing_account_id,
-  period_number,standing_approval,operator_id,evidence_ref,raise_evidence_ref,mode,credit_units,added_units,funded_wallet_revision,
+  period_number,standing_approval,operator_id,evidence_ref,mode,credit_units,terms_revision,added_units,funded_wallet_revision,
   snapshot_revision,period_start,period_end,evidence_digest,recorded_at)
  VALUES (g.organization_id,g.workspace_id,v_id,g.id,g.billing_account_id,v_k,p_standing_approval,p_operator_id,p_evidence_ref,
-  p_raise_evidence_ref,'test',v_units,v_added,v_funded,s.revision+1,v_start,v_end,v_digest,v_now);
+  'test',v_units,v_terms.terms_revision,v_added,v_funded,s.revision+1,v_start,v_end,v_digest,v_now);
  v_wallet_revision:=w.revision; v_available:=w.available;
  IF v_added>0 THEN
   UPDATE morrow_billing.credit_wallets x SET available=x.available+v_added,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
@@ -303,8 +315,8 @@ BEGIN
  RETURN QUERY SELECT 'renewed'::text,jsonb_build_object('entitlementId',g.id,'organizationId',g.organization_id,
   'workspaceId',g.workspace_id,'billingAccountId',g.billing_account_id,'renewalId',v_id,'period',v_k::text,
   'periodStart',morrow_work.utc_text(v_start),'periodEnd',morrow_work.utc_text(v_end),'creditUnits',v_units::text,
-  'addedUnits',v_added::text,'snapshotRevision',(s.revision+1)::text,'walletRevision',v_wallet_revision::text,
-  'available',v_available::text)::text;
+  'termsRevision',v_terms.terms_revision::text,'addedUnits',v_added::text,'snapshotRevision',(s.revision+1)::text,
+  'walletRevision',v_wallet_revision::text,'available',v_available::text)::text;
 END $$;
-REVOKE ALL ON FUNCTION morrow_billing.operator_test_entitlement_renew(text,text,text,text,text,text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_billing.operator_test_entitlement_renew(text,text,text,text,text) FROM PUBLIC;
 COMMIT;
