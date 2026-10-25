@@ -74,23 +74,34 @@ test("the profile: no internet, fixed lifetime, exec, size, user and command", (
   // US$0.000014 per vCPU second and US$0.0000045 per GiB second: 900 x 0.0325 = US$0.02925.
   assert.equal(sandboxWorstCaseUsd(), "0.03");
   assert.equal(runtimeCaps.worstCaseUsd, sandboxWorstCaseUsd());
-  assert.ok(Number(runtimeCaps.monthlyBudgetUsd) < Number(runtimeCaps.providerUsageLimitUsd));
+  // ADR-0039 item 6: no monthly runtime budget in code; E2B's own usage limit is recorded
+  // (it is the outside backstop, enforced by E2B, never by Morrow's code).
+  assert.equal(Object.hasOwn(runtimeCaps, "monthlyBudgetUsd"), false);
+  assert.equal(runtimeCaps.providerUsageLimitUsd, "20.00");
   assert.equal(runtimeCaps.concurrentSandboxes, 10);
   assert.equal(runtimeCaps.sandboxesPerWorkspace, 3);
 });
 
-test("migration 0043 holds the same caps, deadline, grace and staleness in SQL", () => {
+test("migration 0052 holds the same caps, deadline, grace and staleness in SQL", () => {
   const sql = readFileSync("migrations/0043.runtime-operations.sql", "utf8");
   const staleSeconds = runtimeGatewayLimits.executeBudgetMaxMs / 1000 + 60;
-  const caps =
+  // 0043 is applied and immutable: its US$10 monthly budget stays in its text, and migration
+  // 0052 (ADR-0039 item 6) replaced runtime_caps() without it. The latest definition is the
+  // code's twin.
+  const caps0043 =
     /CREATE FUNCTION morrow_work\.runtime_caps\(\)[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(
       sql,
     );
+  assert.ok(caps0043);
+  const rest = `${runtimeCaps.concurrentSandboxes},${runtimeCaps.sandboxesPerWorkspace},${runtimeCaps.worstCaseUsd}::numeric(20,8),${computerProfile.sandboxTimeoutSeconds + computerProfile.createAllowanceSeconds},${computerProfile.absentGraceSeconds},${staleSeconds}`;
+  assert.equal(caps0043[1], `10.00::numeric(20,8),${rest}`);
+  const credits = readFileSync("migrations/0052.credits-only-catalogue.sql", "utf8");
+  const caps =
+    /CREATE FUNCTION morrow_work\.runtime_caps\(\)\nRETURNS TABLE\(concurrent_sandboxes integer,[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(
+      credits,
+    );
   assert.ok(caps);
-  assert.equal(
-    caps[1],
-    `${runtimeCaps.monthlyBudgetUsd}::numeric(20,8),${runtimeCaps.concurrentSandboxes},${runtimeCaps.sandboxesPerWorkspace},${runtimeCaps.worstCaseUsd}::numeric(20,8),${computerProfile.sandboxTimeoutSeconds + computerProfile.createAllowanceSeconds},${computerProfile.absentGraceSeconds},${staleSeconds}`,
-  );
+  assert.equal(caps[1], rest);
   // The staleness the sweep waits for is the longest execute the broker admits plus a minute,
   // and that minute covers the execute's last status read and ledger write: raising the
   // execute ceiling without the migration fails here, so the sweep never kills a live job.

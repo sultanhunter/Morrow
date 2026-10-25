@@ -137,12 +137,12 @@ test("the fixture: Team as the Owner, with Listings on the workspace model defau
     assert.deepEqual([agent.thinking.model, agent.thinking.effort], ["claude_opus_5_5", "medium"]);
     assert.deepEqual(agent.thinking.usual, { model: "claude_opus_5_5", effort: "medium" });
   }
-  // The Listings agent follows catalogue version 3's default, Opus 5.5 at medium.
+  // The Listings agent follows catalogue version 4's default (version 3's), Opus 5.5 at medium.
   assert.deepEqual(
     [listings.model, listings.effort, listings.usual.model, listings.usual.effort],
     ["claude_opus_5_5", "medium", "claude_opus_5_5", "medium"],
   );
-  assert.equal(models.value.catalogueVersion, 3);
+  assert.equal(models.value.catalogueVersion, 4);
   assert.equal(models.value.ceiling, 4);
   // Every agent in Add agents starts on Opus 5.5 at medium.
   const catalogue = (await port.team.catalogue(ws)).value;

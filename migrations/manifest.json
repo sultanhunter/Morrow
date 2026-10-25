@@ -399,7 +399,7 @@
     {
       "sequence": 52,
       "file": "0052.credits-only-catalogue.sql",
-      "sha256": "f9bd8fe91ec1f8adda176001a27a76a61b0c72bca8321c0bcdc433ad1da84c59",
+      "sha256": "0ba1e831914e4d59fe42b3ecfecfafba345356d9531287b1a02181a47d56ae4c",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
     }

@@ -1260,8 +1260,8 @@ test("the model default: revise only, keys of the active catalogue, a ceiling th
     effort: "high",
     maxCreditsPerProduct: 6,
   });
-  // The active catalogue version (3 since ADR-0036).
-  assert.deepEqual(tx.sent.at(-1)[1].slice(3), ["3", "claude_opus_5_5", "high", "6", null]);
+  // The active catalogue version (4 since ADR-0039).
+  assert.deepEqual(tx.sent.at(-1)[1].slice(3), ["4", "claude_opus_5_5", "high", "6", null]);
   // A member without governance.model_default.revise is denied before the definer.
   const member = scriptedTx(replies(ownerGrants(owner, { revise: false })));
   await assert.rejects(runAgentCommand(member, g, prepared, "corr"), (e) => e.reason === "denied");
@@ -1351,8 +1351,10 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
     return (await runAgentRead(tx, guarded("GET", "/models", null, {}), "models.list")).body;
   };
   const memberView = await read(ownerGrants(owner, { revise: false }));
-  // Catalogue version 3 (ADR-0036): Opus 5.5 at medium by default, the default ceiling 4.
-  assert.equal(memberView.catalogueVersion, 3);
+  // Catalogue version 4 (ADR-0039): version 3's Opus 5.5 at medium by default (ADR-0036), the
+  // default ceiling 4, and 25 products a run for every entry (no run cost cap).
+  assert.equal(memberView.catalogueVersion, 4);
+  assert.ok(memberView.entries.every((e) => e.runProductLimit === 25));
   assert.equal(memberView.ceiling, 4);
   assert.equal(memberView.canRevise, false);
   assert.deepEqual(memberView.workspaceDefault, { model: "claude_opus_5_5", effort: "medium" });
@@ -1360,7 +1362,7 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
     .filter((e) => e.allowedForMember)
     .map((e) => e.creditsPerProduct);
   assert.ok(allowed.includes(4) && allowed.every((c) => c <= 4));
-  // A default stored at version 1 that version 3 also lists is kept, with its ceiling.
+  // A default stored at version 1 that version 4 also lists is kept, with its ceiling.
   const stored = await read(ownerGrants(owner, { revise: false }), [
     {
       catalogue_version: "1",

@@ -293,7 +293,6 @@ BEGIN
  PERFORM pg_catalog.set_config('morrow.vault_model_run','',true),pg_catalog.set_config('morrow.vault_model_tenant','',true);
  RETURN QUERY SELECT 'begun'::text,v_op,to_char(v_deadline AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
 END $$;
-
 REVOKE ALL ON FUNCTION morrow_vault.runtime_operation_begin(text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_vault.runtime_operation_begin(text,text,text,text,text) TO morrow_vault_broker;
 GRANT CREATE ON SCHEMA morrow_vault TO morrow_work_command;
