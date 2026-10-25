@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
+import {
+  createStandaloneLoginBridge,
+  loginCallbackFailureLine,
+  loginCallbackStages,
+} from "../packages/identity/src/standalone-login.ts";
 import { createStandaloneLoginFixture } from "../scripts/fixtures/standalone-login-fixture.ts";
 import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 import { buildWorkosAuthenticationEvidenceFixture } from "./fixtures/workos-authentication-evidence.mjs";
@@ -684,4 +688,253 @@ test("nonsettling native Promise sink never holds dispatch or retries", async ()
     /TRANSPORT_UNKNOWN/,
   );
   assert.equal(calls, 1);
+});
+// fix-signin-clock-and-stage-log: the callback's stage diagnostic. A failed callback emits
+// exactly one line from closed sets; a successful one emits none.
+const stages = [
+  "setup",
+  "input",
+  "claim",
+  "capsule_open",
+  "preauth_admit",
+  "eligible_before_exchange",
+  "exchange",
+  "eligible_after_exchange",
+  "jwks",
+  "verify_token",
+  "observe_session",
+  "evidence_read",
+  "admission",
+  "finalize",
+];
+const subs = [
+  "prepare",
+  "connect",
+  "session_setup",
+  "role",
+  "admit_query",
+  "decode_shape",
+  "decode_lifetime",
+  "denied",
+  "conflict",
+  "commit",
+  "release",
+  "deadline",
+];
+const leads = ["expired", "lead_le_1s", "lead_le_5s", "lead_le_60s", "lead_gt_60s"];
+const closedLine = (line) => {
+  const row = JSON.parse(line);
+  assert.deepEqual(Object.keys(row), ["event", "stage", "sub", "lead"]);
+  assert.equal(row.event, "morrow_login_callback_failed");
+  assert.ok(stages.includes(row.stage), line);
+  if (row.stage === "admission") assert.ok(row.sub === null || subs.includes(row.sub), line);
+  else assert.equal(row.sub, null);
+  if (row.sub === "decode_lifetime") assert.ok(row.lead === null || leads.includes(row.lead), line);
+  else assert.equal(row.lead, null);
+  return row;
+};
+const once = (name) => {
+  let hit = false;
+  return (stage, state, effect) => {
+    if (stage !== name || hit) return false;
+    hit = true;
+    if (effect) effect(state);
+    else throw Error("PRIVATE_SYNTHETIC_DETAIL user_01ABC session_01ABC code=synthetic-code");
+    return true;
+  };
+};
+async function failedLine(t, options = {}, request) {
+  const lines = [];
+  t.mock.method(console, "log", (line) => lines.push(String(line)));
+  let armed = false;
+  const trigger = options.trigger ? once(options.trigger) : null,
+    reached = [];
+  const f = fixture({
+      ...options.fixture,
+      stage: async (name, state) => {
+        if (armed) reached.push(name);
+        if (armed && trigger) trigger(name, state, options.effect);
+      },
+    }),
+    b = await createStandaloneLoginBridge(f),
+    flow = await started(b);
+  assert.deepEqual(lines, [], "start emits nothing");
+  armed = true;
+  const r = await b.fetch(request ? request(flow) : callbackRequest(flow));
+  t.mock.restoreAll();
+  return { r, lines, f, reached };
+}
+// A callback that fails before claim (setup, input) has asked no pool for a connection, so it
+// has logged no cleanup event. Workers Logs attaches the callback URL, with the code and the
+// state, to every line, so the stage line would be its only record: it emits nothing.
+for (const [name, request] of [
+  ["provider error", () => new Request(origin + "/auth/workos/callback?error=access_denied")],
+  ["no login cookie", (flow) => callbackRequest(flow, { headers: { Cookie: "" } })],
+  [
+    "extra query field",
+    (flow) =>
+      callbackRequest(flow, {
+        path: `/auth/workos/callback?code=synthetic-code&state=${flow.state}&x=1`,
+      }),
+  ],
+])
+  test("a callback that fails at input emits no stage line: " + name, async (t) => {
+    const { r, lines, reached } = await failedLine(t, {}, request);
+    assert.equal(r.status, 303);
+    assert.equal(r.headers.get("location"), "/auth/result");
+    assert.equal(r.headers.has("set-cookie"), false);
+    assert.deepEqual(reached, [], "no pool was asked for a connection");
+    assert.deepEqual(lines, []);
+  });
+for (const [expected, options, request] of [
+  [{ stage: "claim" }, { trigger: "login:claimCallback" }],
+  [{ stage: "capsule_open" }, { fixture: { claimChange: { aad_digest: "a".repeat(64) } } }],
+  [{ stage: "preauth_admit" }, { trigger: "preauth:admit" }],
+  [{ stage: "eligible_before_exchange" }, { fixture: { eligibility: false } }],
+  [{ stage: "exchange" }, { trigger: "provider:exchange" }],
+  [{ stage: "exchange" }, { fixture: { exchangeOutput: "{}" } }],
+  [
+    { stage: "eligible_after_exchange" },
+    { trigger: "provider:exchange", effect: (state) => state.setEligible(false) },
+  ],
+  [{ stage: "jwks" }, { trigger: "provider:keyset" }],
+  [
+    { stage: "verify_token" },
+    {
+      fixture: {
+        exchangeOutput: JSON.stringify({ schemaVersion: 1, accessToken: "a.b.c-PRIVATE_TOKEN" }),
+      },
+    },
+  ],
+  [{ stage: "observe_session" }, { trigger: "provider:page" }],
+  [{ stage: "observe_session" }, { fixture: { providerPage: "{}" } }],
+  [{ stage: "admission", sub: "connect" }, { trigger: "sessions:connect" }],
+  [{ stage: "admission", sub: "session_setup" }, { trigger: "sessions:begin" }],
+  [{ stage: "admission", sub: "role" }, { trigger: "sessions:role" }],
+  [{ stage: "admission", sub: "admit_query" }, { trigger: "sessions:admitAccount" }],
+  [{ stage: "admission", sub: "commit" }, { trigger: "sessions:commit" }],
+  [{ stage: "admission", sub: "release" }, { trigger: "sessions:release" }],
+  // The database's expiry beyond the SQL's own bound (evidence lease end + 30 minutes).
+  [
+    { stage: "admission", sub: "decode_lifetime", lead: "lead_le_5s" },
+    { fixture: { admissionLifetimeMs: 1805000 } },
+  ],
+  [
+    { stage: "admission", sub: "decode_lifetime", lead: "lead_le_60s" },
+    { fixture: { admissionLifetimeMs: 1806000 } },
+  ],
+  // Under one second of cookie: the session was committed, the callback still fails.
+  [{ stage: "finalize" }, { fixture: { admissionLifetimeMs: 999 } }],
+])
+  test(
+    "a failed callback emits one closed stage line: " +
+      [expected.stage, expected.sub, expected.lead].filter(Boolean).join("/"),
+    async (t) => {
+      const { r, lines, f, reached } = await failedLine(t, options, request);
+      assert.equal(r.headers.get("location"), "/auth/result");
+      assert.equal(r.headers.has("set-cookie"), false);
+      assert.equal(reached[0], "login:connect", "claim and later follow a pool connection");
+      assert.equal(lines.length, 1, lines.join("\n"));
+      const row = closedLine(lines[0]);
+      assert.deepEqual(row, {
+        event: "morrow_login_callback_failed",
+        stage: expected.stage,
+        sub: expected.sub ?? null,
+        lead: expected.lead ?? null,
+      });
+      // Nothing from the request, the provider, a token, the database or an error.
+      for (const secret of [
+        "synthetic-code",
+        "PRIVATE",
+        "user_0",
+        "workos",
+        "http",
+        native.token.slice(0, 24),
+        ...f.flows.flatMap((flow) => Object.values(flow).filter((v) => v.length >= 8)),
+      ])
+        assert.equal(lines[0].includes(secret), false, secret);
+      assert.doesNotMatch(lines[0], /(?:user|session|client|app|environment)_[A-Z0-9]{26}/);
+      assert.doesNotMatch(lines[0], /[0-9]{4,}|[a-f0-9]{8}-/);
+    },
+  );
+test("a successful callback emits nothing; a database clock lead within the SQL bound signs in", async (t) => {
+  for (const lifetime of [900000, 1800000, 1800001, 1803000, 1804999]) {
+    const { r, lines } = await failedLine(t, { fixture: { admissionLifetimeMs: lifetime } });
+    assert.equal(r.headers.get("location"), "/", String(lifetime));
+    const cookies = r.headers.getSetCookie();
+    assert.equal(cookies.length, 1);
+    assert.ok(cookies[0].endsWith("; Max-Age=" + Math.min(1800, lifetime / 1000)));
+    assert.deepEqual(lines, []);
+  }
+  // A start never emits the callback line, even when it fails.
+  const lines = [];
+  t.mock.method(console, "log", (line) => lines.push(String(line)));
+  const f = fixture({
+    stage: async (name) => {
+      if (name === "login:createAccountIntent") throw Error("PRIVATE");
+    },
+  });
+  const b = await createStandaloneLoginBridge(f);
+  assert.equal((await b.fetch(startRequest())).status, 503);
+  assert.equal((await b.fetch(new Request(origin + "/auth/result"))).status, 200);
+  t.mock.restoreAll();
+  assert.deepEqual(lines, []);
+});
+test("an aborted callback still emits its one line and delivers nothing", async (t) => {
+  const abort = new AbortController(),
+    lines = [];
+  let armed = false;
+  const f = fixture({
+      stage: async (name) => {
+        if (armed && name === "provider:keyset") abort.abort();
+      },
+    }),
+    b = await createStandaloneLoginBridge(f),
+    flow = await started(b);
+  armed = true;
+  t.mock.method(console, "log", (line) => lines.push(String(line)));
+  let delivered = 0;
+  await b.dispatch(callbackRequest(flow, { signal: abort.signal }), () => {
+    delivered++;
+  });
+  t.mock.restoreAll();
+  assert.equal(delivered, 0);
+  assert.equal(lines.length, 1, lines.join("\n"));
+  assert.equal(closedLine(lines[0]).stage, "jwks");
+});
+test("the stage line admits only closed values, whatever it is handed", () => {
+  for (const [progress, expected] of [
+    [null, ["setup", null, null]],
+    [undefined, ["setup", null, null]],
+    ["claim", ["setup", null, null]],
+    [{ stage: "claim", sub: "role", lead: "expired" }, ["claim", null, null]],
+    [{ stage: "admission", sub: "role", lead: "expired" }, ["admission", "role", null]],
+    [
+      { stage: "admission", sub: "decode_lifetime", lead: "lead_gt_60s" },
+      ["admission", "decode_lifetime", "lead_gt_60s"],
+    ],
+    [
+      { stage: "admission", sub: "decode_lifetime", lead: "1806000" },
+      ["admission", "decode_lifetime", null],
+    ],
+    [{ stage: "admission", sub: "code=abc" }, ["admission", null, null]],
+    [{ stage: "https://x.example/auth/workos/callback?code=abc" }, ["setup", null, null]],
+    [{ stage: { toString: () => "claim" } }, ["setup", null, null]],
+    [
+      new Proxy(
+        {},
+        {
+          get() {
+            throw Error("PRIVATE");
+          },
+        },
+      ),
+      ["setup", null, null],
+    ],
+  ]) {
+    const line = loginCallbackFailureLine(progress);
+    const row = closedLine(line);
+    assert.deepEqual([row.stage, row.sub, row.lead], expected, line);
+  }
+  assert.deepEqual([...loginCallbackStages], stages);
 });

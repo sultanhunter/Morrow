@@ -171,7 +171,7 @@ export const workTables = Object.freeze({
     policies: ["broker_catalog_operation", "broker_catalog_read"],
     content: "none",
   },
-  // v1 PR 4 (0047 catalog-undo): the broker's reads of a product before an undo (the read's
+  // v1 PR 4 (0048 catalog-undo): the broker's reads of a product before an undo (the read's
   // digest, per-field codes and time; content-free, 365 days), written only by its undo
   // definers (broker_catalog_operation) and read by the session context (commandRead); and
   // one record per undo proposal naming the change it undoes (ids and times), written by
@@ -684,6 +684,8 @@ export const workFunctions = Object.freeze({
   // Build order PR 7 (0043 runtime-operations): the ledger's guard, the caps in code (the
   // command role, inside the broker's vault definers) and the operator's hold lift (nobody).
   "runtime_guard()": { kind: "trigger", grantees: [] },
+  // Build order PR 8 (0047 runtime-e2b): any settlement destroys the operation's envd token.
+  "runtime_token_end()": { kind: "trigger", grantees: [] },
   "runtime_caps()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "runtime_hold_lift(text,text,text)": { kind: "operator", grantees: [] },
   // v1 PR 3 (catalog-review, catalog-apply): the review screen's two reads, the claim and
@@ -711,7 +713,7 @@ export const workFunctions = Object.freeze({
   "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },
   "catalog_item_matches(jsonb,jsonb)": { kind: "helper", grantees: [] },
   "readback_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
-  // v1 PR 4 (0047 catalog-undo): the history's undo states and the undo's source (reads), the
+  // v1 PR 4 (0048 catalog-undo): the history's undo states and the undo's source (reads), the
   // undo command (the api), the undo state and the undo item's set (helpers the definers call)
   // and the undo checks' CHECK.
   "catalog_undo_states(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
@@ -1405,6 +1407,13 @@ export const vaultFunctions = Object.freeze({
   "runtime_operation_created(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operation_settle(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "runtime_operations_open(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // Build order PR 8 (0047 runtime-e2b): the sandbox's envd token as a vault record, stored
+  // once and opened per call by the broker's login (any settlement destroys it, through the
+  // runtime_token_end trigger), and the sweep's list with stopped operations (the broker's
+  // registry no longer sends 0043's runtime_operations_open).
+  "runtime_token_put(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_token_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "runtime_operations_sweep(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // v1 PR 3 (catalog-apply): the gateway's apply (resolve, fence, close) and read-back
   // (resolve, record), keyed by one operation id, and their revisable INVOKER helpers (the
   // context settings and the send refusal), which only the definers above call.
@@ -1425,7 +1434,7 @@ export const vaultFunctions = Object.freeze({
   },
   "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
-  // v1 PR 4 (0047 catalog-undo): the undo check's resolution and record, keyed by one
+  // v1 PR 4 (0048 catalog-undo): the undo check's resolution and record, keyed by one
   // operation id as the read-back is.
   "catalog_undo_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "catalog_undo_record(text,text,text,text,text)": {
@@ -1558,6 +1567,10 @@ export const executorLogins = Object.freeze({
     "morrow_vault.runtime_operation_created(text,text)",
     "morrow_vault.runtime_operation_settle(text,text,text)",
     "morrow_vault.runtime_operations_open(text)",
+    // Build order PR 8 (0047 runtime-e2b).
+    "morrow_vault.runtime_operations_sweep(text)",
+    "morrow_vault.runtime_token_get(text)",
+    "morrow_vault.runtime_token_put(text,text,text,text)",
     // v1 PR 3 (catalog-apply).
     "morrow_vault.catalog_reconcile_record(text,text,text,text,text)",
     "morrow_vault.catalog_reconcile_resolve(text)",

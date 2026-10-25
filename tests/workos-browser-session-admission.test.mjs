@@ -129,16 +129,30 @@ async function setup(options = {}) {
       return options.connect ? options.connect(client, state) : client;
     },
   };
+  const helds = [];
   const service = createWorkosBrowserSessionAdmission({
     pool,
     now: () => now,
     signal: cancel.signal,
     readEvidence: (handle) => {
       options.onEvidence?.(++readCount, state);
-      return owner.readEvidence(handle);
+      const read = owner.readEvidence(handle);
+      return options.mapEvidence && read ? options.mapEvidence(read, state) : read;
     },
+    onHeld:
+      options.onHeld ??
+      ((held) => {
+        helds.push(held);
+      }),
   });
-  return { ...state, service, client, connects: () => connects, readCount: () => readCount };
+  return {
+    ...state,
+    service,
+    client,
+    helds,
+    connects: () => connects,
+    readCount: () => readCount,
+  };
 }
 const isHeld = (r) => {
   assert.equal(r.outcome, "held");
@@ -296,23 +310,77 @@ test("safe executor and both membership directions are mandatory", async () => {
     assert.deepEqual(s.releases, [true]);
   }
 });
-test("P05.T01y-AC30: a generation expiring 30 minutes after admission is accepted, one ms more is not", async () => {
+// P05.T01y-AC30 (fix-signin-clock-and-stage-log): the database sets expiry = its admission
+// instant n + 30 minutes and admits only while n is before the evidence lease end, so an honest
+// expiry is before that lease end + 30 minutes. A database clock that leads the Worker's (the
+// first live sign-in) is accepted up to that bound; the bound itself and beyond are held.
+const expiringAt = (offset, base) => ({
+  result: (stage, standard, state) =>
+    stage === "admit"
+      ? {
+          rows: [{ ...standard.rows[0], expires_at_ms: String((base ?? state.now) + offset) }],
+        }
+      : standard,
+});
+test("P05.T01y-AC30: a new generation's expiry is bounded by the SQL's own guarantee, not the Worker's clock", async () => {
+  // The Worker reads `at` = f.at after the reply; the evidence lease ends at f.at + 5000.
   for (const [offset, accepted] of [
     [900000, true],
     [1800000, true],
-    [1800001, false],
+    // The database clock leads the Worker's by 1 ms, 1 s and 4.999 s (the first live sign-in).
+    [1800001, true],
+    [1801000, true],
+    [1804999, true],
+    // The evidence lease end + 30 minutes: the database never admits at or after that end.
+    [1805000, false],
+    [1860000, false],
+    // Not after the Worker's own now.
+    [0, false],
+    [-1, false],
   ]) {
-    const s = await setup({
-      result: (stage, standard, state) =>
-        stage === "admit"
-          ? { rows: [{ ...standard.rows[0], expires_at_ms: String(state.now + offset) }] }
-          : standard,
-    });
+    const s = await setup(expiringAt(offset));
     const r = await s.service.admit(s.proof.handle, selector());
     if (accepted) {
       assert.equal(r.outcome, "newly_admitted");
       assert.equal(r.credential.expiresAtMs, s.f.at + offset);
-    } else isHeld(r);
+      assert.deepEqual(s.helds, []);
+    } else {
+      isHeld(r);
+      assert.equal(s.calls.at(-1).stage, "rollback");
+      assert.deepEqual(
+        s.helds.map((h) => h.sub),
+        ["decode_lifetime"],
+      );
+    }
+  }
+  // The bound moves with the evidence lease, not with a fixed allowance: 2 s into the lease
+  // the database may lead by at most 2.999 s.
+  for (const [offset, accepted] of [
+    [1802999, true],
+    [1803000, false],
+  ]) {
+    const s = await setup({
+      ...expiringAt(offset),
+      before(stage, state) {
+        if (stage === "connect") state.setNow(state.f.at + 2000);
+      },
+    });
+    const r = await s.service.admit(s.proof.handle, selector());
+    if (accepted) assert.equal(r.credential.expiresAtMs, s.f.at + 2000 + offset);
+    else isHeld(r);
+  }
+  // Defence in depth: whatever the evidence lease, never more than 5 s past now + 30 minutes.
+  for (const [offset, accepted] of [
+    [1804999, true],
+    [1805000, false],
+  ]) {
+    const s = await setup({
+      ...expiringAt(offset),
+      mapEvidence: (e, state) => ({ ...e, expiresAtMs: state.f.at + 60000 }),
+    });
+    const r = await s.service.admit(s.proof.handle, selector());
+    if (accepted) assert.equal(r.outcome, "newly_admitted");
+    else isHeld(r);
   }
 });
 test("closed sixTEXTrow, nullable matrix, echoed IDs and exact expiry reject malformed replies", async () => {
@@ -326,8 +394,8 @@ test("closed sixTEXTrow, nullable matrix, echoed IDs and exact expiry reject mal
     { audit_id: null },
     { expires_at_ms: "1e12" },
     { expires_at_ms: "8640000000000001" },
-    // P05.T01y-AC30: more than 30 minutes after admission.
-    { expires_at_ms: "1800001800001" },
+    // P05.T01y-AC30: the evidence lease end (f.at + 5000) + 30 minutes, beyond the SQL's bound.
+    { expires_at_ms: "1800001805000" },
     { extra: true },
   ];
   for (const change of changes) {
@@ -598,4 +666,198 @@ test("retained command ceiling fails closed without evicting a consumed command"
   assert.equal(s.connects(), 1024);
   isHeld(await s.service.admit(s.proof.handle, selector()));
   assert.equal(s.connects(), 1024);
+  assert.equal(s.helds.at(-1).sub, "prepare");
+  assert.equal(s.helds.at(-2).sub, "connect");
+});
+// The sign-in stage diagnostic (fix-signin-clock-and-stage-log): every held admit() reports
+// exactly one closed reason, a successful one reports none, and nothing but closed values can
+// reach the report.
+const heldCodes = [
+  "prepare",
+  "connect",
+  "session_setup",
+  "role",
+  "admit_query",
+  "decode_shape",
+  "decode_lifetime",
+  "denied",
+  "conflict",
+  "commit",
+  "release",
+  "deadline",
+];
+const leads = ["expired", "lead_le_1s", "lead_le_5s", "lead_le_60s", "lead_gt_60s"];
+const closedHeld = (h) => {
+  assert.ok(Object.isFrozen(h));
+  assert.deepEqual(Object.keys(h).sort(), ["lead", "sub"]);
+  assert.ok(heldCodes.includes(h.sub));
+  if (h.sub === "decode_lifetime") assert.ok(leads.includes(h.lead));
+  else assert.equal(h.lead, null);
+};
+const nullReply = (outcome) => ({
+  result: (stage, standard) =>
+    stage === "admit"
+      ? {
+          rows: [
+            {
+              outcome,
+              family_id: null,
+              generation_id: null,
+              provider_binding_id: null,
+              expires_at_ms: null,
+              audit_id: null,
+            },
+          ],
+        }
+      : standard,
+});
+const throwAt = (target) => ({
+  before(actual) {
+    if (actual === target) throw Error("PRIVATE_SYNTHETIC_DETAIL user_01 session_01 code=abc");
+  },
+});
+test("each held admission reports one closed reason; success reports none", async () => {
+  const cases = [
+    ["prepare", {}, (s) => s.service.admit(s.proof.handle, "{}")],
+    ["connect", { connect: () => Promise.reject(Error("PRIVATE_SYNTHETIC_DETAIL")) }],
+    ["session_setup", throwAt("begin")],
+    ["session_setup", throwAt("timeout")],
+    ["session_setup", throwAt("idleTimeout")],
+    ["role", throwAt("role")],
+    [
+      "role",
+      {
+        result: (stage, standard) =>
+          stage === "role" ? { rows: [role({ rolsuper: true })] } : standard,
+      },
+    ],
+    ["admit_query", throwAt("admit")],
+    [
+      "decode_shape",
+      {
+        result: (stage, standard) =>
+          stage === "admit" ? { rows: [{ ...standard.rows[0], family_id: "x" }] } : standard,
+      },
+    ],
+    ["denied", nullReply("denied")],
+    ["conflict", nullReply("conflict")],
+    ["conflict", { outcome: "replayed" }],
+    ["commit", throwAt("commit")],
+    ["release", throwAt("release")],
+    [
+      "deadline",
+      {
+        before(stage, state) {
+          if (stage === "connect") state.setNow(state.f.at + 5000);
+        },
+      },
+    ],
+    [
+      "deadline",
+      {
+        before(stage, state) {
+          if (stage === "admit") state.cancel.abort();
+        },
+      },
+    ],
+    [
+      "deadline",
+      {},
+      (s) => {
+        s.setNow(s.f.at + 5000);
+        return s.service.admit(s.proof.handle, selector());
+      },
+    ],
+  ];
+  for (const [expected, options, run] of cases) {
+    const s = await setup(options);
+    isHeld(await (run ? run(s) : s.service.admit(s.proof.handle, selector())));
+    assert.equal(s.helds.length, 1, expected);
+    closedHeld(s.helds[0]);
+    assert.equal(s.helds[0].sub, expected);
+  }
+  // The same command again in one instance is a conflict and opens nothing.
+  const again = await setup();
+  assert.equal(
+    (await again.service.admit(again.proof.handle, selector())).outcome,
+    "newly_admitted",
+  );
+  isHeld(await again.service.admit(again.proof.handle, selector()));
+  assert.deepEqual(
+    again.helds.map((h) => h.sub),
+    ["conflict"],
+  );
+  assert.equal(again.connects(), 1);
+  // Reconciliation never reports.
+  const r = await setup();
+  await r.service.reconcile("{}");
+  await r.service.reconcile(
+    JSON.stringify({ schemaVersion: 1, commandId: randomUUID(), requestDigest: "a".repeat(64) }),
+  );
+  assert.deepEqual(r.helds, []);
+});
+test("decode_lifetime carries only a coarse lead bucket", async () => {
+  for (const [offset, lead, advance] of [
+    [0, "expired"],
+    [1805000, "lead_le_5s"],
+    [1830000, "lead_le_60s"],
+    [1870000, "lead_gt_60s"],
+    // 4.5 s into the lease the bound is now + 30 minutes + 0.5 s: 0.8 s past now + 30 minutes.
+    [1800800, "lead_le_1s", 4500],
+  ]) {
+    const s = await setup({
+      ...expiringAt(offset),
+      before(stage, state) {
+        if (stage === "connect" && advance) state.setNow(state.f.at + advance);
+      },
+    });
+    isHeld(await s.service.admit(s.proof.handle, selector()));
+    assert.deepEqual(s.helds, [{ sub: "decode_lifetime", lead }]);
+    closedHeld(s.helds[0]);
+  }
+});
+test("the first failure's reason stands when cleanup then runs out of time", async () => {
+  const s = await setup({
+    result: (stage, standard) =>
+      stage === "role" ? { rows: [role({ owner_member: true })] } : standard,
+    before(stage, state) {
+      if (stage === "rollback") state.setNow(state.f.at + 5000);
+    },
+  });
+  isHeld(await s.service.admit(s.proof.handle, selector()));
+  assert.deepEqual(
+    s.helds.map((h) => h.sub),
+    ["role"],
+  );
+});
+test("a throwing or invalid onHeld never changes the outcome", async () => {
+  let called = 0;
+  const s = await setup({
+    ...throwAt("admit"),
+    onHeld: () => {
+      called++;
+      throw Error("observer failure");
+    },
+  });
+  const r = await s.service.admit(s.proof.handle, selector());
+  isHeld(r);
+  assert.equal(called, 1);
+  assert.notEqual(r.correlation, null);
+  const ok = await setup({
+    onHeld: () => {
+      throw Error("observer failure");
+    },
+  });
+  assert.equal((await ok.service.admit(ok.proof.handle, selector())).outcome, "newly_admitted");
+  for (const onHeld of [1, "x", {}, null])
+    assert.throws(
+      () =>
+        createWorkosBrowserSessionAdmission({
+          pool: { connect() {} },
+          now: () => 0,
+          readEvidence: () => null,
+          onHeld,
+        }),
+      /BROWSER_SESSION_ADMISSION_CONFIG_INVALID/,
+    );
 });

@@ -13,8 +13,8 @@ import type {
 
 // The deterministic fake runtime provider (build order PR 7): the reference adapter of the
 // conformance suite (tests/runtime-port-conformance.test.mjs) and the provider of every
-// gateway test. Never composed in the deployed broker (index.ts composes no runtime adapter
-// until the E2B adapter of PR 8; tests/broker-runtime.test.mjs pins that).
+// gateway test. Never composed in the deployed broker (index.ts composes the E2B adapter of
+// build order PR 8 and nothing else; tests/broker-runtime.test.mjs pins that).
 //
 // It models a strict provider: one sandbox per create, alive until killed or until its
 // timeout passes on the injected clock (then gone, never paused), looked up by its
