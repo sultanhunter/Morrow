@@ -84,3 +84,9 @@ The owner's statement in chat, verbatim, on 2026-10-24 (IST), after reading the 
 > approve ADR-0033 and ADR-0034 as recommended
 
 What it approves: this record as written and each owner question above with its recommended answer. It follows the owner's approval of the UX flow recommendation (OD-2026-10-23-8), which asked for this record.
+
+## Amendments
+
+### 2026-10-25: the installed agents' default (ADR-0036)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes the "Does not change" note above, kept as approved: the installed agents no longer keep Sonnet 5.5 at low; by default they run Opus 5.5 at medium (OD-2026-10-23-8 answer 8 is amended).

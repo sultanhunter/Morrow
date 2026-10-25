@@ -58,7 +58,7 @@ All agents share one tool catalogue, one loop (`AgentRunWorkflow`) and one gatew
 
 **Specialists** (ADR-0023 decision 11): only the Owner starts one at launch, from a card whose top lines code writes; 1 running per task and 2 per workspace; one 24-hour authority clock from Start, with the run itself 1 hour by default and 8 at most; read, internal, propose and compute tools only; no customer data and no support tools; reports are data and never reach the Coordinator. A run-scoped installation of the `morrow.specialist` release carries its authority. The switch stays off until the deletion paths and the gateway, reservations and stops exist. **Skills:** 12 first-party job skills (`skills/<id>/SKILL.md` plus `skill.json`), pinned by release digest; no skill registry at launch.
 
-**Models** (ADR-0027 item 12): the Owner chooses each agent's model and thinking effort, Haiku, Sonnet or Opus 5.5 at low, medium or high (an Admin may too, for installed agents). By default the Coordinator runs Opus 5.5 at high effort, specialists Opus 5.5 at medium and the five installed agents Sonnet 5.5 at low. A change applies from the agent's next run and never changes what the agent may do; credits follow the model's token prices.
+**Models** (ADR-0027 item 12): the Owner chooses each agent's model and thinking effort, Haiku, Sonnet or Opus 5.5 at low, medium or high (an Admin may too, for installed agents). By default the Coordinator runs Opus 5.5 at high effort and every other agent (specialists, sub-agents and the five installed agents, Listings included) Opus 5.5 at medium (ADR-0036). A change applies from the agent's next run and never changes what the agent may do; credits follow the model's token prices.
 
 ## Tracks and dependencies
 
