@@ -19,6 +19,7 @@ import {
   EntryLayout,
   FilesScreen,
   HomeScreen,
+  ExceptionScreen,
   InboxScreen,
   ModelDefaultScreen,
   NotFoundScreen,
@@ -627,6 +628,13 @@ function WorkspaceFrame({
         return <InboxScreen workspace={workspace} />;
       case "question":
         return <QuestionScreen workspace={workspace} questionId={params.questionId!} />;
+      // v1 PR 15: one change Morrow couldn't confirm or didn't apply, from the Inbox.
+      case "exception":
+        return services.composed["inbox.operation"] ? (
+          <ExceptionScreen workspace={workspace} operationId={params.operationId!} />
+        ) : (
+          <UnavailableDestination title={destinationTitle(match.id)} />
+        );
       // v1 PR 3: review, approve and apply one proposal's changes.
       case "review":
         return services.composed["review.get"] ? (
@@ -780,6 +788,13 @@ export function guardPort(
       operationsOfTask: watch(port.review.operationsOfTask.bind(port.review), first),
       recheck: watch(port.review.recheck.bind(port.review), first),
       setAside: watch(port.review.setAside.bind(port.review), first),
+      undo: watch(port.review.undo.bind(port.review), first),
+      batch: watch(port.review.batch.bind(port.review), first),
+      decideBatch: watch(port.review.decideBatch.bind(port.review), first),
+    },
+    catalog: {
+      products: watch(port.catalog.products.bind(port.catalog), first),
+      collections: watch(port.catalog.collections.bind(port.catalog), first),
     },
     models: {
       list: watch(port.models.list.bind(port.models), first),
@@ -801,12 +816,16 @@ export function guardPort(
       emailAddresses: watch(port.settings.emailAddresses.bind(port.settings), first),
       notifications: watch(port.settings.notifications.bind(port.settings), first),
       reviseNotifications: watch(port.settings.reviseNotifications.bind(port.settings), first),
-      activity: watch(port.settings.activity.bind(port.settings), first),
     },
+    // v1 PR 15: the Inbox, one operation and the activity log.
+    inbox: watchAll(port.inbox),
     library: {
       knowledge: watch(port.library.knowledge.bind(port.library), first),
       files: watch(port.library.files.bind(port.library), first),
     },
-    samples: { home: watch(port.samples.home.bind(port.samples), first) },
+    samples: {
+      home: watch(port.samples.home.bind(port.samples), first),
+      inbox: watch(port.samples.inbox.bind(port.samples), first),
+    },
   };
 }

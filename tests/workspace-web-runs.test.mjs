@@ -661,7 +661,9 @@ test("the fixture adapter: a run on an enabled store, refusals, and the task's r
   const c = { key: key(), body };
   const admitted = await port.runs.admit(W, taskId, c);
   assert.equal(admitted.kind, "ok");
-  assert.equal(admitted.value.creditsReserved, 2);
+  // The default selection, Opus 5.5 at medium (ADR-0036): 4 credits a product.
+  assert.deepEqual(admitted.value.selection, { model: "claude_opus_5_5", effort: "medium" });
+  assert.equal(admitted.value.creditsReserved, 8);
   assert.equal((await port.runs.admit(W, taskId, c)).replayed, true);
   const runs = await port.runs.listOfTask(W, taskId);
   assert.equal(runs.value.length, 1);
@@ -670,7 +672,7 @@ test("the fixture adapter: a run on an enabled store, refusals, and the task's r
     detail.value.products.map((p) => p.status),
     ["drafted", "failed"],
   );
-  assert.equal(detail.value.credits.settled, 1);
+  assert.equal(detail.value.credits.settled, 4);
   assert.deepEqual((await port.runs.reconcile(W, { key: key(), body: {} })).value, { closed: 0 });
   // Above the product limit of Opus high (nine products).
   const many = Array.from({ length: 10 }, (_, i) => "product:" + (i + 100));

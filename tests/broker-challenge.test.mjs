@@ -383,8 +383,8 @@ test("P05.T01ab: hosted health needs the challenge capability; development does 
       // the switch on; off here (no MORROW_STRIPE_MODE, owner decision (c), 2026-10-21).
       stripe: false,
       stripeMode: "off",
-      // M3 PR-2: the model provider needs the vault and the switch on; off here (no
-      // MORROW_MODEL_PROVIDER, the reviewed record is committed off).
+      // M3 PR-2: the model provider needs the vault and the switch on; off here (this
+      // synthetic environment carries no MORROW_MODEL_PROVIDER).
       model: false,
       modelMode: "off",
       // Build order PR 7: the computer needs the vault, the runtime switch and the E2B key;
@@ -397,6 +397,9 @@ test("P05.T01ab: hosted health needs the challenge capability; development does 
       // Build order PR 11: the agent loop needs the vault and MORROW_AGENT_LOOP "on"; off here
       // (docs/decisions/agent-loop-staging.json is committed off).
       agentLoop: "off",
+      // The shop-specific webhook subscriptions need the vault and the connector's
+      // configuration; neither here.
+      shopifyWebhooks: false,
     },
   ]);
 });

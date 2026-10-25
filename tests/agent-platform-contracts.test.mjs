@@ -575,7 +575,19 @@ test("ADR-0026 item 5: the rate card's shape keeps the free list whole and the c
   for (const [name, change] of [
     ["revoke paid", (c) => (c.free = c.free.filter((x) => x !== "routine_revoke"))],
     ["an invented free item", (c) => (c.free[0] = "everything")],
-    ["a look-for-work cap over 1%", (c) => (c.caps.lookForWorkPassBasisPoints = 101)],
+    // ADR-0036 item 7: the look-for-work cap is US$ per agent per day, not 1% of the grant.
+    [
+      "a look-for-work cap in basis points of the grant",
+      (c) => {
+        delete c.caps.lookForWorkDailyUsd;
+        c.caps.lookForWorkPassBasisPoints = 100;
+      },
+    ],
+    [
+      "a look-for-work cap in another currency",
+      (c) => (c.caps.lookForWorkDailyUsd.currency = "EUR"),
+    ],
+    ["a negative look-for-work cap", (c) => (c.caps.lookForWorkDailyUsd.amount = "-1.12")],
     ["a specialist cap over 5%", (c) => (c.caps.specialistRunBasisPoints = 501)],
     ["a specialist day over 20%", (c) => (c.caps.specialistWorkspaceDailyBasisPoints = 2001)],
     ["a vendor share over 50%", (c) => (c.margin.maxVendorShareBasisPoints = 5001)],

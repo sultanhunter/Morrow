@@ -42,13 +42,18 @@ const body = (name) => {
   return sql.slice(start, sql.indexOf("$$", open + 2) + 2);
 };
 
-test("manifest: its row, executeAs the work owner, its brief and digest, no prerequisites", () => {
+test("manifest: row 0046, executeAs the work owner, its brief and digest, no prerequisites", () => {
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
-  // The last row when it merged (0046; the no-gap rule is migration-history's); only later
-  // PRs' migrations follow it (build order PR 11's agent-runs).
-  const later = manifest.migrations.slice(manifest.migrations.indexOf(row) + 1);
-  assert.ok(later.every((m) => m.sequence > row.sequence && /\.agent-runs\.sql$/.test(m.file)));
+  // 0046, applied live and immutable; later migrations (build order PR 8's runtime-e2b,
+  // v1 PR 4's catalog-undo, ...) append after it, never between, and the no-gap rule is
+  // migration-history's.
+  assert.equal(row.sequence, 46);
+  assert.ok(
+    manifest.migrations
+      .slice(manifest.migrations.indexOf(row) + 1)
+      .every((m) => m.sequence > row.sequence),
+  );
   assert.deepEqual(
     [row.executeAs, row.reviewRef],
     ["morrow_work_owner", "docs/briefs/projects-backend.md"],

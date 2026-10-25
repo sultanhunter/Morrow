@@ -272,13 +272,37 @@ test("contradictory or invalid timestamps hold and the target expiry caps the le
     { expires_at: new Date(f.at).toISOString() },
     { expires_at: new Date(f.at - 1).toISOString() },
     { created_at: new Date(f.at + 1).toISOString() },
-    { updated_at: new Date(f.at + 1).toISOString() },
+    // WorkOS's updated_at may lead the Worker's clock by at most 5 s (clock-allowance.ts).
+    { updated_at: new Date(f.at + 5001).toISOString() },
+    {
+      created_at: new Date(f.at + 5001).toISOString(),
+      updated_at: new Date(f.at + 5001).toISOString(),
+    },
     { updated_at: new Date(f.at - 61000).toISOString() },
     { expires_at: "2026-02-31T00:00:00.000Z" },
     { expires_at: "2027-01-01T00:00:00+00:00" },
     { created_at: 1 },
   ])
     await denies([f.page([f.session(change)])]);
+  // fix-signin-clock-and-stage-log: a session the exchange has just touched may carry an
+  // updated_at from a WorkOS clock that leads the Worker's; up to 5 s it is observed.
+  for (const lead of [1, 1000, 5000]) {
+    const ahead = setup([
+      f.page([
+        f.session({ updated_at: new Date(f.at + lead).toISOString() }),
+        f.session({
+          id: workosSessionStatusId("session", 60),
+          created_at: new Date(f.at + lead).toISOString(),
+          updated_at: new Date(f.at + lead).toISOString(),
+        }),
+      ]),
+    ]);
+    assert.equal(
+      (await ahead.reader.observe(f.queryJson)).outcome,
+      "observed_active",
+      String(lead),
+    );
+  }
   const s = setup([f.page([f.session({ expires_at: new Date(f.at + 1000).toISOString() })])]);
   const result = await s.reader.observe(f.queryJson);
   assert.equal(result.outcome, "observed_active");

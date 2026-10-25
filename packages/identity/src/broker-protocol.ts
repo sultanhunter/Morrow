@@ -93,7 +93,8 @@ const brokerRequiredSecretsWithStripe: readonly string[] = Object.freeze([
 ]);
 // M3 PR-2 (ADR-0022 items 7 and 10): the Anthropic Console workspace's API key, bound only
 // to the broker and only while the reviewed model-provider switch is on. The switch is
-// docs/decisions/model-provider-staging.json `switch`, committed "off": while it is off the
+// docs/decisions/model-provider-staging.json `switch` (on in staging since model-provider-on,
+// 2026-10-25; committed "off" before): while it is off the
 // broker requires no model secret, modelRespond answers BROKER_HELD (MODEL_UNAVAILABLE)
 // before any input, database or provider access, run admission answers 503 before any
 // reservation and ListingsRunWorkflow throws dispatch_disabled before any step. Its runtime
@@ -242,6 +243,12 @@ export interface ApiBrokerRpc {
   // read-back is never blocked by the switch.
   shopifyProductApply(operationId: string, budgetMs: number): Promise<string>;
   shopifyProductReconcile(operationId: string, budgetMs: number): Promise<string>;
+  // v1 PR 4: the undo check of one verified catalog_write operation: one product read, its
+  // five listing fields compared with the values the apply left, the read stored as a product
+  // snapshot and its codes recorded (encodeShopifyUndoCheckResult: codes only). Ids and a
+  // budget only, keyed by the operation as the read-back is, never blocked by the switch (it
+  // only reads; the undo it prepares is applied through the gateway).
+  shopifyProductUndoCheck(operationId: string, budgetMs: number): Promise<string>;
   // "Disconnect store" (ADR-0022 items 7 and 13; the M2 brief's PR-3 checklist): after the
   // api's disconnect committed, destroys that installation's offline token and records the
   // destruction on it. The reason is fixed (`disconnected`): the api can destroy only a token
@@ -272,6 +279,15 @@ export interface ConnectorBrokerRpc {
   // M2 PR-3: destroys an ended installation's offline token, only with the end reason its
   // row records, and records the destruction on it (encodeShopifyCredentialResult).
   shopifyCredentialDestroy(installationId: string, reason: string): Promise<string>;
+  // Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md): a
+  // budget only. The broker takes the active installations whose app/uninstalled and
+  // app/scopes_update subscriptions are not registered, or were registered 24 hours ago
+  // (a re-check: Shopify removes a subscription whose deliveries keep failing), from its
+  // own vault login, lists each store's subscriptions of those topics with its token and
+  // creates only a missing one, to the connector's webhook path built from its own
+  // configuration; counts only come back (encodeShopifyWebhookSyncResult). Held without the
+  // vault or that configuration.
+  shopifyWebhookSubscriptionsSync(budgetMs: number): Promise<string>;
 }
 export interface RuntimeBrokerRpc {
   health(): Promise<boolean>;
@@ -332,8 +348,8 @@ export interface RuntimeBrokerRpc {
  * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant (an RPC stub
  * answers any method name, so it is never probed), true since M2 PR-3 and M3 PR-2 were
  * integrated. The api's run admission and the orchestrator's dispatch both require it with
- * the model-provider switch, so the switch (committed off, docs/decisions/
- * model-provider-staging.json) is now the only gate: no run, lease or reservation exists
+ * the model-provider switch, so the switch (docs/decisions/model-provider-staging.json, on in
+ * staging since model-provider-on) is now the only gate: no run, lease or reservation exists
  * while it is off.
  */
 export const runtimeProductReadAvailable: boolean = true;
@@ -682,6 +698,20 @@ export const shopifyWebhookTopics = Object.freeze([
   "shop/redact",
 ] as const);
 export type ShopifyWebhookTopic = (typeof shopifyWebhookTopics)[number];
+// Shopify CLI 4.9 refuses app-specific subscriptions with use_legacy_install_flow (the
+// connector's own authorization-code install), so the app configuration subscribes only the
+// three compliance topics (they are always app-specific), and the broker registers the two
+// app topics for each installation as shop-specific subscriptions through the Admin API, to
+// the same signed webhook path (docs/briefs/shopify-shop-specific-webhooks.md).
+export const shopifyComplianceWebhookTopics = Object.freeze([
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact",
+] as const);
+export const shopifyShopWebhookTopics = Object.freeze([
+  "app/uninstalled",
+  "app/scopes_update",
+] as const);
 // The selected X-Shopify-* headers, lower-case, that the connector forwards as JSON.
 export const shopifyWebhookHeaderNames = Object.freeze([
   "x-shopify-api-version",
@@ -847,6 +877,115 @@ export function decodeShopifyCredentialResult(text: unknown): ShopifyCredentialO
   )
     throw invalid();
   return v.outcome as ShopifyCredentialOutcome;
+}
+
+// ---------------------------------------------------------------------------
+// Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md). One
+// sync takes at most `batch` installations from the vault's pending list (the identity
+// bridge's LIMIT) within its budget. Each installation ends in one closed outcome:
+// registered (both subscriptions exist with exactly the connector's webhook path as their
+// uri), failed (not both registered, and nothing unproven: a list or create that failed or
+// was refused, a reconciled create, or a token the broker cannot use), unknown (a create
+// whose outcome the broker could not prove and the reconciling list did not settle),
+// unauthorized (Shopify refused the token), or skipped (the installation ended, its
+// credential changed, or the outcome could not be recorded). The first four are what the
+// vault records; the result carries only the counts.
+export const shopifyWebhookSyncLimits = Object.freeze({
+  budgetMinMs: 2000,
+  budgetMaxMs: 25000,
+  batch: 10,
+});
+// The connector's own origin, from the reviewed CONNECTOR_CONFIGURATION_JSON the broker binds
+// byte-equal to the connector's ({schemaVersion: 1, origin, apiOrigin}, at most 1024 bytes):
+// an https origin exactly (no path, credentials or port), or loopback http in development
+// only (the workerd lab), as the connector's own parser admits it. The broker builds each
+// subscription's callback URL from this origin and the app key alone. Throws otherwise.
+export function parseConnectorWebhookOrigin(json: unknown, environment: string): string {
+  let c: Readonly<Record<string, unknown>>;
+  try {
+    c = loginJson(json, 1024, ["schemaVersion", "origin", "apiOrigin"]);
+  } catch {
+    throw invalid();
+  }
+  const origin = (value: unknown): string | null => {
+    if (typeof value !== "string" || value.length > 300) return null;
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      return null;
+    }
+    if (url.origin !== value || url.username || url.password) return null;
+    if (url.protocol === "https:" && url.port === "") return value;
+    if (
+      environment === "development" &&
+      /^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(value) &&
+      Number(url.port) <= 65535
+    )
+      return value;
+    return null;
+  };
+  const own = origin(c.origin);
+  const api = origin(c.apiOrigin);
+  if (c.schemaVersion !== 1 || own === null || api === null || own === api) throw invalid();
+  return own;
+}
+/** One app's webhook callback URL: the connector's signed webhook route for that app key. */
+export function shopifyWebhookCallbackUrl(origin: string, appKey: string): string {
+  if (!exact(shopifyAppKeyPattern, appKey)) throw invalid();
+  return `${origin}/shopify/a/${appKey}/webhooks`;
+}
+export const shopifyWebhookRegistrationStatuses = Object.freeze([
+  "registered",
+  "failed",
+  "unknown",
+  "unauthorized",
+] as const);
+export type ShopifyWebhookRegistrationStatus = (typeof shopifyWebhookRegistrationStatuses)[number];
+export interface ShopifyWebhookSyncResult {
+  readonly checked: number;
+  readonly registered: number;
+  readonly failed: number;
+  readonly unknown: number;
+  readonly unauthorized: number;
+  readonly skipped: number;
+}
+const webhookSyncCounts = ["registered", "failed", "unknown", "unauthorized", "skipped"] as const;
+const syncCount = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isSafeInteger(value) &&
+  value >= 0 &&
+  value <= shopifyWebhookSyncLimits.batch;
+export function encodeShopifyWebhookSyncResult(r: ShopifyWebhookSyncResult): string {
+  const text = JSON.stringify({
+    schemaVersion: 1,
+    checked: r.checked,
+    registered: r.registered,
+    failed: r.failed,
+    unknown: r.unknown,
+    unauthorized: r.unauthorized,
+    skipped: r.skipped,
+  });
+  decodeShopifyWebhookSyncResult(text);
+  return text;
+}
+export function decodeShopifyWebhookSyncResult(text: unknown): ShopifyWebhookSyncResult {
+  const v = verdictJson(text, ["schemaVersion", "checked", ...webhookSyncCounts]);
+  if (
+    v.schemaVersion !== 1 ||
+    !syncCount(v.checked) ||
+    !webhookSyncCounts.every((name) => syncCount(v[name])) ||
+    webhookSyncCounts.reduce((sum, name) => sum + (v[name] as number), 0) !== v.checked
+  )
+    throw invalid();
+  return Object.freeze({
+    checked: v.checked,
+    registered: v.registered as number,
+    failed: v.failed as number,
+    unknown: v.unknown as number,
+    unauthorized: v.unauthorized as number,
+    skipped: v.skipped as number,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1272,6 +1411,79 @@ export function decodeShopifyReconcileResult(text: unknown): ShopifyReconcileRes
     outcome: v.outcome as ShopifyReconcileOutcome,
     status: v.status as OperationStatusName | null,
     verdict: v.verdict as ShopifyReconcileResult["verdict"],
+  });
+}
+
+// v1 PR 4: the undo check's closed result. `recorded` carries the check's sequence (which the
+// undo command names), the overall verdict and the five listing fields' codes (`missing` has
+// no codes); every other outcome is a refusal code with nulls. Codes only: never a value.
+export const shopifyUndoCheckOutcomes = Object.freeze([
+  "recorded",
+  "not_applied",
+  "unavailable",
+  "too_soon",
+  "link_changed",
+  "credential_unavailable",
+  "held",
+] as const);
+export type ShopifyUndoCheckOutcome = (typeof shopifyUndoCheckOutcomes)[number];
+export const undoCheckFields = Object.freeze([
+  "descriptionHtml",
+  "seo.description",
+  "seo.title",
+  "tags",
+  "title",
+] as const);
+export type UndoFieldCode = "unchanged" | "changed";
+export interface ShopifyUndoCheckResult {
+  readonly outcome: ShopifyUndoCheckOutcome;
+  readonly sequence: number | null;
+  readonly verdict: "unchanged" | "changed" | "missing" | null;
+  readonly fields: Readonly<Record<(typeof undoCheckFields)[number], UndoFieldCode>> | null;
+}
+function undoCheckValid(r: Record<string, unknown>): boolean {
+  const fields = r.fields;
+  const fieldsValid =
+    fields === null ||
+    (!!fields &&
+      typeof fields === "object" &&
+      !Array.isArray(fields) &&
+      Object.keys(fields).sort().join(",") === [...undoCheckFields].join(",") &&
+      Object.values(fields).every((v) => v === "unchanged" || v === "changed"));
+  if (!(shopifyUndoCheckOutcomes as readonly unknown[]).includes(r.outcome) || !fieldsValid)
+    return false;
+  if (r.outcome !== "recorded") return r.sequence === null && r.verdict === null && fields === null;
+  if (!Number.isSafeInteger(r.sequence) || (r.sequence as number) < 1) return false;
+  if (r.verdict === "missing") return fields === null;
+  if (fields === null) return false;
+  const all = Object.values(fields as Record<string, string>).every((v) => v === "unchanged");
+  return r.verdict === (all ? "unchanged" : "changed");
+}
+export function encodeShopifyUndoCheckResult(r: ShopifyUndoCheckResult): string {
+  const value = {
+    schemaVersion: 1,
+    outcome: r.outcome,
+    sequence: r.sequence,
+    verdict: r.verdict,
+    fields:
+      r.fields === null ? null : Object.fromEntries(undoCheckFields.map((f) => [f, r.fields![f]])),
+  };
+  if (!undoCheckValid(value)) throw invalid();
+  return JSON.stringify(value);
+}
+export function decodeShopifyUndoCheckResult(text: unknown): ShopifyUndoCheckResult {
+  const v = closedResult(text, ["schemaVersion", "outcome", "sequence", "verdict", "fields"]);
+  if (!undoCheckValid(v)) throw invalid();
+  return Object.freeze({
+    outcome: v.outcome as ShopifyUndoCheckOutcome,
+    sequence: v.sequence as number | null,
+    verdict: v.verdict as ShopifyUndoCheckResult["verdict"],
+    fields:
+      v.fields === null
+        ? null
+        : (Object.freeze({
+            ...(v.fields as Record<string, UndoFieldCode>),
+          }) as ShopifyUndoCheckResult["fields"]),
   });
 }
 

@@ -1,6 +1,7 @@
 // Home (ADR-0032, the Sunrise Home board): "What needs me today, what happens next, and
 // how is the shop doing?" Built on the data that exists today: what waits for you in the
-// Inbox (open questions), recent work, and the store connection. Each card owns its
+// Inbox (v1 PR 15: the one Inbox read, so Home, the sidebar and the Inbox count the same
+// items), recent work, and the store connection. Each card owns its
 // denied, unavailable and empty states, so Home never fails as a whole. It carries the
 // ADR-0015 pre-payment notice, which names no checkout or store route and so stays true
 // on both billing routes. The board's other sections show only from fixtures, behind the
@@ -8,20 +9,23 @@
 // opens a screen whose actions the server checks.
 import { useMemo } from "react";
 import { copy } from "../copy";
-import type { GoalView, HomeSamplesView, Id, Page, QuestionView, WorkspaceView } from "../model";
-import { useRead, useServices, type ReadState } from "../services";
 import {
-  primaryStore,
-  useConnections,
-  useHomeSamples,
-  useOpenQuestions,
-  waitingCount,
-} from "../workspace-data";
+  inboxComplete,
+  inboxCountLabel,
+  inboxTab,
+  openItems,
+  type InboxView,
+} from "../inbox-model";
+import type { ConnectionsView, GoalView, HomeSamplesView, Id, WorkspaceView } from "../model";
+import { useRead, useServices, type ReadState } from "../services";
+import { primaryStore, useConnections, useHomeSamples, useInbox } from "../workspace-data";
 import { RouteLink } from "../components/controls";
 import { BadgeGlyph, Icon, RecordText, StatusTag, Tag } from "../components/display";
 import { Banner, StateView, outcomeState } from "../components/feedback";
 import { AskMorrowButton } from "../components/shell";
 import { AskPanel, GlanceCard, IdeasCard, ProjectsCard, TodayCard } from "./home-samples";
+import { InboxRow, PartNotice, needsYouItems, shopName } from "./inbox";
+import { inboxCopy } from "../sunrise/inbox-copy";
 
 const longDate = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
@@ -47,14 +51,6 @@ export function homeHeader(now: Date): { readonly date: string; readonly greetin
 const isoDay = (now: Date) =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-/** The most urgent first: the soonest expiry, then those that don't expire. */
-export function byUrgency(questions: readonly QuestionView[]): QuestionView[] {
-  const at = (q: QuestionView) => {
-    const t = q.expiresAt === null ? Number.NaN : Date.parse(q.expiresAt);
-    return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
-  };
-  return [...questions].sort((a, b) => at(a) - at(b));
-}
 /** The most recently updated first. */
 export function byRecent(goals: readonly GoalView[]): GoalView[] {
   const at = (g: GoalView) => {
@@ -65,14 +61,16 @@ export function byRecent(goals: readonly GoalView[]): GoalView[] {
 }
 
 /**
- * What Home's header says. Nothing is "clear" unless the open-questions read answered:
- * when it was denied, failed, rate limited or offline, the scope line stays neutral, no
- * primary is offered, and the Needs you card carries that state. A false all-clear
- * would hide work that waits (the AC26 first-run Home is governance-only, so its read
- * is a 403). Sample counts exist only in the default-off preview.
+ * What Home's header says. Nothing is "clear" unless every section of the Inbox read
+ * answered and the server said nothing more waits: when a section was denied, the read
+ * failed, was rate limited or offline, or more waits than the reply carries ("0+"), the
+ * scope line stays neutral, no "all clear" primary is offered, and the Needs you card
+ * carries that state. A false all-clear would hide work that waits (the AC26 first-run
+ * Home is governance-only, so its questions are denied). Sample counts exist only in the
+ * default-off preview.
  */
 export function homeSummary(
-  questions: ReadState<Page<QuestionView>>,
+  inbox: ReadState<InboxView>,
   samples: HomeSamplesView | null,
 ): {
   readonly action: "review" | "ask" | null;
@@ -80,71 +78,82 @@ export function homeSummary(
   readonly open: number;
   readonly clear: boolean;
 } {
-  if (questions.kind === "loading") return { action: null, total: "0", open: 0, clear: false };
-  const known = questions.kind === "ok";
-  const open = known ? questions.value.items.length : 0;
+  if (inbox.kind === "loading") return { action: null, total: "0", open: 0, clear: false };
+  const known = inbox.kind === "ok";
+  const open = known ? openItems(inbox.value).length : 0;
   const extra = samples ? samples.waiting.review + samples.waiting.tasks : 0;
-  const total = known && questions.value.next !== null ? "50+" : String(open + extra);
-  const clear = known && total === "0";
-  return { action: total !== "0" ? "review" : clear ? "ask" : null, total, open, clear };
+  const count = open + extra;
+  const total = known && inbox.value.more ? `${count}+` : String(count);
+  const clear = known && inboxComplete(inbox.value) && count === 0 && !inbox.value.more;
+  return { action: count > 0 ? "review" : clear ? "ask" : null, total, open, clear };
+}
+/** Home's waiting chips, from the same read: per kind, the open items. */
+export function homeChips(view: InboxView): {
+  readonly review: number;
+  readonly questions: number;
+  readonly problems: number;
+} {
+  const open = openItems(view);
+  const of = (tab: "review" | "questions" | "problems") =>
+    open.filter((i) => inboxTab(i) === tab).length;
+  return { review: of("review"), questions: of("questions"), problems: of("problems") };
 }
 
-function NeedsYouCard({
+export function NeedsYouCard({
   ws,
-  questions,
+  inbox,
   reload,
+  connections,
 }: {
   readonly ws: Id;
-  readonly questions: ReturnType<typeof useOpenQuestions>[0];
+  readonly inbox: ReadState<InboxView>;
   readonly reload: () => void;
+  readonly connections: ReadState<ConnectionsView>;
 }) {
-  const count = questions.kind === "ok" ? waitingCount(questions.value) : null;
+  const count = inbox.kind === "ok" ? openItems(inbox.value).length : 0;
+  const label = inbox.kind === "ok" ? inboxCountLabel(inbox.value) : "0";
+  const shown = inbox.kind === "ok" ? needsYouItems(inbox.value) : [];
+  // A section the server didn't answer for this person, or more than the reply carries:
+  // never "nothing waits".
+  const denied = inbox.kind === "ok" && !inboxComplete(inbox.value);
+  const more = inbox.kind === "ok" && inbox.value.more;
   return (
     <section className="card panel" data-card="needs" aria-labelledby="home-needs-title">
       <div className="card-head">
         <h2 id="home-needs-title">{copy.home.needsTitle}</h2>
-        {count !== null && count !== "0" ? (
+        {count > 0 ? (
           <RouteLink route="inbox" params={{ workspaceId: ws }} className="card-link">
-            {copy.home.seeAllInbox(count)}
+            {copy.home.seeAllInbox(label)}
           </RouteLink>
         ) : null}
       </div>
-      {questions.kind === "ok" ? (
-        questions.value.items.length ? (
-          <ul className="row-list">
-            {byUrgency(questions.value.items)
-              .slice(0, 3)
-              .map((q) => (
-                <li key={q.id}>
-                  <RouteLink
-                    route="question"
-                    params={{ workspaceId: ws, questionId: q.id }}
-                    className="row row-link"
-                  >
-                    <span className="row-lead" aria-hidden="true">
-                      <Icon name="question" />
-                    </span>
-                    <span className="row-text">
-                      <RecordText className="row-title">{q.prompt}</RecordText>
-                      <span className="row-sub">
-                        {q.expiresAt
-                          ? `${copy.home.questionLine} · ${copy.home.expires(homeDate(q.expiresAt))}`
-                          : copy.home.questionLine}
-                      </span>
-                    </span>
-                    <Tag tone="caution" glyph="ring">
-                      {copy.home.needsYou}
-                    </Tag>
-                    <Icon name="forward" />
-                  </RouteLink>
+      {inbox.kind === "ok" ? (
+        <>
+          <PartNotice view={inbox.value} />
+          {shown.length ? (
+            <ul className="row-list">
+              {shown.map((item) => (
+                <li key={item.kind + ":" + item.id}>
+                  <InboxRow
+                    ws={ws}
+                    item={item}
+                    shop={shopName(connections, "storeId" in item ? item.storeId : null)}
+                  />
                 </li>
               ))}
-          </ul>
-        ) : (
-          <StateView kind="empty" compact message={copy.home.nothingWaiting} />
-        )
+            </ul>
+          ) : more ? (
+            <p className="muted">
+              <RouteLink route="inbox" params={{ workspaceId: ws }} className="text-link">
+                {inboxCopy.home.moreWaiting}
+              </RouteLink>
+            </p>
+          ) : denied ? null : (
+            <StateView kind="empty" compact message={copy.home.nothingWaiting} />
+          )}
+        </>
       ) : (
-        outcomeState(questions, reload, { compact: true })
+        outcomeState(inbox, reload, { compact: true })
       )}
     </section>
   );
@@ -238,12 +247,16 @@ function StoreCard({ ws }: { readonly ws: Id }) {
 
 export function HomeScreen({ workspace }: { readonly workspace: WorkspaceView }) {
   const ws = workspace.id;
-  const [questions, reloadQuestions] = useOpenQuestions(ws);
+  const [inbox, reloadInbox] = useInbox(ws);
+  const [connections] = useConnections(ws);
   const samples = useHomeSamples(ws);
   const now = useMemo(() => new Date(), []);
   const header = homeHeader(now);
-  const { action, total, open, clear } = homeSummary(questions, samples);
+  const { action, total, clear } = homeSummary(inbox, samples);
   const waiting = action === "review";
+  const chips =
+    inbox.kind === "ok" ? homeChips(inbox.value) : { review: 0, questions: 0, problems: 0 };
+  const review = chips.review + (samples ? samples.waiting.review : 0);
   return (
     <div className={samples ? "page home has-panel" : "page home"}>
       <div className="home-main">
@@ -273,19 +286,27 @@ export function HomeScreen({ workspace }: { readonly workspace: WorkspaceView })
           {waiting ? (
             <div className="chips-row">
               <ul className="chips" aria-label={copy.home.waitingLabel}>
-                {samples && samples.waiting.review > 0 ? (
+                {review > 0 ? (
                   <li>
                     <RouteLink route="inbox" params={{ workspaceId: ws }} className="chip">
                       <BadgeGlyph glyph="ring" />
-                      {copy.home.reviewChip(samples.waiting.review)}
+                      {copy.home.reviewChip(review)}
                     </RouteLink>
                   </li>
                 ) : null}
-                {open > 0 && questions.kind === "ok" ? (
+                {chips.questions > 0 ? (
                   <li>
                     <RouteLink route="inbox" params={{ workspaceId: ws }} className="chip">
                       <BadgeGlyph glyph="ring" />
-                      {copy.home.questionsChip(waitingCount(questions.value))}
+                      {copy.home.questionsChip(String(chips.questions))}
+                    </RouteLink>
+                  </li>
+                ) : null}
+                {chips.problems > 0 ? (
+                  <li>
+                    <RouteLink route="inbox" params={{ workspaceId: ws }} className="chip">
+                      <BadgeGlyph glyph="ring" />
+                      {inboxCopy.home.problemsChip(chips.problems)}
                     </RouteLink>
                   </li>
                 ) : null}
@@ -310,7 +331,7 @@ export function HomeScreen({ workspace }: { readonly workspace: WorkspaceView })
         <Banner tone="info" title={copy.home.prepaymentTitle}>
           <p>{copy.home.prepayment}</p>
         </Banner>
-        <NeedsYouCard ws={ws} questions={questions} reload={reloadQuestions} />
+        <NeedsYouCard ws={ws} inbox={inbox} reload={reloadInbox} connections={connections} />
         {samples ? (
           <>
             <TodayCard samples={samples} />

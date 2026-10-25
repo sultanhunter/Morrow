@@ -1,7 +1,45 @@
+import { CROSS_CLOCK_ALLOWANCE_MS } from "./clock-allowance.js";
 import { executorRoleMemberSql } from "./executor-role-preflight.js";
 import type { WorkosAuthenticationEvidence } from "./workos-authentication-evidence.js";
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
 
+// The closed reason of a held admit() (the sign-in stage diagnostic). prepare: before a
+// connection was requested (selector, command ledger, secret and digests); connect: the pool;
+// session_setup: BEGIN and the two SET LOCAL timeouts; role: the executor preflight;
+// admit_query: the admission statement; decode_shape: its reply's closed row; decode_lifetime:
+// the reply's expiry; denied and conflict: the database's answer (a replayed or locally
+// repeated command is a conflict); commit; release; deadline: the attempt deadline, the
+// evidence lease, an abort or the clock.
+export const browserSessionAdmissionHeldCodes = Object.freeze([
+  "prepare",
+  "connect",
+  "session_setup",
+  "role",
+  "admit_query",
+  "decode_shape",
+  "decode_lifetime",
+  "denied",
+  "conflict",
+  "commit",
+  "release",
+  "deadline",
+] as const);
+export type BrowserSessionAdmissionHeldCode = (typeof browserSessionAdmissionHeldCodes)[number];
+// decode_lifetime only: how far the reply's expiry lay past the Worker's now + 30 minutes, in
+// coarse buckets, or "expired" when it was not after the Worker's now. Never the value itself.
+export const browserSessionAdmissionLifetimeLeads = Object.freeze([
+  "expired",
+  "lead_le_1s",
+  "lead_le_5s",
+  "lead_le_60s",
+  "lead_gt_60s",
+] as const);
+export type BrowserSessionAdmissionLifetimeLead =
+  (typeof browserSessionAdmissionLifetimeLeads)[number];
+export type BrowserSessionAdmissionHeld = Readonly<{
+  sub: BrowserSessionAdmissionHeldCode;
+  lead: BrowserSessionAdmissionLifetimeLead | null;
+}>;
 export interface BrowserSessionAdmissionControl {
   readonly deadlineMs: number;
   readonly signal: AbortSignal;
@@ -24,6 +62,9 @@ export interface BrowserSessionAdmissionDependencies {
   readonly pool: BrowserSessionAdmissionSqlPool;
   readonly now: () => number;
   readonly signal?: AbortSignal;
+  // Called once per held admit() with closed values only; never for reconcile(). It cannot
+  // change the result: a throw is swallowed.
+  readonly onHeld?: (held: BrowserSessionAdmissionHeld) => void;
 }
 export interface BrowserSessionAdmissionCorrelation {
   readonly commandId: string;
@@ -217,10 +258,36 @@ function requireRole(value: unknown) {
     throw fail();
 }
 type Attribution = Omit<Readonly<PrivateBrowserSessionCredential>, "secret">;
+const lifetimeLead = (expiry: number, at: number): BrowserSessionAdmissionLifetimeLead => {
+  if (expiry <= at) return "expired";
+  const lead = expiry - (at + 1800000);
+  return lead <= 1000
+    ? "lead_le_1s"
+    : lead <= 5000
+      ? "lead_le_5s"
+      : lead <= 60000
+        ? "lead_le_60s"
+        : "lead_gt_60s";
+};
+// P05.T01y (ADR-0004): a new generation expires 30 minutes after its admission instant. The
+// database sets expiry = n + 30 minutes from its own clock_timestamp() n (0016
+// browser_new_lifetimes) and admits only while n is before the evidence lease end
+// (admit_account_family and admit_browser_family: p_evidence_expires > n, rechecked after the
+// writes), so an honest reply's expiry is before that lease end + 30 minutes. The Worker reads
+// `at` from its own clock after the reply, and the database's clock may lead it: comparing
+// with at + 30 minutes alone refused every reply whose clock lead exceeded the reply latency.
+// The bound is the SQL's own guarantee, and never more than CROSS_CLOCK_ALLOWANCE_MS past
+// at + 30 minutes. The cookie cap (1800 s) and the database's triggers stay the authority.
+const newGenerationExpiryValid = (expiry: number, at: number, evidenceExpiresAtMs: number) =>
+  time(evidenceExpiresAtMs) &&
+  expiry > at &&
+  expiry < Math.min(evidenceExpiresAtMs, at + CROSS_CLOCK_ALLOWANCE_MS) + 1800000;
 function decode(
   value: unknown,
   at: number,
+  evidenceExpiresAtMs?: number,
   generated?: readonly string[],
+  onLifetime?: (lead: BrowserSessionAdmissionLifetimeLead) => void,
 ): {
   outcome: "newly_admitted" | "replayed" | "denied" | "conflict";
   attribution: Attribution | null;
@@ -256,11 +323,17 @@ function decode(
   const expiry = Number(v.expires_at_ms);
   if (
     !time(expiry) ||
-    (generated && (v.family_id !== generated[0] || v.generation_id !== generated[1])) ||
-    // P05.T01y: a new generation expires at most 30 minutes after admission (ADR-0004).
-    (outcome === "newly_admitted" && (expiry <= at || expiry > at + 1800000))
+    (generated && (v.family_id !== generated[0] || v.generation_id !== generated[1]))
   )
     throw fail();
+  if (outcome === "newly_admitted") {
+    // Only an admission with its evidence lease can carry a new generation.
+    if (evidenceExpiresAtMs === undefined) throw fail();
+    if (!newGenerationExpiryValid(expiry, at, evidenceExpiresAtMs)) {
+      onLifetime?.(lifetimeLead(expiry, at));
+      throw fail();
+    }
+  }
   return {
     outcome,
     attribution: Object.freeze({
@@ -298,14 +371,16 @@ function createAdmission(
   let readEvidence: BrowserSessionAdmissionDependencies["readEvidence"],
     pool: BrowserSessionAdmissionSqlPool,
     now: () => number,
-    signal: AbortSignal | undefined;
+    signal: AbortSignal | undefined,
+    onHeld: BrowserSessionAdmissionDependencies["onHeld"];
   try {
-    ({ readEvidence, pool, now, signal } = dependencies);
+    ({ readEvidence, pool, now, signal, onHeld } = dependencies);
     if (
       typeof readEvidence !== "function" ||
       typeof pool?.connect !== "function" ||
       typeof now !== "function" ||
-      (signal !== undefined && !(signal instanceof AbortSignal))
+      (signal !== undefined && !(signal instanceof AbortSignal)) ||
+      (onHeld !== undefined && typeof onHeld !== "function")
     )
       throw fail();
   } catch {
@@ -325,12 +400,18 @@ function createAdmission(
       throw fail();
     }
   };
+  type AttemptPhase = Exclude<BrowserSessionAdmissionHeldCode, "denied" | "conflict" | "deadline">;
+  type AttemptTools = Readonly<{ check: () => number; mark: (phase: AttemptPhase) => void }>;
   async function attempt<T>(
     fresh: () => number,
     deadline: number,
     readOnly: boolean,
-    action: (query: (text: string, values?: readonly string[]) => Promise<unknown>) => Promise<T>,
+    action: (
+      query: (text: string, values?: readonly string[]) => Promise<unknown>,
+      tools: AttemptTools,
+    ) => Promise<T>,
     prepare?: (check: () => number) => Promise<void>,
+    failed?: (code: AttemptPhase | "deadline") => void,
   ): Promise<T> {
     let client: BrowserSessionAdmissionSqlClient | undefined,
       releasePromise: Promise<void> | undefined,
@@ -338,7 +419,14 @@ function createAdmission(
     let stopped = false,
       open = false,
       uncertain = false,
-      commitAttempted = false;
+      commitAttempted = false,
+      // Diagnostic only: the step in flight, and whether a time, lease, abort or clock check
+      // failed. Neither changes any decision below.
+      phase: AttemptPhase = "prepare",
+      late = false;
+    const mark = (next: AttemptPhase) => {
+      phase = next;
+    };
     const abort = new AbortController();
     let interrupted!: () => void;
     const interruption = new Promise<{ stopped: true }>((resolve) => {
@@ -359,8 +447,15 @@ function createAdmission(
       dispose();
     };
     const check = () => {
-      const at = fresh();
+      let at: number;
+      try {
+        at = fresh();
+      } catch (error) {
+        late = true;
+        throw error;
+      }
       if (stopped || signal?.aborted || at >= deadline) {
+        late = true;
         stop();
         throw fail();
       }
@@ -398,6 +493,7 @@ function createAdmission(
           check();
         }
       }
+      mark("connect");
       const connecting = Promise.resolve(pool.connect(control)).then((value) => {
         client = value;
         if (stopped || abort.signal.aborted) {
@@ -413,23 +509,36 @@ function createAdmission(
         check();
       }
       open = true;
+      mark("session_setup");
       await query(
         readOnly ? browserSessionAdmissionSql.readOnlyBegin : browserSessionAdmissionSql.begin,
       );
+      mark("role");
       requireRole(await query(browserSessionAdmissionSql.role));
+      mark("session_setup");
       await query(browserSessionAdmissionSql.timeout);
       await query(browserSessionAdmissionSql.idleTimeout);
-      const value = await action(query);
+      mark("admit_query");
+      const value = await action(query, Object.freeze({ check, mark }));
       check();
+      mark("commit");
       commitAttempted = true;
       await query(browserSessionAdmissionSql.commit);
       open = false;
+      mark("release");
       const released = dispose();
       if (!released) throw fail();
       await race(released);
       check();
       return value;
     } catch {
+      // The first failure's reason, fixed before any cleanup check can change it.
+      const code = late || stopped ? ("deadline" as const) : phase;
+      try {
+        failed?.(code);
+      } catch {
+        /* A diagnostic never changes the outcome. */
+      }
       if (client && open && !uncertain && !commitAttempted && !stopped && !abort.signal.aborted) {
         try {
           check();
@@ -459,15 +568,40 @@ function createAdmission(
     async admit(handle: unknown, selectorJson: unknown): Promise<BrowserSessionAdmissionResult> {
       let secret: string | undefined,
         correlation: Readonly<BrowserSessionAdmissionCorrelation> | null = null;
+      // Diagnostic state for onHeld only; no decision below reads it.
+      let attemptCode: BrowserSessionAdmissionHeldCode | undefined,
+        lead: BrowserSessionAdmissionLifetimeLead | null = null,
+        late = false;
+      const report = (sub: BrowserSessionAdmissionHeldCode) => {
+        try {
+          onHeld?.(Object.freeze({ sub, lead: sub === "decode_lifetime" ? lead : null }));
+        } catch {
+          /* A diagnostic never changes the outcome. */
+        }
+      };
+      const timed = <V>(read: () => V): V => {
+        try {
+          return read();
+        } catch (error) {
+          late = true;
+          throw error;
+        }
+      };
       try {
-        const started = clock(),
+        const started = timed(clock),
           selected = mode === "account" ? accountSelector(selectorJson) : selector(selectorJson),
           commandId = selected.commandId as string;
-        if (commands.has(commandId)) return held(commands.get(commandId) ?? null);
-        if (commands.size >= 1024) return held(null);
+        if (commands.has(commandId)) {
+          report("conflict");
+          return held(commands.get(commandId) ?? null);
+        }
+        if (commands.size >= 1024) {
+          report("prepare");
+          return held(null);
+        }
         let original: Readonly<WorkosAuthenticationEvidence> | undefined,
           deadline = 0;
-        const fresh = () => {
+        const observe = () => {
           clock();
           let value: Readonly<WorkosAuthenticationEvidence>;
           try {
@@ -486,6 +620,7 @@ function createAdmission(
           original ??= value;
           return at;
         };
+        const fresh = () => timed(observe);
         fresh();
         deadline = Math.min(started + 5000, original!.expiresAtMs);
         fresh();
@@ -497,17 +632,20 @@ function createAdmission(
           fresh,
           deadline,
           false,
-          async (query) =>
-            decode(
-              await query(
-                mode === "account"
-                  ? browserSessionAdmissionSql.admitAccount
-                  : browserSessionAdmissionSql.admit,
-                values,
-              ),
-              fresh(),
-              [familyId, generationId],
-            ),
+          async (query, { check, mark }) => {
+            const reply = await query(
+              mode === "account"
+                ? browserSessionAdmissionSql.admitAccount
+                : browserSessionAdmissionSql.admit,
+              values,
+            );
+            const at = check();
+            mark("decode_shape");
+            return decode(reply, at, original!.expiresAtMs, [familyId, generationId], (bucket) => {
+              lead = bucket;
+              mark("decode_lifetime");
+            });
+          },
           async (check) => {
             const random = crypto.getRandomValues(new Uint8Array(32));
             try {
@@ -583,21 +721,36 @@ function createAdmission(
             commands.set(commandId, correlation);
             values = Object.freeze([commandId, requestDigest, ...tuple.slice(1)]);
           },
+          (code) => {
+            attemptCode = code;
+          },
         );
         const at = fresh();
-        if (
-          typeof secret !== "string" ||
-          admitted.outcome !== "newly_admitted" ||
-          !admitted.attribution ||
-          at >= admitted.attribution.expiresAtMs
-        )
+        if (typeof secret !== "string") {
+          report("prepare");
           return held(correlation);
+        }
+        if (admitted.outcome !== "newly_admitted") {
+          // A replayed command was already used, as a conflicting one was.
+          report(admitted.outcome === "denied" ? "denied" : "conflict");
+          return held(correlation);
+        }
+        if (!admitted.attribution) {
+          report("decode_shape");
+          return held(correlation);
+        }
+        if (at >= admitted.attribution.expiresAtMs) {
+          lead = "expired";
+          report("decode_lifetime");
+          return held(correlation);
+        }
         return Object.freeze({
           outcome: "newly_admitted",
           credential: Object.freeze({ secret, ...admitted.attribution }),
           correlation,
         });
       } catch {
+        report(attemptCode ?? (late ? "deadline" : "prepare"));
         return held(correlation);
       } finally {
         secret = undefined;

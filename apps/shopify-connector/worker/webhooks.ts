@@ -2,8 +2,11 @@
 // headers go to the broker, which checks the HMAC over the raw bytes before any parse. A
 // missing header or a refused signature is 401 with no state change. M2 PR-3: a verified
 // delivery is recorded in the durable inbox by the broker, in the transaction that verified
-// it, before the connector answers 200 (connector.ts); the generated app TOML subscribes the
-// five topics from PR-3 on.
+// it, before the connector answers 200 (connector.ts). The generated app TOML subscribes the
+// three compliance topics here; app/uninstalled and app/scopes_update are the broker's
+// shop-specific subscriptions to this same path (docs/briefs/shopify-shop-specific-webhooks.md).
+// Both kinds are read, forwarded and verified alike: the same five headers (other delivery
+// headers are neither forwarded nor signed) and the app secret's HMAC over the raw body.
 import {
   shopifyLimits,
   shopifyWebhookHeaderNames,

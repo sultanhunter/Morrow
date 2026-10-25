@@ -62,3 +62,9 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 > approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
 
 What it approves: this record as written and each owner question above with its recommended answer.
+
+## Amendments
+
+### 2026-10-25: uploads and workspace-created agents (ADR-0037)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) ends the specialist kind, so item 6's "never a specialist at launch" lapses; the text above is kept as approved. A workspace-created agent opens an upload only as any installed agent does: in a sandbox, by its run the uploader's tags allow, and only when its approved card holds the computer tools. The owner confirmed this as recommended (OD-2026-10-25-4).

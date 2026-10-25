@@ -53,6 +53,9 @@ const markers = {
   stripeWebhook: "stripehook" + alnum(12),
   // Build order PR 7: the owner's E2B API key.
   e2b: "e2bkey" + alnum(12),
+  // model-provider-on: the owner's Anthropic Console key (80 to 200 characters after the
+  // sk-ant-api03- prefix).
+  anthropic: "anthropickey" + alnum(40),
 };
 const files = () => ({
   "workos-api-key": "sk_test_" + markers.workos,
@@ -64,6 +67,7 @@ const files = () => ({
   "stripe-restricted-key": "rk_test_" + markers.stripeKey,
   "stripe-webhook-secret": "whsec_" + markers.stripeWebhook,
   "e2b-api-key": "e2b_" + markers.e2b,
+  "anthropic-api-key": "sk-ant-api03-" + markers.anthropic,
 });
 const everyMarker = () => Object.values(markers);
 const contains = (text, values) => values.filter((value) => value && String(text).includes(value));
@@ -84,11 +88,13 @@ async function status({
   stripe = "off",
   // Build order PR 7: the runtime switch; off is the committed state.
   runtime = "off",
+  // model-provider-on: the model-provider switch (committed on; the fakes default to off).
+  model = "off",
 } = {}) {
   const planted = plantedHome(plant, { modes, links, directoryMode });
   try {
     const constants = (
-      await fakeContext({ home: planted.home, tools: fakeTools().tools, stripe, runtime })
+      await fakeContext({ home: planted.home, tools: fakeTools().tools, stripe, model, runtime })
     ).constants;
     const tracked = [...constants.brokerSecrets, "LOGIN_CAPSULE_KEYRING"];
     const record = {
@@ -129,6 +135,7 @@ async function status({
       database: db.connector,
       now,
       stripe,
+      model,
       runtime,
     });
     const code = await main(["secrets-status"], ctx);
@@ -191,13 +198,26 @@ test("AC02: the broker's secret names follow the Stripe switch and wrangler's se
       (name) => !["MORROW_DB_PASSWORD_MORROW_VAULT_BROKER", "MORROW_VAULT_KEK_V1"].includes(name),
     ),
   );
+  // model-provider-on: the committed model-provider switch is on, so the staging broker also
+  // requires ANTHROPIC_API_KEY (fifteen); development never carries it.
+  const { stagingModelSwitch } = await import("../scripts/staging.mjs");
+  assert.equal(stagingModelSwitch(process.cwd()), "on");
+  const staging = await identityConstants({
+    stripe: committed,
+    model: stagingModelSwitch(process.cwd()),
+  });
+  assert.deepEqual(staging.brokerSecrets, [...expected, "ANTHROPIC_API_KEY"].sort());
   const { unstable_readConfig } = await loadWranglerApi();
   const resolved = (worker, env) =>
     captureConsole(() => unstable_readConfig({ config: workerConfigs[worker], env }, {})).value;
   for (const env of [undefined, "staging", "production"])
     assert.deepEqual(
       [...resolved("broker", env).secrets.required].sort(),
-      env === "production" ? production : constants.brokerSecrets,
+      env === "production"
+        ? production
+        : env === "staging"
+          ? staging.brokerSecrets
+          : constants.brokerSecrets,
       String(env),
     );
   const api = resolved("api", "staging");
@@ -434,8 +454,8 @@ test("AC08: ages warn at 80 days (50 for the keyring); transient files are repor
 // ---------------------------------------------------------------------------
 // AC07: every subcommand path in a child process, captured at the descriptor level.
 const child = new URL("./fixtures/staging-marker-child.mjs", import.meta.url).pathname;
-function runChild(scenario, plant = files()) {
-  const planted = plantedHome(plant);
+function runChild(scenario, plant = files(), modes = {}) {
+  const planted = plantedHome(plant, { modes });
   const work = mkdtempSync(join(tmpdir(), "morrow-staging-marker-"));
   try {
     writeFileSync(join(work, "markers.json"), JSON.stringify(markers));
@@ -888,6 +908,192 @@ test("PR 7: secrets-status accepts the E2B key present or absent while off, and 
     plant: (({ "e2b-api-key": _, ...rest }) => rest)(files()),
   });
   assert.ok(noFile.report.mismatches.includes("file:e2b-api-key"));
+});
+
+// model-provider-on (docs/briefs/model-provider-on.md; the Stripe switch's protocol): the
+// Anthropic key comes only from the owner's chmod-600 file and reaches the broker only through
+// `secret bulk` stdin, after the reviewed-main preconditions, never argv or any output. While
+// the switch is off put-secret refuses it before reading the file or running any tool, and no
+// flag places it ahead of the switch.
+test("model-provider-on: put-secret ANTHROPIC_API_KEY places the owner file by stdin, only while on", async () => {
+  const off = runChild("put-secret-model-off");
+  assert.equal(off.status, 1);
+  assert.deepEqual(oneLine(off, "stderr"), { command: "put-secret", code: "STAGING_MODEL_OFF" });
+  assert.deepEqual(off.dump.bulkInputs, []);
+  assert.deepEqual(off.dump.calls, []);
+  noMarkers(off);
+  // On: placed on a broker that does not hold the name yet (the switch's commit merged first).
+  const on = runChild("put-secret-model-on");
+  assert.equal(on.status, 0, on.stderr);
+  // The name and the broker version only: no value, length or fingerprint.
+  assert.deepEqual(
+    { ...oneLine(on, "stdout"), versionId: null },
+    { command: "put-secret", secret: "ANTHROPIC_API_KEY", versionId: null },
+  );
+  assert.deepEqual(JSON.parse(on.dump.bulkInputs[0].input), {
+    ANTHROPIC_API_KEY: "sk-ant-api03-" + markers.anthropic,
+  });
+  const calls = on.dump.calls;
+  const bulk = calls.findIndex((c) => c.tool === "wrangler" && c.args[1] === "bulk");
+  assert.deepEqual(calls[bulk].args, [
+    "secret",
+    "bulk",
+    "--config",
+    "apps/broker/wrangler.jsonc",
+    "--env",
+    "staging",
+  ]);
+  // Reviewed main first: HEAD is a freshly fetched origin/main with a green foundation.
+  const fetched = calls.findIndex((c) => c.tool === "git" && c.args[0] === "fetch");
+  const foundation = calls.findIndex(
+    (c) => c.tool === "gh" && c.args.some((arg) => /check-runs\?check_name=foundation/.test(arg)),
+  );
+  assert.ok(fetched >= 0 && foundation > fetched && bulk > foundation, JSON.stringify(calls));
+  noMarkers(on);
+  // No flag places it: --while-runtime-off belongs to E2B_API_KEY, and there is no other.
+  for (const scenario of ["put-secret-model-flag", "put-secret-model-other-flag"]) {
+    const refused = runChild(scenario);
+    assert.notEqual(refused.status, 0, scenario);
+    assert.equal(oneLine(refused, "stderr").code, "STAGING_USAGE", scenario);
+    assert.deepEqual(refused.dump?.bulkInputs ?? [], [], scenario);
+    noMarkers(refused);
+  }
+  // A malformed, missing or loosely permitted owner file is refused by name, never echoed,
+  // and nothing reaches the broker.
+  for (const [plant, modes, code] of [
+    [{ ...files(), "anthropic-api-key": "sk-ant-" + markers.malformed }, {}, "STAGING_FILE_FORMAT"],
+    [
+      { ...files(), "anthropic-api-key": "sk-ant-api03-" + markers.malformed.slice(0, 10) },
+      {},
+      "STAGING_FILE_FORMAT",
+    ],
+    [(({ "anthropic-api-key": _, ...rest }) => rest)(files()), {}, "STAGING_FILE_MISSING"],
+    [files(), { "anthropic-api-key": 0o644 }, "STAGING_FILE_MODE"],
+  ]) {
+    const refused = runChild("put-secret-model-on", plant, modes);
+    assert.equal(refused.status, 1, code);
+    assert.equal(oneLine(refused, "stderr").code, code);
+    assert.equal(oneLine(refused, "stderr").file, "anthropic-api-key");
+    assert.deepEqual(refused.dump.bulkInputs, [], code);
+    noMarkers(refused);
+  }
+  // The first provisioning with the switch on reads the owner's file into the 0600 broker
+  // file (fifteen names), like the Stripe files.
+  const constants = await identityConstants({ model: "on" });
+  const first = runChild("provision-first-model");
+  assert.equal(first.status, 0, first.stderr);
+  const secrets = JSON.parse(first.brokerFile);
+  assert.equal(secrets.ANTHROPIC_API_KEY, "sk-ant-api03-" + markers.anthropic);
+  assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
+  assert.equal(Object.keys(secrets).length, 15);
+  noMarkers(first, [], rolePasswords(constants, secrets));
+});
+
+// model-provider-on: the switch is read with edge:check's own record rule; the broker's names
+// follow it (ANTHROPIC_API_KEY required while on, never optional), and the owner file's format
+// is the broker's key shape.
+test("model-provider-on: the model switch sets the broker's Anthropic name and owner file", async () => {
+  const { stagingModelSwitch } = await import("../scripts/staging.mjs");
+  assert.equal(stagingModelSwitch(process.cwd()), "on");
+  const off = await identityConstants({ model: "off" });
+  assert.equal(off.brokerSecrets.length, 14);
+  assert.deepEqual(off.modelSecrets, []);
+  assert.equal(off.model, "off");
+  const on = await identityConstants({ model: "on" });
+  assert.equal(on.model, "on");
+  assert.deepEqual(on.modelSecrets, ["ANTHROPIC_API_KEY"]);
+  assert.deepEqual(on.brokerSecrets, [...off.brokerSecrets, "ANTHROPIC_API_KEY"].sort());
+  assert.deepEqual(on.brokerOptionalSecrets, ["E2B_API_KEY"]);
+  // With Stripe and the runtime on too: every switch's names, once each.
+  const all = await identityConstants({ stripe: "on", model: "on", runtime: "on" });
+  assert.equal(all.brokerSecrets.length, 18);
+  for (const model of ["yes", true, "anthropic"])
+    await assert.rejects(identityConstants({ model }), { code: "STAGING_MODEL_RECORD_INVALID" });
+  const { anthropicKeyPattern } = await import("../packages/identity/src/broker-protocol.ts");
+  const { anthropicKeyFormat, stagingFileSpecs } = await import("../scripts/staging-files.mjs");
+  assert.equal(anthropicKeyFormat.source, anthropicKeyPattern.source);
+  assert.equal(anthropicKeyFormat.flags, anthropicKeyPattern.flags);
+  const specs = (constants) =>
+    stagingFileSpecs({
+      brokerSecretNames: constants.brokerSecrets,
+      optionalSecretNames: constants.brokerOptionalSecrets,
+    });
+  assert.equal(specs(off)["anthropic-api-key"], undefined);
+  const spec = specs(on)["anthropic-api-key"];
+  assert.deepEqual([spec.required, spec.secret], [true, "ANTHROPIC_API_KEY"]);
+  assert.ok(spec.format("sk-ant-api03-" + "A".repeat(80)));
+  for (const bad of [
+    "sk-ant-api03-short",
+    "sk-ant-admin01-" + "A".repeat(90),
+    "sk-ant-api03-" + "A".repeat(90) + "\n",
+    "sk-ant-api03-" + "A".repeat(201),
+  ])
+    assert.ok(!spec.format(bad), bad.slice(0, 20));
+  const root = mkdtempSync(join(tmpdir(), "morrow-model-switch-"));
+  try {
+    mkdirSync(join(root, "docs/decisions"), { recursive: true });
+    const committed = JSON.parse(
+      readFileSync("docs/decisions/model-provider-staging.json", "utf8"),
+    );
+    const write = (record) =>
+      writeFileSync(
+        join(root, "docs/decisions/model-provider-staging.json"),
+        JSON.stringify(record),
+      );
+    write({ ...committed, switch: "off", monthly_spend_limit_usd: null, observed_on: null });
+    assert.equal(stagingModelSwitch(root), "off");
+    for (const record of [
+      { ...committed, monthly_spend_limit_usd: null, observed_on: null },
+      { ...committed, environment_kind: "production" },
+      { ...committed, switch: true },
+      { ...committed, provider: "openai" },
+    ]) {
+      write(record);
+      assert.throws(() => stagingModelSwitch(root), { code: "STAGING_MODEL_RECORD_INVALID" });
+    }
+    rmSync(join(root, "docs/decisions/model-provider-staging.json"));
+    assert.throws(() => stagingModelSwitch(root), { code: "STAGING_MODEL_RECORD_INVALID" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("model-provider-on: secrets-status requires the Anthropic key and its owner file while on", async () => {
+  const { brokerRequiredSecrets } = await import("../packages/identity/src/broker-protocol.ts");
+  const on = await status({ model: "on" });
+  assert.equal(on.code, 0, JSON.stringify(on.report.mismatches));
+  assert.equal(on.report.workers.broker.names.length, 15);
+  const file = on.report.files.find((f) => f.file === "anthropic-api-key");
+  assert.deepEqual([file.required, file.ok], [true, true]);
+  // The broker without the key (the switch's commit merged, the key not yet placed).
+  const missing = await status({
+    model: "on",
+    tools: { secrets: { broker: [...brokerRequiredSecrets] } },
+  });
+  assert.equal(missing.code, 1);
+  assert.deepEqual(missing.report.workers.broker.missing, ["ANTHROPIC_API_KEY"]);
+  const noFile = await status({
+    model: "on",
+    plant: (({ "anthropic-api-key": _, ...rest }) => rest)(files()),
+  });
+  assert.ok(noFile.report.mismatches.includes("file:anthropic-api-key"));
+  const bad = await status({
+    model: "on",
+    plant: { ...files(), "anthropic-api-key": "sk-ant-api03-" + markers.malformed },
+  });
+  assert.ok(bad.report.mismatches.includes("file:anthropic-api-key"));
+  assert.deepEqual(contains(bad.text, everyMarker()), []);
+  // Off, a broker still holding the key is an extra name (the reverse commit's order).
+  const off = await status({
+    tools: { secrets: { broker: [...brokerRequiredSecrets, "ANTHROPIC_API_KEY"] } },
+  });
+  assert.equal(off.code, 1);
+  assert.deepEqual(off.report.workers.broker.extra, ["ANTHROPIC_API_KEY"]);
+  assert.equal(
+    off.report.files.find((f) => f.file === "anthropic-api-key"),
+    undefined,
+    "no Anthropic file is read while off",
+  );
 });
 
 test("AC07: connections count unknown names without printing them; keyring prints metadata only", () => {

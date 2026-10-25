@@ -141,7 +141,7 @@ test("the system text is pinned by its SHA-256 and is the only text the broker m
 test("caps and holds: code equals the SQL formula and the policy kernel for every v2 entry", () => {
   const entries = loopEntries(2);
   assert.equal(entries.length, 9);
-  const migration = readFileSync("migrations/0047.agent-runs.sql", "utf8");
+  const migration = readFileSync("migrations/0052.agent-runs.sql", "utf8");
   // The SQL formula, as cmd_agent_run_admit derives it: least(16, floor(7 / worst)) turns and
   // least(turns * worst, 7) held, the worst case rounded up to numeric(20,8).
   assert.match(

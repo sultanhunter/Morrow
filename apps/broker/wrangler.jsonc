@@ -13,7 +13,11 @@
 // PR-D part 1); the first hosted deploy fails closed until P04.T01i supplies
 // `wrangler deploy --secrets-file`. Merchant and
 // model credentials come only under trust model v1, as vault rows or the secrets
-// ADR-0022 item 7 admits, each with the PR that uses it.
+// ADR-0022 item 7 admits, each with the PR that uses it. M3 PR-2's ANTHROPIC_API_KEY
+// (ADR-0022 item 10) joins env.staging's secrets.required with MORROW_MODEL_PROVIDER in its
+// vars while the reviewed model-provider switch is on (docs/decisions/
+// model-provider-staging.json, on since 2026-10-25; 15 names); edge:check refuses any mixed
+// state and gate 6 holds every deploy until the owner's key is placed.
 // M2 PR-2: the bundle includes the Neon driver (the vault login's own transport,
 // src/vault-database.ts; about 150 KB, already minified) and is minified as a whole, so
 // it stays under the 384 KiB cap of scripts/edge.mjs (`edgeBundleLimits.brokerBytes`)
@@ -83,6 +87,12 @@
         "LOGIN_CONFIGURATION_JSON": "{\"schemaVersion\":1,\"controllerProtocol\":\"morrow-login-v1\",\"origin\":\"https://morrow-staging-api.sultanibneusman0.workers.dev\",\"retentionTier\":\"staging\",\"authenticationBindingJson\":\"{\\\"bindingId\\\":\\\"workos_staging_login\\\",\\\"bindingRevision\\\":1,\\\"environmentId\\\":\\\"environment_01M4HG7FV7X8EFXE1J9S6GG00R\\\",\\\"applicationId\\\":\\\"app_01M4HG7GEJJWTKG4W16RB98VZE\\\",\\\"clientId\\\":\\\"client_01M4HG7GA0DX8C3PFSQHBP4BN3\\\",\\\"redirectUri\\\":\\\"https://morrow-staging-api.sultanibneusman0.workers.dev/auth/workos/callback\\\",\\\"returnPath\\\":\\\"/\\\"}\",\"verificationProfileJson\":\"{\\\"schemaVersion\\\":1,\\\"providerId\\\":\\\"workos\\\",\\\"environmentId\\\":\\\"environment_01M4HG7FV7X8EFXE1J9S6GG00R\\\",\\\"applicationId\\\":\\\"app_01M4HG7GEJJWTKG4W16RB98VZE\\\",\\\"clientId\\\":\\\"client_01M4HG7GA0DX8C3PFSQHBP4BN3\\\",\\\"issuer\\\":\\\"https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3\\\",\\\"revision\\\":1,\\\"audiencePolicy\\\":\\\"absent\\\"}\",\"profileId\":\"workos_staging_profile\",\"profileRecordRevision\":1}",
         "MORROW_DATABASE_BINDING_JSON": "{\"schemaVersion\":1,\"environment\":\"staging\",\"projectId\":\"sweet-sound-23947873\",\"branchId\":\"br-dark-recipe-b78ytwj9\",\"hostname\":\"ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech\",\"database\":\"morrow\"}",
         "TURNSTILE_CONFIGURATION_JSON": "{\"schemaVersion\":1,\"hostname\":\"morrow-staging-api.sultanibneusman0.workers.dev\",\"actions\":{\"login\":\"account_login\",\"signup\":\"organization_signup\"}}",
+        // The shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md):
+        // byte-equal to the connector's; the broker builds each callback URL from its origin.
+        "CONNECTOR_CONFIGURATION_JSON": "{\"schemaVersion\":1,\"origin\":\"https://morrow-staging-connector.sultanibneusman0.workers.dev\",\"apiOrigin\":\"https://morrow-staging-api.sultanibneusman0.workers.dev\"}",
+        // M3 PR-2's model-provider switch, on (docs/decisions/model-provider-staging.json):
+        // the broker reads ANTHROPIC_API_KEY (required below) only with this var.
+        "MORROW_MODEL_PROVIDER": "anthropic",
       },
       "secrets": {
         "required": [
@@ -100,6 +110,9 @@
           "MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR",
           "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
           "MORROW_VAULT_KEK_V1",
+          // The model-provider switch's key (brokerRequiredSecretsFor("staging", "off",
+          // "on")), placed by the owner with `staging:put-secret -- ANTHROPIC_API_KEY`.
+          "ANTHROPIC_API_KEY",
         ],
       },
     },

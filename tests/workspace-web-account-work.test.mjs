@@ -142,13 +142,22 @@ test("§4.2 PR-2: account.* and work.* are composed; keepAlive, people.list and 
     Object.entries(composed)
       .filter(([, on]) => !on)
       .map(([method]) => method),
-    ["session.keepAlive", "people.list", ...projectPortMethods, ...teamPortMethods, "samples.home"],
+    [
+      "session.keepAlive",
+      "people.list",
+      ...projectPortMethods,
+      ...teamPortMethods,
+      "samples.home",
+      "samples.inbox",
+    ],
   );
   const { calls, port: p } = port(() => json(200, {}));
   assert.deepEqual(await p.people.list(ws), { kind: "not_in_build" });
   assert.deepEqual(await p.session.keepAlive(), { kind: "not_in_build" });
   // ADR-0032: the Home preview switch is off in the HTTP build and sends nothing.
   assert.deepEqual(await p.samples.home(ws), { kind: "not_in_build" });
+  // v1 PR 15: the Inbox preview switch is off in the HTTP build too.
+  assert.deepEqual(await p.samples.inbox(ws), { kind: "not_in_build" });
   assert.equal(calls.length, 0);
 });
 

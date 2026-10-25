@@ -19,6 +19,7 @@ import {
   modelProviderVar,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
+  parseConnectorWebhookOrigin,
   runtimeProviderE2b,
   runtimeSwitchVar,
   parseStripeConfiguration,
@@ -73,7 +74,11 @@ export type BrokerMethod =
   | "runtimeSweep"
   // v1 PR 3 (ApiBroker): the gateway's apply and read-back of one catalog_write operation.
   | "shopifyProductApply"
-  | "shopifyProductReconcile";
+  | "shopifyProductReconcile"
+  // v1 PR 4 (ApiBroker): the undo check of one verified catalog_write operation.
+  | "shopifyProductUndoCheck"
+  // ConnectorBroker: the shop-specific app/uninstalled and app/scopes_update subscriptions.
+  | "shopifyWebhookSubscriptionsSync";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"
@@ -100,7 +105,11 @@ export type BrokerFailureCode =
   // v1 PR 3: the apply switch is off; no Shopify write runs. And the isolate's one write
   // slot on the vault login is in use.
   | "WRITE_UNAVAILABLE"
-  | "WRITE_BUSY";
+  | "WRITE_BUSY"
+  // Shop-specific webhook subscriptions: no connector origin or no vault in this broker, and
+  // the isolate's one sync is already running.
+  | "WEBHOOKS_UNAVAILABLE"
+  | "WEBHOOKS_BUSY";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
     super("BROKER_HELD");
@@ -180,6 +189,14 @@ export interface BrokerCapabilities {
    * else is off, and modelTurn holds every call.
    */
   readonly agentLoop: "off" | "on";
+  /**
+   * Shop-specific webhook subscriptions: the connector's own origin, from
+   * CONNECTOR_CONFIGURATION_JSON (byte-equal to the connector's, which edge:check holds), in
+   * development or staging and only with the vault (the registration definers run on the
+   * broker's own login). The broker builds every subscription's callback URL from it alone;
+   * absent or malformed holds the sync (WEBHOOKS_UNAVAILABLE).
+   */
+  readonly shopifyWebhookOrigin: string | null;
   // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
   // health also needs the challenge capability; development may run without it.
   readonly challengeRequired: boolean;
@@ -200,6 +217,7 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   computerMode: "off",
   shopifyWrite: "off",
   agentLoop: "off",
+  shopifyWebhookOrigin: null,
   challengeRequired: true,
 });
 const environments = ["development", "staging", "production"] as const;
@@ -462,6 +480,22 @@ function agentLoop(
     : "off";
 }
 
+// Shop-specific webhook subscriptions: the connector's origin from its own reviewed
+// configuration, parsed as the connector parses it; development or staging, and only with
+// the vault. Production holds it with the vault.
+function shopifyWebhookOrigin(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): string | null {
+  if (environment === "production" || vaultCapability === null) return null;
+  try {
+    return parseConnectorWebhookOrigin(own(env, "CONNECTOR_CONFIGURATION_JSON"), environment);
+  } catch {
+    return null;
+  }
+}
+
 async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
   let result = nothing;
   try {
@@ -486,6 +520,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         computerMode: computerMode(env, environment),
         shopifyWrite: shopifyWrite(env, environment, vaultCapability),
         agentLoop: agentLoop(env, environment, vaultCapability),
+        shopifyWebhookOrigin: shopifyWebhookOrigin(env, environment, vaultCapability),
         challengeRequired: environment !== "development",
       });
     }
@@ -509,6 +544,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       computerMode: result.computerMode,
       shopifyWrite: result.shopifyWrite,
       agentLoop: result.agentLoop,
+      shopifyWebhooks: result.shopifyWebhookOrigin !== null,
     }),
   );
   return result;
@@ -516,14 +552,24 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
 
 // Memoised per isolate (per env object) with one in-flight initialisation that
 // concurrent first calls share. It never rejects; a failure stays held.
+const initialised = new WeakSet<object>();
 export function brokerCapabilities(env: unknown): Promise<Readonly<BrokerCapabilities>> {
   if (!env || typeof env !== "object") return Promise.resolve(nothing);
   let pending = initialisations.get(env);
   if (!pending) {
-    pending = initialise(env).catch(() => nothing);
+    pending = initialise(env)
+      .catch(() => nothing)
+      .finally(() => initialised.add(env));
     initialisations.set(env, pending);
   }
   return pending;
+}
+/**
+ * Whether this isolate has finished initialising the capabilities of `env` (a call that
+ * finds false waits for the initialisation: a cold isolate, for the Shopify stage line).
+ */
+export function brokerCapabilitiesWarm(env: unknown): boolean {
+  return !!env && typeof env === "object" && initialised.has(env);
 }
 
 // Every failure becomes the single error BROKER_HELD plus one fixed log line naming the

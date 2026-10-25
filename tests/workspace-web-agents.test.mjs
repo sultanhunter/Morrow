@@ -161,9 +161,11 @@ const contextRow = {
 test("decoders accept the server's own bodies exactly", async () => {
   const models = await serverRead("models.list", { enterContext: [contextRow] });
   const decoded = decodeModels({ schemaVersion: 1, ...models.body });
-  assert.equal(decoded?.catalogueVersion, 1);
+  // Catalogue version 3 (ADR-0036): Opus 5.5 at medium by default, under the default ceiling 4.
+  assert.equal(decoded?.catalogueVersion, 3);
   assert.equal(decoded.entries.length, 9);
-  assert.deepEqual(decoded.workspaceDefault, { model: "claude_sonnet_5_5", effort: "low" });
+  assert.deepEqual(decoded.workspaceDefault, { model: "claude_opus_5_5", effort: "medium" });
+  assert.equal(decoded.ceiling, 4);
   assert.equal(decoded.canRevise, false);
   // M3 PR-2: GET /models says whether run admission is open (closed unless the api's runs
   // handler admits), so Ask writes nothing while it is not.

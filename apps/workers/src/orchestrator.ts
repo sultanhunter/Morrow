@@ -23,6 +23,7 @@ import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from 
 import { agentAnswerEvent, runAgentWorkflow } from "./agent-run.js";
 import { runListingsWorkflow } from "./listings-run.js";
 import { createRuntimePool } from "./runtime-pool.js";
+import { keepRuntimeSweep } from "./runtime-sweep.js";
 
 // morrow-<env>-orchestrator (P04.T02a D8; M3 PR-2, mvp-architecture §2 steps 8, 9 and 15 and
 // §3). ListingsRunWorkflow replaces the placeholder MorrowWorkWorkflow: one instance per run,
@@ -33,8 +34,8 @@ import { createRuntimePool } from "./runtime-pool.js";
 // dispatch_disabled before any step, unless the reviewed model-provider switch is on with the
 // reviewed database binding and the RuntimeBroker and Workflow bindings (environment.ts).
 // M2 PR-3's product read exists since the integration of M2 PR-3 and M3 PR-2
-// (productReadAvailable, a reviewed constant), so the model-provider switch, committed off,
-// is the only gate. OperationWorkflow joins in M4.
+// (productReadAvailable, a reviewed constant), so the model-provider switch (on in staging
+// since model-provider-on, 2026-10-25) is the only gate. OperationWorkflow joins in M4.
 // Build order PR 11: AgentRunWorkflow (agent-run@1), one instance per agent run, its id the
 // run id, its payload AgentRunParams@1 (ids only). It is dispatched only while the reviewed
 // agent-loop switch is on as well (environment.ts agentRuns); otherwise it throws
@@ -161,7 +162,9 @@ export default {
     batch.retryAll();
     console.log(JSON.stringify({ event: "morrow_orchestrator_dispatch_disabled" }));
   },
-  async scheduled(_controller: unknown, env: unknown): Promise<void> {
+  async scheduled(controller: unknown, env: unknown, ctx?: unknown): Promise<void> {
+    // Build order PR 8: the runtime's clean-up, whatever dispatch says (runtime-sweep.ts).
+    keepRuntimeSweep(controller, env, ctx);
     const selected = select(env);
     if (!selected.ports || !selected.mapping.ok) {
       console.log(JSON.stringify({ event: "morrow_orchestrator_dispatch_disabled" }));

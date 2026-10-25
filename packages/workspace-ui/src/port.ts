@@ -4,6 +4,14 @@ import type {
   AccountOverviewView,
   AnswerView,
   ApplyResultView,
+  BatchDecidedView,
+  BatchDecisionBody,
+  BatchDocumentView,
+  CatalogCollectionView,
+  CatalogPageView,
+  CatalogProductView,
+  HistoryOperationView,
+  UndoRequestedView,
   ConnectionDisconnectView,
   ConnectionsView,
   DisconnectResultView,
@@ -44,6 +52,12 @@ import type {
   RepeatingView,
   StopStepsResultView,
 } from "./projects/model";
+import type {
+  ActivityLogView,
+  InboxSamplesView,
+  InboxView,
+  OperationDetailView,
+} from "./inbox-model";
 import { teamPortMethods, type LibraryPort, type SettingsPort, type TeamPort } from "./team-model";
 
 export type Outcome<T> =
@@ -240,7 +254,7 @@ export interface WorkspacePort {
       proposalId: Id,
       c: Command<{ readonly proposalRef: RecordRefView; readonly approvalRef: RecordRefView }>,
     ): Promise<Outcome<ApplyResultView>>;
-    operationsOfTask(ws: Id, taskId: Id): Promise<Outcome<readonly OperationView[]>>;
+    operationsOfTask(ws: Id, taskId: Id): Promise<Outcome<readonly HistoryOperationView[]>>;
     recheck(
       ws: Id,
       operationId: Id,
@@ -251,6 +265,45 @@ export interface WorkspacePort {
       operationId: Id,
       c: Command<Record<string, never>>,
     ): Promise<Outcome<OperationView>>;
+    /**
+     * v1 PR 4: Undo of one applied change. Morrow reads the product, and when every field
+     * still holds what the change wrote, builds a NEW change back to the values read before
+     * it, which waits for approval like any other (nothing is written to the store here).
+     */
+    undo(
+      ws: Id,
+      operationId: Id,
+      c: Command<Record<string, never>>,
+    ): Promise<Outcome<UndoRequestedView>>;
+    /** v1 PR 4: the server-built document of the changes waiting on this proposal's task. */
+    batch(ws: Id, proposalId: Id): Promise<Outcome<BatchDocumentView>>;
+    /** v1 PR 4: one confirmation of that document: one exact approval each, all or none. */
+    decideBatch(
+      ws: Id,
+      proposalId: Id,
+      c: Command<BatchDecisionBody>,
+    ): Promise<Outcome<BatchDecidedView>>;
+  };
+  /**
+   * v1 PR 4: the product picker's reads (M2 PR-3's catalogue routes): one page of a linked
+   * store's products (a search, or a collection's) or collections. Ids and titles only; the
+   * server checks the store's link and the product read rule on every page.
+   */
+  readonly catalog: {
+    products(
+      ws: Id,
+      storeId: Id,
+      q: {
+        readonly after: string | null;
+        readonly collectionId: string | null;
+        readonly query: string | null;
+      },
+    ): Promise<Outcome<CatalogPageView<CatalogProductView>>>;
+    collections(
+      ws: Id,
+      storeId: Id,
+      after: string | null,
+    ): Promise<Outcome<CatalogPageView<CatalogCollectionView>>>;
   };
   /** M3 PR-1: the model catalogue and the workspace's default and member ceiling. */
   readonly models: {
@@ -349,6 +402,17 @@ export interface WorkspacePort {
       c: Command<{ documentDigest: string; nonce: string }>,
     ): Promise<Outcome<PlanStartResultView>>;
   };
+  /**
+   * v1 PR 15: the Inbox (what waits for this person, filtered by the server: open
+   * questions, changes they may decide, apply outcomes that are unknown or not applied, and
+   * store connection problems), one apply outcome for the exception screen, and the
+   * activity log (Settings > Activity), a page at a time. Reads only.
+   */
+  readonly inbox: {
+    read(ws: Id): Promise<Outcome<InboxView>>;
+    operation(ws: Id, operationId: Id): Promise<Outcome<OperationDetailView>>;
+    activity(ws: Id, after: string | null): Promise<Outcome<ActivityLogView>>;
+  };
   /** T7 PR 16: Team, agent pages and Add agents; Settings; Shop knowledge and Files. */
   readonly team: TeamPort;
   readonly settings: SettingsPort;
@@ -358,7 +422,15 @@ export interface WorkspacePort {
    * HTTP build never composes it; the fixture build composes it only in its
    * `home_preview` scenario. A default-off switch, not a feature.
    */
-  readonly samples: { home(ws: Id): Promise<Outcome<HomeSamplesView>> };
+  readonly samples: {
+    home(ws: Id): Promise<Outcome<HomeSamplesView>>;
+    /**
+     * v1 PR 15: the Inbox kinds whose backend isn't built yet (an agent's question from a
+     * run, Reconnect after a permission change), from fixtures only. Default off: the HTTP
+     * build never composes it; the fixture composes it only in `inbox_preview`.
+     */
+    inbox(ws: Id): Promise<Outcome<InboxSamplesView>>;
+  };
 }
 
 export const portMethods = [
@@ -425,7 +497,16 @@ export const portMethods = [
   "review.operationsOfTask",
   "review.recheck",
   "review.setAside",
+  "review.undo",
+  "review.batch",
+  "review.decideBatch",
+  "catalog.products",
+  "catalog.collections",
+  "inbox.read",
+  "inbox.operation",
+  "inbox.activity",
   "samples.home",
+  "samples.inbox",
 ] as const;
 /** T7 PR 19: the project screens' methods, uncomposed over HTTP until T2 and T6 land. */
 export const projectPortMethods = portMethods.filter(

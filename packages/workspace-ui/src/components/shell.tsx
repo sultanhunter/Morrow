@@ -12,14 +12,14 @@ import { copy } from "../copy";
 import type { HomeSamplesView, Id, WorkspaceSummary, WorkspaceView } from "../model";
 import { useServices } from "../services";
 import { breakpoints } from "../tokens";
+import { inboxCountLabel, openItems } from "../inbox-model";
 import {
   ShellRefreshProvider,
   primaryStore,
   useConnections,
   useHomeSamples,
-  useOpenQuestions,
+  useInbox,
   useShellRefresh,
-  waitingCount,
   type ShellRefresh,
 } from "../workspace-data";
 import { AgentAvatar, PersonAvatar, StoreTile, agentNames } from "./avatars";
@@ -582,12 +582,12 @@ export function AppShell({
   // The Inbox count and the connection line follow the person: read again on each page,
   // command change and Retry, under the refresh Home's reads of them share.
   const refresh = useShellRefresh(page ?? currentRoute);
-  const [questions] = useOpenQuestions(ws, refresh);
+  // v1 PR 15: the count is the Inbox read's open items, the same read Home and the Inbox
+  // show, so the three never disagree.
+  const [inbox] = useInbox(ws, refresh);
   const samples = useHomeSamples(ws);
   const waiting =
-    questions.kind === "ok" && questions.value.items.length > 0
-      ? waitingCount(questions.value)
-      : null;
+    inbox.kind === "ok" && openItems(inbox.value).length > 0 ? inboxCountLabel(inbox.value) : null;
   useEffect(() => {
     if (!narrow) setDrawerOpen(false);
   }, [narrow]);

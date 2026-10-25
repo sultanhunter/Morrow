@@ -280,3 +280,14 @@ The owner's answer to the 2026-10-26 decision sheet (OD-2026-10-23-7, quoted in 
 - **Decision 11b's last sentence and the ADR-0005 entry under "Does not change"** (ADR-0024 owner question 1, answered (b)): installed agents keep stage-and-activate, but in a team the Owner installs an agent and issues or renews its mandate with no second reviewer while no other member holds the mandate's store grants. This amends ADR-0005 item 3; kill switches stay `human_only`.
 
 Members choosing a model per run stays dropped.
+
+### 2026-10-25: decision 7's defaults (ADR-0036)
+
+The owner's decision of 2026-10-25 (OD-2026-10-25-1, recorded in ADR-0036) changes decision 7's defaults as restated above: the Coordinator runs Opus 5.5 at high effort and every other agent, specialists and the five installed agents included, Opus 5.5 at medium.
+
+### 2026-10-25: one agent kind in place of specialists (ADR-0037)
+
+The owner's decisions of 2026-10-25 (OD-2026-10-25-3, and OD-2026-10-25-4 for the values, recorded in ADR-0037) change these lines; the text above is kept as approved.
+
+- **Decision 1.** The Coordinator line's first two sentences become: "Morrow answers from knowledge, orchestrates teammates for Asks and @mentions in any way the work needs (calling them as tools for structured results, in sequence or in parallel, or, outside an Ask, handing work to them), asks clarifying questions and ranks suggestions. It creates only tasks, questions, messages, plan cards and agent cards; a plan card or agent card creates nothing until a person starts or approves it." The rest of the bullet stays: Morrow is separate from the optional Chief of Staff and CMO, and agent titles and delegation never confer authority. The owner's addition becomes one level of teammates under Morrow: Morrow may propose a new teammate, a person approves its exact card, and teammates cannot create, call or hand off to agents. "Installable agents" gains a second origin: agents Morrow creates from the fixed tool catalogue, which are installations like the premade ones.
+- **Decision 11.** Its specialist parts (11a to 11c, 11e, "One clock", "Rules and model", "Reports", "Switch and slip rules" and 11f) are superseded by ADR-0037 items 3 to 9; item 9 carries the slip rule (agent cards move to the first fast follow if G11 is missed or their authority packet is not merged by G18's date, 2026-12-04), so the planning date still holds by the slip rules. 11d stays, except that a workspace-created agent carries instruction and skill text Morrow writes for it, shown in full on its card and bound by its digest; there is still no skill registry and no skill tool.

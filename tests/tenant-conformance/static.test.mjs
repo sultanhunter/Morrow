@@ -338,8 +338,17 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_catalog_tenant'::text, true)))",
     null,
   ],
+  // v1 PR 4 (catalog-undo): the broker's undo check stores its read of one product, as the
+  // broker's login only, for exactly the tenant, store and product its own transaction-local
+  // setting names (INSERT only; catalog_undo_record writes and clears it).
+  broker_undo_snapshot: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || product_id) = current_setting('morrow.vault_undo_product'::text, true)))",
+  ],
 };
-// Build order PR 11 (0047 agent-runs): the broker's two turn definers reach, as the broker's
+// Build order PR 11 (0052 agent-runs): the broker's two turn definers reach, as the broker's
 // login only, the one run (and call) their own transaction-local settings name; the runtime
 // login's cron and lease lookup read queued and running runs only.
 const brokerAgentRun = (column) =>
