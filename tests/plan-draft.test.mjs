@@ -184,7 +184,7 @@ test("plan.draft is ToolCatalogue@1's: grants nothing, on workspace.conversation
   assert.ok(Object.isFrozen(planDraftTool));
   // A catalogue entry names no grant: a tool is one capability and verb, checked per call.
   assert.equal(Object.hasOwn(planDraftTool, "grants"), false);
-  assert.equal(toolCatalogueVersion, 2, "a new tool is a new catalogue version");
+  assert.equal(toolCatalogueVersion, 3, "a new tool is a new catalogue version (ADR-0037: 3)");
   const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
   const post = catalogue.capabilities.find((c) => c.id === planDraftTool.capabilityId);
   assert.equal(post.executor, "agent_direct_write");
@@ -293,10 +293,20 @@ test("the launch Coordinator subset leaves task.create out; the grant set keeps 
   assert.ok(coordinatorLaunchTools("on").includes("plan.draft"));
   assert.ok(!coordinatorLaunchTools("off").includes("plan.draft"), "absent while off");
   assert.ok(!coordinatorLaunchTools().includes("plan.draft"), "committed off");
+  // ADR-0037 item 9: the teammate tools follow their own switches, both committed off.
+  const team = (teammateCalls, agentCards) => ({ teammateCalls, agentCards });
+  for (const tool of ["agent.ask", "agent.result.read", "agent.propose"])
+    assert.ok(!coordinatorLaunchTools().includes(tool), tool + " committed off");
+  assert.ok(coordinatorLaunchTools("on", team("on", "off")).includes("agent.ask"));
+  assert.ok(coordinatorLaunchTools("on", team("on", "off")).includes("agent.result.read"));
+  assert.ok(!coordinatorLaunchTools("on", team("on", "off")).includes("agent.propose"));
+  assert.ok(coordinatorLaunchTools("on", team("off", "on")).includes("agent.propose"));
+  assert.ok(!coordinatorLaunchTools("on", team("off", "on")).includes("agent.ask"));
+  assert.ok(coordinatorLaunchTools("off", team("off", "off")).includes("agent.route"));
 });
 
-test("Morrow in an Ask: only under the envelope; never task.create, specialist.draft, inbox.ask", () => {
-  for (const tool of ["task.create", "specialist.draft", "inbox.ask"])
+test("Morrow in an Ask: only under the envelope; never task.create, agent.propose, inbox.ask", () => {
+  for (const tool of ["task.create", "agent.propose", "inbox.ask"])
     assert.ok(!askTools.includes(tool), tool);
   assert.deepEqual(turnTools(turn({ conversation: "ask", askEnvelope: false })), []);
   assert.deepEqual(
@@ -341,7 +351,7 @@ test("Morrow in an Ask: only under the envelope; never task.create, specialist.d
     }),
     "input_invalid",
   );
-  // The @Morrow run: no task.create, no agent.route, no specialist.draft, no inbox.ask.
+  // The @Morrow run: no task.create, no agent.route, no agent.propose, no inbox.ask.
   assert.deepEqual(
     [...mentionRunTools],
     ["knowledge.search", "work.read", "message.post", "plan.draft"],

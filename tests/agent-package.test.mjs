@@ -1,12 +1,17 @@
 // PR 10: AgentPackage@1 and SkillManifest@1 (ADR-0023 decisions 6 and 11d) and the package
 // checks CI and install run: tools by kind, capabilities asked for, Support's customer data,
 // no customer reads with the computer, pinned skills that add no tool, offered model entries.
+// ADR-0037 PR 2: one kind with two origins (a workspace package carries its instructions and
+// skill text), depth 1 (no agent.*, delegation or agents.* outside the Coordinator) and item
+// 5's exclusions for workspace packages; the specialist kind retired.
 import assert from "node:assert/strict";
 import test from "node:test";
+import { canonicalDigest } from "../packages/policy/src/review.ts";
 import { inspectAgentPackage, skillDigest } from "../packages/policy/src/agent-package.ts";
 import {
   fakeListingsPackage,
   fakeSkillManifest,
+  fakeWorkspacePackage,
 } from "../packages/policy/src/agent-platform-fakes.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 
@@ -31,7 +36,26 @@ test("the Listings package and its skill pass", () => {
 
 for (const [name, change, expected] of [
   ["a coordination tool", (p) => p.tools.push("agent.route"), "TOOL_NOT_FOR_KIND"],
-  ["the built-in specialist id", (p) => (p.id = "morrow.specialist"), "PACKAGE_ID_KIND_MISMATCH"],
+  // ADR-0037 item 2: depth 1. A teammate never holds an agent.* tool, delegation or agents.*.
+  ["a teammate call", (p) => p.tools.push("agent.ask"), "AGENT_AUTHORITY_OUTSIDE_COORDINATOR"],
+  [
+    "the result reader",
+    (p) => p.tools.push("agent.result.read"),
+    "AGENT_AUTHORITY_OUTSIDE_COORDINATOR",
+  ],
+  ["an agent card", (p) => p.tools.push("agent.propose"), "AGENT_AUTHORITY_OUTSIDE_COORDINATOR"],
+  [
+    "delegation without a tool",
+    (p) => p.capabilities.push({ capabilityId: "workspace.task.delegate", verbs: ["delegate"] }),
+    "AGENT_AUTHORITY_OUTSIDE_COORDINATOR",
+  ],
+  [
+    "an agents.* capability",
+    (p) => p.capabilities.push({ capabilityId: "agents.builder.describe", verbs: ["execute"] }),
+    "AGENT_AUTHORITY_OUTSIDE_COORDINATOR",
+  ],
+  ["the retired specialist id", (p) => (p.id = "morrow.specialist"), "PACKAGE_ID_KIND_MISMATCH"],
+  ["a workspace id", (p) => (p.id = "workspace.listings"), "PACKAGE_ID_ORIGIN_MISMATCH"],
   [
     "a tool whose capability it does not ask for",
     (p) =>
@@ -146,7 +170,9 @@ test("built-in kinds: the Coordinator holds exactly its tools; neither built-in 
       "inbox.ask",
       "task.create",
       "agent.route",
-      "specialist.draft",
+      "agent.ask",
+      "agent.result.read",
+      "agent.propose",
       "plan.draft",
     ];
     p.capabilities = [
@@ -169,7 +195,66 @@ test("built-in kinds: the Coordinator holds exactly its tools; neither built-in 
   );
   assert.deepEqual(check({ ...coordinator, triggerKinds: ["schedule"] }), ["PACKAGE_INVALID"]);
   assert.deepEqual(check({ ...coordinator, computer: true }), ["PACKAGE_INVALID"]);
-  const specialist = { ...coordinator, id: "morrow.specialist", kind: "specialist" };
-  assert.deepEqual(check({ ...specialist, optionalScopes: ["read_orders"] }), ["PACKAGE_INVALID"]);
-  assert.ok(check(specialist).includes("TOOL_NOT_FOR_KIND"), "no task.create or route");
+  // The specialist kind retired with ADR-0037; a workspace Coordinator fails the schema.
+  assert.deepEqual(check({ ...coordinator, id: "morrow.specialist", kind: "specialist" }), [
+    "PACKAGE_INVALID",
+  ]);
+  assert.deepEqual(check({ ...coordinator, origin: "workspace" }), ["PACKAGE_INVALID"]);
 });
+
+// ADR-0037 items 4 and 5: a workspace package, as an approved card becomes.
+const workspace = () => {
+  const pkg = structuredClone(fakeWorkspacePackage());
+  pkg.roleTextDigest = canonicalDigest(pkg.instructions);
+  return pkg;
+};
+const workspaceChanged = (change) => {
+  const pkg = workspace();
+  change(pkg);
+  return pkg;
+};
+test("ADR-0037 item 4: a workspace package passes with its instructions' digest and one offered model", () => {
+  assert.ok(validateCurrentDefinition("AgentPackage", workspace()));
+  assert.deepEqual(inspectAgentPackage(workspace(), [], 2), []);
+  // Its model is the workspace's default for new teammates, even when that is not the kind's.
+  assert.deepEqual(
+    inspectAgentPackage(
+      workspaceChanged((p) => {
+        p.offeredProfiles = [{ model: "claude_sonnet_5_5", effort: "low" }];
+        p.defaultProfile = { model: "claude_sonnet_5_5", effort: "low" };
+      }),
+      [],
+      2,
+    ),
+    [],
+  );
+});
+for (const [name, change, expected] of [
+  [
+    "edited instructions",
+    (p) => (p.instructions += " Also change prices."),
+    "ROLE_TEXT_DIGEST_MISMATCH",
+  ],
+  ["a first-party id", (p) => (p.id = "morrow.restock"), "PACKAGE_ID_ORIGIN_MISMATCH"],
+  [
+    "a human_only capability, even to propose",
+    (p) => p.capabilities.push({ capabilityId: "agents.installation.disable", verbs: ["propose"] }),
+    "WORKSPACE_EXCLUDED",
+  ],
+  [
+    "support.*",
+    (p) => p.capabilities.push({ capabilityId: "support.case.read", verbs: ["view"] }),
+    "WORKSPACE_EXCLUDED",
+  ],
+  ["customer mail as a trigger", (p) => p.triggerKinds.push("inbound_mail"), "WORKSPACE_EXCLUDED"],
+  ["a teammate call", (p) => p.tools.push("agent.ask"), "AGENT_AUTHORITY_OUTSIDE_COORDINATOR"],
+  [
+    "delegation",
+    (p) => p.capabilities.push({ capabilityId: "workspace.task.delegate", verbs: ["delegate"] }),
+    "AGENT_AUTHORITY_OUTSIDE_COORDINATOR",
+  ],
+])
+  test(`ADR-0037 item 5: a workspace package is refused for ${name}`, () => {
+    const codes = inspectAgentPackage(workspaceChanged(change), [], 2);
+    assert.ok(codes.includes(expected), JSON.stringify(codes));
+  });

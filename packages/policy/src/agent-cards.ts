@@ -282,9 +282,19 @@ export interface CardEdit {
   /** Indexes into skillTexts. */
   readonly removeSkillTexts?: readonly number[];
 }
+const editKeys = new Set([
+  "name",
+  "purpose",
+  "instructions",
+  "removeTools",
+  "removeTriggerKinds",
+  "removeSkillIds",
+  "removeSkillTexts",
+]);
 /**
- * The next revision of a card after a person's edit, or input_invalid: removing a tool the
- * card does not hold, the teammate result tool, every picked tool, or a tool a remaining skill
+ * The next revision of a card after a person's edit, or input_invalid: a key outside CardEdit
+ * (there is no edit that adds: an addition is a new card and a new approval), removing a tool
+ * the card does not hold, the teammate result tool, every picked tool, or a tool a kept skill
  * declares; or a value outside AgentProposal@1. Grants are derived again from the remaining
  * tools, so an edit only narrows; the taint, store, limits and model stay.
  */
@@ -293,9 +303,19 @@ export function reviseAgentCard(
   edit: CardEdit,
   editor: Current_HumanActorRef,
   at: string,
+  skillFacts: readonly CardSkill[],
 ):
   | { readonly ok: true; readonly card: Current_AgentProposal }
   | { readonly ok: false; readonly refusal: CardRefusal } {
+  if (
+    !edit ||
+    typeof edit !== "object" ||
+    Object.keys(edit).some((key) => !editKeys.has(key)) ||
+    [edit.removeTools, edit.removeTriggerKinds, edit.removeSkillIds, edit.removeSkillTexts].some(
+      (list) => list !== undefined && !Array.isArray(list),
+    )
+  )
+    return { ok: false, refusal: "input_invalid" };
   const remove = (list: readonly string[] | undefined) => new Set(list ?? []);
   const tools = remove(edit.removeTools);
   const triggers = remove(edit.removeTriggerKinds);
@@ -337,7 +357,7 @@ export function reviseAgentCard(
     ownerOnly: [...grants.ownerOnly],
     revisedAt: at,
   };
-  if (!validateCurrentDefinition("AgentProposal", next))
+  if (!validateCurrentDefinition("AgentProposal", next) || !cardSkillsWithinTools(next, skillFacts))
     return { ok: false, refusal: "input_invalid" };
   return { ok: true, card: freezeDeep(next) };
 }

@@ -130,9 +130,9 @@ export function tablePages(
   const pages: { firstRow: number; rows: (readonly string[])[] }[] = [];
   let current: { firstRow: number; rows: (readonly string[])[] } = { firstRow: 1, rows: [] };
   let size = frame;
-  table.rows.forEach((row, index) => {
+  for (const [index, row] of table.rows.entries()) {
     const n = jsonBytes(row) + 1;
-    if (frame + n > resultItemPageBytes) throw new TeammateResultError("TEAMMATE_RESULT_TOO_LARGE");
+    if (frame + n > resultItemPageBytes) return null;
     if (size + n > resultItemPageBytes && current.rows.length) {
       pages.push(current);
       current = { firstRow: index + 1, rows: [] };
@@ -140,19 +140,11 @@ export function tablePages(
     }
     current.rows.push(row);
     size += n;
-  });
+  }
   pages.push(current);
   return Object.freeze(pages.map((p) => Object.freeze({ ...p, rows: Object.freeze(p.rows) })));
 }
-const fitsTable = (table: TeammateTableContent) => {
-  try {
-    return tablePages(table) !== null;
-  } catch (error) {
-    if (error instanceof TeammateResultError && error.code === "TEAMMATE_RESULT_TOO_LARGE")
-      return false;
-    throw error;
-  }
-};
+const fitsTable = (table: TeammateTableContent) => tablePages(table) !== null;
 const csvCell = (cell: string) =>
   /[",\r\n]/.test(cell) ? '"' + cell.replace(/"/g, '""') + '"' : cell;
 /** RFC 4180 text of a table, for a table whose rows do not fit a page one by one. */
@@ -308,6 +300,8 @@ export type ResultItemSink = (draft: ResultItemDraft) => Promise<string>;
 
 // A placeholder id as long as an Id may be, so a plan that fits still fits with real ids.
 const placeholderId = "x".repeat(128);
+// About the bytes a reference adds (an item marker and its listed ref with a long title).
+const movableBytes = 512;
 type Part =
   | { readonly at: "summary"; readonly size: number }
   | { readonly at: "detail" | "table"; readonly finding: number; readonly size: number };
@@ -437,7 +431,10 @@ export async function buildTeammateResult(
     ...submit.findings.flatMap((f, i) =>
       f.table === null ? [] : [{ at: "table" as const, finding: i, size: jsonBytes(f.table) }],
     ),
-  ].sort((a, b) => b.size - a.size);
+  ]
+    // A part smaller than a reference to it never makes the result smaller by moving.
+    .filter((part) => part.size > movableBytes)
+    .sort((a, b) => b.size - a.size);
   let allFindings: ResultItemDraft | null = null;
   for (const part of parts) {
     if (measure(null) <= toolResultMaxBytes) break;

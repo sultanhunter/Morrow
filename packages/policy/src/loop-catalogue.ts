@@ -25,6 +25,12 @@ import { modelCallBudgetMs, modelGatewayLimits } from "../../identity/src/broker
 import { generatedLoopCatalogue } from "./generated/loop-catalogue";
 
 export type LoopProfileKind = "coordinator" | "specialist" | "installed";
+/**
+ * A loop run's kind for holds. "specialist" is no longer an AgentRunKind (ADR-0037 retired the
+ * kind; its contracts PR dropped it from agent-run@1): its hold, the 5% credit cap, stays here
+ * only until ADR-0039's contracts PR removes the money caps with this module's holds.
+ */
+export type LoopRunKind = Current_AgentRunKind | "specialist";
 export type LoopCatalogueStatus = "active" | "retired" | "proposed";
 export interface LoopSelectionKeys {
   readonly model: string;
@@ -71,7 +77,7 @@ export class LoopCatalogueError extends Error {
   }
 }
 const invalid = () => new LoopCatalogueError("LOOP_CATALOGUE_INPUT_INVALID");
-const runKinds = ["coordinator", "routed", "mandate"];
+const runKinds = ["coordinator", "routed", "mandate", "specialist"];
 const usd12 = (value: number) => BigInt(value);
 const nonNegative = (value: unknown): value is bigint => typeof value === "bigint" && value >= 0n;
 
@@ -160,16 +166,13 @@ function limitsOf(version: number) {
   if (!v) throw invalid();
   return v.limits;
 }
-/**
- * A mandate run (look-for-work included) must call a tool: two turns. The specialist kind
- * retired with ADR-0037.
- */
-export function toolTurnsRequired(kind: Current_AgentRunKind): 1 | 2 {
+/** A mandate run (look-for-work included) and a specialist must call a tool: two turns. */
+export function toolTurnsRequired(kind: LoopRunKind): 1 | 2 {
   if (!runKinds.includes(kind)) throw invalid();
-  return kind === "mandate" ? 2 : 1;
+  return kind === "mandate" || kind === "specialist" ? 2 : 1;
 }
 /** The kind's limit lowered so that it times the worst-case turn fits the run backstop. */
-export function turnLimit(entry: LoopEntry, kind: Current_AgentRunKind): number {
+export function turnLimit(entry: LoopEntry, kind: LoopRunKind): number {
   if (!runKinds.includes(kind) || !entry || entry.worstCaseTurnUsd12 <= 0n) throw invalid();
   const limits = limitsOf(entry.catalogueVersion);
   const kindLimit =
@@ -183,7 +186,7 @@ export function turnLimit(entry: LoopEntry, kind: Current_AgentRunKind): number 
  */
 export function runHold(input: {
   readonly entry: LoopEntry;
-  readonly kind: Current_AgentRunKind;
+  readonly kind: LoopRunKind;
   readonly creditCapUsd12: bigint | null;
 }): RunHoldResult {
   const { entry, kind, creditCapUsd12 } = input;

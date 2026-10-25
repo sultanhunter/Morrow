@@ -1,19 +1,21 @@
-// PR 10: ToolCatalogue@1 (ADR-0027 items 2, 3 and 8), the Specialist ceiling (ADR-0028 item
-// 2) and the committed-off agent switches (ADR-0027 item 11, ADR-0028 item 8). The safety tests
-// of the build order's PR 10: no tool takes SQL, a URL, a store, a recipient, a credential or a
-// model; validators are generated ahead of time; the old formats stay unchanged.
+// PR 10: ToolCatalogue@1 (ADR-0027 items 2, 3 and 8) and the committed-off agent switches
+// (ADR-0027 item 11); ADR-0037 PR 2: catalogue version 3 (agent.ask, agent.result.read and
+// agent.propose for Morrow only, agent.route without once per job, structured briefs without a
+// character cap, the call context and result.submit) and the teammate-call and agent-card
+// switches, with the Specialist ceiling and its switch retired. The safety tests of the build
+// order's PR 10: no tool takes SQL, a URL, a store, a recipient, a credential or a model;
+// validators are generated ahead of time; the old formats stay unchanged.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  cardToolsException,
   coordinatorToolNames,
   forbiddenInputName,
   generateAgentPlatform,
-  generatedSpecialistCeilingPath,
   generatedToolCataloguePath,
   inspectAgentPlatformSwitches,
-  inspectSpecialistCeiling,
   inspectToolCatalogue,
   jcs,
   strictModelSchema,
@@ -23,9 +25,9 @@ import {
   checkToolInput,
   modelToolDefinitions,
   offeredTools,
+  isAgentTool,
   runContext,
-  specialistCapabilities,
-  specialistCeiling,
+  teammateResultTool,
   toolByWireName,
   toolCatalogue,
   toolCatalogueDigest,
@@ -33,45 +35,53 @@ import {
   toolEntry,
   ToolCatalogueError,
   toolsForContext,
-  withinSpecialistCeiling,
 } from "../packages/policy/src/tool-catalogue.ts";
-import { fakeSpecialistSpec } from "../packages/policy/src/agent-platform-fakes.ts";
+import {
+  fakeIds,
+  fakeListingsPackage,
+  fakeTeammateBrief,
+} from "../packages/policy/src/agent-platform-fakes.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 const catalogue = read("docs/contracts/tool-catalogue.json");
-const ceiling = read("docs/contracts/specialist-ceiling.json");
 const capabilities = read("docs/contracts/capabilities.json").capabilities;
 const schemas = [
   read("docs/contracts/schemas/v1/core.schema.json"),
   read("docs/contracts/schemas/v1.1/core.schema.json"),
 ];
 const validate = (value) => validateCurrentDefinition("ToolCatalogue", value);
-const inspect = (c = catalogue, s = schemas, l = ceiling) =>
-  inspectToolCatalogue({ catalogue: c, capabilities, schemas: s, ceiling: l, validate });
+const inspect = (c = catalogue, s = schemas) =>
+  inspectToolCatalogue({ catalogue: c, capabilities, schemas: s, validate });
+const switches = () => [
+  read("docs/decisions/agent-loop-staging.json"),
+  read("docs/decisions/teammate-calls-staging.json"),
+  read("docs/decisions/agent-cards-staging.json"),
+];
 const tool = (c, name) => c.tools.find((t) => t.name === name);
 
 test("the generator reproduces the committed modules, which are data only", async () => {
   const first = await generateAgentPlatform();
   const second = await generateAgentPlatform();
   assert.deepEqual(first, second);
-  for (const path of [generatedToolCataloguePath, generatedSpecialistCeilingPath]) {
+  assert.deepEqual(Object.keys(first), [generatedToolCataloguePath]);
+  for (const path of [generatedToolCataloguePath]) {
     assert.equal(readFileSync(path, "utf8"), first[path], path);
     assert.doesNotMatch(first[path], /\bimport\b|\bfunction\b|=>|\beval\b|new Function/);
   }
 });
 
-test("the committed catalogue, ceiling and switches inspect clean", () => {
+test("the committed catalogue and switches inspect clean; the specialist files are gone", () => {
   assert.deepEqual(inspect(), []);
-  assert.deepEqual(inspectSpecialistCeiling(ceiling, capabilities), []);
-  assert.deepEqual(
-    inspectAgentPlatformSwitches(
-      read("docs/decisions/agent-loop-staging.json"),
-      read("docs/decisions/specialists-staging.json"),
-    ),
-    [],
-  );
+  assert.deepEqual(inspectAgentPlatformSwitches(...switches()), []);
   assert.ok(validate(catalogue));
+  assert.equal(catalogue.version, 3);
+  for (const path of [
+    "docs/contracts/specialist-ceiling.json",
+    "docs/decisions/specialists-staging.json",
+    "packages/policy/src/generated/specialist-ceiling.ts",
+  ])
+    assert.equal(existsSync(path), false, path);
 });
 
 test("the digest a run manifest pins is sha256 of the RFC 8785 text of the catalogue", () => {
@@ -108,6 +118,7 @@ for (const field of [
   "effort",
   "capabilityId",
   "scope",
+  "tools",
 ])
   test(`a tool input that takes ${field} is refused`, () => {
     assert.ok(forbiddenInputName.test(field), field);
@@ -183,19 +194,56 @@ for (const [name, change, expected] of [
     /support\.thread\.read: support tools only/,
   ],
   [
-    "customer mail for a specialist",
-    (c) => tool(c, "support.thread.read").contexts.push("specialist"),
-    /support\.thread\.read: (support tools only|a specialist tool must be inside)/,
+    // ADR-0037 item 3(a): a called teammate never reads customer mail, asks or posts.
+    "customer mail for a called teammate",
+    (c) => tool(c, "support.thread.read").contexts.push("call"),
+    /support\.thread\.read: support tools only/,
   ],
   [
-    "order reads for a specialist",
-    (c) => tool(c, "orders.summary").contexts.push("specialist"),
-    /orders\.summary: a specialist tool must be inside the Specialist ceiling/,
+    "a question to the person in a teammate call",
+    (c) => tool(c, "inbox.ask").contexts.push("call"),
+    /inbox\.ask: a called teammate never asks or posts to the person/,
   ],
   [
-    "task creation for a specialist",
-    (c) => tool(c, "task.create").contexts.push("specialist"),
-    /task\.create: a specialist tool must be inside the Specialist ceiling/,
+    "a post to the person in a teammate call",
+    (c) => tool(c, "message.post").contexts.push("call"),
+    /message\.post: a called teammate never asks or posts to the person/,
+  ],
+  [
+    // ADR-0037 item 2: depth 1, agent.* for Morrow only.
+    "agent.ask for an installed agent",
+    (c) => tool(c, "agent.ask").contexts.push("routed"),
+    /agent\.ask: agent tools belong to the Coordinator only \(depth 1\)/,
+  ],
+  [
+    "agent.result.read for a called teammate",
+    (c) => tool(c, "agent.result.read").contexts.push("call"),
+    /agent\.result\.read: agent tools belong to the Coordinator only/,
+  ],
+  [
+    "agent.propose in a mandate run",
+    (c) => tool(c, "agent.propose").contexts.push("mandate"),
+    /agent\.propose: agent tools belong to the Coordinator only/,
+  ],
+  [
+    "a hand-off from a called teammate",
+    (c) => tool(c, "agent.route").contexts.push("call"),
+    /agent\.route: agent tools belong to the Coordinator only/,
+  ],
+  [
+    "the teammate result outside a call",
+    (c) => tool(c, "result.submit").contexts.push("routed"),
+    /result\.submit: the teammate result is an internal tool of the call context only/,
+  ],
+  [
+    "no teammate result in the call context",
+    (c) => (tool(c, "result.submit").contexts = ["routed"]),
+    /the call context must offer result\.submit/,
+  ],
+  [
+    "a call-only tool that is not the result",
+    (c) => (tool(c, "proposal.listing").contexts = ["call"]),
+    /proposal\.listing: only the teammate result is offered in the call context alone/,
   ],
   [
     "store reads for the Coordinator",
@@ -225,8 +273,8 @@ for (const [name, change, expected] of [
   ],
   [
     "an input definition outside the ToolInput names",
-    (c) => (tool(c, "specialist.draft").inputDefinition = "SpecialistBrief"),
-    /specialist\.draft: input definition must be a ToolInput definition/,
+    (c) => (tool(c, "agent.propose").inputDefinition = "AgentProposal"),
+    /agent\.propose: input definition must be a ToolInput definition/,
   ],
 ])
   test(`the tool catalogue refuses ${name}`, () => {
@@ -426,85 +474,154 @@ test("a strict schema refuses what strict tool use cannot carry exactly", () => 
   );
 });
 
-test("ADR-0028 item 2: the Specialist ceiling is fixed ids, never the never-list", () => {
-  assert.ok(specialistCeiling.length >= 1 && specialistCeiling.length <= 16);
-  for (const [capabilityId, verb] of [
-    ["orders.read", "view"],
-    ["support.case.read", "view"],
-    ["support.reply.send", "propose"],
-    ["workspace.task.delegate", "delegate"],
-    ["workspace.task.create", "execute"],
-    ["workspace.task.assign", "execute"],
-    ["catalog.content.publish", "execute"],
-    ["catalog.content.publish", "approve"],
-    ["agents.installation.disable", "execute"],
-  ])
-    assert.equal(withinSpecialistCeiling(capabilityId, verb), false, capabilityId + " " + verb);
-  for (const [name, change] of [
-    ["order reads", (l) => l.capabilities.push({ capabilityId: "orders.read", verbs: ["view"] })],
-    [
-      "customer mail",
-      (l) => l.capabilities.push({ capabilityId: "support.case.read", verbs: ["view"] }),
-    ],
-    [
-      "delegation",
-      (l) => l.capabilities.push({ capabilityId: "workspace.task.delegate", verbs: ["delegate"] }),
-    ],
-    [
-      "task creation",
-      (l) => l.capabilities.push({ capabilityId: "workspace.task.create", verbs: ["execute"] }),
-    ],
-    [
-      "executing a publish",
-      (l) =>
-        (l.capabilities.find((r) => r.capabilityId === "catalog.content.publish").verbs = [
-          "propose",
-          "execute",
-        ]),
-    ],
-    [
-      "a human_only stop",
-      (l) =>
-        l.capabilities.push({ capabilityId: "agents.installation.disable", verbs: ["execute"] }),
-    ],
-    [
-      "17 ids",
-      (l) => {
-        while (l.capabilities.length < 17)
-          l.capabilities.push({ capabilityId: "workspace.knowledge.read", verbs: ["view"] });
-      },
-    ],
-  ]) {
-    const l = structuredClone(ceiling);
-    change(l);
-    assert.ok(inspectSpecialistCeiling(l, capabilities).length > 0, name);
-  }
-});
-
-test("ADR-0027 item 10: a specialist's capabilities come from its tools inside the ceiling", () => {
-  const spec = fakeSpecialistSpec();
-  const derived = specialistCapabilities(spec.tools);
-  assert.deepEqual(
-    [...derived].map((r) => r.capabilityId + ":" + r.verbs.join()).sort(),
-    [...spec.capabilities].map((r) => r.capabilityId + ":" + r.verbs.join()).sort(),
-  );
-  assert.throws(() => specialistCapabilities(["orders.summary"]), ToolCatalogueError);
-  assert.throws(() => specialistCapabilities(["agent.route"]), ToolCatalogueError);
-  assert.throws(() => specialistCapabilities(["proposal.reply"]), ToolCatalogueError);
-});
-
-test("ADR-0027 item 11, ADR-0028 item 8: both switches are committed off; on or extra keys fail", () => {
-  const loop = read("docs/decisions/agent-loop-staging.json");
-  const specialists = read("docs/decisions/specialists-staging.json");
-  assert.equal(loop.switch, "off");
-  assert.equal(specialists.switch, "off");
-  assert.equal(inspectAgentPlatformSwitches({ ...loop, switch: "on" }, specialists).length, 1);
-  assert.equal(inspectAgentPlatformSwitches(loop, { ...specialists, switch: "on" }).length, 1);
+test("ADR-0027 item 11, ADR-0037 item 9: the switches are committed off; on or extra keys fail", () => {
+  const [loop, calls, cards] = switches();
+  for (const record of [loop, calls, cards]) assert.equal(record.switch, "off");
+  assert.equal(calls.feature, "teammate_calls");
+  assert.equal(cards.feature, "agent_cards");
+  assert.equal(inspectAgentPlatformSwitches({ ...loop, switch: "on" }, calls, cards).length, 1);
+  assert.equal(inspectAgentPlatformSwitches(loop, { ...calls, switch: "on" }, cards).length, 1);
+  assert.equal(inspectAgentPlatformSwitches(loop, calls, { ...cards, switch: "on" }).length, 1);
   assert.equal(
-    inspectAgentPlatformSwitches({ ...loop, observed_on: "2026-10-26" }, specialists).length,
+    inspectAgentPlatformSwitches(loop, calls, { ...cards, observed_on: "2026-10-26" }).length,
     1,
   );
-  assert.equal(inspectAgentPlatformSwitches({ ...loop, key: "x" }, specialists).length, 1);
+  assert.equal(inspectAgentPlatformSwitches(loop, { ...calls, key: "x" }, cards).length, 1);
+  // Each record names its own feature: swapped files fail.
+  assert.equal(inspectAgentPlatformSwitches(loop, cards, calls).length, 2);
+  assert.equal(inspectAgentPlatformSwitches({ ...loop, key: "x" }, calls, cards).length, 1);
+});
+
+test("ADR-0037 item 2: no context but the Coordinator's offers an agent.* tool (depth 1)", () => {
+  const agentTools = toolCatalogue.filter((t) => t.name.startsWith("agent.")).map((t) => t.name);
+  assert.deepEqual(agentTools, ["agent.route", "agent.ask", "agent.result.read", "agent.propose"]);
+  for (const name of agentTools) {
+    assert.ok(isAgentTool(name), name);
+    assert.deepEqual([...toolEntry(name).contexts], ["coordinator"], name);
+  }
+  for (const context of ["routed", "mandate", "look_for_work", "call"])
+    for (const name of toolsForContext(context)) {
+      assert.ok(!isAgentTool(name), `${context} ${name}`);
+      assert.notEqual(toolEntry(name).capabilityId, "workspace.task.delegate", name);
+      assert.ok(!toolEntry(name).capabilityId.startsWith("agents."), name);
+    }
+  assert.equal(isAgentTool("agent.anything"), false);
+  assert.equal(toolEntry("specialist.draft"), null, "retired in version 3");
+  // agent.ask and agent.route are delegations on workspace.task.delegate; agent.propose a
+  // draft on agents.builder.describe; agent.result.read a read that grants nothing.
+  assert.deepEqual(
+    agentTools.map((n) => {
+      const t = toolEntry(n);
+      return [t.family, t.capabilityId, t.verb];
+    }),
+    [
+      ["coordination", "workspace.task.delegate", "delegate"],
+      ["coordination", "workspace.task.delegate", "delegate"],
+      ["read", "workspace.artifact.read", "view"],
+      ["coordination", "agents.builder.describe", "execute"],
+    ],
+  );
+});
+
+test("ADR-0037 item 3(a): a called teammate cannot talk to the person and ends with result.submit", () => {
+  const call = toolsForContext("call");
+  assert.ok(call.includes(teammateResultTool));
+  for (const name of ["inbox.ask", "message.post", "support.thread.read", "proposal.reply"])
+    assert.ok(!call.includes(name), name);
+  assert.deepEqual([...toolEntry(teammateResultTool).contexts], ["call"]);
+  assert.equal(runContext("routed", false, true), "call");
+  assert.equal(runContext("routed", false), "routed");
+  for (const [kind, lookForWork, called] of [
+    ["mandate", false, true],
+    ["coordinator", false, true],
+    ["mandate", true, true],
+    ["specialist", false, false],
+  ])
+    assert.throws(() => runContext(kind, lookForWork, called), ToolCatalogueError, kind);
+  // A first-party package declares result.submit to be callable; a call offers it nothing
+  // that reaches the person.
+  assert.deepEqual(offeredTools("call", fakeListingsPackage().tools), [
+    "knowledge.search",
+    "work.read",
+    "products.read",
+    "suggestion.create",
+    "report.write",
+    "proposal.listing",
+    "result.submit",
+  ]);
+  assert.ok(!offeredTools("routed", fakeListingsPackage().tools).includes(teammateResultTool));
+});
+
+test("ADR-0037 item 3: briefs and results are structured with no character cap", () => {
+  const long = "Long material. ".repeat(20000);
+  const brief = { ...fakeTeammateBrief(), objective: long, details: long };
+  for (const name of ["agent.ask", "agent.route"]) {
+    const input = { installationId: fakeIds.listingsInstallationId, brief };
+    assert.deepEqual(checkToolInput(name, input), { ok: true }, name);
+    // Structured and closed: a brief as plain text, or with an extra field, is refused.
+    assert.equal(checkToolInput(name, { ...input, brief: "do it" }).ok, false, name);
+    assert.equal(
+      checkToolInput(name, { ...input, brief: { ...brief, extra: ["orders.summary"] } }).ok,
+      false,
+      name,
+    );
+    assert.doesNotMatch(toolEntry(name).description, /once per/i, name);
+  }
+  const core = schemas[1].$defs;
+  for (const name of [
+    "TeammateBrief",
+    "TeammateBriefLines",
+    "ToolInputResultSubmit",
+    "TeammateFindingInput",
+    "TeammateTableInput",
+    "TeammateText",
+    "TeammateTable",
+    "ResultItemPageContent",
+  ]) {
+    const { unit: _unit, ...rest } = core[name].properties ?? {};
+    assert.doesNotMatch(JSON.stringify({ ...core[name], properties: rest }), /maxLength/, name);
+  }
+  assert.deepEqual(checkToolInput("agent.result.read", { itemId: fakeIds.itemId, page: 1 }), {
+    ok: true,
+  });
+  assert.equal(checkToolInput("agent.result.read", { itemId: fakeIds.itemId, page: 0 }).ok, false);
+});
+
+const proposeInput = () => ({
+  name: "Restock Watch",
+  purpose: "Watch stock levels.",
+  instructions: "Suggest restocks.",
+  skillTexts: [],
+  skillIds: [],
+  tools: ["inventory.read"],
+  triggerKinds: [],
+});
+test("ADR-0037 item 4: agent.propose is the one input that names tools, by ToolName only", () => {
+  assert.deepEqual(
+    { ...cardToolsException },
+    {
+      tool: "agent.propose",
+      property: "tools",
+      items: "#/$defs/ToolName",
+    },
+  );
+  assert.deepEqual(checkToolInput("agent.propose", proposeInput()), { ok: true });
+  const s = structuredClone(schemas);
+  s[1].$defs.ToolInputAgentPropose.properties.tools.items = { type: "string" };
+  assert.match(
+    inspect(catalogue, s).join("\n"),
+    /agent\.propose: input takes a forbidden field tools/,
+  );
+  const c = structuredClone(catalogue);
+  tool(c, "agent.ask").inputDefinition = "ToolInputAgentPropose";
+  assert.match(inspect(c).join("\n"), /agent\.ask: input takes a forbidden field tools/);
+  // The model names no capability, scope, store, model or limit on a card.
+  for (const field of ["capabilities", "optionalScopes", "storeId", "model", "runLimits"])
+    assert.equal(
+      checkToolInput("agent.propose", { ...proposeInput(), [field]: [] }).ok,
+      false,
+      field,
+    );
 });
 
 test("the old formats stay: ModelCall@1, ModelResult@1 and the per-product catalogue are unchanged", async () => {
