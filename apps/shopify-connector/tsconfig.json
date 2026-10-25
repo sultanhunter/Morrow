@@ -5,5 +5,5 @@
     "types": ["@react-router/node", "vite/client"]
   },
   "include": ["app/**/*.ts", "app/**/*.tsx", "*.ts", ".react-router/types/**/*"],
-  "exclude": ["worker/**/*.ts"]
+  "exclude": ["worker/**/*.ts", "worker-configuration.d.ts"]
 }

@@ -451,8 +451,17 @@ const allowedBindings = Object.freeze({
   orchestrator: ["vars", "services", "workflows", "queues", "triggers", "secrets"],
   // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint and, since the
   // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits). M2 PR-3: its
-  // one cron trigger (edgeConnectorCrons).
-  connector: ["vars", "services", "secrets", "ratelimits", "triggers"],
+  // one cron trigger (edgeConnectorCrons). fix-connector-cron-latency: the cron's Durable
+  // Object and its one migration (edgeConnectorDurableObjects, edgeConnectorMigrations).
+  connector: [
+    "vars",
+    "services",
+    "secrets",
+    "ratelimits",
+    "triggers",
+    "durable_objects",
+    "migrations",
+  ],
 });
 // The reviewed packages/ files the connector bundle may include (M2 PR-2): the shared
 // broker protocol and the role preflight text, with the JSON helpers they import, and the
@@ -581,6 +590,40 @@ export function edgeConnectorRateLimits(environment) {
 // resource: the inbox row is the queue (no Queue binding), and no other Worker has a
 // trigger.
 export const edgeConnectorCrons = Object.freeze(["*/5 * * * *"]);
+// fix-connector-cron-latency (docs/briefs/fix-connector-cron-latency.md): placement moves
+// only fetch handlers, so the cron's run moves into one Durable Object created near the
+// database (apps/shopify-connector/worker/cron.ts). Exact in every environment (the
+// binding is not inherited; the migration is): one binding, CONNECTOR_CRON, to this
+// Worker's own SQLite-backed class ConnectorCron, and the one migration that creates it.
+// No other Worker may bind a Durable Object or carry a migration.
+export const edgeConnectorDurableObjects = Object.freeze({
+  bindings: Object.freeze([Object.freeze({ name: "CONNECTOR_CRON", class_name: "ConnectorCron" })]),
+});
+export const edgeConnectorMigrations = Object.freeze([
+  Object.freeze({ tag: "v1", new_sqlite_classes: Object.freeze(["ConnectorCron"]) }),
+]);
+// The Durable Object location hint of each Neon AWS region (Neon's `aws-<region>` ids;
+// Cloudflare's data-location reference, developers.cloudflare.com/durable-objects/reference/
+// data-location/). Any other region is null and fails the check, so a move of the database
+// moves the hint by a reviewed change. A hint only counts where Cloudflare creates the object
+// inside it: "sam" (South America) spawns in Eastern North America, and "afr" and "me" spawn
+// elsewhere too, so Sao Paulo (sa-east-1) and those regions stay unmapped (AI review F2).
+// Singapore takes the narrower documented "apac-se" rather than all of Asia-Pacific.
+const neonRegionLocationHints = Object.freeze({
+  "us-east-1": "enam",
+  "us-east-2": "enam",
+  "us-west-2": "wnam",
+  "eu-central-1": "weur",
+  "eu-west-2": "weur",
+  "ap-southeast-1": "apac-se",
+  "ap-southeast-2": "oc",
+});
+export function edgeDurableObjectLocationHint(regionId) {
+  const region = neonAwsRegion(regionId);
+  return region !== null && Object.hasOwn(neonRegionLocationHints, region)
+    ? neonRegionLocationHints[region]
+    : null;
+}
 
 // P04.T01i D1 and D6 (AC01, AC02): only the staging api is on workers.dev; every staging
 // Worker keeps Workers Logs (invocation logs and traces off); development and production
@@ -1304,9 +1347,17 @@ export async function verifyEdgeConfig({
   evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
   liveEvalsPath = join(repositoryRoot, "docs/decisions/agent-evals-live.json"),
+  // fix-connector-cron-latency: the cron object's location hint, read from the connector's
+  // source (worker/cron.ts) unless a test names another.
+  connectorCronLocationHint,
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
+  const cronLocationHint =
+    connectorCronLocationHint === undefined
+      ? (await tsImport("../apps/shopify-connector/worker/cron.ts", here)).connectorCron
+          .locationHint
+      : connectorCronLocationHint;
   const { selectedConfiguration } = await tsImport(
     "../packages/infrastructure/src/selected-stack.ts",
     here,
@@ -1640,6 +1691,17 @@ export async function verifyEdgeConfig({
         problem("EDGE_CONNECTOR_RATELIMITS", where);
       if (worker.key === "connector" && !same(config.triggers, { crons: [...edgeConnectorCrons] }))
         problem("EDGE_CONNECTOR_TRIGGERS", where);
+      // fix-connector-cron-latency: the cron's Durable Object and its migration, exact.
+      if (
+        worker.key === "connector" &&
+        canonicalJson(config.durable_objects) !== canonicalJson(edgeConnectorDurableObjects)
+      )
+        problem("EDGE_CONNECTOR_DURABLE_OBJECTS", where);
+      if (
+        worker.key === "connector" &&
+        canonicalJson(config.migrations) !== canonicalJson(edgeConnectorMigrations)
+      )
+        problem("EDGE_CONNECTOR_MIGRATIONS", where);
       if (worker.key === "api") {
         if (
           !same(config.services, [
@@ -1735,6 +1797,15 @@ export async function verifyEdgeConfig({
   for (const [worker, region] of Object.entries(stagingPlacements))
     if (placementRegion === null || region !== placementRegion)
       problem("EDGE_PLACEMENT_REGION", worker + ":staging");
+  // fix-connector-cron-latency: the cron object is created with the location hint of that
+  // same region, so the cron's transactions and broker RPCs start beside the database too.
+  // (A region_id of another shape is already EDGE_PLACEMENT_REGION:staging.json; an AWS
+  // region with no honoured hint, such as aws-sa-east-1, fails here.)
+  if (
+    placementRegion !== null &&
+    edgeDurableObjectLocationHint(staging?.neon?.region_id) !== cronLocationHint
+  )
+    problem("EDGE_CONNECTOR_CRON_LOCATION", "connector:cron.ts");
   for (const worker of edgeWorkers)
     for (const [kind, pattern] of committedIdentifierPatterns) {
       const remaining = new Map();
