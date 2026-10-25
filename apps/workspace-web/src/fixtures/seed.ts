@@ -14,18 +14,19 @@ import type {
 export const fixtureWorkspace = { id: "ws-linen", displayName: "Linen & Form", policyRevision: 7 };
 export const fixtureOrganizationName = "Linen & Form (sample)";
 // M3 PR-1: the active catalogue version as GET /models lists it (docs/decisions/model-policy.json;
-// credits per product and the run product limit): version 3 since ADR-0036, version 1's entries. The Listings agent's store is M2 PR-2's
-// sample store (fixtureStore below).
+// credits per product and the run product limit): version 4 since ADR-0039, version 1's credits
+// with no run cost cap, so every entry admits 25 products. The Listings agent's store is M2
+// PR-2's sample store (fixtureStore below).
 export const fixtureCatalogue = [
   { model: "claude_haiku_5_5", effort: "low", creditsPerProduct: 1, runProductLimit: 25 },
   { model: "claude_haiku_5_5", effort: "medium", creditsPerProduct: 1, runProductLimit: 25 },
   { model: "claude_haiku_5_5", effort: "high", creditsPerProduct: 1, runProductLimit: 25 },
   { model: "claude_sonnet_5_5", effort: "low", creditsPerProduct: 1, runProductLimit: 25 },
   { model: "claude_sonnet_5_5", effort: "medium", creditsPerProduct: 2, runProductLimit: 25 },
-  { model: "claude_sonnet_5_5", effort: "high", creditsPerProduct: 3, runProductLimit: 19 },
+  { model: "claude_sonnet_5_5", effort: "high", creditsPerProduct: 3, runProductLimit: 25 },
   { model: "claude_opus_5_5", effort: "low", creditsPerProduct: 2, runProductLimit: 25 },
-  { model: "claude_opus_5_5", effort: "medium", creditsPerProduct: 4, runProductLimit: 12 },
-  { model: "claude_opus_5_5", effort: "high", creditsPerProduct: 6, runProductLimit: 9 },
+  { model: "claude_opus_5_5", effort: "medium", creditsPerProduct: 4, runProductLimit: 25 },
+  { model: "claude_opus_5_5", effort: "high", creditsPerProduct: 6, runProductLimit: 25 },
 ] as const;
 const person = (principalId: string): PersonRef => ({
   principalId,

@@ -2420,7 +2420,6 @@ test("PR 7: the committed runtime record is off, and the record rule", async () 
       profile: "morrow.computer@1",
       switch: "off",
       admission: "synthetic_only",
-      monthly_budget_usd: "10.00",
       provider_usage_limit_usd: "20.00",
       qualified_on: null,
       qualification_record: null,
@@ -2430,9 +2429,10 @@ test("PR 7: the committed runtime record is off, and the record rule", async () 
     { ...reviewedRuntimeRecord(committedRuntime) },
     { switch: "off", admission: "synthetic_only" },
   );
-  // The record's budget is the code's (and migration 0043's), below the provider's limit.
+  // ADR-0039 item 6: no monthly runtime budget in the record or the code; the provider's own
+  // usage limit (E2B enforces it, never Morrow's code) is recorded in both.
   const { runtimeCaps } = await import("../packages/policy/src/runtime-computer.ts");
-  assert.equal(committedRuntime.monthly_budget_usd, runtimeCaps.monthlyBudgetUsd);
+  assert.equal(Object.hasOwn(runtimeCaps, "monthlyBudgetUsd"), false);
   assert.equal(committedRuntime.provider_usage_limit_usd, runtimeCaps.providerUsageLimitUsd);
   // The staging tools' owner-file format is the broker's key shape.
   const { e2bKeyPattern } = await import("../packages/identity/src/broker-protocol.ts");
@@ -2485,10 +2485,11 @@ test("PR 7: the committed runtime record is off, and the record rule", async () 
     (r) => (r.profile = "morrow.computer@2"),
     (r) => delete r.switch,
     (r) => (r.extra = 1),
-    (r) => (r.monthly_budget_usd = "20.00"),
-    (r) => (r.monthly_budget_usd = "25.00"),
-    (r) => (r.monthly_budget_usd = "0.00"),
-    (r) => (r.monthly_budget_usd = 10),
+    // ADR-0039 item 6: a monthly runtime budget in the record is refused, as any other key.
+    (r) => (r.monthly_budget_usd = "10.00"),
+    (r) => (r.provider_usage_limit_usd = "0.00"),
+    (r) => (r.provider_usage_limit_usd = 20),
+    (r) => delete r.provider_usage_limit_usd,
     (r) => (r.qualified_on = "2026-10-30"),
     (r) => (r.qualification_record = "docs/evidence/live/2026-10-30-e2b.md"),
     (r) => (

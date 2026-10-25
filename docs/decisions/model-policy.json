@@ -131,14 +131,15 @@
   "catalogue": {
     "id": "morrow-model-catalogue",
     "active_versions": {
-      "per_product": 3,
+      "per_product": 4,
       "agent_loop": null
     },
     "published_digests": {
       "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660",
-      "3": "f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0"
+      "3": "f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0",
+      "4": "013de2e441ad4d30db5acb75a9a40d953e34d0e973e06f47b7c2dc8766ff1d42"
     },
-    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while a per-product version stays active (ADR-0027 item 4). ADR-0036 removed the unrecovered-cost cap: version 1 keeps its published workspace_period_unrecovered_cost_cap_usd, which nothing enforces, and no later version carries one.",
+    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while a per-product version stays active (ADR-0027 item 4). ADR-0036 removed the unrecovered-cost cap: version 1 keeps its published workspace_period_unrecovered_cost_cap_usd, which nothing enforces, and no later version carries one. ADR-0039 made credits the only spend limit: versions 1 and 3 keep their published run_cost_cap_usd and workspace_daily_cost_cap_usd, which nothing enforces once version 4 is active; version 4 and every later per-product version, and every loop version, carry neither (nor a look-for-work cap).",
     "versions": [
       {
         "version": 1,
@@ -276,7 +277,7 @@
         "status": "proposed",
         "run_shape": "agent_loop",
         "proposed_on": "2026-10-23",
-        "decision": "ADR-0027 items 6 and 12, ADR-0026 item 4, with ADR-0036's installed-agent default, no unrecovered-cost cap and its look-for-work cap of US$1.12 per agent per day (ADR-0036 item 7; the owner set that value, OD-2026-10-25-2) (PR 10 proposes it; it publishes only on the owner's recorded confirmation, ADR-0027 item 11)",
+        "decision": "ADR-0027 items 6 and 12, ADR-0026 item 4, with ADR-0036's installed-agent default and no unrecovered-cost cap, and no money cap: ADR-0039 removed the run backstop, the daily backstop and the look-for-work cap, so credits are the only spend limit (PR 10 proposes it; it publishes only on the owner's recorded confirmation, ADR-0027 item 11)",
         "owner_confirmation": null,
         "effective_from": null,
         "default_profiles": {
@@ -305,9 +306,6 @@
           "specialist_default_run_minutes": 60,
           "specialist_max_run_minutes": 480,
           "tool_result_max_bytes": 8192,
-          "run_cost_cap_usd": "7",
-          "workspace_daily_cost_cap_usd": "25",
-          "look_for_work_daily_cost_cap_usd": "1.12",
           "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
         },
         "expected_turn": {
@@ -405,7 +403,7 @@
       },
       {
         "version": 3,
-        "status": "active",
+        "status": "retired",
         "proposed_on": "2026-10-25",
         "decision": "ADR-0036 items 2 and 3",
         "owner_confirmation": "Owner, 2026-10-25, in chat (OD-2026-10-25-1): \"use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost\". It sets the default selection to Opus 5.5 at medium and removes the unrecovered-cost cap. Owner, 2026-10-25, in chat (OD-2026-10-25-2), asked \"With Listings on Opus 5.5 medium, each product it drafts costs 4 credits instead of 1 (your 300 test credits = about 75 products). Who in a shop may run it at that default?\", answered \"Everyone, up to 4 (Recommended)\": the default member ceiling of 4 (ADR-0036 item 2), the default's own credits, which replaces the ceiling of 1 the owner confirmed on 2026-10-19. Every other value is version 1's, confirmed by the owner on 2026-10-19.",
@@ -532,6 +530,135 @@
           "international_card_fee_rate": "0.015",
           "max_worst_case_share": "0.90",
           "rule": "every selection's worst case per product is at most max_worst_case_share of its credits' share of the plan's net revenue after every fee; no unrecovered-cost cap (ADR-0036)"
+        }
+      },
+      {
+        "version": 4,
+        "status": "active",
+        "proposed_on": "2026-10-25",
+        "decision": "ADR-0039 item 4",
+        "owner_confirmation": "Owner, 2026-10-25, in chat (OD-2026-10-25-4): \"for budget why we limiting anything? it should be very simple credit based system like suppose we give user 1000credits it will be spend on the agentic work so that creidt will bcome limit itself no need to hardcode all of that bullshit. and for one i want it to be truty multi agent system so the agents can be orchestrated by the main agent in any way no need to limit to a single agent call only. for 2 why we adding limit on characters? it might strip important information i think only needs to be structured. for other option use the recommded one\". Credits are the only spend limit (ADR-0039 items 1 and 4): no run or daily cost cap, so every entry admits up to max_products_per_run, 25 products a run, held up front in credits. Every other value is version 3's: its entries, credits, rates, default selection and default member ceiling, confirmed by the owner on 2026-10-19 and 2026-10-25 (OD-2026-10-25-1, OD-2026-10-25-2).",
+        "effective_from": "2026-10-25",
+        "default_selection": {
+          "model": "claude_opus_5_5",
+          "effort": "medium"
+        },
+        "default_member_credit_ceiling": 4,
+        "limits": {
+          "max_input_tokens_per_call": 8000,
+          "max_attempts_per_product": 2,
+          "max_products_per_run": 25,
+          "max_consecutive_failed_products": 3,
+          "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
+        },
+        "expected_input_tokens": 3000,
+        "efforts": [
+          {
+            "key": "low",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "low"
+              }
+            },
+            "max_output_tokens": 5000,
+            "expected_output_tokens": 1200
+          },
+          {
+            "key": "medium",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "medium"
+              }
+            },
+            "max_output_tokens": 12000,
+            "expected_output_tokens": 2500
+          },
+          {
+            "key": "high",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "high"
+              }
+            },
+            "max_output_tokens": 16000,
+            "expected_output_tokens": 5000
+          }
+        ],
+        "models": [
+          {
+            "key": "claude_haiku_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-haiku-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-10-07",
+            "rates_usd_per_million_tokens": {
+              "input": "0.10",
+              "output": "0.50"
+            },
+            "rate_tier_max_input_tokens": 100000,
+            "credits_per_product": {
+              "low": 1,
+              "medium": 1,
+              "high": 1
+            }
+          },
+          {
+            "key": "claude_sonnet_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-sonnet-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-28",
+            "rates_usd_per_million_tokens": {
+              "input": "2",
+              "output": "10"
+            },
+            "rate_tier_max_input_tokens": null,
+            "credits_per_product": {
+              "low": 1,
+              "medium": 2,
+              "high": 3
+            }
+          },
+          {
+            "key": "claude_opus_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-opus-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-22",
+            "rates_usd_per_million_tokens": {
+              "input": "4",
+              "output": "20"
+            },
+            "rate_tier_max_input_tokens": null,
+            "credits_per_product": {
+              "low": 2,
+              "medium": 4,
+              "high": 6
+            }
+          }
+        ],
+        "economics": {
+          "plan_price_usd": "49",
+          "plan_credits": 300,
+          "card_fee_rate": "0.029",
+          "card_fee_fixed_usd": "0.30",
+          "billing_fee_rate": "0.007",
+          "tax_fee_rate": "0.005",
+          "international_card_fee_rate": "0.015",
+          "max_worst_case_share": "0.90",
+          "rule": "every selection's worst case per product is at most max_worst_case_share of its credits' share of the plan's net revenue after every fee; no unrecovered-cost cap (ADR-0036) and no run or daily cost cap (ADR-0039)"
         }
       }
     ]

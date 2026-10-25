@@ -66,6 +66,7 @@ const refusals: Readonly<Record<RunRefusal, readonly [number, string, string, st
     ],
     entitlement: [403, "denied", "never", "An active Morrow plan is required to draft listings."],
     insufficient_credits: [409, "budget_exhausted", "never", "Not enough credits for this run."],
+    // Never returned since migration 0052 (ADR-0039: credits are the only spend limit).
     daily_cap: [
       409,
       "budget_exhausted",

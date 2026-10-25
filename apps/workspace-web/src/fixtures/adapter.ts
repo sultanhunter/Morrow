@@ -1230,7 +1230,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         reply<ModelCatalogueView>("models.list", () =>
           ws(id)
             ? ok({
-                catalogueVersion: 3,
+                catalogueVersion: 4,
                 entries: fixtureCatalogue.map((e) => ({
                   ...e,
                   allowedForMember:
