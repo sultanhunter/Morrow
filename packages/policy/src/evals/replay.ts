@@ -740,7 +740,7 @@ class Replay {
               (field) => change[field] !== null,
             ),
           })),
-          content: { kind: "catalog.listing", agent: run.agent, changes },
+          content: { proposalId, kind: "catalog.listing", agent: run.agent, changes },
           tainted: run.taint.size > 0,
         });
         return ok();
@@ -757,7 +757,7 @@ class Replay {
           agent: run.agent as EvalTeammateRef,
           runKey: run.key,
           changes: [],
-          content: { kind: "support.reply", agent: run.agent, input },
+          content: { proposalId, kind: "support.reply", agent: run.agent, input },
           tainted: run.taint.size > 0,
         });
         return ok();
