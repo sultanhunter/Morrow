@@ -16,6 +16,7 @@ import {
   brokerShopifyWebhookVerify,
 } from "./shopify-install.js";
 import { brokerShopifyRead } from "./shopify-read.js";
+import { brokerShopifyWebhookSubscriptionsSync } from "./shopify-webhooks.js";
 import {
   brokerShopifyProductApply,
   brokerShopifyProductReconcile,
@@ -166,6 +167,8 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
 // webhook signature checks and the install's claim, exchange, identity read and vault
 // write. M2 PR-3 makes the webhook check record the delivery and adds the token's
 // destruction (shopifyRead is the api's and the orchestrator's, never the connector's).
+// The shop-specific webhook subscriptions add shopifyWebhookSubscriptionsSync, a budget only
+// (docs/briefs/shopify-shop-specific-webhooks.md).
 export class ConnectorBroker extends WorkerEntrypoint<unknown> implements ConnectorBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -205,6 +208,11 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
     return arguments.length === 2
       ? brokerShopifyCredentialDestroy(this.env, installationId, reason)
       : brokerInputInvalid("shopifyCredentialDestroy", "ConnectorBroker");
+  }
+  shopifyWebhookSubscriptionsSync(budgetMs: number): Promise<string> {
+    return arguments.length === 1
+      ? brokerShopifyWebhookSubscriptionsSync(this.env, budgetMs)
+      : brokerInputInvalid("shopifyWebhookSubscriptionsSync", "ConnectorBroker");
   }
 }
 

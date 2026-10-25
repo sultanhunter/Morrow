@@ -5,11 +5,21 @@
 // offline token, the granted scope), the ShopIdentity Admin GraphQL document and (M2 PR-3)
 // the catalogue reads by operation name (CollectionsPage, ProductsPage,
 // CollectionProductsPage, ProductContent) from a synthetic catalogue, and signs webhook
-// bodies (base64 HMAC of the raw bytes). Every GraphQL call is recorded with its operation
-// and variables. Faults are opt-in: a lost exchange, a 5xx, THROTTLED once, an oversize
+// bodies (base64 HMAC of the raw bytes). The shop-specific webhook subscriptions
+// (docs/briefs/shopify-shop-specific-webhooks.md): WebhookSubscriptions lists the shop's
+// subscriptions of the queried topics (id, topic, uri) and WebhookSubscriptionCreate adds
+// one, refusing a second of the same topic and address with userErrors, as Shopify does;
+// `state.subscriptions` may be seeded with another app path's subscription. Every GraphQL
+// call is recorded with its operation and variables. Faults are opt-in: a lost exchange, a 5xx, THROTTLED once, an oversize
 // reply, a non-development store and another granted scope; `extraFields` adds keys no
 // document asked for (the broker's minimiser must drop them). Recorded development-store
-// fixtures replace or augment it after the owner-approved smoke.
+// fixtures replace or augment it after the owner-approved smoke. fix-shopify-install-live:
+// `tokenKind: "expiring"` answers the exchange as Shopify does for an app that must use
+// expiring offline tokens (expires_in 3600, refresh_token, refresh_token_expires_in
+// 7776000), and `publicApp: true` answers every Admin GraphQL call made with a
+// non-expiring token 403 (public apps created on or after 2026-04-01; the reply's body is
+// not documented, only its status is relied on); `launchQuery` and `callbackQuery` take
+// Shopify's other app-open keys (embedded, id_token, locale, session) as overrides.
 import { createHmac, randomBytes } from "node:crypto";
 
 export const shopifyOracleIdentityDocument =
@@ -32,6 +42,12 @@ export function createShopifyOracle({
     tokens: [],
     calls: [],
     extraFields: false,
+    // The shop's webhook subscriptions ({id, topic, uri}); ids count up from 7001.
+    subscriptions: [],
+    nextSubscriptionId: 7001,
+    tokenKind: "non_expiring",
+    publicApp: false,
+    expiringTokens: [],
     // The synthetic catalogue: two collections, thirty products (the first five in Summer).
     catalog: {
       collections: [
@@ -114,6 +130,60 @@ export function createShopifyOracle({
           },
         };
       }
+      case "WebhookSubscriptions": {
+        // The broker's fixed list: both app topics, no variables, one page of 25.
+        const topics = ["APP_UNINSTALLED", "APP_SCOPES_UPDATE"];
+        const nodes = state.subscriptions.filter((w) => topics.includes(w.topic));
+        return {
+          webhookSubscriptions: {
+            nodes: nodes.slice(0, 25).map((w) => ({
+              id: "gid://shopify/WebhookSubscription/" + w.id,
+              topic: w.topic,
+              uri: w.uri,
+            })),
+            pageInfo: { hasNextPage: nodes.length > 25 },
+          },
+        };
+      }
+      case "WebhookSubscriptionCreate": {
+        const topic = v.topic;
+        const uri = v.uri;
+        if (
+          !["APP_UNINSTALLED", "APP_SCOPES_UPDATE"].includes(topic) ||
+          typeof uri !== "string" ||
+          !/^https:\/\//.test(uri)
+        )
+          return {
+            webhookSubscriptionCreate: {
+              webhookSubscription: null,
+              userErrors: [{ field: ["webhookSubscription", "uri"], message: "Invalid" }],
+            },
+          };
+        if (state.subscriptions.some((w) => w.topic === topic && w.uri === uri))
+          return {
+            webhookSubscriptionCreate: {
+              webhookSubscription: null,
+              userErrors: [
+                {
+                  field: ["webhookSubscription", "uri"],
+                  message: "Address for this topic has already been taken",
+                },
+              ],
+            },
+          };
+        const created = { id: String(state.nextSubscriptionId++), topic, uri };
+        state.subscriptions.push(created);
+        return {
+          webhookSubscriptionCreate: {
+            webhookSubscription: {
+              id: "gid://shopify/WebhookSubscription/" + created.id,
+              topic,
+              uri,
+            },
+            userErrors: [],
+          },
+        };
+      }
       case "ProductContent": {
         const id = /^gid:\/\/shopify\/Product\/([0-9]+)$/.exec(v.id ?? "")?.[1];
         const p = products.find((x) => x.id === id);
@@ -189,14 +259,28 @@ export function createShopifyOracle({
         code.used = true;
         const token = "shpat_" + randomBytes(16).toString("hex");
         state.tokens.push(token);
+        if (state.tokenKind === "expiring") {
+          const refresh = "shprt_" + randomBytes(16).toString("hex");
+          state.expiringTokens.push(token, refresh);
+          return json({
+            access_token: token,
+            expires_in: 3600,
+            refresh_token: refresh,
+            refresh_token_expires_in: 7776000,
+            scope: state.scope,
+          });
+        }
         return json({ access_token: token, scope: state.scope });
       }
       if (target.pathname === "/admin/api/2026-10/graphql.json" && init.method === "POST") {
         const headers = new Headers(init.headers);
-        if (!state.tokens.includes(headers.get("x-shopify-access-token") ?? ""))
+        const presented = headers.get("x-shopify-access-token") ?? "";
+        if (!state.tokens.includes(presented))
           return json({ errors: "[API] Invalid API key or access token" }, 401);
+        if (state.publicApp && !state.expiringTokens.includes(presented))
+          return json({ errors: "[API] Non-expiring access token refused (synthetic)" }, 403);
         const request = JSON.parse(init.body);
-        call.operation = /^query ([A-Za-z]+)/.exec(request.query ?? "")?.[1] ?? null;
+        call.operation = /^(?:query|mutation) ([A-Za-z]+)/.exec(request.query ?? "")?.[1] ?? null;
         call.variables = request.variables ?? null;
         const identity = request.query === shopifyOracleIdentityDocument;
         const data = identity ? null : readData(call.operation, request.variables ?? {});

@@ -1,5 +1,5 @@
 // v1 PR 4 PostgreSQL 17 laboratory: Undo, the apply history's undo state, "Approve several at
-// once" and the product picker's reads (migration 0048 catalog-undo on top of 0044-0045) on an
+// once" and the product picker's reads (migration 0050 catalog-undo on top of 0044-0045) on an
 // isolated network-none engine, the full manifest applied by the Neon-shaped non-superuser
 // CREATEROLE administrator (ADR-0020 D4). It drives the real code end to end, as
 // lab:catalog-apply does: a Listings run drafts real proposals (runs handler, the Workflow

@@ -171,7 +171,7 @@ export const workTables = Object.freeze({
     policies: ["broker_catalog_operation", "broker_catalog_read"],
     content: "none",
   },
-  // v1 PR 4 (0048 catalog-undo): the broker's reads of a product before an undo (the read's
+  // v1 PR 4 (0050 catalog-undo): the broker's reads of a product before an undo (the read's
   // digest, per-field codes and time; content-free, 365 days), written only by its undo
   // definers (broker_catalog_operation) and read by the session context (commandRead); and
   // one record per undo proposal naming the change it undoes (ids and times), written by
@@ -713,7 +713,7 @@ export const workFunctions = Object.freeze({
   "catalog_item(jsonb,integer)": { kind: "helper", grantees: [] },
   "catalog_item_matches(jsonb,jsonb)": { kind: "helper", grantees: [] },
   "readback_verdicts_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
-  // v1 PR 4 (0048 catalog-undo): the history's undo states and the undo's source (reads), the
+  // v1 PR 4 (0050 catalog-undo): the history's undo states and the undo's source (reads), the
   // undo command (the api), the undo state and the undo item's set (helpers the definers call)
   // and the undo checks' CHECK.
   "catalog_undo_states(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
@@ -826,6 +826,12 @@ export const bridgeFunctions = Object.freeze([
   // v1 PR 1 (shopify-live-store-identity): the live-store admission, called only by the
   // broker's vault definer of shopify-live-store-vault (ADR-0035 item 2).
   "work_shopify_live_store(text,text)",
+  // Shop-specific webhook subscriptions (shopify-webhook-registrations-identity): the
+  // registration target, the outcome record and the ids-only pending list, called only by the
+  // broker's vault definers of shopify-webhook-registrations-vault.
+  "work_shopify_webhook_target(text)",
+  "work_shopify_webhook_registration_record(text,text,text,text,text)",
+  "work_shopify_webhook_registrations_pending()",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
@@ -1387,6 +1393,14 @@ export const vaultFunctions = Object.freeze({
   },
   // v1 PR 1 (shopify-live-store-vault): the live-store admission of an install.
   "shopify_live_store_admission(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  // Shop-specific webhook subscriptions (shopify-webhook-registrations-vault): the pending ids,
+  // one installation's target with its token's envelope, and the outcome record.
+  "shopify_webhook_registrations_pending()": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_webhook_target(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_webhook_registration_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
   // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
   // and counts only; the broker's login).
   "model_call_begin(text,text,text,text,text,text,text,text)": {
@@ -1434,7 +1448,7 @@ export const vaultFunctions = Object.freeze({
   },
   "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
-  // v1 PR 4 (0048 catalog-undo): the undo check's resolution and record, keyed by one
+  // v1 PR 4 (0050 catalog-undo): the undo check's resolution and record, keyed by one
   // operation id as the read-back is.
   "catalog_undo_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "catalog_undo_record(text,text,text,text,text)": {
@@ -1501,6 +1515,9 @@ export const identityTables = Object.freeze({
   // M2 PR-3 (0036): the minimised webhook bodies (ids, scope names and a keyed customer
   // digest only, spine §11; 7 days).
   shopify_webhook_inbox: { content: "none" },
+  // Shop-specific webhook subscriptions: the broker's last outcome per installation and
+  // Shopify's two subscription ids (ids, codes, counts and times only).
+  shopify_webhook_registrations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   store_installations: { content: "store" },
   workspace_link_results: { content: "none" },
@@ -1559,6 +1576,10 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_webhook_record(text,text,text,text,text,text)",
     // v1 PR 1 (shopify-live-store-vault).
     "morrow_vault.shopify_live_store_admission(text,text)",
+    // Shop-specific webhook subscriptions (shopify-webhook-registrations-vault).
+    "morrow_vault.shopify_webhook_registration_record(text,text,text,text,text)",
+    "morrow_vault.shopify_webhook_registrations_pending()",
+    "morrow_vault.shopify_webhook_target(text)",
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",

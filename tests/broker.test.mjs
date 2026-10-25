@@ -198,7 +198,10 @@ test("trust model v1: connector and runtime health need their own lease and the 
 // the staging broker is healthy for the api, the connector and the orchestrator.
 test("P04.T01i PR-D: the committed staging vars give the broker every capability", async () => {
   const { vars } = await resolvedEdgeConfig("broker", "staging");
+  // The shop-specific webhook subscriptions add the connector's own configuration
+  // (docs/briefs/shopify-shop-specific-webhooks.md), byte-equal to the connector's.
   assert.deepEqual(Object.keys(vars).sort(), [
+    "CONNECTOR_CONFIGURATION_JSON",
     "LOGIN_CONFIGURATION_JSON",
     "MORROW_DATABASE_BINDING_JSON",
     "MORROW_ENVIRONMENT",
@@ -210,6 +213,11 @@ test("P04.T01i PR-D: the committed staging vars give the broker every capability
     assert.notEqual(capabilities[name], null, name);
   assert.equal(capabilities.challenge.hostname, "morrow-staging-api.sultanibneusman0.workers.dev");
   assert.deepEqual(capabilities.challenge.actions, ["account_login", "organization_signup"]);
+  // The broker builds each shop-specific subscription's URL from the connector's origin.
+  assert.equal(
+    capabilities.shopifyWebhookOrigin,
+    "https://morrow-staging-connector.sultanibneusman0.workers.dev",
+  );
   assert.equal(await brokerHealth(env), true);
   assert.equal(await brokerCallerHealth(env, "connector"), true);
   assert.equal(await brokerCallerHealth(env, "runtime"), true);
@@ -475,7 +483,8 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   // connector its three Shopify methods and M2 PR-3 the token's destruction; M2 PR-3 gives
   // the orchestrator shopifyRead (one product under a run lease) and M3 PR-2 modelRespond;
   // build order PR 7 the computer's runtimeExecute and runtimeSweep (held while the runtime
-  // switch is off, tests/broker-runtime.test.mjs).
+  // switch is off, tests/broker-runtime.test.mjs). The shop-specific webhook subscriptions
+  // give the connector shopifyWebhookSubscriptionsSync (a budget only).
   assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
     "constructor",
     "health",
@@ -483,6 +492,7 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
     "shopifyCredentialDestroy",
     "shopifyInstallComplete",
     "shopifyLaunchVerify",
+    "shopifyWebhookSubscriptionsSync",
     "shopifyWebhookVerify",
   ]);
   assert.deepEqual(Object.getOwnPropertyNames(module.RuntimeBroker.prototype).sort(), [
@@ -579,11 +589,29 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   await failure(connector.shopifyWebhookVerify("app-1", "{}"));
   await failure(connector.shopifyCredentialDestroy("installation_1"));
   await failure(connector.shopifyCredentialDestroy("installation_1", "uninstalled", 1));
+  await failure(connector.shopifyWebhookSubscriptionsSync());
+  await failure(connector.shopifyWebhookSubscriptionsSync(15000, 1));
   assert.deepEqual(
     logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
-    Array(7).fill(["ConnectorBroker", "INPUT_INVALID"]),
+    Array(9).fill(["ConnectorBroker", "INPUT_INVALID"]),
   );
-  for (const name of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"]) {
+  // The test env carries no connector configuration: the sync is held, never run.
+  logs.length = 0;
+  await failure(connector.shopifyWebhookSubscriptionsSync(15000));
+  await failure(connector.shopifyWebhookSubscriptionsSync(100));
+  assert.deepEqual(
+    logs.map((line) => [JSON.parse(line).method, JSON.parse(line).code]),
+    [
+      ["shopifyWebhookSubscriptionsSync", "WEBHOOKS_UNAVAILABLE"],
+      ["shopifyWebhookSubscriptionsSync", "BUDGET_INVALID"],
+    ],
+  );
+  for (const name of [
+    "shopifyLaunchVerify",
+    "shopifyInstallComplete",
+    "shopifyWebhookVerify",
+    "shopifyWebhookSubscriptionsSync",
+  ]) {
     assert.equal(typeof new module.ApiBroker({}, env)[name], "undefined");
     assert.equal(typeof new module.RuntimeBroker({}, env)[name], "undefined");
   }
