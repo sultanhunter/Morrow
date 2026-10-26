@@ -1,6 +1,6 @@
 # Morrow status
 
-Updated 2026-10-26. Rewrite this file in place (at most 80 lines). The 2026-10-24 version is `git show 5541e430:docs/progress/STATUS.md`. Then run `npm run graph -- status`.
+Updated 2026-10-26. Rewrite this file in place (at most 80 lines). The previous version is `git show 43cc5489:docs/progress/STATUS.md`. Then run `npm run graph -- status`.
 
 ## Active work
 
@@ -31,7 +31,7 @@ Updated 2026-10-26. Rewrite this file in place (at most 80 lines). The 2026-10-2
 
 1. On the owner's answers to the 35 questions: merge #82, then rebuild #64 and #79 to ADR-0041 (the implementation plan is `docs/plan/harness-foundations-implementation.md` on #82), then #83.
 2. With the owner: the first Listings drafts on the live store, then a log check end to end.
-3. CI: give each test a time limit in `scripts/run-tests.mjs`, so a hang fails with its name instead of cancelling `checks` at 15 minutes (seen on #68 and #75).
+3. CI: give each test a time limit in `scripts/run-tests.mjs`, so a hang fails with its name instead of cancelling `checks` at 15 minutes (seen on #67, #75 and #83).
 4. Follow-ups: the Inbox wording for scope changes (#66 review L1); an operator path to lift a system scope stop; worktree clean-up, including the stale `claude/adr-0041-harness-foundations` branch from a stopped workflow.
 
 ## Blockers
@@ -49,7 +49,7 @@ The agent loop, teammate calls and the messaging work wait on the owner's answer
 
 ## Open unknown-outcome provider operations
 
-None. The deletion of the three Neon probe branches of 2026-10-20 is still not read back.
+None. The three Neon probe branches of 2026-10-20 carried expiries; their deletion is still not read back.
 
 ## Active approval cards
 
