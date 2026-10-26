@@ -478,7 +478,47 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, validat
   for (const name of [...everyContextToolNames, teammateItemToolName])
     if (!tools.some((t) => t.name === name && contextToolFamilies.includes(t.family)))
       fail(`the catalogue must offer ${name} as a memory or harness tool (ADR-0041 item 24)`);
+  // RunToolCall@1, the audit row of every call, names no capability or verb exactly for the
+  // memory and harness tools, and the capability and verb for every other tool (the H5 AI
+  // review's H5-6): its one branch on tool lists the catalogue's context tools, in catalogue
+  // order, so a row can never drop the authority a grant tool used.
+  const row = core?.$defs?.RunToolCall;
+  const toolBranches = (Array.isArray(row?.allOf) ? row.allOf : []).filter(
+    (branch) => branch?.if?.properties?.tool !== undefined,
+  );
+  const expectedRowBranch = runToolCallCapabilityBranch(
+    tools.filter((t) => contextToolFamilies.includes(t.family)).map((t) => t.name),
+    row,
+  );
+  if (toolBranches.length !== 1 || jcs(toolBranches[0]) !== jcs(expectedRowBranch))
+    fail(
+      "RunToolCall must name no capability or verb exactly for the memory and harness tools, in catalogue order, and a capability and verb for every other tool (ADR-0041 item 24)",
+    );
   return errors;
+}
+
+/**
+ * RunToolCall@1's branch on tool: the named context tools' rows hold no capability or verb,
+ * and every other row holds the non-null forms of the row's own capabilityId and verb.
+ */
+export function runToolCallCapabilityBranch(contextToolNames, row) {
+  const nonNull = (property) =>
+    row?.properties?.[property]?.anyOf?.find((branch) => branch?.type !== "null") ?? null;
+  return {
+    if: {
+      type: "object",
+      properties: { tool: { enum: [...contextToolNames] } },
+      required: ["tool"],
+    },
+    then: {
+      type: "object",
+      properties: { capabilityId: { type: "null" }, verb: { type: "null" } },
+    },
+    else: {
+      type: "object",
+      properties: { capabilityId: nonNull("capabilityId"), verb: nonNull("verb") },
+    },
+  };
 }
 
 /**

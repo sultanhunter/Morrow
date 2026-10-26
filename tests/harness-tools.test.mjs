@@ -275,8 +275,15 @@ test("run.complete: a teammate gives its child form and no reply; Morrow a reply
     ],
     ["a reply holding NUL", { ...fakeRunCompleteInput(), reply: "Done\u0000." }, "coordinator"],
     ["a code outcome", { ...fakeRunCompleteInput(), outcome: "stopped" }, "coordinator"],
+    // Review H5-9: look-for-work is never offered a wait, by run.wait or by a completion.
+    ["look-for-work waiting", { ...routed, outcome: "waiting" }, "look_for_work"],
   ])
     assert.equal(runCompleteInputValid(input, context), false, name);
+  assert.ok(runCompleteInputValid(routed, "look_for_work"), "look-for-work completes");
+  assert.deepEqual(
+    checkToolInputInContext("run.complete", { ...routed, outcome: "waiting" }, "look_for_work"),
+    invalid,
+  );
   // Blocked and partial carry what the teammate needs.
   const blocked = edit(fakeRunCompleteChild(), (c) => {
     c.outcome = "blocked";

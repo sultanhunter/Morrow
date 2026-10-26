@@ -8,8 +8,10 @@
 // in its brief that its calling run received; nothing customer-tagged reaches Morrow. Each call
 // is admitted alone under the kernel's 32 children (then a check-in) and the balance (credits
 // only: a call it cannot cover parks the job); follow-ups reopen an idle child; result.write
-// builds items across turns; a dispatch over unknown outcomes is refused. Taint only joins and
-// never truncates: every kind, 256 sources inline and a count of the rest.
+// builds items across turns; a dispatch over unknown outcomes is refused, a follow-up's too.
+// Taint only joins and never truncates: every kind, 256 sources inline and a count of the rest;
+// read tags only join across a child's sequences, and a customer-tagged result releases its
+// child.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -21,8 +23,10 @@ import {
   codeOutcome,
   coordinatorMayOpen,
   csvText,
+  joinReadTags,
   joinRunTaint,
   nextFor,
+  readTagLimit,
   receivedItemIds,
   resultItemPage,
   resultItemPageBytes,
@@ -62,6 +66,7 @@ const at = "2026-10-26T09:03:00.000Z";
 const productTag = { storeId: fakeIds.storeId, capability: "catalog.products.read" };
 const knowledgeTag = { storeId: null, capability: "workspace.knowledge.read" };
 const customerTag = { storeId: fakeIds.storeId, capability: "support.case.read" };
+const ordersTag = { storeId: fakeIds.storeId, capability: "orders.read" };
 const facts = (change = () => {}) => {
   const f = {
     organizationId: fakeIds.organizationId,
@@ -651,6 +656,24 @@ test("taint only joins and never truncates: every kind, 256 sources inline and a
   assert.equal(runTaintValid({ ...tainted(product), omittedSources: -1 }), false);
 });
 
+test("read tags only join: distinct, in order of first appearance, refused rather than cut past 24", () => {
+  assert.deepEqual(joinReadTags(), []);
+  assert.deepEqual(joinReadTags([productTag, knowledgeTag], [], [knowledgeTag, ordersTag]), [
+    productTag,
+    knowledgeTag,
+    ordersTag,
+  ]);
+  // A store-less tag is its own tag, distinct from the same capability on a store.
+  const storeKnowledge = { storeId: fakeIds.storeId, capability: "workspace.knowledge.read" };
+  assert.deepEqual(joinReadTags([knowledgeTag], [storeKnowledge]), [knowledgeTag, storeKnowledge]);
+  const stores = (n) =>
+    Array.from({ length: n }, (_, i) => ({ storeId: `store_${i}`, capability: "orders.read" }));
+  assert.equal(readTagLimit, 24);
+  assert.equal(joinReadTags(stores(20), stores(24)).length, 24);
+  assert.equal(joinReadTags(stores(24), [productTag]), null);
+  assert.ok(validateCurrentDefinition("ReadTags", joinReadTags(stores(24))));
+});
+
 // --- The fakes' conformance ------------------------------------------------------------------
 const world = (options = {}) => {
   let clock = 0;
@@ -782,11 +805,35 @@ const world = (options = {}) => {
       created: [],
     };
   });
+  // A teammate that reads products and orders on its first sequence; a follow-up reads nothing
+  // new and writes an item, unless its brief asks it to read the support case.
+  const reader = scripted("inst_reader", async (brief, { resultWrite }) => {
+    const first = brief.followUpOf === null;
+    const support = brief.objective === "Read the support case.";
+    if (!first)
+      await resultWrite({
+        itemId: null,
+        title: "As before",
+        kind: "text",
+        mediaType: "text/markdown",
+        columns: null,
+        text: "The same answer, from what I read before.",
+        rows: null,
+        close: false,
+      });
+    return {
+      completion: complete(),
+      endReason: "completed",
+      readTags: first ? [productTag, ordersTag] : support ? [customerTag] : [],
+      taint: cleanTaint(),
+      created: [],
+    };
+  });
   let balance = options.balance ?? Infinity;
   const runner = createFakeTeammateRunner({
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
-    teammates: [listings, support, paused, clean, stopper, unsure, writer, slow],
+    teammates: [listings, support, paused, clean, stopper, unsure, writer, slow, reader],
     store,
     coversCall: () => balance-- > 0,
     now,
@@ -995,6 +1042,115 @@ test("a stopped child keeps its work as partial; unknown outcomes block a retry 
   assert.ok((await ask(runner, { parentRunId: "run_fake_3" })).ok);
 });
 
+test("review H5-1: read tags only join across a child's sequences; a follow-up never narrows them", async () => {
+  const { runner, store } = world();
+  const first = await ask(runner, { installationId: "inst_reader" });
+  assert.ok(first.ok);
+  // The requester's words' tag, then what the run read.
+  assert.deepEqual(first.result.readTags, [knowledgeTag, productTag, ordersTag]);
+  // The follow-up reads nothing new and carries no request, yet its context still holds what
+  // the first sequence read: its result and the item it writes keep every tag.
+  const followUp = await ask(runner, {
+    installationId: null,
+    followUpOf: first.callId,
+    request: null,
+    brief: { ...fakeTeammateBriefInput(), objective: "Say it again.", records: [] },
+  });
+  assert.ok(followUp.ok);
+  assert.equal(followUp.result.runId, first.result.runId);
+  assert.equal(followUp.sequence, 2);
+  for (const tag of first.result.readTags)
+    assert.ok(
+      followUp.result.readTags.some(
+        (t) => t.storeId === tag.storeId && t.capability === tag.capability,
+      ),
+      tag.capability,
+    );
+  assert.deepEqual(followUp.result.readTags, first.result.readTags);
+  assert.equal(followUp.result.items.length, 1);
+  assert.deepEqual(store.item(followUp.result.items[0].itemId).readTags, first.result.readTags);
+});
+
+test("review H5-1: a customer-tagged result releases its child, so no follow-up returns what it read", async () => {
+  const { runner } = world();
+  // A first sequence that read the support case: refused, and its child (call_fake_1) released.
+  assert.deepEqual(await ask(runner, { installationId: fakeIds.supportInstallationId }), {
+    ok: false,
+    refusal: "result_customer_tagged",
+  });
+  const again = { ...fakeTeammateBriefInput(), objective: "As before, briefly.", records: [] };
+  assert.deepEqual(
+    await ask(runner, { installationId: null, followUpOf: "call_fake_1", brief: again }),
+    { ok: false, refusal: "call_not_idle" },
+  );
+  assert.deepEqual(runner.cancel(fakeIds.runId, "call_fake_1"), {
+    ok: false,
+    refusal: "call_not_idle",
+  });
+  assert.equal(runner.children(fakeIds.runId), 1, "the refused call still counted");
+  // A follow-up that reads the support case is refused the same way, and its child released.
+  const reader = await ask(runner, { installationId: "inst_reader" });
+  assert.ok(reader.ok);
+  const support = { ...again, objective: "Read the support case." };
+  assert.deepEqual(
+    await ask(runner, { installationId: null, followUpOf: reader.callId, brief: support }),
+    { ok: false, refusal: "result_customer_tagged" },
+  );
+  assert.deepEqual(
+    await ask(runner, { installationId: null, followUpOf: reader.callId, brief: again }),
+    { ok: false, refusal: "call_not_idle" },
+  );
+});
+
+test("review H5-4: a follow-up keeps the child's subjects, so retry_blocked holds until the reconciler settles them", async () => {
+  const { runner } = world();
+  const product = { kind: "product", id: "product:1001" };
+  const again = { ...fakeTeammateBriefInput(), objective: "Try that again.", records: [] };
+  // The child was given product:1001 and left it unknown: a follow-up naming no records is
+  // still over it.
+  const given = await ask(runner, { installationId: "inst_unsure" });
+  assert.ok(given.ok);
+  assert.equal(given.result.next, "do_not_retry");
+  assert.deepEqual(
+    await ask(runner, { installationId: null, followUpOf: given.callId, brief: again }),
+    { ok: false, refusal: "retry_blocked" },
+  );
+  // A subject the child left unknown without being given it holds the same way.
+  const elsewhere = "run_fake_4";
+  const other = { ...fakeTeammateBriefInput(), records: [{ kind: "product", id: "product:2002" }] };
+  const left = await ask(runner, {
+    installationId: "inst_unsure",
+    parentRunId: elsewhere,
+    brief: other,
+  });
+  assert.ok(left.ok);
+  const followLeft = () =>
+    ask(runner, {
+      installationId: null,
+      followUpOf: left.callId,
+      parentRunId: elsewhere,
+      brief: again,
+    });
+  assert.deepEqual(await followLeft(), { ok: false, refusal: "retry_blocked" });
+  // Once the reconciler settles the subject, the follow-up is admitted; another run's
+  // settlement is its own.
+  runner.settle(elsewhere, product);
+  const settled = await followLeft();
+  assert.ok(settled.ok);
+  assert.equal(settled.sequence, 2);
+  assert.deepEqual(
+    await ask(runner, { installationId: null, followUpOf: given.callId, brief: again }),
+    { ok: false, refusal: "retry_blocked" },
+  );
+  runner.settle(fakeIds.runId, product);
+  assert.ok(
+    (await ask(runner, { installationId: null, followUpOf: given.callId, brief: again })).ok,
+  );
+  // A fresh call over it is admitted again too.
+  runner.settle(fakeIds.runId, product);
+  assert.ok((await ask(runner)).ok);
+});
+
 test("result.write builds a called teammate's items across turns: its own items only, never after close", async () => {
   const { runner, store, writes } = world();
   const call = await ask(runner, { installationId: "inst_writer" });
@@ -1018,8 +1174,9 @@ test("result.write builds a called teammate's items across turns: its own items 
   assert.ok(validateCurrentDefinition("ResultItem", table));
   assert.equal(table.open, false);
   assert.equal(store.item(notes.itemId).open, false);
-  // The items carry the run's read tags and taint, as code stamps them.
-  assert.deepEqual(table.readTags, [productTag]);
+  // The items carry the run's read tags (the requester's words' and its own reads') and taint,
+  // as code stamps them.
+  assert.deepEqual(table.readTags, [knowledgeTag, productTag]);
   assert.deepEqual(table.taint, fakeTaint());
   // Evidence citing a written item resolves; Morrow reads the table back row for row.
   assert.deepEqual(
@@ -1050,7 +1207,7 @@ test("the fake store: items read page by page by the run that received them, ref
   assert.ok(validateCurrentDefinition("ResultItem", record));
   assert.equal(record.runId, call.result.runId);
   assert.equal(record.open, false);
-  assert.deepEqual(record.readTags, [productTag]);
+  assert.deepEqual(record.readTags, [knowledgeTag, productTag]);
   assert.deepEqual(record.taint, fakeTaint());
   const pages = [];
   for (let page = 1; page <= record.pageCount; page++) {

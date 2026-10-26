@@ -439,6 +439,32 @@ test("ADR-0027 item 7: run_tool_calls rows hold ids, codes and digests only; a r
   );
   assert.equal(valid("RunToolCall", { ...row, outcome: null }), false, "in flight has no result");
   assert.equal(valid("RunToolCall", { ...row, resultBytes: 8193 }), false);
+  // Review H5-6: a grant tool's row names the capability and verb it used; a memory or harness
+  // tool's row names neither (ADR-0041 item 24), and never half of one.
+  const grant = { ...row, tool: "proposal.listing", capabilityId: "catalog.content.publish" };
+  assert.ok(valid("RunToolCall", { ...grant, verb: "propose" }));
+  assert.equal(valid("RunToolCall", { ...grant, capabilityId: null, verb: null }), false);
+  assert.equal(valid("RunToolCall", { ...grant, verb: null }), false, "a grant row names its verb");
+  assert.equal(valid("RunToolCall", { ...row, capabilityId: null }), false);
+  for (const tool of [
+    "memory.search",
+    "memory.read",
+    "memory.suggest",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "result.write",
+    "context.checkpoint",
+  ]) {
+    assert.ok(valid("RunToolCall", { ...row, tool, capabilityId: null, verb: null }), tool);
+    assert.equal(valid("RunToolCall", { ...row, tool }), false, `${tool} names no capability`);
+    assert.equal(
+      valid("RunToolCall", { ...row, tool, capabilityId: "orders.read", verb: "view" }),
+      false,
+      tool,
+    );
+    assert.equal(valid("RunToolCall", { ...row, tool, capabilityId: null }), false, tool);
+  }
   // Turns keep content with read tags and an expiry (ADR-0031 item 1).
   const turn = fakes.fakeRunTurn();
   assert.equal(

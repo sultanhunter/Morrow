@@ -132,9 +132,11 @@ export function runPlanInputValid(
 /**
  * run.complete's code rules: criteria reported once each; a called teammate gives its result
  * (the child form, with its own rules) and no reply, never waiting; Morrow's job gives the
- * reply it posts and no result; any other job gives no result. What a teammate needs goes only
- * with blocked or partial. The gate (plan, open calls and questions, unknown outcomes, typed
- * checks, the review) runs at dispatch against SQL.
+ * reply it posts and no result; any other job gives no result. Look-for-work never waits: a
+ * waiting completion opens a durable wait (ADR-0041 item 17), and its pass is reads and
+ * suggestions only (ADR-0024 item 6). What a teammate needs goes only with blocked or partial.
+ * The gate (plan, open calls and questions, unknown outcomes, typed checks, the review) runs at
+ * dispatch against SQL.
  */
 export function runCompleteInputValid(
   input: unknown,
@@ -152,6 +154,7 @@ export function runCompleteInputValid(
       (i.result.needs === null || i.outcome === "blocked" || i.outcome === "partial")
     );
   if (i.result !== null) return false;
+  if (context === "look_for_work" && i.outcome === "waiting") return false;
   return context === "coordinator" ? i.reply !== null : true;
 }
 

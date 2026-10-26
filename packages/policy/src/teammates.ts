@@ -22,7 +22,8 @@
 //   named in its brief. Nothing customer-tagged enters Morrow's context. A model-written id is
 //   never authority to read.
 // - Taint only joins and never truncates (ADR-0041 item 34): every kind, the first 256 distinct
-//   sources and a count of the rest.
+//   sources and a count of the rest. Read tags only join too (joinReadTags): a child's
+//   follow-up keeps every tag its context already holds.
 import type {
   Current_AgentRunEndReason,
   Current_ModelUntrustedSource,
@@ -161,6 +162,25 @@ export function joinRunTaint(...taints: readonly Current_RunTaint[]): Current_Ru
     }
   }
   return { contextTaint: "untrusted_external", kinds, sources, omittedSources: omitted };
+}
+/** ReadTags' bound (ADR-0031 item 6): a run's tags are distinct, at most 24. */
+export const readTagLimit = 24;
+/**
+ * The join of read tags (ADR-0031 item 6): everything a context holds keeps its tags, so a
+ * child's tags only join across its sequences (ADR-0041 item 21: a follow-up keeps everything
+ * it read) and never narrow. Distinct, in order of first appearance. Null past ReadTags' 24,
+ * which code refuses rather than cut.
+ */
+export function joinReadTags(
+  ...lists: readonly (readonly Current_ReadTag[])[]
+): readonly Current_ReadTag[] | null {
+  const tags = new Map<string, Current_ReadTag>();
+  for (const list of lists)
+    for (const t of list) {
+      const key = JSON.stringify([t.storeId, t.capability]);
+      if (!tags.has(key)) tags.set(key, { storeId: t.storeId, capability: t.capability });
+    }
+  return tags.size > readTagLimit ? null : [...tags.values()];
 }
 /** RunTaint's code rule beyond its schema: every listed source's kind is among kinds. */
 export function runTaintValid(value: unknown): value is Current_RunTaint {

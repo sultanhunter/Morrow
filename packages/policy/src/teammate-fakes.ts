@@ -19,14 +19,19 @@
 //   parks on credits, item 9; there is no money cap). A dispatch over subjects an earlier
 //   result left with unknown outcomes is refused (retry_blocked, item 23). Each fresh call is a
 //   fresh child, the same teammate again included; a follow-up (followUpOf) reopens an idle
-//   child of the same run with a new brief and the next sequence, keeping what it was given
-//   and its taint, and counts no new child; agent.cancel releases an idle child, or stops a
-//   running one, which keeps what it did as partial and is then released. The brief the
-//   teammate receives is built by code (teammateBrief), request included. The called run starts
-//   with the calling run's taint and joins its own (joinRunTaint), so its items and its result
-//   carry both. It builds TeammateResult@1 with buildTeammateResult for every end, so large
-//   output becomes items, work done before a stop is kept as partial, and a customer-tagged
-//   result never reaches Morrow.
+//   child of the same run with a new brief and the next sequence, keeping what it was given,
+//   its read tags and its taint, and counts no new child. A follow-up's subjects are the
+//   child's whole set (what it was given, what the new brief names and what it left unknown),
+//   so retry_blocked holds for it too until the reconciler settles them (settle). agent.cancel
+//   releases an idle child, or stops a running one, which keeps what it did as partial and is
+//   then released. The brief the teammate receives is built by code (teammateBrief), request
+//   included. The called run starts with the calling run's taint and joins its own
+//   (joinRunTaint), so its items and its result carry both; its read tags join the
+//   requester's words', every earlier sequence's and its own (joinReadTags), and never narrow.
+//   It builds TeammateResult@1 with buildTeammateResult for every end, so large output becomes
+//   items, work done before a stop is kept as partial, and a customer-tagged result never
+//   reaches Morrow: the child that produced it is released, so no follow-up can return what its
+//   context holds under other tags.
 import type {
   Current_AgentRunEndReason,
   Current_ReadTag,
@@ -56,6 +61,7 @@ import {
   coordinatorMayOpen,
   csvText,
   type ItemOpenRefusal,
+  joinReadTags,
   joinRunTaint,
   type ResultItemContent,
   type ResultItemSink,
@@ -425,6 +431,11 @@ export interface FakeTeammateRunner {
   cancel(parentRunId: string, callId: string): CancelOutcome;
   /** Children admitted under one Morrow run's envelope so far (follow-ups add none). */
   children(parentRunId: string): number;
+  /**
+   * The reconciler settled a subject's unknown outcome (ADR-0041 item 23): a dispatch or a
+   * follow-up over it is admitted again.
+   */
+  settle(parentRunId: string, subject: Current_TeammateRecordRef): void;
 }
 
 interface CallState {
@@ -438,9 +449,19 @@ interface CallState {
   cancelled: boolean;
   sequence: number;
   given: Current_TeammateRecordRef[];
+  /** The subjects the child's own results left with unknown outcomes. */
+  left: Current_TeammateRecordRef[];
+  /** Every read tag the child's context holds: they only join across its sequences. */
+  readTags: readonly Current_ReadTag[];
   taint: Current_RunTaint;
 }
 const refKey = (r: { readonly kind: string; readonly id: string }) => r.kind + "\u0000" + r.id;
+// A fake refuses rather than cut: past ReadTags' 24 the scripted run is out of contract.
+const joinedTags = (...lists: readonly (readonly Current_ReadTag[])[]) => {
+  const tags = joinReadTags(...lists);
+  if (tags === null) throw Error("FAKE_READ_TAGS_OVER_LIMIT");
+  return tags;
+};
 
 export function createFakeTeammateRunner(options: {
   readonly organizationId: string;
@@ -460,6 +481,12 @@ export function createFakeTeammateRunner(options: {
   let next = 1;
   return {
     children: (parentRunId) => children.get(parentRunId) ?? 0,
+    settle(parentRunId, subject) {
+      const left = (unresolvedByParent.get(parentRunId) ?? []).filter(
+        (u) => refKey(u.subject) !== refKey(subject),
+      );
+      unresolvedByParent.set(parentRunId, left);
+    },
     cancel(parentRunId, callId) {
       const call = calls.get(callId);
       if (!call || call.parentRunId !== parentRunId)
@@ -491,8 +518,12 @@ export function createFakeTeammateRunner(options: {
       const installationId = call?.installationId ?? input.installationId!;
       const teammate = options.teammates.find((t) => t.installationId === installationId);
       if (!teammate || !teammate.active) return { ok: false, refusal: "teammate_unavailable" };
-      // ADR-0041 item 23: nothing is dispatched over subjects with unknown outcomes.
-      if (retryBlocked(input.brief.records, unresolvedByParent.get(parentRunId) ?? []) !== "ok")
+      // ADR-0041 item 23: nothing is dispatched over subjects with unknown outcomes. A
+      // follow-up's subjects are the child's whole set: it keeps what it was given and what it
+      // left unknown, so a brief naming no records cannot reopen them.
+      const subjects =
+        call === null ? input.brief.records : [...call.given, ...call.left, ...input.brief.records];
+      if (retryBlocked(subjects, unresolvedByParent.get(parentRunId) ?? []) !== "ok")
         return { ok: false, refusal: "retry_blocked" };
       const count = children.get(parentRunId) ?? 0;
       if (call === null && count >= maximumChildrenPerEnvelope)
@@ -519,6 +550,8 @@ export function createFakeTeammateRunner(options: {
           cancelled: false,
           sequence: 1,
           given: [],
+          left: [],
+          readTags: [],
           taint: callerTaint,
         };
         calls.set(call.callId, call);
@@ -533,21 +566,25 @@ export function createFakeTeammateRunner(options: {
           seen.add(refKey(r));
           call.given.push({ kind: r.kind, id: r.id });
         }
-      // The call starts tainted when its caller is, and a follow-up keeps what the child read.
+      // The call starts tainted when its caller is, and a follow-up keeps what the child read:
+      // its taint, and the read tags of every earlier sequence and of the requester's words.
       const startTaint = joinRunTaint(call.taint, callerTaint);
+      const startTags = joinedTags(call.readTags, request?.readTags ?? []);
       const child = call;
       const run = await teammate.respond(structuredClone(brief) as Current_TeammateBrief, {
         resultWrite: options.store.writerFor({
           runId: child.runId,
-          readTags: [],
+          readTags: startTags,
           taint: startTaint,
         }),
       });
       const runTaint = joinRunTaint(startTaint, run.taint);
+      const runTags = joinedTags(startTags, run.readTags);
       call.taint = runTaint;
+      call.readTags = runTags;
       const written = await options.store.closeRun({
         runId: call.runId,
-        readTags: run.readTags,
+        readTags: runTags,
         taint: runTaint,
       });
       const facts = {
@@ -572,22 +609,26 @@ export function createFakeTeammateRunner(options: {
         plan: run.plan ?? null,
         checkpointId: run.checkpointId ?? null,
         verifierVerdict: "not_run" as const,
-        readTags: run.readTags,
+        readTags: runTags,
         taint: runTaint,
         completedAt: options.now(),
       };
       const result = await buildTeammateResult(
         facts,
         run.completion,
-        options.store.sinkFor({ runId: call.runId, readTags: run.readTags, taint: runTaint }),
+        options.store.sinkFor({ runId: call.runId, readTags: runTags, taint: runTaint }),
       );
-      call.state = call.cancelled ? "released" : "idle";
+      for (const u of run.unresolved ?? [])
+        call.left.push({ kind: u.subject.kind, id: u.subject.id });
       if ((run.unresolved ?? []).length > 0)
         unresolvedByParent.set(parentRunId, [
           ...(unresolvedByParent.get(parentRunId) ?? []),
           ...run.unresolved!,
         ]);
       const accepted = acceptTeammateResult(result);
+      // A customer-tagged result never reaches Morrow, and the child that produced it is
+      // released: its context holds the customer content, so no follow-up may reopen it.
+      call.state = call.cancelled || accepted !== "ok" ? "released" : "idle";
       if (accepted === "result_customer_tagged") return { ok: false, refusal: accepted };
       if (accepted !== "ok") throw Error("FAKE_RESULT_INVALID");
       options.store.receive(parentRunId, result);

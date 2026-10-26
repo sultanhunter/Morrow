@@ -10435,7 +10435,7 @@
       "additionalProperties": false
     },
     "RunToolCall": {
-      "description": "RunToolCall@1 (ADR-0027 item 7; PR 10): one row of run_tool_calls: ids, codes and digests only, never content. A refused call names its code; an invalid_input call names input_invalid. A memory or harness tool's call names no capability or verb (null): it holds none (ADR-0041 item 24).",
+      "description": "RunToolCall@1 (ADR-0027 item 7; PR 10): one row of run_tool_calls: ids, codes and digests only, never content. A refused call names its code; an invalid_input call names input_invalid. A memory or harness tool's call names no capability or verb (null): it holds none (ADR-0041 item 24); every other tool's call names the capability and verb it used, never null (the generator checks this list against the catalogue's memory and harness families).",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -10588,6 +10588,58 @@
       ],
       "additionalProperties": false,
       "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "enum": [
+                  "memory.search",
+                  "memory.read",
+                  "memory.suggest",
+                  "run.plan",
+                  "run.complete",
+                  "run.wait",
+                  "result.write",
+                  "context.checkpoint"
+                ]
+              }
+            },
+            "required": [
+              "tool"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "capabilityId": {
+                "type": "null"
+              },
+              "verb": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "capabilityId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+              },
+              "verb": {
+                "type": "string",
+                "enum": [
+                  "view",
+                  "propose",
+                  "approve",
+                  "execute",
+                  "delegate",
+                  "administer"
+                ]
+              }
+            }
+          }
+        },
         {
           "if": {
             "type": "object",

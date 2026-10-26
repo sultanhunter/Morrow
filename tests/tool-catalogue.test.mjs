@@ -570,6 +570,42 @@ for (const [name, change, expected] of [
     (s) => s[1].$defs.ToolInputMessagePost.required.pop(),
     /message\.post: input is not strict-expressible: AGENT_PLATFORM_SCHEMA_OPTIONAL/,
   ],
+  // Review H5-6: RunToolCall@1's row names no capability or verb exactly for the memory and
+  // harness tools, and the capability and verb for every other tool.
+  [
+    "a RunToolCall row whose capability and verb may be null for any tool",
+    (s) => {
+      const row = s[1].$defs.RunToolCall;
+      row.allOf = row.allOf.filter((b) => b?.if?.properties?.tool === undefined);
+    },
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
+  [
+    "a RunToolCall branch missing a harness tool",
+    (s) => {
+      const branch = s[1].$defs.RunToolCall.allOf.find((b) => b?.if?.properties?.tool);
+      branch.if.properties.tool.enum = branch.if.properties.tool.enum.filter(
+        (n) => n !== "run.complete",
+      );
+    },
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
+  [
+    "a RunToolCall branch that names a grant tool",
+    (s) =>
+      s[1].$defs.RunToolCall.allOf
+        .find((b) => b?.if?.properties?.tool)
+        .if.properties.tool.enum.push("proposal.listing"),
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
+  [
+    "a RunToolCall branch whose other tools may name no capability",
+    (s) => {
+      const branch = s[1].$defs.RunToolCall.allOf.find((b) => b?.if?.properties?.tool);
+      branch.else.properties.capabilityId = { anyOf: [{ type: "null" }, { type: "string" }] };
+    },
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
 ])
   test(`the tool catalogue refuses ${name}`, () => {
     const s = structuredClone(schemas);
