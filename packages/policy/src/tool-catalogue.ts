@@ -14,7 +14,7 @@
 //   cached prefix of a run stays byte-stable. A recorded tool_use carries the same strict
 //   shape (ToolModelInput*); the tool-call step validates it again with the full ToolInput
 //   definition (checkToolInput), and a limit breach is that call's invalid_input.
-// - Catalogue version 3 retired the specialist context and the Specialist ceiling with the
+// - Catalogue version 4 retired the specialist context and the Specialist ceiling with the
 //   specialist kind (ADR-0037 item 7).
 import type {
   Current_AgentRunKind,

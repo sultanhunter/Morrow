@@ -1,5 +1,5 @@
 // PR 10: ToolCatalogue@1 (ADR-0027 items 2, 3 and 8) and the committed-off agent switches
-// (ADR-0027 item 11); ADR-0037 PR 2: catalogue version 3 (agent.ask, agent.result.read and
+// (ADR-0027 item 11); ADR-0037 PR 2: catalogue version 4 (agent.ask, agent.result.read and
 // agent.propose for Morrow only, agent.route without once per job, structured briefs without a
 // character cap, the call context and result.submit) and the teammate-call and agent-card
 // switches, with the Specialist ceiling and its switch retired. The safety tests of the build
@@ -75,7 +75,8 @@ test("the committed catalogue and switches inspect clean; the specialist files a
   assert.deepEqual(inspect(), []);
   assert.deepEqual(inspectAgentPlatformSwitches(...switches()), []);
   assert.ok(validate(catalogue));
-  assert.equal(catalogue.version, 3);
+  // Version 3 is PR 20's (knowledge.propose and notebook.write); ADR-0037's tools are version 4.
+  assert.equal(catalogue.version, 4);
   for (const path of [
     "docs/contracts/specialist-ceiling.json",
     "docs/decisions/specialists-staging.json",
@@ -506,7 +507,7 @@ test("ADR-0037 item 2: no context but the Coordinator's offers an agent.* tool (
       assert.ok(!toolEntry(name).capabilityId.startsWith("agents."), name);
     }
   assert.equal(isAgentTool("agent.anything"), false);
-  assert.equal(toolEntry("specialist.draft"), null, "retired in version 3");
+  assert.equal(toolEntry("specialist.draft"), null, "retired in version 4");
   // agent.ask and agent.route are delegations on workspace.task.delegate; agent.propose a
   // draft on agents.builder.describe; agent.result.read a read that grants nothing.
   assert.deepEqual(

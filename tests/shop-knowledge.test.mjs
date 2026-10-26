@@ -456,7 +456,9 @@ test("ToolCatalogue@1 version 3: the two tools are internal writes for routed an
     assert.equal(capability.executor, "agent_direct_write");
     assert.equal(capability.effect, "internal_write");
     assert.equal(capability.review_required, false);
-    for (const context of ["coordinator", "look_for_work", "specialist"])
+    // Catalogue version 4 (ADR-0037) retired the specialist context; a called teammate's run
+    // (the call context) is not offered them either.
+    for (const context of ["coordinator", "look_for_work", "call"])
       assert.equal(toolsForContext(context).includes(name), false, context);
   }
   // A person's approve, write and delete stay human_only: no tool reaches them.

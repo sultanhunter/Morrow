@@ -111,7 +111,15 @@ test("ADR-0037 item 5: the fixed catalogue only; agent.*, support, delegation an
     "suggestion.create",
     "report.write",
     "proposal.listing",
+    // PR 20's internal writes (catalogue version 3): no data class, scope or Owner-only kind.
+    "knowledge.propose",
+    "notebook.write",
   ]);
+  const notebook = deriveCardGrants(["knowledge.search", "knowledge.propose", "notebook.write"]);
+  assert.deepEqual(notebook.dataClasses, ["workspace.knowledge.read"]);
+  assert.deepEqual(notebook.optionalScopes, []);
+  assert.deepEqual(notebook.ownerOnly, []);
+  assert.equal(notebook.customerData, "none");
   // Customer mail never arrives by trigger either.
   assert.ok(!cardTriggerKinds.includes("inbound_mail"));
   const mail = input();

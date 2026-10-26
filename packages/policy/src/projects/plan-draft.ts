@@ -56,7 +56,7 @@ export const planDraftTool: ToolEntry = (() => {
 
 /**
  * ADR-0027 item 8's Coordinator grant set with plan.draft and ADR-0037 item 1's teammate
- * tools (ToolCatalogue@1 version 3: agent.ask, agent.result.read and agent.propose in place of
+ * tools (ToolCatalogue@1 version 4: agent.ask, agent.result.read and agent.propose in place of
  * specialist.draft); it keeps task.create.
  */
 export const coordinatorGrantTools = Object.freeze([

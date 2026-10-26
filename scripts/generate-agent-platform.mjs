@@ -46,7 +46,7 @@ const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex")
 
 // ADR-0027 item 8: the Coordinator's fixed grant set, as tools, with plan.draft (ADR-0034
 // item 2 amends item 8; catalogue version 2) and ADR-0037 item 1's teammate tools (catalogue
-// version 3: agent.propose in place of specialist.draft, agent.ask and agent.result.read).
+// version 4: agent.propose in place of specialist.draft, agent.ask and agent.result.read).
 // The launch subset and the switches narrow what a Coordinator turn is offered
 // (packages/policy/src/projects/plan-draft.ts).
 export const coordinatorToolNames = Object.freeze([

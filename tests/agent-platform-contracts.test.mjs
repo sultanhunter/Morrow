@@ -600,7 +600,7 @@ test("ADR-0037 item 4: AgentPackage@1 has two origins; a workspace package carri
   );
 });
 
-test("catalogue version 3's codes: teammate refusals, records and sources; route_used and the specialist spec retired", () => {
+test("catalogue version 4's codes: teammate refusals, records and sources; route_used and the specialist spec retired", () => {
   const refusals = core.$defs.ToolRefusalCode.enum;
   assert.equal(refusals.includes("route_used"), false);
   for (const code of [

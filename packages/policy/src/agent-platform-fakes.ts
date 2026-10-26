@@ -464,7 +464,7 @@ export function fakeReportArtifact(): Current_ReportArtifact {
 
 // --- Agent runs (ADR-0027) ---------------------------------------------------------------
 /**
- * A manifest of each run kind, at the version 2 defaults. Morrow's shows its version 3 tools
+ * A manifest of each run kind, at the version 2 defaults. Morrow's shows its version 4 tools
  * with both team switches on; a called teammate's run is a routed run (ADR-0037 item 2).
  */
 export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentRunManifest {
@@ -476,7 +476,7 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
     workspaceId: fakeIds.workspaceId,
     taskId: fakeIds.taskId,
     systemTextDigest: fakeDigest("system text"),
-    toolCatalogueVersion: 3,
+    toolCatalogueVersion: 4,
     toolCatalogueDigest: fakeDigest("tool catalogue"),
     admittedAt: at,
   };
