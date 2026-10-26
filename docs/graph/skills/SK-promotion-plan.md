@@ -3,11 +3,11 @@ id: SK-promotion-plan
 type: skill
 title: The weekly promotion plan, with campaign and social copy
 status: proposed
-specialist_eligible: "no"
+card_eligible: "yes"
 runtime: none
 job_tags: [marketing]
 links:
-  governed_by: [ADR-0023, ADR-0025]
+  governed_by: [ADR-0023, ADR-0025, ADR-0037]
 ---
 
 Plans the week's promotions from product data and sales aggregates, never from order reads; copy in

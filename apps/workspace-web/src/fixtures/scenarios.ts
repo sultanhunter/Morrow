@@ -104,6 +104,9 @@ const reads: readonly PortMethod[] = [
   "settings.emailAddresses",
   "settings.notifications",
   "library.knowledge",
+  // PR 20.
+  "team.notebook",
+  "library.knowledgePage",
   "library.files",
   // v1 PR 15.
   "inbox.read",

@@ -6,8 +6,8 @@
 // Each JS entry of @morrow/workspace-ui is also bundled for the browser on its own and
 // held to the same module denials (P05.T01y: the session keeper, before P14.T01a wires it).
 // Screens that load on first use (`createDeferred` for the project screens, `lazyScreen`
-// for Review, the applied history and Ask) must stay out of the entry chunk and arrive in
-// a chunk of their own: the budget counts the entry only.
+// for Review, the applied history, Ask, the exception screen and Shop knowledge) must stay
+// out of the entry chunk and arrive in a chunk of their own: the budget counts the entry only.
 import {
   existsSync,
   mkdirSync,
@@ -66,12 +66,15 @@ const urlPattern = /https?:\/\/[^\s"'`)<>\\]+/g;
 // v1 PR 4: the screens that load as their own chunk (packages/workspace-ui/src/screens/
 // lazy.tsx) and keep the entry within its budget. A static import that pulls one into an
 // entry chunk is named here rather than surfacing later as an entry over its size. v1 PR
-// 15's exception screen uses Review's OperationList, so it loads the same way.
+// 15's exception screen uses Review's OperationList, so it loads the same way. PR 20's Shop
+// knowledge screen (with Files, the same module) took the entry past its budget before it
+// loaded this way (CI: DIST_ENTRY_TOO_LARGE:154976).
 export const lazyModules = Object.freeze([
   "packages/workspace-ui/src/screens/review.tsx",
   "packages/workspace-ui/src/screens/ask.tsx",
   "packages/workspace-ui/src/screens/product-picker.tsx",
   "packages/workspace-ui/src/screens/exception.tsx",
+  "packages/workspace-ui/src/screens/library.tsx",
 ]);
 
 /** The web build's module report: each lazy screen is bundled, and never into an entry. */

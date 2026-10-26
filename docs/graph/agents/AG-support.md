@@ -4,6 +4,7 @@ type: agent
 kind: installable
 title: Customer Support
 status: planned
+origin: first-party
 scopes_optional: [read_orders, read_customers, read_returns]
 customer_data: level2
 computer: "no"

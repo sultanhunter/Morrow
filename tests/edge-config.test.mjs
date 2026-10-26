@@ -17,7 +17,10 @@ import {
   bundleSizeFailure,
   edgeBundleLimits,
   edgeChildEnvironment,
+  edgeConnectorDurableObjects,
+  edgeConnectorMigrations,
   edgeConnectorRateLimits,
+  edgeDurableObjectLocationHint,
   edgeEnvironments,
   devBindingTables,
   edgeObservability,
@@ -40,8 +43,12 @@ import {
   orchestratorPackageAllowlist,
   resolvedEdgeConfig,
   edgePlanDraftsPrerequisites,
+  edgeLiveEvalsPrerequisites,
+  reviewedLiveEvalsRecord,
+  edgeShopKnowledgePrerequisites,
   reviewedModelRecord,
   reviewedPlanDraftsRecord,
+  reviewedShopKnowledgeRecord,
   reviewedRuntimeRecord,
   reviewedStripeRecord,
   runWrangler,
@@ -51,6 +58,10 @@ import {
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
 import { planDraftsSwitchAllowed } from "../packages/policy/src/projects/plan-draft.ts";
+import {
+  shopKnowledgeRecord,
+  shopKnowledgeSwitchAllowed,
+} from "../packages/policy/src/knowledge/rules.ts";
 
 // P04.T02a AC01, AC04, AC24 and the static half of AC22. Configuration is read
 // with the pinned wrangler (no account, credential or network).
@@ -1823,16 +1834,18 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
     }
   }
   // staging.json names another region, another cloud or none: the committed placements and
-  // the committed endpoint no longer match it.
-  for (const patch of [
-    (s) => (s.neon.region_id = "aws-eu-central-1"),
-    (s) => (s.neon.region_id = "azure-eastus2"),
-    (s) => (s.neon.region_id = "aws:us-east-1"),
-    (s) => (s.neon.region_id = null),
-    (s) => delete s.neon.region_id,
+  // the committed endpoint no longer match it (fix-connector-cron-latency: nor does the
+  // cron object's hint, when the other region maps).
+  for (const [patch, cronToo] of [
+    [(s) => (s.neon.region_id = "aws-eu-central-1"), true],
+    [(s) => (s.neon.region_id = "azure-eastus2"), false],
+    [(s) => (s.neon.region_id = "aws:us-east-1"), false],
+    [(s) => (s.neon.region_id = null), false],
+    [(s) => delete s.neon.region_id, false],
   ]) {
     const verdict = await verify(tree(), undefined, records({ staging: patch }));
     assert.deepEqual(verdict.problems.sort(), [
+      ...(cronToo ? ["EDGE_CONNECTOR_CRON_LOCATION:connector:cron.ts"] : []),
       "EDGE_PLACEMENT_REGION:api:staging",
       "EDGE_PLACEMENT_REGION:broker:staging",
       "EDGE_PLACEMENT_REGION:connector:staging",
@@ -1846,11 +1859,12 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
     broker: (c) => (c.env.staging.placement = targeted("aws:eu-central-1")),
     connector: (c) => (c.env.staging.placement = targeted("aws:eu-central-1")),
   };
-  const stranded = await verify(
-    tree(moved),
-    undefined,
-    records({ staging: (s) => (s.neon.region_id = "aws-eu-central-1") }),
-  );
+  // (The cron object's hint, a code constant, moves with them: here "weur".)
+  const stranded = await verifyEdgeConfig({
+    root: tree(moved),
+    ...records({ staging: (s) => (s.neon.region_id = "aws-eu-central-1") }),
+    connectorCronLocationHint: "weur",
+  });
   assert.deepEqual(stranded.problems, ["EDGE_PLACEMENT_REGION:staging.json"]);
   // The rule follows staging.json, not a fixed region: the placements, region_id, the
   // endpoint and both bindings moved together verify cleanly.
@@ -1870,17 +1884,22 @@ test("P04.T01i D1: the staging placement region is staging.json's neon.region_id
   // model-provider-on: the orchestrator's copy too (it has no placement).
   all.orchestrator = (c) =>
     patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
-  const relocated = await verify(
-    tree(all),
-    undefined,
-    records({
-      staging: (s) => {
-        s.neon.region_id = "aws-eu-central-1";
-        s.neon.endpoint_host = host;
-      },
-    }),
-  );
+  const relocatedRecords = records({
+    staging: (s) => {
+      s.neon.region_id = "aws-eu-central-1";
+      s.neon.endpoint_host = host;
+    },
+  });
+  const relocated = await verifyEdgeConfig({
+    root: tree(all),
+    ...relocatedRecords,
+    connectorCronLocationHint: "weur",
+  });
   assert.deepEqual(relocated.problems, []);
+  // fix-connector-cron-latency: everything moved but the cron object's hint, which still
+  // names Eastern North America.
+  const hintLeft = await verify(tree(all), undefined, relocatedRecords);
+  assert.deepEqual(hintLeft.problems, ["EDGE_CONNECTOR_CRON_LOCATION:connector:cron.ts"]);
 });
 
 test("P04.T01i D1: no placement outside the staging api, broker and connector, an explicit off included", async () => {
@@ -1911,6 +1930,157 @@ test("P04.T01i D1: no placement outside the staging api, broker and connector, a
     const found = codes(await verify(tree(mutate)));
     assert.ok(found.includes(expected), index + ": " + expected + " not in " + found.join(","));
     assert.ok(!found.includes("EDGE_UNEXPECTED_BINDING_PLACEMENT"), index + ": " + found.join(","));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// fix-connector-cron-latency: the connector's cron runs in one Durable Object created with
+// the Neon region's location hint. Its binding (not inherited) and its one SQLite migration
+// are exact in every environment; no other Worker binds a Durable Object or carries a
+// migration; the hint in worker/cron.ts is the hint of staging.json's region.
+test("fix-connector-cron-latency: the cron's Durable Object binding and migration are exact per environment", async () => {
+  for (const environment of edgeEnvironments) {
+    const config = await resolvedEdgeConfig("connector", environment);
+    assert.deepEqual(config.durable_objects, {
+      bindings: [{ name: "CONNECTOR_CRON", class_name: "ConnectorCron" }],
+    });
+    assert.deepEqual(config.migrations, [{ tag: "v1", new_sqlite_classes: ["ConnectorCron"] }]);
+    for (const other of ["api", "broker", "orchestrator"]) {
+      const resolved = await resolvedEdgeConfig(other, environment);
+      assert.deepEqual(resolved.durable_objects?.bindings ?? [], [], other);
+      assert.deepEqual(resolved.migrations ?? [], [], other);
+    }
+  }
+  assert.deepEqual(JSON.parse(JSON.stringify(edgeConnectorDurableObjects)), {
+    bindings: [{ name: "CONNECTOR_CRON", class_name: "ConnectorCron" }],
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(edgeConnectorMigrations)), [
+    { tag: "v1", new_sqlite_classes: ["ConnectorCron"] },
+  ]);
+  const binding = (extra = {}) => ({
+    bindings: [{ name: "CONNECTOR_CRON", class_name: "ConnectorCron", ...extra }],
+  });
+  const cases = [
+    // Missing in one environment (the binding is not inherited).
+    [{ connector: (c) => delete c.env.staging.durable_objects }, "EDGE_CONNECTOR_DURABLE_OBJECTS"],
+    [
+      { connector: (c) => (c.env.production.durable_objects = { bindings: [] }) },
+      "EDGE_CONNECTOR_DURABLE_OBJECTS",
+    ],
+    // Another name, another script's class, or a second binding.
+    [
+      { connector: (c) => (c.durable_objects.bindings[0].name = "CRON") },
+      "EDGE_CONNECTOR_DURABLE_OBJECTS",
+    ],
+    [
+      {
+        connector: (c) =>
+          (c.env.staging.durable_objects = binding({ script_name: "morrow-staging-broker" })),
+      },
+      "EDGE_CONNECTOR_DURABLE_OBJECTS",
+    ],
+    [
+      {
+        connector: (c) =>
+          c.env.staging.durable_objects.bindings.push({ name: "X", class_name: "ConnectorCron" }),
+      },
+      "EDGE_CONNECTOR_DURABLE_OBJECTS",
+    ],
+    // A KV-backed class, a second migration, or none.
+    [
+      { connector: (c) => (c.migrations = [{ tag: "v1", new_classes: ["ConnectorCron"] }]) },
+      "EDGE_CONNECTOR_MIGRATIONS",
+    ],
+    [
+      {
+        connector: (c) => c.migrations.push({ tag: "v2", deleted_classes: ["ConnectorCron"] }),
+      },
+      "EDGE_CONNECTOR_MIGRATIONS",
+    ],
+    [{ connector: (c) => delete c.migrations }, "EDGE_CONNECTOR_MIGRATIONS"],
+    // No other Worker may bind a Durable Object or carry a migration.
+    [
+      {
+        api: (c) =>
+          (c.env.staging.durable_objects = binding({
+            script_name: "morrow-staging-connector",
+          })),
+      },
+      "EDGE_UNEXPECTED_BINDING_DURABLE_OBJECTS",
+    ],
+    [
+      { broker: (c) => (c.migrations = [{ tag: "v1", new_sqlite_classes: ["Semaphore"] }]) },
+      "EDGE_UNEXPECTED_BINDING_MIGRATIONS",
+    ],
+  ];
+  for (const [index, [mutate, expected]] of cases.entries()) {
+    const found = codes(await verify(tree(mutate)));
+    assert.ok(found.includes(expected), index + ": " + expected + " not in " + found.join(","));
+  }
+});
+
+test("fix-connector-cron-latency: the cron object's location hint is staging.json's Neon region's", async () => {
+  assert.equal(edgeDurableObjectLocationHint(committedStaging.neon.region_id), "enam");
+  for (const [region, hint] of [
+    ["aws-us-east-1", "enam"],
+    ["aws-us-east-2", "enam"],
+    ["aws-us-west-2", "wnam"],
+    ["aws-eu-central-1", "weur"],
+    ["aws-eu-west-2", "weur"],
+    ["aws-ap-southeast-1", "apac-se"],
+    ["aws-ap-southeast-2", "oc"],
+    // AI review F2: Cloudflare creates a "sam" object in Eastern North America, so Sao
+    // Paulo has no honoured hint and stays unmapped.
+    ["aws-sa-east-1", null],
+    ["aws-ap-northeast-1", null],
+    ["azure-eastus2", null],
+    ["aws:us-east-1", null],
+    ["", null],
+    [null, null],
+    [undefined, null],
+  ])
+    assert.equal(edgeDurableObjectLocationHint(region), hint, String(region));
+  // The connector's own hint (read from worker/cron.ts) verifies; another one fails.
+  assert.deepEqual((await verify(resolve("."))).problems, []);
+  for (const other of ["wnam", "weur", "ENAM", "", null])
+    assert.deepEqual(
+      (await verifyEdgeConfig({ connectorCronLocationHint: other })).problems,
+      ["EDGE_CONNECTOR_CRON_LOCATION:connector:cron.ts"],
+      String(other),
+    );
+});
+
+test("fix-connector-cron-latency (AI review F2): a database moved to Sao Paulo fails the cron object's hint, whatever it names", async () => {
+  // Everything else moves with the database: the three placements, region_id, the endpoint
+  // and both bindings. Only the hint is left to decide, and no hint passes, "sam" included,
+  // because Cloudflare creates a "sam" object in Eastern North America.
+  const host = "ep-hidden-mouse-b7e6ff6l.c-13.sa-east-1.aws.neon.tech";
+  const moved = {};
+  for (const worker of ["api", "broker", "connector"])
+    moved[worker] = (c) => {
+      c.env.staging.placement = targeted("aws:sa-east-1");
+      patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
+    };
+  // model-provider-on: the orchestrator's copy of the binding moves too (it has no placement).
+  moved.orchestrator = (c) =>
+    patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
+  const saoPaulo = records({
+    staging: (s) => {
+      s.neon.region_id = "aws-sa-east-1";
+      s.neon.endpoint_host = host;
+    },
+  });
+  for (const hint of ["sam", "enam", undefined]) {
+    const verdict = await verifyEdgeConfig({
+      root: tree(moved),
+      ...saoPaulo,
+      ...(hint === undefined ? {} : { connectorCronLocationHint: hint }),
+    });
+    assert.deepEqual(
+      verdict.problems,
+      ["EDGE_CONNECTOR_CRON_LOCATION:connector:cron.ts"],
+      String(hint),
+    );
   }
 });
 
@@ -2190,6 +2360,7 @@ test("model-provider-on: switched on, the full model set is required and every m
     ["off", "off", "off"],
   );
   for (const name of [
+    "agent-evals-live.json",
     "agent-loop-staging.json",
     "plan-drafts-staging.json",
     "shopify-write-staging.json",
@@ -2375,6 +2546,148 @@ test("the plan-drafts switch: committed off and held; on is refused while the lo
     const found = codes(
       await verify(resolve("."), undefined, {
         planDraftsPath: write("plan-drafts-staging.json", value),
+      }),
+    );
+    assert.deepEqual(found, [expected]);
+  }
+});
+
+// PR 20: the shop-knowledge switch is committed off with its agent tools off; edge:check refuses
+// the routes on before a reviewed template issues the workspace.knowledge.* grants, and the
+// tools on before the routes and the agent loop are on (neither prerequisite has a record yet).
+test("the shop-knowledge switch: committed off; on is refused before its grants, the tools before the loop", async () => {
+  const committed = JSON.parse(readFileSync("docs/decisions/shop-knowledge-staging.json", "utf8"));
+  assert.deepEqual(
+    { ...reviewedShopKnowledgeRecord(committed) },
+    { switch: "off", agent_tools: "off" },
+  );
+  assert.deepEqual({ ...shopKnowledgeRecord }, { switch: "off", agent_tools: "off" });
+  assert.deepEqual(
+    { ...edgeShopKnowledgePrerequisites },
+    { grantsIssued: false, agentLoop: "off" },
+  );
+  const on = { ...committed, switch: "on" };
+  assert.throws(() => reviewedShopKnowledgeRecord(on), /EDGE_SHOP_KNOWLEDGE_BEFORE_GRANTS/);
+  assert.deepEqual(
+    { ...reviewedShopKnowledgeRecord(on, { grantsIssued: true, agentLoop: "off" }) },
+    { switch: "on", agent_tools: "off" },
+  );
+  const tools = { ...committed, switch: "on", agent_tools: "on" };
+  assert.throws(
+    () => reviewedShopKnowledgeRecord(tools, { grantsIssued: true, agentLoop: "off" }),
+    /EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP/,
+  );
+  assert.throws(
+    () =>
+      reviewedShopKnowledgeRecord(
+        { ...committed, agent_tools: "on" },
+        { grantsIssued: true, agentLoop: "on" },
+      ),
+    /EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP/,
+  );
+  // The edge check and the policy rule agree on every combination.
+  for (const routes of ["off", "on"])
+    for (const agentTools of ["off", "on"])
+      for (const grantsIssued of [false, true])
+        for (const agentLoop of ["off", "on"]) {
+          const record = { ...committed, switch: routes, agent_tools: agentTools };
+          let edge = true;
+          try {
+            reviewedShopKnowledgeRecord(record, { grantsIssued, agentLoop });
+          } catch {
+            edge = false;
+          }
+          assert.equal(
+            edge,
+            shopKnowledgeSwitchAllowed({ routes, agentTools, grantsIssued, agentLoop }),
+          );
+        }
+  for (const edit of [
+    (r) => (r.switch = true),
+    (r) => (r.agent_tools = "yes"),
+    (r) => delete r.agent_tools,
+    (r) => (r.extra = 1),
+    (r) => (r.environment_kind = "production"),
+    (r) => (r.schema_version = 2),
+    (r) => (r.scope = null),
+  ]) {
+    const record = structuredClone(committed);
+    edit(record);
+    assert.throws(() => reviewedShopKnowledgeRecord(record), /EDGE_STAGING_SHOP_KNOWLEDGE_RECORD/);
+  }
+  // Through verifyEdgeConfig: the committed record passes; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "shop-knowledge-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [value, expected] of [
+    [on, "EDGE_SHOP_KNOWLEDGE_BEFORE_GRANTS"],
+    [{ ...committed, agent_tools: "on" }, "EDGE_KNOWLEDGE_TOOLS_BEFORE_LOOP"],
+    [{ ...committed, switch: "yes" }, "EDGE_STAGING_SHOP_KNOWLEDGE_RECORD"],
+    [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+  ]) {
+    const found = codes(
+      await verify(resolve("."), undefined, {
+        shopKnowledgePath: write("shop-knowledge-staging.json", value),
+      }),
+    );
+    assert.deepEqual(found, [expected]);
+  }
+});
+
+// ADR-0037 plan PR 9 (ADR-0037 item 10): the live-evals switch is committed off, and edge:check
+// refuses it on until the agent loop is on and a deployed driver for teammate calls exists
+// (neither has a record yet, so both count as off).
+test("the live-evals switch: committed off; on is refused before the loop and a driver", async () => {
+  const committed = JSON.parse(readFileSync("docs/decisions/agent-evals-live.json", "utf8"));
+  assert.deepEqual(
+    { ...reviewedLiveEvalsRecord(committed) },
+    { switch: "off", set_id: "golden@1" },
+  );
+  assert.deepEqual({ ...edgeLiveEvalsPrerequisites }, { agentLoop: "off", liveDriver: false });
+  const on = { ...committed, switch: "on" };
+  for (const prerequisites of [
+    undefined,
+    { agentLoop: "on", liveDriver: false },
+    { agentLoop: "off", liveDriver: true },
+  ])
+    assert.throws(() => reviewedLiveEvalsRecord(on, prerequisites), /EDGE_LIVE_EVALS_BEFORE_LOOP/);
+  assert.deepEqual(
+    { ...reviewedLiveEvalsRecord(on, { agentLoop: "on", liveDriver: true }) },
+    { switch: "on", set_id: "golden@1" },
+  );
+  for (const edit of [
+    (r) => (r.switch = true),
+    (r) => (r.set_id = "golden"),
+    (r) => delete r.set_id,
+    (r) => (r.extra = 1),
+    (r) => (r.environment_kind = "production"),
+    (r) => (r.schema_version = 2),
+    (r) => (r.scope = null),
+  ]) {
+    const record = structuredClone(committed);
+    edit(record);
+    assert.throws(() => reviewedLiveEvalsRecord(record), /EDGE_STAGING_LIVE_EVALS_RECORD/);
+  }
+  // Through verifyEdgeConfig: the committed record passes; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "live-evals-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [value, expected] of [
+    [on, "EDGE_LIVE_EVALS_BEFORE_LOOP"],
+    [{ ...committed, switch: "yes" }, "EDGE_STAGING_LIVE_EVALS_RECORD"],
+    [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+  ]) {
+    const found = codes(
+      await verify(resolve("."), undefined, {
+        liveEvalsPath: write("agent-evals-live.json", value),
       }),
     );
     assert.deepEqual(found, [expected]);

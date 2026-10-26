@@ -17,6 +17,15 @@
 // finding B8): one cron trigger, every five minutes, runs the ids-only re-drives of the
 // webhook inbox and of ended installations' tokens (worker/index.ts scheduled); named in
 // every environment, exactly as scripts/edge.mjs edgeConnectorCrons pins it.
+// fix-connector-cron-latency (docs/briefs/fix-connector-cron-latency.md): placement moves
+// only fetch handlers, so the cron ran wherever Cloudflare put it, with its database
+// transactions and its broker RPCs beside it. scheduled() now hands the run to one Durable
+// Object, ConnectorCron (CONNECTOR_CRON, created with the location hint of the Neon region,
+// worker/cron.ts), so the run and every call it makes start beside the database. The class
+// is SQLite-backed and stores nothing. Only this Worker binds it; it adds no route,
+// hostname, secret or grant. `durable_objects` is not inherited, so every environment
+// names it, exactly as scripts/edge.mjs edgeConnectorDurableObjects pins it, with the one
+// migration edgeConnectorMigrations pins.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-connector",
@@ -43,6 +52,8 @@
     { "name": "WEBHOOK_LIMITER", "namespace_id": "7005", "simple": { "limit": 300, "period": 60 } },
   ],
   "triggers": { "crons": ["*/5 * * * *"] },
+  "durable_objects": { "bindings": [{ "name": "CONNECTOR_CRON", "class_name": "ConnectorCron" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConnectorCron"] }],
   "secrets": { "required": [] },
   "env": {
     // P04.T01i D1 and D6: no preview URL or route; Workers Logs as the api's. v1 PR 1: the
@@ -95,6 +106,9 @@
         },
       ],
       "triggers": { "crons": ["*/5 * * * *"] },
+      "durable_objects": {
+        "bindings": [{ "name": "CONNECTOR_CRON", "class_name": "ConnectorCron" }],
+      },
       "secrets": { "required": [] },
     },
     "production": {
@@ -120,6 +134,9 @@
         },
       ],
       "triggers": { "crons": ["*/5 * * * *"] },
+      "durable_objects": {
+        "bindings": [{ "name": "CONNECTOR_CRON", "class_name": "ConnectorCron" }],
+      },
       "secrets": { "required": [] },
     },
   },

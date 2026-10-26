@@ -1,7 +1,7 @@
 // T7 PR 16: one agent's page (the Agent board): what it does, what it works toward and
 // in, how it thinks, what it may do, its recent work, and in the aside its status, credits,
-// permission and renewal, Shopify access, schedule and notes. Pause, Remove, Renew and
-// editing notes wait for their backends and are not drawn as working buttons.
+// permission and renewal, Shopify access, schedule and notes (its notebook, PR 20). Pause,
+// Remove, Renew and editing notes wait for their backends and are not drawn as working buttons.
 import { RouteLink } from "../components/controls";
 import { StateView, outcomeState } from "../components/feedback";
 import type { Id, WorkspaceView } from "../model";
@@ -144,7 +144,50 @@ function Main({
   );
 }
 
-function Aside({ view }: { readonly view: AgentDetailView }) {
+// PR 20: the notes the agent keeps between jobs (its notebook), read on their own: only the
+// entries this person may see under their read tags; the server leaves out the rest.
+function Notebook({
+  workspaceId,
+  agentId,
+  name,
+}: {
+  readonly workspaceId: Id;
+  readonly agentId: Id;
+  readonly name: string;
+}) {
+  const services = useServices();
+  const [notebook, reload] = useRead(`${workspaceId}|team.notebook|${agentId}`, () =>
+    services.port.team.notebook(workspaceId, agentId),
+  );
+  return (
+    <Card title={a.notes}>
+      <p className="sr-help">{a.notesIntro(name)}</p>
+      {notebook.kind !== "ok" ? (
+        outcomeState(notebook, reload, { compact: true })
+      ) : notebook.value.entries.length === 0 ? (
+        <p className="sr-help">{a.notesEmpty}</p>
+      ) : (
+        <ul className="sr-note-list">
+          {notebook.value.entries.map((note) => (
+            <li key={note.id} dir="auto">
+              {note.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function Aside({
+  workspaceId,
+  agentId,
+  view,
+}: {
+  readonly workspaceId: Id;
+  readonly agentId: Id;
+  readonly view: AgentDetailView;
+}) {
   return (
     <div className="sr-detail-aside">
       <Card title={a.status} headingLevel={2}>
@@ -246,20 +289,7 @@ function Aside({ view }: { readonly view: AgentDetailView }) {
         </ul>
         <p className="sr-help">{a.whenNote}</p>
       </Card>
-      <Card title={a.notes}>
-        <p className="sr-help">{a.notesIntro(view.name)}</p>
-        {view.notes.length === 0 ? (
-          <p className="sr-help">{a.notesEmpty}</p>
-        ) : (
-          <ul className="sr-note-list">
-            {view.notes.map((note) => (
-              <li key={note} dir="auto">
-                {note}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <Notebook workspaceId={workspaceId} agentId={agentId} name={view.name} />
     </div>
   );
 }
@@ -310,7 +340,7 @@ export function AgentScreen({
       />
       <div className="sr-detail-layout">
         <Main workspaceId={ws} view={view} reload={reload} />
-        <Aside view={view} />
+        <Aside workspaceId={ws} agentId={agentId} view={view} />
       </div>
     </div>
   );

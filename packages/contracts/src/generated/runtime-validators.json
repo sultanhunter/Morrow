@@ -1,25 +1,25 @@
 {
   "schema_version": 3,
   "contract_version": "morrow.contracts.v1.1",
-  "definitions": 722,
+  "definitions": 743,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
-    "core-v1.1": 319,
-    "capabilities-v1.1": 41,
+    "core-v1.1": 336,
+    "capabilities-v1.1": 45,
     "billing-v1.1": 28
   },
-  "current_definitions": 426,
+  "current_definitions": 443,
   "current_billing_definitions": 35,
-  "capability_bodies": 240,
+  "capability_bodies": 244,
   "event_types": 23,
   "inputs": {
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "3263f8d5d7778cb5f76d1756bdb54a52b4841341ad5131f1ad91cf77fee96e07",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "2166f78251ef2602510ee33be4e5c6d4250e20be940f41f6a65ca4ed0a89f682",
+    "docs/contracts/schemas/v1.1/core.schema.json": "ae61958d9114b18f9cc03e8bb407e64fdae3fbb969ee579367e562559c63b12d",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "4248429dfa207dbe56b6e21685b243519bfc77b3c8bbb1a87d9d62a7d4f59dfc",
     "docs/contracts/schemas/v1.1/billing.schema.json": "a513b52a94b2654f2fabebdcc05a7b6dbbc10cdf046e9d4fec69f11e51c70dc2",
     "docs/contracts/event-registry.json": "3187243efde263c6de85f11bce2984ee818e48b4fb18d1a216c9473ef68d07ba"
   },
@@ -30,7 +30,7 @@
   },
   "output": {
     "path": "packages/contracts/src/generated/runtime-validators.mjs",
-    "sha256": "38e5c92d4590d0c4f1db6ad977a6b46ff76dfd9b1527c248592e3ddb1e80632d"
+    "sha256": "32252d4e06b0fb598a2ce5e8967b7c5f1033a68f1e20ecde3f2fcde8a08a0d54"
   },
   "browser_validators": {
     "SessionRotationResult": {
