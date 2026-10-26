@@ -66,6 +66,7 @@ H5 checklist:
 - [x] `tests/teammates.test.mjs` (25): partial work kept, every end, criteria checks, review verdicts, uncapped lists, taint counts; the fake runner's follow-ups, cancel (an idle child released, a running one stopped with its work kept as partial), `result.write`, `retry_blocked`, check-in and parking.
 - [x] New `tests/harness-tools.test.mjs` (9): the code rules of `run.plan`, `run.complete`, `run.wait`, `result.write`, `memory.read`, `context.checkpoint`, `agent.ask` and `agent.map`.
 - [x] `agent-cards` (9), `agent-package` (45), `plan-draft` (10), `shop-knowledge` (16), `agent-evals` (19) and `edge-config` follow.
+- [x] PR #79's review findings F1 to F5 re-checked against H5 (GitHub holds no other open review comment on #79): F1's exact-grants rule, F2's document digest, F3's role-text digest and skill eligibility, F4's carried taint (now with every kind and the source count) and F5's editor tenancy all keep their tests. F1's "no teammate result tool" case became "a declared harness tool" (`TOOL_NOT_FOR_KIND`), since a card no longer carries a result tool.
 - [ ] Full checks: see PR #79's H5 comment for the commands and results.
 - [ ] AI review (separate context, same model family) of H5 with the security lens; hosted `foundation`; the owner.
 
