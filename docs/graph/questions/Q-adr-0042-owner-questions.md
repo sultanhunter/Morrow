@@ -17,6 +17,10 @@ it reached you, and a further review of the pull request corrected it. Each ques
 recommendation. To accept them all, including the CLAUDE.md text shown in question 6, say "approve
 ADR-0042 as recommended and the CLAUDE.md change", or answer by number. Nothing is built past the
 records until you answer. The sources are in `docs/references/connected-services-and-contact.md`.
+(Note of 2026-10-27: this form, and the CLAUDE.md text in question 6, were added at 22:04 IST on
+2026-10-26, after the answer. The owner answered "approve ADR-0042 as recommended", which approved
+the CLAUDE.md change in substance only; the four lines' words wait for the owner's word-for-word
+confirmation. See the Answered note at the end.)
 
 1. **Should services come only from a Morrow catalogue, connected with the merchant's own accounts?**
    - Options: (a) only catalogued services, each with a reviewed adapter; (b) also let merchants
@@ -80,7 +84,10 @@ records until you answer. The sources are in `docs/references/connected-services
      - Your OK in chat is still needed, once, before the first real customer is called.
    - The exact CLAUDE.md text. A "yes" approves these four edits word for word, as you approved
      ADR-0035's lines (OD-2026-10-23-10); CS2 commits them as shown and changes nothing else in
-     CLAUDE.md.
+     CLAUDE.md. (Note of 2026-10-27: this text was added at 22:04 IST on 2026-10-26, after the
+     answer, so the owner's "yes" approved this change in substance only. These four edits wait
+     for the owner's word-for-word confirmation, and CS2 commits them only then; see the Answered
+     note at the end.)
      1. Security invariants.
         - Now: "Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The
           gateway re-checks authority before execution."
