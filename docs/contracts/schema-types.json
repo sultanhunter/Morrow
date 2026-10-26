@@ -193,6 +193,22 @@
       "schema": "urn:morrow:contracts:core:v1#/$defs/KnowledgeList",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     },
+    "KnowledgePageKind": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgePageKind",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "KnowledgeSources": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgeSources",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "KnowledgeText": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgeText",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "KnowledgeTitle": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/KnowledgeTitle",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "LiabilityList": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/LiabilityList",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
@@ -228,6 +244,10 @@
     "MoneyRef": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/MoneyRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "NotebookText": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NotebookText",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
     "NullableGoalKey": {
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableGoalKey",

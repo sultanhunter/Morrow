@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "switch": "off",
+  "agent_tools": "off",
+  "scope": "The shop-knowledge switch (PR 20, docs/briefs/shop-knowledge.md). Committed off: the knowledge and notebook routes (/workspace/:ws/work/knowledge/* and /workspace/:ws/work/agents/:installationId/notebook*) answer 503 before any connection, and the Shop knowledge screen's port methods stay uncomposed. agent_tools is committed off: knowledge.propose and notebook.write refuse with switch_off in code, and Listings gets no brand voice. edge:check refuses switch on until a reviewed grant template issues the workspace.knowledge.* grants (none does yet), and agent_tools on until the switch is on and the agent-loop switch (ADR-0027 item 11) is on. Identifiers only; no provider, key or tenant."
+}

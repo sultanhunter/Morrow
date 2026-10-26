@@ -6,7 +6,7 @@
 //   C1 two reservations racing for a balance for one: exactly one is admitted, both orders;
 //   C2 release restores the wallet; settlement never exceeds the reservation; the wallet
 //      conserves available+reserved+consumed;
-//   C3 credits are the only spend limit (ADR-0039, migration 0052): a third 25-product run
+//   C3 credits are the only spend limit (ADR-0039, migration 0053): a third 25-product run
 //      is admitted past US$25 of the day's cost when the wallet covers it (no daily cap), and
 //      two 25-product runs racing for the last credits admit exactly one, both orders;
 //   C4 the unrecovered-cost ledger accrues failed and uncertain bookings and caps nothing
@@ -16,9 +16,9 @@
 //      version 4: no US$7 run cap lowers the limit);
 //   C6 a reservation keeps its catalogue version after a newer one is active;
 //   C12 after 0051, version 3 was active (Opus 5.5 at medium, ceiling 4, no unrecovered-cost
-//      cap) and version 1 retired; after 0052 both are retired, keep their published caps and
+//      cap) and version 1 retired; after 0053 both are retired, keep their published caps and
 //      are refused for new runs, and no later version may carry an unrecovered-cost cap;
-//   C13 after 0052 (ADR-0039), version 4 is active with version 3's entries and default, no
+//   C13 after 0053 (ADR-0039), version 4 is active with version 3's entries and default, no
 //      run or daily cap and 25 products for every entry; no version but 1 and 3 may carry a
 //      run or daily cap, and neither may lose its own;
 //   C7 refusals: duplicate, no wallet, no billing period, another tenant;
@@ -636,7 +636,7 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
   phase("catalogue_version");
   {
     // C6: a reservation keeps its catalogue version; after version 5 is active (sim: the
-    // shape of a future catalogue migration, as 0052 published version 4), version 4 is
+    // shape of a future catalogue migration, as 0053 published version 4), version 4 is
     // refused for new runs but the open run books and settles at its own version.
     fund("account_version", 100);
     const before = reserve("account_version", "run_v4", "claude_sonnet_5_5", "low", 2, {
@@ -681,9 +681,9 @@ COMMIT;`);
   // -------------------------------------------------------------------------
   phase("adr_0036_catalogue");
   {
-    // C12: migration 0051 (ADR-0036), as 0052 left it. Version 3 has Opus 5.5 at medium as
+    // C12: migration 0051 (ADR-0036), as 0053 left it. Version 3 has Opus 5.5 at medium as
     // its default, the default member ceiling 4 and no unrecovered-cost cap, and is retired
-    // since 0052; version 1 is retired with its published US$4.50 kept. A reservation at
+    // since 0053; version 1 is retired with its published US$4.50 kept. A reservation at
     // either is refused. No version but 1 may carry an unrecovered-cost cap, and version 1 may
     // not lose its own.
     const versions = db.rows(
@@ -741,7 +741,7 @@ COMMIT;`);
   // -------------------------------------------------------------------------
   phase("adr_0039_catalogue");
   {
-    // C13: migration 0052 (ADR-0039). Version 4 is the active version: version 3's default,
+    // C13: migration 0053 (ADR-0039). Version 4 is the active version: version 3's default,
     // ceiling and entries (credits, worst cases, rates), no run or daily cap, and 25 products
     // for every entry. Versions 1 and 3 keep their published US$7 and US$25. No other version
     // may carry a run or daily cap, and neither 1 nor 3 may lose its own.
@@ -1229,7 +1229,7 @@ async function main() {
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, provider, payment or merchant data.",
       "The wallets are M5 PR-1's (one billing account per synthetic workspace); funding is superuser maintenance with wallet_guard disabled for that one update (sim), where M5 PR-1 funds them from verified payments (lab:billing).",
       "The run steps are stood in for by lab-only command-owned definers (lab_credits); M3 PR-2 lands the runtime definers.",
-      "Catalogue version 5 is installed by superuser maintenance (sim), the shape of a future catalogue migration such as 0052.",
+      "Catalogue version 5 is installed by superuser maintenance (sim), the shape of a future catalogue migration such as 0053.",
     ],
   });
   if (result.failures.length) {

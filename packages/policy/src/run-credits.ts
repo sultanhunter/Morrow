@@ -12,7 +12,7 @@
 // - It settles at the products drafted × credits per product, never above the reservation:
 //   a failed product earns no credit. The rest is released.
 // - Credits are the only spend limit (ADR-0039): no run or daily cost cap. The SQL twin
-//   run_reserve (migration 0052) no longer returns `daily_cap`, and its TypeScript twin
+//   run_reserve (migration 0053) no longer returns `daily_cap`, and its TypeScript twin
 //   `dailyCapAllows` is gone. The vendor reservation still records each run's worst case.
 // - The unrecovered cost of a workspace's billing period (AI cost of products that earned
 //   no credit, `uncertain` bookings at their worst case included) is recorded per period and

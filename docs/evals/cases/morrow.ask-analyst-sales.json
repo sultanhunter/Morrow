@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "caseId": "morrow.ask-analyst-sales",
+  "title": "Morrow calls Business Analyst for last week's sales and answers itself",
+  "category": "routing",
+  "rubricId": "rubric.teammate-answer@1",
+  "entry": "morrow",
+  "agents": [
+    "morrow",
+    "business_analyst"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "How did sales go over the last 7 days, and which product sold the most?"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "orders_week",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_201",
+      "liveSlot": null,
+      "injection": null,
+      "data": {
+        "metric": "units_sold",
+        "period": "last_7_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 42
+          },
+          {
+            "recordId": "product:999999102",
+            "value": 17
+          },
+          {
+            "recordId": "product:999999103",
+            "value": 5
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst"
+    ],
+    "stopBeforeTurn": null,
+    "creditBalance": 400,
+    "foreignItems": []
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "business_analyst",
+          "tool": "orders.summary",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.route"
+        },
+        {
+          "agent": "any",
+          "tool": "agent.propose"
+        }
+      ]
+    },
+    "teammates": {
+      "calls": {
+        "min": 1,
+        "max": 1
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "business_analyst"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "order_summary"
+      ]
+    },
+    "cost": {
+      "modelTurnsMax": 4,
+      "outputTokensMax": 1500
+    }
+  }
+}

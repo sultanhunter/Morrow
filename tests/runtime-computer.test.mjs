@@ -82,11 +82,11 @@ test("the profile: no internet, fixed lifetime, exec, size, user and command", (
   assert.equal(runtimeCaps.sandboxesPerWorkspace, 3);
 });
 
-test("migration 0052 holds the same caps, deadline, grace and staleness in SQL", () => {
+test("migration 0053 holds the same caps, deadline, grace and staleness in SQL", () => {
   const sql = readFileSync("migrations/0043.runtime-operations.sql", "utf8");
   const staleSeconds = runtimeGatewayLimits.executeBudgetMaxMs / 1000 + 60;
   // 0043 is applied and immutable: its US$10 monthly budget stays in its text, and migration
-  // 0052 (ADR-0039 item 6) replaced runtime_caps() without it. The latest definition is the
+  // 0053 (ADR-0039 item 6) replaced runtime_caps() without it. The latest definition is the
   // code's twin.
   const caps0043 =
     /CREATE FUNCTION morrow_work\.runtime_caps\(\)[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(
@@ -95,7 +95,7 @@ test("migration 0052 holds the same caps, deadline, grace and staleness in SQL",
   assert.ok(caps0043);
   const rest = `${runtimeCaps.concurrentSandboxes},${runtimeCaps.sandboxesPerWorkspace},${runtimeCaps.worstCaseUsd}::numeric(20,8),${computerProfile.sandboxTimeoutSeconds + computerProfile.createAllowanceSeconds},${computerProfile.absentGraceSeconds},${staleSeconds}`;
   assert.equal(caps0043[1], `10.00::numeric(20,8),${rest}`);
-  const credits = readFileSync("migrations/0052.credits-only-catalogue.sql", "utf8");
+  const credits = readFileSync("migrations/0053.credits-only-catalogue.sql", "utf8");
   const caps =
     /CREATE FUNCTION morrow_work\.runtime_caps\(\)\nRETURNS TABLE\(concurrent_sandboxes integer,[\s\S]*?AS \$\$\n SELECT ([^\n]+)\n\$\$;/.exec(
       credits,

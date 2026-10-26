@@ -31,7 +31,11 @@ import {
 } from "../apps/shopify-connector/worker/oauth-state.ts";
 import { connectorPage } from "../apps/shopify-connector/worker/pages.ts";
 import { selectConnectorRoute } from "../apps/shopify-connector/worker/routes.ts";
-import deployed from "../apps/shopify-connector/worker/index.ts";
+import { loadConnectorEntry } from "./fixtures/connector-entry.mjs";
+
+// fix-connector-cron-latency: the deployed entry imports cloudflare:workers, so it is
+// bundled with that module stubbed (tests/connector-cron.test.mjs covers its cron).
+const deployed = (await loadConnectorEntry()).default;
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 const origin = "https://connector.morrow.test";
@@ -551,7 +555,7 @@ test("callback: the install never waits for or depends on the subscription sync"
   try {
     // A sync that never answers: the redirect is already final; the RPC timer gives up
     // after the budget and its slack (mock timers: no real wait), with one fixed line.
-    mock.timers.enable({ apis: ["setTimeout"] });
+    mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_760_950_000_000 });
     try {
       const c = context();
       const hung = harness({ install, syncHangs: true });
@@ -590,24 +594,40 @@ test("callback: the install never waits for or depends on the subscription sync"
   } finally {
     console.log = saved;
   }
-  assert.deepEqual(
-    logged.filter((row) => row.event === "morrow_connector_webhooks"),
-    [
-      { event: "morrow_connector_webhooks", code: "SUBSCRIPTIONS_UNAVAILABLE" },
-      { event: "morrow_connector_webhooks", code: "SUBSCRIPTIONS_UNAVAILABLE" },
-      {
-        event: "morrow_connector_webhooks",
-        code: "SUBSCRIPTIONS_SYNCED",
-        checked: 3,
-        registered: 1,
-        failed: 1,
-        unknown: 0,
-        unauthorized: 0,
-        skipped: 1,
-      },
-      { event: "morrow_connector_webhooks", code: "SUBSCRIPTIONS_UNAVAILABLE" },
-    ],
-  );
+  // fix-connector-cron-latency: each unavailable line names why and how long it waited:
+  // the connector's timer (after the budget and its slack), the broker's refusal, a reply
+  // that did not decode.
+  // The last three ran on the real clock: their waits are any whole 50 ms step.
+  const unavailable = (reason, elapsedMs) => ({
+    event: "morrow_connector_webhooks",
+    code: "SUBSCRIPTIONS_UNAVAILABLE",
+    reason,
+    elapsedMs,
+  });
+  const lines = logged.filter((row) => row.event === "morrow_connector_webhooks");
+  for (const line of lines.slice(1))
+    if (line.code === "SUBSCRIPTIONS_UNAVAILABLE") {
+      assert.ok(Number.isSafeInteger(line.elapsedMs) && line.elapsedMs % 50 === 0);
+      line.elapsedMs = 0;
+    }
+  assert.deepEqual(lines, [
+    unavailable(
+      "timeout",
+      connectorBudgets.subscriptionsMs + connectorBudgets.subscriptionsSlackMs,
+    ),
+    unavailable("refused", 0),
+    {
+      event: "morrow_connector_webhooks",
+      code: "SUBSCRIPTIONS_SYNCED",
+      checked: 3,
+      registered: 1,
+      failed: 1,
+      unknown: 0,
+      unauthorized: 0,
+      skipped: 1,
+    },
+    unavailable("invalid", 0),
+  ]);
   // Both budgets sit inside the broker's closed range, and the after-response sync inside
   // the platform's 30 seconds of waitUntil after a response.
   for (const budget of [connectorBudgets.subscriptionsMs, connectorBudgets.subscriptionsCronMs])
@@ -981,7 +1001,16 @@ test("cron: open privacy requests past their target or due time log fixed codes 
       { event: "morrow_connector_privacy", code: "PRIVACY_TARGET_MISSED", requests: 3 },
       { event: "morrow_connector_privacy", code: "PRIVACY_DUE_MISSED", requests: 1 },
       { event: "morrow_connector_privacy", code: "PRIVACY_TARGET_MISSED", requests: 2 },
-      { event: "morrow_connector_privacy", code: "PRIVACY_CHECK_UNAVAILABLE" },
+      // fix-connector-cron-latency: the stage fields; this fake's plain error has none.
+      {
+        event: "morrow_connector_privacy",
+        code: "PRIVACY_CHECK_UNAVAILABLE",
+        phase: "unknown",
+        cause: "unknown",
+        statements: null,
+        connectMs: null,
+        txMs: null,
+      },
     ],
   );
 });

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "caseId": "refusal.permission-foreign-item",
+  "design": "teammates@1",
+  "origin": "authored",
+  "basisDigest": "6b0695db4dde3c485aebf57539ec88635a52175ce40528a19189fb952b126e50",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "knowledge.search",
+              "input": {
+                "searchText": "sales",
+                "limit": 5
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2100,
+            "outputTokens": 90
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c2",
+              "tool": "agent.result.read",
+              "input": {
+                "itemId": "item_foreign_1",
+                "page": 1
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "id_out_of_scope",
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 80
+          }
+        },
+        {
+          "text": "Your Q3 notes say sales grew steadily, led by aprons and boards. They mention a full table, but it is not something I can open from here.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 2900,
+            "outputTokens": 120
+          }
+        }
+      ]
+    }
+  ]
+}

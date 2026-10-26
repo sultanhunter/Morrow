@@ -1,7 +1,7 @@
 BEGIN;
 -- ADR-0039 (OD-2026-10-25-4): credits are the only spend limit. Implementation plan PR 1 (the
 -- listings and the catalogue, credits only) with PR 4's removal of the runtime budget.
--- Executes AS morrow_work_owner, after 0051. No external effect: nothing here sends a
+-- Executes AS morrow_work_owner, after 0052. No external effect: nothing here sends a
 -- request, reserves money or dispatches.
 --   * model_catalogue_versions.run_cost_cap_usd and workspace_daily_cost_cap_usd become
 --     nullable: versions 1 and 3 keep their published US$7 and US$25, which nothing enforces

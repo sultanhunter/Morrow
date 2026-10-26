@@ -11,7 +11,7 @@
 //      refuses (capability_missing) and nothing is written, booked or created;
 //   J  a job on a release that declares it: the send mark commits first (sending, booked at
 //      the worst case as sandbox_compute on the run's vendor reservation, the platform's open
-//      count moved; no month's tally since migration 0052 removed the monthly budget), one
+//      count moved; no month's tally since migration 0053 removed the monthly budget), one
 //      create, the job, the checked outputs, the kill, settled
 //      killed; the result carries no sandbox id, token or key; the same run and call key
 //      again never creates (replay);
@@ -24,7 +24,7 @@
 //      qualified sweep past the grace settles absent_verified;
 //   K  the caps in SQL: three open sandboxes per workspace, the platform's concurrency and the
 //      run's vendor reservation each refuse before any row; not_created settles only a
-//      `sending` operation; no monthly budget refuses (ADR-0039 item 6, migration 0052): E2B's
+//      `sending` operation; no monthly budget refuses (ADR-0039 item 6, migration 0053): E2B's
 //      own refusal (its usage limit) is unknown_effect with a runtime hold that refuses every
 //      create until a person lifts it;
 //   L  the lease: another generation is not_found, a queued run is run_inactive, and "Stop AI
@@ -688,7 +688,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         booking.amount === "0.03000000" &&
         (Number(vendor().booked) - Number(vendorBefore.booked)).toFixed(8) === "0.03000000" &&
         cap.open === 0 &&
-        // Migration 0052 (ADR-0039 item 6): no monthly budget, so the month's tally no
+        // Migration 0053 (ADR-0039 item 6): no monthly budget, so the month's tally no
         // longer moves; the worst case is still booked on the run's vendor reservation.
         cap.committed === "0.00000000",
       { row, booking, vendor: vendor(), vendorBefore, cap },
@@ -892,7 +892,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
     const busy = begin("cap-busy");
     replica("UPDATE morrow_work.runtime_capacity SET open_operations=0;");
-    // ADR-0039 item 6 (migration 0052): no monthly budget. With this month's committed worst
+    // ADR-0039 item 6 (migration 0053): no monthly budget. With this month's committed worst
     // cases at the former US$10 (sim), a create is still admitted, and the month's tally does
     // not move.
     const committed = capacity().committed;

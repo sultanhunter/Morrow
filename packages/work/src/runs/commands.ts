@@ -55,7 +55,7 @@ export type RunRefusal =
   | "runs_unavailable"
   | "entitlement"
   | "insufficient_credits"
-  // Never returned since migration 0052 (ADR-0039: credits are the only spend limit, so
+  // Never returned since migration 0053 (ADR-0039: credits are the only spend limit, so
   // run_reserve has no daily cap); kept for the closed set.
   | "daily_cap"
   // Never returned since migration 0051 (ADR-0036 removed the cap); kept for the closed set.

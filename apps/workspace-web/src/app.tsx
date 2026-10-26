@@ -810,6 +810,7 @@ export function guardPort(
       catalogue: watch(port.team.catalogue.bind(port.team), first),
       addDocument: watch(port.team.addDocument.bind(port.team), first),
       addConfirm: watch(port.team.addConfirm.bind(port.team), first),
+      notebook: watch(port.team.notebook.bind(port.team), first),
     },
     settings: {
       plan: watch(port.settings.plan.bind(port.settings), first),
@@ -819,10 +820,8 @@ export function guardPort(
     },
     // v1 PR 15: the Inbox, one operation and the activity log.
     inbox: watchAll(port.inbox),
-    library: {
-      knowledge: watch(port.library.knowledge.bind(port.library), first),
-      files: watch(port.library.files.bind(port.library), first),
-    },
+    // PR 20: Shop knowledge's methods (default off: uncomposed in this build) and Files.
+    library: watchAll(port.library),
     samples: {
       home: watch(port.samples.home.bind(port.samples), first),
       inbox: watch(port.samples.inbox.bind(port.samples), first),

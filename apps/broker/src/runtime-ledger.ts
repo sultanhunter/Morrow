@@ -38,8 +38,8 @@ const uuid = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const instant = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/;
 const refusals: readonly RuntimeBeginRefusal[] = [
   "runtime_held",
-  // Never returned since migration 0052 (ADR-0039 removed the monthly budget); kept so a
-  // reply from a database before 0052 still decodes as a refusal, never as a guess.
+  // Never returned since migration 0053 (ADR-0039 removed the monthly budget); kept so a
+  // reply from a database before 0053 still decodes as a refusal, never as a guess.
   "monthly_budget",
   "concurrency_limit",
   "workspace_limit",

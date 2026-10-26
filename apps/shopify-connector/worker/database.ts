@@ -9,6 +9,12 @@
 // connector_inbox_pending and connector_credentials_pending, and the count-only privacy
 // deadline check connector_privacy_overdue. Every failure is CONNECTOR_SQL_UNAVAILABLE;
 // nothing is logged and the password never appears in an error.
+// fix-connector-cron-latency: a failed transaction's error carries where it ended
+// (connectorSqlObservation: the step in progress, a closed cause, the statements
+// acknowledged and two durations; the vault transport's observation for this login), so
+// the caller's fixed-code line can tell a deadline far from the database from a refusal
+// near it. No text, value or identifier; it never changes the order, the deadline or the
+// outcome.
 import { Client } from "@neondatabase/serverless";
 import {
   brokerLimits,
@@ -109,6 +115,53 @@ const isReason = (value: unknown): value is ShopifyCredentialReason =>
   (shopifyCredentialReasons as readonly unknown[]).includes(value);
 
 const unavailable = () => Error("CONNECTOR_SQL_UNAVAILABLE");
+// Where a failed transaction ended: the step in progress (the broker's lease of the
+// password, the connection, BEGIN, the role preflight, the timeouts, the statement,
+// COMMIT), and why: the budget ran out (before a send, or while one waited), the lease
+// failed, the driver failed or closed, the role preflight refused the session, a reply had
+// no rows array, or the statement's reply was refused.
+export const connectorTransactionPhases = Object.freeze([
+  "lease",
+  "connect",
+  "begin",
+  "role",
+  "settings",
+  "body",
+  "commit",
+] as const);
+export type ConnectorTransactionPhase = (typeof connectorTransactionPhases)[number];
+export const connectorTransactionCauses = Object.freeze([
+  "deadline",
+  "lease",
+  "driver",
+  "role_check",
+  "rows_shape",
+  "body",
+] as const);
+export type ConnectorTransactionCause = (typeof connectorTransactionCauses)[number];
+export interface ConnectorTransactionObservation {
+  readonly phase: ConnectorTransactionPhase;
+  readonly cause: ConnectorTransactionCause;
+  /** Statements acknowledged by the database, BEGIN included. */
+  readonly statements: number;
+  /** From the start until the connection was open; null when it never opened. */
+  readonly connectMs: number | null;
+  /** From the start until the failure was fixed (before any rollback or close). */
+  readonly txMs: number;
+}
+class ConnectorSqlUnavailable extends Error {
+  readonly observation: Readonly<ConnectorTransactionObservation>;
+  constructor(observation: Readonly<ConnectorTransactionObservation>) {
+    super("CONNECTOR_SQL_UNAVAILABLE");
+    this.observation = observation;
+  }
+}
+/** Where a transaction that threw ended, or null for any other error. */
+export function connectorSqlObservation(
+  error: unknown,
+): Readonly<ConnectorTransactionObservation> | null {
+  return error instanceof ConnectorSqlUnavailable ? error.observation : null;
+}
 const roleNames = [
   "role",
   "login",
@@ -144,11 +197,24 @@ export const neonConnectorDriver: ConnectorDriverFactory = (config) => {
   return client as unknown as ConnectorDriverClient;
 };
 
-function within<T>(pending: Promise<T>, deadlineMs: number, now: () => number): Promise<T> {
+// Races one operation against the deadline; the loser settles unobserved. `expired` runs
+// when the deadline wins.
+function within<T>(
+  pending: Promise<T>,
+  deadlineMs: number,
+  now: () => number,
+  expired: () => void = () => {},
+): Promise<T> {
   void pending.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
   const stopped = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(unavailable()), Math.max(0, deadlineMs - now()));
+    timer = setTimeout(
+      () => {
+        expired();
+        reject(unavailable());
+      },
+      Math.max(0, deadlineMs - now()),
+    );
   });
   void stopped.catch(() => {});
   return Promise.race([pending, stopped]).finally(() => {
@@ -183,7 +249,31 @@ export function createConnectorDatabase(
     ) => Promise<T>,
   ): Promise<T> {
     if (!Number.isSafeInteger(budgetMs) || budgetMs < 1 || budgetMs > 10000) throw unavailable();
-    const deadline = now() + budgetMs;
+    const started = now();
+    const deadline = started + budgetMs;
+    // The observation: set as the transaction goes, fixed by the first failure (`endedAt`),
+    // so the rollback and the close never change it.
+    let phase: ConnectorTransactionPhase = "lease";
+    let cause: ConnectorTransactionCause | null = null;
+    let statements = 0;
+    let connectMs: number | null = null;
+    let endedAt: number | null = null;
+    const note = (why: ConnectorTransactionCause) => {
+      if (cause === null && endedAt === null) cause = why;
+    };
+    const failed = (fallback: ConnectorTransactionCause) => {
+      note(fallback);
+      if (endedAt === null) endedAt = now();
+      return new ConnectorSqlUnavailable(
+        Object.freeze({
+          phase,
+          cause: cause ?? fallback,
+          statements,
+          connectMs,
+          txMs: endedAt - started,
+        }),
+      );
+    };
     let password: string;
     try {
       password = decodeNeonLeaseGrant(
@@ -191,10 +281,11 @@ export function createConnectorDatabase(
           Promise.resolve().then(() => broker.neonLease(namespaceJson)),
           deadline,
           now,
+          () => note("deadline"),
         ),
       );
     } catch {
-      throw unavailable();
+      throw failed("lease");
     }
     const native = nativeSocket ?? (globalThis.WebSocket as unknown as SocketConstructor);
     const sockets: { close(): void }[] = [];
@@ -215,6 +306,7 @@ export function createConnectorDatabase(
         }
     };
     let client: ConnectorDriverClient;
+    phase = "connect";
     try {
       client = driver({
         hostname: binding.hostname,
@@ -227,14 +319,17 @@ export function createConnectorDatabase(
       });
     } catch {
       shutdown();
-      throw unavailable();
+      throw failed("driver");
     }
     password = "";
     client.on("error", shutdown);
     let open = false,
       inFlight = false;
     const send = async (text: string, values: readonly string[] = []) => {
-      if (shut || inFlight || now() >= deadline) throw unavailable();
+      if (shut || inFlight || now() >= deadline) {
+        note(shut || inFlight ? "driver" : "deadline");
+        throw unavailable();
+      }
       inFlight = true;
       try {
         const reply = await within(
@@ -243,10 +338,20 @@ export function createConnectorDatabase(
           ),
           deadline,
           now,
+          () => note("deadline"),
         );
         inFlight = false;
-        return rowsOf(reply);
+        let rows: readonly Record<string, unknown>[];
+        try {
+          rows = rowsOf(reply);
+        } catch (error) {
+          note("rows_shape");
+          throw error;
+        }
+        if (endedAt === null) statements++;
+        return rows;
       } catch {
+        note("driver");
         shutdown();
         throw unavailable();
       }
@@ -256,9 +361,13 @@ export function createConnectorDatabase(
         Promise.resolve().then(() => client.connect()),
         deadline,
         now,
+        () => note("deadline"),
       );
+      connectMs = now() - started;
+      phase = "begin";
       await send(connectorSql.begin);
       open = true;
+      phase = "role";
       const role = await send(connectorSql.role);
       const r = role.length === 1 ? role[0] : undefined;
       if (
@@ -267,26 +376,33 @@ export function createConnectorDatabase(
         r.role !== connectorLogin ||
         r.login !== connectorLogin ||
         roleNames.slice(2).some((name) => r[name] !== false)
-      )
+      ) {
+        note("role_check");
         throw unavailable();
+      }
+      phase = "settings";
       for (const setting of [
         connectorSql.statementTimeout,
         connectorSql.lockTimeout,
         connectorSql.idleTimeout,
       ])
         await send(setting);
+      phase = "body";
       const value = await body(send);
+      phase = "commit";
       await send(connectorSql.commit);
       open = false;
       return value;
     } catch {
+      // The connect's own failure, or the body's refusal of a reply.
+      const error = failed(phase === "body" ? "body" : "driver");
       if (open && !inFlight && !shut)
         try {
           await send(connectorSql.rollback);
         } catch {
           /* Discarded with the connection. */
         }
-      throw unavailable();
+      throw error;
     } finally {
       try {
         await within(

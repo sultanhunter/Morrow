@@ -1,7 +1,7 @@
 // ADR-0036 (OD-2026-10-25-1, OD-2026-10-25-2): Opus 5.5 by default for every agent, no
 // unrecovered-cost cap, the member ceiling of 4 and the look-for-work cap of US$1.12 a day.
 // ADR-0039 (OD-2026-10-25-4) later removed the look-for-work cap and the US$7 and US$25
-// backstops (catalogue version 4, migration 0052; tests/credits-only.test.mjs); the cases
+// backstops (catalogue version 4, migration 0053; tests/credits-only.test.mjs); the cases
 // below keep ADR-0036's records and say what ADR-0039 changed. Pure: no I/O beyond reading
 // the repository files. lab:run-credits (C4, C12) and lab:listings-runs (M1, U1) prove
 // migration 0051 on PostgreSQL 17.
@@ -418,7 +418,7 @@ test("unrecovered_allows is revised from its pinned 0033 body to compare with no
   assert.match(after, /v\.version=p_catalogue_version/);
   assert.match(after, /p_period_start IS NOT NULL AND p_worst_case_usd>=0\),false\)/);
   // Its callers are not redefined here: 0038's run_reserve and run_product_begin refuse at the
-  // run limit (and, until migration 0052 removed it under ADR-0039, the daily cap), and stop
+  // run limit (and, until migration 0053 removed it under ADR-0039, the daily cap), and stop
   // at the breaker and an exhausted hold.
   for (const name of ["run_reserve", "run_product_begin", "cmd_run_admit"])
     assert.doesNotMatch(sql, new RegExp(`FUNCTION [a-z_]+\\.${name}\\(`), name);

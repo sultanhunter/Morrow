@@ -632,7 +632,7 @@ test("a lazy screen shows the loading state, then the screen; a chunk that fails
   assert.equal(attempts, 1, "Retry reloads the page; a render never refetches");
 });
 
-test("Review, the history, Ask and the exception screen are reached only through the lazy screens", () => {
+test("Review, the history, Ask, the exception screen and Shop knowledge are reached only through the lazy screens", () => {
   const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
   const lazyNames = lazyModules.map((m) =>
     m
@@ -640,7 +640,8 @@ test("Review, the history, Ask and the exception screen are reached only through
       .at(-1)
       .replace(/\.tsx$/, ""),
   );
-  assert.deepEqual(lazyNames, ["review", "ask", "product-picker", "exception"]);
+  // PR 20's Shop knowledge screen (screens/library.tsx, with Files) joined them at integration.
+  assert.deepEqual(lazyNames, ["review", "ask", "product-picker", "exception", "library"]);
   const statics = (text) =>
     [...text.matchAll(/^(?:import|export)\b[^;]*?from "([^"]+)";/gms)].map((m) => m[1]);
   // The barrel and the task screen import none of them statically.

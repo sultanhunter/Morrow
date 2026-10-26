@@ -6,8 +6,12 @@
 // ConnectorBroker entrypoint and its two ingress rate limits; no secret and no Shopify
 // library (ADR-0008 items 1-2). M2 PR-3: webhooks are applied after the response
 // (waitUntil), and a cron trigger runs the ids-only re-drives (an unbound connector does
-// nothing).
+// nothing). fix-connector-cron-latency (worker/cron.ts): scheduled() waits for the re-drives
+// in the ConnectorCron Durable Object, created beside the database, instead of running them
+// wherever Cloudflare runs the cron.
+import { DurableObject } from "cloudflare:workers";
 import { createConnectorHandler, type ConnectorContext } from "./connector.js";
+import { forwardConnectorCron, type ConnectorCronOutcome } from "./cron.js";
 import { createConnectorDatabase } from "./database.js";
 import { mapConnectorEnvironment, type ConnectorEnvironmentCode } from "./environment.js";
 import { connectorJson } from "./pages.js";
@@ -88,10 +92,30 @@ export default {
       return connectorJson(503, { code: "connector_unavailable" });
     }
   },
-  async scheduled(_controller: unknown, env: unknown, ctx: ConnectorContext): Promise<void> {
-    const selected = select(env);
-    if (!selected.handler) return;
-    const handler = selected.handler;
-    ctx.waitUntil(handler.redrive().catch(() => undefined));
+  // The re-drives run in the object, awaited (not handed to waitUntil, whose 30 s after the
+  // handler returns could cut a 60 s run). An unbound connector touches nothing.
+  async scheduled(_controller: unknown, env: unknown, _ctx: unknown): Promise<void> {
+    if (!select(env).handler) return;
+    await forwardConnectorCron(env);
   },
 };
+
+// The cron's Durable Object (CONNECTOR_CRON; one object, by a fixed name): one method, which
+// runs the re-drives with this Worker's own bindings and answers a closed outcome; the
+// counts stay in its morrow_connector_redrive line. A second run while one is in progress
+// is "busy". It keeps no storage.
+export class ConnectorCron extends DurableObject {
+  #running = false;
+  async redrive(): Promise<ConnectorCronOutcome> {
+    const selected = select(this.env);
+    if (!selected.handler) return "unbound";
+    if (this.#running) return "busy";
+    this.#running = true;
+    try {
+      await selected.handler.redrive();
+      return "ran";
+    } finally {
+      this.#running = false;
+    }
+  }
+}

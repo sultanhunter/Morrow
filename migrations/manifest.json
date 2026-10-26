@@ -398,8 +398,15 @@
     },
     {
       "sequence": 52,
-      "file": "0052.credits-only-catalogue.sql",
-      "sha256": "0ba1e831914e4d59fe42b3ecfecfafba345356d9531287b1a02181a47d56ae4c",
+      "file": "0052.shop-knowledge.sql",
+      "sha256": "4597c094203277ee75c2416ea591676c24da7f8fddd83841e5eadb69b6378f0a",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/shop-knowledge.md"
+    },
+    {
+      "sequence": 53,
+      "file": "0053.credits-only-catalogue.sql",
+      "sha256": "a634719f1a3120d9087f9f2d9ba59f79ae92fd2d6a6d6aa7430acc5c6c35b422",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
     }

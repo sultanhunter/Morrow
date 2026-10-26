@@ -49,6 +49,10 @@ export const capabilitiesAfter0018 = Object.freeze([
   // PR 18 (ADR-0033 items 4 and 5): both human_only, neither review-required.
   "workspace.goal.revise",
   "workspace.goal.measure.record",
+  // PR 20 (shop knowledge): an agent's proposal and its own notebook, internal writes,
+  // neither review-required.
+  "workspace.knowledge.propose",
+  "workspace.notebook.write",
 ]);
 /** The catalogue as 0018 copies it, in catalogue order. */
 export const catalogueAt0018 = (catalogue) =>
