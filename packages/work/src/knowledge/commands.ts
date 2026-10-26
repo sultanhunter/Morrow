@@ -14,6 +14,13 @@ import type {
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { createHumanPolicyService, type HumanAuthority, type PermissionVerb } from "@morrow/policy";
 import { knowledgeLimits, viewable, type TagViewer } from "@morrow/policy/knowledge";
+import {
+  memoryAudienceValid,
+  memoryLimits,
+  memorySubjectsValid,
+  type MemoryAudience,
+  type MemorySubject,
+} from "@morrow/policy/memory";
 import { storeResource } from "@morrow/policy/store-resource";
 import { WorkReject, type WorkRejection, type WorkTx } from "../connection.js";
 import { enterWorkContext, WorkContextUnavailable, type WorkAuthority } from "../context.js";
@@ -41,7 +48,8 @@ import {
 //     next version) and accepts or rejects an agent's proposal (ADR-0024: a person decides,
 //     never an agent or a mandate); {administer} deletes a page (the deletion path).
 //   * workspace.notebook.write {administer} clears an agent's notebook (agents only ever hold
-//     execute, and only through their run).
+//     execute, and only through their run). A notebook is the installation's agent principal's
+//     (H12a, migration 0057).
 //   * Reads (ADR-0031 item 6): a page, version, proposal, search hit or notebook entry is
 //     returned only when the viewer holds view on every one of its read tags under live
 //     grants; otherwise it is left out of lists, counts and search, and a direct read is 404.
@@ -612,11 +620,35 @@ async function installationOf(tx: WorkTx, installationId: string): Promise<void>
   const row = one(await tx.run("knowledgeInstallation", [installationId]));
   if (!row || text(row, "status") === "uninstalled") throw new WorkReject("not_found");
 }
-async function notebookEntryRows(tx: WorkTx, installationId: string) {
-  const rows = await tx.run("notebookEntries", [installationId]);
-  if (rows.length > knowledgeLimits.notebookLiveEntries) throw new WorkContextUnavailable();
-  return rows.map((row) => ({ row, tags: tagsOf(row) }));
+// Every live entry's scope, newest first. ADR-0041 item 25: a person sees an entry only when they
+// may view every read tag, every source subject, and its audience. Until H9c brings people's
+// subject view, an entry scoped to a subject (or, which a notebook never holds, to one person) is
+// not shown to anyone here: hidden, never shown by default.
+async function notebookEntryScopes(tx: WorkTx, installationId: string) {
+  const rows = await tx.run("notebookEntryScopes", [installationId]);
+  if (rows.length > memoryLimits.notebookLiveEntries) throw new WorkContextUnavailable();
+  return rows.map((row) => {
+    const audience = parsedJson(text(row, "audience"));
+    const subjects = parsedJson(text(row, "source_subjects"));
+    const current = text(row, "current");
+    if (
+      !memoryAudienceValid(audience) ||
+      !memorySubjectsValid(subjects) ||
+      (current !== "true" && current !== "false")
+    )
+      throw new WorkContextUnavailable();
+    return {
+      id: text(row, "id"),
+      tags: tagsOf(row),
+      audience: audience as MemoryAudience,
+      subjects: subjects as MemorySubject[],
+      current: current === "true",
+    };
+  });
 }
+type NotebookScope = Awaited<ReturnType<typeof notebookEntryScopes>>[number];
+const notebookShown = (viewer: TagViewer, e: NotebookScope) =>
+  viewable(viewer, e.tags) && e.audience.kind === "workspace" && e.subjects.length === 0;
 async function notebookClear(
   tx: WorkTx,
   g: Guarded,
@@ -636,13 +668,13 @@ async function notebookClear(
   const revision = one(await tx.run("notebookRevision", [installationId]));
   if (!revision) throw new WorkReject("not_found");
   const expectedRevision = String(integer(text(revision, "revision")));
-  const entries = await notebookEntryRows(tx, installationId);
+  const entries = await notebookEntryScopes(tx, installationId);
   const viewer = await knowledgeViewer(
     tx,
     a,
     entries.flatMap((e) => e.tags),
   );
-  if (entries.some((e) => !viewable(viewer, e.tags))) throw new KnowledgeReject("hidden_entries");
+  if (entries.some((e) => !notebookShown(viewer, e))) throw new KnowledgeReject("hidden_entries");
   // The definer's recorded result ({installationId, entriesErased}), the same body a replay
   // returns (with replayed: true), like every other knowledge command (review R4).
   const result = await submit(tx, "cmdNotebookClear", [
@@ -794,25 +826,33 @@ async function searchRead(tx: WorkTx, a: WorkAuthority, query: string | undefine
 }
 async function notebookRead(tx: WorkTx, a: WorkAuthority, installationId: string) {
   await installationOf(tx, installationId);
-  const entries = await notebookEntryRows(tx, installationId);
+  const entries = await notebookEntryScopes(tx, installationId);
   const viewer = await knowledgeViewer(
     tx,
     a,
-    entries.flatMap((e) => e.tags),
+    entries.filter((e) => e.current).flatMap((e) => e.tags),
   );
-  const shown: Current_NotebookEntry[] = entries
-    .slice(0, knowledgeLimits.notebookLiveEntries)
-    .filter((e) => viewable(viewer, e.tags))
-    .map((e) =>
-      checked("NotebookEntry", {
-        schemaVersion: 1,
-        id: text(e.row, "id"),
-        installationId,
-        sequence: integer(text(e.row, "sequence")),
-        text: text(e.row, "body"),
-        createdAt: text(e.row, "created_at"),
-      } as Current_NotebookEntry),
-    );
+  // The newest entries this viewer may see (NotebookEntry@1 shows the text; H6's NotebookEntry@2
+  // adds the kind, title and "learned while working for"), at most 100.
+  const ids = entries
+    .filter((e) => e.current && notebookShown(viewer, e))
+    .slice(0, memoryLimits.notebookShownEntries)
+    .map((e) => e.id);
+  const rows = ids.length
+    ? await tx.run("notebookEntryTexts", [installationId, JSON.stringify(ids)])
+    : [];
+  if (rows.length > ids.length || rows.some((row) => !ids.includes(text(row, "id"))))
+    throw new WorkContextUnavailable();
+  const shown: Current_NotebookEntry[] = rows.map((row) =>
+    checked("NotebookEntry", {
+      schemaVersion: 1,
+      id: text(row, "id"),
+      installationId,
+      sequence: integer(text(row, "sequence")),
+      text: text(row, "body"),
+      createdAt: text(row, "created_at"),
+    } as Current_NotebookEntry),
+  );
   return { installationId, entries: shown };
 }
 export async function runKnowledgeRead(

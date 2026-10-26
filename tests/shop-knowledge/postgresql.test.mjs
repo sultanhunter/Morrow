@@ -9,8 +9,9 @@
 // knowledge.propose (grants nothing, idempotent per run and tool call, a page the run cannot see
 // is out of scope) and only a person accepts or rejects the exact digest (a page that changed
 // since is stale); the accepted brand voice reaches Listings only as one marked data block; an
-// agent's notebook is per installation, per viewer, clocked 90 days, capped at 100 live entries
-// and cleared only by a person who sees every entry, at the notebook revision that check read
+// agent's notebook is its agent principal's (H12a, 0057), per viewer, clocked 90 days, capped
+// at 1,000 live entries (the page shows the newest 100) and cleared only by a person who sees
+// every entry, at the notebook revision that check read
 // (an entry a run commits in between is a conflict, never erased unseen); the deletion path
 // erases a page's every version, its search entry and its pending proposals in one transaction
 // and records it, and no runtime role can delete a row. The review fixes: a run's reads hand
@@ -277,11 +278,36 @@ async function underLease(lease, body) {
   }
 }
 const allTags = { mayView: () => true };
+// H12a (0057): a run's memory facts, as the agent loop computes them. The notebook is the
+// installation's agent principal's; these runs write to the workspace and may read every tag
+// the lab's entries carry.
+const labViewable = [
+  "catalog.products.read",
+  "orders.read",
+  "workspace.knowledge.read",
+  "workspace.artifact.read",
+].map((capability) => ({ storeId: STORE, capability }));
+const memoryFacts = (taint) => ({
+  taint:
+    taint === "untrusted_external"
+      ? {
+          kinds: ["untrusted_external"],
+          sources: [{ source: "product", sourceId: null }],
+          omitted: 0,
+        }
+      : { kinds: [], sources: [], omitted: 0 },
+  audience: { kind: "workspace" },
+  sourceSubjects: [],
+  personMemoryLoaded: false,
+  viewableTags: labViewable,
+  subjectScope: { kinds: [], ids: [] },
+});
 const runFacts = (overrides = {}) => ({
   context: "routed",
   readTags: [{ storeId: STORE, capability: "catalog.products.read" }],
   taint: "untrusted_external",
   agentTools: "on",
+  memory: memoryFacts(overrides.taint ?? "untrusted_external"),
   ...overrides,
 });
 
@@ -822,7 +848,7 @@ test("K6 Listings gets the accepted brand voice only as one marked data block", 
   );
 });
 
-test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 100 live entries, cleared by a person", async () => {
+test("K7 an agent's notebook: its own agent, per viewer, 90-day clock, 1,000 live entries, cleared by a person", async () => {
   const lease = openRunLease("run_k7");
   const write = (toolUseId, text, readTags = []) =>
     underLease(lease, (query) =>
@@ -835,6 +861,7 @@ test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 10
     );
   const first = await write("toolu_n1", "Titles on linen shirts run long; keep under 60.");
   assert.equal(first.outcome, "ok");
+  assert.equal(first.effect, "applied");
   assert.equal(first.record.kind, "notebook_entry");
   assert.deepEqual(await write("toolu_n1", "Titles on linen shirts run long; keep under 60."), {
     ...first,
@@ -875,15 +902,25 @@ test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 10
       P.A,
       `UPDATE morrow_work.agent_notebook_entries SET expires_at=expires_at+interval '1 day';`,
     ),
-    /AGENT_NOTEBOOK_INVALID|permission denied/,
+    /AGENT_NOTEBOOK_INVALID|agent_notebook_entries_clock|permission denied/,
   );
-  // The 101st live entry supersedes the oldest.
-  db.sql(
-    `BEGIN; SELECT outcome FROM morrow_work.enter_lease(${literal(lease.id)},'1'); SELECT count(*) FROM (SELECT morrow_work.run_notebook_write('toolu_bulk_'||g,'Bulk note '||g,'[]') FROM generate_series(1,99) g) x; COMMIT;`,
-    { user: "morrow_runtime_executor" },
-  );
-  assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 100);
+  // The 1,001st live entry supersedes the least recently renewed (H12a, 0057's v2 definer). The
+  // owner seeds 998 entries in one statement (999 definer calls would take minutes on a loaded
+  // host); the run's next write is the 1,001st.
+  db.workOwner(`BEGIN;
+UPDATE morrow_work.agent_notebooks SET next_sequence=next_sequence+998,live_entries=live_entries+998,revision=revision+1 WHERE agent_principal_id=${literal(AGENT)};
+INSERT INTO morrow_work.agent_notebook_entries(organization_id,workspace_id,agent_principal_id,sequence,id,kind,title,body,read_tags,taint,derived_from,audience,source_subjects,requester_principal_id,requester_membership_id,run_id,tool_use_id,digest,created_at,renewed_at,renewals,use_count,expires_at)
+SELECT n.organization_id,n.workspace_id,n.agent_principal_id,n.next_sequence-999+g,gen_random_uuid()::text,'lesson','Bulk '||g,'Bulk note '||g,${literal(JSON.stringify([{ storeId: STORE, capability: "workspace.artifact.read" }]))},'{"kinds":[],"sources":[],"omitted":0}','[]','{"kind":"workspace"}','[]',${literal(P.A.principal)},${literal(P.A.membership)},'run_k7_bulk','toolu_bulk_'||g,morrow_work.memory_entry_digest('lesson','Bulk '||g,'Bulk note '||g),t,t,0,0,t+interval '90 days'
+ FROM morrow_work.agent_notebooks n,generate_series(1,998) g,(SELECT date_trunc('milliseconds',clock_timestamp()) AS t) x WHERE n.agent_principal_id=${literal(AGENT)};
+COMMIT;`);
+  assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 1000);
+  assert.equal((await write("toolu_bulk_999", "Bulk note 999")).effect, "applied");
+  assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 1000);
   assert.equal(count("agent_notebook_entries", "erased_reason='superseded'"), 1);
+  // The page shows the newest 100 A may see.
+  const page = await read(P.A);
+  assert.equal(page.entries.length, 100);
+  assert.equal(page.entries[0].text, "Bulk note 999");
   assert.equal(
     count(
       "agent_notebook_entries",
@@ -894,7 +931,7 @@ test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 10
   // B holds administer but cannot see the entries: no blind clear. A clears it.
   const blind = await send(open, P.B, "POST", `/agents/${INSTALLATION}/notebook/clear`, {});
   assert.equal(blind.status, 403);
-  assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 100);
+  assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 1000);
   const noGrant = await send(open, P.C, "POST", `/agents/${INSTALLATION}/notebook/clear`, {});
   assert.equal(noGrant.status, 403);
   const key = randomUUID();
@@ -910,7 +947,7 @@ test("K7 an agent's notebook: its own installation, per viewer, 90-day clock, 10
   assert.deepEqual(cleared.body, {
     schemaVersion: 1,
     installationId: INSTALLATION,
-    entriesErased: 100,
+    entriesErased: 1000,
   });
   assert.equal(count("agent_notebook_entries", "erased_at IS NULL OR body IS NOT NULL"), 0);
   assert.deepEqual((await read(P.A)).entries, []);
@@ -1106,7 +1143,7 @@ test("K10 a clear erases only at the notebook revision its per-viewer check read
         const inner = await connector.open(control);
         return {
           async query(sql, values, querySignal) {
-            if (injected === null && sql.includes("morrow_work.cmd_notebook_clear(")) {
+            if (injected === null && sql.includes("morrow_work.cmd_notebook_clear_v2(")) {
               injected = await notebookWriteStep(runQuery, {
                 toolUseId: "toolu_k10_hidden",
                 input: { text: "Orders from the coast arrive a day late." },
@@ -1153,7 +1190,7 @@ test("K10 a clear erases only at the notebook revision its per-viewer check read
   // TypeScript bypassed).
   const revision = Number(
     db.sql(
-      `SELECT revision FROM morrow_work.agent_notebooks WHERE installation_id=${literal(INSTALLATION)};`,
+      `SELECT revision FROM morrow_work.agent_notebooks WHERE agent_principal_id=${literal(AGENT)};`,
     ),
   );
   const direct = (expected) =>
@@ -1161,7 +1198,7 @@ test("K10 a clear erases only at the notebook revision its per-viewer check read
       .sql(
         asApi(
           P.A,
-          `SELECT outcome FROM morrow_work.cmd_notebook_clear(${literal(randomUUID())},repeat('c',64),'corr-k10',${literal(INSTALLATION)},${literal(String(expected))});`,
+          `SELECT outcome FROM morrow_work.cmd_notebook_clear_v2(${literal(randomUUID())},repeat('c',64),'corr-k10',${literal(INSTALLATION)},${literal(String(expected))});`,
         ),
         { user: "morrow_api_worker" },
       )

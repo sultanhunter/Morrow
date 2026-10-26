@@ -273,11 +273,29 @@ test("Listings gets the brand voice only as one marked data block: it chooses no
   assert.equal(tags.ok, false);
 });
 
+// H12a: the run's memory facts (taint with its sources, audience, subjects, what it may read);
+// the context taint and the memory taint agree.
+const memoryFor = (taint) => ({
+  taint:
+    taint === "untrusted_external"
+      ? {
+          kinds: ["untrusted_external"],
+          sources: [{ source: "product", sourceId: null }],
+          omitted: 0,
+        }
+      : { kinds: [], sources: [], omitted: 0 },
+  audience: { kind: "workspace" },
+  sourceSubjects: [],
+  personMemoryLoaded: false,
+  viewableTags: [tag("catalog.products.read"), tag("workspace.artifact.read")],
+  subjectScope: { kinds: ["goal", "task", "conversation"], ids: [] },
+});
 const run = (over = {}) => ({
   context: "routed",
   readTags: [tag("catalog.products.read")],
   taint: "untrusted_external",
   agentTools: "on",
+  memory: memoryFor(over.taint ?? "untrusted_external"),
   ...over,
 });
 const proposeInput = (over = {}) => ({
@@ -343,7 +361,21 @@ test("knowledge.propose's checks in code: grants nothing, server-held tags and t
 
 test("notebook.write's checks in code: its own notebook, never customer data", () => {
   const ok = decideNotebookWrite({ text: "Titles run long." }, run({ readTags: [] }));
-  assert.deepEqual(ok, { ok: true, args: { text: "Titles run long.", readTags: [] } });
+  // H12a: an add of a lesson titled from its first line, with the run's memory facts.
+  assert.deepEqual(ok, {
+    ok: true,
+    args: {
+      operation: {
+        op: "add",
+        kind: "lesson",
+        title: "Titles run long.",
+        text: "Titles run long.",
+        derivedFrom: [],
+      },
+      readTags: [],
+      memory: run().memory,
+    },
+  });
   assert.deepEqual(decideNotebookWrite({ text: "x" }, run({ context: "look_for_work" })), {
     ok: false,
     outcome: "refused",
@@ -727,35 +759,51 @@ test("migration 0052: forward only, FORCE RLS, no customer tag, clocked notebook
 });
 
 test("a notebook clear is bound to the revision its per-viewer check read (review F1)", () => {
-  // The definer compares the expected revision under its lock, before it erases anything.
-  const clear = sql.slice(
-    sql.indexOf("CREATE FUNCTION morrow_work.cmd_notebook_clear("),
-    sql.indexOf("END $$;", sql.indexOf("CREATE FUNCTION morrow_work.cmd_notebook_clear(")),
-  );
-  assert.match(clear, /p_installation_id text,\s*p_expected_revision text\)/);
-  assert.match(
-    clear,
-    /p_expected_revision IS NULL OR p_expected_revision !~ '\^\[1-9\]\[0-9\]\{0,15\}\$'/,
-  );
-  const lock = clear.indexOf("FOR UPDATE;");
-  const compare = clear.indexOf(
-    "IF n.revision<>p_expected_revision::bigint THEN RETURN QUERY SELECT 'revision_conflict'",
-  );
-  const erase = clear.indexOf("UPDATE morrow_work.agent_notebook_entries");
-  assert.ok(lock > 0 && compare > lock && erase > compare, "lock, compare, then erase");
+  // The definer compares the expected revision under its lock, before it erases anything: 0052's
+  // and its H12a successor on the re-keyed notebook (0057), which the work API now sends.
+  const memory = readFileSync("migrations/0057.memory-foundation.sql", "utf8");
+  for (const [text, name] of [
+    [sql, "cmd_notebook_clear("],
+    [memory, "cmd_notebook_clear_v2("],
+  ]) {
+    const clear = text.slice(
+      text.indexOf("CREATE FUNCTION morrow_work." + name),
+      text.indexOf("END $$;", text.indexOf("CREATE FUNCTION morrow_work." + name)),
+    );
+    assert.match(clear, /p_installation_id text,\s*p_expected_revision text\)/);
+    assert.match(
+      clear,
+      /p_expected_revision IS NULL OR p_expected_revision !~ '\^\[1-9\]\[0-9\]\{0,15\}\$'/,
+    );
+    const lock = clear.indexOf("FOR UPDATE;");
+    const compare = clear.indexOf(
+      "IF n.revision<>p_expected_revision::bigint THEN RETURN QUERY SELECT 'revision_conflict'",
+    );
+    const erase = clear.indexOf("UPDATE morrow_work.agent_notebook_entries");
+    assert.ok(lock > 0 && compare > lock && erase > compare, name + " lock, compare, then erase");
+  }
   // Every entry written bumps the revision the clear compares.
-  const write = sql.slice(sql.indexOf("CREATE FUNCTION morrow_work.run_notebook_write("));
-  assert.match(write, /UPDATE morrow_work\.agent_notebooks y SET [^;]*revision=y\.revision\+1/);
+  for (const [text, name] of [
+    [sql, "run_notebook_write("],
+    [memory, "run_notebook_write_v2("],
+  ]) {
+    const write = text.slice(text.indexOf("CREATE FUNCTION morrow_work." + name));
+    assert.match(
+      write,
+      /UPDATE morrow_work\.agent_notebooks y SET [^;]*revision=y\.revision\+1/,
+      name,
+    );
+  }
   // The work API sends the revision it read before the entries it checked, as the fifth value.
   assert.match(
     workStatements.cmdNotebookClear,
-    /morrow_work\.cmd_notebook_clear\(\$1,\$2,\$3,\$4,\$5\)$/,
+    /morrow_work\.cmd_notebook_clear_v2\(\$1,\$2,\$3,\$4,\$5\)$/,
   );
-  assert.match(workStatements.notebookRevision, /FROM morrow_work\.agent_notebooks n WHERE/);
+  assert.match(workStatements.notebookRevision, /FROM morrow_work\.agent_notebooks n JOIN/);
   const source = readFileSync("packages/work/src/knowledge/commands.ts", "utf8");
   const body = source.slice(source.indexOf("async function notebookClear("));
   const revisionRead = body.indexOf('tx.run("notebookRevision"');
-  const entriesRead = body.indexOf("notebookEntryRows(tx, installationId)");
+  const entriesRead = body.indexOf("notebookEntryScopes(tx, installationId)");
   const sent = body.indexOf('submit(tx, "cmdNotebookClear"');
   assert.ok(
     revisionRead > 0 && entriesRead > revisionRead && sent > entriesRead,
@@ -838,7 +886,10 @@ test("the deletion path is in the one registry, before any real content (ADR-003
   const holding = tables
     .filter((t) => workTables[t].content === "workspace")
     .map((t) => "morrow_work." + t);
-  assert.deepEqual(holding.sort(), workspaceContentHandlers.map((h) => h.table).sort());
+  assert.deepEqual(
+    holding.sort(),
+    [...new Set(workspaceContentHandlers.map((h) => h.table))].sort(),
+  );
   for (const handler of workspaceContentHandlers) {
     assert.ok(text(handler.table), handler.table);
     assert.equal(handler.action, "erase_keep_digest");

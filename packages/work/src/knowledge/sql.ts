@@ -4,6 +4,9 @@
 // the work API filters every row per viewer by its read tags in code (ADR-0031 item 6) before
 // anything leaves the server, so read_tags is selected with every row that holds content.
 
+// An installation's agent's notebook rows (H12a: keyed by the agent principal).
+const notebookOf = (alias: string) =>
+  `JOIN morrow_work.agent_installations i ON i.organization_id=${alias}.organization_id AND i.workspace_id=${alias}.workspace_id AND i.agent_principal_id=${alias}.agent_principal_id`;
 const utc = (column: string) =>
   `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 const pageColumns = `p.id::text AS id,p.kind,p.title,p.current_version::text AS version,p.read_tags::text AS read_tags,${utc("p.created_at")} AS created_at,${utc("p.updated_at")} AS updated_at`;
@@ -19,8 +22,9 @@ export const knowledgeStatements = Object.freeze({
     "SELECT outcome,result FROM morrow_work.cmd_knowledge_accept($1,$2,$3,$4,$5,$6)",
   cmdKnowledgeReject: "SELECT outcome,result FROM morrow_work.cmd_knowledge_reject($1,$2,$3,$4,$5)",
   cmdKnowledgeDelete: "SELECT outcome,result FROM morrow_work.cmd_knowledge_delete($1,$2,$3,$4,$5)",
-  // At the notebook revision read before the clearer's per-viewer check (notebookRevision).
-  cmdNotebookClear: "SELECT outcome,result FROM morrow_work.cmd_notebook_clear($1,$2,$3,$4,$5)",
+  // At the notebook revision read before the clearer's per-viewer check (notebookRevision); the
+  // notebook is the installation's agent principal's (H12a, 0057).
+  cmdNotebookClear: "SELECT outcome,result FROM morrow_work.cmd_notebook_clear_v2($1,$2,$3,$4,$5)",
   // Live pages, most recently changed first (at most 500 live pages exist; one more is read as
   // a guard).
   knowledgePages: `SELECT ${pageColumns},left(v.body,280) AS excerpt FROM morrow_work.knowledge_pages p JOIN morrow_work.knowledge_versions v ON v.organization_id=p.organization_id AND v.workspace_id=p.workspace_id AND v.page_id=p.id AND v.version=p.current_version WHERE p.deleted_at IS NULL ORDER BY p.updated_at DESC,p.id::text COLLATE "C" LIMIT 501`,
@@ -38,12 +42,15 @@ export const knowledgeStatements = Object.freeze({
   // An installation of this workspace (tenant_read), if any.
   knowledgeInstallation:
     "SELECT i.id::text AS id,i.status,i.store_id::text AS store_id,i.connection_id::text AS connection_id FROM morrow_work.agent_installations i WHERE i.id=$1::text",
-  // An installation's notebook revision (every entry written bumps it), if it has one. The
-  // clear reads it before the entries, so an entry committed after this read is a
-  // revision_conflict at cmd_notebook_clear's lock, never erased unseen.
-  notebookRevision:
-    "SELECT n.revision::text AS revision FROM morrow_work.agent_notebooks n WHERE n.installation_id=$1::text",
-  // An installation's live, unexpired notebook entries, newest first (at most 100 live).
-  notebookEntries: `SELECT e.id::text AS id,e.sequence::text AS sequence,e.body,e.read_tags::text AS read_tags,${utc("e.created_at")} AS created_at FROM morrow_work.agent_notebook_entries e WHERE e.installation_id=$1::text AND e.erased_at IS NULL AND e.expires_at>clock_timestamp() ORDER BY e.sequence DESC LIMIT 101`,
+  // An installation's notebook revision (every write, renewal, retire and erasure bumps it),
+  // if its agent has one. Notebooks are keyed by agent principal (H12a, 0057); an installation
+  // names its agent. The clear reads it before the entries, so an entry committed after this
+  // read is a revision_conflict at cmd_notebook_clear_v2's lock, never erased unseen.
+  notebookRevision: `SELECT n.revision::text AS revision FROM morrow_work.agent_notebooks n ${notebookOf("n")} WHERE i.id=$1::text`,
+  // Every live notebook entry's scope (read tags, audience and source subjects; no text),
+  // newest first: at most 1,000 live (one more is read as a guard). The clear checks them all.
+  notebookEntryScopes: `SELECT e.id::text AS id,e.sequence::text AS sequence,e.read_tags::text AS read_tags,e.audience::text AS audience,e.source_subjects::text AS source_subjects,(e.expires_at>clock_timestamp())::text AS current FROM morrow_work.agent_notebook_entries e ${notebookOf("e")} WHERE i.id=$1::text AND e.erased_at IS NULL ORDER BY e.sequence DESC LIMIT 1001`,
+  // The text of the entries the viewer may see (at most 100 ids, a JSON array), newest first.
+  notebookEntryTexts: `SELECT e.id::text AS id,e.sequence::text AS sequence,e.body,${utc("e.created_at")} AS created_at FROM morrow_work.agent_notebook_entries e ${notebookOf("e")} WHERE i.id=$1::text AND e.erased_at IS NULL AND e.expires_at>clock_timestamp() AND e.id::text IN (SELECT jsonb_array_elements_text($2::jsonb)) ORDER BY e.sequence DESC LIMIT 100`,
 } as const);
 export type KnowledgeStatementName = keyof typeof knowledgeStatements;

@@ -193,6 +193,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_knowledge_reject(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_reject('${uuid}','${digest}','corr','${randomUUID()}','${digest}')`,
     "cmd_knowledge_delete(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_delete('${uuid}','${digest}','corr','page_probe','1')`,
     "cmd_notebook_clear(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_notebook_clear('${uuid}','${digest}','corr','installation_probe','1')`,
+    // H12a (0057): the clear on the re-keyed notebook.
+    "cmd_notebook_clear_v2(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_notebook_clear_v2('${uuid}','${digest}','corr','installation_probe','1')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",

@@ -1051,6 +1051,18 @@ test("the shop-knowledge lab is last in pg-http and runs once in CI, on the http
   assert.equal(scriptsReachedByCi().get("lab:shop-knowledge"), 1);
 });
 
+// H12a: the memory lab runs in the pg-http group only, just before the shop-knowledge lab, on
+// the `http` leg once.
+test("the memory lab runs once in CI, in pg-http before the shop-knowledge lab", () => {
+  const holding = Object.entries(scripts)
+    .filter(([name]) => name.startsWith("lab:group:"))
+    .filter(([, text]) => rootScriptsRun(text).includes("lab:memory"))
+    .map(([name]) => name);
+  assert.deepEqual(holding, ["lab:group:pg-http"]);
+  assert.equal(rootScriptsRun(scripts["lab:group:pg-http"]).at(-2), "lab:memory");
+  assert.equal(scriptsReachedByCi().get("lab:memory"), 1);
+});
+
 // ADR-0014, amendment of 2026-10-22: ci.yml alone may run on the owner's Mac runner, chosen
 // by the repository variable MORROW_CI_RUNS_ON (unset: GitHub-hosted ubuntu-24.04). It names
 // no secret and no environment, so GitHub sends that runner no secret; the staging deploy, the

@@ -562,7 +562,8 @@ test("migration 0056: a forward work-owner migration, row 56, its brief and dige
   // The next free number on main after the test credits renewal's 0055 (pull request 80); if
   // another pull request lands first, the lead renumbers this one again at merge time.
   assert.equal(row.sequence, 56);
-  assert.equal(manifest.migrations.at(-1), row);
+  // Row 56 of the manifest (H12a's 0057 follows it).
+  assert.equal(manifest.migrations[55], row);
   // The header names the migration it follows (review A1), the one before it in the manifest.
   const previous = manifest.migrations.find((m) => m.sequence === row.sequence - 1);
   assert.equal(previous.file, "0055.staging-test-credits-renewal.sql");
