@@ -40,7 +40,7 @@
 //   D  one lock order (the workspace stream, then the run, then the rest): a run finishing or
 //      starting while a session holds the stream as an admission or a stop does waits on
 //      the stream first, and neither deadlocks;
-//   C  no daily cap (ADR-0039, migration 0053): an overflow booking (real spend beyond a
+//   C  no daily cap (ADR-0039, migration 0055): an overflow booking (real spend beyond a
 //      reservation) is still booked and counted, and the next run is admitted past US$25 of
 //      the day's cost;
 //   P  the pending approvals cap: admission refuses a run whose proposals could not fit, and
@@ -1476,7 +1476,7 @@ COMMIT;`,
   // ---------------------------------------------------------------------------
   phase("no_daily_cap");
   {
-    // C1 (ADR-0039, migration 0053): overflow is real spend and is still booked and counted,
+    // C1 (ADR-0039, migration 0055): overflow is real spend and is still booked and counted,
     // but no daily cap refuses on it. One overflow booking (sim) takes today's reservations
     // and overflow past US$25, so the next run's worst case would have passed the former cap:
     // it is admitted and drafted all the same, while the booking stays recorded. The booking

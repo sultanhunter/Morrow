@@ -3,11 +3,11 @@
 // catalogue version 4 with no run or daily cap and 25 products a run for every entry, and
 // Claude Opus 5.5 only (the owner, 2026-10-26: Haiku 5.5 and Sonnet 5.5 leave the catalogue),
 // version 3 retired, run_reserve without the daily cap, runtime_caps() and
-// runtime_operation_begin without the monthly budget (migration 0053), and verify refusing a
+// runtime_operation_begin without the monthly budget (migration 0055), and verify refusing a
 // money cap on any later per-product version and on any loop version, and any model but
 // Claude Opus from version 4. Pure: no I/O beyond
 // reading the repository files. lab:run-credits (C3, C12, C13), lab:listings-runs (B4, C1) and
-// lab:runtime-operations (K2) prove migration 0053 on PostgreSQL 17.
+// lab:runtime-operations (K2) prove migration 0055 on PostgreSQL 17.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -39,7 +39,7 @@ const read = (path) => readFileSync(path, "utf8");
 const policy = JSON.parse(read("docs/decisions/model-policy.json"));
 const registry = JSON.parse(read("docs/decisions/providers.json"));
 const manifest = JSON.parse(read("migrations/manifest.json"));
-const file = "0053.credits-only-catalogue.sql";
+const file = "0055.credits-only-catalogue.sql";
 const sql = read("migrations/" + file);
 const runs = read("migrations/0038.listings-runs.sql");
 const runtime = read("migrations/0043.runtime-operations.sql");
@@ -336,11 +336,11 @@ test("more than 25 products is the request's bound (400 missing_input), not the 
   // The Sunrise sample answers as the server does (tests/workspace-web-runs.test.mjs).
 });
 
-test("migration 0053: a forward work-owner migration, row 53, its brief and digest", () => {
+test("migration 0055: a forward work-owner migration, row 55, its brief and digest", () => {
   const row = manifest.migrations.find((m) => m.file === file);
-  // The next free number on main after shop knowledge's 0052 (pull request 68); other open
-  // pull requests renumber at their integration (or this one does, whichever merges later).
-  assert.equal(row.sequence, 53);
+  // The next free number on main after connection health's 0053 and 0054 (pull request 66);
+  // if another pull request lands first, the lead renumbers this one again at merge time.
+  assert.equal(row.sequence, 55);
   assert.equal(manifest.migrations.at(-1), row);
   assert.equal(row.executeAs, "morrow_work_owner");
   assert.equal(row.sha256, createHash("sha256").update(sql).digest("hex"));
@@ -378,7 +378,7 @@ test("migration 0053: a forward work-owner migration, row 53, its brief and dige
   assert.doesNotMatch(sql, /SET (LOCAL )?ROLE|SECURITY INVOKER|BYPASSRLS/);
 });
 
-test("migration 0053 seeds catalogue version 4 exactly as the generated catalogue holds it", () => {
+test("migration 0055 seeds catalogue version 4 exactly as the generated catalogue holds it", () => {
   const generated = generatedModelCatalogue.versions.find((v) => v.version === 4);
   assert.equal(generatedModelCatalogue.activeVersion, 4);
   const [version] = rows("INSERT INTO morrow_work.model_catalogue_versions(");
@@ -545,7 +545,7 @@ REVOKE CREATE ON SCHEMA morrow_vault FROM morrow_work_command;
 COMMIT;
 `,
   );
-  // The broker's closed refusal set keeps monthly_budget for replies from before 0053.
+  // The broker's closed refusal set keeps monthly_budget for replies from before 0055.
   assert.match(read("apps/broker/src/runtime-ledger.ts"), /\n {2}"monthly_budget",\n/);
   // The staging runtime record carries the provider's limit and no budget of the code's.
   const record = JSON.parse(read("docs/decisions/runtime-staging.json"));
@@ -557,14 +557,14 @@ test("daily_cap stays in the run refusals' closed set for old records and is nev
   const commands = read("packages/work/src/runs/commands.ts");
   assert.match(
     commands,
-    /\/\/ Never returned since migration 0053 \(ADR-0039[^\n]*\n[^\n]*\n {2}\| "daily_cap"/,
+    /\/\/ Never returned since migration 0055 \(ADR-0039[^\n]*\n[^\n]*\n {2}\| "daily_cap"/,
   );
   const http = read("packages/work/src/runs/http.ts");
   assert.match(
     http,
-    /\/\/ Never returned since migration 0053 \(ADR-0039[^\n]*\n {4}daily_cap: \[/,
+    /\/\/ Never returned since migration 0055 \(ADR-0039[^\n]*\n {4}daily_cap: \[/,
   );
-  // The only SQL that returns it is 0033's and 0038's run_reserve, both replaced by 0053.
+  // The only SQL that returns it is 0033's and 0038's run_reserve, both replaced by 0055.
   const returning = manifest.migrations
     .filter((m) => read("migrations/" + m.file).includes("SELECT 'daily_cap'"))
     .map((m) => m.sequence);

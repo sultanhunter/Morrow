@@ -2,7 +2,7 @@
 // (run_reserve, run_book_cost, run_settle, run_release) are proved under concurrency by
 // lab:run-credits. ADR-0036 removed the unrecovered-cost cap: unrecovered_allows (revised by
 // migration 0051) caps nothing, and its TypeScript twin is gone. ADR-0039 made credits the only
-// spend limit: run_reserve (revised by migration 0053) has no daily cap, its TypeScript twin
+// spend limit: run_reserve (revised by migration 0055) has no daily cap, its TypeScript twin
 // dailyCapAllows is gone, and from catalogue version 4 every entry admits 25 products.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

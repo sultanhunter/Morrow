@@ -1,4 +1,6 @@
 import {
+  connectionCleanupOn,
+  connectionCleanupVar,
   parseBrokerDatabaseBinding,
   type BrokerDatabaseBinding,
   type ConnectorBrokerRpc,
@@ -50,6 +52,8 @@ export type ConnectorEnvironmentMapping =
       broker: ConnectorBrokerRpc;
       /** Null only in development without the committed limiters (a lab). */
       limiters: Readonly<ConnectorLimiters> | null;
+      /** v1 PR 5: the connection clean-up switch, on only while its var is exactly "on". */
+      cleanup: boolean;
     }>
   | Readonly<{ ok: false; code: ConnectorEnvironmentCode }>;
 
@@ -202,6 +206,15 @@ export function mapConnectorEnvironment(env: unknown): ConnectorEnvironmentMappi
   } catch {
     return fail("CONNECTOR_ENV_LIMITER_INVALID");
   }
+  // 9. v1 PR 5: the connection clean-up switch (docs/decisions/connection-cleanup-staging.json,
+  // committed off; edge:check refuses a mixed state). On only while its var is exactly "on";
+  // absent or any other value is off.
+  let cleanup = false;
+  try {
+    cleanup = dataProperty(record, connectionCleanupVar).value === connectionCleanupOn;
+  } catch {
+    cleanup = false;
+  }
   return Object.freeze({
     ok: true,
     environment: binding.environment,
@@ -209,5 +222,6 @@ export function mapConnectorEnvironment(env: unknown): ConnectorEnvironmentMappi
     binding,
     broker,
     limiters,
+    cleanup,
   });
 }

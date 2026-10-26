@@ -73,6 +73,16 @@ const connectorRedact =
 // M3 PR-2 with M2 PR-3: the connector's redaction context on a store-content table.
 const connectorContent =
   "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_redact'::text, true)))";
+// v1 PR 5 (connection-health-work): the connector's health context, one connection
+// (org|ws|store|connection) or one store (org|ws|store), each written only by the reconcile.
+const connectorHealth =
+  "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (connection_id)::text) = current_setting('morrow.connector_health'::text, true)))";
+const connectorAgentStore =
+  "((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_agent_stop'::text, true))";
+const connectorHealthLease =
+  "((SESSION_USER = 'morrow_connector_ingress'::name) AND (installation_id IS NOT NULL) AND " +
+  connectorAgentStore +
+  ")";
 // v1 PR 3 (catalog-apply): the broker's catalog context (one operation, by its own setting).
 const brokerCatalog =
   "((SESSION_USER = 'morrow_vault_broker'::name) AND (kind = 'catalog_write'::text) AND ((id)::text = current_setting('morrow.vault_catalog_operation'::text, true)))";
@@ -346,6 +356,59 @@ const extraPolicies = {
     "{morrow_work_command}",
     null,
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || product_id) = current_setting('morrow.vault_undo_product'::text, true)))",
+  ],
+  // v1 PR 5 (connection-health-work): the connector's health context. The Reconnect item of
+  // exactly one connection (read, raise while open, revise), the cron's open-item list (only
+  // under that definer's own setting), the store's agent installations (read only), and the
+  // system installation stop of a scope change (read, set with its two reasons, never
+  // lifted; its StopRecord@1; the revocation of that store's agent leases).
+  connector_health_read: ["SELECT", "{morrow_work_command}", connectorHealth, null],
+  connector_health_raise: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (cleared_at IS NULL) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (connection_id)::text) = current_setting('morrow.connector_health'::text, true)))",
+  ],
+  connector_health_revise: ["UPDATE", "{morrow_work_command}", connectorHealth, connectorHealth],
+  connector_health_sweep: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (cleared_at IS NULL) AND (current_setting('morrow.connector_sweep'::text, true) = 'open'::text))",
+    null,
+  ],
+  connector_health_agents: ["SELECT", "{morrow_work_command}", connectorHealth, null],
+  connector_health_stop_read: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (scope = 'installation'::text) AND " +
+      connectorAgentStore +
+      ")",
+    null,
+  ],
+  connector_health_stop_set: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (scope = 'installation'::text) AND (set_by_kind = 'system'::text) AND (lifted_at IS NULL) AND (kill_switch_record_id IS NULL) AND (reason_code = ANY (ARRAY['shopify_scope_missing'::text, 'shopify_token_refused'::text])) AND " +
+      connectorAgentStore +
+      ")",
+  ],
+  connector_health_stop_record: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (action = 'set'::text) AND (actor_kind = 'system'::text) AND (operator_id IS NULL) AND (scope = 'installation'::text) AND (reason_code = ANY (ARRAY['shopify_scope_missing'::text, 'shopify_token_refused'::text])) AND " +
+      connectorAgentStore +
+      ")",
+  ],
+  connector_health_lease_read: ["SELECT", "{morrow_work_command}", connectorHealthLease, null],
+  connector_health_lease_revoke: [
+    "UPDATE",
+    "{morrow_work_command}",
+    connectorHealthLease,
+    "((status = 'revoked'::text) AND (revoked_reason = 'stop'::text) AND (SESSION_USER = 'morrow_connector_ingress'::name) AND (installation_id IS NOT NULL) AND " +
+      connectorAgentStore +
+      ")",
   ],
 };
 // The only restrictive policies; every other policy is permissive.

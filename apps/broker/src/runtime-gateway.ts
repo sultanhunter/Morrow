@@ -40,7 +40,7 @@ import {
 //   3. The send mark (morrow_vault.runtime_operation_begin, its own committed transaction):
 //      the lease resolves as for a model call, the run's installation's package declares
 //      runtime.execution.use, no runtime hold is active, the concurrency and the
-//      per-workspace caps hold (no monthly budget since migration 0053, ADR-0039 item 6: E2B's
+//      per-workspace caps hold (no monthly budget since migration 0055, ADR-0039 item 6: E2B's
 //      own usage limit is the outside backstop, and its refusal sets the runtime hold), and
 //      the run's vendor reservation books the sandbox's worst case (`sandbox_compute`). Only
 //      then does a create leave the broker.
@@ -101,7 +101,7 @@ export type RuntimeUnknownReason =
   | "paused_found";
 export type RuntimeBeginRefusal =
   | "runtime_held"
-  // Never returned since migration 0053 (ADR-0039 removed the monthly budget); kept in the
+  // Never returned since migration 0055 (ADR-0039 removed the monthly budget); kept in the
   // closed set for records and replies written before it.
   | "monthly_budget"
   | "concurrency_limit"

@@ -675,7 +675,8 @@ export function edgePlacementRegion(regionId) {
 // model-provider switch's vars (edgeModelVarNames) on the staging api, broker and
 // orchestrator. Build order PR 7: the runtime switch's var (edgeRuntimeVarNames) on the
 // staging broker while it is on or cleanup-only. v1 PR 3: the apply switch's var
-// (edgeApplyVarNames) on the staging api and broker.
+// (edgeApplyVarNames) on the staging api and broker. v1 PR 5: the connection clean-up
+// switch's var (edgeCleanupVarNames) on the staging connector.
 export function edgeVarNames(
   worker,
   environment,
@@ -683,6 +684,7 @@ export function edgeVarNames(
   model = "off",
   runtime = "off",
   apply = "off",
+  cleanup = "off",
 ) {
   const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
   if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
@@ -690,7 +692,12 @@ export function edgeVarNames(
   // v1 PR 1: the staging connector's two reviewed identifiers (its own origin and the
   // api's; the database binding byte-equal to the api's).
   if (worker === "connector")
-    return ["MORROW_ENVIRONMENT", "CONNECTOR_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"];
+    return [
+      "MORROW_ENVIRONMENT",
+      "CONNECTOR_CONFIGURATION_JSON",
+      "MORROW_DATABASE_BINDING_JSON",
+      ...(cleanup === "on" ? edgeCleanupVarNames(worker, environment) : []),
+    ];
   const stripeVars = [
     ...(stripe === "on" ? edgeStripeVarNames(worker, environment) : []),
     ...(apply === "on" ? edgeApplyVarNames(worker, environment) : []),
@@ -892,6 +899,33 @@ export function reviewedApplyRecord(record) {
     typeof record.scope !== "string"
   )
     throw Error("EDGE_STAGING_APPLY_RECORD");
+  return Object.freeze({ switch: record.switch });
+}
+// v1 PR 5, the connection clean-up switch (ADR-0025 item 10; ADR-0031 item 3; committed off):
+// its runtime image is the var MORROW_CONNECTION_CLEANUP ("on") on the staging connector; no
+// secret. While it is on the connector's cron reads every live installation's scopes back
+// through the broker, deletes the data of an installation uninstalled 48 hours ago whose
+// shop/redact never completed, and closes stuck scope-change deliveries. Development's
+// committed config never carries it, and production has no switch.
+export const edgeCleanupVar = "MORROW_CONNECTION_CLEANUP";
+export const edgeCleanupValue = "on";
+export function edgeCleanupVarNames(worker, environment) {
+  return environment === "staging" && worker === "connector" ? [edgeCleanupVar] : [];
+}
+// The reviewed staging clean-up record (v1 PR 5; committed off): `switch` "off" until one
+// reviewed commit turns it "on". Returns the switch, or throws.
+export function reviewedCleanupRecord(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== "environment_kind,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_CLEANUP_RECORD");
   return Object.freeze({ switch: record.switch });
 }
 // Build order PR 7, the runtime switch (ADR-0029 item 10; ADR-0035 item 6; committed off):
@@ -1344,6 +1378,7 @@ export async function verifyEdgeConfig({
   runtimePath = join(repositoryRoot, "docs/decisions/runtime-staging.json"),
   evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
+  cleanupPath = join(repositoryRoot, "docs/decisions/connection-cleanup-staging.json"),
   liveEvalsPath = join(repositoryRoot, "docs/decisions/agent-evals-live.json"),
   // fix-connector-cron-latency: the cron object's location hint, read from the connector's
   // source (worker/cron.ts) unless a test names another.
@@ -1361,6 +1396,8 @@ export async function verifyEdgeConfig({
     here,
   );
   const {
+    connectionCleanupVar,
+    connectionCleanupOn,
     brokerRequiredSecretsFor,
     brokerStripeSecrets,
     stripeModeTest,
@@ -1425,6 +1462,21 @@ export async function verifyEdgeConfig({
     environment === "staging" && applied?.switch === "on" ? "on" : "off";
   if (shopifyWriteVar !== edgeApplyVar || shopifyWriteOn !== edgeApplyValue)
     problem("EDGE_APPLY_SWITCH_NAMES", "broker-protocol");
+  // v1 PR 5, the connection clean-up switch: the same protocol, on the connector alone.
+  const cleanupRecord = readJson(cleanupPath);
+  let cleaned = null;
+  if (cleanupRecord === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "connection-cleanup-staging.json");
+  else
+    try {
+      cleaned = reviewedCleanupRecord(cleanupRecord);
+    } catch {
+      problem("EDGE_STAGING_CLEANUP_RECORD", "connection-cleanup-staging.json");
+    }
+  const cleanupSwitch = (environment) =>
+    environment === "staging" && cleaned?.switch === "on" ? "on" : "off";
+  if (connectionCleanupVar !== edgeCleanupVar || connectionCleanupOn !== edgeCleanupValue)
+    problem("EDGE_CLEANUP_SWITCH_NAMES", "broker-protocol");
   // PR 18, the plan-drafts switch: refused on while the agent loop is off (ADR-0034 item 10).
   // PR 20, the shop-knowledge switch: refused on before its grants, the tools before the loop.
   const shopKnowledge = readJson(shopKnowledgePath);
@@ -1579,6 +1631,7 @@ export async function verifyEdgeConfig({
       const modelSwitched = modelSwitch(environment);
       const runtimeSwitched = runtimeSwitch(environment);
       const applySwitched = applySwitch(environment);
+      const cleanupSwitched = cleanupSwitch(environment);
       const varNames = edgeVarNames(
         worker.key,
         environment,
@@ -1586,6 +1639,7 @@ export async function verifyEdgeConfig({
         modelSwitched,
         runtimeSwitched,
         applySwitched,
+        cleanupSwitched,
       );
       if (
         vars === null ||
@@ -1599,7 +1653,8 @@ export async function verifyEdgeConfig({
         // The broker's runtime var is exactly the reviewed switch (on or cleanup_only).
         (varNames.includes(edgeRuntimeSwitchVar) &&
           vars[edgeRuntimeSwitchVar] !== runtimeSwitched) ||
-        (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue)
+        (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue) ||
+        (varNames.includes(edgeCleanupVar) && vars[edgeCleanupVar] !== edgeCleanupValue)
       )
         problem("EDGE_VARS", where);
       // Build order PR 7: no mixed runtime state. While off no Worker carries the runtime var
@@ -1832,6 +1887,7 @@ export async function verifyEdgeConfig({
     modelSwitch: modelSwitch("staging"),
     runtimeSwitch: runtimeSwitch("staging"),
     applySwitch: applySwitch("staging"),
+    cleanupSwitch: cleanupSwitch("staging"),
   };
 }
 

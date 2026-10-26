@@ -405,7 +405,21 @@
     },
     {
       "sequence": 53,
-      "file": "0053.credits-only-catalogue.sql",
+      "file": "0053.connection-health-identity.sql",
+      "sha256": "4bec18798a5f157e296bd8b5e027ab0eef850d0a01cbbd7bed734bbc05af1d5a",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-connection-health.md"
+    },
+    {
+      "sequence": 54,
+      "file": "0054.connection-health-work.sql",
+      "sha256": "68d1577340cfed2d961c9aeb72b2d24cec4d18edc64b4befe58b0bd5d5a014b9",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-connection-health.md"
+    },
+    {
+      "sequence": 55,
+      "file": "0055.credits-only-catalogue.sql",
       "sha256": "845ade56d9d8f3f19350ab9355101c826bb9849230e2a191acf21b9accb7fc84",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"

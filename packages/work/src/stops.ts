@@ -28,7 +28,9 @@ import {
 // - System and operator stops write StopRecord@1: the app/uninstalled and
 //   app/scopes_update connection stops (M2 PR-3 writes them through the connector's
 //   applier, morrow_work.connector_inbox_apply, with exactly these codes and reasons) and
-//   the platform stop of the owner's script (0020 platform_stop_set/_lift).
+//   the platform stop of the owner's script (0020 platform_stop_set/_lift). v1 PR 5: a scope
+//   change no longer stops the connection; the system installation stop of each agent that
+//   needs a missing scope (shopify_scope_missing, or shopify_token_refused) does instead.
 // - A stop revokes its matching active leases in the same statement (0020 stop_guard);
 //   `stopBlocks` is the TypeScript twin of morrow_work.stop_active.
 // Agents never set or lift a stop; they may only propose one.
@@ -40,8 +42,19 @@ export const stopReasonCodes = Object.freeze({
   disconnect: "human_disconnect",
   /** The app/uninstalled webhook's connection stop (system). */
   uninstalled: "shopify_app_uninstalled",
-  /** The app/scopes_update webhook's connection stop when the scopes changed (system). */
+  /**
+   * The app/scopes_update webhook's connection stop when the scopes changed (system; M2
+   * PR-3). Since v1 PR 5 a scope change keeps the connection: this code is no longer written,
+   * and stays for the rows M2 PR-3 wrote.
+   */
   scopesChanged: "shopify_scopes_changed",
+  /**
+   * v1 PR 5 (ADR-0025 item 10): the system installation stop on an agent whose release needs a
+   * Shopify scope that is no longer granted (connection-health-work's reconcile).
+   */
+  scopeMissing: "shopify_scope_missing",
+  /** v1 PR 5: the same stop when Shopify refused the connection's token (the read-back). */
+  tokenRefused: "shopify_token_refused",
   /** Fixed by 0020's platform_stop_set and platform_stop_lift (operator). */
   platformStop: "operator_platform_stop",
   platformLift: "operator_platform_lift",
@@ -299,6 +312,15 @@ export function disconnectRecord(
 export const systemStopReasons = Object.freeze({
   shopify_app_uninstalled: "The Shopify app was uninstalled from the store.",
   shopify_scopes_changed: "The Shopify app's access scopes changed.",
+} as const);
+/**
+ * v1 PR 5: the system installation stops' fixed reasons (migration connection-health-work's
+ * connection_health_reconcile writes exactly these; tests/connection-health.test.mjs pins
+ * them to the SQL). Agents never set or lift them; only a person resumes an agent.
+ */
+export const systemInstallationStopReasons = Object.freeze({
+  shopify_scope_missing: "The Shopify app no longer has a permission this agent needs.",
+  shopify_token_refused: "Shopify no longer accepts the store connection's access token.",
 } as const);
 /**
  * The system's connection stop for an app/uninstalled webhook (ADR-0022 items 13-15):
