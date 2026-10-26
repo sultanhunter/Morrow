@@ -99,3 +99,10 @@ The owner's decisions of 2026-10-25 (OD-2026-10-25-3, and OD-2026-10-25-4 for th
 - **Item 6(a).** Tapping a new-teammate step starts one Morrow run limited to `knowledge.search`, `work.read`, `message.post` and `agent.propose`; "Start check-up" becomes "Add to team", and the step is a ready agent step once its card is approved.
 - **Item 7.** In a private Ask, `agent.route`'s read-only answer once per run becomes teammate calls (`agent.ask`), as many as the work needs, each read-only under the Ask-bound envelope and returning a structured result to Morrow, which opens the result items it references with `agent.result.read`; there is no hand-off and no agent card from an Ask, and a new teammate comes only from a plan card's step. The list of what Morrow never uses there keeps `task.create`, `inbox.ask` and mentions, with `agent.propose` in place of `specialist.draft`.
 - **Item 9.** `checkup_done` is built from TeammateResult@1's typed counts and next-step codes.
+
+### 2026-10-26: item 9 and answer 4, request cards and standing requests (ADR-0040)
+
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0040 as recommended, owner questions 24 and 30 included) changes these as below (ADR-0040 items 4, 5 and 12); the text above is kept as approved.
+
+- **Item 9.** The system author gains `job_card`, a request card that code keeps; Morrow's plan gains `understood` and up to 6 steps, as fields of ADR-0041's `run.plan`, rendered by code as the request's first message.
+- **Answer 4** ("Morrow never checks in on its own schedule"). Morrow may run a person's standing request: created by that person on a card, fired from a server-held trigger row under the signer's live grants, read-only plus suggestions, posting only in the signer's own Morrow conversation, and expiring after 90 days unless renewed.

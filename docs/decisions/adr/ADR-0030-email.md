@@ -84,3 +84,11 @@ The owner's statement in chat, verbatim, on 2026-10-23 (IST), after reading the 
 What it approves: this record as written and each owner question above with its recommended answer.
 
 The rest of the statement changes owner question 1: every email job picks its sender from the workspace's list of sending addresses, with the shop's Morrow address linked and selected by default; linking the merchant's own mailboxes is designed for but not built at launch. Item 10 records the change.
+
+## Amendments
+
+### 2026-10-26: item 8, phone and desktop notifications (ADR-0040)
+
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0040 as recommended, owner question 28 included) adds Web Push beside item 8's fixed-template email (ADR-0040 item 16); the text above is kept as approved.
+
+Pushes are empty: the device fetches counts with its session and shows a fixed template ("Morrow · 1 finished · 2 need you"). A policy in code sends "Needs you" at once and "Done" after 2 minutes unseen, at most 6 pushes an hour and none in quiet hours. Endpoints must be on an allowlist and are readable only by the broker's role; each send has one delivery key, and an uncertain send is never resent with a new key. Email after G7 stays item 8's templates, batched, at most one an hour.
