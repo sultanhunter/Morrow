@@ -61,13 +61,15 @@ export function sandboxWorstCaseUsd(): string {
 
 /**
  * The runtime caps (ADR-0029 item 8), checked in SQL under one platform row lock before
- * every create (migration 0043, morrow_vault.runtime_operation_begin): a monthly budget
- * below E2B's US$20 usage limit, half of Hobby's 20 concurrent sandboxes, and three open
- * sandboxes per workspace. At a cap the caller's TypeScript fallback runs; cleanup is never
- * blocked.
+ * every create (migration 0043's morrow_vault.runtime_operation_begin, revised by 0056):
+ * half of Hobby's 20 concurrent sandboxes and three open sandboxes per workspace, both
+ * counts, not money. At a cap the caller's TypeScript fallback runs; cleanup is never
+ * blocked. ADR-0039 item 6 removed the US$10 monthly budget: credits are the only spend
+ * limit, and E2B's usage limit in the owner's E2B account (US$20, recorded here and in
+ * docs/decisions/runtime-staging.json, enforced by E2B, never by Morrow's code) is the outside
+ * backstop. E2B's refusal sets the runtime hold that only a person lifts (ADR-0029 item 9).
  */
 export const runtimeCaps = Object.freeze({
-  monthlyBudgetUsd: "10.00",
   providerUsageLimitUsd: "20.00",
   concurrentSandboxes: 10,
   sandboxesPerWorkspace: 3,

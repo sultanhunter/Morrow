@@ -950,8 +950,9 @@ export function edgeRuntimeNamesRequired(worker, environment, runtime) {
 const edgeRuntimeNames = Object.freeze([edgeRuntimeSwitchVar, ...edgeRuntimeSecretNames]);
 // The reviewed staging runtime record (build order PR 7; committed off): provider e2b, the
 // profile morrow.computer@1, `switch` off, cleanup_only or on, `admission` synthetic_only or
-// merchant, the code's monthly runtime budget below the provider project's usage limit (both
-// decimal USD strings), and the qualification (ADR-0029 item 11): the date and its
+// merchant, the provider project's usage limit (a decimal USD string: E2B enforces it, never
+// Morrow's code; ADR-0039 item 6 removed the code's monthly runtime budget below it), and the
+// qualification (ADR-0029 item 11): the date and its
 // docs/evidence/live/ record, both or neither, and the record a committed file under
 // `evidenceRoot` (the repository root unless a test names another), so "on" never stands on a
 // name alone. On needs qualification; merchant admission needs on. Returns {switch,
@@ -965,7 +966,7 @@ export function reviewedRuntimeRecord(record, evidenceRoot = repositoryRoot) {
     typeof record !== "object" ||
     Array.isArray(record) ||
     Object.keys(record).sort().join() !==
-      "admission,environment_kind,monthly_budget_usd,profile,provider,provider_usage_limit_usd,qualification_record,qualified_on,schema_version,scope,switch" ||
+      "admission,environment_kind,profile,provider,provider_usage_limit_usd,qualification_record,qualified_on,schema_version,scope,switch" ||
     record.schema_version !== 1 ||
     record.environment_kind !== "staging" ||
     record.provider !== "e2b" ||
@@ -973,12 +974,9 @@ export function reviewedRuntimeRecord(record, evidenceRoot = repositoryRoot) {
     !["off", "cleanup_only", "on"].includes(record.switch) ||
     !["synthetic_only", "merchant"].includes(record.admission) ||
     typeof record.scope !== "string" ||
-    typeof record.monthly_budget_usd !== "string" ||
-    !usd.test(record.monthly_budget_usd) ||
     typeof record.provider_usage_limit_usd !== "string" ||
     !usd.test(record.provider_usage_limit_usd) ||
-    !(Number(record.monthly_budget_usd) > 0) ||
-    !(Number(record.monthly_budget_usd) < Number(record.provider_usage_limit_usd)) ||
+    !(Number(record.provider_usage_limit_usd) > 0) ||
     (record.qualified_on === null) !== (record.qualification_record === null) ||
     (record.qualified_on !== null &&
       (typeof record.qualified_on !== "string" ||

@@ -7,15 +7,18 @@
 //
 // - A run reserves products × the selection's credits per product, and products × its
 //   worst case per product of vendor cost. The product count is at most the selection's
-//   run limit (min of 25 and US$7 / worst case).
+//   run limit: 25 for every entry from catalogue version 4 (ADR-0039 item 4); at versions 1
+//   and 3, as published, the lower of 25 and US$7 over the worst case.
 // - It settles at the products drafted × credits per product, never above the reservation:
 //   a failed product earns no credit. The rest is released.
-// - The daily cap counts settled cost plus open reservations (UTC day).
+// - Credits are the only spend limit (ADR-0039): no run or daily cost cap. The SQL twin
+//   run_reserve (migration 0056) no longer returns `daily_cap`, and its TypeScript twin
+//   `dailyCapAllows` is gone. The vendor reservation still records each run's worst case.
 // - The unrecovered cost of a workspace's billing period (AI cost of products that earned
 //   no credit, `uncertain` bookings at their worst case included) is recorded per period and
 //   caps nothing: ADR-0036 removed the unrecovered-cost cap, so `unrecovered_cost_cap` is
-//   never returned again. The per-run and per-day caps, the breaker and the provider's
-//   monthly limit bound failed products' cost.
+//   never returned again. The breaker, the 25-product run limit and the provider's monthly
+//   limit bound failed products' cost.
 // - A run stops after three consecutive failed products; a good product resets the count.
 import type { CatalogueEntry, CatalogueLimits } from "./model-catalogue";
 
@@ -98,20 +101,6 @@ export function attemptCostUsd8(
   return (
     BigInt(u.inputTokens) * entry.inputUsd8PerToken +
     BigInt(u.outputTokens) * entry.outputUsd8PerToken
-  );
-}
-
-/** The daily cap: settled cost plus open reservations plus this reservation, within the cap. */
-export function dailyCapAllows(
-  limits: CatalogueLimits,
-  settledTodayUsd8: bigint,
-  openReservationsUsd8: bigint,
-  newReservationUsd8: bigint,
-): boolean {
-  if (!limits || ![settledTodayUsd8, openReservationsUsd8, newReservationUsd8].every(nonNegative))
-    throw invalid();
-  return (
-    settledTodayUsd8 + openReservationsUsd8 + newReservationUsd8 <= limits.workspaceDailyCostCapUsd8
   );
 }
 
