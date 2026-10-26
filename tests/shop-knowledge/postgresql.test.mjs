@@ -904,11 +904,17 @@ test("K7 an agent's notebook: its own agent, per viewer, 90-day clock, 1,000 liv
     ),
     /AGENT_NOTEBOOK_INVALID|agent_notebook_entries_clock|permission denied/,
   );
-  // The 1,001st live entry supersedes the least recently renewed (H12a, 0057's v2 definer).
-  db.sql(
-    `BEGIN; SELECT outcome FROM morrow_work.enter_lease(${literal(lease.id)},'1'); SELECT count(*) FROM (SELECT morrow_work.run_notebook_write_v2('toolu_bulk_'||g,'add',NULL,'lesson','Bulk '||g,'Bulk note '||g,'[]','{"kinds":[],"sources":[],"omitted":0}','{"kind":"workspace"}','[]','[]',${literal(JSON.stringify(labViewable))},'{"kinds":[],"ids":[]}','false') FROM generate_series(1,999) g) x; COMMIT;`,
-    { user: "morrow_runtime_executor" },
-  );
+  // The 1,001st live entry supersedes the least recently renewed (H12a, 0057's v2 definer). The
+  // owner seeds 998 entries in one statement (999 definer calls would take minutes on a loaded
+  // host); the run's next write is the 1,001st.
+  db.workOwner(`BEGIN;
+UPDATE morrow_work.agent_notebooks SET next_sequence=next_sequence+998,live_entries=live_entries+998,revision=revision+1 WHERE agent_principal_id=${literal(AGENT)};
+INSERT INTO morrow_work.agent_notebook_entries(organization_id,workspace_id,agent_principal_id,sequence,id,kind,title,body,read_tags,taint,derived_from,audience,source_subjects,requester_principal_id,requester_membership_id,run_id,tool_use_id,digest,created_at,renewed_at,renewals,use_count,expires_at)
+SELECT n.organization_id,n.workspace_id,n.agent_principal_id,n.next_sequence-999+g,gen_random_uuid()::text,'lesson','Bulk '||g,'Bulk note '||g,${literal(JSON.stringify([{ storeId: STORE, capability: "workspace.artifact.read" }]))},'{"kinds":[],"sources":[],"omitted":0}','[]','{"kind":"workspace"}','[]',${literal(P.A.principal)},${literal(P.A.membership)},'run_k7_bulk','toolu_bulk_'||g,morrow_work.memory_entry_digest('lesson','Bulk '||g,'Bulk note '||g),t,t,0,0,t+interval '90 days'
+ FROM morrow_work.agent_notebooks n,generate_series(1,998) g,(SELECT date_trunc('milliseconds',clock_timestamp()) AS t) x WHERE n.agent_principal_id=${literal(AGENT)};
+COMMIT;`);
+  assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 1000);
+  assert.equal((await write("toolu_bulk_999", "Bulk note 999")).effect, "applied");
   assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), 1000);
   assert.equal(count("agent_notebook_entries", "erased_reason='superseded'"), 1);
   // The page shows the newest 100 A may see.

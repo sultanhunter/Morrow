@@ -590,10 +590,12 @@ test("the deletion path: a clear, deletion following the source, and the clock, 
     sql,
     /CREATE TRIGGER memory_page_follow AFTER UPDATE ON morrow_work\.knowledge_pages FOR EACH ROW\s+WHEN \(\(NEW\.deleted_at IS NOT NULL AND OLD\.deleted_at IS NULL\) OR NEW\.current_version<>OLD\.current_version\)/,
   );
+  // An entry's erasure follows in one set-based pass per statement, over its transition tables.
   assert.match(
     sql,
-    /CREATE TRIGGER memory_entry_follow AFTER UPDATE ON morrow_work\.agent_notebook_entries FOR EACH ROW\s+WHEN \(OLD\.erased_at IS NULL AND NEW\.erased_at IS NOT NULL AND NEW\.erased_reason IN \('cleared','source_erased'\)\)/,
+    /CREATE TRIGGER memory_entry_follow AFTER UPDATE ON morrow_work\.agent_notebook_entries\s+REFERENCING OLD TABLE AS memory_entry_old NEW TABLE AS memory_entry_new FOR EACH STATEMENT/,
   );
+  assert.match(sql, /n\.erased_reason IN \('cleared','source_erased'\)/);
   for (const table of ["memory_derivations", "memory_repairs", "memory_settings"])
     assert.equal(workTables[table].content, "none", table);
 });

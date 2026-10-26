@@ -11,11 +11,12 @@ BEGIN;
 --   * Notebooks re-keyed by agent principal (ADR-0041 item 27): 0052's agent_notebooks and
 --     agent_notebook_entries are altered in place, guarded on both being empty (nothing writes
 --     them while docs/decisions/shop-knowledge-staging.json holds agent_tools off). An entry
---     gains its kind, title, taint (kinds and sources), derived_from, audience, source subjects,
---     the requester it was written for, renewal and use counts, and is clocked 90 days after its
---     last write or re-affirmation. Its text is indexed in the same row (a `simple` tsvector and
---     trigram text, both expressions of title and body), so erasing the text erases its index in
---     the same UPDATE.
+--     gains its kind, title, taint (kinds and sources), derived_from (closed over knowledge
+--     pages), audience, source subjects, the requester it was written for, renewal (with the
+--     call that renewed it) and use counts, and is clocked 90 days after its last write or
+--     re-affirmation. Its text is indexed in the same row (a `simple` tsvector and trigram text,
+--     both expressions of title and body), so erasing the text erases its index in the same
+--     UPDATE.
 --   * memory_derivations: the content-free lineage of every derived row (which source it came
 --     from), read by the deletion path ("deletion follows the source") and the view rebase.
 --   * memory_repairs: content-free flags on memory a person or an upkeep run must look at: an
@@ -24,8 +25,10 @@ BEGIN;
 --   * memory_settings: one row per person (personal memory on or off and its default scope),
 --     written first by H12b's Settings › Memory.
 --   * Definers: run_notebook_write_v2 (notebook.write's add, replace and retire under the run's
---     lease), run_memory_search and run_memory_read (the memory tools: every layer's predicates,
---     read tags, source subjects and audience, applied before ranking), and cmd_notebook_clear_v2
+--     lease; its target and sources must pass the run's own read predicates; a tainted run only
+--     flags a clean entry; a replay returns what the call did), run_memory_search and
+--     run_memory_read (the memory tools: every layer's predicates, read tags, source subjects and
+--     audience, applied before ranking), and cmd_notebook_clear_v2
 --     (a person clears an agent's notebook at the revision their check read). 0052's
 --     run_notebook_write and cmd_notebook_clear stay registered and fail closed on the re-keyed
 --     tables (their statements name a dropped column), so neither can write.
@@ -40,6 +43,7 @@ DO $$ BEGIN
  OR to_regclass('morrow_work.agent_notebooks') IS NULL OR to_regclass('morrow_work.agent_notebook_entries') IS NULL
  OR to_regclass('morrow_work.knowledge_pages') IS NULL OR to_regclass('morrow_work.knowledge_versions') IS NULL
  OR to_regclass('morrow_work.agent_installations') IS NULL OR to_regclass('morrow_work.work_leases') IS NULL
+ OR to_regclass('morrow_work.knowledge_proposals') IS NULL OR to_regclass('morrow_work.knowledge_search_entries') IS NULL
  OR to_regclass('morrow_work.memory_derivations') IS NOT NULL OR to_regclass('morrow_work.memory_repairs') IS NOT NULL
  OR to_regclass('morrow_work.memory_settings') IS NOT NULL
  OR EXISTS(SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname='extensions')
@@ -49,6 +53,7 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_work.command_prelude(text,text)') IS NULL
  OR to_regprocedure('morrow_work.record_command(text,text,text,text,text,text,text,text,bigint,jsonb,text,timestamp with time zone)') IS NULL
  OR to_regprocedure('morrow_work.db_now()') IS NULL OR to_regprocedure('morrow_work.sha256_text(text)') IS NULL
+ OR to_regprocedure('morrow_work.utc_text(timestamp with time zone)') IS NULL
  OR to_regprocedure('morrow_work.append_only()') IS NULL
  OR to_regprocedure('morrow_work.knowledge_tags_valid(jsonb)') IS NULL OR to_regprocedure('morrow_work.knowledge_tags_union(jsonb,jsonb)') IS NULL
  OR to_regprocedure('morrow_work.agent_notebook_entry_guard()') IS NULL
@@ -667,11 +672,23 @@ BEGIN
 END $$;
 -- A person's erasure of an entry ('cleared') or its source's ('source_erased') carries on to
 -- the entries derived from it. A supersede, retire or expiry erases only the entry itself
--- (a consolidation's output outlives the inputs it retires).
+-- (a consolidation's output outlives the inputs it retires). One set-based pass per statement
+-- over its transition tables, calling the helper only for an erased entry something derives
+-- from, so a clear of a whole notebook costs one query, not one call per entry.
 CREATE FUNCTION morrow_work.memory_entry_follow() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+DECLARE r record;
 BEGIN
- PERFORM morrow_work.memory_erase_derived(NEW.organization_id,NEW.workspace_id,'notebook_entry',NEW.id,NEW.erased_at);
+ FOR r IN SELECT n.organization_id::text AS org,n.workspace_id::text AS ws,n.id::text AS id,n.erased_at
+   FROM memory_entry_new n JOIN memory_entry_old o ON o.organization_id=n.organization_id AND o.workspace_id=n.workspace_id
+    AND o.agent_principal_id=n.agent_principal_id AND o.sequence=n.sequence
+   WHERE o.erased_at IS NULL AND n.erased_at IS NOT NULL AND n.erased_reason IN ('cleared','source_erased')
+    AND EXISTS(SELECT 1 FROM morrow_work.memory_derivations d WHERE d.organization_id=n.organization_id
+     AND d.workspace_id=n.workspace_id AND d.source_kind='notebook_entry' AND d.source_id=n.id)
+   ORDER BY n.organization_id,n.workspace_id,n.id
+ LOOP
+  PERFORM morrow_work.memory_erase_derived(r.org,r.ws,'notebook_entry',r.id,r.erased_at);
+ END LOOP;
  RETURN NULL;
 END $$;
 REVOKE ALL ON FUNCTION morrow_work.memory_page_follow() FROM PUBLIC;
@@ -679,8 +696,8 @@ REVOKE ALL ON FUNCTION morrow_work.memory_entry_follow() FROM PUBLIC;
 CREATE TRIGGER memory_page_follow AFTER UPDATE ON morrow_work.knowledge_pages FOR EACH ROW
  WHEN ((NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL) OR NEW.current_version<>OLD.current_version)
  EXECUTE FUNCTION morrow_work.memory_page_follow();
-CREATE TRIGGER memory_entry_follow AFTER UPDATE ON morrow_work.agent_notebook_entries FOR EACH ROW
- WHEN (OLD.erased_at IS NULL AND NEW.erased_at IS NOT NULL AND NEW.erased_reason IN ('cleared','source_erased'))
+CREATE TRIGGER memory_entry_follow AFTER UPDATE ON morrow_work.agent_notebook_entries
+ REFERENCING OLD TABLE AS memory_entry_old NEW TABLE AS memory_entry_new FOR EACH STATEMENT
  EXECUTE FUNCTION morrow_work.memory_entry_follow();
 
 -- ---------------------------------------------------------------------------
