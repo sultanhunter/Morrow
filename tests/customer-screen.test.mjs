@@ -112,6 +112,8 @@ test("street addresses: shapes in several languages, PO boxes, units and postcod
   found("street_address", [
     "221B Baker Street",
     "742 Evergreen Terrace",
+    "12 B4ker Street",
+    "Customers post returns to 12 Quill3fa9b2c1 Street.",
     "1600 Pennsylvania Ave NW",
     "Deliver to 12 Main St.",
     "5 High St, Oxford",

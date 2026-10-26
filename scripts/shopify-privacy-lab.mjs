@@ -24,8 +24,13 @@
 // an uninstalled installation's app offers its link for a reinstall (v1 PR 5) while a
 // redacted one's is cleared, and the redaction clears only its own
 // app's link, never a replacement app's in another tenant; K  no other login applies deliveries or
-// ends an installation, and the connector's login cannot forge its context; O  logs and
-// outbound requests. Owner-seeded synthetic fixtures only (two tenants, four linked
+// ends an installation, and the connector's login cannot forge its context; I  the customer
+// identifier screen (H9a; ADR-0041 item 31): under a real run lease of the runtime login, an
+// agent's knowledge.propose and notebook.write holding the customer customers/* named (its
+// email, plain or obfuscated, a phone, a street address, a customer GID) are refused before the
+// command and nothing of them reaches any table of any Morrow schema, while a clean text is
+// written through the same lease; a post naming that customer is refused content-free;
+// O  logs and outbound requests. Owner-seeded synthetic fixtures only (two tenants, four linked
 // development stores); no provider, credential or merchant data. Runs in the CI pg-work
 // group. The local superuser is used only for fixtures and the shapes marked "sim".
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -46,9 +51,15 @@ import {
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 import { createCatalogApiHandler } from "../packages/work/src/catalog/http.ts";
+import {
+  knowledgeProposeStep,
+  notebookWriteStep,
+} from "../packages/work/src/knowledge/run-steps.ts";
+import { customerDataSafeMessage, screenPost } from "../packages/policy/src/customer-screen.ts";
 import { storeContentHandlers } from "../packages/work/src/redaction.ts";
 import {
   asApi,
+  asCommandRole,
   literal,
   seedWorkFixtures,
   storeInstallationSql,
@@ -102,6 +113,9 @@ const sourceDigests = Object.fromEntries(
     "packages/identity/src/broker-protocol.ts",
     "packages/work/src/catalog/http.ts",
     "packages/work/src/redaction.ts",
+    "packages/work/src/knowledge/run-steps.ts",
+    "packages/policy/src/knowledge/tools.ts",
+    "packages/policy/src/customer-screen.ts",
     ...files.map((f) => "migrations/" + f),
   ].map((p) => [p, sha(readFileSync(p))]),
 );
@@ -123,7 +137,20 @@ const brokerEnv = {
 };
 const connectorOrigin = "https://connector.lab.example.test";
 const customerEmail = "lab-customer-" + randomBytes(6).toString("hex") + "@example.test";
-const privateMarkers = [kek, brokerEnv.MORROW_DB_PASSWORD_MORROW_VAULT_BROKER, customerEmail];
+// Phase I's planted customer details: a phone in the UK drama range, a street and a
+// customer GID, each unique to this run so a whole-database search finds only what it planted.
+const screenPhoneDigits = "447700900" + String(100 + (randomBytes(2).readUInt16BE() % 900));
+const screenPhone = "+44 7700 900" + screenPhoneDigits.slice(-3);
+const screenStreet = "Quill" + randomBytes(4).toString("hex") + " Street";
+const screenGidNumber = "7" + String(randomBytes(6).readUIntBE(0, 6)).padStart(12, "0").slice(-12);
+const privateMarkers = [
+  kek,
+  brokerEnv.MORROW_DB_PASSWORD_MORROW_VAULT_BROKER,
+  customerEmail,
+  screenPhoneDigits,
+  screenStreet,
+  screenGidNumber,
+];
 // Worker console lines are captured: no secret, token or customer value may appear.
 const consoleLines = [];
 const print = console.log.bind(console);
@@ -1257,6 +1284,214 @@ const report = await withWorkDatabase(
     );
 
     // -------------------------------------------------------------------------
+    // I: the customer identifier screen (H9a; ADR-0041 item 31). The model-written texts that
+    // reach storage today are knowledge.propose's and notebook.write's; an agent's run on a
+    // fresh store of A's tenant writes through both under a real run lease of the runtime
+    // login, the way the loop's tool-call step will (lab:shop-knowledge's fake caller).
+    phase("screen");
+    const screen = {
+      store: "store_screen",
+      connection: "connection_screen",
+      storeInstallation: "storeinst_screen",
+      installation: "installation_screen",
+      agent: "agent_" + randomUUID(),
+    };
+    db.admin(
+      storeInstallationSql({
+        org: A.org,
+        workspace: A.workspace,
+        principal: A.principal,
+        storeId: screen.store,
+        connectionId: screen.connection,
+        installationId: screen.storeInstallation,
+      }) +
+        `\nINSERT INTO morrow_identity.principals VALUES(${literal(screen.agent)},'agent',true);
+INSERT INTO morrow_identity.agent_principals VALUES(${literal(screen.agent)},'agent',${literal(A.org)},${literal(A.workspace)},'installation',${literal(screen.installation)},date_trunc('milliseconds',clock_timestamp()));`,
+    );
+    db.workOwner(`BEGIN; INSERT INTO morrow_work.agent_installations(organization_id,workspace_id,id,revision,release_id,release_revision,release_digest,store_id,connection_id,agent_principal_id,owner_principal_id,owner_membership_id,status,scope,grant_refs,configuration_digest,created_at,updated_at)
+SELECT ${literal(A.org)},${literal(A.workspace)},${literal(screen.installation)},1,r.id,r.revision,r.digest,${literal(screen.store)},${literal(screen.connection)},${literal(screen.agent)},${literal(A.principal)},${literal(A.membership)},'active',morrow_work.listings_scope(${literal(A.org)},${literal(A.workspace)},${literal(screen.store)},${literal(screen.connection)}),(SELECT jsonb_agg(jsonb_build_object('organizationId',${literal(A.org)},'workspaceId',${literal(A.workspace)},'storeId',${literal(screen.store)},'kind','grant','id','g_ref_'||n,'revision',1,'digest',repeat('a',64))) FROM generate_series(1,3) n),repeat('b',64),t,t FROM morrow_work.agent_releases r, (SELECT date_trunc('milliseconds',clock_timestamp()) AS t) x WHERE r.id='morrow.listings' AND r.revision=1; COMMIT;`);
+    const leaseOut = db
+      .sql(
+        asCommandRole(
+          A,
+          `SELECT concat_ws('|',outcome,lease_id,generation) FROM morrow_work.lease_open('run','run_screen',${literal(screen.store)},${literal(screen.connection)},${literal(screen.installation)});`,
+          { end: "COMMIT" },
+        ),
+      )
+      .split("\n")
+      .at(-1)
+      .split("|");
+    const runtime = db.connector({
+      user: "morrow_runtime_executor",
+      stderr: (text) => process.env.MORROW_LAB_DEBUG === "1" && process.stderr.write(text),
+    });
+    // One transaction of the runtime login under the entered lease, as runLeaseStep runs it.
+    const underLease = async (body) => {
+      const connection = await runtime.open({
+        signal: new AbortController().signal,
+        deadlineMs: Date.now() + 60000,
+        waitUntil() {},
+      });
+      const signal = new AbortController().signal;
+      const query = async (text, values = []) =>
+        (await connection.query(text, [...values], signal)).rows;
+      try {
+        await query("BEGIN");
+        const [entered] = await query("SELECT outcome FROM morrow_work.enter_lease($1,$2)", [
+          leaseOut[1],
+          leaseOut[2],
+        ]);
+        if (entered?.outcome !== "entered") throw Error("SHOPIFY_PRIVACY_LAB_LEASE_NOT_ENTERED");
+        const value = await body(query);
+        await query("COMMIT");
+        return value;
+      } catch (error) {
+        await query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally {
+        await connection.close();
+      }
+    };
+    const runFacts = {
+      context: "routed",
+      readTags: [{ storeId: screen.store, capability: "catalog.products.read" }],
+      taint: "untrusted_external",
+      agentTools: "on",
+    };
+    const allTagsViewer = { mayView: () => true };
+    const toolCall = (step, toolUseId, input) =>
+      underLease((query) =>
+        step(query, { toolUseId, input, run: runFacts, viewer: allTagsViewer }),
+      );
+    const footprintOf = () =>
+      db.rows(
+        `SELECT (SELECT count(*) FROM morrow_work.knowledge_proposals)::int AS proposals, (SELECT count(*) FROM morrow_work.agent_notebook_entries)::int AS entries, (SELECT count(*) FROM morrow_work.commands)::int AS commands`,
+      )[0];
+    const screenBefore = footprintOf();
+    const propose = (title, text, sources = []) => ({
+      pageId: null,
+      kind: "policy",
+      title,
+      text,
+      sources,
+    });
+    const screened = [];
+    for (const [id, step, input] of [
+      ["toolu_i1", notebookWriteStep, { text: `Reach her at ${customerEmail} about the parcel.` }],
+      ["toolu_i2", notebookWriteStep, { text: `Her mobile is ${screenPhone}.` }],
+      [
+        "toolu_i3",
+        knowledgeProposeStep,
+        propose("Returns", `Customers post returns to 12 ${screenStreet}.`),
+      ],
+      [
+        "toolu_i4",
+        knowledgeProposeStep,
+        propose("Gift notes", "Keep gift notes short.", [
+          { kind: "note", value: `gid://shopify/Customer/${screenGidNumber}` },
+        ]),
+      ],
+      [
+        "toolu_i5",
+        knowledgeProposeStep,
+        propose(
+          "Replies",
+          `Write to ${customerEmail.replace("@", " (at) ").replace(/\.test$/, " (dot) test")}.`,
+        ),
+      ],
+    ])
+      screened.push(await toolCall(step, id, input));
+    const screenAfter = footprintOf();
+    check(
+      "I1:model_written_customer_identifiers_are_refused_before_the_command",
+      screened.length === 5 &&
+        screened.every((r) => r.outcome === "refused" && r.refusal === "customer_data") &&
+        same(screenAfter, screenBefore),
+      { screened, screenBefore, screenAfter },
+    );
+    // The control: a clean text through the same lease is written (order numbers and ids are
+    // not customer data), so the refusals above are the screen's and the search below sees
+    // what lands.
+    const controlMarker = "titles-run-long-" + randomBytes(6).toString("hex");
+    const control = await toolCall(notebookWriteStep, "toolu_i6", {
+      text: `Order #1042 (gid://shopify/Order/5123456789012) shipped; ${controlMarker}.`,
+    });
+    // Every row of every table in every Morrow schema, read as the superuser (read only, an
+    // oracle beside RLS), searched for each planted value.
+    const morrowTables = db
+      .rows(
+        "SELECT format('%I.%I',n.nspname,c.relname) AS t FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname LIKE 'morrow\\_%' ORDER BY 1",
+      )
+      .map((r) => r.t);
+    const tablesHolding = (needle) =>
+      db
+        .rows(
+          morrowTables
+            .map(
+              (t) =>
+                `SELECT ${literal(t)} AS t, count(*)::int AS n FROM ${t} x WHERE strpos(lower(row_to_json(x)::text),lower(${literal(needle)}))>0`,
+            )
+            .join(" UNION ALL "),
+        )
+        .filter((r) => r.n > 0)
+        .map((r) => r.t);
+    const controlTables = tablesHolding(controlMarker);
+    check(
+      "I2:a_clean_text_is_written_through_the_same_lease",
+      control.outcome === "ok" &&
+        control.record.kind === "notebook_entry" &&
+        control.replayed === false &&
+        same(controlTables, ["morrow_work.agent_notebook_entries"]) &&
+        footprintOf().entries === screenBefore.entries + 1,
+      { control, controlTables },
+    );
+    const planted = {
+      email: tablesHolding(customerEmail),
+      emailLocal: tablesHolding(customerEmail.split("@")[0]),
+      phone: tablesHolding(screenPhone.slice(4)),
+      phoneDigits: tablesHolding(screenPhoneDigits),
+      street: tablesHolding(screenStreet),
+      gid: tablesHolding(screenGidNumber),
+    };
+    check(
+      "I3:no_planted_customer_value_is_in_any_table_of_any_morrow_schema",
+      morrowTables.length > 50 &&
+        morrowTables.includes("morrow_work.agent_notebook_entries") &&
+        morrowTables.includes("morrow_work.knowledge_proposals") &&
+        Object.values(planted).every((tables) => tables.length === 0),
+      { planted, tables: morrowTables.length },
+    );
+    // The post command (ADR-0040 item 2; H11b) runs screenPost before anything is stored: the
+    // customer customers/* named, in each form a person could type it, is refused with the
+    // record's own words and a content-free refusal.
+    const posts = [];
+    for (const text of [
+      `Refund ${customerEmail} for order #1042`,
+      `She called from ${screenPhone}`,
+      `Ship it to 12 ${screenStreet}`,
+      `https://admin.shopify.com/store/lab-store/customers/${screenGidNumber}`,
+    ])
+      posts.push(await screenPost(text));
+    check(
+      "I4:a_post_naming_the_customer_is_refused_content_free_with_the_records_words",
+      posts.every(
+        (p) =>
+          p.ok === false &&
+          p.delivery === "not_started" &&
+          p.code === "customer_data" &&
+          p.safeMessage === customerDataSafeMessage &&
+          validateCurrentDefinition("CustomerScreenRefusal", p.refusal) &&
+          !privateMarkers.some((m) => JSON.stringify(p).includes(m)),
+      ) &&
+        same(
+          posts.map((p) => p.refusal.kinds),
+          [["email"], ["phone"], ["street_address"], ["customer_gid"]],
+        ) &&
+        (await screenPost("Raise the tote's price by 10% on order #1042")).ok === true,
+      posts,
+    );
+
+    // -------------------------------------------------------------------------
     // O: logs and outbound.
     phase("observability");
     const logged = consoleLines.join("\n");
@@ -1294,6 +1529,7 @@ writeArtifact("labs/shopify-privacy.json", {
     "The store installations, store-link read grants, app secrets and sealed tokens are owner-seeded (lab:shopify-install proves the install and link that write them). Shapes marked sim: inbox rows backdated past the cron's two-minute window.",
     "No catalog proposal exists in this lab's stores, so the proposal-parameters handler empties zero rows here; lab:listings-authority P6 proves it on real proposals through the same connector path.",
     "A person's disconnect (governance.connection.disconnect) is not in this PR: it waits on the owner's ADR-0022 amendments for its grant and its kill-switch record.",
+    "Phase I (H9a) drives the model-written write paths that exist on main, knowledge.propose and notebook.write, with a fake caller under a real run lease (the agent loop is not merged), and screenPost in Node: the post command, messages, run turns, summaries and checkpoints have no table yet, so their cases land with the PRs that write them (H11b, H7d, H12c). A customer's name typed as free text is not detected (ADR-0041 item 31).",
   ],
 });
 if (report.failures.length) {

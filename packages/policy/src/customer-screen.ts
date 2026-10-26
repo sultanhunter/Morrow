@@ -872,7 +872,9 @@ const particles = new Set([
 ]);
 const houseNumber = /^[0-9]{1,5}[A-Za-z]?(?:[-/][0-9]{1,5}[A-Za-z]?)?$/u;
 const shortNumber = /^(?:n[.ºo°]{0,2})?[0-9]{1,4}[A-Za-z]?$/iu;
-const nameWord = /^(?:[\p{L}][\p{L}'’.-]{0,40}|[0-9]{1,3}(?:st|nd|rd|th))$/u;
+// A street-name word starts with a letter and may hold digits ("B4ker", lab:shopify-privacy's
+// random names), or is an ordinal ("34th").
+const nameWord = /^(?:\p{L}[\p{L}\p{N}'’.-]{0,40}|[0-9]{1,3}(?:st|nd|rd|th))$/u;
 const unitWords = new Set([
   "days",
   "day",
