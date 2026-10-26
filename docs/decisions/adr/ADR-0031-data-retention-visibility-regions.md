@@ -90,3 +90,25 @@ The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0041 and ADR-
 - **Item 1.** New run-content classes on a per-epoch clock: plans and revisions, checkpoints and compaction summaries, epoch openings (references only), review verdicts, teammate results and result items, and conversation summaries, kept 90 days from the close of each epoch, with a context rolling to a new epoch at least every 30 days; thinking deleted when it stops being sent; content-free records kept 365 days. Person memory kept until the person deletes it ("Still true?" after 180 days unused; erased within 24 hours of membership ending, at workspace erasure and for a removed store's entries); notebooks 90 days after the last write or re-affirmation. ADR-0040's conversation tables on their own clocks. Each class's deletion handler lands in the PR that first writes it (G9).
 - **Item 6.** Every derived row carries an audience (the workspace, a subject or one principal) and its source subjects beside its read tags. A read passes only when the read tags allow it, the reader has live view of every source subject, and the audience matches.
 - **Item 7.** `data-regions.json` records Anthropic's retention terms for compaction blocks before the provider strategy is switched on, and the browsers' push services as processors.
+
+### 2026-10-26, proposed and not decided: item 1, store-data classes and clocks (ADR-0043)
+
+Not in force. ADR-0043 (Proposed) and the store-data foundation plan (`docs/plan/store-data-foundation-implementation.md`) add classes that item 1 has no row for. This note proposes their clocks for the owner to decide, as question 15 of Q-store-data-foundation; the text above is unchanged and governs until then. When the owner answers, this heading takes the decision's OD number and the rows below become an amendment, as answered.
+
+None of these classes holds customer data under this record's Terms: order ids and order names are not customer data, and no row keeps a name, email, phone, address or note. Every row keyed by an order is still deleted, or has its order id blanked, when a `customers/redact` request lists that order, so the inbox keeps `orders_to_redact` as order ids on its 7-day clock until every handler reports zero remaining (item 3). Each class's handler and CHECK land in the PR that first writes it (item 4, G9).
+
+| Class | What it holds | Kept |
+| --- | --- | --- |
+| `order_state` (projection) | one current row per order: ids, order name, dates, statuses, totals, closed codes and chosen-tag booleans | 90 days from the order's date, as `order_aggregates`; deleted for the listed orders at `customers/redact` |
+| `inventory_levels` (projection) | latest available quantity per (item, location) with `updated_at`; no history | latest values only; deleted at `shop/redact` and 48 hours after uninstall |
+| Reconciler high-water marks and projection checkpoints | content-free positions per store and resource family | while the store is linked; deleted with the store |
+| Bulk operation records | content-free: operation id, document, state, counts, checkpoints; results are never stored unminimised | 30 days after the operation ends |
+| Per-shop Shopify cost budget | bucket levels per (store, app) | latest values only; deleted with the store |
+| Subscriptions, schedules, deadline rules and monitors | trigger-set records (closed fields, no store text) | as `agent_trigger_sets`: deleted with the installation; content-free history 365 days |
+| Trigger rows, deadline occurrences and monitor alerts | ids, closed codes, counts and times | 365 days, content-free; order ids blanked at `customers/redact` |
+| Standing policies and their revisions | the approved digest and its closed fields | 365 days after the policy ends, as mandate records |
+| Rule-action logs | policy revision, subject id, action, occurrence, operation, outcome code, times | 365 days, content-free; order ids blanked at `customers/redact` |
+| `AutomationUsage@1` (daily usage ledger) | counts, Shopify cost points and provider-reported costs per (workspace, store, kind, day); no subject ids | 365 days |
+| Collaboration scope audits (ADR-0044) | content-free refusals and grant changes | 365 days, as `run_tool_calls` |
+
+Classes that later agents add (reorder plans, purchase-order files, supplier mail, marketing audiences and consent snapshots) come with their own records. Counsel's question on India's DPDP Rule 8(3) one-year minimum for processing logs, against the 90-day clocks, stays open, to be settled before that duty takes effect (about May 2027).
