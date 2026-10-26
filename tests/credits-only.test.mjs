@@ -25,6 +25,7 @@ import { reservationSize, usd8Text } from "../packages/policy/src/run-credits.ts
 import { computerProfile, runtimeCaps } from "../packages/policy/src/runtime-computer.ts";
 import { runtimeGatewayLimits } from "../packages/identity/src/broker-protocol.ts";
 import { fixtureCatalogue } from "../apps/workspace-web/src/fixtures/seed.ts";
+import { parseAdmitBody } from "../packages/work/src/runs/commands.ts";
 
 const read = (path) => readFileSync(path, "utf8");
 const policy = JSON.parse(read("docs/decisions/model-policy.json"));
@@ -197,6 +198,37 @@ test("the Sunrise sample's catalogue listing is version 4's", () => {
     listing.entries.map((e) => ({ ...e })),
   );
   assert.match(read("apps/workspace-web/src/fixtures/adapter.ts"), /catalogueVersion: 4,/);
+});
+
+test("more than 25 products is the request's bound (400 missing_input), not the selection's 409", () => {
+  // The server: parseAdmitBody refuses 26 before any database access, so under version 4,
+  // where every entry allows 25, the selection's run_product_limit is never reached.
+  const products = (n) => Array.from({ length: n }, (_, i) => "product:" + (i + 1));
+  const admit = (n) => ({
+    storeId: "store_a",
+    products: products(n),
+    fields: ["title"],
+    selection: { model: "claude_opus_5_5", effort: "high" },
+  });
+  assert.equal(parseAdmitBody(admit(26)), null);
+  assert.equal(parseAdmitBody(admit(25)).products.length, 25);
+  assert.ok(catalogueListing().entries.every((e) => e.runProductLimit === 25));
+  // A null parse is WorkReject("invalid"): 400 missing_input (tests/listings-runs-http.test.mjs).
+  assert.match(read("packages/work/src/http.ts"), /invalid: \[400, "missing_input", "never"/);
+  // The contract says the same, and no longer promises the 409 for 26 products.
+  const contract = read("docs/contracts/work-api.md");
+  const refusals = contract.slice(contract.indexOf("- **Refusals** persist nothing."));
+  const line = refusals.slice(0, refusals.indexOf("\n"));
+  assert.match(
+    line,
+    /More than 25 products is outside the request's bound[^.]*: 400 `missing_input`/,
+  );
+  assert.match(
+    line,
+    /since catalogue version 4 \(ADR-0039\) every entry allows 25, so it is never returned/,
+  );
+  assert.doesNotMatch(line, /more products than the selection allows/);
+  // The Sunrise sample answers as the server does (tests/workspace-web-runs.test.mjs).
 });
 
 test("migration 0052: a forward work-owner migration, row 52, its brief and digest", () => {
