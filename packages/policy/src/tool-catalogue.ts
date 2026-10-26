@@ -89,15 +89,19 @@ export function toolEntry(name: unknown): ToolEntry | null {
 export function toolByWireName(wireName: unknown): ToolEntry | null {
   return typeof wireName === "string" ? (byWire.get(wireName) ?? null) : null;
 }
+// The run kinds this catalogue version has a tool context for. ADR-0041 item 4's call, review
+// and upkeep kinds get theirs with tool catalogue version 4 (H5); until then they are refused.
+const kindContexts: readonly ToolContext[] = ["coordinator", "routed", "mandate", "specialist"];
 /** The context a run's tools come from. Look-for-work is a mandate run's pass. */
 export function runContext(kind: Current_AgentRunKind, lookForWork: boolean): ToolContext {
+  const context = kindContexts.find((c) => c === kind);
   if (
-    !["coordinator", "routed", "mandate", "specialist"].includes(kind) ||
+    context === undefined ||
     typeof lookForWork !== "boolean" ||
     (lookForWork && kind !== "mandate")
   )
     throw invalid();
-  return lookForWork ? "look_for_work" : kind;
+  return lookForWork ? "look_for_work" : context;
 }
 /** The tools a context may be offered, in catalogue order. */
 export function toolsForContext(context: ToolContext): readonly ToolName[] {
