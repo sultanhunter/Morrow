@@ -51,7 +51,10 @@ const freeze = <T>(value: T): T => {
 const ids = fakeHarnessIds;
 /** The audience of everything derived from the Owner's private Morrow conversation. */
 const ownerAudience = { kind: "principal" as const, principalId: fakeIds.ownerPrincipalId };
-const productsTag: Current_ReadTag = { storeId: fakeIds.storeId, capability: "catalog.products.read" };
+const productsTag: Current_ReadTag = {
+  storeId: fakeIds.storeId,
+  capability: "catalog.products.read",
+};
 const projectId = "project_fake_1";
 
 // --- Model calls (ModelCall@2 and ModelResult@2, ADR-0041 item 8) -------------------------
@@ -538,7 +541,10 @@ const waitConditions: Readonly<Record<Current_RunWaitKind, Current_RunWaitCondit
   checkin: { kind: "checkin", code: "cost" },
   detector: { kind: "detector", code: "repetition" },
   credits: { kind: "credits" },
-  agent_credit_limit: { kind: "agent_credit_limit", installationId: fakeIds.listingsInstallationId },
+  agent_credit_limit: {
+    kind: "agent_credit_limit",
+    installationId: fakeIds.listingsInstallationId,
+  },
   children: { kind: "children", mode: "all", callIds: [ids.callId] },
   approval: { kind: "approval", until: "applied", proposalIds: [ids.proposalId] },
   timer: { kind: "timer", until: days(1) },
