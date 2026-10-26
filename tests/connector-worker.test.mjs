@@ -602,7 +602,7 @@ test("callback: the install never waits for or depends on the subscription sync"
       const response = await hung.handler.fetch(request(), c.ctx);
       assert.equal(response.status, 303);
       assert.equal(c.pending.length, 1);
-      for (let i = 0; i < 20 && hung.calls.length < 2; i++) await new Promise(setImmediate);
+      await yieldUntil(() => hung.calls.length >= 2, "the subscription sync is called");
       mock.timers.tick(connectorBudgets.subscriptionsMs + connectorBudgets.subscriptionsSlackMs);
       assert.equal(await c.pending[0], null);
     } finally {
@@ -696,7 +696,7 @@ test("budgets: the launch and install timers cover the broker's budgets and a co
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
       const pending = h.handler.fetch(request(), context().ctx);
-      for (let i = 0; i < 20 && h.calls.length === 0; i++) await new Promise(setImmediate);
+      await yieldUntil(() => h.calls.length > 0, "the broker is called");
       mock.timers.tick(waitMs);
       for (let i = 0; i < 5; i++) await new Promise(setImmediate);
       return { response: await pending, calls: h.calls };
@@ -740,6 +740,16 @@ test("budgets: the launch and install timers cover the broker's budgets and a co
   assert.equal(confirmed.response.status, 303);
   assert.deepEqual(confirmed.calls[0].slice(-1), [connectorBudgets.installMs]);
 });
+
+// Yields to the event loop until `ready()` holds. The fake-clock tests tick only once the code
+// under test has armed its timers. On a loaded machine its Web Crypto work can take far more
+// than a few turns, and ticking early leaves those timers unfired forever: the intermittent
+// CI hang that the per-test limit (#85) named on 2026-10-26. A condition never reached fails
+// with its name instead of hanging.
+const yieldUntil = async (ready, what) => {
+  for (let i = 0; i < 100_000 && !ready(); i++) await new Promise(setImmediate);
+  assert.ok(ready(), `never reached: ${what}`);
+};
 
 // A request context recording what the handler leaves running after its response.
 const context = () => {
@@ -833,7 +843,7 @@ test("webhooks: 401 unsigned, 400 invalid, 503 unknown; 200 only once recorded, 
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
       const pending = post(slow, c.ctx);
-      for (let i = 0; i < 20 && slow.calls.length === 0; i++) await new Promise(setImmediate);
+      await yieldUntil(() => slow.calls.length > 0, "the webhook is recorded");
       assert.deepEqual(
         slow.calls.map((x) => x[0]),
         ["webhook"],
