@@ -3,7 +3,7 @@ id: Q-adr-0042-owner-questions
 type: question
 kind: decide
 title: "The decision sheet for ADR-0042: connected services, customer contact and the COD confirmation agent, 20 questions with the lead's recommendations"
-status: open
+status: answered
 asked_of: owner
 links:
   raised_by: [OD-2026-10-26-8, ADR-0042]
@@ -245,3 +245,7 @@ records until you answer. The sources are in `docs/references/connected-services
       before the first live day. It is
       in launch scope if ready by G17, otherwise the first fast follow, and it never holds launch.
     - Why: you asked to build the full product in parallel. The gates protect your real customers.
+
+Answered 2026-10-26 (OD-2026-10-26-9): "approve ADR-0042 as recommended": all 20 as recommended, question 6's four CLAUDE.md lines as shown included, so ADR-0042 is Accepted as recommended. The same message made COD Confirmation an installable agent that is not built now, and asked for a foundation that supports agents using live store data and scheduled actions: plan rows CS3 to CS9, CS11 and CS12 are built as shared foundation with their switches off, and the agent's own rows wait until the owner asks for it.
+
+Note added 2026-10-26, after the answer, from the pull request's re-review: questions 6, 9 and 10 also change ADR-0023 decision 1's "Effects" and the two bullets of its "Security invariants that do not change" on exact-digest approval and per-action approval of customer messages, and `docs/plan/mvp.md`'s line "never … message a customer without a person approving the exact change" and its "Not at launch" entries "Automatic apply" and "cancellations, order edits", for plan-driven contacts and tags and person-approved COD cancellations. ADR-0042's Amends list named these when the owner approved it as recommended; this sheet did not.
