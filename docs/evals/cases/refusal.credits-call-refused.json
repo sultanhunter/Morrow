@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "caseId": "refusal.credits-call-refused",
+  "title": "The balance cannot cover a teammate call: refused at once, and Morrow says so",
+  "category": "refusal_credits",
+  "rubricId": "rubric.credits@1",
+  "entry": "morrow",
+  "agents": [
+    "morrow",
+    "business_analyst"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "How did sales go last week?"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "orders_week",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_201",
+      "liveSlot": null,
+      "injection": null,
+      "data": {
+        "metric": "units_sold",
+        "period": "last_7_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 42
+          },
+          {
+            "recordId": "product:999999102",
+            "value": 17
+          },
+          {
+            "recordId": "product:999999103",
+            "value": 5
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst"
+    ],
+    "stopBeforeTurn": null,
+    "creditBalance": 21,
+    "foreignItems": []
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "credits_exhausted",
+    "tools": {
+      "required": [],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.route"
+        }
+      ]
+    },
+    "teammates": {
+      "calls": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask",
+          "code": "insufficient_credits"
+        }
+      ],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": false,
+      "sources": []
+    },
+    "cost": {
+      "modelTurnsMax": 2,
+      "outputTokensMax": 1000
+    }
+  }
+}

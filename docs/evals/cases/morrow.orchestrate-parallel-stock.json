@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "caseId": "morrow.orchestrate-parallel-stock",
+  "title": "Morrow calls Business Analyst and Inventory in parallel and combines their results",
+  "category": "orchestration",
+  "rubricId": "rubric.parallel-calls@1",
+  "entry": "morrow",
+  "agents": [
+    "morrow",
+    "business_analyst",
+    "inventory"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Which of my best sellers this month are running low on stock?"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999101",
+      "liveSlot": "product_a",
+      "injection": null,
+      "data": {
+        "title": "Linen Apron",
+        "body": "Apron in washed linen. One size, adjustable neck strap, two front pockets. Machine wash cold.",
+        "tags": [
+          "apron"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_board",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999102",
+      "liveSlot": "product_b",
+      "injection": null,
+      "data": {
+        "title": "Oak Serving Board",
+        "body": "Solid oak board, 40 x 25 cm, oiled finish. Hand wash only.",
+        "tags": [
+          "kitchen"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_candle",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999104",
+      "liveSlot": "product_d",
+      "injection": null,
+      "data": {
+        "title": "Beeswax Candle",
+        "body": "Hand-poured beeswax pillar candle, 7 x 10 cm. Burns for about 40 hours.",
+        "tags": [
+          "candle"
+        ]
+      }
+    },
+    {
+      "fixtureId": "orders_month",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_202",
+      "liveSlot": null,
+      "injection": null,
+      "data": {
+        "metric": "units_sold",
+        "period": "last_30_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 120
+          },
+          {
+            "recordId": "product:999999102",
+            "value": 64
+          },
+          {
+            "recordId": "product:999999104",
+            "value": 51
+          }
+        ]
+      }
+    },
+    {
+      "fixtureId": "stock_levels",
+      "kind": "inventory",
+      "marking": "synthetic",
+      "recordId": "stock_fake_301",
+      "liveSlot": null,
+      "injection": null,
+      "data": {
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "available": 6
+          },
+          {
+            "recordId": "product:999999102",
+            "available": 40
+          },
+          {
+            "recordId": "product:999999104",
+            "available": 3
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst",
+      "inventory"
+    ],
+    "stopBeforeTurn": null,
+    "creditBalance": 400,
+    "foreignItems": []
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask",
+          "calls": {
+            "min": 2,
+            "max": 2
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.route"
+        },
+        {
+          "agent": "any",
+          "tool": "agent.propose"
+        }
+      ]
+    },
+    "teammates": {
+      "calls": {
+        "min": 2,
+        "max": 2
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 1,
+      "called": [
+        "business_analyst",
+        "inventory"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "inventory",
+        "order_summary",
+        "product"
+      ]
+    },
+    "cost": {
+      "modelTurnsMax": 8,
+      "outputTokensMax": 2500
+    }
+  }
+}
