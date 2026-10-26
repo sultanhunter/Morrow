@@ -1,7 +1,7 @@
 BEGIN;
 -- Build order PR 11 (track T4), the agent loop's records (ADR-0027 items 1-7 and 11-12, as
 -- ADR-0036 and ADR-0039 amend them; ADR-0024 item 7; brief docs/briefs/t4-agent-loop.md).
--- Executes AS morrow_work_owner, after 0051. On the ADR-0010 tenant pattern: composite tenant keys,
+-- Executes AS morrow_work_owner, after 0052. On the ADR-0010 tenant pattern: composite tenant keys,
 -- ENABLE and FORCE RLS, definers owned by morrow_work_command, INVOKER triggers and checks
 -- owned by the owner. No external effect: nothing here sends a request. Nothing here is
 -- reachable while the agent-loop switch (docs/decisions/agent-loop-staging.json) is off:
