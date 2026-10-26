@@ -80,3 +80,9 @@ The owner's decision of 2026-10-25 (OD-2026-10-25-3, recorded in ADR-0037) chang
 ### 2026-10-25: items 1 and 6, mandates and admission without money caps (ADR-0039)
 
 The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) changes these items; the text above is kept as approved. Item 1: code no longer builds caps into a mandate (MandateDocument@1 loses MandateCaps); a mandate keeps its owner, grants, scope, trigger kinds, quiet hours, depth 0 and 90-day expiry. Item 6: `admit_mandate_run` no longer checks caps or takes a cap reservation; it holds the run's admission credits from the workspace's wallet under its row lock (ADR-0039 item 2(d)), and a trigger the balance cannot cover stays pending, retried at the next tick and never dropped, until its recorded expiry. The look-for-work pass has no money cap. One pass per agent a day, one run per trigger key, quiet hours, stops and every other admission check stand, and it is still the only lease source for mandate runs.
+
+### 2026-10-26: item 7, whoever's words shaped a proposal (ADR-0041)
+
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0041 as recommended, owner question 17 included) extends item 7 (ADR-0041 item 32); the text above is kept as approved.
+
+A proposal's conflict set also holds every principal whose words or memory reached the drafting run: the authors of its `other_member` sources, the requester of each notebook entry it read, and the authors cited by summaries or checkpoints it loaded, checked when the proposal is decided and again at dispatch. For a mandate run, a member whose post or notebook lesson shaped the proposal cannot approve it.
