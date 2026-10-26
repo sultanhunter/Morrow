@@ -120,8 +120,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - Only a person who holds the disconnect right can disconnect, and agents cannot. After a disconnect nothing reads the store and the token is gone (the stop and kill-switch cases).
   - Existing links gain the disconnect right through a forward database change, and nothing else.
   - The switch is all on or all off across the Workers. The key is only a broker secret (the config and boundary checks).
-  - Every run reserves credits first and stays under US$7 per run and US$25 a day. "Stop AI work" ends a run before its next product.
-    *2026-10-25: ADR-0039 removes both caps in its first code PR; the workspace's credits become the only spend limit, with your Anthropic monthly limit as the outside backstop.*
+  - Every run reserves its credits first, from the workspace's wallet, and stays within 25 products (credits are the only spend limit since ADR-0039, which removed the US$7 per run and US$25 a day). "Stop AI work" ends a run before its next product.
   - Product text cannot change the model, the fields or the product (the existing injection cases).
 - **Runs in parallel with:** PR 1 while it is built. It goes live after PR 1.
 

@@ -860,7 +860,12 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     runs: {
       admit: (id, taskId, c) =>
         command<RunAdmittedView>("runs.admit", c, () => {
-          if (!ws(id) || !task(taskId)) return notFound;
+          if (!ws(id)) return notFound;
+          // The request's bound, as parseAdmitBody: 1-25 products, refused (400 missing_input)
+          // before any lookup or the selection's run limit.
+          if (c.body.products.length < 1 || c.body.products.length > 25)
+            return { kind: "invalid", field: null };
+          if (!task(taskId)) return notFound;
           if (c.body.storeId !== fixtureStore.storeId || !storeLinked())
             return { kind: "not_found" };
           if (listings.installationId === null || listings.status !== "active")
@@ -883,6 +888,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
               message: "That model or effort is above your workspace's limit.",
               reference: null,
             };
+          // A selection's run limit below the bound (none since catalogue version 4, ADR-0039).
           if (c.body.products.length > entry.runProductLimit)
             return {
               kind: "conflict",
@@ -1230,7 +1236,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         reply<ModelCatalogueView>("models.list", () =>
           ws(id)
             ? ok({
-                catalogueVersion: 3,
+                catalogueVersion: 4,
                 entries: fixtureCatalogue.map((e) => ({
                   ...e,
                   allowedForMember:
