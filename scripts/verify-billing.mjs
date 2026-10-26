@@ -36,6 +36,7 @@ import { isPaidWork } from "../packages/policy/src/paid-work.ts";
 import { parseTermsDocument } from "../packages/work/src/billing/terms.ts";
 import { stripeCanonicalJson } from "../packages/work/src/billing/stripe-objects.ts";
 import { createHash } from "node:crypto";
+import { operatorRaise, raiseRecordPath, raiseRecordProblem } from "./terms-raise.mjs";
 
 // Runs under tsx (npm run verify:billing): the walkthroughs use
 // packages/policy/src/billing-state.ts as the only implementation.
@@ -485,8 +486,9 @@ for (const d of decisions.consumed_decisions) {
 // month with 300 credits (owner, 2026-10-19), test mode only before M6, and production has
 // no revision. ADR-0022 item 5 amendment (owner decision (b), 2026-10-21): a development or
 // staging revision may carry one operator_test_entitlement entry, the beta plan's 300 test
-// credits with no price and no offer; a revision is either priced (at least one beta
-// subscription entry) or operator-only (staging's revision 1 while the Stripe switch is off).
+// credits with no price and no offer (other credits only with the owner's committed record,
+// below); a revision is either priced (at least one beta subscription entry) or
+// operator-only (staging's revision 1 while the Stripe switch is off).
 const publishedTermsDigests = Object.freeze({
   development: ["4c6ccd12dc283abcde21532208ecdabd6551865458c86ba5629b65d9c177e411"],
   staging: ["88744622d6efbddb2136154fe11e8f4472e99519559c19d629d68e4199fed350"],
@@ -500,6 +502,66 @@ check("billing terms: closed file, three environments", () => {
     Object.keys(termsFile.environments).sort().join() === "development,production,staging"
   );
 });
+// Review R2 of v1 build order PR 6 (ADR-0035 item 4): an operator entry with any credits
+// other than the beta plan's 300 is accepted only when its revision names a committed
+// owner record (`ownerRecord`) that names that revision and those credits and quotes the
+// owner's words naming the amount (scripts/terms-raise.mjs); a revision without a raise
+// names none. staging:seed-platform applies the same rule to the record as committed.
+const readRepositoryRecord = (path) =>
+  raiseRecordPath.test(path) && existsSync(resolve(root, path))
+    ? readFileSync(resolve(root, path), "utf8")
+    : null;
+function revisionValid(environment, revision, index, pinned, readRecord) {
+  const keys = Object.keys(revision ?? {})
+    .sort()
+    .join();
+  if (keys !== "digest,offers,terms" && keys !== "digest,offers,ownerRecord,terms") return false;
+  const document = parseTermsDocument(revision.terms, revision.offers);
+  const digest = createHash("sha256")
+    .update(stripeCanonicalJson({ terms: revision.terms, offers: revision.offers }))
+    .digest("hex");
+  const offerFor = (priceKey) => document.offers.find((o) => o.priceKey === priceKey);
+  const subscriptions = document.terms.entries.filter(
+    (e) => e.route === "morrow_direct" && e.kind === "subscription_period",
+  );
+  const operator = document.terms.entries.filter((e) => e.kind === "operator_test_entitlement");
+  const raise = operatorRaise(revision);
+  const recorded =
+    raise === null
+      ? !Object.hasOwn(revision, "ownerRecord")
+      : typeof revision.ownerRecord === "string" &&
+        raiseRecordPath.test(revision.ownerRecord) &&
+        raiseRecordProblem(readRecord(revision.ownerRecord), {
+          environment,
+          termsRevision: index + 1,
+          creditUnits: raise,
+        }) === null;
+  return (
+    document.terms.termsRevision === index + 1 &&
+    revision.digest === digest &&
+    (index >= pinned.length || pinned[index] === digest) &&
+    (subscriptions.length >= 1 || (operator.length === 1 && document.terms.entries.length === 1)) &&
+    operator.length <= 1 &&
+    (operator.length === 0 || environment !== "production") &&
+    operator.every(
+      (e) =>
+        e.route === "morrow_direct" &&
+        e.priceKey === "morrow:operator_plan:beta" &&
+        e.currency === "USD" &&
+        /^[1-9][0-9]{0,17}$/.test(e.creditUnits),
+    ) &&
+    recorded &&
+    document.offers.every((o) => !operator.some((e) => e.priceKey === o.priceKey)) &&
+    document.terms.entries.every((e) => e.mode === "test") &&
+    subscriptions.every(
+      (e) =>
+        e.currency === "USD" &&
+        e.creditUnits === "300" &&
+        offerFor(e.priceKey)?.unitAmount === "4900" &&
+        offerFor(e.priceKey)?.interval === "month",
+    )
+  );
+}
 for (const [environment, revisions] of Object.entries(termsFile.environments ?? {}))
   check(
     `billing terms: ${environment} revisions parse, are contiguous and keep their digests`,
@@ -508,47 +570,46 @@ for (const [environment, revisions] of Object.entries(termsFile.environments ?? 
       const pinned = publishedTermsDigests[environment] ?? [];
       if (revisions.length < pinned.length) return false;
       if (environment === "production" && revisions.length !== 0) return false;
-      return revisions.every((revision, index) => {
-        if (Object.keys(revision).sort().join() !== "digest,offers,terms") return false;
-        const document = parseTermsDocument(revision.terms, revision.offers);
-        const digest = createHash("sha256")
-          .update(stripeCanonicalJson({ terms: revision.terms, offers: revision.offers }))
-          .digest("hex");
-        const offerFor = (priceKey) => document.offers.find((o) => o.priceKey === priceKey);
-        const subscriptions = document.terms.entries.filter(
-          (e) => e.route === "morrow_direct" && e.kind === "subscription_period",
-        );
-        const operator = document.terms.entries.filter(
-          (e) => e.kind === "operator_test_entitlement",
-        );
-        return (
-          document.terms.termsRevision === index + 1 &&
-          revision.digest === digest &&
-          (index >= pinned.length || pinned[index] === digest) &&
-          (subscriptions.length >= 1 ||
-            (operator.length === 1 && document.terms.entries.length === 1)) &&
-          operator.length <= 1 &&
-          (operator.length === 0 || environment !== "production") &&
-          operator.every(
-            (e) =>
-              e.route === "morrow_direct" &&
-              e.priceKey === "morrow:operator_plan:beta" &&
-              e.currency === "USD" &&
-              e.creditUnits === "300",
-          ) &&
-          document.offers.every((o) => !operator.some((e) => e.priceKey === o.priceKey)) &&
-          document.terms.entries.every((e) => e.mode === "test") &&
-          subscriptions.every(
-            (e) =>
-              e.currency === "USD" &&
-              e.creditUnits === "300" &&
-              offerFor(e.priceKey)?.unitAmount === "4900" &&
-              offerFor(e.priceKey)?.interval === "month",
-          )
-        );
-      });
+      return revisions.every((revision, index) =>
+        revisionValid(environment, revision, index, pinned, readRepositoryRecord),
+      );
     },
   );
+// R2's rule on a synthetic staging revision 2 that raises the operator credits to 1,000:
+// refused without a record, with a record that names another revision or amount or does
+// not quote the owner naming it, and with a record on a revision that raises nothing;
+// accepted only with the owner's record.
+check("billing terms: an operator raise needs the owner's committed record (review R2)", () => {
+  const base = structuredClone(termsFile.environments.staging[0]);
+  const raised = structuredClone(base);
+  raised.terms.termsRevision = 2;
+  raised.terms.entries[0].creditUnits = "1000";
+  raised.digest = createHash("sha256")
+    .update(stripeCanonicalJson({ terms: raised.terms, offers: raised.offers }))
+    .digest("hex");
+  const path = ["docs/evidence/live/2026-11-20-test-credits-raise", "md"].join(".");
+  const record = (revision, credits, words) =>
+    `# Test credits raise\n\n- Terms revision: \`${revision}\`\n- Credits per period: \`${credits}\`\n- Owner's words: "${words}"\n`;
+  const yes = record("staging.2", "1000", "Yes, raise my test credits to 1,000 a period.");
+  const valid = (revision, text) =>
+    revisionValid("staging", revision, 1, [], (p) => (p === path ? text : null));
+  return (
+    !valid(raised, yes) &&
+    !valid(
+      { ...raised, ownerRecord: ["docs/evidence/live/2026-11-20-other", "md"].join(".") },
+      yes,
+    ) &&
+    !valid({ ...raised, ownerRecord: path }, null) &&
+    !valid({ ...raised, ownerRecord: path }, record("staging.3", "1000", "Yes, 1,000.")) &&
+    !valid({ ...raised, ownerRecord: path }, record("staging.2", "2000", "Yes, 2,000.")) &&
+    !valid({ ...raised, ownerRecord: path }, record("staging.2", "1000", "Yes, raise them.")) &&
+    !valid({ ...raised, ownerRecord: path }, record("staging.2", "1000", "Yes to 10000.")) &&
+    !valid({ ...raised, ownerRecord: path }, yes + "- Terms revision: `staging.2`\n") &&
+    !revisionValid("staging", { ...base, ownerRecord: path }, 0, [], () => yes) &&
+    valid({ ...raised, ownerRecord: path }, yes) &&
+    revisionValid("staging", base, 0, [], () => null)
+  );
+});
 check("billing terms: a changed published revision is refused", () => {
   const first = structuredClone(termsFile.environments.development[0]);
   first.terms.entries[0].creditUnits = "400";
@@ -582,6 +643,7 @@ const inputs = [
   "docs/decisions/readiness.json",
   "docs/decisions/reviews/P01.T04-review.md",
   "scripts/billing-checks.mjs",
+  "scripts/terms-raise.mjs",
   "tests/billing.test.mjs",
 ];
 const report = {

@@ -107,11 +107,18 @@ const plain = new Set([
   connectorSql.commit,
   connectorSql.rollback,
 ]);
-// The database's answers to the cron's three id reads: nothing pending, nothing overdue.
+// The database's answers to the cron's id reads: nothing pending, nothing overdue, and (v1
+// PR 5, after the subscription sync) no open Reconnect item. The clean-up switch is off
+// here, so its read-backs, deletions and stuck deliveries are never read.
 function answer(text) {
   if (plain.has(text)) return [];
   if (text === connectorSql.role) return [roleRow];
-  if (text === connectorSql.inboxPending || text === connectorSql.credentialsPending) return [];
+  if (
+    text === connectorSql.inboxPending ||
+    text === connectorSql.credentialsPending ||
+    text === connectorSql.noticesDue
+  )
+    return [];
   if (text === connectorSql.privacyOverdue) return [{ target_missed: 0, due_missed: 0 }];
   throw Error("UNEXPECTED_STATEMENT");
 }
@@ -258,9 +265,11 @@ test("latency: where the cron runs, every step misses its 3 s (the 12:41 lines);
   // connected at 1560 ms and its statement would answer at 3120 ms, past its 3000 ms; the
   // broker's first vault transaction misses its own 3000 ms the same way.
   const before = await farCron("here");
+  // v1 PR 5: the open Reconnect items' list, read after the sync, misses the same way.
   assert.deepEqual(events(before.lines, "morrow_connector_cron"), [
     idRead("INBOX_PENDING_UNAVAILABLE"),
     idRead("CREDENTIALS_PENDING_UNAVAILABLE"),
+    idRead("NOTICES_DUE_UNAVAILABLE"),
   ]);
   assert.deepEqual(events(before.lines, "morrow_connector_privacy"), [
     { ...idRead("PRIVACY_CHECK_UNAVAILABLE"), event: "morrow_connector_privacy" },
@@ -284,16 +293,24 @@ test("latency: where the cron runs, every step misses its 3 s (the 12:41 lines);
       dueMissed: 0,
       subscriptionsChecked: 0,
       subscriptionsRegistered: 0,
-      unavailable: 4,
-      elapsedMs: 12000,
+      unavailable: 5,
+      notices: 0,
+      reconciled: 0,
+      checks: 0,
+      observed: 0,
+      refused: 0,
+      deletions: 0,
+      deleted: 0,
+      stuckClosed: 0,
+      stuck: 0,
+      elapsedMs: 15000,
     },
   ]);
   assert.ok(before.world.opened.every(([at]) => at === "far"));
-  assert.deepEqual(before.world.brokerCalls.at(-1), [
-    "subscriptions",
-    "far",
-    connectorBudgets.subscriptionsCronMs,
-  ]);
+  assert.deepEqual(
+    before.world.brokerCalls.find(([call]) => call === "subscriptions"),
+    ["subscriptions", "far", connectorBudgets.subscriptionsCronMs],
+  );
 
   // After: scheduled() at the same far edge hands the run to the object, created with the
   // hint "enam"; every connection, the leases and the sync run there, and every step
@@ -308,12 +325,14 @@ test("latency: where the cron runs, every step misses its 3 s (the 12:41 lines);
     ["enam", connectorLogin],
     ["enam", connectorLogin],
     ["enam", connectorLogin],
+    ["enam", connectorLogin],
   ]);
   assert.deepEqual(after.world.brokerCalls, [
     ["neonLease", "enam"],
     ["neonLease", "enam"],
     ["neonLease", "enam"],
     ["subscriptions", "enam", connectorBudgets.subscriptionsCronMs],
+    ["neonLease", "enam"],
   ]);
   assert.deepEqual(events(after.lines, "morrow_connector_cron"), []);
   assert.deepEqual(events(after.lines, "morrow_connector_privacy"), []);
@@ -341,8 +360,19 @@ test("latency: where the cron runs, every step misses its 3 s (the 12:41 lines);
       subscriptionsChecked: 1,
       subscriptionsRegistered: 1,
       unavailable: 0,
-      // Three transactions of 13 x 25 ms, then the sync's three and Shopify's 450 ms.
-      elapsedMs: 2400,
+      notices: 0,
+      reconciled: 0,
+      checks: 0,
+      observed: 0,
+      refused: 0,
+      deletions: 0,
+      deleted: 0,
+      stuckClosed: 0,
+      stuck: 0,
+      // Three transactions of 13 x 25 ms, then the sync's three and Shopify's 450 ms, then
+      // v1 PR 5's Reconnect list, one more transaction of 13 x 25 ms (2725 ms, logged in
+      // 50 ms steps).
+      elapsedMs: 2700,
     },
   ]);
   // Every line is closed codes and counts: no host, lease, binding or origin.

@@ -22,6 +22,10 @@ const usage =
 const sets = ["unit"];
 const artifactSegment = /^[a-z0-9][a-z0-9._-]*$/;
 export const serialListPath = "tests/serial-tests.json";
+// Each test may run for at most five minutes. A test whose promise never settles then
+// fails with its own name instead of hanging until CI cancels the whole `checks` job at
+// 15 minutes, which hid the hung file twice on 2026-10-25 (#68, #75).
+export const testTimeoutMs = 300_000;
 const limits = Object.freeze({
   concurrency: [1, 16],
   repeat: [1, 10],
@@ -173,6 +177,7 @@ export function testCommands(plan, { repeat = 1, junit = null } = {}) {
           "--test-reporter=junit",
           `--test-reporter-destination=${report}`,
         );
+      args.push(`--test-timeout=${testTimeoutMs}`);
       commands.push({ kind, run, files: [...files], args: [...args, ...files], report });
     }
   return commands;

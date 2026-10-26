@@ -19,10 +19,19 @@
 //     morrow_identity.work_shopify_redact_identity (the installation, its candidate and
 //     the app registry), and completes the privacy request only when nothing is
 //     outstanding, the token's destruction included;
-//   * app/uninstalled (and a scope change): the broker's shopifyCredentialDestroy
+//   * app/uninstalled: the broker's shopifyCredentialDestroy
 //     (morrow_vault.shopify_credential_destroy), which records the destruction on the
 //     installation in the transaction that erases the key material; the connector's cron
-//     re-drives every installation whose destruction is not yet recorded.
+//     re-drives every installation whose destruction is not yet recorded. v1 PR 5
+//     (connection-health-work; ADR-0025 item 10): a scope change no longer ends the
+//     installation or destroys its token; a reinstall destroys an earlier installation's
+//     leftover token in its own install transaction (morrow_vault.shopify_install_prepare_v2);
+//   * the 48-hour deletion (v1 PR 5; ADR-0031 item 3): when shop/redact has not come 48 hours
+//     after an uninstall, morrow_work.connector_deletion_apply runs the same shop_redact
+//     handlers once (store_content_redact, then work_shopify_redact_identity itself for the
+//     identity's pseudonym and install link), and completes its content-free record
+//     (morrow_identity.store_data_deletions) only when nothing is outstanding, the token's
+//     destruction included.
 
 export type StoreContentTrigger = "shop_redact" | "uninstall_or_disconnect";
 export type StoreContentAction =
@@ -76,7 +85,10 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
     // Retirement clears it already; shop/redact clears it for the redacted installation's
     // own app only. An app registered later for the same shop (after the first was
     // uninstalled and retired), which may invite another tenant, keeps its link (M2 PR-3
-    // review: shop/redact covers what Morrow holds through the app it was sent to).
+    // review: shop/redact covers what Morrow holds through the app it was sent to). v1 PR 5
+    // (connection-health-identity): the link is kept while the app has an installation
+    // that is not uninstalled (a reinstall connects through it, and its live installation
+    // holds the same shop domain), for shop/redact and the 48-hour deletion alike.
     {
       table: "morrow_identity.shopify_apps",
       dataClass: "shop_identity",

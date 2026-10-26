@@ -15,6 +15,7 @@ import {
   brokerShopifyLaunchVerify,
   brokerShopifyWebhookVerify,
 } from "./shopify-install.js";
+import { brokerShopifyConnectionCheck } from "./shopify-health.js";
 import { brokerShopifyRead } from "./shopify-read.js";
 import { brokerShopifyWebhookSubscriptionsSync } from "./shopify-webhooks.js";
 import {
@@ -169,6 +170,8 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
 // destruction (shopifyRead is the api's and the orchestrator's, never the connector's).
 // The shop-specific webhook subscriptions add shopifyWebhookSubscriptionsSync, a budget only
 // (docs/briefs/shopify-shop-specific-webhooks.md).
+// v1 PR 5 adds the read-back of a live installation's granted scopes
+// (shopifyConnectionCheck, apps/broker/src/shopify-health.ts).
 export class ConnectorBroker extends WorkerEntrypoint<unknown> implements ConnectorBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -213,6 +216,13 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
     return arguments.length === 1
       ? brokerShopifyWebhookSubscriptionsSync(this.env, budgetMs)
       : brokerInputInvalid("shopifyWebhookSubscriptionsSync", "ConnectorBroker");
+  }
+  // v1 PR 5 (ADR-0025 item 10): the read-back of a live installation's granted scopes (an id
+  // and a budget only).
+  shopifyConnectionCheck(installationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerShopifyConnectionCheck(this.env, installationId, budgetMs)
+      : brokerInputInvalid("shopifyConnectionCheck", "ConnectorBroker");
   }
 }
 

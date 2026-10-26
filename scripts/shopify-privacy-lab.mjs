@@ -17,10 +17,12 @@
 // held" and keep no customer value; T  closed catalogue reads under a read lease, closed
 // variables, closed results, the vault resolution's refusals and the read budget;
 // U  app/uninstalled ends the installation, stops the connection, revokes its leases and
-// destroys the token (idempotent, tenant-local); G  scope changes; D  the cron re-drives a
+// destroys the token (idempotent, tenant-local); G  scope changes (v1 PR 5: the connection
+// and its token stay, and a Reconnect item is raised); D  the cron re-drives a
 // lost apply and a failed destruction; S  shop/redact executes every store-content handler
 // and completes only when nothing is outstanding, an overdue request is counted and logged,
-// an ended installation's app offers no install link, and the redaction clears only its own
+// an uninstalled installation's app offers its link for a reinstall (v1 PR 5) while a
+// redacted one's is cleared, and the redaction clears only its own
 // app's link, never a replacement app's in another tenant; K  no other login applies deliveries or
 // ends an installation, and the connector's login cannot forge its context; O  logs and
 // outbound requests. Owner-seeded synthetic fixtures only (two tenants, four linked
@@ -854,8 +856,19 @@ const report = await withWorkDatabase(
     );
 
     // -------------------------------------------------------------------------
-    // G: scope changes.
+    // G: scope changes. v1 PR 5 (ADR-0025 item 10) rewrote G1 to G3: a scope change keeps the
+    // connection and its token; the delivery's scopes only narrow the record, the agents that
+    // need a missing scope stop (G has none here: lab:connection-health covers them) and one
+    // Reconnect item names the missing scope; a later uninstall ends it as any uninstall.
     phase("scopes");
+    const noticesOf = (s) =>
+      workRows(
+        `SELECT missing_scopes,stopped_installations,cleared_reason FROM morrow_work.connection_notices WHERE connection_id=${literal(s.connection)} ORDER BY created_at,id`,
+      );
+    const scopesOf = (s) =>
+      ownerRows(
+        `SELECT array_to_string(granted_scopes,',') AS scopes FROM morrow_identity.store_installations WHERE id=${literal(s.installation)}`,
+      )[0]?.scopes;
     const unchanged = await deliver(G, "app/scopes_update", {
       id: 1,
       previous: ["write_products"],
@@ -863,12 +876,15 @@ const report = await withWorkDatabase(
     });
     const unchangedRow = inboxRows().find((r) => r.webhook_id === unchanged.webhookId);
     check(
-      "G1:write_products_alone_is_unchanged_scopes_and_ignored",
+      "G1:write_products_alone_is_recorded_unchanged_and_stops_nothing",
       unchanged.status === 200 &&
-        unchangedRow?.status === "ignored" &&
-        unchangedRow.outcome === "scopes_unchanged" &&
+        unchangedRow?.status === "applied" &&
+        unchangedRow.outcome === "scopes_recorded" &&
+        unchangedRow.effects?.scopes === "unchanged" &&
         installationOf(G).status === "linked" &&
-        stopsOf(G).length === 0,
+        scopesOf(G) === "read_products,write_products" &&
+        stopsOf(G).length === 0 &&
+        noticesOf(G).length === 0,
       { unchangedRow },
     );
     const narrowed = await deliver(G, "app/scopes_update", {
@@ -877,27 +893,40 @@ const report = await withWorkDatabase(
       current: ["read_products"],
     });
     check(
-      "G2:a_scope_change_suspends_stops_and_destroys_the_token",
+      "G2:a_scope_change_keeps_the_connection_and_its_token_and_raises_reconnect",
       narrowed.status === 200 &&
-        installationOf(G).status === "suspended" &&
-        installationOf(G).suspended_reason === "scopes_changed" &&
-        JSON.stringify(stopsOf(G)) ===
-          JSON.stringify([
-            { reason_code: "shopify_scopes_changed", set_by_kind: "system", active: true },
-          ]) &&
+        installationOf(G).status === "linked" &&
+        installationOf(G).suspended_reason === null &&
+        installationOf(G).token_destroyed === false &&
+        scopesOf(G) === "read_products" &&
+        stopsOf(G).length === 0 &&
         JSON.stringify(credentialOf(G)) ===
-          JSON.stringify([{ status: "destroyed", erased: true, destroy_reason: "scopes_changed" }]),
-      { installation: installationOf(G), stops: stopsOf(G), credential: credentialOf(G) },
+          JSON.stringify([{ status: "active", erased: false, destroy_reason: null }]) &&
+        JSON.stringify(noticesOf(G)) ===
+          JSON.stringify([
+            { missing_scopes: ["write_products"], stopped_installations: [], cleared_reason: null },
+          ]),
+      {
+        installation: installationOf(G),
+        stops: stopsOf(G),
+        credential: credentialOf(G),
+        notices: noticesOf(G),
+      },
     );
     const thenUninstalled = await deliver(G, "app/uninstalled", shopBody(G));
     check(
-      "G3:an_uninstall_after_a_scope_change_ends_it_with_no_second_stop",
+      "G3:an_uninstall_after_a_scope_change_ends_it_destroys_the_token_and_clears_the_item",
       thenUninstalled.status === 200 &&
         installationOf(G).status === "uninstalled" &&
-        stopsOf(G).length === 1 &&
+        JSON.stringify(stopsOf(G)) ===
+          JSON.stringify([
+            { reason_code: "shopify_app_uninstalled", set_by_kind: "system", active: true },
+          ]) &&
         credentialOf(G).length === 1 &&
-        credentialOf(G)[0].destroy_reason === "scopes_changed",
-      { installation: installationOf(G), stops: stopsOf(G) },
+        credentialOf(G)[0].status === "destroyed" &&
+        credentialOf(G)[0].destroy_reason === "uninstalled" &&
+        noticesOf(G)[0]?.cleared_reason === "connection_ended",
+      { installation: installationOf(G), stops: stopsOf(G), notices: noticesOf(G) },
     );
 
     // -------------------------------------------------------------------------
@@ -1048,8 +1077,8 @@ const report = await withWorkDatabase(
         (s) => installationOf(s).shop_domain === s.shop && !installationOf(s).redacted,
       ),
     );
-    // shop/redact after the uninstall (G: uninstalled, its token destroyed at the scope
-    // change): completes in one apply, with the same handlers.
+    // shop/redact after the uninstall (G: uninstalled, its token destroyed at the
+    // uninstall): completes in one apply, with the same handlers.
     const redactedAfter = await deliver(G, "shop/redact", compliance(G));
     const afterRow = inboxRows().find((r) => r.webhook_id === redactedAfter.webhookId);
     const afterDone = requestsOf(afterRow?.id ?? "")[0];
@@ -1068,9 +1097,11 @@ const report = await withWorkDatabase(
         installationOf(T).redacted === false,
       { afterRow, afterDone },
     );
-    // M2 PR-3 review: an app whose installation ended offers no install link (a reinstall
-    // under the same app is refused). A's workspace has two active apps: S's (uninstalled in
-    // U, its link kept) and G's (redacted above, its link cleared), so none is offered.
+    // v1 PR 5 (rewrites M2 PR-3 review's S7): an app whose installation was uninstalled
+    // offers its install link again (a reinstall is a new installation, linked only by a
+    // person); a redacted installation's app has its link cleared. A's workspace has two
+    // active apps: S's (uninstalled in U, its link kept) and G's (redacted above, its link
+    // cleared), so S's is offered.
     const connectionsRead = (p) =>
       db.rows(
         `SELECT app_registered,install_url FROM morrow_identity.workspace_connections(${literal(p.digest)},${literal(p.workspace)})`,
@@ -1082,19 +1113,21 @@ const report = await withWorkDatabase(
       )[0] ?? null;
     const endedOffer = connectionsRead(A);
     check(
-      "S7:an_app_whose_installation_ended_offers_no_install_link",
+      "S7:an_uninstalled_apps_link_is_offered_for_a_reinstall_and_a_redacted_ones_is_cleared",
       appOf(S.appKey)?.status === "active" &&
         appOf(S.appKey).install_url !== null &&
         installationOf(S).status === "uninstalled" &&
-        endedOffer?.app_registered === false &&
-        endedOffer.install_url === null,
+        appOf(G.appKey)?.install_url === null &&
+        endedOffer?.app_registered === true &&
+        endedOffer.install_url === appOf(S.appKey).install_url,
       { endedOffer, app: appOf(S.appKey) },
     );
     // M2 PR-3 review: shop/redact clears only its own app's install link. T (uninstalled in
     // D, token destroyed) has its app retired, and a replacement app is registered for T's
     // shop that invites A's workspace, another tenant. T's shop/redact, applied and then
     // re-driven (recorded again with its apply lost), clears and counts T's app only: the
-    // replacement keeps its link and A's workspace is still offered it.
+    // replacement keeps its link and A's workspace is offered exactly what it was before
+    // (v1 PR 5: S's link, offered for a reinstall, comes first).
     const retired = ownerRows(
       `SELECT outcome FROM morrow_identity.shopify_app_retire(${literal(T.appKey)})`,
     )[0]?.outcome;
@@ -1127,7 +1160,7 @@ const report = await withWorkDatabase(
       retired === "retired" &&
         registered === "registered" &&
         offeredBefore?.app_registered === true &&
-        offeredBefore.install_url === replacementUrl &&
+        offeredBefore.install_url !== null &&
         tRedact.status === 200 &&
         tRedact.applied === "applied" &&
         tDone?.status === "completed" &&
@@ -1144,7 +1177,7 @@ const report = await withWorkDatabase(
         appOf(replacementKey).install_url === replacementUrl &&
         appOf(replacementKey).revision === 1 &&
         offeredAfter?.app_registered === true &&
-        offeredAfter.install_url === replacementUrl,
+        offeredAfter.install_url === offeredBefore.install_url,
       {
         retired,
         registered,
