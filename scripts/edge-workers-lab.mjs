@@ -1633,14 +1633,35 @@ await instance(
           destroy.message === "BROKER_HELD",
         { reads, connectorRead, destroy },
       );
+      // v1 PR 5 (ADR-0025 item 10): the read-back of an installation's granted scopes is the
+      // connector's alone over the real RPC bindings; a malformed id or budget is held before
+      // the vault.
+      const scopeChecks = [];
+      for (const binding of ["BROKER", "BROKER_RUNTIME"])
+        scopeChecks.push((await probe({ op: "shopifyConnectionCheck", binding, args: [] }))[0]);
+      const beforeScopeCheck = observed.brokerNeon;
+      const badScopeChecks = [];
+      for (const args of [["bad id", 1000], ["lab-installation-1", 0], ["lab-installation-1"]])
+        badScopeChecks.push(
+          (await probe({ op: "shopifyConnectionCheck", binding: "BROKER_CONNECTOR", args }))[0],
+        );
+      check(
+        "V1PR5:the_scopes_read_back_is_the_connectors_alone_and_holds_bad_input",
+        scopeChecks.every((r) => r.ok === false && r.name === "TypeError") &&
+          badScopeChecks.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
+          observed.brokerNeon === beforeScopeCheck &&
+          observed.connectorOutbound === 0,
+        { scopeChecks, badScopeChecks },
+      );
       check("M2PR2:no_unexpected_outbound", observed.unexpected === 0);
     },
   );
   // fix-connector-cron-latency: the cron in workerd. wrangler's own options carry the
   // committed SQLite class and its CONNECTOR_CRON binding; scheduled() hands the run to that
   // object, which runs the re-drives with the connector's bindings. Here every database is
-  // refused, so the run's line counts four unavailable steps, each id read with a closed
-  // stage and the sync with its reason. Without the binding, scheduled() runs nothing.
+  // refused, so the run's line counts five unavailable steps (v1 PR 5's open Reconnect items
+  // are read after the sync), each id read with a closed stage and the sync with its reason.
+  // Without the binding, scheduled() runs nothing.
   const cronBindings = {
     MORROW_ENVIRONMENT: "development",
     CONNECTOR_CONFIGURATION_JSON: JSON.stringify({
@@ -1677,7 +1698,7 @@ await instance(
         "CRON:scheduled_runs_the_redrives_in_the_object",
         ran.outcome === "ok" &&
           lines.runs.length === 1 &&
-          lines.runs[0].unavailable === 4 &&
+          lines.runs[0].unavailable === 5 &&
           Number.isSafeInteger(lines.runs[0].elapsedMs) &&
           !lines.cron.some((row) => row.code.startsWith("CRON_")),
         { ran, lines },
@@ -1685,7 +1706,7 @@ await instance(
       check(
         "CRON:each_unavailable_step_names_its_stage",
         JSON.stringify(lines.cron.map((row) => row.code)) ===
-          '["INBOX_PENDING_UNAVAILABLE","CREDENTIALS_PENDING_UNAVAILABLE"]' &&
+          '["INBOX_PENDING_UNAVAILABLE","CREDENTIALS_PENDING_UNAVAILABLE","NOTICES_DUE_UNAVAILABLE"]' &&
           lines.privacy.length === 1 &&
           lines.privacy[0].code === "PRIVACY_CHECK_UNAVAILABLE" &&
           [...lines.cron, ...lines.privacy].every(

@@ -2668,6 +2668,8 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     "shopify-app-register",
     "smoke",
     "status",
+    // v1 build order PR 6: renewing the owner's test credits (tests/staging-test-credits.test.mjs).
+    "test-credits",
     // The staging test entitlement (owner decision (b), 2026-10-21; card E13).
     "test-entitlement",
     "turnstile-create",

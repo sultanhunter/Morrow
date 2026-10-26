@@ -762,6 +762,17 @@ await withWorkDatabase(
               subscriptionsChecked: 0,
               subscriptionsRegistered: 0,
               unavailable: 0,
+              // v1 PR 5: the open Reconnect items (none: the uninstall cleared none), and,
+              // with the clean-up switch off here, no read-back, deletion or stuck count.
+              notices: 0,
+              reconciled: 0,
+              checks: 0,
+              observed: 0,
+              refused: 0,
+              deletions: 0,
+              deleted: 0,
+              stuckClosed: 0,
+              stuck: 0,
             }),
         {
           redelivered: redelivered.status,

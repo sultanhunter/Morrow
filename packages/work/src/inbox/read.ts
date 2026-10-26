@@ -1,5 +1,11 @@
 import { workPermissions } from "@morrow/contracts/work-permissions";
 import { storeResource } from "@morrow/policy/store-resource";
+import {
+  ReconnectNoticeInvalid,
+  decodeReinstalledStore,
+  readReconnectNotices,
+  type ReconnectNotice,
+} from "../connection-health/notices.js";
 import { disconnectAllowed } from "../connections/commands.js";
 import { listApprovals } from "../approvals/index.js";
 import { readProposalRow } from "../approvals/family.js";
@@ -22,11 +28,17 @@ import { decideWork } from "../permissions.js";
 //   exception   apply outcomes that are unknown (uncertain: needs a person) or, for seven
 //               days, not applied; visible as the operation's own read (the proposal's
 //               reviewer or proposer)
-//   connection  an open stop on a store connection that is not linked again: a person's
-//               disconnect, an uninstall or a scope change; only for a person who holds the
-//               store's disconnect right (the connection steward and the Owner)
-// Kinds whose backend is not built yet (questions from agent runs, Reconnect after a scope
-// change) are not here: the SPA shows them only from fixtures behind `samples.inbox`.
+//   connection  an open stop on a store connection that is not linked again, neither the
+//               same store nor, after a reinstall of the same app, its shop as a new store
+//               (v1 PR 5: a reinstall is a new store): a person's disconnect, an uninstall
+//               or a scope change recorded before v1 PR 5; and, since v1 PR 5, a live
+//               connection's open Reconnect item (a Shopify permission it lacks, or a token
+//               Shopify refused: `scopes_changed`, from connection_notices_open, which
+//               answers only its recipients); each only for a person who holds the store's
+//               disconnect right (the connection steward and the Owner)
+// Agents' questions from runs have no backend yet: the SPA shows them only from fixtures
+// behind `samples.inbox`, as it does the fuller `reconnect` kind (the missing permissions and
+// the paused agents) until PR 10b.
 // Ids, codes and times only; a question's prompt is the one text, as the question list
 // returns it.
 
@@ -127,6 +139,19 @@ export async function storeLinkedNow(tx: WorkTx, storeId: string): Promise<boole
   if (rows.length === 0) return false;
   if (rows.length !== 1 || rows[0]!.store_id !== storeId) throw new WorkContextUnavailable();
   return true;
+}
+/**
+ * Whether a reinstall of the same app linked this ended store's shop to this workspace again
+ * (v1 PR 5: a reinstall is a new store and connection, so the ended store itself is never
+ * linked again; PR 5 review finding F3, after integration with main).
+ */
+export async function storeReinstalledNow(tx: WorkTx, storeId: string): Promise<boolean> {
+  try {
+    return decodeReinstalledStore(await tx.run("storeReinstalled", [storeId]), storeId) !== null;
+  } catch (error) {
+    if (error instanceof ReconnectNoticeInvalid) throw new WorkContextUnavailable();
+    throw error;
+  }
 }
 
 /**
@@ -311,8 +336,44 @@ const setters = ["human", "system", "operator"] as const;
 function connectionReason(setBy: string, reasonCode: string): InboxConnectionItem["reason"] {
   if (setBy === "human" && reasonCode === "human_disconnect") return "disconnected";
   if (reasonCode === "shopify_app_uninstalled") return "uninstalled";
+  // Only a connection stop recorded before v1 PR 5 carries this code (0037's suspension on
+  // app/scopes_update, which 0053 refuses since): a scope change now keeps the connection
+  // and raises a Reconnect item instead (inboxReconnectItems below).
   if (reasonCode === "shopify_scopes_changed") return "scopes_changed";
   return "stopped";
+}
+/**
+ * The Inbox's connection problems from a live connection's open Reconnect items (v1 PR 5;
+ * PR 5 review finding F1, after integration with main): each item the read definer answers
+ * (only to its recipients, the connection steward and the Owner) that still needs
+ * reconnecting, as a `scopes_changed` problem of its connection, for a viewer who also holds
+ * the store's disconnect right, as every connection problem. An item a re-authorisation
+ * already settled (`open` false; the cron clears it) and a connection already listed are
+ * skipped.
+ */
+export async function inboxReconnectItems(
+  notices: readonly ReconnectNotice[],
+  allowed: (storeId: string, connectionId: string) => Promise<boolean>,
+  seen: Set<string> = new Set(),
+): Promise<InboxConnectionItem[]> {
+  const items: InboxConnectionItem[] = [];
+  for (const n of notices) {
+    if (!n.open || seen.has(n.connectionId)) continue;
+    seen.add(n.connectionId);
+    if (!(await allowed(n.storeId, n.connectionId))) continue;
+    items.push(
+      Object.freeze({
+        kind: "connection",
+        reason: "scopes_changed",
+        id: n.connectionId,
+        storeId: n.storeId,
+        setBy: "system",
+        since: n.createdAt,
+        open: true,
+      }),
+    );
+  }
+  return items;
 }
 async function connections(
   tx: WorkTx,
@@ -322,6 +383,11 @@ async function connections(
   const rows = await tx.run("inboxConnectionStops", []);
   const items: InboxConnectionItem[] = [];
   const seen = new Set<string>();
+  const allowed = (storeId: string, connectionId: string) =>
+    disconnectAllowed(
+      a,
+      storeResource(a.actor.organizationId, a.resource.workspaceId, storeId, connectionId),
+    );
   for (const row of rows) {
     const connectionId = id(row, "connection_id");
     const storeId = id(row, "store_id");
@@ -331,15 +397,11 @@ async function connections(
       throw new WorkContextUnavailable();
     if (seen.has(connectionId)) continue;
     seen.add(connectionId);
-    // Settled once the store is linked to this workspace again (a new connection).
+    // Settled once the store is linked to this workspace again (a new connection), or once a
+    // reinstall of the same app linked its shop again (a new store: v1 PR 5's reinstall).
     if (await linked(storeId)) continue;
-    const store = storeResource(
-      a.actor.organizationId,
-      a.resource.workspaceId,
-      storeId,
-      connectionId,
-    );
-    if (!(await disconnectAllowed(a, store))) continue;
+    if (await storeReinstalledNow(tx, storeId)) continue;
+    if (!(await allowed(storeId, connectionId))) continue;
     items.push(
       Object.freeze({
         kind: "connection",
@@ -352,6 +414,14 @@ async function connections(
       }),
     );
   }
+  let notices: readonly ReconnectNotice[];
+  try {
+    notices = await readReconnectNotices(tx);
+  } catch (error) {
+    if (error instanceof ReconnectNoticeInvalid) throw new WorkContextUnavailable();
+    throw error;
+  }
+  items.push(...(await inboxReconnectItems(notices, allowed, seen)));
   return { state: "ok" as const, items };
 }
 

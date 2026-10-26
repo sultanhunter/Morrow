@@ -8,3 +8,5 @@ links:
 ---
 
 Building from 5541e430.
+Merged origin/main at 7d726330, where #68's 0052.shop-knowledge took 0052, so this branch's
+pair became 0053.connection-health-identity and 0054.connection-health-work.

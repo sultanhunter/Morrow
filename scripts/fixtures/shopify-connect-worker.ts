@@ -20,6 +20,7 @@ import {
   createConnectorDatabase,
   type ConnectorDriverFactory,
 } from "../../apps/shopify-connector/worker/database";
+import { createShopifyHealthChecker } from "../../apps/broker/src/shopify-health";
 import { createShopifyBroker, type VaultTransaction } from "../../apps/broker/src/shopify-install";
 import { createShopifyWebhookSync } from "../../apps/broker/src/shopify-webhooks";
 import {
@@ -143,6 +144,9 @@ function connectorHandler(env: Env) {
   };
   const shopify = createShopifyBroker(brokerDependencies);
   const subscriptions = createShopifyWebhookSync(brokerDependencies);
+  // v1 PR 5: the scopes read-back (the connector's clean-up switch is off in this lab, so it
+  // is never asked; lab:connection-health runs it).
+  const health = createShopifyHealthChecker(brokerDependencies);
   const connectorDriver: ConnectorDriverFactory = (config) => bridgedClient(env, config.user);
   return createConnectorHandler({
     configuration: { origin: env.LAB_CONNECTOR_ORIGIN, apiOrigin: env.LAB_API_ORIGIN },
@@ -155,6 +159,8 @@ function connectorHandler(env: Env) {
       shopifyCredentialDestroy: (installationId, reason) =>
         shopify.credentialDestroy(env, installationId, reason),
       shopifyWebhookSubscriptionsSync: (budgetMs) => subscriptions.sync(env, budgetMs),
+      shopifyConnectionCheck: (installationId, budgetMs) =>
+        health.check(env, installationId, budgetMs),
     },
     // The ConnectorBroker lease: the lab's login takes any password, so the grant is
     // the one fixed lab value (the real lease is proved by lab:edge-workers).
