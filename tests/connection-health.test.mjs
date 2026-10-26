@@ -344,7 +344,7 @@ test("twin: the system installation stops' codes and reasons are the reconcile's
     v2,
     /scopes_changed|shopify_credential_destroy|work_shopify_installation_end\(/,
   );
-  // 0052's installation end refuses scopes_changed.
+  // 0053's installation end refuses scopes_changed.
   const end = functionText(identity.text, "morrow_identity.work_shopify_installation_end");
   assert.match(end, /p_reason NOT IN \('uninstalled','disconnected'\)/);
 });

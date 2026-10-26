@@ -774,7 +774,20 @@ await withWorkDatabase(
               stuckClosed: 0,
               stuck: 0,
             }),
-        { redelivered: redelivered.status, redrive },
+        {
+          redelivered: redelivered.status,
+          redrive,
+          // fix-connector-cron-latency: each failed step's closed stage line, if any.
+          stages: logs
+            .join("")
+            .split("\n")
+            .filter((line) =>
+              /"event":"morrow_(connector_(cron|privacy|webhooks|inbox|credential)|broker)"/.test(
+                line,
+              ),
+            )
+            .slice(-12),
+        },
       );
 
       // ---- O: logins, outbound and logs.

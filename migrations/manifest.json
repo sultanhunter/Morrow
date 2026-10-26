@@ -398,15 +398,22 @@
     },
     {
       "sequence": 52,
-      "file": "0052.connection-health-identity.sql",
-      "sha256": "54066b01cdaefbdb224177809a9960902ab6a1905e26bc5e3f43c638ade7bf28",
+      "file": "0052.shop-knowledge.sql",
+      "sha256": "4597c094203277ee75c2416ea591676c24da7f8fddd83841e5eadb69b6378f0a",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/shop-knowledge.md"
+    },
+    {
+      "sequence": 53,
+      "file": "0053.connection-health-identity.sql",
+      "sha256": "4bec18798a5f157e296bd8b5e027ab0eef850d0a01cbbd7bed734bbc05af1d5a",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/v1-connection-health.md"
     },
     {
-      "sequence": 53,
-      "file": "0053.connection-health-work.sql",
-      "sha256": "244032a1846be22f7c640f7ee912850f6bd54e0eebb8afb6cb4a1054e679c044",
+      "sequence": 54,
+      "file": "0054.connection-health-work.sql",
+      "sha256": "68d1577340cfed2d961c9aeb72b2d24cec4d18edc64b4befe58b0bd5d5a014b9",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-connection-health.md"
     }

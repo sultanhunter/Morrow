@@ -4,6 +4,7 @@ type: agent
 kind: installable
 title: Business Analyst
 status: planned
+origin: first-party
 scopes_optional: [read_orders]
 customer_data: level1
 computer: "yes"

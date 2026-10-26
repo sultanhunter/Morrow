@@ -28,6 +28,9 @@
 // requests without a canonical session cookie go uncounted to the handler's own refusal,
 // the 121st counted request is 429, logout and rotate keep their own buckets while the
 // read and work bucket is empty, and none of it reaches the database.
+// fix-connector-cron-latency: the connector's scheduled() hands its run to the ConnectorCron
+// Durable Object from wrangler's own options (SQLite), which logs each refused step with a
+// closed stage; without the binding nothing runs (CRON checks).
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1651,6 +1654,91 @@ await instance(
         { scopeChecks, badScopeChecks },
       );
       check("M2PR2:no_unexpected_outbound", observed.unexpected === 0);
+    },
+  );
+  // fix-connector-cron-latency: the cron in workerd. wrangler's own options carry the
+  // committed SQLite class and its CONNECTOR_CRON binding; scheduled() hands the run to that
+  // object, which runs the re-drives with the connector's bindings. Here every database is
+  // refused, so the run's line counts five unavailable steps (v1 PR 5's open Reconnect items
+  // are read after the sync), each id read with a closed stage and the sync with its reason.
+  // Without the binding, scheduled() runs nothing.
+  const cronBindings = {
+    MORROW_ENVIRONMENT: "development",
+    CONNECTOR_CONFIGURATION_JSON: JSON.stringify({
+      schemaVersion: 1,
+      origin: connectorOrigin,
+      apiOrigin: origin,
+    }),
+    MORROW_DATABASE_BINDING_JSON: JSON.stringify(databaseBinding),
+  };
+  const cronLines = async (events) => {
+    for (let i = 0; i < 40 && events("morrow_connector_redrive").length === 0; i++)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    return {
+      runs: events("morrow_connector_redrive"),
+      cron: events("morrow_connector_cron"),
+      privacy: events("morrow_connector_privacy"),
+      webhooks: events("morrow_connector_webhooks"),
+    };
+  };
+  const stageKeys = "event,code,phase,cause,statements,connectMs,txMs";
+  check(
+    "CRON:wrangler_options_bind_the_cron_object",
+    JSON.stringify(options.connector.durableObjects) ===
+      JSON.stringify({ CONNECTOR_CRON: { className: "ConnectorCron", useSQLite: true } }),
+    { durableObjects: options.connector.durableObjects },
+  );
+  await instance(
+    "CRON_connector_object",
+    { extra: connectorWorkerOptions(cronBindings) },
+    async ({ mf, observed, events }) => {
+      const ran = await (await mf.getWorker(names.connector)).scheduled({ cron: "*/5 * * * *" });
+      const lines = await cronLines(events);
+      check(
+        "CRON:scheduled_runs_the_redrives_in_the_object",
+        ran.outcome === "ok" &&
+          lines.runs.length === 1 &&
+          lines.runs[0].unavailable === 5 &&
+          Number.isSafeInteger(lines.runs[0].elapsedMs) &&
+          !lines.cron.some((row) => row.code.startsWith("CRON_")),
+        { ran, lines },
+      );
+      check(
+        "CRON:each_unavailable_step_names_its_stage",
+        JSON.stringify(lines.cron.map((row) => row.code)) ===
+          '["INBOX_PENDING_UNAVAILABLE","CREDENTIALS_PENDING_UNAVAILABLE","NOTICES_DUE_UNAVAILABLE"]' &&
+          lines.privacy.length === 1 &&
+          lines.privacy[0].code === "PRIVACY_CHECK_UNAVAILABLE" &&
+          [...lines.cron, ...lines.privacy].every(
+            (row) =>
+              Object.keys(row).join() === stageKeys &&
+              row.phase !== "unknown" &&
+              row.cause !== "unknown",
+          ) &&
+          lines.webhooks.length === 1 &&
+          lines.webhooks[0].code === "SUBSCRIPTIONS_UNAVAILABLE" &&
+          ["refused", "timeout"].includes(lines.webhooks[0].reason),
+        lines,
+      );
+      check("CRON:no_unexpected_outbound", observed.unexpected === 0);
+    },
+  );
+  await instance(
+    "CRON_connector_without_object",
+    { extra: [{ ...connectorWorkerOptions(cronBindings)[0], durableObjects: {} }] },
+    async ({ mf, observed, events }) => {
+      const ran = await (await mf.getWorker(names.connector)).scheduled({ cron: "*/5 * * * *" });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      check(
+        "CRON:without_the_binding_nothing_runs",
+        ran.outcome === "ok" &&
+          JSON.stringify(events("morrow_connector_cron").map((row) => row.code)) ===
+            '["CRON_UNBOUND"]' &&
+          events("morrow_connector_redrive").length === 0 &&
+          observed.connectorOutbound === 0 &&
+          observed.brokerNeon === 0,
+        { ran, logs: observed.logs },
+      );
     },
   );
 }

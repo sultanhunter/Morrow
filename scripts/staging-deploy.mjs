@@ -318,6 +318,8 @@ async function deployWorker(ctx, api, { config, name, sha, secretsFile, previous
 //   brokerSecrets   the broker's exact secret names (gate 6)
 //   brokerOptionalSecrets  names the broker may also hold (gate 6; build order PR 7: E2B_API_KEY
 //                   placed ahead of the runtime switch); absent means none
+//   putSecretNames  names `staging:put-secret` places from an owner file (gate 6's `next`
+//                   when they are all the deployed broker lacks); absent means none
 //   schemaHead      the committed chain's head (gate 3)
 //   loginDigest     () -> the committed login configuration's digest (gate 4)
 //   challenge       () -> the checked P05.T01ab challenge configuration (gate 4): the
@@ -492,9 +494,26 @@ async function deployBody(ctx, plan, report, run) {
     }
     report.gates.brokerSecrets = "first";
   } else {
-    if (!sameNames(await brokerNames())) {
+    const deployed = await brokerNames();
+    if (!sameNames(deployed)) {
       report.gates.brokerSecrets = "mismatch";
-      return stop("failed", "STAGING_BROKER_SECRETS_MISMATCH");
+      // A switch turned on before its key was placed (the model-provider switch's runbook
+      // does this on purpose: merge, put-secret from main, rerun): nothing is uploaded, and
+      // when every name the broker lacks is one put-secret places, and it holds no stray
+      // name, the report says so. The names are the committed constants, never a value.
+      const missing = plan.brokerSecrets.filter((name) => !deployed.includes(name));
+      const stray = deployed.filter(
+        (name) => !plan.brokerSecrets.includes(name) && !optionalNames.includes(name),
+      );
+      const placeable =
+        missing.length > 0 &&
+        stray.length === 0 &&
+        missing.every((name) => (plan.putSecretNames ?? []).includes(name));
+      return stop(
+        "failed",
+        "STAGING_BROKER_SECRETS_MISMATCH",
+        placeable ? { missing, next: "run_staging_put_secret_then_gh_run_rerun" } : {},
+      );
     }
     report.gates.brokerSecrets = "ok";
   }

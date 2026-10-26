@@ -1403,6 +1403,22 @@ fixtureCases.push(
     widths: two,
     setup: (page) => page.getByRole("tab", { name: /Lessons/ }).click(),
   }),
+  // PR 20: a person adds a page (typed text only, never customer details) and decides an
+  // agent's suggestion; the fixture is the Owner, who may do both.
+  fixtureCase("library", "knowledge_add_dialog", `/w/${ws}/knowledge`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add knowledge" }).click();
+      await page.getByRole("dialog", { name: "Add shop knowledge" }).waitFor();
+    },
+  }),
+  fixtureCase("library", "knowledge_suggested", `/w/${ws}/knowledge`, {
+    widths: two,
+    setup: async (page) => {
+      await page.getByRole("tab", { name: /Suggested/ }).click();
+      await page.getByRole("button", { name: "Accept Fit complaints" }).waitFor();
+    },
+  }),
   fixtureCase("library", "files", `/w/${ws}/assets`),
   fixtureCase("library", "files_empty", `/w/${ws}/assets`, { widths: two, scenario: "empty" }),
 );

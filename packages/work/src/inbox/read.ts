@@ -337,7 +337,7 @@ function connectionReason(setBy: string, reasonCode: string): InboxConnectionIte
   if (setBy === "human" && reasonCode === "human_disconnect") return "disconnected";
   if (reasonCode === "shopify_app_uninstalled") return "uninstalled";
   // Only a connection stop recorded before v1 PR 5 carries this code (0037's suspension on
-  // app/scopes_update, which 0052 refuses since): a scope change now keeps the connection
+  // app/scopes_update, which 0053 refuses since): a scope change now keeps the connection
   // and raises a Reconnect item instead (inboxReconnectItems below).
   if (reasonCode === "shopify_scopes_changed") return "scopes_changed";
   return "stopped";

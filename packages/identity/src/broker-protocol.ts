@@ -93,7 +93,8 @@ const brokerRequiredSecretsWithStripe: readonly string[] = Object.freeze([
 ]);
 // M3 PR-2 (ADR-0022 items 7 and 10): the Anthropic Console workspace's API key, bound only
 // to the broker and only while the reviewed model-provider switch is on. The switch is
-// docs/decisions/model-provider-staging.json `switch`, committed "off": while it is off the
+// docs/decisions/model-provider-staging.json `switch` (on in staging since model-provider-on,
+// 2026-10-25; committed "off" before): while it is off the
 // broker requires no model secret, modelRespond answers BROKER_HELD (MODEL_UNAVAILABLE)
 // before any input, database or provider access, run admission answers 503 before any
 // reservation and ListingsRunWorkflow throws dispatch_disabled before any step. Its runtime
@@ -104,8 +105,14 @@ export const brokerModelSecrets: readonly string[] = Object.freeze(["ANTHROPIC_A
 export type BrokerModelSwitch = "off" | "on";
 export const modelProviderVar = "MORROW_MODEL_PROVIDER";
 export const modelProviderAnthropic = "anthropic";
-/** An Anthropic Console API key (sk-ant-api03-…); never logged, never returned. */
-export const anthropicKeyPattern = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
+/**
+ * An Anthropic Console API key; never logged, never returned. Two shapes: a legacy workspace
+ * key (sk-ant-api03-…) and an identity-backed personal or service-account key, whose type
+ * label is three lowercase letters (sk-ant-<label>-…; fix-anthropic-key-format). Admin keys
+ * (sk-ant-admin01-…), OAuth tokens (sk-ant-oat01-…) and session keys carry digits in their
+ * label and never match.
+ */
+export const anthropicKeyPattern = /^sk-ant-(?:api03|[a-z]{3})-[A-Za-z0-9_-]{80,200}$/;
 // Build order PR 7 (ADR-0029 items 3 and 10): the E2B API key, bound only to the broker and
 // required only while the reviewed runtime switch is not off. The switch is
 // docs/decisions/runtime-staging.json `switch` ("off", "cleanup_only" or "on"), committed
@@ -328,8 +335,8 @@ export interface RuntimeBrokerRpc {
  * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant (an RPC stub
  * answers any method name, so it is never probed), true since M2 PR-3 and M3 PR-2 were
  * integrated. The api's run admission and the orchestrator's dispatch both require it with
- * the model-provider switch, so the switch (committed off, docs/decisions/
- * model-provider-staging.json) is now the only gate: no run, lease or reservation exists
+ * the model-provider switch, so the switch (docs/decisions/model-provider-staging.json, on in
+ * staging since model-provider-on) is now the only gate: no run, lease or reservation exists
  * while it is off.
  */
 export const runtimeProductReadAvailable: boolean = true;

@@ -26,7 +26,9 @@
 //             destroyed again. The inbox row is the queue: no Queue resource exists. Then
 //             (M2 PR-3 review) the count of open privacy requests past their target or
 //             their 30-day due time, logged as PRIVACY_TARGET_MISSED / PRIVACY_DUE_MISSED.
-//             Then the shop-specific webhook subscriptions (below).
+//             Then the shop-specific webhook subscriptions (below). The run happens inside
+//             the ConnectorCron Durable Object, beside the database (worker/cron.ts;
+//             fix-connector-cron-latency), so its transactions and RPCs keep their budgets.
 //   subscriptions  Shopify CLI 4.9 admits no app-specific app/uninstalled or
 //             app/scopes_update subscription under the legacy install flow, so the broker
 //             registers both for each active installation as shop-specific subscriptions to
@@ -80,7 +82,12 @@ import {
 } from "../../../packages/identity/src/broker-protocol.js";
 import { limitAddress } from "../../../packages/identity/src/edge-limiter.js";
 import type { ConnectorConfiguration, ConnectorLimiters } from "./environment.js";
-import type { ConnectorDatabase } from "./database.js";
+import {
+  connectorSqlObservation,
+  connectorTransactionCauses,
+  connectorTransactionPhases,
+  type ConnectorDatabase,
+} from "./database.js";
 import {
   newOAuthState,
   oauthStateDigest,
@@ -150,25 +157,65 @@ export const connectorBudgets = Object.freeze({
 });
 /** A request's context: the response may return before work handed to waitUntil ends. */
 export type ConnectorContext = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
-const log = (event: string, value: Record<string, string | number>) =>
+const log = (event: string, value: Record<string, string | number | null>) =>
   console.log(JSON.stringify({ event, ...value }));
-const held = () => Error("CONNECTOR_BROKER_HELD");
+// fix-connector-cron-latency: why a broker RPC did not give an answer: the connector's timer
+// fired first ("timeout"), the broker refused or failed ("refused": its own line names the
+// method), or the reply did not decode ("invalid").
+class BrokerRpcFailure extends Error {
+  readonly reason: "timeout" | "refused";
+  constructor(reason: "timeout" | "refused") {
+    super("CONNECTOR_BROKER_HELD");
+    this.reason = reason;
+  }
+}
 
 // One RPC raced against a timer; a late reply is discarded and nothing is retried.
 async function rpc<T>(start: () => Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const stopped = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(held()), ms);
+    timer = setTimeout(() => reject(new BrokerRpcFailure("timeout")), ms);
   });
   void stopped.catch(() => {});
   try {
-    const pending = Promise.resolve().then(start);
+    const pending = Promise.resolve()
+      .then(start)
+      .catch(() => {
+        throw new BrokerRpcFailure("refused");
+      });
     void pending.catch(() => {});
     return await Promise.race([pending, stopped]);
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
 }
+
+// fix-connector-cron-latency: the stage of a failed step, on its fixed-code line. Closed
+// values only, and durations floored to 50 ms (at most 20 s): never a text, an id or a
+// value. A database step names where its transaction ended (connectorSqlObservation); a
+// broker RPC names its reason and how long it waited.
+const stageMs = (ms: number | null, capMs = 20000) =>
+  ms === null || !Number.isFinite(ms) ? null : Math.min(capMs, Math.max(0, ms - (ms % 50)));
+function sqlStage(error: unknown): Record<string, string | number | null> {
+  const seen = connectorSqlObservation(error);
+  if (!seen)
+    return { phase: "unknown", cause: "unknown", statements: null, connectMs: null, txMs: null };
+  return {
+    phase: (connectorTransactionPhases as readonly string[]).includes(seen.phase)
+      ? seen.phase
+      : "unknown",
+    cause: (connectorTransactionCauses as readonly string[]).includes(seen.cause)
+      ? seen.cause
+      : "unknown",
+    statements: Number.isSafeInteger(seen.statements) ? Math.min(seen.statements, 20) : null,
+    connectMs: stageMs(seen.connectMs),
+    txMs: stageMs(seen.txMs),
+  };
+}
+const rpcStage = (error: unknown, startedAt: number): Record<string, string | number | null> => ({
+  reason: error instanceof BrokerRpcFailure ? error.reason : "invalid",
+  elapsedMs: stageMs(Date.now() - startedAt),
+});
 
 export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   const { configuration, broker, database } = deps;
@@ -267,8 +314,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   }
 
   // The shop-specific webhook subscriptions: one broker sync with this budget. Never throws;
-  // one fixed-code line with the counts, or SUBSCRIPTIONS_UNAVAILABLE.
+  // one fixed-code line with the counts, or SUBSCRIPTIONS_UNAVAILABLE with its stage.
   async function subscriptions(budgetMs: number) {
+    const startedAt = Date.now();
     try {
       const result = decodeShopifyWebhookSyncResult(
         await rpc(
@@ -278,8 +326,11 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       );
       log("morrow_connector_webhooks", { code: "SUBSCRIPTIONS_SYNCED", ...result });
       return result;
-    } catch {
-      log("morrow_connector_webhooks", { code: "SUBSCRIPTIONS_UNAVAILABLE" });
+    } catch (error) {
+      log("morrow_connector_webhooks", {
+        code: "SUBSCRIPTIONS_UNAVAILABLE",
+        ...rpcStage(error, startedAt),
+      });
       return null;
     }
   }
@@ -355,6 +406,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
 
   // The token of an ended installation, with the reason its row records (idempotent).
   async function destroy(installationId: string, reason: ShopifyCredentialReason) {
+    const startedAt = Date.now();
     try {
       const outcome = decodeShopifyCredentialResult(
         await rpc(
@@ -364,8 +416,11 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       );
       if (outcome === "destroyed" || outcome === "already_destroyed") return true;
       log("morrow_connector_credential", { code: "DESTROY_" + outcome.toUpperCase() });
-    } catch {
-      log("morrow_connector_credential", { code: "DESTROY_UNAVAILABLE" });
+    } catch (error) {
+      log("morrow_connector_credential", {
+        code: "DESTROY_UNAVAILABLE",
+        ...rpcStage(error, startedAt),
+      });
     }
     return false;
   }
@@ -375,8 +430,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     try {
       const r = await database.healthReconcile(installationId, connectorBudgets.reconcileMs);
       return r.outcome === "reconciled" || r.outcome === "ended";
-    } catch {
-      log("morrow_connector_health", { code: "RECONCILE_UNAVAILABLE" });
+    } catch (error) {
+      log("morrow_connector_health", { code: "RECONCILE_UNAVAILABLE", ...sqlStage(error) });
       return false;
     }
   }
@@ -384,6 +439,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   // granted scopes back with its own token and records what Shopify answered; then the
   // reconcile. Nothing is assumed from an unclear answer.
   async function readBack(installationId: string): Promise<"observed" | "refused" | "skipped"> {
+    const startedAt = Date.now();
     let outcome;
     try {
       outcome = decodeShopifyConnectionCheck(
@@ -392,8 +448,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
           connectorBudgets.checkMs + connectorBudgets.checkSlackMs,
         ),
       );
-    } catch {
-      log("morrow_connector_health", { code: "CHECK_UNAVAILABLE" });
+    } catch (error) {
+      log("morrow_connector_health", { code: "CHECK_UNAVAILABLE", ...rpcStage(error, startedAt) });
       return "skipped";
     }
     if (outcome !== "observed" && outcome !== "token_refused") {
@@ -413,8 +469,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       let applied;
       try {
         applied = await database.inboxApply(inboxId, connectorBudgets.applyMs);
-      } catch {
-        log("morrow_connector_inbox", { code: "APPLY_UNAVAILABLE" });
+      } catch (error) {
+        log("morrow_connector_inbox", { code: "APPLY_UNAVAILABLE", ...sqlStage(error) });
         return "failed";
       }
       const tokenPending =
@@ -491,8 +547,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       let d;
       try {
         d = await database.deletionApply(installationId, connectorBudgets.deletionMs);
-      } catch {
-        log("morrow_connector_deletion", { code: "DELETION_UNAVAILABLE" });
+      } catch (error) {
+        log("morrow_connector_deletion", { code: "DELETION_UNAVAILABLE", ...sqlStage(error) });
         return "failed";
       }
       if (d.outcome === "applied" || d.outcome === "settled") return "applied";
@@ -513,8 +569,12 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   // webhook subscriptions, when the run still has their whole budget. v1 PR 5: then the open
   // Reconnect items, and, with the clean-up switch on, the read-backs due, the 48-hour
   // deletions due and the stuck deliveries (each loop stops at the run's deadline).
+  // fix-connector-cron-latency: each step that fails logs its stage (an id read on
+  // morrow_connector_cron, the others on their own lines), and the run's line adds its
+  // duration (elapsedMs: seconds far from the database, well under one beside it).
   async function redrive(): Promise<Readonly<Record<string, number>>> {
-    const deadline = Date.now() + connectorBudgets.redriveMs;
+    const startedAt = Date.now();
+    const deadline = startedAt + connectorBudgets.redriveMs;
     const counts = {
       inbox: 0,
       applied: 0,
@@ -538,8 +598,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     let ids: readonly string[] = [];
     try {
       ids = await database.inboxPending(connectorBudgets.pendingMs);
-    } catch {
+    } catch (error) {
       counts.unavailable++;
+      log("morrow_connector_cron", { code: "INBOX_PENDING_UNAVAILABLE", ...sqlStage(error) });
     }
     for (const id of ids) {
       if (Date.now() > deadline) break;
@@ -549,8 +610,12 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     let tokens: Awaited<ReturnType<typeof database.credentialsPending>> = [];
     try {
       tokens = await database.credentialsPending(connectorBudgets.pendingMs);
-    } catch {
+    } catch (error) {
       counts.unavailable++;
+      log("morrow_connector_cron", {
+        code: "CREDENTIALS_PENDING_UNAVAILABLE",
+        ...sqlStage(error),
+      });
     }
     for (const token of tokens) {
       if (Date.now() > deadline) break;
@@ -571,9 +636,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
           code: "PRIVACY_DUE_MISSED",
           requests: overdue.dueMissed,
         });
-    } catch {
+    } catch (error) {
       counts.unavailable++;
-      log("morrow_connector_privacy", { code: "PRIVACY_CHECK_UNAVAILABLE" });
+      log("morrow_connector_privacy", { code: "PRIVACY_CHECK_UNAVAILABLE", ...sqlStage(error) });
     }
     // The shop-specific webhook subscriptions of every active installation that lacks them,
     // when the run still has the sync's whole budget.
@@ -592,8 +657,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     let notices: readonly string[] = [];
     try {
       notices = await database.noticesDue(connectorBudgets.pendingMs);
-    } catch {
+    } catch (error) {
       counts.unavailable++;
+      log("morrow_connector_cron", { code: "NOTICES_DUE_UNAVAILABLE", ...sqlStage(error) });
     }
     for (const id of notices) {
       if (Date.now() > deadline) break;
@@ -606,8 +672,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       let checks: readonly string[] = [];
       try {
         checks = await database.checksDue(connectorBudgets.pendingMs);
-      } catch {
+      } catch (error) {
         counts.unavailable++;
+        log("morrow_connector_cron", { code: "CHECKS_DUE_UNAVAILABLE", ...sqlStage(error) });
       }
       for (const id of checks) {
         if (Date.now() > deadline) break;
@@ -620,8 +687,9 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       let deletions: readonly string[] = [];
       try {
         deletions = await database.deletionsDue(connectorBudgets.pendingMs);
-      } catch {
+      } catch (error) {
         counts.unavailable++;
+        log("morrow_connector_cron", { code: "DELETIONS_DUE_UNAVAILABLE", ...sqlStage(error) });
       }
       for (const id of deletions) {
         if (Date.now() > deadline) break;
@@ -636,11 +704,15 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
         counts.stuck = stuck.stuck;
         if (stuck.stuck > 0)
           log("morrow_connector_inbox", { code: "INBOX_STUCK", deliveries: stuck.stuck });
-      } catch {
+      } catch (error) {
         counts.unavailable++;
+        log("morrow_connector_inbox", { code: "INBOX_STUCK_UNAVAILABLE", ...sqlStage(error) });
       }
     }
-    log("morrow_connector_redrive", counts);
+    log("morrow_connector_redrive", {
+      ...counts,
+      elapsedMs: stageMs(Date.now() - startedAt, 120000),
+    });
     return Object.freeze(counts);
   }
 
