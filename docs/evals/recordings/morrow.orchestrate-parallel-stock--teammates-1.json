@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "caseId": "morrow.orchestrate-parallel-stock",
+  "design": "teammates@1",
+  "origin": "authored",
+  "basisDigest": "57c986ff5e0b30a8d16b0cafaed522bbf6404112ce5fcd5898add41b091877fd",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_business_analyst",
+                "brief": {
+                  "objective": "List this month's best sellers by units sold.",
+                  "recordIds": [],
+                  "fields": [
+                    {
+                      "name": "period",
+                      "value": "last_30_days"
+                    }
+                  ]
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": "analyst-1"
+              }
+            },
+            {
+              "id": "c2",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_inventory",
+                "brief": {
+                  "objective": "List products with fewer than 10 units available.",
+                  "recordIds": [],
+                  "fields": [
+                    {
+                      "name": "threshold",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": "inventory-1"
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 320
+          }
+        },
+        {
+          "text": "Two of this month's best sellers are running low: the Linen Apron (120 sold, 6 left) and the Beeswax Candle (51 sold, 3 left). The Oak Serving Board has 40 in stock.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 3900,
+            "outputTokens": 180
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "analyst-1",
+      "agent": "business_analyst",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "a1",
+              "tool": "orders.summary",
+              "input": {
+                "metric": "units_sold",
+                "period": "last_30_days",
+                "groupBy": "product"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 1700,
+            "outputTokens": 90
+          }
+        },
+        {
+          "text": null,
+          "calls": [],
+          "result": {
+            "outcome": "done",
+            "nextSteps": [
+              "none"
+            ],
+            "summary": "Best sellers over the last 30 days: Linen Apron (120), Oak Serving Board (64), Beeswax Candle (51).",
+            "findings": [
+              {
+                "kind": "fact",
+                "text": "Best sellers by units sold, last 30 days",
+                "recordIds": [
+                  "product:999999101",
+                  "product:999999102",
+                  "product:999999104"
+                ]
+              }
+            ],
+            "items": []
+          },
+          "usage": {
+            "inputTokens": 2000,
+            "outputTokens": 220
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "inventory-1",
+      "agent": "inventory",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "i1",
+              "tool": "products.read",
+              "input": {
+                "productIds": null,
+                "titleContains": null,
+                "limit": 25
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 1500,
+            "outputTokens": 80
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "i2",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999101",
+                  "product:999999102",
+                  "product:999999104"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2200,
+            "outputTokens": 90
+          }
+        },
+        {
+          "text": null,
+          "calls": [],
+          "result": {
+            "outcome": "done",
+            "nextSteps": [
+              "none"
+            ],
+            "summary": "Two products are under 10 units: Linen Apron (6) and Beeswax Candle (3).",
+            "findings": [
+              {
+                "kind": "risk",
+                "text": "Low stock: Linen Apron 6, Beeswax Candle 3",
+                "recordIds": [
+                  "product:999999101",
+                  "product:999999104"
+                ]
+              }
+            ],
+            "items": []
+          },
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 200
+          }
+        }
+      ]
+    }
+  ]
+}
