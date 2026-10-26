@@ -325,8 +325,10 @@ export async function decidePlanDraft(
   if (turn.mentionRun && mapped.kind !== "task" && mapped.kind !== "plan_change")
     return { ok: false, refusal: "card_kind_not_allowed" };
   // Every text of the card the model wrote passes the customer identifier screen before it is
-  // stored (H9a, ADR-0041 item 31); the card's ids and keys pass it too (order and product ids
-  // are not customer data).
+  // stored (H9a, ADR-0041 item 31); the card's ids and keys pass it too, so nothing the model
+  // wrote is unscreened. Order and product ids are not customer data, and Morrow's UUID record
+  // ids (projects, tasks, principals, installations) are masked as ids, never read as a phone
+  // number (H9A-R4).
   if (!screenModelWrittenSync("plan_card", mapped).ok)
     return { ok: false, refusal: "customer_data" };
   const draft = structuredClone(mapped);

@@ -5,8 +5,9 @@
 // money, dates, codes, ordinary sentences) and what it cannot see (a customer's name); its
 // content-free verdict and CustomerScreenRefusal@1; the keyed list port failing closed; its
 // bounds and linear time; the post command's and the model-written texts' entry points and
-// the decisions wired to it today; the copy, exactly as the records give it. lab:shopify-privacy
-// (phase I) drives the wired decisions against PostgreSQL 17.
+// the decisions wired to it today; lab:shopify-privacy's planted texts and markers; the copy,
+// exactly as the records give it. lab:shopify-privacy (phase I) drives the wired decisions
+// against PostgreSQL 17.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -30,6 +31,7 @@ import {
   screenPost,
   stringsOf,
 } from "../packages/policy/src/customer-screen.ts";
+import { phaseITexts, plantedCustomer } from "../scripts/fixtures/privacy-lab-customer.mjs";
 import * as knowledge from "../packages/policy/src/knowledge/index.ts";
 import * as projects from "../packages/policy/src/projects/index.ts";
 import { copy } from "../packages/workspace-ui/src/copy.ts";
@@ -105,6 +107,24 @@ test("phones: international, national, grouped, after a phone word, and in links
     "＋４４ ２０ ７９４６ ０９５８",
     // A dash of another kind.
     "0300‑1234567",
+    // Right after a key, a list separator or a mark a model copies tool output with (H9A-R2):
+    // key=value, CSV and slash or dot glued forms, and "#" or "-" after a phone word.
+    "customer_phone=+923001234567",
+    "phone=+14155552671",
+    "tel=03001234567",
+    "phone_number: 03001234567",
+    "customer_phone=5550187",
+    "Jane,03001234567,Lahore",
+    "name,phone\nJane,+14155552671",
+    "Ph#03001234567",
+    "Tel#03001234567",
+    "Phone-03001234567",
+    "ph.03001234567",
+    "Jane/03001234567",
+    "Number.03001234567",
+    // In a link's path or query (H9A-R3).
+    "https://example.com/contact?phone=03001234567",
+    "https://example.com/call/+44+20+7946+0958",
   ]);
 });
 
@@ -134,6 +154,18 @@ test("street addresses: shapes in several languages, PO boxes, units and postcod
     "zip 90210",
     "postcode: 54000",
     "pin code 110001",
+    // A label glued to the house number, or the number glued to the street name (H9A-R3).
+    "Address:12 Baker Street",
+    "address=12 Baker Street",
+    "ship_to=221B Baker Street",
+    "12-Baker Street",
+    "zip=90210",
+    // In a map link: its path and query are read, decoded (H9A-R3).
+    "Delivery pin: https://maps.google.com/?q=221B+Baker+Street,+London+NW1+6XE",
+    "https://www.google.com/maps/place/221B+Baker+St,+London+NW1+6XE",
+    "https://www.google.com/maps/search/?api=1&query=12%20Baker%20Street",
+    "www.google.com/maps?q=12+Main+Street+Springfield",
+    "https://maps.example.com/?q=12%2BBaker%2BStreet",
   ]);
 });
 
@@ -205,8 +237,27 @@ test("not customer data: orders, products, money, dates, codes and ordinary sent
     "Visit https://shop.example.com/products/tote?variant=4123456789012",
     "Read pages 1012-1024",
     "Coordinates 24.8607, 67.0011",
+    // Morrow's own record ids (gen_random_uuid, crypto.randomUUID), also digit-led (H9A-R4).
+    "31415926-5358-4abc-9def-0123456789ab",
+    "Task 27182818-2845-4abc-9def-0123456789ab is done; see project 16180339-8874-4ABC-9DEF-0123456789AB.",
+    // Ids, numbers and marks glued to the separators a phone may now follow (H9A-R2, R3).
+    "Ticket #2125550187",
+    "SKU-2125550187",
+    "order_id=2125550187",
+    "variant_id=4123456789012",
+    "Totals 1,204,567,890 and 3.14159265358979",
+    "Ratio 1:2, step 3:4",
+    "https://admin.shopify.com/store/my-shop/orders/5123456789012?tab=timeline",
+    "https://cdn.shopify.com/s/files/1/0612/3456/7890/files/tote.png?v=1712345678",
+    "https://shop.example.com/blogs/news/12-main-street-sale",
+    "https://shop.example.com/products/tote?variant=4123456789012&utm_source=x",
+    "3-pack Rose Gardens prints",
   ])
     assert.deepEqual(screenCustomerText(text), { ok: true }, JSON.stringify(text));
+  // A phone beside a record id is still a phone.
+  assert.deepEqual(kindsOf("Task 31415926-5358-4abc-9def-0123456789ab: call 0300-1234567"), [
+    "phone",
+  ]);
 });
 
 test("what it cannot see: a customer's name typed as free text (ADR-0041 item 31)", () => {
@@ -380,29 +431,76 @@ test("bounds: closed inputs, refused sizes, and every structured string screened
 });
 
 test("linear time: a mebibyte of adversarial text is screened in bounded time", () => {
-  // Every pattern is bounded; a quadratic one would take minutes on these. The bound is wide
-  // for a loaded machine (each takes about a second there).
+  // Every pattern is bounded; a quadratic one would take hours on these at the full bound. Each
+  // shape (a head, a filler repeated, a tail; or numbered parts) is timed at a 64th, a 16th, a
+  // quarter and all of the bound, so a quadratic pattern fails at the first size it overruns,
+  // within minutes, and never hangs the run (H9A-R1). The bound is wide for a loaded machine
+  // (each takes a few seconds there).
   const size = customerScreenLimits.textChars;
-  for (const unit of [
-    "1 ",
-    "1",
-    "a@",
-    "a at b dot ",
-    "12 Main ",
-    "Z2lkOi8v",
-    "+1 (",
-    "@ ",
-    "&#64;",
-    "%40",
-    "customer ",
-    "jane.doe @ ",
-  ]) {
-    const text = unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-    const started = performance.now();
-    screenCustomerText(text);
-    const ms = performance.now() - started;
-    assert.ok(ms < 20_000, `${JSON.stringify(unit)} took ${Math.round(ms)} ms`);
-  }
+  const shapes = [
+    ...[
+      "1 ",
+      "1",
+      "a@",
+      "a at b dot ",
+      "12 Main ",
+      "Z2lkOi8v",
+      "+1 (",
+      "@ ",
+      "&#64;",
+      "%40",
+      "customer ",
+      "jane.doe @ ",
+    ].map((unit) => ["", unit, ""]),
+    // Long runs of spaces, tabs and punctuation (H9A-R1): the bracketed "(at)", the loose email
+    // forms, a token's trimming, and the address and postcode patterns with a space run inside.
+    ["a", " ", "b"],
+    ["1 a", " ", "b"],
+    ["1 (", " ", "x"],
+    ["", "\t", "1"],
+    ["1 a", "*", "a"],
+    ["1 a", "*.", "a"],
+    ["1 zip", " ", "x"],
+    ["1 h", " ", "x"],
+    ["1 jane", " ", "x @ b"],
+    ["1 x at", " ", "y"],
+    ["", "%20", "1"],
+    // The masked copy's runs: a masked link, GID or date leaves a run of spaces in place.
+    ["1 zip ", "www.a ", "x"],
+    ["1 h ", "www.a ", "x 5, Street"],
+    ["1 po box ", "gid://a ", "x"],
+    ["1 Springfield, CA ", "2026-10-27 ", "x"],
+    ["1 street ", "www.a ", "x"],
+    // Links read for addresses and phones, glued labels and separators (H9A-R2, R3).
+    ["", "https://maps.example/?q=12+Main+", ""],
+    ["", "whatsapp.com/send?a=", ""],
+    ["", "a:1 ", ""],
+    ["", "1,", ""],
+    ["", "=+1", ""],
+    ["", "12-a ", ""],
+    ["", "31415926-5358-4abc-9def-0123456789ab ", ""],
+    // Distinct links, each decoded and scanned on its own.
+    (i) => `https://maps.example/?q=${i}+Main+x&p=${i * 7} `,
+  ];
+  const textOf = (shape, n) => {
+    if (typeof shape === "function") {
+      let text = "";
+      for (let i = 0; text.length < n; i += 1) text += shape(i);
+      return text.slice(0, n);
+    }
+    const [head, fill, tail] = shape;
+    return (head + fill.repeat(Math.ceil(n / fill.length))).slice(0, n - tail.length) + tail;
+  };
+  for (const shape of shapes)
+    for (const n of [size / 64, size / 16, size / 4, size]) {
+      const text = textOf(shape, n);
+      assert.equal(text.length, n);
+      const started = performance.now();
+      screenCustomerText(text);
+      const ms = performance.now() - started;
+      const name = typeof shape === "function" ? shape(0) : JSON.stringify(shape);
+      assert.ok(ms < 20_000, `${name} at ${n} took ${Math.round(ms)} ms`);
+    }
 });
 
 test("the post command's entry point: not_started customer_data with the safe message", async () => {
@@ -479,6 +577,39 @@ test("every decision the registry names screens the text its model wrote (H9a wi
   // plan.draft: tests/plan-draft.test.mjs drives the card fixtures through decidePlanDraft.
   const source = readFileSync("packages/policy/src/projects/plan-draft.ts", "utf8");
   assert.match(source, /screenModelWrittenSync\("plan_card", mapped\)/);
+});
+
+test("lab:shopify-privacy's markers cover every form phase I plants, and the screen refuses each", () => {
+  // O1 (no log line) and I4 (no refusal) search the log and the refusals for the markers; a
+  // form without its marker would pass them unseen (H9A-R6). Several runs' random values.
+  for (let run = 0; run < 8; run += 1) {
+    const customer = plantedCustomer();
+    const planted = phaseITexts(customer);
+    const texts = [
+      ...planted.notebook,
+      planted.returnsText,
+      planted.giftSource,
+      planted.repliesText,
+      ...planted.posts,
+    ];
+    assert.equal(texts.length, 9);
+    for (const text of texts) {
+      assert.ok(
+        customer.markers.some((m) => text.includes(m)),
+        `no marker for ${JSON.stringify(text)}`,
+      );
+      assert.equal(screenCustomerText(text).ok, false, text);
+    }
+    // O1's own guard: each marker is long enough not to match by chance.
+    assert.ok(customer.markers.every((m) => typeof m === "string" && m.length > 8));
+    // Each planted form is its own marker: the spaced phone and the obfuscated email.
+    assert.ok(customer.markers.includes(customer.screenPhone));
+    assert.ok(customer.markers.includes(customer.obfuscatedEmail));
+  }
+  // The lab takes its customer, texts and markers from the fixture.
+  const lab = readFileSync("scripts/shopify-privacy-lab.mjs", "utf8");
+  assert.match(lab, /\.\.\.labCustomer\.markers/);
+  assert.match(lab, /plantedTexts\.posts/);
 });
 
 test("the copy, exactly as ADR-0040 and ADR-0041 give it, and the module stays edge-safe", () => {

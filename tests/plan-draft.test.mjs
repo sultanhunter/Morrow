@@ -410,6 +410,26 @@ test("plan.draft: a card holding a customer identifier is refused before it is s
     });
   // The fixtures' dates, ids and counts pass.
   assert.equal((await decidePlanDraft(turn(), asToolInput(project))).ok, true);
+  // Morrow's own record ids are UUIDs (gen_random_uuid, crypto.randomUUID); one whose leading
+  // groups are digits is an id, never a grouped phone number (H9A-R4).
+  const projectId = "31415926-5358-4abc-9def-0123456789ab";
+  const principalId = "27182818-2845-4abc-9def-0123456789ab";
+  const installationId = "16180339-8874-4abc-9def-0123456789ab";
+  for (const card of [
+    { ...change, target: { ...change.target, projectId } },
+    {
+      ...project,
+      steps: [
+        { ...project.steps[0], assignee: { kind: "person", principalId } },
+        project.steps[1],
+        { ...project.steps[2], assignee: { kind: "agent", installationId } },
+      ],
+    },
+    { ...change, steps: [{ ...change.steps[0], assignee: { kind: "person", principalId } }] },
+  ]) {
+    const decided = await decidePlanDraft(turn(), asToolInput(card));
+    assert.equal(decided.ok, true, JSON.stringify(decided));
+  }
   // The earlier checks keep their order: an invalid card is input_invalid, not customer_data.
   assert.deepEqual(
     await decidePlanDraft(turn(), asToolInput({ ...project, title: "Tote", why: "a@b.co" })),

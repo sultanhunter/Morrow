@@ -381,12 +381,34 @@ test("H9a: a customer identifier the model wrote is refused before the command (
     "Jane prefers WhatsApp: 0300-1234567",
     "Customer 7234567890123 asked for a gift wrap.",
     "jane&#64;example.com",
+    // Tool output copied as key=value or CSV, and glued forms (H9A-R2).
+    "customer_phone=+923001234567",
+    "phone=+14155552671",
+    "tel=03001234567",
+    "Jane,03001234567,Lahore",
+    "name,phone\nJane,+14155552671",
+    "Ph#03001234567",
+    "ph.03001234567",
+    "Jane/03001234567",
+    // A glued label, or a map link (H9A-R3).
+    "ship_to=221B Baker Street",
+    "Pin: https://maps.google.com/?q=221B+Baker+Street,+London+NW1+6XE",
   ])
     assert.deepEqual(decideNotebookWrite({ text }, run()), refused, text);
   // Order numbers, order and product ids, prices and dates are not customer data.
   const fine = "Order #1042 (gid://shopify/Order/5123456789012) shipped 2026-10-20; $54.20.";
   assert.equal(decideKnowledgePropose(proposeInput({ text: fine }), run()).ok, true);
   assert.equal(decideNotebookWrite({ text: fine }, run()).ok, true);
+  // A task source is a Morrow UUID; one with digit-led groups is an id, not a phone (H9A-R4).
+  const taskId = "31415926-5358-4abc-9def-0123456789ab";
+  assert.equal(
+    decideKnowledgePropose(proposeInput({ sources: [{ kind: "task", value: taskId }] }), run()).ok,
+    true,
+  );
+  assert.equal(
+    decideNotebookWrite({ text: `Task ${taskId} is waiting on photos.` }, run()).ok,
+    true,
+  );
   // An invalid input stays invalid_input: the screen runs on a valid input only.
   assert.equal(
     decideNotebookWrite({ text: "jane@example.com", installationId: "i" }, run()).outcome,

@@ -26,8 +26,11 @@ import type { Current_CustomerDataKind, Current_CustomerScreenRefusal } from "@m
 // shop address), which no pattern can tell from a customer's; owner question 23 approved the
 // screen for every email, phone and street address.
 // Pure and synchronous apart from the list port: no I/O, no node:* import, no model. Every
-// pattern is linear in the text (bounded quantifiers, fixed alternations), and the verdict names
-// kinds only, never the text or what matched.
+// pattern is linear in the text: each whitespace and repeated-piece quantifier is bounded,
+// alternations are fixed, a pattern that may start anywhere in a run never scans to the run's
+// end, and the email, customer id and address scans read a copy with every run of spaces and
+// tabs closed up to one space (H9A-R1; tests/customer-screen.test.mjs times long whitespace,
+// punctuation and link runs). The verdict names kinds only, never the text or what matched.
 
 export type CustomerDataKind = Current_CustomerDataKind;
 export type CustomerScreenRefusal = Current_CustomerScreenRefusal;
@@ -120,13 +123,16 @@ export function customerEmailDigestInput(email: string): string | null {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The scan copy. Only the screen reads it; it is never stored. NFKC folds full-width and
+// The scan copies. Only the screen reads them; they are never stored. NFKC folds full-width and
 // compatibility forms (＠, ﹫, full-width digits and letters, no-break spaces); format characters
 // (zero-width spaces and joiners, bidi controls, soft hyphens, variation selectors, fillers) are
 // dropped; HTML character references and percent escapes of the characters an address or id
 // needs are decoded, and the result is folded again (an escaped full-width at sign is still an
-// at sign), up to three times; every decimal digit becomes its ASCII digit; every dash becomes "-"; and bracketed
-// "(at)" and "(dot)" become "@" and ".".
+// at sign), up to three times; every decimal digit becomes its ASCII digit; every dash becomes
+// "-"; and bracketed "(at)" and "(dot)" become "@" and ".". The scan copy the email, customer id
+// and address scans read also closes every run of spaces and tabs up to one space, so no padding
+// stretches a pattern past its bounded quantifiers (H9A-R1). The phone scan reads the spaced
+// copy, with its runs kept: four spaces between two numbers part them, as they always have.
 const formatCharacters = /[\p{Cf}͏ᅟᅠ឴឵᠋-᠏ㅤ︀-️ﾠ\u{E0100}-\u{E01EF}]/gu;
 const dashes = /[‐-―−﹘﹣－]/gu;
 const namedReferences: Readonly<Record<string, string>> = Object.freeze({
@@ -181,27 +187,41 @@ function digitValue(c: string): string {
   }
   return String(value);
 }
-const bracketedAt = /[ \t]*[([{<][ \t]*(?:at|@)[ \t]*[)\]}>][ \t]*/giu;
-const bracketedDot = /[ \t]*[([{<][ \t]*(?:dot|\.)[ \t]*[)\]}>][ \t]*/giu;
+// Bounded on every side: an unbounded leading run would make each start in a long run of
+// spaces scan to its end (quadratic; H9A-R1).
+const bracketedAt = /[ \t]{0,8}[([{<][ \t]{0,8}(?:at|@)[ \t]{0,8}[)\]}>][ \t]{0,8}/giu;
+const bracketedDot = /[ \t]{0,8}[([{<][ \t]{0,8}(?:dot|\.)[ \t]{0,8}[)\]}>][ \t]{0,8}/giu;
+const spaceRun = /[ \t]+/gu;
+const closedUp = (text: string) => text.replace(spaceRun, " ");
 const fold = (text: string) => text.normalize("NFKC").replace(formatCharacters, "");
+/** Every script's digits made ASCII, and every dash "-". */
+const plain = (text: string) => text.replace(otherDigit, digitValue).replace(dashes, "-");
+const bracketsRead = (text: string) =>
+  /[([{<]/u.test(text) ? text.replace(bracketedAt, "@").replace(bracketedDot, ".") : text;
 const unescaped = (text: string) =>
   text
     .replace(htmlReference, decodeReference)
     .replace(percentEscape, (_, hex: string) => percentEscapes[hex.toLowerCase()] ?? "");
 // Escapes are decoded up to three times ("&amp;#64;" is an at sign escaped twice).
 const decodePasses = 3;
-function scanCopy(text: string): string {
-  let current = fold(text);
+interface ScanCopies {
+  /** The text folded, before any escape is decoded (its links are read whole). */
+  readonly folded: string;
+  /** Decoded, digits and dashes plain, brackets read; its runs of spaces kept (phones). */
+  readonly spaced: string;
+  /** The same with every run of spaces and tabs closed up to one space. */
+  readonly scan: string;
+}
+function scanCopies(text: string): ScanCopies {
+  const folded = fold(text);
+  let current = folded;
   for (let pass = 0; pass < decodePasses && /[&%]/u.test(current); pass += 1) {
     const next = fold(unescaped(current));
     if (next === current) break;
     current = next;
   }
-  return current
-    .replace(otherDigit, digitValue)
-    .replace(dashes, "-")
-    .replace(bracketedAt, "@")
-    .replace(bracketedDot, ".");
+  const decoded = plain(current);
+  return { folded, spaced: bracketsRead(decoded), scan: bracketsRead(closedUp(decoded)) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -285,20 +305,23 @@ const writtenTlds =
   "uk|us|ca|au|nz|ie|de|fr|es|it|nl|be|ch|at|se|no|dk|fi|pt|pl|cz|gr|ru|ua|tr|il|ae|sa|qa|kw|" +
   "bh|om|eg|ma|ng|ke|za|in|pk|bd|lk|np|my|sg|id|ph|th|vn|cn|jp|kr|tw|hk|br|mx|ar|cl|pe";
 const looseLocal = "(?<![\\p{L}\\p{N}._%+-])([\\p{L}\\p{N}._%+-]{1,64})";
-const looseDomain = `((?:${label}(?:[ \\t]?\\.[ \\t]?|[ \\t]+dot[ \\t]+))+)`;
+// Spaces are bounded (the scan copy holds at most one in a row; H9A-R1).
+const sp = "[ \\t]{1,8}";
+const sp0 = "[ \\t]{0,8}";
+const looseDomain = `((?:${label}(?:[ \\t]?\\.[ \\t]?|${sp}dot${sp}))+)`;
 // "name @ shop.com", "name@ shop . com": an at sign with spaces on either side.
 const spacedEmail = new RegExp(
-  `${looseLocal}(?:[ \\t]+@[ \\t]*|@[ \\t]+)${looseDomain}(\\p{L}{2,24})(?![\\p{L}\\p{N}-])`,
+  `${looseLocal}(?:${sp}@${sp0}|@${sp})${looseDomain}(\\p{L}{2,24})(?![\\p{L}\\p{N}-])`,
   "giu",
 );
 // "name at shop dot com", "name at shop.com".
 const writtenEmail = new RegExp(
-  `${looseLocal}[ \\t]+at[ \\t]+${looseDomain}(${writtenTlds})(?![\\p{L}\\p{N}-])`,
+  `${looseLocal}${sp}at${sp}${looseDomain}(${writtenTlds})(?![\\p{L}\\p{N}-])`,
   "giu",
 );
 // "name@gmail", "name at gmail": a mail provider without its top-level domain.
 const bareProvider = new RegExp(
-  `${looseLocal}([ \\t]*@[ \\t]*|[ \\t]+at[ \\t]+)(${providerNames})(?![\\p{L}\\p{N}.@-])`,
+  `${looseLocal}(${sp0}@${sp0}|${sp}at${sp})(${providerNames})(?![\\p{L}\\p{N}.@-])`,
   "giu",
 );
 // A local part with a dot, underscore or plus, or with letters and digits, reads as an address
@@ -313,7 +336,7 @@ interface Findings {
 
 function looseForm(found: Findings, local: string, domainText: string, tld: string): void {
   const domain = (domainText + tld)
-    .replace(/[ \t]+dot[ \t]+/giu, ".")
+    .replace(/[ \t]{1,8}dot[ \t]{1,8}/giu, ".")
     .replace(/[ \t]/gu, "")
     .toLowerCase();
   if (fileExtensions.has(tld.toLowerCase())) return;
@@ -395,27 +418,78 @@ function scanCustomerIds(scan: string, found: Findings): void {
 
 // ---------------------------------------------------------------------------------------------
 // The phone and address scans read a masked copy: links, GIDs, email addresses, Morrow record
-// ids and ISO dates and times are blanked first (an order GID's 13 digits are an id, a date's
-// digits a date), after the phone links among them (tel:, wa.me, WhatsApp's send link) are read.
+// ids (a "product:N" id, a UUID) and ISO dates and times are blanked first (an order GID's 13
+// digits are an id, a UUID's leading groups a record id, never a grouped phone number (H9A-R4),
+// a date's digits a date), after the phone links among them (tel:, wa.me, WhatsApp's send link)
+// are read. What a link says is read on its own (H9A-R3): each link's path, query and fragment,
+// decoded ("+" a space, percent escapes read, each "/", "?", "&" and "#" a line break), is
+// masked and scanned for phones and addresses like a text of its own, so a map link's
+// "?q=221B+Baker+Street" or a "?phone=" is found, while an order link's ids still read as ids
+// and nothing in a link runs on into the text around it.
 const phoneLink =
-  /\btel:[ \t]*(\+?[0-9][0-9 \t().-]{5,24}[0-9])|\bwa\.me\/\+?([0-9]{7,15})\b|\bwhatsapp\.com\/send\/?\?(?:[a-z_]+=[^&\s]*&)*phone=\+?([0-9]{7,15})\b/giu;
+  /\btel:[ \t]{0,8}(\+?[0-9][0-9 \t().-]{5,24}[0-9])|\bwa\.me\/\+?([0-9]{7,15})\b|\bwhatsapp\.com\/send\/?\?(?:[a-z_]{1,32}=[^&\s]{0,256}&){0,16}phone=\+?([0-9]{7,15})\b/giu;
+const linkPattern = /\b(?:https?:\/\/|www\.)[^\s<>"']{1,2048}/giu;
+const uuidPattern =
+  /(?<![0-9A-Za-z])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9A-Za-z])/giu;
 const maskPatterns: readonly RegExp[] = Object.freeze([
-  /\b(?:https?:\/\/|www\.)[^\s<>"']{1,2048}/giu,
+  linkPattern,
   /\bgid:\/\/[^\s<>"']{1,256}/giu,
   /[\p{L}\p{N}._%+-]{1,64}@[^\s<>"',;]{1,255}/gu,
   /\b(?:product|order|variant|collection|location|fulfillment|refund|line_item|inventory_item|draft_order):[0-9]{1,20}\b/giu,
+  uuidPattern,
   /\b[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,9})?)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?)?\b/gu,
   /\b[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\b/gu,
   /\b[0-9]{1,3}(?:\.[0-9]{1,3}){3}\b/gu,
 ]);
-function maskedCopy(scan: string, found: Findings): string {
+const blank = (s: string) => " ".repeat(s.length);
+function scanPhoneLinks(scan: string, found: Findings): void {
   for (const m of scan.matchAll(phoneLink)) {
     const digits = (m[1] ?? m[2] ?? m[3] ?? "").replace(/[^0-9]/gu, "");
     if (digits.length >= 7 && digits.length <= 15) found.kinds.add("phone");
   }
-  let masked = scan;
-  for (const pattern of maskPatterns) masked = masked.replace(pattern, (s) => " ".repeat(s.length));
+}
+function maskedCopy(text: string): string {
+  let masked = text;
+  for (const pattern of maskPatterns)
+    if (pattern !== uuidPattern || masked.includes("-")) masked = masked.replace(pattern, blank);
   return masked;
+}
+const linkAuthority = /^(?:https?:\/\/)?[^/?#]{0,2048}/iu;
+const linkDelimiters = /[/?&#]/gu;
+const percentRun = /(?:%[0-9A-Fa-f]{2})+/gu;
+function decodedPercents(run: string): string {
+  try {
+    return decodeURIComponent(run);
+  } catch {
+    return " ";
+  }
+}
+/** A link's path, query and fragment, decoded, with its scheme and host left out. */
+function linkContent(link: string): string {
+  let rest = link
+    .slice(linkAuthority.exec(link)![0].length)
+    .replace(htmlReference, decodeReference);
+  for (let pass = 0; pass < decodePasses && rest.includes("%"); pass += 1) {
+    const next = rest.replace(percentRun, decodedPercents);
+    if (next === rest) break;
+    rest = next;
+  }
+  return plain(fold(rest.replace(linkDelimiters, "\n").replace(/\+/gu, " ")));
+}
+/**
+ * The links of the folded text (whole, before an escaped space ends them) and of the scan copy,
+ * each one's content once. Only a content with a digit can hold a phone or an address, and a
+ * link without a digit of any script has none (an escaped digit is written with digits).
+ */
+function linkContents(...copies: readonly string[]): readonly string[] {
+  const contents = new Set<string>();
+  for (const copy of copies)
+    for (const m of copy.matchAll(linkPattern)) {
+      if (!/\p{Nd}/u.test(m[0])) continue;
+      const content = linkContent(m[0]);
+      if (/[0-9]/u.test(content)) contents.add(content);
+    }
+  return [...contents];
 }
 
 // Phone numbers. A run of digits with phone separators, classified by its shape and the words
@@ -423,17 +497,36 @@ function maskedCopy(scan: string, found: Findings): string {
 // an id or money word ("order", "SKU", "tracking", "Rs" ...) makes it not one; otherwise an
 // international number (+ or 00) of 8 to 15 digits, a grouped number of 10 to 13 digits, or a
 // bare national number (10 or 11 digits with a trunk 0, or a valid North American number).
+// A run starts after a space, a line break or a bracket, never inside a word or a number.
 const phoneRun =
   /(?<![\p{L}\p{N}_#$€£¥₹@/\\.,=+-])(\+|\b00)?[ \t]?(?:\([0-9]{1,5}\)|[0-9])(?:[ \t.()-]{0,3}[0-9]){6,16}(?![\p{L}\p{N}_])/gu;
+// A run glued to a separator a model copies tool output with is read too (H9A-R2): after "="
+// ("phone=+1...", "tel=0300..."), "," ("Jane,0300...", a CSV row), "/" ("Jane/0300...") or "."
+// ("ph.0300..."), unless a digit comes before the mark (a decimal, a list of numbers, a date);
+// and after "#" or "-" only when a phone word comes first ("Tel#0300...", "Phone-0300..."), since
+// "#1042" and "SKU-..." are ids. It is a second pass: a run the first pass reads is read as before.
+const gluedPhoneRun =
+  /(?<![0-9][=,./#-])(?<=[=,./#-])\+?(?:\([0-9]{1,5}\)|[0-9])(?:[ \t.()-]{0,3}[0-9]){6,16}(?![\p{L}\p{N}_])/gu;
+// A phone word ends at anything but a letter or digit, so a key's parts count
+// ("customer_phone=", "phone_number:").
 const phoneWordBefore =
-  /\b(?:phone|phones|tel|telephone|mobile|mob|cell|cellphone|whats ?app|call|sms|fax|ph|landline|contact|reach)\b[^\p{L}\p{N}]{0,4}(?:\p{L}{1,12}[^\p{L}\p{N}]{1,4}){0,2}$/iu;
-const idWordBefore =
-  /\b(?:order|orders|product|products|variant|sku|item|items|invoice|tracking|track|ref|reference|po|barcode|upc|ean|isbn|gtin|mpn|asin|id|code|batch|lot|serial|model|part|awb|consignment|shipment|parcel|receipt|transaction|txn|account|acct|rs|pkr|inr|usd|eur|gbp|aed|sar|rupees|dollars|qty|quantity|total|price|amount|revenue|sales|profit|cost|budget|spend|gmv|aov|views|visits)\b[^\p{L}\p{N}]{0,4}(?:(?:no|nr|num|number|id)\b[^\p{L}\p{N}]{0,4})?$/iu;
+  /(?<![\p{L}\p{N}])(?:phone|phones|tel|telephone|mobile|mob|cell|cellphone|whats ?app|call|sms|fax|ph|landline|contact|reach)(?![\p{L}\p{N}])[^\p{L}\p{N}]{0,4}(?:\p{L}{1,12}[^\p{L}\p{N}]{1,4}){0,2}$/iu;
+const idWords =
+  "order|orders|product|products|variant|sku|item|items|invoice|tracking|track|ref|reference|po|barcode|upc|ean|isbn|gtin|mpn|asin|id|code|batch|lot|serial|model|part|awb|consignment|shipment|parcel|receipt|transaction|txn|account|acct|rs|pkr|inr|usd|eur|gbp|aed|sar|rupees|dollars|qty|quantity|total|price|amount|revenue|sales|profit|cost|budget|spend|gmv|aov|views|visits";
+const idWordBefore = new RegExp(
+  `\\b(?:${idWords})\\b[^\\p{L}\\p{N}]{0,4}(?:(?:no|nr|num|number|id)\\b[^\\p{L}\\p{N}]{0,4})?$`,
+  "iu",
+);
+// For a glued run, a key's parts count as words too ("order_id=", "variant_id=").
+const idKeyBefore = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:${idWords})(?![\\p{L}\\p{N}])[^\\p{L}\\p{N}]{0,4}(?:(?:no|nr|num|number|id)(?![\\p{L}\\p{N}])[^\\p{L}\\p{N}]{0,4})?$`,
+  "iu",
+);
 const unitAfter =
   /^[ \t]{0,2}(?:%|(?:units?|pcs|pieces?|items?|orders?|views?|visits?|customers?|sales|products?|usd|pkr|inr|eur|gbp|aed|sar|rs|rupees|dollars|times|days?|nights?)\b)/iu;
 const nanp = (ten: string) => /^[2-9][0-9]{2}[2-9][0-9]{6}$/u.test(ten);
 
-function phoneShaped(match: string, before: string, after: string): boolean {
+function phoneShaped(match: string, before: string, after: string, idBefore: RegExp): boolean {
   const digits = match.replace(/[^0-9]/gu, "");
   const international = match.startsWith("+") || match.startsWith("00");
   const body = match.replace(/^(?:\+|00)/u, "");
@@ -442,7 +535,7 @@ function phoneShaped(match: string, before: string, after: string): boolean {
   if (groups.filter((g) => g.length === 1).length > 1) return false; // ISBN-like groups
   if (unitAfter.test(after)) return false;
   if (phoneWordBefore.test(before)) return digits.length >= 7 && digits.length <= 15;
-  if (idWordBefore.test(before)) return false;
+  if (idBefore.test(before)) return false;
   if (international) {
     const n = match.startsWith("00") ? digits.length - 2 : digits.length;
     return n >= 8 && n <= 15;
@@ -456,20 +549,27 @@ function phoneShaped(match: string, before: string, after: string): boolean {
 }
 function scanPhones(masked: string, found: Findings): void {
   if (!/[0-9]{3}/u.test(masked.replace(/[ \t.()-]/gu, ""))) return;
-  for (const m of masked.matchAll(phoneRun)) {
-    const at = m.index;
-    const match = m[0].trimEnd();
-    if (
-      phoneShaped(
-        match,
-        masked.slice(Math.max(0, at - 40), at),
-        masked.slice(at + m[0].length, at + m[0].length + 16),
-      )
-    ) {
+  const read = (m: RegExpExecArray | RegExpMatchArray, glued: boolean) => {
+    const at = m.index!;
+    const before = masked.slice(Math.max(0, at - 40), at);
+    if (glued && /[#-]$/u.test(before) && !phoneWordBefore.test(before)) return false;
+    return phoneShaped(
+      m[0].trimEnd(),
+      before,
+      masked.slice(at + m[0].length, at + m[0].length + 16),
+      glued ? idKeyBefore : idWordBefore,
+    );
+  };
+  for (const m of masked.matchAll(phoneRun))
+    if (read(m, false)) {
       found.kinds.add("phone");
       return;
     }
-  }
+  for (const m of masked.matchAll(gluedPhoneRun))
+    if (read(m, true)) {
+      found.kinds.add("phone");
+      return;
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -912,7 +1012,19 @@ const unitWords = new Set([
 ]);
 const titleCase = (w: string) => /^\p{Lu}/u.test(w);
 const allCaps = (w: string) => /\p{L}/u.test(w) && w === w.toUpperCase() && w.length > 1;
-const bare = (w: string) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}']+$/gu, "");
+// A token without its leading punctuation and its trailing punctuation but an apostrophe. The
+// trailing run is found from the last letter, digit or apostrophe, so a match starts only at
+// one of those: a pattern for the run itself would rescan a long punctuation run from each of
+// its characters (quadratic; H9A-R1).
+const firstKept = /[\p{L}\p{N}]/u;
+const lastKept = /[\p{L}\p{N}'][^\p{L}\p{N}']*$/u;
+function bare(w: string): string {
+  const first = firstKept.exec(w);
+  if (first === null) return "";
+  const rest = w.slice(first.index);
+  const last = lastKept.exec(rest)!;
+  return rest.slice(0, last.index + (last[0].codePointAt(0)! > 0xffff ? 2 : 1));
+}
 
 interface Token {
   readonly raw: string;
@@ -921,16 +1033,26 @@ interface Token {
   /** Only spaces or tabs part it from the next token (no comma, stop or line break). */
   readonly runsOn: boolean;
 }
-const tokenPattern = /[^\s,;()\[\]{}"“”«»|]+/gu;
-const runsOnAfter = /^[ \t]+[^\s,;()\[\]{}"“”«»|]/u;
+// A label glued to a value is two tokens ("Address:12", "ship_to=221B"; H9A-R3), and so is a
+// house number glued to its street name ("12-Baker Street").
+const tokenPattern = /[^\s,;:=()\[\]{}"“”«»|]+/gu;
+const runsOnAfter = /^[ \t]{1,8}[^\s,;:=()\[\]{}"“”«»|]/u;
+const numberDashName = /^([0-9]{1,5}[A-Za-z]?)-(?=\p{L})/u;
 function tokens(masked: string): readonly Token[] {
   const out: Token[] = [];
+  const push = (raw: string, runsOn: boolean) => {
+    const word = bare(raw);
+    if (word !== "") out.push({ raw, word, lower: word.toLowerCase(), runsOn });
+  };
   for (const m of masked.matchAll(tokenPattern)) {
-    const word = bare(m[0]);
-    if (word === "") continue;
+    let raw = m[0];
+    const glued = numberDashName.exec(raw);
+    if (glued) {
+      push(glued[1]!, true);
+      raw = raw.slice(glued[0].length);
+    }
     const end = m.index + m[0].length;
-    const runsOn = !/[.!?:]$/u.test(m[0]) && runsOnAfter.test(masked.slice(end, end + 64));
-    out.push({ raw: m[0], word, lower: word.toLowerCase(), runsOn });
+    push(raw, !/[.!?]$/u.test(raw) && runsOnAfter.test(masked.slice(end, end + 64)));
   }
   return out;
 }
@@ -945,11 +1067,11 @@ function englishAddress(t: readonly Token[], i: number): boolean {
   const before = t[i - 1]?.lower;
   if (before !== undefined && (idWordBefore.test(before) || before === "#")) return false;
   for (let k = 1; k <= 4 && i + k + 1 < t.length; k += 1) {
-    const names = t.slice(i + 1, i + k + 1);
     const street = t[i + k + 1]!;
     const word = street.lower.replace(/\.$/u, "");
     const risky = titleCaseStreetWords.has(word);
     if (!risky && !anyCaseStreetWords.has(word)) continue;
+    const names = t.slice(i + 1, i + k + 1);
     if (!names.every(nameWordOk)) continue;
     const shouting = allCaps(street.word);
     if (names.some((n) => allCaps(n.word)) && !shouting) continue;
@@ -1002,12 +1124,14 @@ function nameFirstAddress(t: readonly Token[], i: number): boolean {
 }
 const compoundStreet =
   /(?<![\p{L}])\p{Lu}[\p{Ll}ß]{1,30}(?:straße|strasse|str\.|gasse|weg|allee|platz|ufer|chaussee|damm|straat|laan|gracht|plein|steeg|kade|singel|vej|gade|gatan|gata|vägen|veien)[ \t]?[0-9]{1,4}[a-z]?(?![\p{L}\p{N}])/u;
+// Every space run below is bounded: two unbounded runs around an optional piece are quadratic
+// on a long run of spaces (H9A-R1), and the scan copy holds at most one space in a row.
 const unitAndStreet =
-  /\b(?:house|h|plot|flat|apartment|apt|villa|bungalow|unit|suite|shop|office)[ \t]*(?:no\.?|number|#)?[ \t]*[a-z]?-?[0-9]{1,5}[a-z]?[ \t]*,[ \t]*(?:street|st|lane|road|rd|block|sector|phase|gali|mohalla|colony|avenue|ave|floor)\b/iu;
+  /\b(?:house|h|plot|flat|apartment|apt|villa|bungalow|unit|suite|shop|office)[ \t]{0,4}(?:no\.?|number|#)?[ \t]{0,4}[a-z]?-?[0-9]{1,5}[a-z]?[ \t]{0,4},[ \t]{0,4}(?:street|st|lane|road|rd|block|sector|phase|gali|mohalla|colony|avenue|ave|floor)\b/iu;
 const numberedStreet =
-  /\b(?:street|st|lane|gali|road|rd)[ \t]*(?:no\.?|number|#)[ \t]*[0-9]{1,4}\b/iu;
+  /\b(?:street|st|lane|gali|road|rd)[ \t]{0,4}(?:no\.?|number|#)[ \t]{0,4}[0-9]{1,4}\b/iu;
 const poBox =
-  /\b(?:g?p\.?[ \t]?o\.?|post[ \t]+office)[ \t]*box[ \t]*(?:no\.?|#)?[ \t]*[0-9]{1,7}\b/iu;
+  /\b(?:g?p\.?[ \t]?o\.?|post[ \t]{1,4}office)[ \t]{0,4}box[ \t]{0,4}(?:no\.?|#)?[ \t]{0,4}[0-9]{1,7}\b/iu;
 const ukAreas =
   "AB|AL|BA|BB|BD|BH|BL|BN|BR|BS|BT|CA|CB|CF|CH|CM|CO|CR|CT|CV|CW|DA|DD|DE|DG|DH|DL|DN|DT|DY|EC|EH|EN|EX|FK|FY|GL|GU|GY|HA|HD|HG|HP|HR|HS|HU|HX|IG|IM|IP|IV|JE|KA|KT|KW|KY|LA|LD|LE|LL|LN|LS|LU|ME|MK|ML|NE|NG|NN|NP|NR|NW|OL|OX|PA|PE|PH|PL|PO|PR|RG|RH|RM|SA|SE|SG|SK|SL|SM|SN|SO|SP|SR|SS|ST|SW|SY|TA|TD|TF|TN|TQ|TR|TS|TW|UB|WA|WC|WD|WF|WN|WR|WS|WV|YO|ZE|B|E|G|L|M|N|S|W";
 const ukPostcode = new RegExp(
@@ -1017,9 +1141,9 @@ const ukPostcode = new RegExp(
 const canadianPostcode =
   /(?<![\p{L}\p{N}])[ABCEGHJ-NPRSTVXY][0-9][ABCEGHJ-NPRSTV-Z][ -]?[0-9][ABCEGHJ-NPRSTV-Z][0-9](?![\p{L}\p{N}])/u;
 const usStateZip =
-  /,[ \t]*(?:AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|PR|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)[ \t]+[0-9]{5}(?:-[0-9]{4})?(?![\p{N}])/u;
+  /,[ \t]{0,4}(?:AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|PR|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)[ \t]{1,4}[0-9]{5}(?:-[0-9]{4})?(?![\p{N}])/u;
 const keywordPostcode =
-  /\b(?:postal[ \t]*code|post[ \t]*code|postcode|zip[ \t]*code|zip|pin[ \t]*code|pincode)\b[ \t]*[:#-]?[ \t]*(?=[A-Z]{0,4}[0-9])[A-Z0-9]{2,6}(?:[ -]?[A-Z0-9]{2,5})?\b/iu;
+  /\b(?:postal[ \t]{0,2}code|post[ \t]{0,2}code|postcode|zip[ \t]{0,2}code|zip|pin[ \t]{0,2}code|pincode)\b[ \t]{0,4}[:#=-]?[ \t]{0,4}(?=[A-Z]{0,4}[0-9])[A-Z0-9]{2,6}(?:[ -]?[A-Z0-9]{2,5})?\b/iu;
 
 function scanAddresses(masked: string, found: Findings): void {
   if (
@@ -1057,13 +1181,22 @@ function inspect(texts: readonly string[]): Findings {
     if (text.length > customerScreenLimits.textChars) throw Error("CUSTOMER_SCREEN_TEXT_TOO_LONG");
     total += text.length;
     if (total > customerScreenLimits.totalChars) throw Error("CUSTOMER_SCREEN_TEXT_TOO_LONG");
-    const scan = scanCopy(text);
+    const { folded, spaced, scan } = scanCopies(text);
     if (!mayHold.test(scan)) continue;
     scanEmails(scan, found);
     scanCustomerIds(scan, found);
-    const masked = maskedCopy(scan, found);
+    scanPhoneLinks(scan, found);
+    const masked = maskedCopy(spaced);
     scanPhones(masked, found);
-    scanAddresses(masked, found);
+    // Runs of spaces, a masked span's among them, are closed up for the address scan ("12 <link>
+    // Baker Street" reads as it always has).
+    scanAddresses(closedUp(masked), found);
+    for (const content of linkContents(folded, scan)) {
+      if (found.kinds.has("phone") && found.kinds.has("street_address")) break;
+      const linkMasked = maskedCopy(content);
+      scanPhones(linkMasked, found);
+      scanAddresses(closedUp(linkMasked), found);
+    }
   }
   // More looser forms than the list may be asked about: refused as email addresses.
   if (found.candidates.size > customerScreenLimits.listCandidates) found.kinds.add("email");

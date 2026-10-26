@@ -56,6 +56,7 @@ import {
   notebookWriteStep,
 } from "../packages/work/src/knowledge/run-steps.ts";
 import { customerDataSafeMessage, screenPost } from "../packages/policy/src/customer-screen.ts";
+import { phaseITexts, plantedCustomer } from "./fixtures/privacy-lab-customer.mjs";
 import { storeContentHandlers } from "../packages/work/src/redaction.ts";
 import {
   asApi,
@@ -136,20 +137,19 @@ const brokerEnv = {
   MORROW_VAULT_KEK_V1: kek,
 };
 const connectorOrigin = "https://connector.lab.example.test";
-const customerEmail = "lab-customer-" + randomBytes(6).toString("hex") + "@example.test";
-// Phase I's planted customer details: a phone in the UK drama range, a street and a
-// customer GID, each unique to this run so a whole-database search finds only what it planted.
-const screenPhoneDigits = "447700900" + String(100 + (randomBytes(2).readUInt16BE() % 900));
-const screenPhone = "+44 7700 900" + screenPhoneDigits.slice(-3);
-const screenStreet = "Quill" + randomBytes(4).toString("hex") + " Street";
-const screenGidNumber = "7" + String(randomBytes(6).readUIntBE(0, 6)).padStart(12, "0").slice(-12);
+// The customer customers/* names, and phase I's planted details: a phone in the UK drama range,
+// a street and a customer GID, each unique to this run so a whole-database search finds only
+// what it planted (scripts/fixtures/privacy-lab-customer.mjs).
+const labCustomer = plantedCustomer();
+const { customerEmail, screenPhone, screenPhoneDigits, screenStreet, screenGidNumber } =
+  labCustomer;
+const plantedTexts = phaseITexts(labCustomer);
+// O1 and I4 search for every form phase I plants: the email whole and by its local part (the
+// obfuscated form keeps only that), the phone spaced as planted and as bare digits (H9A-R6).
 const privateMarkers = [
   kek,
   brokerEnv.MORROW_DB_PASSWORD_MORROW_VAULT_BROKER,
-  customerEmail,
-  screenPhoneDigits,
-  screenStreet,
-  screenGidNumber,
+  ...labCustomer.markers,
 ];
 // Worker console lines are captured: no secret, token or customer value may appear.
 const consoleLines = [];
@@ -1377,28 +1377,17 @@ SELECT ${literal(A.org)},${literal(A.workspace)},${literal(screen.installation)}
     });
     const screened = [];
     for (const [id, step, input] of [
-      ["toolu_i1", notebookWriteStep, { text: `Reach her at ${customerEmail} about the parcel.` }],
-      ["toolu_i2", notebookWriteStep, { text: `Her mobile is ${screenPhone}.` }],
-      [
-        "toolu_i3",
-        knowledgeProposeStep,
-        propose("Returns", `Customers post returns to 12 ${screenStreet}.`),
-      ],
+      ["toolu_i1", notebookWriteStep, { text: plantedTexts.notebook[0] }],
+      ["toolu_i2", notebookWriteStep, { text: plantedTexts.notebook[1] }],
+      ["toolu_i3", knowledgeProposeStep, propose("Returns", plantedTexts.returnsText)],
       [
         "toolu_i4",
         knowledgeProposeStep,
         propose("Gift notes", "Keep gift notes short.", [
-          { kind: "note", value: `gid://shopify/Customer/${screenGidNumber}` },
+          { kind: "note", value: plantedTexts.giftSource },
         ]),
       ],
-      [
-        "toolu_i5",
-        knowledgeProposeStep,
-        propose(
-          "Replies",
-          `Write to ${customerEmail.replace("@", " (at) ").replace(/\.test$/, " (dot) test")}.`,
-        ),
-      ],
+      ["toolu_i5", knowledgeProposeStep, propose("Replies", plantedTexts.repliesText)],
     ])
       screened.push(await toolCall(step, id, input));
     const screenAfter = footprintOf();
@@ -1465,13 +1454,7 @@ SELECT ${literal(A.org)},${literal(A.workspace)},${literal(screen.installation)}
     // customer customers/* named, in each form a person could type it, is refused with the
     // record's own words and a content-free refusal.
     const posts = [];
-    for (const text of [
-      `Refund ${customerEmail} for order #1042`,
-      `She called from ${screenPhone}`,
-      `Ship it to 12 ${screenStreet}`,
-      `https://admin.shopify.com/store/lab-store/customers/${screenGidNumber}`,
-    ])
-      posts.push(await screenPost(text));
+    for (const text of plantedTexts.posts) posts.push(await screenPost(text));
     check(
       "I4:a_post_naming_the_customer_is_refused_content_free_with_the_records_words",
       posts.every(
