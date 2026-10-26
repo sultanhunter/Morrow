@@ -17,7 +17,7 @@ Bring the launch plan, the v1 build order and the ADR-0037 and ADR-0039 plans in
 
 ## Interfaces touched
 
-Documentation and two tests that read it. Nothing in `apps/`, `packages/`, `migrations/`, `docs/contracts/` or `docs/decisions/*.json` changes. CLAUDE.md, STATUS.md and the ADR texts are not edited. The graph is unchanged; the docs avoid ids that do not resolve on `main` (ADR 0042 is written without a hyphen, as pull request 86 does, and its OD number is not cited), so `graph check` adds no warning.
+Documentation and two tests that read it. Nothing in `apps/`, `packages/`, `migrations/`, `docs/contracts/` or `docs/decisions/*.json` changes. CLAUDE.md, STATUS.md and the ADR texts are not edited. In the graph, only `TRK-decisions` (T0) changes: it claims the two new briefs and notes H2. The docs avoid ids that do not resolve on `main` (ADR 0042 is written without a hyphen, as pull request 86 does, and its OD number is not cited; inside the wording brief's fenced drafts, ids are not scanned), so `graph check` keeps `main`'s warning count.
 
 ## Security notes
 
