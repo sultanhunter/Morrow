@@ -37,7 +37,9 @@ export const knowledgeLimits = Object.freeze({
   pagesPerWorkspace: 500,
   pendingProposalsPerWorkspace: 50,
   notebookTextChars: 2000,
-  notebookLiveEntries: 100,
+  // H12a (0057): a notebook is an agent principal's, with at most 1,000 live entries (a safety
+  // range: consolidation tends it long before); memoryLimits holds the memory bounds.
+  notebookLiveEntries: 1000,
   notebookDays: 90,
   searchTextChars: 200,
   searchResults: 20,

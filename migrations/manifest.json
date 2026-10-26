@@ -430,6 +430,13 @@
       "sha256": "d3812e8d06a8dff5edfb6c45e4e172e7fa42930034b1a6f6ea75d621c38e965e",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
+    },
+    {
+      "sequence": 57,
+      "file": "0057.memory-foundation.sql",
+      "sha256": "1a78f4bb1e93d065cb04e3e1e438193536952f37a4a0bd8c363a0afad797c417",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/memory-foundation.md"
     }
   ]
 }

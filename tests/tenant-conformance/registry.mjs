@@ -396,9 +396,11 @@ export const workTables = Object.freeze({
     content: "workspace",
   },
   knowledge_deletions: { class: "tenant_readable", parents: ["knowledge_pages"], content: "none" },
+  // H12a (0057) re-keys both by agent principal: an entry also holds its title, kind, taint,
+  // lineage, audience, source subjects and requester, renewal and use counts.
   agent_notebooks: {
     class: "tenant_readable",
-    parents: ["agent_installations"],
+    parents: ["morrow_identity.agent_principals"],
     lease: true,
     content: "none",
   },
@@ -407,6 +409,28 @@ export const workTables = Object.freeze({
     parents: ["agent_notebooks"],
     lease: true,
     content: "workspace",
+  },
+  // H12a (0057, the memory foundation; ADR-0041 items 25 to 30). The lineage of derived memory
+  // and the repair flags hold ids, codes and times only; the memory settings, two codes per
+  // person. The runtime definers write them under the run lease (the lease twin); the api reads
+  // the flags and the settings, never the lineage.
+  memory_derivations: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    content: "none",
+  },
+  memory_repairs: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.agent_principals"],
+    lease: true,
+    content: "none",
+  },
+  memory_settings: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    content: "none",
   },
   // v1 PR 5 (connection-health-work; ADR-0025 item 10): a store connection's Reconnect item:
   // ids, scope names, codes and times. The session template is read-only (`commandRead`:
@@ -957,6 +981,74 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_runtime_executor"],
   },
   "run_notebook_write(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  // H12a (0057, the memory foundation). Pure functions of the CHECKs, the index expressions and
+  // the definers' closed checks.
+  "memory_subject_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_subjects_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_audience_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_taint_source_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_taint_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_taint_union(jsonb,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_subjects_union(jsonb,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_audience_narrow(jsonb,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_audience_readable(jsonb,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_subject_scope_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_subjects_viewable(jsonb,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_viewable_tags_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_ref_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_refs_valid(jsonb,integer)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_entry_digest(text,text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_document(text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_trigram_text(text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_text_refused(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "memory_repair_guard()": { kind: "trigger", grantees: [] },
+  "memory_settings_guard()": { kind: "trigger", grantees: [] },
+  // The source-following triggers: a deleted page, or a cleared or source-erased entry, erases
+  // every live entry derived from it (a new page version flags them) in the same transaction.
+  "memory_page_follow()": { kind: "trigger", grantees: [] },
+  "memory_entry_follow()": { kind: "trigger", grantees: [] },
+  // Revisable owner helpers: the deletion path, the 90-day clock's handler, a page's taint, the
+  // lease's agent and the ranked search with every predicate before ranking.
+  "memory_erase_derived(text,text,text,text,timestamp with time zone)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "memory_flag_changed(text,text,text,text,timestamp with time zone)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "memory_erase_expired(text,text,timestamp with time zone,integer)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "memory_knowledge_taint(text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "memory_lease_agent()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "memory_search_ranked(text,text,text,text[],text[],jsonb,jsonb,jsonb,integer,timestamp with time zone)":
+    { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  // A person clears an agent's notebook (the re-keyed successor of cmd_notebook_clear, which
+  // stays registered and fails closed on the re-keyed tables).
+  "cmd_notebook_clear_v2(text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "notebook.clear",
+  },
+  // The memory tools' server side, under an entered run lease (0052's run_notebook_write stays
+  // registered and fails closed on the re-keyed tables).
+  "run_notebook_write_v2(text,text,text,text,text,text,text,text,text,text,text,text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+  },
+  "run_memory_search(text,text,text,text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+  },
+  "run_memory_read(text,text,text,text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+  },
 });
 // The identity bridges (0014, 0017): definers owned by the identity owner, EXECUTE
 // for the command role only.
@@ -1798,7 +1890,11 @@ export const executorLogins = Object.freeze({
     "morrow_work.run_knowledge_page(text)",
     "morrow_work.run_knowledge_propose(text,text,text,text,text,text,text,text)",
     "morrow_work.run_knowledge_search(text)",
+    // H12a (0057): the memory tools' server side.
+    "morrow_work.run_memory_read(text,text,text,text,text,text)",
+    "morrow_work.run_memory_search(text,text,text,text,text,text)",
     "morrow_work.run_notebook_write(text,text,text)",
+    "morrow_work.run_notebook_write_v2(text,text,text,text,text,text,text,text,text,text,text,text,text,text)",
     "morrow_work.run_product_begin(text)",
     "morrow_work.run_product_finish(text,text,text,text,text,text)",
     "morrow_work.run_review_context()",

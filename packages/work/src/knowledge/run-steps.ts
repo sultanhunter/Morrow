@@ -8,16 +8,18 @@ import type { FixedSqlQuery } from "../../../identity/src/fixed-sql-transaction.
 import {
   brandVoiceBlocks,
   decideKnowledgePropose,
+  decideNotebookOperation,
   decideNotebookWrite,
   knowledgeLimits,
   viewable,
   type BrandVoicePage,
   type KnowledgeRunFacts,
+  type NotebookWriteArgs,
   type TagViewer,
 } from "@morrow/policy/knowledge";
 
 // The agent side of shop knowledge (PR 20): the server-side commands of knowledge.propose and
-// notebook.write, the brand voice for Listings and knowledge.search's candidates, each sent
+// notebook.write (re-keyed by agent principal in H12a, migration 0057), the brand voice for Listings and knowledge.search's candidates, each sent
 // inside one entered run lease (runLeaseStep's query; the agent loop, PR 11, owns the step and
 // calls these as its tool-call step's dispatch, after lease re-entry, replay, its authority
 // decision and the hold). Until the loop lands, the tests and lab:shop-knowledge drive them
@@ -37,7 +39,9 @@ export const knowledgeRunSql = Object.freeze({
     "SELECT page_id,kind,version,title,body,read_tags FROM morrow_work.run_knowledge_search($1)",
   propose:
     "SELECT outcome,proposal_id FROM morrow_work.run_knowledge_propose($1,NULLIF($2,''),$3,$4,$5,$6,$7,$8)",
-  notebookWrite: "SELECT outcome,entry_id,sequence FROM morrow_work.run_notebook_write($1,$2,$3)",
+  // H12a (0057): notebook.write in the lease's own agent's notebook, with the run's memory facts.
+  notebookWrite:
+    "SELECT outcome,entry_id,sequence FROM morrow_work.run_notebook_write_v2($1,$2,NULLIF($3,''),NULLIF($4,''),NULLIF($5,''),NULLIF($6,''),$7,$8,$9,$10,$11,$12,$13,$14)",
 } as const);
 
 const held = () => Error("RUNTIME_KNOWLEDGE_HELD");
@@ -87,7 +91,7 @@ export type KnowledgeToolResult =
   | {
       readonly outcome: "ok";
       readonly record: {
-        readonly kind: "knowledge_proposal" | "notebook_entry";
+        readonly kind: "knowledge_proposal";
         readonly id: string;
       };
       readonly replayed: boolean;
@@ -162,39 +166,127 @@ export async function knowledgeProposeStep(
   throw held();
 }
 
-/** notebook.write's dispatch: the code checks, then run_notebook_write (its own notebook only). */
+/**
+ * What notebook.write did: `applied` (an entry added or replaced, or the target retired),
+ * `renewed` (an identical live entry re-affirmed instead of duplicated) or `flagged` (a tainted
+ * run named an untainted target, so the target stays and a repair flag records it; a replace
+ * still adds its new, tainted entry). `record` is the entry written or renewed; a retire has none.
+ */
+export type NotebookWriteResult =
+  | {
+      readonly outcome: "ok";
+      readonly effect: "applied" | "renewed" | "flagged";
+      readonly record: { readonly kind: "notebook_entry"; readonly id: string } | null;
+      readonly replayed: boolean;
+    }
+  | { readonly outcome: "refused"; readonly refusal: Current_ToolRefusalCode }
+  | { readonly outcome: "invalid_input"; readonly refusal: "input_invalid" };
+// The definer's outcomes past the code checks: each ok effect, its replay, and the refusals of
+// state the code cannot see (the lease, the installation, a source or target out of reach).
+const notebookEffects: Readonly<
+  Record<string, { effect: "applied" | "renewed" | "flagged"; replayed: boolean }>
+> = Object.freeze({
+  applied: { effect: "applied", replayed: false },
+  renewed: { effect: "renewed", replayed: false },
+  flagged: { effect: "flagged", replayed: false },
+  replay: { effect: "applied", replayed: true },
+  replay_renewed: { effect: "renewed", replayed: true },
+  replay_flagged: { effect: "flagged", replayed: true },
+});
+const notebookRefusals: Readonly<Record<string, Current_ToolRefusalCode>> = Object.freeze({
+  customer_data: "customer_data",
+  id_out_of_scope: "id_out_of_scope",
+  // Sources whose audiences no one audience covers (two subjects, or two people).
+  audience_conflict: "id_out_of_scope",
+  lease_ended: "lease_ended",
+  stopped: "stopped",
+});
+async function notebookDispatch(
+  query: FixedSqlQuery,
+  toolUseIdValue: string,
+  args: NotebookWriteArgs,
+): Promise<NotebookWriteResult> {
+  const o = args.operation;
+  const m = args.memory;
+  const content = o.op === "retire" ? null : o;
+  const r = exactRow(
+    await query(knowledgeRunSql.notebookWrite, [
+      toolUseIdValue,
+      o.op,
+      o.op === "add" ? "" : o.targetId,
+      content?.kind ?? "",
+      content?.title ?? "",
+      content?.text ?? "",
+      JSON.stringify(args.readTags),
+      JSON.stringify(m.taint),
+      JSON.stringify(m.audience),
+      JSON.stringify(m.sourceSubjects),
+      JSON.stringify(content?.derivedFrom ?? []),
+      JSON.stringify(m.viewableTags),
+      JSON.stringify(m.subjectScope),
+      m.personMemoryLoaded ? "true" : "false",
+    ]),
+    ["outcome", "entry_id", "sequence"],
+  );
+  const outcome = str(r, "outcome");
+  const effect = notebookEffects[outcome];
+  if (effect) {
+    // An add, a replace or a renewal names its entry; a retire (and its flag) names none.
+    const named = r.entry_id !== null;
+    if (named !== (o.op !== "retire")) throw held();
+    if (named) positive(str(r, "sequence"));
+    else if (r.sequence !== null) throw held();
+    return Object.freeze({
+      outcome: "ok",
+      effect: effect.effect,
+      record: named
+        ? Object.freeze({ kind: "notebook_entry" as const, id: str(r, "entry_id") })
+        : null,
+      replayed: effect.replayed,
+    });
+  }
+  if (r.entry_id !== null || r.sequence !== null) throw held();
+  const refusal = notebookRefusals[outcome];
+  if (refusal) return Object.freeze({ outcome: "refused", refusal });
+  // invalid, conflict, ask_bound or person_memory_loaded: the code checks above passed, so the
+  // definer's own refusal of the same input is a defect, never a result the model sees.
+  throw held();
+}
+
+/**
+ * notebook.write's dispatch for the v1.1 input ({text}): the code checks
+ * (decideNotebookWrite), then run_notebook_write_v2 in the lease's own agent's notebook.
+ */
 export async function notebookWriteStep(
   query: FixedSqlQuery,
   call: KnowledgeToolCall,
-): Promise<KnowledgeToolResult> {
+): Promise<NotebookWriteResult> {
   if (!toolUseId(call.toolUseId)) throw held();
   const decided = decideNotebookWrite(call.input, call.run);
   if (!decided.ok)
     return Object.freeze({
       outcome: decided.outcome,
       refusal: decided.refusal,
-    }) as KnowledgeToolResult;
-  const r = exactRow(
-    await query(knowledgeRunSql.notebookWrite, [
-      call.toolUseId,
-      decided.args.text,
-      JSON.stringify(decided.args.readTags),
-    ]),
-    ["outcome", "entry_id", "sequence"],
-  );
-  const outcome = str(r, "outcome");
-  if (outcome === "applied" || outcome === "replay") {
-    positive(str(r, "sequence"));
+    }) as NotebookWriteResult;
+  return notebookDispatch(query, call.toolUseId, decided.args);
+}
+
+/**
+ * One full notebook operation (add, replace or retire, with its sources): decideNotebookOperation,
+ * then the same definer. Tool catalogue version 4 (H5) dispatches notebook.write {op} here.
+ */
+export async function notebookOperationStep(
+  query: FixedSqlQuery,
+  call: Omit<KnowledgeToolCall, "input"> & { readonly operation: unknown },
+): Promise<NotebookWriteResult> {
+  if (!toolUseId(call.toolUseId)) throw held();
+  const decided = decideNotebookOperation(call.operation, call.run);
+  if (!decided.ok)
     return Object.freeze({
-      outcome: "ok",
-      record: Object.freeze({ kind: "notebook_entry" as const, id: str(r, "entry_id") }),
-      replayed: outcome === "replay",
-    });
-  }
-  if (r.entry_id !== null) throw held();
-  const refusal = definerRefusals[outcome];
-  if (refusal) return refusedWith(refusal);
-  throw held();
+      outcome: decided.outcome,
+      refusal: decided.refusal,
+    }) as NotebookWriteResult;
+  return notebookDispatch(query, call.toolUseId, decided.args);
 }
 
 /** The accepted brand voice for a Listings run (marked data), or null. */

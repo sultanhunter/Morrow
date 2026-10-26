@@ -157,16 +157,24 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
 // The deletion path of the workspace-content classes that people and agents write (PR 20;
 // ADR-0031 items 1, 3 and 4; G9: a class has its path before real data of that class). Shop
 // knowledge pages "stay until a person deletes them, the store is redacted or the workspace is
-// erased"; notebooks are clocked 90 days and go with their installation. No runtime role holds
-// DELETE (tenant conformance S4), so each handler erases the content in place and keeps only
-// ids, digests and times; the owner's retention sweep removes clocked rows past their clock.
+// erased"; notebooks are an agent principal's (H12a, migration 0057), clocked 90 days from the
+// last write or re-affirmation (ADR-0041 item 27). No runtime role holds DELETE (tenant
+// conformance S4), so each handler erases the content in place and keeps only ids, digests and
+// times; the owner's retention sweep removes clocked rows past their clock.
 // Built here: a person's page deletion (one transaction over every knowledge table below,
-// recorded in knowledge_deletions and the command log) and a person's notebook clear. Not yet
-// built, each with the work that brings its trigger: knowledge erased at shop/redact for a
+// recorded in knowledge_deletions and the command log), a person's notebook clear, and (H12a)
+// deletion following the source: a deleted page, and a cleared or source-erased entry, erase
+// every live entry derived from them in the same transaction (memory_derivations), each
+// recorded as a content-free repair; and the 90-day clock's handler for the daily sweep. Not
+// yet built, each with the work that brings its trigger: knowledge erased at shop/redact for a
 // store-tagged page (with lab:shopify-privacy) and at workspace erasure
-// (governance.privacy.erase), notebooks at agent uninstall, and the daily sweep of expired
-// notebook entries.
-export type WorkspaceContentTrigger = "person_delete" | "notebook_clear";
+// (governance.privacy.erase), notebooks at agent uninstall, and the sweep's schedule that calls
+// memory_erase_expired.
+export type WorkspaceContentTrigger =
+  | "person_delete"
+  | "notebook_clear"
+  | "source_erased"
+  | "clock_expired";
 export interface WorkspaceContentHandler {
   /** schema.table, as the tenant-conformance registry names it. */
   readonly table: string;
@@ -177,9 +185,9 @@ export interface WorkspaceContentHandler {
   readonly action: "erase_keep_digest";
   /** How the handler finds one target's rows. */
   readonly key: string;
-  /** The definer that runs it. */
+  /** The definer (or, for a source-following trigger, the helper) that runs it. */
   readonly executor: string;
-  readonly executable: "PR 20";
+  readonly executable: "PR 20" | "H12a";
 }
 export const workspaceContentHandlers: readonly WorkspaceContentHandler[] = Object.freeze(
   (
@@ -225,9 +233,27 @@ export const workspaceContentHandlers: readonly WorkspaceContentHandler[] = Obje
         dataClass: "notebooks",
         trigger: "notebook_clear",
         action: "erase_keep_digest",
-        key: "installation_id: every live entry of the installation's notebook",
-        executor: "morrow_work.cmd_notebook_clear",
-        executable: "PR 20",
+        key: "agent_principal_id: every live entry of the installation's agent's notebook (and every entry derived from them)",
+        executor: "morrow_work.cmd_notebook_clear_v2",
+        executable: "H12a",
+      },
+      {
+        table: "morrow_work.agent_notebook_entries",
+        dataClass: "notebooks",
+        trigger: "source_erased",
+        action: "erase_keep_digest",
+        key: "memory_derivations: every live entry derived from a deleted page or an erased entry, recorded in memory_repairs",
+        executor: "morrow_work.memory_erase_derived",
+        executable: "H12a",
+      },
+      {
+        table: "morrow_work.agent_notebook_entries",
+        dataClass: "notebooks",
+        trigger: "clock_expired",
+        action: "erase_keep_digest",
+        key: "expires_at: a workspace's live entries past their 90-day clock, oldest first, in bounded batches",
+        executor: "morrow_work.memory_erase_expired",
+        executable: "H12a",
       },
     ] as const
   ).map((handler) => Object.freeze(handler as WorkspaceContentHandler)),
