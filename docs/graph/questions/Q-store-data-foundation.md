@@ -87,12 +87,58 @@ so if you want them otherwise.
        taken back. They become a standing policy as its one named exception, under ADR 0042's own
        approval and checks; the allowlist itself holds only the three reversible order actions.
      - The CLAUDE.md text above started from CLAUDE.md as it stands today, so it would have
-       overwritten three of the four lines you approved word for word for ADR 0042 (its question
-       6) and dropped their call-plan exceptions. The corrected text, under "Question 5: the
-       corrected CLAUDE.md text" below, builds on those lines as ADR 0042's CS2 commits them. It
-       comes back to you to confirm word for word; it lands as its own change after
-       CS2's and changes nothing else in CLAUDE.md. ADR 0042's third line, the ask before sending
-       anything to your customers, does not change.
+       overwritten three of ADR 0042's four CLAUDE.md lines (its question 6) and dropped their
+       call-plan exceptions. You approved those four lines in substance when you approved ADR 0042
+       (OD 2026-10-26-9, recorded on pull request 86), but their exact text was added to that
+       sheet after your answer, so it still waits for your word-for-word confirmation, and ADR
+       0042's CS2 commits it only then. The corrected text, under "Question 5: the corrected
+       CLAUDE.md text" below, builds on those lines as CS2 will commit them. It comes back to you
+       to confirm word for word; it lands as its own change after CS2's and changes nothing else
+       in CLAUDE.md. You can confirm both sets of words in one message: ADR 0042's four lines and
+       these three. ADR 0042's third line, the ask before sending anything to your customers, does
+       not change.
+
+6. **What always needs your approval each time?**
+   - Recommended: cancelling and refunding orders, prices, discounts, stock quantities,
+     fulfilment, changes to customers, supplier mail and anything that cannot be undone. Code or
+     an agent may draft them; you approve each, alone or in a batch. No answer, deadline or
+     monitor ever cancels an order by itself.
+   - Why: these move money or stock, or cannot be taken back. An automatic version would need its
+     own record after measured results.
+
+7. **May one typed confirmation cover a plan with several kinds of change?**
+   - Recommended: yes. A "plan bundle" covers 2 to 50 pending changes of up to 5 kinds on one
+     store (for example a reorder's spreadsheet and a product note), with one phrase that lists
+     each kind's count, one cool-down, and the strictest rule among them. One bad change refuses
+     the whole bundle.
+   - Why: today a solo Owner types the phrase and waits out the cool-down once per kind of change,
+     so a mixed plan costs two or three waits for no extra safety.
+
+8. **Should rules have Pause and Revoke buttons that act at once?**
+   - Recommended: yes. Pause rule (the Owner, Admins and the agent's owner) and Revoke rule (the
+     Owner and the agent's owner) need no second person, never wait on credits, and agents may
+     only suggest them. Turning a rule back on is reviewed like approving it.
+   - Why: it follows ADR-0005: stopping is always fast and human; starting again is checked.
+
+9. **How should stops apply to everything that runs on its own?**
+   - Recommended: one stop check in code for every automated path (event and schedule triggers,
+     deadlines, monitors, rule actions, calls and the gateway). Anything that falls due while
+     stopped is skipped, not saved up, so nothing bursts out on resume; resuming covers only what
+     happens afterwards unless you choose to include the earlier ones. "Stop customer contact"
+     covers every contact capability, not a list of three. The workspace stop lands before any
+     send or order-write switch goes on.
+   - Why: a stop that quietly queues work, or misses a new path, is not a stop.
+
+10. **How should work that runs without AI use credits?**
+    - Options: (a) counted but not charged until the rate card prices it, and never blocked by
+      credits when it is time-critical (receiving events, keeping data fresh, approved actions,
+      stops, deletion); AI runs hold credits as today; agents waiting on credits are combined into
+      one run each when credits return; bulk work you start by choice, such as a future campaign,
+      reserves all its credits when approved; (b) price every code step now.
+    - Recommended: (a).
+    - Why: the rate card is not published, and an empty balance must never silently drop a
+      confirmation or a tag you approved. Combining waiting runs stops a flood when you add
+      credits. Pricing comes with rate card v1, which you confirm.
 
 ## ADR-0044: installed agents asking questions and posting
 
@@ -168,10 +214,13 @@ so if you want them otherwise.
 
 ## Question 5: the corrected CLAUDE.md text
 
-Three lines change, each shown as ADR 0042's CS2 commits it ("Now") and as proposed. The text is
-in plain blocks so that it can be confirmed exactly as it will be committed.
+Three lines change, each shown as ADR 0042's CS2 will commit it ("Now") and as proposed. The
+"Now" text is ADR 0042's question 6 lines 1, 2 and 4, approved in substance by OD 2026-10-26-9 and
+still waiting for your word-for-word confirmation; you can confirm those four lines and these three
+in one message. The text is in plain blocks so that it can be confirmed exactly as it will be
+committed.
 
-1. Security invariants. Now, as CS2 commits it:
+1. Security invariants. Now, as CS2 will commit it:
 
 ```text
 Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The gateway re-checks authority before execution. One exception (ADR-0042): an approved customer-contact call plan is one exact proposal whose approval covers each contact and order tag it names; an edit to a plan makes a new revision that needs its own approval, and the approved revision keeps running until then unless the editor pauses it.
@@ -183,7 +232,7 @@ Approvals are bound to a digest of the exact proposal. Any edit invalidates them
 Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The gateway re-checks authority before execution. One exception (ADR-0043): an approved exact standing policy, of which ADR-0042's customer-contact call plan is one, is one exact proposal whose approval covers each action it names, each admitted in code against its digest and the subject's current state; an edit to a policy makes a new revision that needs its own approval, and the approved revision keeps running until then unless the editor pauses it.
 ```
 
-2. Security invariants. Now, as CS2 commits it:
+2. Security invariants. Now, as CS2 will commit it:
 
 ```text
 The owner's own store is the only real store until the public launch, and Morrow is built and tested on it (ADR-0035). Agents change it only through an approved exact proposal, or by adding an order tag that an approved call plan names (ADR-0042). Local and CI tests use fakes; only the deployed environment reaches the store.
@@ -195,7 +244,7 @@ The owner's own store is the only real store until the public launch, and Morrow
 The owner's own store is the only real store until the public launch, and Morrow is built and tested on it (ADR-0035). Agents change it only through an approved exact proposal, or through an action that an approved exact standing policy names, such as an order tag that an approved call plan names (ADR-0042, ADR-0043). Local and CI tests use fakes; only the deployed environment reaches the store.
 ```
 
-3. Provider and live effects. Now, as CS2 commits it:
+3. Provider and live effects. Now, as CS2 will commit it:
 
 ```text
 Change the owner's store only through Morrow's own flow: the owner approves the exact change, or the call plan that names it (ADR-0042), in the workspace, and the gateway applies, reads back and audits it. Never write to the store any other way.
@@ -209,7 +258,9 @@ Change the owner's store only through Morrow's own flow: the owner approves the 
 
 ## Answered
 
-Answered 2026-10-26 (OD-2026-10-26-11): "recommended, and yes to the paid Neon plan": all 17 as recommended, so ADR-0043 and ADR-0044 are Accepted as recommended and the note on ADR-0031 item 1 is decided. Question 17 is answered (a), and the owner bought Neon's paid plan in Neon's own console the same day. The CLAUDE.md words of question 5, as corrected above, wait for the owner's confirmation word for word.
+Answered 2026-10-26 (OD-2026-10-26-11): "recommended, and yes to the paid Neon plan": all 17 as recommended, so ADR-0043 and ADR-0044 are Accepted as recommended and the note on ADR-0031 item 1 is decided. Question 17 is answered (a), and the owner bought Neon's paid plan in Neon's own console the same day. The CLAUDE.md words of question 5, as corrected above, wait for the owner's confirmation word for word, as do ADR 0042's four lines they build on, which OD 2026-10-26-9 approved in substance only (question 6 of ADR 0042's decision sheet); the owner can confirm both sets in one message.
+
+Questions 6 to 10 above are as the owner answered them. An editing slip dropped them from this sheet when the answer was recorded; they were restored, unchanged, on 2026-10-27.
 
 The records' review (an AI review, separate context, same model family) ran on this sheet before the answer, and its fixes were made after it. Besides question 5's corrections above, each narrows or makes exact what was answered, except that question 10's can resume one agent as more than one run:
 

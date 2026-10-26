@@ -103,12 +103,12 @@ None of these classes holds customer data under this record's Terms: order ids a
 | `inventory_levels` (projection) | latest available quantity per (item, location) with `updated_at`; no history | latest values only; deleted at `shop/redact` and 48 hours after uninstall |
 | Reconciler high-water marks and projection checkpoints | content-free positions per store and resource family | while the store is linked; deleted with the store |
 | Bulk operation records | content-free: operation id, document, state, counts, checkpoints; results are never stored unminimised | 30 days after the operation ends |
-| Per-shop Shopify cost budget | bucket levels per (store, app) | latest values only; deleted with the store |
+| Per-shop buckets for Shopify's API query cost (Shopify's rate limit, not money) | bucket levels per (store, app) | latest values only; deleted with the store |
 | Subscriptions, schedules, deadline rules and monitors | trigger-set records (closed fields, no store text) | as `agent_trigger_sets`: deleted with the installation; content-free history 365 days |
 | Trigger rows, deadline occurrences, policy occurrence rows and monitor alerts | ids, closed codes, counts and times | order ids blanked 90 days after the order's date, and at once for the orders `customers/redact` lists; the content-free row kept 365 days |
 | Standing policies and their revisions | the approved digest and its closed fields | 365 days after the policy ends, as mandate records |
 | Rule-action logs (no contact rows: ADR 0042's `customer_contacts` is the contact log) | policy revision, subject id, action, entry, operation, outcome code (`already_present` included), times | order ids blanked 90 days after the order's date, and at once for the orders `customers/redact` lists; the content-free row kept 365 days |
-| `AutomationUsage@1` (daily usage ledger) | counts, Shopify cost points and provider-reported costs per (workspace, store, kind, day); no subject ids | 365 days |
+| `AutomationUsage@1` (daily usage ledger) | counts, Shopify's API query-cost points and provider-reported costs per (workspace, store, kind, day), recorded and never a limit; no subject ids | 365 days |
 | Collaboration scope audits (ADR-0044) | content-free refusals and grant changes | 365 days, as `run_tool_calls` |
 
 Classes that later agents add (reorder plans, purchase-order files, supplier mail, marketing audiences and consent snapshots) come with their own records. Counsel's question on India's DPDP Rule 8(3) one-year minimum for processing logs, against the 90-day clocks, stays open, to be settled before that duty takes effect (about May 2027).
