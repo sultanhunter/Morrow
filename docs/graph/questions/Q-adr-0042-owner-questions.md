@@ -7,14 +7,16 @@ status: open
 asked_of: owner
 links:
   raised_by: [OD-2026-10-26-8, ADR-0042]
-  about: [ADR-0042, ADR-0025, ADR-0031, ADR-0035, ADR-0037, ADR-0039, F-order-and-money-writes, F-privacy-deletion, F-more-integrations, GATE-legal, GATE-deletion-paths, GATE-gateway-reservations-stops]
+  about: [ADR-0042, ADR-0011, ADR-0022, ADR-0023, ADR-0025, ADR-0031, ADR-0035, ADR-0037, ADR-0039, F-order-and-money-writes, F-privacy-deletion, F-more-integrations, GATE-legal, GATE-deletion-paths, GATE-gateway-reservations-stops]
 ---
 
 You asked whether a user could create an agent that calls a customer when a COD order arrives, to
 confirm it, using their own calling service (OD-2026-10-26-8). The answer is yes, and ADR-0042
 says how. Three separate reviews (security, legal and privacy, product) changed the draft before
-it reached you. Each question below has one recommendation. To accept them all, say "approve
-ADR-0042 as recommended", or answer by number. Nothing is built past the records until you answer.
+it reached you, and a further review of the pull request corrected it. Each question below has one
+recommendation. To accept them all, including the CLAUDE.md text shown in question 6, say "approve
+ADR-0042 as recommended and the CLAUDE.md change", or answer by number. Nothing is built past the
+records until you answer. The sources are in `docs/references/connected-services-and-contact.md`.
 
 1. **Should services come only from a Morrow catalogue, connected with the merchant's own accounts?**
    - Options: (a) only catalogued services, each with a reviewed adapter; (b) also let merchants
@@ -26,10 +28,11 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
      request, not a workaround.
 
 2. **How are keys entered?**
-   - Recommended: through a sealed form. Morrow's broker signs the form and your browser checks
-     the signature, then encrypts the key to the broker before it leaves the page, so Morrow's web
-     server never sees it. Keys come from a sub-account with only the access Morrow needs. They are
-     never shown again, only a short fingerprint, and account passwords are never accepted.
+   - Recommended: through a sealed form. Morrow's broker signs the form, with a signing key you
+     place once and only the broker holds, and your browser checks the signature, then encrypts
+     the key to the broker before it leaves the page, so Morrow's web server never sees it. Keys
+     come from a sub-account with only the access Morrow needs. They are never shown again, only a
+     short fingerprint, and account passwords are never accepted.
    - Why: it keeps the rule that only the broker ever holds a credential. MCP and the leading agent
      platforms forbid collecting secrets through a form an AI can see.
 
@@ -45,9 +48,11 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
      say which calling service and which WhatsApp provider you use.
    - Why: call audio for India must stay on servers in India; Twilio, Vapi and Retell numbers can't
      place these calls domestically; Plivo signs its callbacks and lets Morrow serve the script per
-     call. Most Indian shops reach WhatsApp through a provider, and setting up the raw API means
-     pasting developer tokens. WhatsApp also needs the customer's opt-in, which most checkouts
-     don't collect yet.
+     call. At Plivo you would also set the limits it offers, such as calls to India only and call
+     transfer and recording off, which limit what a fault or break-in inside Morrow could make a
+     call do. Most Indian shops reach WhatsApp through a provider, and setting up the raw API means
+     pasting developer tokens. WhatsApp also needs the customer's opt-in, which most checkouts don't
+     collect yet.
 
 5. **Scripted calls, or free-form AI conversations?**
    - Recommended: scripted, keypress only. The words are fixed and approved; a synthetic voice
@@ -63,10 +68,55 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
    - Recommended: yes. You approve the exact words, numbers, hours, tries, tags and limits once, by
      typing a phrase; each call is then checked in code against the plan, the stops, the hours, the
      stop list and the limits, with no tap per call.
-   - Why: a COD confirmation has to happen within minutes, and a tap per order doesn't work. This
-     changes the wording of CLAUDE.md's "ask the owner first, every time … sending anything to the
-     owner's customers" and of ADR-0035 items 4, 5 and 7, so your approval would also approve those
-     edits. Your OK in chat before the first live day stays.
+   - Why: a COD confirmation has to happen within minutes, and a tap per order doesn't work.
+   - What it changes. This relaxes one of Morrow's security rules, so please read it closely:
+     - "Approvals are bound to a digest of the exact proposal" stays true, but one approval now
+       covers many calls and the tags they lead to.
+     - "Any edit invalidates them" changes for plans: when a plan is edited, the old version keeps
+       calling under your earlier approval until you approve the new one, unless whoever edits it
+       chooses to pause it meanwhile. Every other approval is still voided by any edit.
+     - ADR-0035 item 4 (ask you before each send to your customers) and item 5 (agents change the
+       store or message a customer only after you approve the exact change) change the same way.
+     - Your OK in chat is still needed, once, before the first real customer is called.
+   - The exact CLAUDE.md text. A "yes" approves these four edits word for word, as you approved
+     ADR-0035's lines (OD-2026-10-23-10); CS2 commits them as shown and changes nothing else in
+     CLAUDE.md.
+     1. Security invariants.
+        - Now: "Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The
+          gateway re-checks authority before execution."
+        - Proposed: "Approvals are bound to a digest of the exact proposal. Any edit invalidates
+          them. The gateway re-checks authority before execution. One exception (ADR-0042): an
+          approved customer-contact call plan is one exact proposal whose approval covers each
+          contact and order tag it names; an edit to a plan makes a new revision that needs its own
+          approval, and the approved revision keeps running until then unless the editor pauses it."
+     2. Security invariants.
+        - Now: "The owner's own store is the only real store until the public launch, and Morrow is
+          built and tested on it (ADR-0035). Agents change it only through an approved exact
+          proposal. Local and CI tests use fakes; only the deployed environment reaches the store."
+        - Proposed: "The owner's own store is the only real store until the public launch, and
+          Morrow is built and tested on it (ADR-0035). Agents change it only through an approved
+          exact proposal, or by adding an order tag that an approved call plan names (ADR-0042).
+          Local and CI tests use fakes; only the deployed environment reaches the store."
+     3. Provider and live effects.
+        - Now: "Ask the owner first, every time: purchases, plan upgrades and ad spend; raising a
+          cap; deleting data; sending anything to the owner's customers; the App Store submission;
+          any store other than the owner's. Accepting a provider's terms and anything that needs the
+          owner's own login stay the owner's."
+        - Proposed: "Ask the owner first, every time: purchases, plan upgrades and ad spend; raising
+          a cap; deleting data; sending anything to the owner's customers, except that under an
+          approved call plan the owner's OK in chat is asked once, before the first live day, and
+          the plan's approval then covers each contact (ADR-0042); the App Store submission; any
+          store other than the owner's. Accepting a provider's terms and anything that needs the
+          owner's own login stay the owner's."
+     4. Provider and live effects.
+        - Now: "Change the owner's store only through Morrow's own flow: the owner approves the
+          exact change in the workspace, and the gateway applies, reads back and audits it. Never
+          write to the store any other way."
+        - Proposed: "Change the owner's store only through Morrow's own flow: the owner approves the
+          exact change, or the call plan that names it (ADR-0042), in the workspace, and the gateway
+          applies, reads back and audits it. Never write to the store any other way."
+   - Not changed: the customer-data rule ("Customer data … never enter before their P09.T05
+     deletion and privacy path exists"). Question 8 covers the phone field.
 
 7. **Which agents may make these calls?**
    - Options: (a) only Morrow's own COD Confirmation teammate in the first version; (b) also agents
@@ -84,6 +134,9 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
    - Why: minimum data is Shopify's first rule, and each field is reviewed separately. Names aren't
      needed for "your order 1042". If Shopify also requires the Address field to read a shipping
      phone, you will be asked again.
+   - What it changes: ADR-0035 items 3 and 7 say customer data comes last, with the Support agent.
+     A "yes" lets the phone field come earlier, for COD Confirmation only, and still only after its
+     deletion path is in place. CLAUDE.md's customer-data rule does not change.
 
 9. **May the plan tag orders in Shopify?**
    - Recommended: yes. Shopify asks you for `write_orders` during setup. The plan adds one of three
@@ -116,7 +169,9 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
 
 12. **One setup approval, and a test call to your own phone?**
     - Recommended: yes. Setup is a 3-step guide (connect your calling service, allow tagging, hear
-      it and approve). "Call me now" rings your own phone with the exact words for a recent order.
+      it and approve). You add your own phone as a test number: Morrow calls it once with a 6-digit
+      code, which you type back, so only a phone you hold can be a test number. "Call me now" then
+      rings it with the exact words for a recent order.
       Then one review covers the teammate and its first call plan, with one phrase, "add COD
       Confirmation and approve calls for up to 200 COD orders a day", and one 5-minute wait.
     - Why: separate approvals would mean two phrases and two waits for one job. The two stay
@@ -124,8 +179,10 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
 
 13. **How long is contact data kept?**
     - Recommended:
-      - the per-call log, which holds no call words or phone numbers, for 90 days, like other customer data in
-        Morrow; daily counts with no order link for 365 days;
+      - the per-call log, which holds no call words or phone numbers, for 90 days, like other
+        customer data in Morrow; the daily list of orders to check and the call-back tasks expire
+        with it and go when a customer asks to be deleted; daily counts with no order link for 365
+        days;
       - an opt-out, as a fingerprint only, even after a customer's deletion request, so they are
         never called again; a lawyer confirms this against Shopify's rules before outside merchants.
     - Why: deleting an opt-out would bring back calls to someone who said stop. India's one-year log
@@ -134,7 +191,7 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
 14. **The safety values.**
     - Recommended: as in ADR-0042's Values table:
       - 09:00 to 21:00 IST at most;
-      - per phone number, 3 contacts a day and 6 a month;
+      - per phone number, 3 contacts in any 24 hours and 6 in any 30 days;
       - 200 COD orders a day per plan by default, at most 2,000;
       - an automatic stop on high opt-out or wrong-number rates, abandoned or silent calls, a burst
         of failed calls, or a spam flag reported by the provider or by you.
@@ -142,11 +199,11 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
       target someone else's phone.
 
 15. **Measure the effect?**
-    - Recommended: yes. Hold back 10% of COD orders, not called and not tagged, until about 300 of
-      them have settled. You pick the tag or status your courier app writes for a returned parcel.
-      Each week the report shows confirmations and cancellations at once, and returned parcels for
-      settled weeks, with "Too early to tell" until the numbers are clear. Then you set the share,
-      from 0 to 30%.
+    - Recommended: yes. Hold back 10% of COD orders, not called and not tagged. The share stays at
+      10%, at setup too, until about 300 of them have settled. You pick the tag or status your
+      courier app writes for a returned parcel. Each week the report shows confirmations and
+      cancellations at once, and returned parcels for settled weeks, with "Too early to tell" until
+      the numbers are clear. Then you set the share, from 0 to 30%.
     - Why: vendors claim 15 to 45% fewer returns, but no independent study exists, and returns
       take 1 to 3 weeks to show up. This shows what it does for your store.
 
@@ -176,13 +233,15 @@ ADR-0042 as recommended", or answer by number. Nothing is built past the records
 19. **A "Stop customer contact" switch?**
     - Recommended: yes. Any Owner or Admin can stop all customer calls in the workspace at once,
       with no second approver. Calls already ringing are hung up; a call answered just after hears a
-      short approved goodbye. Restarting is reviewed and covers only new orders unless you choose
-      otherwise.
+      short approved goodbye. Restarting is reviewed for each call plan and covers only new orders
+      unless you choose otherwise; lifting any stop, the workspace stop of ADR 0040 included,
+      restarts no plan by itself.
     - Why: "Stop AI work" stops one agent; this stops every call, the way the existing stops work.
 
 20. **When?**
     - Recommended: build it now as its own lane, with switches off. "Call me now" works once the
       gateway and its stops are in place. Real customers are called after the customer-data
-      deletion path is in place, Shopify grants the phone field and you give your OK in chat. It is
+      deletion path is in place, Shopify grants the phone field and you give your OK in chat, once,
+      before the first live day. It is
       in launch scope if ready by G17, otherwise the first fast follow, and it never holds launch.
     - Why: you asked to build the full product in parallel. The gates protect your real customers.
