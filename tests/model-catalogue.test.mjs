@@ -87,9 +87,9 @@ test("the ADR-0022 item 11 table: credits, worst case and run limits in versions
     for (const [model, efforts] of Object.entries(expected))
       for (const [effort, [credits, worst, limit]] of Object.entries(efforts)) {
         const at = `v${version} ${model} ${effort}`;
-        // Version 4 lists Claude Opus 5.5 only (the owner, 2026-10-26); versions 1 and 3 keep
-        // their Haiku 5.5 and Sonnet 5.5 entries as published.
-        if (version === 4 && model !== "claude_opus_5_5") {
+        // Version 4 lists Claude Opus 5.5 at medium and high only (the owner, 2026-10-26);
+        // versions 1 and 3 keep their Haiku 5.5, Sonnet 5.5 and low entries as published.
+        if (version === 4 && (model !== "claude_opus_5_5" || effort === "low")) {
           assert.equal(findCatalogueEntry(version, model, effort), null, at);
           continue;
         }
@@ -122,6 +122,9 @@ test("keys are opaque: provider model strings, unknown keys, xhigh and retired v
   assert.equal(findCatalogueEntry(1, "gpt_5", "low"), null);
   // Version 2 is the proposed loop version: no per-product entry.
   assert.equal(findCatalogueEntry(2, "claude_opus_5_5", "high"), null);
+  // Version 4 has no low effort (the owner, 2026-10-26); versions 1 and 3 keep theirs.
+  assert.equal(findCatalogueEntry(4, "claude_opus_5_5", "low"), null);
+  assert.ok(findCatalogueEntry(3, "claude_opus_5_5", "low"));
   assert.equal(findCatalogueEntry(5, "claude_opus_5_5", "high"), null);
   assert.equal(findCatalogueEntry(0, "claude_opus_5_5", "high"), null);
   assert.throws(() => catalogueEntry(1, "claude-opus-5-5", "high"), ModelCatalogueError);
@@ -131,7 +134,6 @@ test("keys are opaque: provider model strings, unknown keys, xhigh and retired v
   assert.deepEqual(
     listing.entries.map((entry) => [entry.model, entry.effort]),
     [
-      ["claude_opus_5_5", "low"],
       ["claude_opus_5_5", "medium"],
       ["claude_opus_5_5", "high"],
     ],
@@ -157,9 +159,11 @@ test("selection: refusals, the default and the member ceiling (ADR-0022 item 16,
     ["claude_opus_5_5", "selection_invalid"],
     [{ model: "claude_opus_5_5", effort: "xhigh" }, "selection_unknown"],
     [{ model: "claude_unknown_9", effort: "low" }, "selection_unknown"],
-    // Entries of versions 1 and 3 that version 4 does not list (Opus 5.5 only, 2026-10-26).
+    // Entries of versions 1 and 3 that version 4 does not list (Opus 5.5 at medium and high
+    // only, 2026-10-26).
     [{ model: "claude_haiku_5_5", effort: "low" }, "selection_unknown"],
     [{ model: "claude_sonnet_5_5", effort: "high" }, "selection_unknown"],
+    [{ model: "claude_opus_5_5", effort: "low" }, "selection_unknown"],
   ])
     assert.deepEqual(resolveSelection({ ...member, selection }), { ok: false, code }, code);
   // A missing selection is the workspace default: Opus 5.5 at medium, four credits (ADR-0036),
@@ -173,29 +177,24 @@ test("selection: refusals, the default and the member ceiling (ADR-0022 item 16,
   assert.equal(defaulted.entry.runProductLimit, 25);
   assert.deepEqual(defaultSelection(), { model: "claude_opus_5_5", effort: "medium" });
   assert.equal(defaultMemberCreditCeiling(), 4);
-  // A workspace that stored a ceiling of 1 (version 1's default) keeps it: its members are
-  // refused the new default and, since version 4 lists Opus 5.5 only (2 credits at low),
-  // every entry, until a holder of governance.model_default.revise raises it.
-  assert.deepEqual(resolveSelection({ ...member, ceiling: 1, selection: null }), {
-    ok: false,
-    code: "selection_above_ceiling",
-  });
-  assert.deepEqual(
-    resolveSelection({
-      ...member,
-      ceiling: 1,
-      selection: { model: "claude_opus_5_5", effort: "low" },
-    }),
-    { ok: false, code: "selection_above_ceiling" },
-  );
-  assert.equal(
-    resolveSelection({
-      ...member,
-      ceiling: 2,
-      selection: { model: "claude_opus_5_5", effort: "low" },
-    }).ok,
-    true,
-  );
+  // A workspace that stored a ceiling below 4 (version 1's default was 1) keeps it: its
+  // members are refused the new default and, since version 4's cheapest entry is Opus 5.5 at
+  // medium (4 credits), every entry, until a holder of governance.model_default.revise
+  // raises it.
+  for (const ceiling of [1, 2, 3]) {
+    assert.deepEqual(resolveSelection({ ...member, ceiling, selection: null }), {
+      ok: false,
+      code: "selection_above_ceiling",
+    });
+    assert.deepEqual(
+      resolveSelection({
+        ...member,
+        ceiling,
+        selection: { model: "claude_opus_5_5", effort: "medium" },
+      }),
+      { ok: false, code: "selection_above_ceiling" },
+    );
+  }
   // A member without governance.model_default.revise picking Opus high under ceiling 4.
   const opusHigh = { model: "claude_opus_5_5", effort: "high" };
   assert.deepEqual(resolveSelection({ ...member, selection: opusHigh }), {
@@ -217,23 +216,27 @@ test("selection: refusals, the default and the member ceiling (ADR-0022 item 16,
     workspaceDefault: { model: "claude_retired_4", effort: "low" },
   });
   assert.equal(stale.ok && stale.entry.model, "claude_opus_5_5");
-  // A stored default of version 1 or 3 that version 4 does not list (Sonnet 5.5 at low) falls
-  // back to the catalogue default too; one that version 4 lists (Opus 5.5 at low) is kept.
-  const sonnet = resolveSelection({
-    ...member,
-    selection: null,
-    workspaceDefault: { model: "claude_sonnet_5_5", effort: "low" },
-  });
-  assert.deepEqual(sonnet.ok && [sonnet.entry.model, sonnet.entry.effort], [
-    "claude_opus_5_5",
-    "medium",
-  ]);
+  // A stored default of version 1 or 3 that version 4 does not list (Sonnet 5.5 at low, Opus
+  // 5.5 at low) falls back to the catalogue default too; one that version 4 lists (Opus 5.5 at
+  // high) is kept.
+  for (const stored of [
+    { model: "claude_sonnet_5_5", effort: "low" },
+    { model: "claude_opus_5_5", effort: "low" },
+  ]) {
+    const fallback = resolveSelection({ ...member, selection: null, workspaceDefault: stored });
+    assert.deepEqual(
+      fallback.ok && [fallback.entry.model, fallback.entry.effort],
+      ["claude_opus_5_5", "medium"],
+      `${stored.model} ${stored.effort}`,
+    );
+  }
   const kept = resolveSelection({
     ...member,
+    ceiling: 6,
     selection: null,
-    workspaceDefault: { model: "claude_opus_5_5", effort: "low" },
+    workspaceDefault: opusHigh,
   });
-  assert.deepEqual(kept.ok && [kept.entry.model, kept.entry.effort], ["claude_opus_5_5", "low"]);
+  assert.deepEqual(kept.ok && [kept.entry.model, kept.entry.effort], ["claude_opus_5_5", "high"]);
   assert.equal(kept.ok && kept.entry.catalogueVersion, 4);
   assert.equal(memberMayPick(6, 6, false), true);
   assert.equal(memberMayPick(6, 5, false), false);

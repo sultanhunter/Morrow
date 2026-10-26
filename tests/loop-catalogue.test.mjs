@@ -272,9 +272,14 @@ test("a hold record is RunHold@1 in numeric(20,8) text, rounded up", () => {
 
 // The loop version's rule cases (the per-product cases are in tests/providers.test.mjs).
 const v2 = (p) => p.catalogue.versions[1];
-// Publishing version 2 as the owner's confirmation would: v1 untouched and still active.
+// Publishing version 2 as the owner's confirmation would: v1 untouched and still active. A
+// published version 2 must be Claude Opus 5.5 at medium or high (the owner, 2026-10-26; review
+// A2), so it is rewritten to that first, as pull request 64 will under ADR-0041; verify refuses
+// it published as it stands (tests/credits-only.test.mjs).
 const publishV2 = (p, { pointer = 2 } = {}) => {
   const entry = v2(p);
+  entry.models = entry.models.filter((m) => m.key === "claude_opus_5_5");
+  entry.efforts = entry.efforts.filter((e) => e.key !== "low");
   entry.status = "active";
   entry.owner_confirmation = "synthetic owner confirmation";
   entry.effective_from = "2026-11-01";

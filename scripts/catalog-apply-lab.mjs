@@ -803,7 +803,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       storeId: S,
       products: numbers.map((n) => "product:" + n),
       fields,
-      selection: { model: "claude_opus_5_5", effort: "low" },
+      selection: { model: "claude_opus_5_5", effort: "medium" },
     });
     const runId = admitted.body.runId;
     if (admitted.status !== 201)

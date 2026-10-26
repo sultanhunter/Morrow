@@ -486,12 +486,12 @@ test("the Listings agent's choice (the workspace default) is the Owner's, on Tea
     // Team's "Change" and the agent page's picker follow the same server decision.
     assert.equal(listings.thinking.canChange, may, scenario);
     assert.equal(models.canRevise, may, scenario);
-    // An entry of the sample's catalogue (version 4: Claude Opus 5.5 only).
+    // An entry of the sample's catalogue (version 4: Claude Opus 5.5 at medium and high only).
     const saved = await port.models.reviseDefault(
       ws,
       command({
         model: "claude_opus_5_5",
-        effort: "low",
+        effort: "medium",
         maxCreditsPerProduct: models.ceiling,
         expectedRevision: models.revision,
       }),

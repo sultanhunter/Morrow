@@ -1353,12 +1353,11 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
   const memberView = await read(ownerGrants(owner, { revise: false }));
   // Catalogue version 4 (ADR-0039): version 3's Opus 5.5 at medium by default (ADR-0036), the
   // default ceiling 4, and 25 products a run for every entry (no run cost cap). Claude Opus
-  // 5.5 only (the owner, 2026-10-26): low, medium and high.
+  // 5.5 only, at medium and high (the owner, 2026-10-26).
   assert.equal(memberView.catalogueVersion, 4);
   assert.deepEqual(
     memberView.entries.map((e) => [e.model, e.effort, e.creditsPerProduct]),
     [
-      ["claude_opus_5_5", "low", 2],
       ["claude_opus_5_5", "medium", 4],
       ["claude_opus_5_5", "high", 6],
     ],
@@ -1387,7 +1386,8 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
   assert.deepEqual(stored.workspaceDefault, { model: "claude_opus_5_5", effort: "medium" });
   assert.equal(stored.ceiling, 1);
   assert.ok(stored.entries.every((e) => !e.allowedForMember));
-  // A default stored at version 3 that version 4 also lists (Opus 5.5 at low) is kept.
+  // A default stored at version 3 that version 4 no longer lists (Opus 5.5 at low) reads as the
+  // catalogue's default too; its ceiling of 2 is kept, below version 4's cheapest entry (4).
   const opusLow = await read(ownerGrants(owner, { revise: false }), [
     {
       catalogue_version: "3",
@@ -1398,10 +1398,11 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
       updated_at: "2026-10-25T11:00:00.000Z",
     },
   ]);
-  assert.deepEqual(opusLow.workspaceDefault, { model: "claude_opus_5_5", effort: "low" });
+  assert.deepEqual(opusLow.workspaceDefault, { model: "claude_opus_5_5", effort: "medium" });
+  assert.equal(opusLow.ceiling, 2);
   assert.deepEqual(
     opusLow.entries.map((e) => e.allowedForMember),
-    [true, false, false],
+    [false, false],
   );
   const text = JSON.stringify(memberView);
   assert.doesNotMatch(text, /claude-|anthropic|usd|price|cost|token/i);

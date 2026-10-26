@@ -163,10 +163,13 @@ test("decoders accept the server's own bodies exactly", async () => {
   const decoded = decodeModels({ schemaVersion: 1, ...models.body });
   // Catalogue version 4 (ADR-0039): version 3's Opus 5.5 at medium by default (ADR-0036),
   // under the default ceiling 4, with 25 products a run for every entry; Claude Opus 5.5 at
-  // low, medium and high only (the owner, 2026-10-26).
+  // medium and high only (the owner, 2026-10-26).
   assert.equal(decoded?.catalogueVersion, 4);
   assert.ok(decoded.entries.every((e) => e.runProductLimit === 25));
-  assert.equal(decoded.entries.length, 3);
+  assert.deepEqual(
+    decoded.entries.map((e) => e.effort),
+    ["medium", "high"],
+  );
   assert.ok(decoded.entries.every((e) => e.model === "claude_opus_5_5"));
   assert.deepEqual(decoded.workspaceDefault, { model: "claude_opus_5_5", effort: "medium" });
   assert.equal(decoded.ceiling, 4);

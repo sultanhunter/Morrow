@@ -151,7 +151,7 @@ export const generatedModelCatalogue = {
     {
       version: 4,
       status: "active",
-      digest: "fce5fabf387c932b79d2fc48bba0cef97b807a528374912deb413592c9e05a45",
+      digest: "189ba14bcad6b5cbdf15d7d6e2a51d1b571720615d3688042e17f0777b74c62c",
       effectiveFrom: "2026-10-26",
       defaultSelection: {
         model: "claude_opus_5_5",
@@ -167,10 +167,6 @@ export const generatedModelCatalogue = {
         workspaceDailyCostCapUsd8: null,
       },
       efforts: [
-        {
-          key: "low",
-          maxOutputTokens: 5000,
-        },
         {
           key: "medium",
           maxOutputTokens: 12000,
@@ -188,7 +184,6 @@ export const generatedModelCatalogue = {
           inputUsd8PerToken: 400,
           outputUsd8PerToken: 2000,
           creditsPerProduct: {
-            low: 2,
             medium: 4,
             high: 6,
           },

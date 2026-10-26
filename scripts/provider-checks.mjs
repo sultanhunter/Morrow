@@ -108,9 +108,17 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
 // out on models"): from version 4, a version of either run shape holds only Claude Opus 5.5
 // entries, and any other model is refused: Haiku or Sonnet, and an older Opus such as
 // claude_opus_4_1 as much as a newer one. A later model needs a reviewed change to this rule
-// (OPUS_ONLY_MODEL), not just a new catalogue version. Versions 1 to 3 keep theirs as
-// published (1 and 3) or proposed (the loop's 2).
+// (OPUS_ONLY_MODEL), not just a new catalogue version. The owner's answer to question 1 on
+// pull request 82 (2026-10-26, the recommendation "Drop low effort everywhere") drops low
+// effort under the same rule: medium and high only (xhigh and max may come in a later version
+// once tests show they help). The rule holds from version 4 and, since review finding A2, for
+// every published (active or retired) version other than 1 and 3, so publishing the loop's
+// version 2 as it stands is refused too. Versions 1 and 3 keep their Haiku, Sonnet and low
+// effort as published; the loop's version 2 keeps them only while it is proposed (pull request
+// 64 rewrites it under ADR-0041).
 export const OPUS_ONLY_FROM_VERSION = 4;
+export const PUBLISHED_BEFORE_OPUS_ONLY = Object.freeze([1, 3]);
+export const OPUS_ONLY_REFUSED_EFFORTS = Object.freeze(["low"]);
 export const OPUS_ONLY_MODEL = Object.freeze({
   provider: "anthropic",
   key: "claude_opus_5_5",
@@ -127,13 +135,23 @@ export const isOpusModel = (model) =>
   model?.provider === OPUS_ONLY_MODEL.provider &&
   model.key === OPUS_ONLY_MODEL.key &&
   model.provider_model_id === OPUS_ONLY_MODEL.provider_model_id;
+/**
+ * Whether the owner's Opus-only rule holds for a version, of either run shape: every version
+ * from 4, and every published (active or retired) version other than 1 and 3 (review A2).
+ */
+export const opusOnlyApplies = (entry) =>
+  Number.isInteger(entry?.version) &&
+  (entry.version >= OPUS_ONLY_FROM_VERSION ||
+    (["active", "retired"].includes(entry.status) &&
+      !PUBLISHED_BEFORE_OPUS_ONLY.includes(entry.version)));
+const OPUS_ONLY_SCOPE = "from version 4, and in every published version but 1 and 3,";
 const refuseNonOpus = (entry, model, fail) => {
-  if (
-    Number.isInteger(entry.version) &&
-    entry.version >= OPUS_ONLY_FROM_VERSION &&
-    !isOpusModel(model)
-  )
-    fail(`${model.key} is not Claude Opus 5.5; from version 4 every entry is Claude Opus 5.5`);
+  if (opusOnlyApplies(entry) && !isOpusModel(model))
+    fail(`${model.key} is not Claude Opus 5.5; ${OPUS_ONLY_SCOPE} every entry is Claude Opus 5.5`);
+};
+const refuseOpusOnlyEffort = (entry, effort, fail) => {
+  if (opusOnlyApplies(entry) && OPUS_ONLY_REFUSED_EFFORTS.includes(effort.key))
+    fail(`effort ${effort.key} is refused; ${OPUS_ONLY_SCOPE} entries run at medium or high`);
 };
 const unrecoveredCapField = "workspace_period_unrecovered_cost_cap_usd";
 const costCapFields = Object.freeze(["run_cost_cap_usd", "workspace_daily_cost_cap_usd"]);
@@ -218,6 +236,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     // No xhigh or max at launch: the send is non-streaming (ADR-0027 item 12).
     if (!["low", "medium", "high"].includes(effort.key) || efforts.has(effort.key))
       fail(`invalid loop effort ${effort.key}`);
+    refuseOpusOnlyEffort(entry, effort, fail);
     if (
       JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
       JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||
@@ -338,6 +357,7 @@ function inspectCatalogueVersion(entry, adapters) {
     const request = effort.request ?? {};
     if (!EFFORT_LEVELS.includes(effort.key) || efforts.has(effort.key))
       fail(`invalid effort ${effort.key}`);
+    refuseOpusOnlyEffort(entry, effort, fail);
     if (
       JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
       JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||

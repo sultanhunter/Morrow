@@ -15,10 +15,10 @@ export const fixtureWorkspace = { id: "ws-linen", displayName: "Linen & Form", p
 export const fixtureOrganizationName = "Linen & Form (sample)";
 // M3 PR-1: the active catalogue version as GET /models lists it (docs/decisions/model-policy.json;
 // credits per product and the run product limit): version 4 since ADR-0039, Claude Opus 5.5
-// only (the owner, 2026-10-26) at version 1's credits with no run cost cap, so every entry
-// admits 25 products. The Listings agent's store is M2 PR-2's sample store (fixtureStore below).
+// only at medium and high (the owner, 2026-10-26) at version 1's credits with no run cost cap,
+// so every entry admits 25 products. The Listings agent's store is M2 PR-2's sample store
+// (fixtureStore below).
 export const fixtureCatalogue = [
-  { model: "claude_opus_5_5", effort: "low", creditsPerProduct: 2, runProductLimit: 25 },
   { model: "claude_opus_5_5", effort: "medium", creditsPerProduct: 4, runProductLimit: 25 },
   { model: "claude_opus_5_5", effort: "high", creditsPerProduct: 6, runProductLimit: 25 },
 ] as const;
