@@ -5,7 +5,7 @@
 // version 3 retired, run_reserve without the daily cap, runtime_caps() and
 // runtime_operation_begin without the monthly budget (migration 0055), and verify refusing a
 // money cap on any later per-product version and on any loop version, and any model but
-// Claude Opus from version 4. Pure: no I/O beyond
+// Claude Opus 5.5 from version 4. Pure: no I/O beyond
 // reading the repository files. lab:run-credits (C3, C12, C13), lab:listings-runs (B4, C1) and
 // lab:runtime-operations (K2) prove migration 0055 on PostgreSQL 17.
 import assert from "node:assert/strict";
@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   OPUS_ONLY_FROM_VERSION,
+  OPUS_ONLY_MODEL,
   catalogueVersionDigest,
   inspectModelPolicy,
   isOpusModel,
@@ -116,6 +117,25 @@ test("ADR-0039's Approval quotes OD-2026-10-25-4 verbatim and item 4 publishes v
   // Item 4 is what this branch carries out: version 4 with 25 products for every entry.
   assert.match(adr, /^4\. \*\*Listings\.\*\* /m);
   assert.ok(adr.includes("catalogue version 4 publishes on this decision"));
+});
+
+// Item 4 still reads "version 3 with no run or daily cap"; the dated note amends it to Claude
+// Opus 5.5 only, quoting the owner's words exactly as version 4's owner_confirmation does.
+test("ADR-0039's amendment of 2026-10-26 makes version 4 Opus 5.5 only, in the owner's words", () => {
+  const adr = read("docs/decisions/adr/ADR-0039-credits-only-spend-limit.md");
+  const amendments = adr.slice(adr.indexOf("\n## Amendments\n"));
+  assert.ok(adr.indexOf("\n## Amendments\n") > adr.indexOf("\n## Approval\n"));
+  const note = amendments.slice(
+    amendments.indexOf(
+      "### 2026-10-26: item 4, catalogue version 4 is Claude Opus 5.5 only (decided)\n",
+    ),
+  );
+  assert.ok(note.startsWith("### 2026-10-26: item 4"));
+  assert.ok(note.includes("\n> " + opusQuote + "\n"));
+  assert.ok(v4.owner_confirmation.includes('"' + opusQuote + '"'));
+  assert.ok(note.includes("The cheapest Listings product costs 2 credits, not 1."));
+  assert.ok(note.includes("owner question 1 on pull request 82 (ADR-0041, Proposed;"));
+  assert.ok(note.includes("(the key `claude_opus_5_5` calling `claude-opus-5-5`)"));
 });
 
 test("catalogue version 4: version 3's Opus entries, rates, default and ceiling, no caps, 25 products", () => {
@@ -242,8 +262,13 @@ test("no money cap after version 3: per-product versions, the loop version and t
   assert.ok(report.selections.every((s) => s.products_per_run === 25));
 });
 
-test("Claude Opus only from version 4: verify refuses any other model, either run shape", () => {
+test("Claude Opus 5.5 only from version 4: verify refuses any other model, either run shape", () => {
   assert.equal(OPUS_ONLY_FROM_VERSION, 4);
+  assert.deepEqual(
+    { ...OPUS_ONLY_MODEL },
+    { provider: "anthropic", key: "claude_opus_5_5", provider_model_id: "claude-opus-5-5" },
+  );
+  assert.ok(Object.isFrozen(OPUS_ONLY_MODEL));
   for (const entry of policy.catalogue.versions)
     if (entry.version >= 4) assert.ok(entry.models.every(isOpusModel), `v${entry.version}`);
   // Versions 1 to 3 keep their Haiku and Sonnet as published (1 and 3) or proposed (the loop's 2).
@@ -271,23 +296,62 @@ test("Claude Opus only from version 4: verify refuses any other model, either ru
     refused(
       (p) => p.catalogue.versions[3].models.unshift(structuredClone(v3.models[index])),
       new RegExp(
-        `model catalogue v4: ${v3.models[index].key} is not a Claude Opus model; from version 4 every entry is Opus`,
+        `model catalogue v4: ${v3.models[index].key} is not Claude Opus 5\\.5; from version 4 every entry is Claude Opus 5\\.5`,
       ),
     );
   // An Opus key that calls another model, and another provider's model, are not Opus.
   refused(
     (p) => (p.catalogue.versions[3].models[0].provider_model_id = "claude-sonnet-5-5"),
-    /model catalogue v4: claude_opus_5_5 is not a Claude Opus model/,
+    /model catalogue v4: claude_opus_5_5 is not Claude Opus 5\.5/,
   );
+  // Another Opus generation is refused too (the review's F2): an older, cheaper Opus such as
+  // Claude Opus 4.1 in a later per-product version, and a newer one, until a reviewed change to
+  // the rule. Each is otherwise a valid entry: version 4's own, with the key and model ID changed.
+  for (const [key, id] of [
+    ["claude_opus_4_1", "claude-opus-4-1"],
+    ["claude_opus_6_0", "claude-opus-6-0"],
+  ]) {
+    refused(
+      (p) => {
+        const next = structuredClone(p.catalogue.versions[3]);
+        next.version = 5;
+        next.status = "proposed";
+        next.models[0].key = key;
+        next.models[0].provider_model_id = id;
+        p.catalogue.versions.push(next);
+      },
+      new RegExp(`model catalogue v5: ${key} is not Claude Opus 5\\.5`),
+    );
+    refused(
+      (p) => {
+        p.catalogue.versions[3].models[0].key = key;
+        p.catalogue.versions[3].models[0].provider_model_id = id;
+      },
+      new RegExp(`model catalogue v4: ${key} is not Claude Opus 5\\.5`),
+    );
+  }
   // A later loop version (a sim version 5 of the agent-loop shape) is held to the same rule.
   refused((p) => {
     const next = structuredClone(loop);
     next.version = 5;
     p.catalogue.versions.push(next);
-  }, /model catalogue v5: claude_haiku_5_5 is not a Claude Opus model[\s\S]*model catalogue v5: claude_sonnet_5_5 is not a Claude Opus model/);
-  // The rule itself: an Anthropic Opus key whose provider model ID spells the same name.
+  }, /model catalogue v5: claude_haiku_5_5 is not Claude Opus 5\.5[\s\S]*model catalogue v5: claude_sonnet_5_5 is not Claude Opus 5\.5/);
+  // The rule itself: exactly Anthropic's claude_opus_5_5 calling claude-opus-5-5.
   const opus = v4.models[0];
   assert.equal(isOpusModel(opus), true);
+  assert.equal(
+    isOpusModel({ ...opus, key: "claude_opus_4_1", provider_model_id: "claude-opus-4-1" }),
+    false,
+  );
+  assert.equal(
+    isOpusModel({ ...opus, key: "claude_opus_6_0", provider_model_id: "claude-opus-6-0" }),
+    false,
+  );
+  assert.equal(
+    isOpusModel({ ...opus, key: "claude_opus_5_5_1", provider_model_id: "claude-opus-5-5-1" }),
+    false,
+  );
+  assert.equal(isOpusModel({ ...opus, provider_model_id: "claude-opus-4-1" }), false);
   assert.equal(isOpusModel({ ...opus, provider: "openai" }), false);
   assert.equal(isOpusModel({ ...opus, key: "claude_opus_latest" }), false);
   assert.equal(isOpusModel({ ...opus, provider_model_id: "claude-opus-5-5-latest" }), false);

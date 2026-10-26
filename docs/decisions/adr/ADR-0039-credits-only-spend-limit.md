@@ -105,3 +105,18 @@ The owner's answer in chat, verbatim, on 2026-10-26 (OD-2026-10-26-1), to the le
 What it decides: a loop run that fails draws nothing (item 2(g); which endings count as failed is the lead's proposal, put to the owner in Q-adr-0039-run-endings); the final-turn reserve stands (item 2(d) and (e)); the platform ceiling on buying credits stays; an optional per-agent credit limit that the Owner sets is built, none by default (item 7).
 
 The owner's answer on 2026-10-26 to Q-adr-0039-run-endings (OD-2026-10-26-2), in full: "recommended". It accepts the lead's recommendation as put in chat: a run that ends because of an error on Morrow's side or the AI provider's is free; a run that still gives an answer, or that a person stops, is charged; and a breaker pauses an agent after three failed runs in a row (item 2(g); Consequences).
+
+## Amendments
+
+### 2026-10-26: item 4, catalogue version 4 is Claude Opus 5.5 only (decided)
+
+The owner's message in chat on 2026-10-26, verbatim, as catalogue version 4's `owner_confirmation` in `docs/decisions/model-policy.json` quotes it:
+
+> one more thing i am seeing we are using haiku for some parts? why is that? we don't want to cheap out on models as we want the best results for users as all the users are going to be paid users
+
+The lead reads it as every agent on Claude Opus 5.5, with Haiku 5.5 and Sonnet 5.5 leaving the catalogue. By that decision of the owner, item 4 changes as below; the text above is kept as approved.
+
+- **Item 4.** Catalogue version 4 is not "version 3 with no run or daily cap". It is version 3's Claude Opus 5.5 entries only, at low, medium and high (2, 4 and 6 credits a product), with no run or daily cap and 25 products a run for every entry, effective 2026-10-26. Version 3's Haiku 5.5 and Sonnet 5.5 entries are not carried into it, so item 4's "Sonnet 5.5 at high from 19 to 25" describes no version 4 entry. Every other value is version 3's: Opus 5.5's rates, the efforts and token limits, the economics, the default (Opus 5.5 at medium, 4 credits) and the default member ceiling (4). Version 3 still retires, and a run recorded at version 1 or 3 is still booked at its version.
+- **The cheapest Listings product costs 2 credits, not 1.** Version 3's 1-credit entries (Haiku 5.5 at every effort, Sonnet 5.5 at low) leave; version 4's cheapest is Opus 5.5 at low. A workspace whose stored member ceiling is 1 (version 1's default) leaves its members no entry until the Owner raises it, and a stored default naming Haiku or Sonnet reads as the catalogue's default, Opus 5.5 at medium.
+- **Low effort is the owner's open question.** Whether Opus 5.5 at low stays is owner question 1 on pull request 82 (ADR-0041, Proposed; `Q-adr-0040-0041-owner-questions`), which recommends dropping it. Pull request 83, which seeds version 4, waits for that answer: if low goes, version 4 holds only Opus 5.5 at medium and high, and the cheapest Listings product costs 4 credits.
+- **Checked in code.** From version 4, `npm run verify` refuses any model that is not exactly Claude Opus 5.5 (the key `claude_opus_5_5` calling `claude-opus-5-5`), in a version of either run shape: Haiku, Sonnet, and an older or newer Opus alike. A later model needs a reviewed change to that rule, not only a new catalogue version.

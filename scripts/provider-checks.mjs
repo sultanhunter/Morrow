@@ -105,28 +105,35 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
 // and enforced nowhere once version 4 is active). A per-product version after 3 that carries
 // either, and a loop version that carries any money cap, is refused; the margin rules stay.
 // The owner chose the best model for every agent (2026-10-26, in chat: "we don't want to cheap
-// out on models"): from version 4, a version of either run shape holds only Claude Opus
-// entries, and a Haiku or Sonnet entry is refused. Versions 1 to 3 keep theirs as published
-// (1 and 3) or proposed (the loop's 2).
+// out on models"): from version 4, a version of either run shape holds only Claude Opus 5.5
+// entries, and any other model is refused: Haiku or Sonnet, and an older Opus such as
+// claude_opus_4_1 as much as a newer one. A later model needs a reviewed change to this rule
+// (OPUS_ONLY_MODEL), not just a new catalogue version. Versions 1 to 3 keep theirs as
+// published (1 and 3) or proposed (the loop's 2).
 export const OPUS_ONLY_FROM_VERSION = 4;
+export const OPUS_ONLY_MODEL = Object.freeze({
+  provider: "anthropic",
+  key: "claude_opus_5_5",
+  provider_model_id: "claude-opus-5-5",
+});
 export const UNRECOVERED_CAP_VERSIONS = Object.freeze([1]);
 export const COST_CAP_VERSIONS = Object.freeze([1, 3]);
 /**
- * A Claude Opus model: Anthropic's, an opus key and the provider model ID that spells the same
- * name (claude_opus_5_5 is claude-opus-5-5), so a key never names one model and calls another.
+ * Exactly Claude Opus 5.5: Anthropic's, the key claude_opus_5_5 and the provider model ID
+ * claude-opus-5-5, so a key never names one model and calls another, and no other Opus
+ * generation passes.
  */
 export const isOpusModel = (model) =>
-  model?.provider === "anthropic" &&
-  typeof model.key === "string" &&
-  /^claude_opus_[0-9]+(_[0-9]+)*$/.test(model.key) &&
-  model.provider_model_id === model.key.replaceAll("_", "-");
+  model?.provider === OPUS_ONLY_MODEL.provider &&
+  model.key === OPUS_ONLY_MODEL.key &&
+  model.provider_model_id === OPUS_ONLY_MODEL.provider_model_id;
 const refuseNonOpus = (entry, model, fail) => {
   if (
     Number.isInteger(entry.version) &&
     entry.version >= OPUS_ONLY_FROM_VERSION &&
     !isOpusModel(model)
   )
-    fail(`${model.key} is not a Claude Opus model; from version 4 every entry is Opus`);
+    fail(`${model.key} is not Claude Opus 5.5; from version 4 every entry is Claude Opus 5.5`);
 };
 const unrecoveredCapField = "workspace_period_unrecovered_cost_cap_usd";
 const costCapFields = Object.freeze(["run_cost_cap_usd", "workspace_daily_cost_cap_usd"]);

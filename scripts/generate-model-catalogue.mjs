@@ -1,7 +1,7 @@
 // The model catalogue generator (ADR-0022 items 10, 11 and 16; M3 PR-1). It reads the
 // reviewed catalogue in docs/decisions/model-policy.json, refuses it unless
 // `inspectModelPolicy` passes (pinned digests, adaptive thinking, margins, caps, and Claude
-// Opus only from version 4, the owner's choice of 2026-10-26), and
+// Opus 5.5 only from version 4, the owner's choice of 2026-10-26), and
 // writes packages/policy/src/generated/model-catalogue.ts: data only, for the api's
 // checks and, in M3 PR-2, the broker. Keys stay opaque strings; nothing here becomes a
 // contract enum. Every money value is an exact integer count of 10^-8 USD (the
@@ -53,7 +53,7 @@ export function catalogueVersionData(entry) {
     if (!KEY.test(effort.key ?? "")) refuse("KEY_INVALID");
     return { key: effort.key, maxOutputTokens: count(effort.max_output_tokens) };
   });
-  // From version 4 every model is Claude Opus (verify refuses another before this runs).
+  // From version 4 every model is Claude Opus 5.5 (verify refuses another before this runs).
   const models = (entry.models ?? []).map((model) => {
     if (!KEY.test(model.key ?? "")) refuse("KEY_INVALID");
     const rates = model.rates_usd_per_million_tokens ?? {};

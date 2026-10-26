@@ -13,8 +13,10 @@ PR 1 (the listings and the catalogue, credits only) with PR 4's removal of the r
 OD-2026-10-25-4. Catalogue version 4 (version 3 without the US$7 run and US$25 daily caps, 25
 products a run for every entry, and, on the owner's decision of 2026-10-26 that every agent runs
 on the best model, Claude Opus 5.5 at low, medium and high only), version 3 retired, loop
-version 2 without money caps (still proposed), verify refusing any model but Claude Opus from
-version 4, and migration 0055: `run_reserve` without the daily cap, `runtime_caps()` and
-`runtime_operation_begin` without the US$10 monthly budget. Built as 0052, renumbered 0053 when
-pull request 68's shop knowledge took 0052, and 0055 when pull request 66 took 0053 and 0054; if
-another pull request lands first, the lead renumbers it again at merge time.
+version 2 without money caps (still proposed), verify refusing any model but exactly Claude
+Opus 5.5 from version 4, ADR-0039's dated note amending item 4, and migration 0055:
+`run_reserve` without the daily cap, `runtime_caps()` and `runtime_operation_begin` without the
+US$10 monthly budget. Built as 0052, renumbered 0053 when pull request 68's shop knowledge took
+0052, and 0055 when pull request 66 took 0053 and 0054; if another pull request lands first, the
+lead renumbers it again at merge time. Waits for the owner's answer to owner question 1 of pull
+request 82 (the proposed harness record): does Opus 5.5 at low stay.
