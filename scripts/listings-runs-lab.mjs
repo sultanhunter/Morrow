@@ -1300,7 +1300,15 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         next.status === 201 &&
         nextResult?.kind === "ended" &&
         nextResult.status === "succeeded",
-      { result, run: runRow(runId), next: next.body, nextResult },
+      {
+        admitted: admitted.status,
+        sends: ids.map((id) => oracle.sends(id)),
+        calls: calls(runId),
+        result,
+        run: runRow(runId),
+        next: next.body,
+        nextResult,
+      },
     );
     // The cap stopped these runs before ADR-0036, so they spent no credits; the 6 they now
     // spend are returned to W's wallet (sim), so the later phases keep their budget.
