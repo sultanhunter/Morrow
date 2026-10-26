@@ -7133,7 +7133,7 @@
       "additionalProperties": false
     },
     "ToolName": {
-      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 added plan.draft (ADR-0034 item 2; PR 18); version 3 added knowledge.propose and notebook.write (PR 20). Version 4 (ADR-0037 items 1 to 3) replaces specialist.draft with agent.propose and adds agent.ask, agent.result.read and the called teammate's result.submit. A new tool is a new catalogue version and a deliberate schema change.",
+      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 added plan.draft (ADR-0034 item 2; PR 18); version 3 added knowledge.propose and notebook.write (PR 20). Version 4 (ADR-0037 items 1 to 3 and ADR-0041 item 24; unpublished, edited in place until it is) replaces specialist.draft with agent.propose; adds Morrow's orchestration tools agent.ask (ask or review, or a follow-up of an earlier call), agent.map, agent.message and agent.cancel; adds the memory tools memory.search, memory.read (which also opens result items, teammate results, message ranges and this context's labels, in place of agent.result.read) and memory.suggest; and adds the harness tools run.plan, run.complete (whose child form takes the place of result.submit), run.wait, result.write and context.checkpoint. knowledge.search stays for this version as an alias of memory.search's knowledge layer. A new tool is a new catalogue version and a deliberate schema change.",
       "type": "string",
       "enum": [
         "knowledge.search",
@@ -7149,24 +7149,35 @@
         "report.write",
         "agent.route",
         "agent.ask",
-        "agent.result.read",
+        "agent.map",
+        "agent.message",
+        "agent.cancel",
         "agent.propose",
         "proposal.listing",
         "proposal.reply",
         "plan.draft",
         "knowledge.propose",
         "notebook.write",
-        "result.submit"
+        "memory.search",
+        "memory.read",
+        "memory.suggest",
+        "run.plan",
+        "run.complete",
+        "run.wait",
+        "result.write",
+        "context.checkpoint"
       ]
     },
     "ToolFamily": {
-      "description": "read: reads Morrow or store data, or one page of a teammate's result item; internal: writes internal work records (a called teammate's result included); coordination: Morrow's teammate calls, hand-offs, agent cards and plan cards; proposal: a digest-bound proposal for the gateway (ADR-0027's proposal.create family); computer: E2B tools under the runtime switch (none in version 4).",
+      "description": "read: reads Morrow or store data; internal: writes internal work records; coordination: Morrow's teammate calls, hand-offs, agent cards and plan cards; proposal: a digest-bound proposal for the gateway (ADR-0027's proposal.create family); memory (ADR-0041 items 24 and 25): memory.search, memory.read and memory.suggest, which hold no capability of their own: code decides each read per layer and target (the target's own capability over the full intersection, its read tags, its audience and the reader's live view of every source subject), and a suggestion is a message part only its requester sees, saved only by that person's tap (item 29); harness (ADR-0041 item 24): run.plan, run.complete, run.wait, result.write and context.checkpoint, which grant nothing, write only their run's own rows (with the run's audience, read tags and taint) and are checked by the lease and their closed input; computer: E2B tools under the runtime switch (none in version 4). A memory or harness tool is offered by its context, never declared by a package or picked on a card.",
       "type": "string",
       "enum": [
         "read",
         "internal",
         "coordination",
         "proposal",
+        "memory",
+        "harness",
         "computer"
       ]
     },
@@ -7180,7 +7191,7 @@
       ]
     },
     "ToolContext": {
-      "description": "Where a tool may be offered: the Coordinator (Morrow), a person's routed run (a hand-off), a mandate run, a look-for-work pass (reads and suggestions only, ADR-0024 item 6) or a called teammate's run (ADR-0037 item 3(a): no inbox.ask or message.post, so it cannot talk to the person; it ends with result.submit). Version 4 retires the specialist context with the specialist kind.",
+      "description": "Where a tool may be offered: the Coordinator (Morrow), a person's routed run (a hand-off), a mandate run, a look-for-work pass (reads, suggestions, memory reads and its own plan and completion; ADR-0024 item 6) or a called teammate's run (ADR-0037 item 3(a): no inbox.ask, message.post or memory.suggest, so it cannot talk to the person; it builds result items with result.write and ends with run.complete's child form, ADR-0041 item 24). Version 4 retires the specialist context with the specialist kind.",
       "type": "string",
       "enum": [
         "coordinator",
@@ -7196,7 +7207,7 @@
       "pattern": "^[a-z][a-z0-9_]{0,63}$"
     },
     "ToolDefinition": {
-      "description": "One tool of ToolCatalogue@1: its capability and verb, replay class, 8 KiB result bound, input definition and the contexts it may be offered in. A skill never adds a tool.",
+      "description": "One tool of ToolCatalogue@1: its family, capability and verb, replay class, 8 KiB result bound, input definition and the contexts it may be offered in. A skill never adds a tool. A memory or harness tool holds no capability (capabilityId and verb null): it grants nothing, and code decides it as its family says; every other tool names exactly one capability and verb.",
       "type": "object",
       "properties": {
         "name": {
@@ -7209,17 +7220,31 @@
           "$ref": "#/$defs/ToolFamily"
         },
         "capabilityId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "verb": {
-          "type": "string",
-          "enum": [
-            "view",
-            "propose",
-            "approve",
-            "execute",
-            "delegate",
-            "administer"
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "view",
+                "propose",
+                "approve",
+                "execute",
+                "delegate",
+                "administer"
+              ]
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "replayClass": {
@@ -7262,7 +7287,74 @@
         "contexts",
         "description"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "family": {
+                "enum": [
+                  "memory",
+                  "harness"
+                ]
+              }
+            },
+            "required": [
+              "family"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "capabilityId": {
+                "type": "null"
+              },
+              "verb": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "family": {
+                "enum": [
+                  "read",
+                  "internal",
+                  "coordination",
+                  "proposal",
+                  "computer"
+                ]
+              }
+            },
+            "required": [
+              "family"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "capabilityId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+              },
+              "verb": {
+                "type": "string",
+                "enum": [
+                  "view",
+                  "propose",
+                  "approve",
+                  "execute",
+                  "delegate",
+                  "administer"
+                ]
+              }
+            }
+          }
+        }
+      ]
     },
     "ToolCatalogue": {
       "description": "ToolCatalogue@1 (ADR-0027 item 3; PR 10): the closed, generated, digest-pinned tool data in docs/contracts/tool-catalogue.json. No tool takes SQL, a URL, a role, a store, a recipient, a sender, a credential or a model, and none has an external effect.",
@@ -7611,14 +7703,14 @@
       "additionalProperties": false
     },
     "ToolInputAgentRoute": {
-      "description": "agent.route (catalogue version 4): Morrow hands work to one active teammate that must own the conversation with the person, on its own child task, with a structured brief and no character cap. Any number per run (ADR-0037 item 3(b)); it returns nothing to Morrow's run. Never in a private Ask.",
+      "description": "agent.route (catalogue version 4): Morrow hands work to one active teammate that must own the conversation with the person, on its own child task, with a structured brief and no character cap. Any number per job (ADR-0037 item 3(b)); it returns nothing to Morrow's run. Never in a private Ask (ADR-0041 item 33).",
       "type": "object",
       "properties": {
         "installationId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
         },
         "brief": {
-          "$ref": "#/$defs/TeammateBrief"
+          "$ref": "#/$defs/TeammateBriefInput"
         }
       },
       "required": [
@@ -8042,7 +8134,12 @@
                       "knowledge_page",
                       "product",
                       "proposal",
-                      "result_item"
+                      "result_item",
+                      "suggestion",
+                      "knowledge_proposal",
+                      "notebook_entry",
+                      "message",
+                      "person_memory"
                     ]
                   },
                   "id": {
@@ -8054,6 +8151,54 @@
                   "id"
                 ]
               }
+            },
+            "outputFormat": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "findingKinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "fact",
+                      "issue",
+                      "metric",
+                      "recommendation",
+                      "table"
+                    ]
+                  }
+                },
+                "tableColumns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "itemsExpected": {
+                  "type": "boolean"
+                },
+                "summaryDepth": {
+                  "type": "string",
+                  "enum": [
+                    "brief",
+                    "standard",
+                    "detailed"
+                  ]
+                }
+              },
+              "required": [
+                "findingKinds",
+                "tableColumns",
+                "itemsExpected",
+                "summaryDepth"
+              ]
+            },
+            "approach": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": [
@@ -8061,7 +8206,9 @@
             "details",
             "doneCriteria",
             "boundaries",
-            "records"
+            "records",
+            "outputFormat",
+            "approach"
           ]
         }
       },
@@ -8891,7 +9038,7 @@
       "additionalProperties": false
     },
     "ModelUntrustedSource": {
-      "description": "The source a wrapped piece of untrusted data names (ADR-0027 item 5). teammate_result and result_item: a teammate's result and an opened item (ADR-0037 item 3(a)).",
+      "description": "The source a wrapped piece of untrusted data names (ADR-0027 item 5), and a taint kind. teammate_result and result_item: a teammate's result and an opened item (ADR-0037 item 3(a)). ADR-0041 item 34 adds notebook_entry, conversation_summary, person_memory and context_checkpoint (memory read back into a run), thread_post (a post in a shared thread) and other_member (the words of a member who is not the run's requester, ADR-0040).",
       "type": "string",
       "enum": [
         "product",
@@ -8906,7 +9053,13 @@
         "tool_result",
         "message",
         "teammate_result",
-        "result_item"
+        "result_item",
+        "notebook_entry",
+        "conversation_summary",
+        "person_memory",
+        "context_checkpoint",
+        "thread_post",
+        "other_member"
       ]
     },
     "ModelTextBlock": {
@@ -9286,10 +9439,58 @@
               "$ref": "#/$defs/ToolUseId"
             },
             "name": {
-              "const": "agent.result.read"
+              "const": "agent.map"
             },
             "input": {
-              "$ref": "#/$defs/ToolModelInputAgentResultRead"
+              "$ref": "#/$defs/ToolModelInputAgentMap"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "agent.message"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputAgentMessage"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "agent.cancel"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputAgentCancel"
             }
           },
           "required": [
@@ -9454,10 +9655,178 @@
               "$ref": "#/$defs/ToolUseId"
             },
             "name": {
-              "const": "result.submit"
+              "const": "memory.search"
             },
             "input": {
-              "$ref": "#/$defs/ToolModelInputResultSubmit"
+              "$ref": "#/$defs/ToolModelInputMemorySearch"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "memory.read"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputMemoryRead"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "memory.suggest"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputMemorySuggest"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "run.plan"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputRunPlan"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "run.complete"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputRunComplete"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "run.wait"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputRunWait"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "result.write"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputResultWrite"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "context.checkpoint"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputContextCheckpoint"
             }
           },
           "required": [
@@ -9872,7 +10241,7 @@
       ]
     },
     "ToolRefusalCode": {
-      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20 (catalogue version 3): customer_data (a run that read customer data proposes no shop knowledge) and pending_limit (a workspace holds at most 50 pending knowledge proposals). Catalogue version 4 (ADR-0037 item 3) drops route_used (no limit of one hand-off per run) and adds the teammate codes: teammate_unavailable (not active, not on the code-built list, or the Coordinator), children_limit (the kernel's 32 children per envelope), insufficient_credits (the balance cannot cover the call's hold at once, or it would wait), result_customer_tagged, item_not_received (an item from a result this run did not receive), page_out_of_range, hand_off_in_ask, card_tool_excluded and card_limit (10 active workspace-created agents).",
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20 (catalogue version 3): customer_data (a run that read customer data proposes no shop knowledge) and pending_limit (a workspace holds at most 50 pending knowledge proposals). Catalogue version 4 (ADR-0037 item 3) drops route_used (no limit of one hand-off per run) and adds teammate_unavailable (not active, not on the code-built list, or the Coordinator), children_limit and insufficient_credits (kept for records written before ADR-0041: the 33rd child now checks the job in, and a first hold the wallet cannot cover parks the job, items 9 and 21), result_customer_tagged, item_not_received (an item from a result this run did not receive), page_out_of_range, hand_off_in_ask, card_tool_excluded and card_limit (10 active workspace-created agents). ADR-0041 item 34 adds parallel_limit (past a turn's tool calls; re-issued next turn), fork_first (agent.* in Morrow's main thread), retry_blocked (a dispatch over subjects with unknown outcomes), recall_out_of_scope (memory.read of a label not every part of which still passes), call_not_found and call_not_idle (agent.message, agent.cancel or a follow-up naming no call of this run, or one not idle), milestone_too_soon and checkpoint_not_requested (context.checkpoint outside a checkpoint fork); with the harness tools, plan_not_set (run.plan update or a job's run.complete before a plan), verification_failed (run.complete's gate, naming the criterion; the job continues) and item_closed (result.write to a closed item).",
       "type": "string",
       "enum": [
         "not_offered",
@@ -9903,11 +10272,22 @@
         "page_out_of_range",
         "hand_off_in_ask",
         "card_tool_excluded",
-        "card_limit"
+        "card_limit",
+        "parallel_limit",
+        "fork_first",
+        "retry_blocked",
+        "recall_out_of_scope",
+        "call_not_found",
+        "call_not_idle",
+        "milestone_too_soon",
+        "checkpoint_not_requested",
+        "plan_not_set",
+        "verification_failed",
+        "item_closed"
       ]
     },
     "RunToolCallRecordRef": {
-      "description": "The first record an internal write made, returned again on replay. PR 20 (catalogue version 3) adds the knowledge proposal and the notebook entry. Catalogue version 4: agent.propose records an agent_card, agent.ask the teammate_run it started, result.submit the teammate_result.",
+      "description": "The first record an internal write made, returned again on replay. PR 20 (catalogue version 3) adds the knowledge proposal and the notebook entry. Catalogue version 4: agent.propose records an agent_card; agent.ask an agent_call (a call or a follow-up of one; teammate_run stays for records before it); agent.map an agent_map; agent.message an agent_message; agent.cancel the agent_call it acted on; memory.suggest a memory_suggestion; run.plan a run_plan_revision; run.complete a run_completion, or a called teammate's teammate_result; run.wait a run_wait; result.write the result_item; context.checkpoint the context_checkpoint.",
       "type": "object",
       "properties": {
         "kind": {
@@ -9923,7 +10303,16 @@
             "notebook_entry",
             "agent_card",
             "teammate_run",
-            "teammate_result"
+            "teammate_result",
+            "agent_call",
+            "agent_map",
+            "agent_message",
+            "memory_suggestion",
+            "run_plan_revision",
+            "run_completion",
+            "run_wait",
+            "result_item",
+            "context_checkpoint"
           ]
         },
         "id": {
@@ -10046,7 +10435,7 @@
       "additionalProperties": false
     },
     "RunToolCall": {
-      "description": "RunToolCall@1 (ADR-0027 item 7; PR 10): one row of run_tool_calls: ids, codes and digests only, never content. A refused call names its code; an invalid_input call names input_invalid.",
+      "description": "RunToolCall@1 (ADR-0027 item 7; PR 10): one row of run_tool_calls: ids, codes and digests only, never content. A refused call names its code; an invalid_input call names input_invalid. A memory or harness tool's call names no capability or verb (null): it holds none (ADR-0041 item 24).",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -10073,17 +10462,31 @@
           "$ref": "#/$defs/ToolName"
         },
         "capabilityId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "verb": {
-          "type": "string",
-          "enum": [
-            "view",
-            "propose",
-            "approve",
-            "execute",
-            "delegate",
-            "administer"
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "view",
+                "propose",
+                "approve",
+                "execute",
+                "delegate",
+                "administer"
+              ]
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "replayClass": {
@@ -12923,7 +13326,7 @@
       "additionalProperties": false
     },
     "PlanDraftToolTime": {
-      "description": "A UTC time as plan.draft takes it: UtcTime's text without the date-time format keyword, which ADR-0027 item 3 refuses in a tool input. Code maps it to a PlanDraft@1 UtcTime, which is validated again.",
+      "description": "A UTC time as a tool input takes it (plan.draft; run.wait's until and a run.plan follow-through's time): UtcTime's text without the date-time format keyword, which ADR-0027 item 3 refuses in a tool input. Code maps it to a UtcTime, which is validated again.",
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,3})?Z$"
     },
@@ -14050,6 +14453,204 @@
       ],
       "additionalProperties": false
     },
+    "MemoryLayer": {
+      "description": "A layer memory.search may look in (ADR-0041 items 25 to 30): knowledge (approved shop knowledge pages), notebook (the agent's own notebook), person_memory (the requester's own memories, where each entry's scope allows), conversation (messages and verified summaries the requester can see), results (teammate results and result items this job received) and plan (this job's plan and its notes). Code filters by layer, audience and read tags before ranking.",
+      "type": "string",
+      "enum": [
+        "knowledge",
+        "notebook",
+        "person_memory",
+        "conversation",
+        "results",
+        "plan"
+      ]
+    },
+    "ToolInputMemorySearch": {
+      "description": "memory.search (catalogue version 4; ADR-0041 items 24 and 30): hybrid lexical search over the layers this run may read, up to five queries in one call. layers empty means every layer the run may read. Each hit names its source, trust class and taint; the run opens what it needs with memory.read. Results are data, never authority.",
+      "type": "object",
+      "properties": {
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "\\S"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemoryLayer"
+          },
+          "minItems": 0,
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        }
+      },
+      "required": [
+        "queries",
+        "layers",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "ContextLabel": {
+      "description": "A code label in this context's own log (ADR-0041 items 10, 13 and 14): c a tool result (c17), e an earlier checkpoint, k a knowledge page, m a message, o a gateway operation, p a proposal, q a question, r a result item, t a turn. Labels resolve only inside their context.",
+      "type": "string",
+      "pattern": "^[cekmopqrt][0-9]{1,6}$"
+    },
+    "MemoryReadKind": {
+      "description": "What memory.read opens (ADR-0041 item 24): result_item (one page of an item this run received or was given), teammate_result (a call's full result, by call id, at a follow-up sequence or the latest), messages (a range of one conversation the requester can see), label (this context's own log by label), knowledge_page, notebook_entry (the agent's own notebook only), person_memory (the requester's own, where its scope allows) and conversation_summary.",
+      "type": "string",
+      "enum": [
+        "result_item",
+        "teammate_result",
+        "messages",
+        "label",
+        "knowledge_page",
+        "notebook_entry",
+        "person_memory",
+        "conversation_summary"
+      ]
+    },
+    "MemoryReadTarget": {
+      "description": "The one thing memory.read opens. Code rules beyond the schema: label only for kind label; fromPosition and toPosition (from at most to) only for messages, whose id is the conversation; sequence only for teammate_result (null: the latest); id for every other kind.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/MemoryReadKind"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextLabel"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fromPosition": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toPosition": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "label",
+        "sequence",
+        "fromPosition",
+        "toPosition"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputMemoryRead": {
+      "description": "memory.read (catalogue version 4; ADR-0041 items 14 and 24): one page of one target, pages from 1, in place of agent.result.read, context.recall and conversation.read. Each read re-decides the target's own rule under live grants: a result re-decides the original tool's capability over the full intersection and its read tags; a message the visibility rule, redaction and other_member taint; a label refuses with recall_out_of_scope unless every part still passes; an item opens only when it belongs to a result this run received or its brief names it. What it returns is wrapped data naming its source and taint, joined to the run's.",
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/MemoryReadTarget"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "target",
+        "page"
+      ],
+      "additionalProperties": false
+    },
+    "PersonMemoryKind": {
+      "description": "A suggested person memory's kind (ADR-0041 item 29): a preference, a standing instruction, or a fact about the person's work. Never a special category, contact details, a customer, card or government identifier or a credential (code refuses them).",
+      "type": "string",
+      "enum": [
+        "preference",
+        "instruction",
+        "fact"
+      ]
+    },
+    "ToolInputMemorySuggest": {
+      "description": "memory.suggest (catalogue version 4; ADR-0041 items 24 and 29): suggests one memory for the person this job works for, as a message part only that person sees, expiring after 30 days. Nothing is saved until that person taps Save on the exact text; never from a run that read customer data.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PersonMemoryKind"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "text"
+      ],
+      "additionalProperties": false
+    },
     "ToolModelInputKnowledgePropose": {
       "description": "knowledge.propose as the model is given it: ToolInputKnowledgePropose's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputKnowledgePropose before dispatch; a breach is the call's invalid_input, not an invalid output.",
       "type": "object",
@@ -14128,7 +14729,7 @@
       ]
     },
     "TeammateRecordKind": {
-      "description": "The kinds of record a teammate brief or finding names by id (ADR-0037 item 3(a)). A model-written id is never authority to read: code opens a result item only when it belongs to a result the calling Morrow run received, and any other record only as the teammate's own grants, the record's read tags and the requester's visibility allow.",
+      "description": "The kinds of record a brief, a finding or a criterion's evidence names by id (ADR-0037 item 3(a), ADR-0041 items 19 and 29). A model-written id is never authority to read: code opens a result item only when it belongs to a result the calling Morrow run received, a person memory only when it is the requester's and its scope allows (item 29), and any other record only as the teammate's own grants, the record's read tags and the requester's visibility allow.",
       "type": "string",
       "enum": [
         "task",
@@ -14137,7 +14738,12 @@
         "knowledge_page",
         "product",
         "proposal",
-        "result_item"
+        "result_item",
+        "suggestion",
+        "knowledge_proposal",
+        "notebook_entry",
+        "message",
+        "person_memory"
       ]
     },
     "TeammateRecordRef": {
@@ -14179,8 +14785,96 @@
       "maxItems": 64,
       "uniqueItems": true
     },
-    "TeammateBrief": {
-      "description": "The structured brief Morrow passes with agent.ask or agent.route (ADR-0037 item 3(a) and (b)): an objective, details, done criteria, boundaries and the records the work is about, with no character cap (OD-2026-10-25-4); long material goes by record id. Bounded in practice by Morrow's output tokens per turn. It names no tool, capability, scope, store, model or limit: code sets those from the teammate's installation and the envelope.",
+    "TeammateDoneCriteria": {
+      "description": "A brief's done criteria: at least one (ADR-0041 item 21), each a line of any length (OD-2026-10-25-4: no character cap), at most 64. A result reports each by its index, and a review checks each.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "TeammateOutputFormat": {
+      "description": "What Morrow wants back (ADR-0041 item 21): the finding kinds wanted (empty: any), table columns wanted (empty: none), whether result items are expected, and how deep the summary goes. Guidance only: code builds the result's shape.",
+      "type": "object",
+      "properties": {
+        "findingKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeammateFindingKind"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "tableColumns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "itemsExpected": {
+          "type": "boolean"
+        },
+        "summaryDepth": {
+          "type": "string",
+          "enum": [
+            "brief",
+            "standard",
+            "detailed"
+          ]
+        }
+      },
+      "required": [
+        "findingKinds",
+        "tableColumns",
+        "itemsExpected",
+        "summaryDepth"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateBriefMode": {
+      "description": "What a brief starts (ADR-0041 items 19, 21 and 22): ask, a teammate call; review, a review run checking the criteria (view verbs only, it never sees the producer's reasoning); route, a hand-off; map_batch, one batch of agent.map.",
+      "type": "string",
+      "enum": [
+        "ask",
+        "review",
+        "route",
+        "map_batch"
+      ]
+    },
+    "TeammateRequest": {
+      "description": "The requester's own words, filled by code from the message that started the job, never by the model (ADR-0041 item 21): wrapped data carrying that message's read tags. Text is never authority: authority comes from the requester in the envelope.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 0
+        },
+        "readTags": {
+          "$ref": "#/$defs/ReadTags"
+        }
+      },
+      "required": [
+        "messageId",
+        "text",
+        "readTags"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateBriefInput": {
+      "description": "The brief as Morrow writes it in agent.ask, agent.route and agent.map (ADR-0037 item 3, ADR-0041 item 21): an objective, details, at least one done criterion, boundaries, the records the work is about, the output wanted and approach guidance, with no character cap (OD-2026-10-25-4); long material goes by record id. It names no tool, capability, scope, store, model or limit: code sets those from the teammate's installation and the envelope. Fields Morrow writes reach the teammate as wrapped data with Morrow's taint.",
       "type": "object",
       "properties": {
         "objective": {
@@ -14193,13 +14887,19 @@
           "minLength": 0
         },
         "doneCriteria": {
-          "$ref": "#/$defs/TeammateBriefLines"
+          "$ref": "#/$defs/TeammateDoneCriteria"
         },
         "boundaries": {
           "$ref": "#/$defs/TeammateBriefLines"
         },
         "records": {
           "$ref": "#/$defs/TeammateRecordRefs"
+        },
+        "outputFormat": {
+          "$ref": "#/$defs/TeammateOutputFormat"
+        },
+        "approach": {
+          "$ref": "#/$defs/TeammateBriefLines"
         }
       },
       "required": [
@@ -14207,43 +14907,214 @@
         "details",
         "doneCriteria",
         "boundaries",
-        "records"
+        "records",
+        "outputFormat",
+        "approach"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateBrief": {
+      "description": "The brief a teammate receives (ADR-0037 item 3(a) and (b), ADR-0041 item 21): Morrow's TeammateBriefInput, plus request (the requester's own words, filled by code, never the model; null for a mandate episode, which no person's message started), mode and followUpOf from the tool input. It names no tool, capability, scope, store, model or limit.",
+      "type": "object",
+      "properties": {
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "details": {
+          "type": "string",
+          "minLength": 0
+        },
+        "doneCriteria": {
+          "$ref": "#/$defs/TeammateDoneCriteria"
+        },
+        "boundaries": {
+          "$ref": "#/$defs/TeammateBriefLines"
+        },
+        "records": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        },
+        "outputFormat": {
+          "$ref": "#/$defs/TeammateOutputFormat"
+        },
+        "approach": {
+          "$ref": "#/$defs/TeammateBriefLines"
+        },
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateRequest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/TeammateBriefMode"
+        },
+        "followUpOf": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "objective",
+        "details",
+        "doneCriteria",
+        "boundaries",
+        "records",
+        "outputFormat",
+        "approach",
+        "request",
+        "mode",
+        "followUpOf"
       ],
       "additionalProperties": false
     },
     "ToolInputAgentAsk": {
-      "description": "agent.ask (catalogue version 4; ADR-0037 item 3(a)): Morrow calls one active teammate from the code-built list in its opening context and waits for its TeammateResult@1. Any number per run, in sequence or in parallel, the same teammate again included; each call is one child at depth 1, admitted and checked alone.",
+      "description": "agent.ask (catalogue version 4; ADR-0037 item 3(a), ADR-0041 item 21): Morrow calls one active teammate from the code-built list in its opening context, asynchronously: code admits the child in one transaction and returns {callId, state, code} at once, and the result arrives later as wrapped data (source teammate_result). mode ask does work; mode review starts a review run of that teammate's view verbs only. followUpOf reopens an idle call of this run with a new brief: the child keeps everything it read (installationId is then null). Any number per job, in sequence or in parallel; each call is one child at depth 1, admitted and checked alone. Code rules beyond the schema: installationId is non-null exactly when followUpOf is null.",
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "review"
+          ]
+        },
+        "followUpOf": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "brief": {
+          "$ref": "#/$defs/TeammateBriefInput"
+        }
+      },
+      "required": [
+        "installationId",
+        "mode",
+        "followUpOf",
+        "brief"
+      ],
+      "additionalProperties": false
+    },
+    "AgentMapSource": {
+      "description": "What agent.map splits into batches (ADR-0041 item 22): record ids, or the rows of a table result item this run received. Exactly one is non-null (code); records holds at least one. A count bound, never a character cap: a larger source comes as an item's rows.",
+      "type": "object",
+      "properties": {
+        "records": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TeammateRecordRef"
+              },
+              "minItems": 1,
+              "maxItems": 2000,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "records",
+        "itemId"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputAgentMap": {
+      "description": "agent.map (catalogue version 4; ADR-0041 item 22): the same work over many records. Code splits the source into batches of batchSize, each one child call admitted and checked on its own with its own credits, and starts them with a warm-cache stagger; when every batch has finished, a SQL definer merges their structured parts into one result item (counts summed, created records unioned with their call ids, findings concatenated with their origin, tables unioned, failed and partial batches listed), and Morrow receives one aggregated result. briefTemplate's records are shared by every batch; code adds each batch's own.",
       "type": "object",
       "properties": {
         "installationId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
         },
-        "brief": {
-          "$ref": "#/$defs/TeammateBrief"
+        "briefTemplate": {
+          "$ref": "#/$defs/TeammateBriefInput"
+        },
+        "source": {
+          "$ref": "#/$defs/AgentMapSource"
+        },
+        "batchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
         }
       },
       "required": [
         "installationId",
-        "brief"
+        "briefTemplate",
+        "source",
+        "batchSize"
       ],
       "additionalProperties": false
     },
-    "ToolInputAgentResultRead": {
-      "description": "agent.result.read (catalogue version 4; ADR-0037 items 1 and 3(a)): one page of a result item that a teammate's result in this run listed. Pages start at 1. Code opens it only when the item belongs to a result Morrow's own run received and carries no customer read tag.",
+    "ToolInputAgentMessage": {
+      "description": "agent.message (catalogue version 4; ADR-0041 item 21): Morrow's guidance to one running call of this run, delivered at the child's next turn boundary as wrapped data labelled from Morrow, your lead, with Morrow's taint: never a system message, never consent. No character cap.",
       "type": "object",
       "properties": {
-        "itemId": {
+        "callId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
         },
-        "page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100000
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
         }
       },
       "required": [
-        "itemId",
-        "page"
+        "callId",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputAgentCancel": {
+      "description": "agent.cancel (catalogue version 4; ADR-0041 item 21): cancels one running call of this run, or releases an idle one. Only steps that never began may be answered as not run; a step that began returns its recorded result or tool_outcome_unknown, and retry_blocked then applies to its subjects. It is not a kill switch.",
+      "type": "object",
+      "properties": {
+        "callId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "callId"
       ],
       "additionalProperties": false
     },
@@ -14341,36 +15212,37 @@
       "additionalProperties": false
     },
     "TeammateOutcome": {
-      "description": "How a called teammate's run ended (ADR-0037 item 3(a)). The teammate chooses done, partial, nothing_found or blocked in result.submit, and its run then ends completed. Code sets no_result (the run ended, by its limits or its own end turn, without result.submit), stopped (a person's stop, a switch, the lease or the task) and failed (an invalid output or a provider error), never from model text.",
+      "description": "How a called teammate's run ended (ADR-0037 item 3(a), ADR-0041 item 23). The teammate chooses done, partial, nothing_found, blocked or cannot_do in run.complete's child form. Code sets partial when the run ended without run.complete but created records, wrote items or recorded findings (nothing is lost, and partial and blocked go with every end reason), and otherwise no_result, stopped (a person's stop, a switch, the lease, the envelope or the task) or failed (an invalid output or a provider error); never from model text.",
       "type": "string",
       "enum": [
         "done",
         "partial",
         "nothing_found",
         "blocked",
+        "cannot_do",
         "no_result",
         "stopped",
         "failed"
       ]
     },
     "TeammateCounts": {
-      "description": "The typed counts of ADR-0034 item 9, from which code builds checkup_done: what was checked, what was missing, and the questions left for a person.",
+      "description": "The typed counts of ADR-0034 item 9 (what was checked, what was missing, and the questions left for a person), from which code builds checkup_done. A safety range, never a cap on work (ADR-0041 items 22 and 34): agent.map sums its batches' counts, so a large job's counts are kept whole.",
       "type": "object",
       "properties": {
         "checked": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1000
+          "maximum": 1000000
         },
         "missing": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1000
+          "maximum": 1000000
         },
         "questions": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 1000
+          "maximum": 1000000
         }
       },
       "required": [
@@ -14489,19 +15361,602 @@
       ],
       "additionalProperties": false
     },
-    "ToolInputResultSubmit": {
-      "description": "result.submit (catalogue version 4; ADR-0037 item 3(a)): a called teammate ends its run by returning its result to Morrow: an outcome, counts, closed next-step codes, a summary and typed findings, with no character cap. Code adds the run's ids, the records it created, its read tags and taint, and stores anything too large for one 8 KiB tool result as a result item (nothing is cut).",
+    "RunPlanItemKey": {
+      "description": "A plan item's or follow-through item's key, unique within the plan: lower-case letters, digits and underscores.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$"
+    },
+    "RunPlanItemStatus": {
+      "description": "A plan item's status (ADR-0041 item 16). Code advances items from events (a dispatched call sets in_progress, a returned result needs_review); the model sets done, blocked and dropped (a drop needs a reason); awaiting_person is set by code while a question or approval is open.",
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "needs_review",
+        "done",
+        "blocked",
+        "dropped",
+        "awaiting_person"
+      ]
+    },
+    "RunPlanCheckKind": {
+      "description": "How a done criterion is checked at run.complete (ADR-0041 item 16): record_exists, proposal_state, readback_matches (the gateway's read-back after a person's approval), artifact_schema, child_outcome, person_confirmed, or judgment (a review run's verdict).",
+      "type": "string",
+      "enum": [
+        "record_exists",
+        "proposal_state",
+        "readback_matches",
+        "artifact_schema",
+        "child_outcome",
+        "person_confirmed",
+        "judgment"
+      ]
+    },
+    "RunPlanNoteKind": {
+      "description": "A plan note's type (ADR-0041 item 16).",
+      "type": "string",
+      "enum": [
+        "decision",
+        "dead_end",
+        "finding",
+        "assumption",
+        "handoff"
+      ]
+    },
+    "RunPlanCriterionInput": {
+      "description": "One done criterion of a plan and how it is checked.",
       "type": "object",
       "properties": {
-        "outcome": {
+        "text": {
           "type": "string",
-          "enum": [
-            "done",
-            "partial",
-            "nothing_found",
-            "blocked"
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "check": {
+          "$ref": "#/$defs/RunPlanCheckKind"
+        }
+      },
+      "required": [
+        "text",
+        "check"
+      ],
+      "additionalProperties": false
+    },
+    "RunPlanItemInput": {
+      "description": "One plan item: its key, title, the indexes of the criteria it serves and the keys it depends on.",
+      "type": "object",
+      "properties": {
+        "itemKey": {
+          "$ref": "#/$defs/RunPlanItemKey"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 63
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunPlanItemKey"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "itemKey",
+        "title",
+        "criteria",
+        "dependsOn"
+      ],
+      "additionalProperties": false
+    },
+    "RunPlanPhaseInput": {
+      "description": "One phase of a plan: its title and items, in order.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunPlanItemInput"
+          },
+          "minItems": 1,
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "title",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "RunPlanConditionKind": {
+      "description": "A follow-through item's typed condition (ADR-0041 item 17): a proposal decided, a proposal applied with a matching read-back, a call finished, or a time (at most the envelope's expiry).",
+      "type": "string",
+      "enum": [
+        "proposal_decided",
+        "proposal_applied",
+        "call_finished",
+        "time"
+      ]
+    },
+    "RunPlanFollowThroughInput": {
+      "description": "A promise made a wait (ADR-0041 item 17): its key, title and typed condition. id names the proposal or call; at the time (UTC). Code rules: id for the proposal and call kinds, at for time, the other null.",
+      "type": "object",
+      "properties": {
+        "itemKey": {
+          "$ref": "#/$defs/RunPlanItemKey"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "condition": {
+          "$ref": "#/$defs/RunPlanConditionKind"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
+        "at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanDraftToolTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "itemKey",
+        "title",
+        "condition",
+        "id",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "RunPlanSetInput": {
+      "description": "A plan as run.plan sets it in a job's first turn (ADR-0041 item 16): an objective, done criteria with their check kinds (frozen once set), phases and items, follow-through items, and for Morrow's jobs the person-facing understood sentence and up to 6 steps, which code renders as the job's first message and the card's steps (null in every other run). No field names a tool, capability, scope, store, model, recipient or limit.",
+      "type": "object",
+      "properties": {
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunPlanCriterionInput"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunPlanPhaseInput"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "followThrough": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RunPlanFollowThroughInput"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "understood": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "steps": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "minItems": 1,
+              "maxItems": 6,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "objective",
+        "criteria",
+        "phases",
+        "followThrough",
+        "understood",
+        "steps"
+      ],
+      "additionalProperties": false
+    },
+    "RunPlanNoteInput": {
+      "description": "A typed plan note with the records it cites.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RunPlanNoteKind"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "refs": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "RunPlanChangeKind": {
+      "description": "One change to a set plan (ADR-0041 item 16): item_status (done, blocked or dropped, a drop with a reason), add_item (appended to a phase; items are never deleted), add_note, add_follow_through, or change_criterion (only with the requester's message or a logged reason, which the reviewer sees).",
+      "type": "string",
+      "enum": [
+        "item_status",
+        "add_item",
+        "add_note",
+        "add_follow_through",
+        "change_criterion"
+      ]
+    },
+    "RunPlanChange": {
+      "description": "One change. Code rules: item_status takes itemKey, status and evidence (reason for dropped and blocked); add_item takes phase and item; add_note takes note; add_follow_through takes followThrough; change_criterion takes criterion and reason; every other field is null (evidence empty).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RunPlanChangeKind"
+        },
+        "itemKey": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPlanItemKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "done",
+                "blocked",
+                "dropped"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 63
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "item": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPlanItemInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPlanNoteInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "followThrough": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPlanFollowThroughInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "criterion": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 63
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S"
+                },
+                "check": {
+                  "$ref": "#/$defs/RunPlanCheckKind"
+                }
+              },
+              "required": [
+                "index",
+                "text",
+                "check"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "itemKey",
+        "status",
+        "reason",
+        "evidence",
+        "phase",
+        "item",
+        "note",
+        "followThrough",
+        "criterion"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputRunPlan": {
+      "description": "run.plan (catalogue version 4; ADR-0041 items 16 and 24): set the job's plan (once, in its first turn), update it, or read it whole. Harness: it grants nothing and writes only this job's plan revisions. Code rules: set takes plan, update takes changes (1 to 64), read takes neither.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "set",
+            "update",
+            "read"
+          ]
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPlanSetInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changes": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RunPlanChange"
+              },
+              "minItems": 1,
+              "maxItems": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "plan",
+        "changes"
+      ],
+      "additionalProperties": false
+    },
+    "RunCompleteOutcome": {
+      "description": "How a run says it ended (ADR-0041 items 16 and 23): done, partial, nothing_found, blocked, cannot_do, or waiting (a job with follow-through items, never a called teammate).",
+      "type": "string",
+      "enum": [
+        "done",
+        "partial",
+        "nothing_found",
+        "blocked",
+        "cannot_do",
+        "waiting"
+      ]
+    },
+    "TeammateCriterionReport": {
+      "description": "One done criterion as the run reports it: its index in the brief's or plan's criteria, met, not_met or unknown, and the records or items that show it. Code checks the evidence resolves to records or items the run produced or was given; otherwise the criterion becomes unverified.",
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "met",
+            "not_met",
+            "unknown"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        }
+      },
+      "required": [
+        "index",
+        "status",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateNeedKind": {
+      "description": "What a blocked or partial teammate needs (ADR-0041 item 23): a decision, information, a grant or credits.",
+      "type": "string",
+      "enum": [
+        "decision",
+        "information",
+        "grant",
+        "credits"
+      ]
+    },
+    "TeammateNeedsInput": {
+      "description": "What the teammate needs, with an optional question for Morrow to put.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/TeammateNeedKind"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "question"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewVerdictKind": {
+      "description": "A review run's verdict on one criterion (ADR-0041 item 19): pass, fail or unknown. A verdict can only block; it never approves, never clears taint and never overrides a failed code check.",
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "unknown"
+      ]
+    },
+    "TeammateVerdictInput": {
+      "description": "A review run's verdict on one criterion, with its evidence and note.",
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "verdict": {
+          "$ref": "#/$defs/ReviewVerdictKind"
+        },
+        "evidence": {
+          "$ref": "#/$defs/TeammateRecordRefs"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "verdict",
+        "evidence",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateResultInput": {
+      "description": "run.complete's child form (ADR-0041 item 24, in place of result.submit): what a called teammate returns to Morrow, with no character cap: a summary, counts, closed next-step codes, typed findings, what it needs, the result items it wrote and cites, and in review mode a verdict per criterion. Code adds the run's ids, the records it created (from run_tool_calls), its criteria checks, next, unresolved subjects, plan progress, verification, read tags and taint.",
+      "type": "object",
+      "properties": {
         "summary": {
           "type": "string",
           "minLength": 1,
@@ -14526,14 +15981,549 @@
           },
           "minItems": 0,
           "maxItems": 256
+        },
+        "needs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateNeedsInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 512,
+          "uniqueItems": true
+        },
+        "verdicts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeammateVerdictInput"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "summary",
+        "counts",
+        "nextSteps",
+        "findings",
+        "needs",
+        "items",
+        "verdicts"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputRunComplete": {
+      "description": "run.complete (catalogue version 4; ADR-0041 items 16, 23 and 24): the one way a job or a called teammate finishes. It succeeds only through the gate: every plan item terminal or a follow-through item, no call or question open, no unknown outcome unreconciled (with one, only partial, naming it), every typed check passing against SQL, and the review passed where it applies; otherwise verification_failed names the criterion and the job continues. Code rules: a called teammate gives result (its child form) and no reply, never waiting; Morrow's job gives reply (posted as the job's result message) and no result; other jobs give no result.",
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/RunCompleteOutcome"
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeammateCriterionReport"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        },
+        "reply": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateResultInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "outcome",
-        "summary",
-        "counts",
+        "criteria",
+        "reply",
+        "result"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputRunWait": {
+      "description": "run.wait (catalogue version 4; ADR-0041 item 17): one durable wait, holding no lease and no credits, for children (any or all, optionally by call id), proposals (decided, then the gateway's apply and read-back) or a time (at most the envelope's expiry). Code rules: children takes match and callIds (null: every open call of this run); proposals takes match and proposalIds; time takes until; every other field is null.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "children",
+            "proposals",
+            "time"
+          ]
+        },
+        "match": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "any",
+                "all"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "callIds": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proposalIds": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "until": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanDraftToolTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "match",
+        "callIds",
+        "proposalIds",
+        "until"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputResultWrite": {
+      "description": "result.write (catalogue version 4; ADR-0041 items 22 and 24): a called teammate builds a result item across turns, so a large result is never cut: start an item (itemId null, with its title, kind and media type, and columns for a table) or append to an open one of its own, text to a text or file item or rows to a table, and close it when complete. run.complete cites items by id. Code rules: title, kind and mediaType only when starting; columns only when starting a table; text only for text and file items, rows only for tables, one cell per column.",
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResultItemKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mediaType": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResultItemMediaType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "columns": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "minItems": 1,
+              "maxItems": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 0
+                },
+                "minItems": 1,
+                "maxItems": 32
+              },
+              "minItems": 1,
+              "maxItems": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "close": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "itemId",
+        "title",
+        "kind",
+        "mediaType",
+        "columns",
+        "text",
+        "rows",
+        "close"
+      ],
+      "additionalProperties": false
+    },
+    "CheckpointLine": {
+      "description": "One checkpoint entry and the labels it cites.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContextLabel"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "text",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputContextCheckpoint": {
+      "description": "context.checkpoint (catalogue version 4; ADR-0041 items 11, 13 and 24): the model's hand-off when the fallback strategy renews a context, accepted only inside a checkpoint fork (otherwise checkpoint_not_requested). Narrative only (item 13): cite labels for the person's words, approvals, proposals and operations rather than restating them; keep ids and exact values verbatim with their labels; keep decisions and why, what was set aside, difficulties, promises and next steps. Code refuses any field that claims an approval, a consent, an apply or a payment, rejects a stated state for a proposal or operation label that differs from SQL, and runs the customer identifier screen before commit. No character cap; code checks its size against the epoch's budget.",
+      "type": "object",
+      "properties": {
+        "objective": {
+          "$ref": "#/$defs/CheckpointLine"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "in_progress",
+            "waiting",
+            "blocked",
+            "finishing"
+          ]
+        },
+        "statusNote": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "done": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckpointLine"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "inProgress": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckpointLine"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "decision": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "decision",
+              "reason",
+              "refs"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "setAside": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "option": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "option",
+              "reason",
+              "refs"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "exact": {
+                "type": "boolean"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "fact",
+              "exact",
+              "refs"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "difficulties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "problem": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "problem",
+              "resolution",
+              "refs"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "promised": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckpointLine"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckpointLine"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "reopen": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "$ref": "#/$defs/ContextLabel"
+              },
+              "why": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "ref",
+              "why"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "objective",
+        "status",
+        "statusNote",
+        "done",
+        "inProgress",
+        "decisions",
+        "setAside",
+        "facts",
+        "difficulties",
+        "promised",
         "nextSteps",
-        "findings"
+        "reopen"
       ],
       "additionalProperties": false
     },
@@ -14557,7 +16547,7 @@
       ]
     },
     "ResultItemRef": {
-      "description": "A result item as a result shows it (ADR-0037 item 3(a)): its id, kind, size, pages and title. Morrow opens it with agent.result.read, page by page.",
+      "description": "A result item as a result shows it (ADR-0037 item 3(a)): its id, kind, size, pages and title. Morrow opens it with memory.read, page by page (ADR-0041 item 24).",
       "type": "object",
       "properties": {
         "itemId": {
@@ -14617,11 +16607,20 @@
       "additionalProperties": false
     },
     "RunTaint": {
-      "description": "The taint a run, a result, an item or an agent card carries, with its sources (ADR-0027 item 5, ADR-0034 item 3, ADR-0037 items 3(a) and 5). Server-derived; approval never clears it.",
+      "description": "The taint a run, a result, an item or an agent card carries (ADR-0027 item 5, ADR-0034 item 3, ADR-0037 items 3(a) and 5, ADR-0041 item 34). Server-derived; approval never clears it, and it never truncates: kinds lists every distinct kind of source the holder consumed, sources the first 256 distinct sources, and omittedSources how many more are recorded in run_taint_sources (a join of taints adds the inputs' counts, so it may count one source twice, never fewer than there are). Code checks every listed source's kind is among kinds.",
       "type": "object",
       "properties": {
         "contextTaint": {
           "$ref": "#/$defs/ContextTaint"
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelUntrustedSource"
+          },
+          "minItems": 0,
+          "maxItems": 19,
+          "uniqueItems": true
         },
         "sources": {
           "type": "array",
@@ -14629,13 +16628,20 @@
             "$ref": "#/$defs/TaintSource"
           },
           "minItems": 0,
-          "maxItems": 24,
+          "maxItems": 256,
           "uniqueItems": true
+        },
+        "omittedSources": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
         }
       },
       "required": [
         "contextTaint",
-        "sources"
+        "kinds",
+        "sources",
+        "omittedSources"
       ],
       "additionalProperties": false,
       "allOf": [
@@ -14654,9 +16660,16 @@
           "then": {
             "type": "object",
             "properties": {
+              "kinds": {
+                "type": "array",
+                "maxItems": 0
+              },
               "sources": {
                 "type": "array",
                 "maxItems": 0
+              },
+              "omittedSources": {
+                "const": 0
               }
             }
           }
@@ -14676,6 +16689,10 @@
           "then": {
             "type": "object",
             "properties": {
+              "kinds": {
+                "type": "array",
+                "minItems": 1
+              },
               "sources": {
                 "type": "array",
                 "minItems": 1
@@ -14686,7 +16703,7 @@
       ]
     },
     "ResultItem": {
-      "description": "ResultItem@1 (ADR-0037 items 3(a) and 8; PR 2): one stored result item, a FORCE RLS record naming the run that produced it, with its read tags and taint. Run content: on its run's run_turns clock (expiresAt 90 days from that run's end, null while it runs) and deleted with its turns.",
+      "description": "ResultItem@1 (ADR-0037 items 3(a) and 8; ADR-0041 items 22 and 24): one stored result item, a FORCE RLS record naming the run that produced it, with its read tags and taint. A called teammate builds one across turns with result.write (open until it closes it, sections counting its appends); code writes an overflow item whole and closed. Run content: on its run's run_turns clock (expiresAt 90 days from that run's end, null while it runs) and deleted with its turns.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -14726,6 +16743,14 @@
           "minimum": 1,
           "maximum": 100000
         },
+        "open": {
+          "type": "boolean"
+        },
+        "sections": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
         "contentDigest": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
         },
@@ -14760,6 +16785,8 @@
         "title",
         "sizeBytes",
         "pageCount",
+        "open",
+        "sections",
         "contentDigest",
         "readTags",
         "taint",
@@ -14833,7 +16860,7 @@
       ]
     },
     "ResultItemPage": {
-      "description": "ResultItemPage@1 (ADR-0037 item 3(a); PR 2): what agent.result.read returns, as wrapped tainting data naming source result_item. A page fits one 8 KiB tool result.",
+      "description": "ResultItemPage@1 (ADR-0037 item 3(a); PR 2): what memory.read returns for one page of a result item (ADR-0041 item 24), as wrapped tainting data naming source result_item. A page fits one 8 KiB tool result.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -15045,7 +17072,9 @@
             "task",
             "suggestion",
             "artifact",
-            "proposal"
+            "proposal",
+            "knowledge_proposal",
+            "notebook_entry"
           ]
         },
         "id": {
@@ -15058,8 +17087,342 @@
       ],
       "additionalProperties": false
     },
+    "TeammateResultMode": {
+      "description": "The kind of call a result answers: ask, review (verdicts per criterion) or one agent.map batch.",
+      "type": "string",
+      "enum": [
+        "ask",
+        "review",
+        "map_batch"
+      ]
+    },
+    "TeammateNext": {
+      "description": "Code's hint for Morrow's next move (ADR-0041 item 23), never model text: none; follow_up (continue the same child); rebrief (once, with a corrected brief); reroute (another teammate or Morrow itself); retry_later (the provider); ask_person (a decision, information, a grant or credits); do_not_retry (stopped, or subjects with unknown outcomes).",
+      "type": "string",
+      "enum": [
+        "none",
+        "follow_up",
+        "rebrief",
+        "reroute",
+        "retry_later",
+        "ask_person",
+        "do_not_retry"
+      ]
+    },
+    "TeammateNeeds": {
+      "description": "What a blocked or partial teammate needs, its question inline or as an item.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/TeammateNeedKind"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "question"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateEvidence": {
+      "description": "A criterion's or verdict's evidence: inline record refs, or the result item holding the full list and its count.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "list"
+            },
+            "refs": {
+              "$ref": "#/$defs/TeammateRecordRefs"
+            }
+          },
+          "required": [
+            "kind",
+            "refs"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "item"
+            },
+            "itemId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            }
+          },
+          "required": [
+            "kind",
+            "itemId",
+            "count"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TeammateCriterion": {
+      "description": "One done criterion of the brief as code checked it (ADR-0041 item 19): every criterion appears once, by index; a status the teammate did not report is unknown; met with evidence that does not resolve to records or items the run produced or was given becomes unverified (code only).",
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "met",
+            "not_met",
+            "unknown",
+            "unverified"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/$defs/TeammateEvidence"
+        }
+      },
+      "required": [
+        "index",
+        "status",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateVerdict": {
+      "description": "A review run's verdict on one criterion (ADR-0041 item 19): it can only block.",
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "verdict": {
+          "$ref": "#/$defs/ReviewVerdictKind"
+        },
+        "evidence": {
+          "$ref": "#/$defs/TeammateEvidence"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateText"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "index",
+        "verdict",
+        "evidence",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateCreated": {
+      "description": "The records the run created, uncapped (ADR-0041 item 19: from run_tool_calls, never model text): inline, or the result item holding the full list and its count.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "list"
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TeammateCreatedRecord"
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "kind",
+            "records"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "item"
+            },
+            "itemId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            }
+          },
+          "required": [
+            "kind",
+            "itemId",
+            "count"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TeammateUnresolvedSubject": {
+      "description": "A subject whose outcome is unknown (ADR-0041 item 23): the record and the operation (a gateway operation, or a computer tool call answered tool_outcome_unknown). Code refuses a retry dispatch over it with retry_blocked until the reconciler settles it.",
+      "type": "object",
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/TeammateRecordRef"
+        },
+        "operation": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "gateway_operation",
+                "tool_call"
+              ]
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "subject",
+        "operation"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateUnresolved": {
+      "description": "Subjects with unknown outcomes, uncapped: inline, or the result item holding the full list and its count.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "list"
+            },
+            "subjects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TeammateUnresolvedSubject"
+              },
+              "minItems": 0,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "kind",
+            "subjects"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "item"
+            },
+            "itemId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            }
+          },
+          "required": [
+            "kind",
+            "itemId",
+            "count"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TeammatePlanProgress": {
+      "description": "The run's plan progress when it ended (ADR-0041 item 16).",
+      "type": "object",
+      "properties": {
+        "itemsDone": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "itemsTotal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      },
+      "required": [
+        "itemsDone",
+        "itemsTotal"
+      ],
+      "additionalProperties": false
+    },
+    "TeammateVerification": {
+      "description": "Code's checks on the result (ADR-0041 item 19): criteria checks passed and failed, and the review run's overall verdict (not_run when none ran).",
+      "type": "object",
+      "properties": {
+        "codeChecksPassed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "codeChecksFailed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "verifierVerdict": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "unknown",
+            "not_run"
+          ]
+        }
+      },
+      "required": [
+        "codeChecksPassed",
+        "codeChecksFailed",
+        "verifierVerdict"
+      ],
+      "additionalProperties": false
+    },
     "TeammateResult": {
-      "description": "TeammateResult@1 (ADR-0037 item 3(a); PR 2): what a called teammate returns to Morrow's run, closed and structured with no character cap (OD-2026-10-25-4): an outcome, its end reason, typed counts, the ids of the records it created, closed next-step codes, its read tags and taint, a summary and typed findings. Anything too large for one 8 KiB tool result is a result item listed in items, so nothing is cut. Code validates it and gives it to Morrow's turn as wrapped tainting data (source teammate_result); one with a customer read tag never enters Morrow's context. report@1's free text never does either.",
+      "description": "TeammateResult@1 (ADR-0037 item 3(a); ADR-0041 items 19 to 23, merged by plan row H5): what one call or follow-up of a teammate returns to Morrow's job, closed and structured with no character cap (OD-2026-10-25-4): its call id and follow-up sequence, the mode, an outcome and the end reason, typed counts, the records it created (uncapped), closed next-step codes, a criterion check per done criterion, review verdicts, code's next hint, what it needs, subjects with unknown outcomes, plan progress, verification, the checkpoint it left, its read tags and taint, a summary and typed findings. Anything too large for the record (teammates.ts's bound) is a result item listed in items, so nothing is cut. Code validates it and renders a compact form for Morrow's turn as wrapped tainting data (source teammate_result); the full result opens with memory.read. One with a customer read tag never enters Morrow's context.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -15076,6 +17439,17 @@
         },
         "toolUseId": {
           "$ref": "#/$defs/ToolUseId"
+        },
+        "callId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "mode": {
+          "$ref": "#/$defs/TeammateResultMode"
         },
         "runId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
@@ -15105,13 +17479,62 @@
           "uniqueItems": true
         },
         "created": {
+          "$ref": "#/$defs/TeammateCreated"
+        },
+        "criteria": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/TeammateCreatedRecord"
+            "$ref": "#/$defs/TeammateCriterion"
           },
           "minItems": 0,
-          "maxItems": 40,
-          "uniqueItems": true
+          "maxItems": 64
+        },
+        "verdicts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TeammateVerdict"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        },
+        "next": {
+          "$ref": "#/$defs/TeammateNext"
+        },
+        "needs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammateNeeds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unresolved": {
+          "$ref": "#/$defs/TeammateUnresolved"
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeammatePlanProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verification": {
+          "$ref": "#/$defs/TeammateVerification"
+        },
+        "checkpointId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "summary": {
           "anyOf": [
@@ -15156,6 +17579,9 @@
         "workspaceId",
         "parentRunId",
         "toolUseId",
+        "callId",
+        "sequence",
+        "mode",
         "runId",
         "taskId",
         "installationId",
@@ -15164,6 +17590,14 @@
         "counts",
         "nextSteps",
         "created",
+        "criteria",
+        "verdicts",
+        "next",
+        "needs",
+        "unresolved",
+        "plan",
+        "verification",
+        "checkpointId",
         "summary",
         "findings",
         "items",
@@ -15180,9 +17614,8 @@
               "outcome": {
                 "enum": [
                   "done",
-                  "partial",
                   "nothing_found",
-                  "blocked"
+                  "cannot_do"
                 ]
               }
             },
@@ -15231,6 +17664,26 @@
               "nextSteps": {
                 "type": "array",
                 "maxItems": 0
+              },
+              "items": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "verdicts": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "created": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "list"
+                  },
+                  "records": {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                }
               }
             }
           }
@@ -15257,6 +17710,59 @@
                 "not": {
                   "const": "completed"
                 }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "done",
+                  "nothing_found",
+                  "cannot_do",
+                  "no_result",
+                  "stopped",
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "needs": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "ask",
+                  "map_batch"
+                ]
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "verdicts": {
+                "type": "array",
+                "maxItems": 0
               }
             }
           }
@@ -15727,7 +18233,31 @@
       "additionalProperties": false,
       "properties": {
         "installationId": {
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "review"
+          ]
+        },
+        "followUpOf": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "brief": {
           "type": "object",
@@ -15766,7 +18296,12 @@
                       "knowledge_page",
                       "product",
                       "proposal",
-                      "result_item"
+                      "result_item",
+                      "suggestion",
+                      "knowledge_proposal",
+                      "notebook_entry",
+                      "message",
+                      "person_memory"
                     ]
                   },
                   "id": {
@@ -15778,6 +18313,54 @@
                   "id"
                 ]
               }
+            },
+            "outputFormat": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "findingKinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "fact",
+                      "issue",
+                      "metric",
+                      "recommendation",
+                      "table"
+                    ]
+                  }
+                },
+                "tableColumns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "itemsExpected": {
+                  "type": "boolean"
+                },
+                "summaryDepth": {
+                  "type": "string",
+                  "enum": [
+                    "brief",
+                    "standard",
+                    "detailed"
+                  ]
+                }
+              },
+              "required": [
+                "findingKinds",
+                "tableColumns",
+                "itemsExpected",
+                "summaryDepth"
+              ]
+            },
+            "approach": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": [
@@ -15785,30 +18368,17 @@
             "details",
             "doneCriteria",
             "boundaries",
-            "records"
+            "records",
+            "outputFormat",
+            "approach"
           ]
         }
       },
       "required": [
         "installationId",
+        "mode",
+        "followUpOf",
         "brief"
-      ]
-    },
-    "ToolModelInputAgentResultRead": {
-      "description": "agent.result.read as the model is given it: ToolInputAgentResultRead's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentResultRead before dispatch; a breach is the call's invalid_input, not an invalid output.",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "itemId": {
-          "type": "string"
-        },
-        "page": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "itemId",
-        "page"
       ]
     },
     "ToolModelInputAgentPropose": {
@@ -15868,14 +18438,23 @@
               "report.write",
               "agent.route",
               "agent.ask",
-              "agent.result.read",
+              "agent.map",
+              "agent.message",
+              "agent.cancel",
               "agent.propose",
               "proposal.listing",
               "proposal.reply",
               "plan.draft",
               "knowledge.propose",
               "notebook.write",
-              "result.submit"
+              "memory.search",
+              "memory.read",
+              "memory.suggest",
+              "run.plan",
+              "run.complete",
+              "run.wait",
+              "result.write",
+              "context.checkpoint"
             ]
           }
         },
@@ -15903,8 +18482,886 @@
         "triggerKinds"
       ]
     },
-    "ToolModelInputResultSubmit": {
-      "description": "result.submit as the model is given it: ToolInputResultSubmit's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputResultSubmit before dispatch; a breach is the call's invalid_input, not an invalid output.",
+    "ToolModelInputAgentMap": {
+      "description": "agent.map as the model is given it: ToolInputAgentMap's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentMap before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "installationId": {
+          "type": "string"
+        },
+        "briefTemplate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "objective": {
+              "type": "string"
+            },
+            "details": {
+              "type": "string"
+            },
+            "doneCriteria": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "boundaries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "task",
+                      "thread",
+                      "artifact",
+                      "knowledge_page",
+                      "product",
+                      "proposal",
+                      "result_item",
+                      "suggestion",
+                      "knowledge_proposal",
+                      "notebook_entry",
+                      "message",
+                      "person_memory"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ]
+              }
+            },
+            "outputFormat": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "findingKinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "fact",
+                      "issue",
+                      "metric",
+                      "recommendation",
+                      "table"
+                    ]
+                  }
+                },
+                "tableColumns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "itemsExpected": {
+                  "type": "boolean"
+                },
+                "summaryDepth": {
+                  "type": "string",
+                  "enum": [
+                    "brief",
+                    "standard",
+                    "detailed"
+                  ]
+                }
+              },
+              "required": [
+                "findingKinds",
+                "tableColumns",
+                "itemsExpected",
+                "summaryDepth"
+              ]
+            },
+            "approach": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "objective",
+            "details",
+            "doneCriteria",
+            "boundaries",
+            "records",
+            "outputFormat",
+            "approach"
+          ]
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "records": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "task",
+                          "thread",
+                          "artifact",
+                          "knowledge_page",
+                          "product",
+                          "proposal",
+                          "result_item",
+                          "suggestion",
+                          "knowledge_proposal",
+                          "notebook_entry",
+                          "message",
+                          "person_memory"
+                        ]
+                      },
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id"
+                    ]
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "itemId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "records",
+            "itemId"
+          ]
+        },
+        "batchSize": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "installationId",
+        "briefTemplate",
+        "source",
+        "batchSize"
+      ]
+    },
+    "ToolModelInputAgentMessage": {
+      "description": "agent.message as the model is given it: ToolInputAgentMessage's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentMessage before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "callId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "callId",
+        "text"
+      ]
+    },
+    "ToolModelInputAgentCancel": {
+      "description": "agent.cancel as the model is given it: ToolInputAgentCancel's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputAgentCancel before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "callId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "callId"
+      ]
+    },
+    "ToolModelInputMemorySearch": {
+      "description": "memory.search as the model is given it: ToolInputMemorySearch's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputMemorySearch before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "knowledge",
+              "notebook",
+              "person_memory",
+              "conversation",
+              "results",
+              "plan"
+            ]
+          }
+        },
+        "limit": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "queries",
+        "layers",
+        "limit"
+      ]
+    },
+    "ToolModelInputMemoryRead": {
+      "description": "memory.read as the model is given it: ToolInputMemoryRead's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputMemoryRead before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "result_item",
+                "teammate_result",
+                "messages",
+                "label",
+                "knowledge_page",
+                "notebook_entry",
+                "person_memory",
+                "conversation_summary"
+              ]
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sequence": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "fromPosition": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "toPosition": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "label",
+            "sequence",
+            "fromPosition",
+            "toPosition"
+          ]
+        },
+        "page": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target",
+        "page"
+      ]
+    },
+    "ToolModelInputMemorySuggest": {
+      "description": "memory.suggest as the model is given it: ToolInputMemorySuggest's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputMemorySuggest before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "preference",
+            "instruction",
+            "fact"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "text"
+      ]
+    },
+    "ToolModelInputRunPlan": {
+      "description": "run.plan as the model is given it: ToolInputRunPlan's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputRunPlan before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "set",
+            "update",
+            "read"
+          ]
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "objective": {
+                  "type": "string"
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "check": {
+                        "type": "string",
+                        "enum": [
+                          "record_exists",
+                          "proposal_state",
+                          "readback_matches",
+                          "artifact_schema",
+                          "child_outcome",
+                          "person_confirmed",
+                          "judgment"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "text",
+                      "check"
+                    ]
+                  }
+                },
+                "phases": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "itemKey": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "criteria": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
+                            },
+                            "dependsOn": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "itemKey",
+                            "title",
+                            "criteria",
+                            "dependsOn"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "items"
+                    ]
+                  }
+                },
+                "followThrough": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "itemKey": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "condition": {
+                        "type": "string",
+                        "enum": [
+                          "proposal_decided",
+                          "proposal_applied",
+                          "call_finished",
+                          "time"
+                        ]
+                      },
+                      "id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "at": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "itemKey",
+                      "title",
+                      "condition",
+                      "id",
+                      "at"
+                    ]
+                  }
+                },
+                "understood": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "steps": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "objective",
+                "criteria",
+                "phases",
+                "followThrough",
+                "understood",
+                "steps"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changes": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "item_status",
+                      "add_item",
+                      "add_note",
+                      "add_follow_through",
+                      "change_criterion"
+                    ]
+                  },
+                  "itemKey": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "done",
+                          "blocked",
+                          "dropped"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "task",
+                            "thread",
+                            "artifact",
+                            "knowledge_page",
+                            "product",
+                            "proposal",
+                            "result_item",
+                            "suggestion",
+                            "knowledge_proposal",
+                            "notebook_entry",
+                            "message",
+                            "person_memory"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id"
+                      ]
+                    }
+                  },
+                  "phase": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "item": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "itemKey": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "criteria": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          },
+                          "dependsOn": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "itemKey",
+                          "title",
+                          "criteria",
+                          "dependsOn"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "decision",
+                              "dead_end",
+                              "finding",
+                              "assumption",
+                              "handoff"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "refs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "task",
+                                    "thread",
+                                    "artifact",
+                                    "knowledge_page",
+                                    "product",
+                                    "proposal",
+                                    "result_item",
+                                    "suggestion",
+                                    "knowledge_proposal",
+                                    "notebook_entry",
+                                    "message",
+                                    "person_memory"
+                                  ]
+                                },
+                                "id": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "id"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "text",
+                          "refs"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "followThrough": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "itemKey": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "condition": {
+                            "type": "string",
+                            "enum": [
+                              "proposal_decided",
+                              "proposal_applied",
+                              "call_finished",
+                              "time"
+                            ]
+                          },
+                          "id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "itemKey",
+                          "title",
+                          "condition",
+                          "id",
+                          "at"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "criterion": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "index": {
+                            "type": "integer"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "check": {
+                            "type": "string",
+                            "enum": [
+                              "record_exists",
+                              "proposal_state",
+                              "readback_matches",
+                              "artifact_schema",
+                              "child_outcome",
+                              "person_confirmed",
+                              "judgment"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "text",
+                          "check"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "itemKey",
+                  "status",
+                  "reason",
+                  "evidence",
+                  "phase",
+                  "item",
+                  "note",
+                  "followThrough",
+                  "criterion"
+                ]
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "plan",
+        "changes"
+      ]
+    },
+    "ToolModelInputRunComplete": {
+      "description": "run.complete as the model is given it: ToolInputRunComplete's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputRunComplete before dispatch; a breach is the call's invalid_input, not an invalid output.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -15914,68 +19371,29 @@
             "done",
             "partial",
             "nothing_found",
-            "blocked"
+            "blocked",
+            "cannot_do",
+            "waiting"
           ]
         },
-        "summary": {
-          "type": "string"
-        },
-        "counts": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "checked": {
-              "type": "integer"
-            },
-            "missing": {
-              "type": "integer"
-            },
-            "questions": {
-              "type": "integer"
-            }
-          },
-          "required": [
-            "checked",
-            "missing",
-            "questions"
-          ]
-        },
-        "nextSteps": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "add_photo",
-              "ask_reviews",
-              "answer_question",
-              "fill_fact",
-              "check_ai_answers"
-            ]
-          }
-        },
-        "findings": {
+        "criteria": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "kind": {
+              "index": {
+                "type": "integer"
+              },
+              "status": {
                 "type": "string",
                 "enum": [
-                  "fact",
-                  "issue",
-                  "metric",
-                  "recommendation",
-                  "table"
+                  "met",
+                  "not_met",
+                  "unknown"
                 ]
               },
-              "title": {
-                "type": "string"
-              },
-              "detail": {
-                "type": "string"
-              },
-              "records": {
+              "evidence": {
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -15990,7 +19408,12 @@
                         "knowledge_page",
                         "product",
                         "proposal",
-                        "result_item"
+                        "result_item",
+                        "suggestion",
+                        "knowledge_proposal",
+                        "notebook_entry",
+                        "message",
+                        "person_memory"
                       ]
                     },
                     "id": {
@@ -16002,18 +19425,678 @@
                     "id"
                   ]
                 }
-              },
-              "value": {
-                "anyOf": [
-                  {
-                    "type": "number"
+              }
+            },
+            "required": [
+              "index",
+              "status",
+              "evidence"
+            ]
+          }
+        },
+        "reply": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "summary": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "checked": {
+                      "type": "integer"
+                    },
+                    "missing": {
+                      "type": "integer"
+                    },
+                    "questions": {
+                      "type": "integer"
+                    }
                   },
-                  {
-                    "type": "null"
+                  "required": [
+                    "checked",
+                    "missing",
+                    "questions"
+                  ]
+                },
+                "nextSteps": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "add_photo",
+                      "ask_reviews",
+                      "answer_question",
+                      "fill_fact",
+                      "check_ai_answers"
+                    ]
                   }
-                ]
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "fact",
+                          "issue",
+                          "metric",
+                          "recommendation",
+                          "table"
+                        ]
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "detail": {
+                        "type": "string"
+                      },
+                      "records": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "task",
+                                "thread",
+                                "artifact",
+                                "knowledge_page",
+                                "product",
+                                "proposal",
+                                "result_item",
+                                "suggestion",
+                                "knowledge_proposal",
+                                "notebook_entry",
+                                "message",
+                                "person_memory"
+                              ]
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "id"
+                          ]
+                        }
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "unit": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "table": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "columns": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "rows": {
+                                "type": "array",
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "columns",
+                              "rows"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "title",
+                      "detail",
+                      "records",
+                      "value",
+                      "unit",
+                      "table"
+                    ]
+                  }
+                },
+                "needs": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "decision",
+                            "information",
+                            "grant",
+                            "credits"
+                          ]
+                        },
+                        "question": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "question"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "verdicts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "index": {
+                        "type": "integer"
+                      },
+                      "verdict": {
+                        "type": "string",
+                        "enum": [
+                          "pass",
+                          "fail",
+                          "unknown"
+                        ]
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "task",
+                                "thread",
+                                "artifact",
+                                "knowledge_page",
+                                "product",
+                                "proposal",
+                                "result_item",
+                                "suggestion",
+                                "knowledge_proposal",
+                                "notebook_entry",
+                                "message",
+                                "person_memory"
+                              ]
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "id"
+                          ]
+                        }
+                      },
+                      "note": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "index",
+                      "verdict",
+                      "evidence",
+                      "note"
+                    ]
+                  }
+                }
               },
-              "unit": {
+              "required": [
+                "summary",
+                "counts",
+                "nextSteps",
+                "findings",
+                "needs",
+                "items",
+                "verdicts"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "outcome",
+        "criteria",
+        "reply",
+        "result"
+      ]
+    },
+    "ToolModelInputRunWait": {
+      "description": "run.wait as the model is given it: ToolInputRunWait's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputRunWait before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "children",
+            "proposals",
+            "time"
+          ]
+        },
+        "match": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "any",
+                "all"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "callIds": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proposalIds": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "until": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "match",
+        "callIds",
+        "proposalIds",
+        "until"
+      ]
+    },
+    "ToolModelInputResultWrite": {
+      "description": "result.write as the model is given it: ToolInputResultWrite's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputResultWrite before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "itemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "text",
+                "table",
+                "file"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mediaType": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "text/plain",
+                "text/markdown",
+                "text/csv",
+                "application/json"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "columns": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "close": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "itemId",
+        "title",
+        "kind",
+        "mediaType",
+        "columns",
+        "text",
+        "rows",
+        "close"
+      ]
+    },
+    "ToolModelInputContextCheckpoint": {
+      "description": "context.checkpoint as the model is given it: ToolInputContextCheckpoint's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputContextCheckpoint before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "objective": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "refs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "text",
+            "refs"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "in_progress",
+            "waiting",
+            "blocked",
+            "finishing"
+          ]
+        },
+        "statusNote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "done": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "text",
+              "refs"
+            ]
+          }
+        },
+        "inProgress": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "text",
+              "refs"
+            ]
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "decision": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "decision",
+              "reason",
+              "refs"
+            ]
+          }
+        },
+        "setAside": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "option": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "option",
+              "reason",
+              "refs"
+            ]
+          }
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "fact": {
+                "type": "string"
+              },
+              "exact": {
+                "type": "boolean"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "fact",
+              "exact",
+              "refs"
+            ]
+          }
+        },
+        "difficulties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "problem": {
+                "type": "string"
+              },
+              "resolution": {
                 "anyOf": [
                   {
                     "type": "string"
@@ -16023,57 +20106,97 @@
                   }
                 ]
               },
-              "table": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "columns": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "rows": {
-                        "type": "array",
-                        "items": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    },
-                    "required": [
-                      "columns",
-                      "rows"
-                    ]
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": [
-              "kind",
-              "title",
-              "detail",
-              "records",
-              "value",
-              "unit",
-              "table"
+              "problem",
+              "resolution",
+              "refs"
+            ]
+          }
+        },
+        "promised": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "text",
+              "refs"
+            ]
+          }
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "text",
+              "refs"
+            ]
+          }
+        },
+        "reopen": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "why": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ref",
+              "why"
             ]
           }
         }
       },
       "required": [
-        "outcome",
-        "summary",
-        "counts",
+        "objective",
+        "status",
+        "statusNote",
+        "done",
+        "inProgress",
+        "decisions",
+        "setAside",
+        "facts",
+        "difficulties",
+        "promised",
         "nextSteps",
-        "findings"
+        "reopen"
       ]
     }
   }

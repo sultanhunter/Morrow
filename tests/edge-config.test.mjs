@@ -2633,7 +2633,7 @@ test("the teammate-calls and agent-cards switches: committed off; on is refused 
   );
   // The policy reads the same records: while off, Morrow's turns offer none of their tools.
   assert.deepEqual(teamSwitchState(), { teammateCalls: "off", agentCards: "off" });
-  for (const tool of ["agent.ask", "agent.result.read", "agent.propose"])
+  for (const tool of ["agent.ask", "agent.map", "agent.message", "agent.cancel", "agent.propose"])
     assert.ok(!coordinatorLaunchTools().includes(tool), tool);
   // Through verifyEdgeConfig: the committed records pass; on, malformed or missing fails.
   const write = (name, value) => {

@@ -5,14 +5,15 @@
 // ADR-0025 items 6 and 8, ADR-0027 items 3 and 12, ADR-0030 item 3, ADR-0037 items 2, 4 and
 // 5); they decide nothing about a run, whose authority the loop re-checks at every tool call.
 //
-// - Every declared tool is in the catalogue and offered to the package's kind; the
-//   Coordinator's tools are exactly its fixed set.
+// - Every declared tool is a grant tool in the catalogue, offered to the package's kind; the
+//   Coordinator's grant tools are exactly its fixed set. A memory or harness tool is never
+//   declared: every run of a context is offered its context's (ADR-0041 item 24).
 // - Depth 1 (ADR-0037 item 2): no package but the Coordinator's holds an agent.* tool,
 //   workspace.task.delegate or an agents.* capability.
 // - A workspace package (origin workspace, id workspace.*) holds nothing ADR-0037 item 5
 //   excludes: no human_only capability with any verb, no support.*, no Level 2, no inbound
 //   mail. It asks for exactly the capabilities, verbs, Shopify scopes, customer-data level and
-//   computer flag its tools derive (item 4), the teammate result tool among them; it pins only
+//   computer flag its tools derive (item 4); it pins only
 //   skills eligible for workspace agents; its roleTextDigest binds its instructions and skill
 //   text (any change to either is a new card). A first-party package never takes a workspace
 //   id.
@@ -29,7 +30,7 @@ import catalogue from "../../../docs/contracts/capabilities.json";
 import { heldGrantsDerived, workspaceRoleText } from "./agent-cards";
 import { defaultLoopProfile, loopEntry } from "./loop-catalogue";
 import { canonicalDigest } from "./review";
-import { isAgentTool, toolEntry, toolsForContext } from "./tool-catalogue";
+import { grantToolsForContext, isAgentTool, toolEntry } from "./tool-catalogue";
 
 export type AgentPackageCode =
   | "PACKAGE_INVALID"
@@ -82,16 +83,17 @@ export function inspectAgentPackage(
     codes.add("PACKAGE_ID_KIND_MISMATCH");
   if ((pkg.origin === "workspace") !== pkg.id.startsWith("workspace."))
     codes.add("PACKAGE_ID_ORIGIN_MISMATCH");
-  // Tools by kind: an installed agent of either origin may be handed off to, run under a
-  // mandate or called (ADR-0037 item 4: the same in every other way).
+  // Grant tools by kind: an installed agent of either origin may be handed off to, run under a
+  // mandate or called (ADR-0037 item 4: the same in every other way). A memory or harness tool
+  // is the context's to offer, never a package's to declare (ADR-0041 item 24).
   const allowed =
     pkg.kind === "coordinator"
-      ? toolsForContext("coordinator")
+      ? grantToolsForContext("coordinator")
       : [
           ...new Set([
-            ...toolsForContext("routed"),
-            ...toolsForContext("mandate"),
-            ...toolsForContext("call"),
+            ...grantToolsForContext("routed"),
+            ...grantToolsForContext("mandate"),
+            ...grantToolsForContext("call"),
           ]),
         ];
   if (pkg.tools.some((name) => !allowed.includes(name))) codes.add("TOOL_NOT_FOR_KIND");
@@ -107,7 +109,7 @@ export function inspectAgentPackage(
     codes.add("AGENT_AUTHORITY_OUTSIDE_COORDINATOR");
   if (
     pkg.kind === "coordinator" &&
-    [...pkg.tools].sort().join() !== [...toolsForContext("coordinator")].sort().join()
+    [...pkg.tools].sort().join() !== [...grantToolsForContext("coordinator")].sort().join()
   )
     codes.add("COORDINATOR_TOOLS_NOT_FIXED");
   // Capabilities asked for.
@@ -125,7 +127,12 @@ export function inspectAgentPackage(
   }
   for (const name of pkg.tools) {
     const tool = toolEntry(name);
-    if (!tool || !(asked.get(tool.capabilityId) ?? []).includes(tool.verb))
+    if (
+      !tool ||
+      tool.capabilityId === null ||
+      tool.verb === null ||
+      !(asked.get(tool.capabilityId) ?? []).includes(tool.verb)
+    )
       codes.add("TOOL_CAPABILITY_NOT_REQUESTED");
   }
   // ADR-0037 item 5: the fixed catalogue only, and never Level 2, support.* or customer mail.

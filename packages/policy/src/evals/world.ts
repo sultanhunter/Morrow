@@ -76,6 +76,10 @@ export interface EvalToolSpec {
 const catalogueSpec = (name: EvalToolName): EvalToolSpec => {
   const entry = toolEntry(name);
   if (!entry) throw Error("EVAL_WORLD_TOOL_UNKNOWN:" + name);
+  // The world serves grant tools only; a memory or harness tool (catalogue version 4, ADR-0041
+  // item 24) holds no capability and is not in this world's format yet (plan row H18).
+  if (entry.capabilityId === null || entry.verb === null)
+    throw Error("EVAL_WORLD_TOOL_NO_CAPABILITY:" + name);
   return Object.freeze({
     name,
     source: "catalogue",

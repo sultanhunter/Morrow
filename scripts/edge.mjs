@@ -813,8 +813,9 @@ export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsP
 }
 // ADR-0037 item 9 (its implementation plan's PR 2): the teammate-calls and agent-cards
 // switches, committed off in place of the specialist switch. No Worker reads them yet:
-// packages/policy's coordinatorLaunchTools keeps agent.ask, agent.result.read and
-// agent.propose out of Morrow's turns while they are off. Each may go on only after G9 and
+// packages/policy's coordinatorLaunchTools keeps agent.ask, agent.map, agent.message,
+// agent.cancel and agent.propose out of Morrow's contexts while they are off (tool catalogue
+// version 4, ADR-0041 item 24). Each may go on only after G9 and
 // G10, the agent-loop switch (ADR-0027 item 11) and a passing eval round (ADR-0037 item 10);
 // agent cards also after the agent-card authority packet (G18). None of these has a reviewed
 // record yet, so all count as not done here, and an "on" record is a problem.

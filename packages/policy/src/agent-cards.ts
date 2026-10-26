@@ -10,7 +10,10 @@
 //   the Owner-only kinds and the taint.
 // - The fixed catalogue only (item 5): never a human_only capability, workspace.task.delegate,
 //   agents.* or any agent.* tool, and at launch never Level 2 customer data or support.* (nor
-//   the inbound-mail trigger that carries customer mail).
+//   the inbound-mail trigger that carries customer mail). A card holds grant tools only: the
+//   memory and harness tools (run.complete, result.write, memory.read and the rest) come with
+//   every run of the call context and grant nothing, so code never adds or derives anything
+//   from them (ADR-0041 item 24).
 // - A person may edit before approval: change the name, purpose and instructions, or remove
 //   tools, triggers, skills or skill text. Each edit is a new revision with its editor; it
 //   keeps the taint and never widens. Anything more is a new card.
@@ -31,9 +34,9 @@ import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import catalogue from "../../../docs/contracts/capabilities.json";
 import { canonicalText, sha256Hex } from "./projects/digest";
 import {
+  isContextTool,
   type PermissionVerb,
   type ToolName,
-  teammateResultTool,
   toolCatalogue,
   toolEntry,
 } from "./tool-catalogue";
@@ -77,16 +80,16 @@ export function cardCapabilityAllowed(capabilityId: unknown): boolean {
   );
 }
 /**
- * Whether a card may pick a tool (item 5): one an installed agent may be offered (a hand-off,
- * a mandate run or a call), never an agent.* tool, and on an allowed capability. The
- * teammate result tool is code's to add, never the model's to pick.
+ * Whether a card may pick a tool (item 5): a grant tool an installed agent may be offered (a
+ * hand-off, a mandate run or a call), never an agent.* tool, and on an allowed capability. A
+ * memory or harness tool is the context's, never the model's to pick (ADR-0041 item 24).
  */
 export function cardToolAllowed(name: unknown): boolean {
   const tool = toolEntry(name);
   return (
     tool !== null &&
     !tool.name.startsWith("agent.") &&
-    tool.name !== teammateResultTool &&
+    !isContextTool(tool.name) &&
     tool.contexts.some((c) => c === "routed" || c === "mandate" || c === "call") &&
     cardCapabilityAllowed(tool.capabilityId)
   );
@@ -110,21 +113,24 @@ const dataClassOf = new Set([
   "workspace.artifact.read",
 ]);
 /**
- * A card's derived grants from the tools it picked, with the teammate result tool added so
- * every created teammate can be called: tools in catalogue order; each tool's capability and
- * verb, grouped by capability in id order with verbs in their fixed order; read_orders for
- * order reads; the read tools' data classes; level1 for order aggregates; the four Owner-only
- * kinds (an external_write capability even with propose only, order or customer reads, spend,
- * communication). Throws on a tool a card may not hold.
+ * A card's derived grants from the grant tools it picked: tools in catalogue order; each
+ * tool's capability and verb, grouped by capability in id order with verbs in their fixed
+ * order; read_orders for order reads; the read tools' data classes; level1 for order
+ * aggregates; the four Owner-only kinds (an external_write capability even with propose only,
+ * order or customer reads, spend, communication). Every created teammate can be called with no
+ * tool added here: the call context offers run.complete and result.write to every run (ADR-0041
+ * item 24). Throws on a tool a card may not hold.
  */
 export function deriveCardGrants(picked: readonly string[]): CardGrants {
   if (!Array.isArray(picked) || picked.length < 1 || new Set(picked).size !== picked.length)
     throw new AgentCardError("input_invalid");
   if (picked.some((name) => !cardToolAllowed(name))) throw new AgentCardError("card_tool_excluded");
-  const chosen = new Set<string>([...picked, teammateResultTool]);
+  const chosen = new Set<string>(picked);
   const tools = toolCatalogue.filter((t) => chosen.has(t.name));
   const verbs = new Map<string, Set<PermissionVerb>>();
   for (const tool of tools) {
+    // cardToolAllowed admitted grant tools only: each names one capability and verb.
+    if (tool.capabilityId === null || tool.verb === null) throw new AgentCardError("card_tool_excluded");
     const set = verbs.get(tool.capabilityId) ?? new Set<PermissionVerb>();
     set.add(tool.verb);
     verbs.set(tool.capabilityId, set);
@@ -186,7 +192,7 @@ const heldAgainstDerived = (
 ): { readonly check: "ok" | "card_tool_excluded" | "grants_not_derived"; grants?: CardGrants } => {
   let grants: CardGrants;
   try {
-    grants = deriveCardGrants(held.tools.filter((name) => name !== teammateResultTool));
+    grants = deriveCardGrants(held.tools);
   } catch (error) {
     if (!(error instanceof AgentCardError)) throw error;
     return { check: error.code === "card_tool_excluded" ? error.code : "grants_not_derived" };
@@ -200,10 +206,11 @@ const heldAgainstDerived = (
   return { check: same ? "ok" : "grants_not_derived", grants };
 };
 /**
- * Whether held grants are exactly what code derives from the tools (item 4): the teammate
- * result tool among them, and the same capabilities and verbs, Shopify scopes, customer-data
- * level and computer flag, no more and no fewer. card_tool_excluded when a tool may never be
- * on a card (item 5). The package checks run it on every workspace package.
+ * Whether held grants are exactly what code derives from the tools (item 4): the same tools,
+ * capabilities and verbs, Shopify scopes, customer-data level and computer flag, no more and
+ * no fewer. card_tool_excluded when a tool may never be on a card (item 5), a memory or
+ * harness tool included (ADR-0041 item 24: the context offers those). The package checks run
+ * it on every workspace package.
  */
 export function heldGrantsDerived(
   held: HeldGrants,
@@ -259,6 +266,13 @@ export interface CardFacts {
   readonly at: string;
 }
 
+/** A card's taint as the drafting run's, whole: every kind, the listed sources and the count. */
+const copyTaint = (taint: Current_RunTaint): Current_RunTaint => ({
+  contextTaint: taint.contextTaint,
+  kinds: [...taint.kinds],
+  sources: taint.sources.map((s) => ({ source: s.source, sourceId: s.sourceId })),
+  omittedSources: taint.omittedSources,
+});
 const freezeDeep = <T>(value: T): T => {
   if (value && typeof value === "object") {
     for (const child of Object.values(value)) freezeDeep(child);
@@ -322,10 +336,7 @@ export function draftAgentCard(
       runLimits: { ...facts.runLimits },
       modelProfile: { ...facts.modelProfile },
       ownerOnly: [...grants.ownerOnly],
-      taint: {
-        contextTaint: facts.taint.contextTaint,
-        sources: facts.taint.sources.map((s) => ({ ...s })),
-      },
+      taint: copyTaint(facts.taint),
       draftedAt: facts.at,
       revisedAt: facts.at,
     };
@@ -367,8 +378,8 @@ const editKeys = new Set([
  * The next revision of a card after a person's edit, or input_invalid: an editor outside the
  * card's organization and workspace (editors join item 5's conflict set, so a foreign
  * principal is never recorded), a key outside CardEdit (there is no edit that adds: an
- * addition is a new card and a new approval), removing a tool the card does not hold, the
- * teammate result tool, every picked tool, or a tool a kept skill declares; or a value outside
+ * addition is a new card and a new approval), removing a tool the card does not hold, every
+ * picked tool, or a tool a kept skill declares; or a value outside
  * AgentProposal@1. Grants are derived again from the remaining tools, so an edit only narrows;
  * the taint, store, limits and model stay.
  */
@@ -400,13 +411,13 @@ export function reviseAgentCard(
   const skills = remove(edit.removeSkillIds);
   const texts = new Set(edit.removeSkillTexts ?? []);
   if (
-    [...tools].some((t) => !card.tools.includes(t as ToolName) || t === teammateResultTool) ||
+    [...tools].some((t) => !card.tools.includes(t as ToolName)) ||
     [...triggers].some((k) => !card.triggerKinds.includes(k as Current_TriggerKind)) ||
     [...skills].some((s) => !card.skills.some((p) => p.id === s)) ||
     [...texts].some((i) => !Number.isInteger(i) || i < 0 || i >= card.skillTexts.length)
   )
     return { ok: false, refusal: "input_invalid" };
-  const picked = card.tools.filter((t) => t !== teammateResultTool && !tools.has(t));
+  const picked = card.tools.filter((t) => !tools.has(t));
   if (picked.length === 0) return { ok: false, refusal: "input_invalid" };
   let grants: CardGrants;
   try {
@@ -499,10 +510,7 @@ export async function addToTeamDocument(
     runLimits: { ...card.runLimits },
     modelProfile: { ...card.modelProfile },
     ownerOnly: [...card.ownerOnly],
-    taint: {
-      contextTaint: card.taint.contextTaint,
-      sources: card.taint.sources.map((s) => ({ ...s })),
-    },
+    taint: copyTaint(card.taint),
     review: binding.review,
     issuedAt: binding.issuedAt,
     expiresAt: new Date(issued + addToTeamDocumentSeconds * 1000).toISOString(),

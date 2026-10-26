@@ -1,5 +1,6 @@
 // The agent-platform generator (PR 10; ADR-0027 items 3 and 11; ADR-0037 items 1 to 3 and 9,
-// whose contracts PR retired the Specialist ceiling and its switch with the specialist kind).
+// whose contracts PR retired the Specialist ceiling and its switch with the specialist kind;
+// ADR-0041 item 24's memory and harness families, plan row H5).
 // It reads the reviewed data files, refuses them unless every inspection below passes, and
 // writes a data-only TypeScript module for the loop (PR 11) and the screens:
 //   docs/contracts/tool-catalogue.json   -> packages/policy/src/generated/tool-catalogue.ts
@@ -44,10 +45,13 @@ export const jcs = (value) =>
       : JSON.stringify(value);
 const sha256 = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 
-// ADR-0027 item 8: the Coordinator's fixed grant set, as tools, with plan.draft (ADR-0034
-// item 2 amends item 8; catalogue version 2) and ADR-0037 item 1's teammate tools (catalogue
-// version 4: agent.propose in place of specialist.draft, agent.ask and agent.result.read).
-// The launch subset and the switches narrow what a Coordinator turn is offered
+// ADR-0027 item 8: the Coordinator's fixed set, as tools, with plan.draft (ADR-0034 item 2
+// amends item 8; catalogue version 2), ADR-0037 item 1's teammate tools and ADR-0041 items 24
+// and 33's orchestration, memory and harness tools (catalogue version 4: agent.propose in
+// place of specialist.draft; agent.ask, agent.map, agent.message and agent.cancel;
+// knowledge.propose for Morrow, OD-2026-10-26-7 question 15; memory.search, memory.read and
+// memory.suggest; run.plan, run.complete, run.wait and context.checkpoint). The launch subset
+// and the switches narrow what a Coordinator context is offered at admission
 // (packages/policy/src/projects/plan-draft.ts).
 export const coordinatorToolNames = Object.freeze([
   "knowledge.search",
@@ -57,17 +61,44 @@ export const coordinatorToolNames = Object.freeze([
   "task.create",
   "agent.route",
   "agent.ask",
-  "agent.result.read",
+  "agent.map",
+  "agent.message",
+  "agent.cancel",
   "agent.propose",
   "plan.draft",
+  "knowledge.propose",
+  "memory.search",
+  "memory.read",
+  "memory.suggest",
+  "run.plan",
+  "run.complete",
+  "run.wait",
+  "context.checkpoint",
 ]);
-// ADR-0037 item 3(a): a called teammate's run returns its result with this tool, offered only
-// in the call context, and never talks to the person (no question, no post).
-export const teammateResultToolName = "result.submit";
+// ADR-0041 item 24: the memory and harness families hold no capability (capabilityId and verb
+// null): they grant nothing, are offered by their context, and are never declared by a package
+// or picked on a card.
+export const contextToolFamilies = Object.freeze(["memory", "harness"]);
+// Offered in every context: every run can finish (run.complete, ADR-0041 item 16), be
+// checkpointed (context.checkpoint, item 11) and read its memory (memory.search and
+// memory.read, items 14 and 25), so a fork or a follow-up keeps the same tool prefix.
+export const everyContextToolNames = Object.freeze([
+  "memory.search",
+  "memory.read",
+  "run.complete",
+  "context.checkpoint",
+]);
+// ADR-0041 items 22 and 24: a called teammate builds its result items with result.write,
+// offered in the call context alone, and returns its result with run.complete's child form
+// (in place of ADR-0037's result.submit). It never talks to the person: no question, no post
+// and no memory suggestion.
+export const teammateItemToolName = "result.write";
 const personFacingCapabilities = new Set([
   "workspace.question.request",
   "workspace.conversation.post",
 ]);
+const personFacingTools = new Set(["memory.suggest"]);
+const allContexts = Object.freeze(["coordinator", "routed", "mandate", "look_for_work", "call"]);
 // ADR-0027 item 3: no tool takes SQL, a URL, a role, a store, a recipient, a sender, a
 // credential or a model. Field names that would carry one, anywhere in a tool's input.
 export const forbiddenInputName =
@@ -119,14 +150,18 @@ export function strictModelSchema(definition, schemas) {
     if (!node) refuse("SCHEMA_REF:" + pointer);
     return { node, base: id };
   };
-  const convert = (node, base, depth) => {
+  // depth counts nesting (properties, items, union branches), at most 12; a reference adds
+  // none, and one that leads back to itself on the same path is refused (no recursion).
+  const convert = (node, base, depth, path = new Set()) => {
     if (depth > 12 || !node || typeof node !== "object" || Array.isArray(node))
       refuse("SCHEMA_SHAPE");
     if (node.$ref !== undefined) {
       if (Object.keys(node).some((key) => key !== "$ref" && key !== "description"))
         refuse("SCHEMA_REF_SIBLINGS");
       const target = resolveRef(node.$ref, base);
-      return convert(target.node, target.base, depth + 1);
+      const at = target.base + node.$ref.replace(/^[^#]*/, "");
+      if (path.has(at)) refuse("SCHEMA_CYCLE:" + node.$ref);
+      return convert(target.node, target.base, depth, new Set([...path, at]));
     }
     if (node.anyOf !== undefined) {
       const branches = node.anyOf;
@@ -139,7 +174,7 @@ export function strictModelSchema(definition, schemas) {
       )
         refuse("SCHEMA_UNION");
       return {
-        anyOf: [convert(branches[1 - nullIndex], base, depth + 1), { type: "null" }],
+        anyOf: [convert(branches[1 - nullIndex], base, depth + 1, path), { type: "null" }],
       };
     }
     const out = {};
@@ -157,11 +192,11 @@ export function strictModelSchema(definition, schemas) {
         refuse("SCHEMA_OPTIONAL");
       out.properties = {};
       for (const [name, child] of Object.entries(node.properties))
-        out.properties[name] = convert(child, base, depth + 1);
+        out.properties[name] = convert(child, base, depth + 1, path);
       out.required = Object.keys(node.properties);
       out.additionalProperties = false;
     } else if (node.type === "array") {
-      out.items = convert(node.items, base, depth + 1);
+      out.items = convert(node.items, base, depth + 1, path);
     } else if (node.const !== undefined || node.enum !== undefined) {
       // A const or enum keeps its type when it has one.
     } else if (!["string", "integer", "boolean", "number", "null"].includes(node.type)) {
@@ -213,7 +248,7 @@ function propertyNames(
 
 /**
  * The inspections of ToolCatalogue@1 (ADR-0027 items 2, 3 and 8; ADR-0024 item 6; ADR-0037
- * items 1 to 3). Returns every problem as a string; an empty list passes.
+ * items 1 to 3; ADR-0041 item 24). Returns every problem as a string; an empty list passes.
  */
 export function inspectToolCatalogue({ catalogue, capabilities, schemas, validate }) {
   const errors = [];
@@ -234,21 +269,68 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, validat
     if (wires.has(tool.wireName)) at("duplicate wire name");
     wires.add(tool.wireName);
     if (tool.resultMaxBytes !== 8192) at("result bound must be 8 KiB");
-    const capability = byId.get(tool.capabilityId);
-    if (!capability) {
+    const contexts = Array.isArray(tool.contexts) ? tool.contexts : [];
+    if (contextToolFamilies.includes(tool.family)) {
+      // ADR-0041 item 24: a memory or harness tool grants nothing and holds no capability.
+      if (tool.capabilityId !== null || tool.verb !== null)
+        at("a memory or harness tool holds no capability or verb");
+      if (tool.family === "harness") {
+        if (tool.replayClass !== "internal_write")
+          at("a harness tool writes only its run's own rows and replays as an internal write");
+        if (!/^(run|result|context)\./.test(String(tool.name)))
+          at("a harness tool is named run.*, result.* or context.*");
+      } else {
+        if (!String(tool.name).startsWith("memory."))
+          at("a memory tool is named memory.*");
+        if (!["read", "internal_write"].includes(tool.replayClass))
+          at("a memory tool replays as a read or an internal write");
+      }
+      if (
+        contexts.includes("look_for_work") &&
+        !(
+          (tool.family === "memory" && tool.replayClass === "read") ||
+          (tool.family === "harness" && !["run.wait", teammateItemToolName].includes(tool.name))
+        )
+      )
+        at("look-for-work offers only reads and suggestions");
+      if (contexts.includes("call") && personFacingTools.has(tool.name))
+        at("a called teammate never asks or posts to the person");
+      if (personFacingTools.has(tool.name) && contexts.some((c) => !["coordinator", "routed"].includes(c)))
+        at("a memory suggestion goes only to the person a job works for (Morrow and hand-offs)");
+      if (
+        everyContextToolNames.includes(tool.name) &&
+        JSON.stringify(contexts) !== JSON.stringify(allContexts)
+      )
+        at("offered in every context, in context order");
+      if (
+        tool.name === teammateItemToolName &&
+        JSON.stringify(contexts) !== JSON.stringify(["call"])
+      )
+        at("result items are written by called teammates only (the call context alone)");
+    } else if (tool.capabilityId === null || tool.verb === null) {
+      at("only a memory or harness tool holds no capability");
+      continue;
+    }
+    const capability = contextToolFamilies.includes(tool.family)
+      ? null
+      : byId.get(tool.capabilityId);
+    if (capability === undefined) {
       at("unknown capability " + tool.capabilityId);
       continue;
     }
     // No tool has an external effect (ADR-0027 item 3): nothing executes an external_write,
     // spend or communication capability, and no tool approves or administers.
     if (
+      capability !== null &&
       ["external_write", "spend", "communication"].includes(capability.effect) &&
       tool.verb !== "propose"
     )
       at("an external effect is only ever proposed");
     if (["approve", "administer"].includes(tool.verb)) at("no tool approves or administers");
-    if (capability.executor === "human_only") at("no tool uses a human_only capability");
-    switch (tool.family) {
+    if (capability?.executor === "human_only") at("no tool uses a human_only capability");
+    switch (capability === null ? "context" : tool.family) {
+      case "context":
+        break;
       case "read":
         if (
           capability.effect !== "read" ||
@@ -291,15 +373,17 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, validat
       default:
         at("unknown family");
     }
-    const contexts = Array.isArray(tool.contexts) ? tool.contexts : [];
     // Look-for-work is read-only: reads and suggestions, never proposals or the computer
-    // (ADR-0024 item 6), and never customer mail.
+    // (ADR-0024 item 6), and never customer mail. ADR-0041 item 24: its memory reads and the
+    // harness tools that touch only its own run's rows (no wait, no result items) are checked
+    // above.
     if (
+      capability !== null &&
       contexts.includes("look_for_work") &&
       !(tool.family === "read" || tool.name === "suggestion.create")
     )
       at("look-for-work offers only reads and suggestions");
-    if (tool.capabilityId === "support.case.read" || tool.capabilityId.startsWith("support.")) {
+    if (capability !== null && String(tool.capabilityId).startsWith("support.")) {
       if (contexts.some((c) => !["routed", "mandate"].includes(c)))
         at("support tools only in Support's routed and mandate runs");
     }
@@ -309,22 +393,17 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, validat
     if (
       (String(tool.name).startsWith("agent.") ||
         tool.capabilityId === "workspace.task.delegate" ||
-        tool.capabilityId.startsWith("agents.")) &&
+        String(tool.capabilityId).startsWith("agents.")) &&
       JSON.stringify(contexts) !== JSON.stringify(["coordinator"])
     )
       at("agent tools belong to the Coordinator only (depth 1)");
     // ADR-0037 item 3(a): a called teammate cannot talk to the person (no question or post),
-    // never reads customer mail (the support rule above), and returns its result with
-    // result.submit, which no other run is offered.
+    // never reads customer mail (the support rule above), and builds its result items with
+    // result.write, which no other run is offered (ADR-0041 item 24).
     if (contexts.includes("call") && personFacingCapabilities.has(tool.capabilityId))
       at("a called teammate never asks or posts to the person");
-    if (
-      tool.name === teammateResultToolName &&
-      (tool.family !== "internal" || JSON.stringify(contexts) !== JSON.stringify(["call"]))
-    )
-      at("the teammate result is an internal tool of the call context only");
-    if (contexts.length === 1 && contexts[0] === "call" && tool.name !== teammateResultToolName)
-      at("only the teammate result is offered in the call context alone");
+    if (contexts.length === 1 && contexts[0] === "call" && tool.name !== teammateItemToolName)
+      at("only result.write is offered in the call context alone");
     // Input: a v1.1 core ToolInput definition, expressible as a strict schema, naming nothing
     // forbidden; its strict shape is the ToolModelInput definition of the same name.
     if (!/^ToolInput[A-Z][A-Za-z0-9]*$/.test(String(tool.inputDefinition)))
@@ -392,10 +471,11 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, validat
   const coordinator = tools.filter((t) => t.contexts?.includes("coordinator")).map((t) => t.name);
   if (JSON.stringify([...coordinator].sort()) !== JSON.stringify([...coordinatorToolNames].sort()))
     fail(
-      "the Coordinator's tools must be exactly ADR-0027 item 8's fixed set (with ADR-0034 item 2's plan.draft and ADR-0037 item 1's teammate tools)",
+      "the Coordinator's tools must be exactly ADR-0027 item 8's fixed set (with ADR-0034 item 2's plan.draft, ADR-0037 item 1's teammate tools and ADR-0041 items 24 and 33's orchestration, memory and harness tools)",
     );
-  if (!tools.some((t) => t.name === teammateResultToolName && t.contexts?.includes("call")))
-    fail("the call context must offer result.submit (ADR-0037 item 3(a))");
+  for (const name of [...everyContextToolNames, teammateItemToolName])
+    if (!tools.some((t) => t.name === name && contextToolFamilies.includes(t.family)))
+      fail(`the catalogue must offer ${name} as a memory or harness tool (ADR-0041 item 24)`);
   return errors;
 }
 

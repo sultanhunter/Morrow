@@ -1,6 +1,7 @@
 // Fakes of the agent-platform contracts (PR 10; ADR-0037 PR 2 for teammates, result items and
-// agent cards), so the agent loop (PR 11), teammate calls, the agent-card packet and the
-// Sunrise screens build against them before any backend exists. Plain data only: type
+// agent cards; plan row H5 for ADR-0041's merged teammate contracts and tool catalogue version
+// 4's orchestration, memory and harness inputs), so the agent loop, teammate calls, the
+// agent-card packet and the Sunrise screens build against them before any backend exists. Plain data only: type
 // imports, no validator table, no I/O, clock or randomness, so a browser fixture may use it.
 // tests/agent-platform-contracts.test.mjs validates every fake against its contract, so a
 // fake cannot drift from the schema. Every id is synthetic; no real shop, person or address.
@@ -30,9 +31,21 @@ import type {
   Current_SenderIdentity,
   Current_SupportReplyParameters,
   Current_TeammateBrief,
+  Current_TeammateBriefInput,
   Current_TeammateResult,
+  Current_ToolInputAgentAsk,
+  Current_ToolInputAgentCancel,
+  Current_ToolInputAgentMap,
+  Current_ToolInputAgentMessage,
   Current_ToolInputAgentPropose,
-  Current_ToolInputResultSubmit,
+  Current_ToolInputContextCheckpoint,
+  Current_ToolInputMemoryRead,
+  Current_ToolInputMemorySearch,
+  Current_ToolInputMemorySuggest,
+  Current_ToolInputResultWrite,
+  Current_ToolInputRunComplete,
+  Current_ToolInputRunPlan,
+  Current_ToolInputRunWait,
 } from "@morrow/contracts";
 
 /** The synthetic ids every fake shares. */
@@ -50,6 +63,8 @@ export const fakeIds = Object.freeze({
   supportInstallationId: "inst_support",
   inventoryInstallationId: "inst_inventory",
   cardId: "card_fake_1",
+  callId: "call_fake_1",
+  messageId: "message_fake_1",
   callRunId: "run_call_fake_1",
   callTaskId: "task_call_fake_1",
   toolUseId: "toolu_ask_fake_1",
@@ -185,78 +200,164 @@ export function fakeSupportReplyParameters(): Current_SupportReplyParameters {
   });
 }
 
-// --- Teammates (ADR-0037 item 3(a)) ------------------------------------------------------
-/** A tainted run's taint: it read product text, and the result keeps the source. */
+// --- Teammates (ADR-0037 item 3(a); ADR-0041 items 19 to 24) -------------------------------
+/** A tainted run's taint: it read product text, and the result keeps the kind and the source. */
 export function fakeTaint(): Current_RunTaint {
   return freeze({
     contextTaint: "untrusted_external",
+    kinds: ["product"],
     sources: [{ source: "product", sourceId: "product:1001" }],
+    omittedSources: 0,
   });
 }
-/** Morrow's structured brief to Listings: no character cap, long material by record id. */
-export function fakeTeammateBrief(): Current_TeammateBrief {
+/** An untainted run's taint. */
+export function fakeCleanTaint(): Current_RunTaint {
+  return freeze({ contextTaint: "none", kinds: [], sources: [], omittedSources: 0 });
+}
+/** Morrow's structured brief to Listings as it writes it: no character cap, records by id. */
+export function fakeTeammateBriefInput(): Current_TeammateBriefInput {
   return freeze({
     objective: "Check the SEO titles and descriptions of the summer collection.",
     details: "The person wants titles under 70 characters in the brand voice.",
-    doneCriteria: ["Every product in the collection has been checked."],
+    doneCriteria: [
+      "Every product in the collection has been checked.",
+      "Every title over 70 characters has a proposal waiting for review.",
+    ],
     boundaries: ["Do not change prices or stock."],
     records: [
       { kind: "task", id: fakeIds.taskId },
       { kind: "product", id: "product:1001" },
     ],
+    outputFormat: {
+      findingKinds: ["metric", "table"],
+      tableColumns: ["Product", "Proposed title"],
+      itemsExpected: false,
+      summaryDepth: "standard",
+    },
+    approach: ["Read the brand voice page first.", "Check every product, not a sample."],
   });
 }
-/** What Listings returns with result.submit at the end of the call. */
-export function fakeResultSubmit(): Current_ToolInputResultSubmit {
+/** The brief Listings receives: the input, the requester's own words (filled by code), ask mode. */
+export function fakeTeammateBrief(): Current_TeammateBrief {
+  return freeze({
+    ...structuredClone(fakeTeammateBriefInput()),
+    request: {
+      messageId: fakeIds.messageId,
+      text: "Can you fix the SEO titles on the summer dresses? Keep them short.",
+      readTags: [{ storeId: null, capability: "workspace.knowledge.read" }],
+    },
+    mode: "ask",
+    followUpOf: null,
+  });
+}
+/** agent.ask as Morrow writes it: a fresh call to Listings. */
+export function fakeAgentAskInput(): Current_ToolInputAgentAsk {
+  return freeze({
+    installationId: fakeIds.listingsInstallationId,
+    mode: "ask",
+    followUpOf: null,
+    brief: structuredClone(fakeTeammateBriefInput()),
+  });
+}
+/** agent.map over three products, one per batch. */
+export function fakeAgentMapInput(): Current_ToolInputAgentMap {
+  return freeze({
+    installationId: fakeIds.listingsInstallationId,
+    briefTemplate: { ...structuredClone(fakeTeammateBriefInput()), records: [] },
+    source: {
+      records: [
+        { kind: "product", id: "product:1001" },
+        { kind: "product", id: "product:1002" },
+        { kind: "product", id: "product:1003" },
+      ],
+      itemId: null,
+    },
+    batchSize: 1,
+  });
+}
+export function fakeAgentMessageInput(): Current_ToolInputAgentMessage {
+  return freeze({ callId: fakeIds.callId, text: "Focus on the linen dresses first." });
+}
+export function fakeAgentCancelInput(): Current_ToolInputAgentCancel {
+  return freeze({ callId: fakeIds.callId });
+}
+/** What Listings returns with run.complete's child form at the end of the call. */
+export function fakeRunCompleteChild(): Current_ToolInputRunComplete {
   return freeze({
     outcome: "done",
-    summary: "Four of twelve products have SEO titles over 70 characters; proposals are ready.",
-    counts: { checked: 12, missing: 4, questions: 0 },
-    nextSteps: ["fill_fact"],
-    findings: [
-      {
-        kind: "metric",
-        title: "Titles over 70 characters",
-        detail: "",
-        records: [{ kind: "product", id: "product:1001" }],
-        value: 4,
-        unit: "products",
-        table: null,
-      },
-      {
-        kind: "table",
-        title: "Proposed titles",
-        detail: "Each proposal waits for a person's approval.",
-        records: [],
-        value: null,
-        unit: null,
-        table: {
-          columns: ["Product", "Proposed title"],
-          rows: [["product:1001", "Linen summer dress"]],
-        },
-      },
+    criteria: [
+      { index: 0, status: "met", evidence: [{ kind: "product", id: "product:1001" }] },
+      { index: 1, status: "met", evidence: [{ kind: "proposal", id: "proposal_fake_1" }] },
     ],
+    reply: null,
+    result: {
+      summary: "Four of twelve products have SEO titles over 70 characters; proposals are ready.",
+      counts: { checked: 12, missing: 4, questions: 0 },
+      nextSteps: ["fill_fact"],
+      findings: [
+        {
+          kind: "metric",
+          title: "Titles over 70 characters",
+          detail: "",
+          records: [{ kind: "product", id: "product:1001" }],
+          value: 4,
+          unit: "products",
+          table: null,
+        },
+        {
+          kind: "table",
+          title: "Proposed titles",
+          detail: "Each proposal waits for a person's approval.",
+          records: [],
+          value: null,
+          unit: null,
+          table: {
+            columns: ["Product", "Proposed title"],
+            rows: [["product:1001", "Linen summer dress"]],
+          },
+        },
+      ],
+      needs: null,
+      items: [],
+      verdicts: [],
+    },
   });
 }
-/** The TeammateResult@1 that result.submit becomes: everything inline (it fits). */
+/** The TeammateResult@1 that child form becomes: everything inline (it fits). */
 export function fakeTeammateResult(): Current_TeammateResult {
-  const submit = fakeResultSubmit();
+  const child = fakeRunCompleteChild();
+  const result = child.result!;
   return freeze({
     schemaVersion: 1,
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
     parentRunId: fakeIds.runId,
     toolUseId: fakeIds.toolUseId,
+    callId: fakeIds.callId,
+    sequence: 1,
+    mode: "ask",
     runId: fakeIds.callRunId,
     taskId: fakeIds.callTaskId,
     installationId: fakeIds.listingsInstallationId,
     outcome: "done",
     endReason: "completed",
-    counts: { ...submit.counts },
-    nextSteps: [...submit.nextSteps],
-    created: [{ kind: "proposal", id: "proposal_fake_1" }],
-    summary: { kind: "text", text: submit.summary },
-    findings: submit.findings.map((f) => ({
+    counts: { ...result.counts },
+    nextSteps: [...result.nextSteps],
+    created: { kind: "list", records: [{ kind: "proposal", id: "proposal_fake_1" }] },
+    criteria: child.criteria.map((c) => ({
+      index: c.index,
+      status: c.status,
+      evidence: { kind: "list" as const, refs: c.evidence.map((r) => ({ ...r })) },
+    })),
+    verdicts: [],
+    next: "none",
+    needs: null,
+    unresolved: { kind: "list", subjects: [] },
+    plan: { itemsDone: 3, itemsTotal: 3 },
+    verification: { codeChecksPassed: 2, codeChecksFailed: 0, verifierVerdict: "not_run" },
+    checkpointId: null,
+    summary: { kind: "text", text: result.summary },
+    findings: result.findings.map((f) => ({
       kind: f.kind,
       title: f.title,
       detail: { kind: "text" as const, text: f.detail },
@@ -294,6 +395,8 @@ export function fakeResultItem(): Current_ResultItem {
     title: "Summary",
     sizeBytes: 9000,
     pageCount: 2,
+    open: false,
+    sections: 1,
     contentDigest: fakeDigest("item content"),
     readTags: [{ storeId: fakeIds.storeId, capability: "catalog.products.read" }],
     taint: fakeTaint(),
@@ -301,7 +404,7 @@ export function fakeResultItem(): Current_ResultItem {
     expiresAt: null,
   });
 }
-/** The first page of that item, as agent.result.read returns it. */
+/** The first page of that item, as memory.read returns it. */
 export function fakeResultItemPage(): Current_ResultItemPage {
   return freeze({
     schemaVersion: 1,
@@ -311,6 +414,113 @@ export function fakeResultItemPage(): Current_ResultItemPage {
     page: 1,
     pageCount: 2,
     content: { kind: "text", text: "Four of twelve products have SEO titles over 70 characters." },
+  });
+}
+
+// --- Memory and harness tool inputs (ADR-0041 item 24) -------------------------------------
+export function fakeMemorySearchInput(): Current_ToolInputMemorySearch {
+  return freeze({
+    queries: ["brand voice for titles", "summer collection"],
+    layers: ["knowledge", "results"],
+    limit: 10,
+  });
+}
+/** memory.read of a teammate's full result, its latest sequence. */
+export function fakeMemoryReadInput(): Current_ToolInputMemoryRead {
+  return freeze({
+    target: {
+      kind: "teammate_result",
+      id: fakeIds.callId,
+      label: null,
+      sequence: null,
+      fromPosition: null,
+      toPosition: null,
+    },
+    page: 1,
+  });
+}
+export function fakeMemorySuggestInput(): Current_ToolInputMemorySuggest {
+  return freeze({
+    kind: "preference",
+    title: "Short product titles",
+    text: "Keep product titles under 70 characters.",
+  });
+}
+/** Morrow's plan for the SEO job, set in its first turn. */
+export function fakeRunPlanInput(): Current_ToolInputRunPlan {
+  return freeze({
+    action: "set",
+    plan: {
+      objective: "Shorter SEO titles for the summer collection, ready for review.",
+      criteria: [
+        { text: "Every product in the collection has been checked.", check: "child_outcome" },
+        { text: "Every long title has a proposal waiting for review.", check: "proposal_state" },
+      ],
+      phases: [
+        {
+          title: "Check and propose",
+          items: [
+            { itemKey: "check", title: "Ask Listings to check the titles", criteria: [0], dependsOn: [] },
+            { itemKey: "review", title: "Review the proposals", criteria: [1], dependsOn: ["check"] },
+          ],
+        },
+      ],
+      followThrough: [],
+      understood: "You want shorter SEO titles on the summer dresses, in the brand voice.",
+      steps: ["Check every title", "Draft shorter ones", "Send them for your review"],
+    },
+    changes: null,
+  });
+}
+/** Morrow finishing that job with its reply. */
+export function fakeRunCompleteInput(): Current_ToolInputRunComplete {
+  return freeze({
+    outcome: "done",
+    criteria: [
+      { index: 0, status: "met", evidence: [{ kind: "task", id: fakeIds.callTaskId }] },
+      { index: 1, status: "met", evidence: [{ kind: "proposal", id: "proposal_fake_1" }] },
+    ],
+    reply: "Four titles were too long. Shorter ones are waiting for your review.",
+    result: null,
+  });
+}
+export function fakeRunWaitInput(): Current_ToolInputRunWait {
+  return freeze({
+    kind: "children",
+    match: "all",
+    callIds: null,
+    proposalIds: null,
+    until: null,
+  });
+}
+/** A called teammate starting a table item it will fill across turns. */
+export function fakeResultWriteInput(): Current_ToolInputResultWrite {
+  return freeze({
+    itemId: null,
+    title: "Proposed titles",
+    kind: "table",
+    mediaType: "text/csv",
+    columns: ["Product", "Proposed title"],
+    text: null,
+    rows: [["product:1001", "Linen summer dress"]],
+    close: false,
+  });
+}
+/** The fallback strategy's hand-off, citing labels instead of restating approvals. */
+export function fakeContextCheckpointInput(): Current_ToolInputContextCheckpoint {
+  return freeze({
+    objective: { text: "Shorter SEO titles for the summer collection.", refs: ["m1"] },
+    status: "waiting",
+    statusNote: "Listings is checking the titles.",
+    done: [{ text: "Plan set and Listings asked.", refs: ["c2", "c3"] }],
+    inProgress: [{ text: "Listings' check of twelve products.", refs: ["c3"] }],
+    decisions: [{ decision: "Check every product.", reason: "The person asked for all.", refs: ["m1"] }],
+    setAside: [],
+    facts: [{ fact: "product:1001 has a 92-character title.", exact: true, refs: ["c4"] }],
+    difficulties: [],
+    promised: [],
+    nextSteps: [{ text: "Review the proposals when the result arrives.", refs: [] }],
+    reopen: [{ ref: "c4", why: "The exact title lengths." }],
   });
 }
 
@@ -359,7 +569,7 @@ export function fakeCardFacts() {
       wallTimeSeconds: 1800,
     },
     modelProfile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
-    taint: { contextTaint: "none" as const, sources: [] },
+    taint: fakeCleanTaint(),
     at,
   });
 }
@@ -383,17 +593,10 @@ export function fakeAgentProposal(): Current_AgentProposal {
     instructions: input.instructions,
     skillTexts: input.skillTexts.map((s) => ({ ...s })),
     skills: [],
-    tools: [
-      "knowledge.search",
-      "inventory.read",
-      "orders.summary",
-      "suggestion.create",
-      "result.submit",
-    ],
+    tools: ["knowledge.search", "inventory.read", "orders.summary", "suggestion.create"],
     capabilities: [
       { capabilityId: "inventory.levels.read", verbs: ["view"] },
       { capabilityId: "orders.read", verbs: ["view"] },
-      { capabilityId: "workspace.artifact.edit", verbs: ["execute"] },
       { capabilityId: "workspace.comment.create", verbs: ["execute"] },
       { capabilityId: "workspace.knowledge.read", verbs: ["view"] },
     ],
@@ -405,7 +608,7 @@ export function fakeAgentProposal(): Current_AgentProposal {
     runLimits: { ...facts.runLimits },
     modelProfile: { ...facts.modelProfile },
     ownerOnly: ["orders_or_customer"],
-    taint: { contextTaint: "none", sources: [] },
+    taint: fakeCleanTaint(),
     draftedAt: at,
     revisedAt: at,
   });
@@ -438,7 +641,7 @@ export function fakeAddToTeamDocument(): Current_AddToTeamDocument {
     runLimits: { ...card.runLimits },
     modelProfile: { ...card.modelProfile },
     ownerOnly: [...card.ownerOnly],
-    taint: { contextTaint: "none", sources: [] },
+    taint: fakeCleanTaint(),
     review: "solo_owner_phrase",
     issuedAt: at,
     expiresAt: later(5),
@@ -464,8 +667,9 @@ export function fakeReportArtifact(): Current_ReportArtifact {
 
 // --- Agent runs (ADR-0027) ---------------------------------------------------------------
 /**
- * A manifest of each run kind, at the version 2 defaults. Morrow's shows its version 4 tools
- * with both team switches on; a called teammate's run is a routed run (ADR-0037 item 2).
+ * A manifest of each run kind, at the version 2 defaults. Morrow's shows its version 4 launch
+ * tools with both team switches on; every kind's list ends with its context's memory and
+ * harness tools (ADR-0041 item 24); a called teammate's run is a routed run (ADR-0037 item 2).
  */
 export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentRunManifest {
   const base = {
@@ -511,8 +715,16 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
           "inbox.ask",
           "agent.route",
           "agent.ask",
-          "agent.result.read",
+          "agent.map",
+          "agent.message",
+          "agent.cancel",
           "agent.propose",
+          "memory.search",
+          "memory.read",
+          "run.plan",
+          "run.complete",
+          "run.wait",
+          "context.checkpoint",
         ],
         modelProfile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
         caps: caps(6, "3.84000000"),
@@ -539,6 +751,13 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
           "inbox.ask",
           "suggestion.create",
           "proposal.listing",
+          "memory.search",
+          "memory.read",
+          ...(kind === "routed" ? (["memory.suggest"] as const) : []),
+          "run.plan",
+          "run.complete",
+          "run.wait",
+          "context.checkpoint",
         ],
         // The installed default, Opus 5.5 at medium: 12 turns and US$6.72 under US$7.
         modelProfile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
@@ -718,8 +937,9 @@ export function fakeSkillManifest(): Current_SkillManifest {
   });
 }
 /**
- * Listings as an AgentPackage@1 on the loop (origin first_party; it declares result.submit,
- * so Morrow may call it). Its skill pin is a placeholder digest; a test re-pins it with
+ * Listings as an AgentPackage@1 on the loop (origin first_party). It declares grant tools only:
+ * every call of it is offered the call context's run.complete and result.write (ADR-0041 item
+ * 24), so Morrow may call it. Its skill pin is a placeholder digest; a test re-pins it with
  * skillDigest (agent-package.ts), which needs a hash this module avoids.
  */
 export function fakeListingsPackage(): Current_AgentPackage {
@@ -743,7 +963,6 @@ export function fakeListingsPackage(): Current_AgentPackage {
       "suggestion.create",
       "report.write",
       "proposal.listing",
-      "result.submit",
     ],
     capabilities: [
       { capabilityId: "workspace.knowledge.read", verbs: ["view"] },

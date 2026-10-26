@@ -12,6 +12,7 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import planDraftsSwitch from "../../../../docs/decisions/plan-drafts-staging.json";
+import { shopKnowledgeRecord } from "../knowledge/rules";
 import { type TeamSwitchState, teamSwitchState } from "../teammates";
 import { type ToolEntry, toolEntry } from "../tool-catalogue";
 import { canonicalText, sha256Hex } from "./digest";
@@ -55,9 +56,12 @@ export const planDraftTool: ToolEntry = (() => {
 })();
 
 /**
- * ADR-0027 item 8's Coordinator grant set with plan.draft and ADR-0037 item 1's teammate
- * tools (ToolCatalogue@1 version 4: agent.ask, agent.result.read and agent.propose in place of
- * specialist.draft); it keeps task.create.
+ * ADR-0027 item 8's Coordinator set with plan.draft, ADR-0037 item 1's teammate tools and
+ * ADR-0041 items 24 and 33's orchestration, memory and harness tools (ToolCatalogue@1 version
+ * 4: agent.propose in place of specialist.draft; agent.ask, agent.map, agent.message and
+ * agent.cancel; knowledge.propose; memory.search, memory.read in place of agent.result.read,
+ * and memory.suggest; run.plan, run.complete, run.wait and context.checkpoint); it keeps
+ * task.create.
  */
 export const coordinatorGrantTools = Object.freeze([
   "knowledge.search",
@@ -67,29 +71,53 @@ export const coordinatorGrantTools = Object.freeze([
   "task.create",
   "agent.route",
   "agent.ask",
-  "agent.result.read",
+  "agent.map",
+  "agent.message",
+  "agent.cancel",
   "agent.propose",
   "plan.draft",
+  "knowledge.propose",
+  "memory.search",
+  "memory.read",
+  "memory.suggest",
+  "run.plan",
+  "run.complete",
+  "run.wait",
+  "context.checkpoint",
 ] as const);
 export type CoordinatorTool = (typeof coordinatorGrantTools)[number];
+/** The teammate-call tools (ADR-0041 items 21 and 22), all behind the teammate-calls switch. */
+const teammateCallTools: readonly CoordinatorTool[] = [
+  "agent.ask",
+  "agent.map",
+  "agent.message",
+  "agent.cancel",
+];
 /**
- * The morrow.coordinator release's launch subset (ADR-0034 item 1, a product choice):
+ * The morrow.coordinator release's launch subset (ADR-0034 item 1, a product choice), fixed
+ * when a context is admitted (tools never change inside a context, ADR-0041 item 2):
  * task.create is left out, so Morrow creates no task at launch. plan.draft is in it only
- * while the plan-drafts switch is on; agent.ask and agent.result.read only while the
- * teammate-calls switch is on, and agent.propose only while the agent-cards switch is on
- * (ADR-0037 item 9; both committed off).
+ * while the plan-drafts switch is on; agent.ask, agent.map, agent.message and agent.cancel
+ * only while the teammate-calls switch is on, and agent.propose only while the agent-cards
+ * switch is on (ADR-0037 item 9; both committed off); knowledge.propose only while the
+ * shop-knowledge switch's agent_tools is on (committed off). memory.suggest waits for the
+ * person-memory switch its plan row adds (H12b), so it is left out until then. The memory
+ * reads and the harness tools grant nothing and sit behind the agent-loop switch itself.
  */
 export function coordinatorLaunchTools(
   switchState: "on" | "off" = planDraftsRecord.switch,
   team: TeamSwitchState = teamSwitchState(),
+  knowledgeTools: "on" | "off" = shopKnowledgeRecord.agent_tools,
 ) {
   return Object.freeze(
     coordinatorGrantTools.filter(
       (t) =>
         t !== "task.create" &&
+        t !== "memory.suggest" &&
         (t !== "plan.draft" || switchState === "on") &&
-        ((t !== "agent.ask" && t !== "agent.result.read") || team.teammateCalls === "on") &&
-        (t !== "agent.propose" || team.agentCards === "on"),
+        (!teammateCallTools.includes(t) || team.teammateCalls === "on") &&
+        (t !== "agent.propose" || team.agentCards === "on") &&
+        (t !== "knowledge.propose" || knowledgeTools === "on"),
     ),
   );
 }

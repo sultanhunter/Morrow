@@ -5,7 +5,7 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "c06dba64eae0c7fd858c456096277f42fa26523269141bd305c6629533ac91dd",
+    "docs/contracts/schemas/v1.1/core.schema.json": "11f165f7be3f622bec3567390cd111039f6c20a5063d3b106be14e7140d566c3",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "4248429dfa207dbe56b6e21685b243519bfc77b3c8bbb1a87d9d62a7d4f59dfc",
     "docs/contracts/schemas/v1.1/billing.schema.json": "a513b52a94b2654f2fabebdcc05a7b6dbbc10cdf046e9d4fec69f11e51c70dc2"
   },
@@ -138,19 +138,19 @@
       "adr": "ADR-0033"
     }
   ],
-  "definitions": 776,
+  "definitions": 837,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
-    "core-v1.1": 369,
+    "core-v1.1": 430,
     "capabilities-v1.1": 45,
     "billing-v1.1": 28
   },
-  "current_definitions": 476,
+  "current_definitions": 537,
   "current_billing_definitions": 35,
   "capabilities": 122,
   "capability_body_overrides": 45,
   "event_types": 23,
-  "generated_sha256": "7d15deeb896cae4bd013e2af2974729d70054e7a712f2434b406846de4ea3084"
+  "generated_sha256": "ef7e43c9941ee884806e60cae3c57e1f6a6dcd8642ca5252052ee74a85c62966"
 }
