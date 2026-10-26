@@ -147,7 +147,7 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - **Credentials** ("Raw provider, merchant and model credentials are readable only by the broker Worker."): unchanged. ADR 0042's merchant service credentials are merchant credentials, sealed to the broker; ADR-0040's VAPID key is a provider credential held by the broker.
 - **Kill switches** ("Kill switches are `human_only` and need no second approver. Agents may only propose them (ADR-0005)."): unchanged. ADR-0040's Stop on a request and the workspace stop, and ADR 0042's three stop controls, follow it as written.
 - **"Permission and budget checks happen in code, outside model prompts."**: unchanged. ADR-0041 keeps every hold, park, detector and check-in in code, and the model never sees a budget.
-- **The standing approval's "within the owner's spend caps (the Anthropic monthly limit, E2B's US$20, the caps in code)"**: not drafted here. ADR-0039 removes the money caps in code and ADR-0041 adds no new one; whether "the caps in code" should go is ADR-0039's wording question, outside H2.
+- **The standing approval's "within the owner's spend caps (the Anthropic monthly limit, E2B's US$20, the caps in code)"**: not drafted here. ADR-0039 removes the money caps in code, ADR-0041 adds no new one, and OD-2026-10-26-12 removes the spend limits ADR-0041 had (the cost check-in and the 80% pause); whether "the caps in code" should go is ADR-0039's wording question, outside H2.
 
 ## What the owner is asked
 

@@ -3,7 +3,8 @@
 // (2026-10-22), so these tests pin the points where the plan docs would otherwise drift back:
 // every harness row they cite exists, no plan doc offers a model or effort the records
 // removed, the superseded follow-up rows point to the harness plan, and the owner's choices of
-// 2026-10-26 (the P09.T05 path first; COD Confirmation installable and not built now) are there.
+// 2026-10-26 (the P09.T05 path first; COD Confirmation installable and not built now) are there,
+// and, since OD-2026-10-26-12, credits are the only budget in every one of them.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -239,4 +240,49 @@ test("mvp.md lists the same reshaped PRs as the plans it summarises", () => {
   // Every reshaped build order PR cites its harness plan rows.
   for (const number of prNumbers(reshaped[1]))
     assert.match(section(`PR ${number}.`), /(?<![\w-])H\d{1,2}[a-z]?(?![\w-])/, `PR ${number}`);
+});
+
+test("credits are the only budget (OD-2026-10-26-12): no plan doc keeps a removed spend limit", () => {
+  // Removed by OD-2026-10-26-12 and, for upkeep, by the lead under OD-2026-10-25-4: the cost
+  // check-in, the 80% pause with its fair share, the per-person caps on requests working,
+  // waiting or standing, and the daily upkeep spend.
+  for (const [name, text] of Object.entries(docs)) {
+    assert.doesNotMatch(text, /waiting line|too_many_waiting/, `${name}: the waiting line`);
+    assert.doesNotMatch(text, /up to 5 requests working at once/, `${name}: 5 at once`);
+    assert.doesNotMatch(
+      text,
+      /at most 10 per person|10 (?:active )?standing requests per person/,
+      `${name}: 10 standing`,
+    );
+    assert.doesNotMatch(text, /the platform breaker at 80%/, `${name}: the 80% pause`);
+    assert.doesNotMatch(
+      text,
+      /upkeep spend (?:per workspace )?per day/,
+      `${name}: daily upkeep spend`,
+    );
+  }
+  // mvp.md: the safety row and the conversation row say so.
+  const safety = docs.mvp.split("\n").find((line) => line.startsWith("| Safety and governance |"));
+  assert.ok(safety, "mvp.md's safety row");
+  assert.match(safety, /credits the only budget/);
+  assert.match(safety, /no cost check-in/);
+  assert.match(safety, /code alerts the owner, as Morrow's operator[^|]*\(OD-2026-10-26-12\)/);
+  assert.match(
+    docs.mvp,
+    /no per-person cap on requests working, waiting or standing \(OD-2026-10-26-12\)/,
+  );
+  // The build order: PR 11 pauses nothing on spend; PR 21 has no per-person limit.
+  const pr11 = section("PR 11.");
+  assert.match(pr11, /there is no cost check-in/);
+  assert.match(pr11, /code alerts you, as Morrow's operator, and nothing pauses/);
+  assert.match(section("PR 21."), /no limit on how many you have[^\n]*\(OD-2026-10-26-12\)/);
+  // ADR-0039's row 3 (H8): the alert in place of the platform breaker; the cost check-in gone.
+  const [kept, gone] = row(docs.adr0039, "3").split(" Gone: ");
+  assert.ok(gone, "row 3 lists what is gone");
+  assert.doesNotMatch(kept, /platform breaker at|cost check-in/);
+  assert.match(kept, /an alert to the owner[^;]*pausing nothing \(OD-2026-10-26-12/);
+  assert.match(
+    gone,
+    /by OD-2026-10-26-12, the platform breaker's pause at 80%[^.]*the cost check-in\./,
+  );
 });
