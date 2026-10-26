@@ -3,7 +3,7 @@ id: Q-store-data-foundation
 type: question
 kind: decide
 title: "The decision sheet for the store-data foundation: ADR-0043, ADR-0044, the note on ADR-0031, operator paging and the database plan, 17 questions with the lead's recommendations"
-status: open
+status: answered
 asked_of: owner
 links:
   raised_by: [ADR-0043, ADR-0044]
@@ -82,48 +82,17 @@ so if you want them otherwise.
      - "Change the owner's store only through Morrow's own flow: the owner approves the exact
        change, or the exact standing policy it falls under, in the workspace, and the gateway
        applies, reads back and audits it. Never write to the store any other way."
-
-6. **What always needs your approval each time?**
-   - Recommended: cancelling and refunding orders, prices, discounts, stock quantities,
-     fulfilment, changes to customers, supplier mail and anything that cannot be undone. Code or
-     an agent may draft them; you approve each, alone or in a batch. No answer, deadline or
-     monitor ever cancels an order by itself.
-   - Why: these move money or stock, or cannot be taken back. An automatic version would need its
-     own record after measured results.
-
-7. **May one typed confirmation cover a plan with several kinds of change?**
-   - Recommended: yes. A "plan bundle" covers 2 to 50 pending changes of up to 5 kinds on one
-     store (for example a reorder's spreadsheet and a product note), with one phrase that lists
-     each kind's count, one cool-down, and the strictest rule among them. One bad change refuses
-     the whole bundle.
-   - Why: today a solo Owner types the phrase and waits out the cool-down once per kind of change,
-     so a mixed plan costs two or three waits for no extra safety.
-
-8. **Should rules have Pause and Revoke buttons that act at once?**
-   - Recommended: yes. Pause rule (the Owner, Admins and the agent's owner) and Revoke rule (the
-     Owner and the agent's owner) need no second person, never wait on credits, and agents may
-     only suggest them. Turning a rule back on is reviewed like approving it.
-   - Why: it follows ADR-0005: stopping is always fast and human; starting again is checked.
-
-9. **How should stops apply to everything that runs on its own?**
-   - Recommended: one stop check in code for every automated path (event and schedule triggers,
-     deadlines, monitors, rule actions, calls and the gateway). Anything that falls due while
-     stopped is skipped, not saved up, so nothing bursts out on resume; resuming covers only what
-     happens afterwards unless you choose to include the earlier ones. "Stop customer contact"
-     covers every contact capability, not a list of three. The workspace stop lands before any
-     send or order-write switch goes on.
-   - Why: a stop that quietly queues work, or misses a new path, is not a stop.
-
-10. **How should work that runs without AI use credits?**
-    - Options: (a) counted but not charged until the rate card prices it, and never blocked by
-      credits when it is time-critical (receiving events, keeping data fresh, approved actions,
-      stops, deletion); AI runs hold credits as today; agents waiting on credits are combined into
-      one run each when credits return; bulk work you start by choice, such as a future campaign,
-      reserves all its credits when approved; (b) price every code step now.
-    - Recommended: (a).
-    - Why: the rate card is not published, and an empty balance must never silently drop a
-      confirmation or a tag you approved. Combining waiting runs stops a flood when you add
-      credits. Pricing comes with rate card v1, which you confirm.
+   - **Corrected after your answer** (the records' review, 2026-10-26; OD-2026-10-26-11):
+     - ADR 0042's call plans are not among the small, reversible actions, since a call cannot be
+       taken back. They become a standing policy as its one named exception, under ADR 0042's own
+       approval and checks; the allowlist itself holds only the three reversible order actions.
+     - The CLAUDE.md text above started from CLAUDE.md as it stands today, so it would have
+       overwritten three of the four lines you approved word for word for ADR 0042 (its question
+       6) and dropped their call-plan exceptions. The corrected text, under "Question 5: the
+       corrected CLAUDE.md text" below, builds on those lines as ADR 0042's CS2 commits them. It
+       comes back to you to confirm word for word; it lands as its own change after
+       CS2's and changes nothing else in CLAUDE.md. ADR 0042's third line, the ask before sending
+       anything to your customers, does not change.
 
 ## ADR-0044: installed agents asking questions and posting
 
@@ -196,3 +165,58 @@ so if you want them otherwise.
       actions must keep running at night. This is a purchase, so it is yours to make (ADR-0035):
       Claude never buys it and only records the line in the activity log once you say it is done.
       The price is the one Neon shows you when you buy.
+
+## Question 5: the corrected CLAUDE.md text
+
+Three lines change, each shown as ADR 0042's CS2 commits it ("Now") and as proposed. The text is
+in plain blocks so that it can be confirmed exactly as it will be committed.
+
+1. Security invariants. Now, as CS2 commits it:
+
+```text
+Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The gateway re-checks authority before execution. One exception (ADR-0042): an approved customer-contact call plan is one exact proposal whose approval covers each contact and order tag it names; an edit to a plan makes a new revision that needs its own approval, and the approved revision keeps running until then unless the editor pauses it.
+```
+
+   Proposed:
+
+```text
+Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The gateway re-checks authority before execution. One exception (ADR-0043): an approved exact standing policy, of which ADR-0042's customer-contact call plan is one, is one exact proposal whose approval covers each action it names, each admitted in code against its digest and the subject's current state; an edit to a policy makes a new revision that needs its own approval, and the approved revision keeps running until then unless the editor pauses it.
+```
+
+2. Security invariants. Now, as CS2 commits it:
+
+```text
+The owner's own store is the only real store until the public launch, and Morrow is built and tested on it (ADR-0035). Agents change it only through an approved exact proposal, or by adding an order tag that an approved call plan names (ADR-0042). Local and CI tests use fakes; only the deployed environment reaches the store.
+```
+
+   Proposed:
+
+```text
+The owner's own store is the only real store until the public launch, and Morrow is built and tested on it (ADR-0035). Agents change it only through an approved exact proposal, or through an action that an approved exact standing policy names, such as an order tag that an approved call plan names (ADR-0042, ADR-0043). Local and CI tests use fakes; only the deployed environment reaches the store.
+```
+
+3. Provider and live effects. Now, as CS2 commits it:
+
+```text
+Change the owner's store only through Morrow's own flow: the owner approves the exact change, or the call plan that names it (ADR-0042), in the workspace, and the gateway applies, reads back and audits it. Never write to the store any other way.
+```
+
+   Proposed:
+
+```text
+Change the owner's store only through Morrow's own flow: the owner approves the exact change, or the standing policy that names it, such as a call plan (ADR-0042, ADR-0043), in the workspace, and the gateway applies, reads back and audits it. Never write to the store any other way.
+```
+
+## Answered
+
+Answered 2026-10-26 (OD-2026-10-26-11): "recommended, and yes to the paid Neon plan": all 17 as recommended, so ADR-0043 and ADR-0044 are Accepted as recommended and the note on ADR-0031 item 1 is decided. Question 17 is answered (a), and the owner bought Neon's paid plan in Neon's own console the same day. The CLAUDE.md words of question 5, as corrected above, wait for the owner's confirmation word for word.
+
+The records' review (an AI review, separate context, same model family) ran on this sheet before the answer, and its fixes were made after it. Besides question 5's corrections above, each narrows or makes exact what was answered, except that question 10's can resume one agent as more than one run:
+
+- Question 6: "anything that cannot be undone" includes customer contact outside an approved call plan; ADR 0042's call plans are the one exception, under their own approval.
+- Question 9: lifting any stop turns no rule back on by itself, as ADR 0042 says of call plans; each rule needs its own reviewed resume. Including the earlier ones means code writes them again from the store data, within 24 hours, for orders that still qualify.
+- Question 10: waiting runs combine per agent and trigger, not across an agent's different triggers, so an agent with two waiting triggers resumes as two runs, still within its hourly rate.
+- Question 12: switching the two abilities off is its own stop control, `agents.installation.collaboration.disable`, with a reason, an audit record and a notice.
+- Question 13: the agent's question tool has no field for who answers; code works it out from the kind of work.
+- Question 15: in trigger rows, deadline and monitor records and the action log, order ids are blanked 90 days after the order's date instead of kept for 365 days; the rows without them stay 365 days.
+- Not asked (the schedule items): a `once` schedule, the follow-through a job writes for later, is not routine after all. It starts at least 15 minutes ahead, counts toward the agent's 6 runs an hour, inherits what the job had read, and cannot write another, and it is recorded as an amendment of ADR-0041.

@@ -91,11 +91,11 @@ The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0041 and ADR-
 - **Item 6.** Every derived row carries an audience (the workspace, a subject or one principal) and its source subjects beside its read tags. A read passes only when the read tags allow it, the reader has live view of every source subject, and the audience matches.
 - **Item 7.** `data-regions.json` records Anthropic's retention terms for compaction blocks before the provider strategy is switched on, and the browsers' push services as processors.
 
-### 2026-10-26, proposed and not decided: item 1, store-data classes and clocks (ADR-0043)
+### 2026-10-26: item 1, store-data classes and clocks (ADR-0043)
 
-Not in force. ADR-0043 (Proposed) and the store-data foundation plan (`docs/plan/store-data-foundation-implementation.md`) add classes that item 1 has no row for. This note proposes their clocks for the owner to decide, as question 15 of Q-store-data-foundation; the text above is unchanged and governs until then. When the owner answers, this heading takes the decision's OD number and the rows below become an amendment, as answered.
+The owner's decision of 2026-10-26 (OD-2026-10-26-11, accepting ADR-0043 and ADR-0044 as recommended, owner question 15 of Q-store-data-foundation included) adds the classes below, which ADR-0043 item 24 and the store-data foundation plan (`docs/plan/store-data-foundation-implementation.md`) bring, to item 1; the text above is kept as approved. One change was made after the answer by the records' review, and it narrows what was answered: trigger rows, occurrence rows and rule-action logs blank their order ids after 90 days instead of keeping them for 365 (OD-2026-10-26-11).
 
-None of these classes holds customer data under this record's Terms: order ids and order names are not customer data, and no row keeps a name, email, phone, address or note. Every row keyed by an order is still deleted, or has its order id blanked, when a `customers/redact` request lists that order, so the inbox keeps `orders_to_redact` as order ids on its 7-day clock until every handler reports zero remaining (item 3). Each class's handler and CHECK land in the PR that first writes it (item 4, G9).
+None of these classes holds customer data under this record's Terms: order ids and order names are not customer data, and no row keeps a name, email, phone, address or note. An order id tied to an action or a trigger on that order is still pseudonymous personal data, as ADR 0042 item 15 treats its digests and logs, so the content-free logs below blank their order ids after 90 days, the clock of `order_state`, and keep only content-free counts beyond that. Every row keyed by an order is also deleted, or has its order id blanked, when a `customers/redact` request lists that order, so the inbox keeps `orders_to_redact` as order ids on its 7-day clock until every handler reports zero remaining (item 3). A contact's per-order outcome lives only in ADR 0042's `customer_contacts` and the classes its item 24 names (`content: customer`, 90 days), never in these logs. Each class's handler and CHECK land in the PR that first writes it (item 4, G9).
 
 | Class | What it holds | Kept |
 | --- | --- | --- |
@@ -105,9 +105,9 @@ None of these classes holds customer data under this record's Terms: order ids a
 | Bulk operation records | content-free: operation id, document, state, counts, checkpoints; results are never stored unminimised | 30 days after the operation ends |
 | Per-shop Shopify cost budget | bucket levels per (store, app) | latest values only; deleted with the store |
 | Subscriptions, schedules, deadline rules and monitors | trigger-set records (closed fields, no store text) | as `agent_trigger_sets`: deleted with the installation; content-free history 365 days |
-| Trigger rows, deadline occurrences and monitor alerts | ids, closed codes, counts and times | 365 days, content-free; order ids blanked at `customers/redact` |
+| Trigger rows, deadline occurrences, policy occurrence rows and monitor alerts | ids, closed codes, counts and times | order ids blanked 90 days after the order's date, and at once for the orders `customers/redact` lists; the content-free row kept 365 days |
 | Standing policies and their revisions | the approved digest and its closed fields | 365 days after the policy ends, as mandate records |
-| Rule-action logs | policy revision, subject id, action, occurrence, operation, outcome code, times | 365 days, content-free; order ids blanked at `customers/redact` |
+| Rule-action logs (no contact rows: ADR 0042's `customer_contacts` is the contact log) | policy revision, subject id, action, entry, operation, outcome code (`already_present` included), times | order ids blanked 90 days after the order's date, and at once for the orders `customers/redact` lists; the content-free row kept 365 days |
 | `AutomationUsage@1` (daily usage ledger) | counts, Shopify cost points and provider-reported costs per (workspace, store, kind, day); no subject ids | 365 days |
 | Collaboration scope audits (ADR-0044) | content-free refusals and grant changes | 365 days, as `run_tool_calls` |
 

@@ -1,20 +1,20 @@
 # ADR-0043 Store events, schedules and standing action policies for installable agents
 
-- Status: Proposed 2026-10-26. Nothing in it is approved. Its owner questions are questions 1 to 10 of Q-store-data-foundation.
+- Status: Accepted 2026-10-26 (the owner, OD-2026-10-26-11: this record as recommended, with owner questions 1 to 10 of Q-store-data-foundation answered as recommended; see Approval). Proposed earlier the same day.
 - Date: 2026-10-26
 - Supersedes: none.
-- Amends: each only once the owner approves; listed so that the dated notes can be written when the owner answers (plan row SD2).
+- Amends: each record below gets its dated note in plan row SD2; the text of each stays as approved.
   - **ADR-0024** item 1 (a mandate's trigger set may hold store-event subscriptions, deadline rules, monitors and standing policies, each inside the mandate's trigger kinds and grants), item 6 (admission from event, deadline and monitor rows, with batching windows, a per-installation run rate, combined resume when credits return, and rows that fall due during a stop dropped rather than retried) and item 9 (plan bundles: one typed confirmation over pending proposals of several capabilities on one store).
   - **ADR-0011** Q3, through ADR-0024 item 9 (the plan bundle's phrase and its strictest-rule merge) and Q9 (the standing-policy review: an access change merged with the class rule of the policy's capability).
-  - **ADR-0025** item 6 (the topics a store subscribes to are the union of its active installations' subscriptions within granted scopes; `includeFields` at source; inventory events combined; deliveries also deduplicated on Shopify's event id; trigger rows written in the inbox-apply transaction).
+  - **ADR-0025** item 6 (the topics a store subscribes to are its app and compliance topics plus the union of its active installations' subscriptions within granted scopes; trigger rows written in the inbox-apply transaction). Item 4's other parts (`includeFields` at source, deduplication on Shopify's event id, Queue ingress, per-shop limits and combined inventory events) carry out item 6 as written and are routine under ADR-0002, not amendments.
   - **ADR-0027** item 3 (two drafting tools, `routine.draft` and `rule.draft`, neither with an external effect).
-  - **ADR-0031** item 1 (the new classes and clocks, in the proposed dated note in that record, question 15).
-  - **ADR-0039** items 2(a), 2(d) and 3 (code-only work metered and not charged until rate card v1, never blocked by credits when time-critical; proactive triggers waiting on credits combined into one run per installation).
+  - **ADR-0031** item 1 (the new classes and clocks, in the dated note in that record, question 15).
+  - **ADR-0039** items 2(a), 2(d) and 3 (code-only work metered and not charged until rate card v1, never blocked by credits when time-critical; proactive triggers waiting on credits combined into one run per installation and trigger source).
   - **ADR-0040** item 12 (a standing request's schedule is `Schedule@1`, in place of its cron subset).
-  - **ADR-0041** item 7 (the lease-source table names the trigger kinds `admit_mandate_run` admits from, and states that `admit_bounded_action` issues no lease), item 9 (combined resume of waiting triggers), item 20 (deadlines and monitors as episode triggers) and item 35 (the conditional runtime SQL object, if built, also serves the trigger writers, `admit_bounded_action` and the contact definers).
-  - **ADR 0042** (connected services and customer contact, approved by the owner as recommended on 2026-10-26; its records PR, CS2, records the approval with its OD number): item 10 (`ContactRule@1` becomes the first case of `StandingPolicy@1`; "for this capability only" becomes "for the allowlist of item 15 below"), item 12 (`admit_contact_attempt` becomes `admit_bounded_action` with the contact capability's checks), item 14 (stops through one shared check; `contact.stop` covers the whole "Customer contact" domain), item 18 (`OrderEventFilter@1` becomes the predicate set of `StoreEventSubscription@1`; the 5-minute sweep becomes the shared reconciler's orders consumer; order events become a trigger kind for agent runs), item 19 (tag writes under a standing policy, through the gateway's mutation registry), item 23 (its credit rule generalised to all code-only work) and its owner question 17, answered (a) "later, by its own change": this record is that change.
-  - **CLAUDE.md**, with the owner's approval of the exact wording (question 5), put to the owner together with ADR 0042's CS2 wording as one change: "Approvals are bound to a digest of the exact proposal" and "Agents change it only through an approved exact proposal" (an action inside an approved exact standing policy).
-  - **Contracts:** `StoreEventSubscription@1`, `Schedule@1`, `DeadlineRule@1`, `Monitor@1`, `StandingPolicy@1`, `PlanBundleDocument@1`, `AutomationUsage@1`; `capabilities.json` gains `workspace.rule.propose`, `workspace.rule.activate`, `workspace.rule.pause`, `workspace.rule.revoke`, `orders.tags.remove` and `orders.app_note.set`, and a `standing_policy` field on each capability; the tools of item 13.
+  - **ADR-0041** item 7 (the lease-source table names the trigger kinds `admit_mandate_run` admits from and states that `admit_bounded_action` issues no lease; a run's follow-through beyond its envelope may continue only as a code-written `once` schedule whose episode is a successor, item 9), item 9 (combined resume of waiting triggers), item 20 (deadlines and monitors as episode triggers; a `once` schedule's episode inherits the run's taint and read tags) and item 35 (the conditional runtime SQL object, if built, also serves the trigger writers, `admit_bounded_action` and the contact definers).
+  - **ADR 0042** (connected services and customer contact, approved by the owner as recommended on 2026-10-26; its records PR, CS2, records the approval with its OD number): item 10 (`ContactRule@1` becomes the contact case of `StandingPolicy@1`, the one named exception of item 15 below, `standing_policy: contact_plan`, under its own approval and checks; "for this capability only" stays true of that exception), item 12 (`admit_contact_attempt` becomes the contact case of `admit_bounded_action`, with every check it has), item 14 (stops through one shared check; `contact.stop` covers the whole "Customer contact" domain; its rule that lifting a stop resumes no plan applies to every policy), item 18 (`OrderEventFilter@1` becomes the predicate set of `StoreEventSubscription@1`; the 5-minute sweep becomes the shared reconciler's orders consumer, run from the orchestrator's cron, item 6; order events become a trigger kind for agent runs), item 19 (tag writes under a standing policy, through the gateway's mutation registry), item 23 (its credit rule generalised to all code-only work) and its owner question 17, answered (a) "later, by its own change": this record is that change.
+  - **CLAUDE.md**, three lines, each as ADR 0042's CS2 commits it (ADR 0042 question 6's lines 1, 2 and 4; its line 3, the ask before sending to customers, is unchanged): the security invariant "Approvals are bound to a digest of the exact proposal …", the security invariant "The owner's own store is the only real store … Agents change it only through …", and the provider and live effects rule "Change the owner's store only through Morrow's own flow …". The exact current and proposed text is on Q-store-data-foundation, question 5. It lands as its own change after CS2's, once the owner confirms those words (OD-2026-10-26-11).
+  - **Contracts:** `StoreEventSubscription@1`, `Schedule@1`, `DeadlineRule@1`, `Monitor@1`, `StandingPolicy@1`, `PlanBundleDocument@1`, `AutomationUsage@1`; `capabilities.json` gains `workspace.rule.propose`, `workspace.rule.activate`, `workspace.rule.pause`, `workspace.rule.revoke`, `orders.tags.remove` and `orders.app_note.set`, and a `standing_policy` field on each capability (`eligible`, `contact_plan` for `contact.attempt.send` only, or absent); the tools of item 13.
   - **Build plan:** lettered children only (`docs/plan/store-data-foundation-implementation.md`).
 - Does not change:
   - ADR-0005: every stop stays `human_only` with no second approver, and agents only propose stops. The two rule controls this record adds follow its item 1 exactly.
@@ -25,6 +25,9 @@
   - ADR-0039: credits are the only spend limit. The counts in this record are safety bounds, not money.
   - ADR-0041: Morrow's own harness, Opus 5.5 for every agent, one run per trigger key, envelopes, parks and check-ins.
   - ADR-0035 items 1 and 2: one environment, and the owner's store is the only real store until launch.
+  - ADR-0038 item 2: the connector's cron object runs only the connector's existing re-drives. The reconciler and `fire_due_schedules` run from the orchestrator's cron under explicit budgets (items 6 and 9).
+  - ADR-0030 item 8, as ADR-0040 amended it: notifications stay content-free, so an alert's notification carries no order number (item 11).
+  - ADR-0005 item 1: every stop and rule control records a reason, writes an audit record and notifies the Owner.
 - Implements: the owner's direction of 2026-10-26, given with the approval of ADR 0042, that installable agents such as COD Confirmation run on a foundation that consumes live store data and performs scheduled actions (quoted under Context), under the owner's production-grade rule of the same day (OD-2026-10-26-6).
 - Relies on:
   - the gateway (V1-PR03) and the stops of P11.T05;
@@ -32,7 +35,7 @@
   - `read_orders` and the order data's deletion path (V1-PR22), and the customer-data deletion base (P09.T05, plan row SD4);
   - webhook ingress (P09.T04), the shared reconciler, projections and the per-shop Shopify budget (plan rows SD5 to SD9);
   - ADR-0044 (collaboration grants), for any agent post or question that a trigger leads to.
-- Companion: ADR-0044 (collaboration grants for installed agents), and a proposed dated note on ADR-0031 item 1. Their owner questions share one decision sheet, Q-store-data-foundation.
+- Companion: ADR-0044 (collaboration grants for installed agents), and a dated note on ADR-0031 item 1. Their owner questions share one decision sheet, Q-store-data-foundation.
 - Plan: `docs/plan/store-data-foundation-implementation.md`.
 - Terms:
   - **Subscription:** one installation's interest in one store topic, with closed predicates (`StoreEventSubscription@1`).
@@ -40,9 +43,9 @@
   - **Window:** the batching period over which one subscription's matching events become one trigger row.
   - **Deadline:** a condition that becomes true when time passes ("unfulfilled for 48 hours"), checked by code over a projection.
   - **Monitor:** a metric computed in SQL compared with a threshold, which posts an alert built by code.
-  - **Standing policy:** a person's one exact approval of a small, reversible action that code may then take for each subject a trigger names, within caps (`StandingPolicy@1`). ADR 0042's call plan is its first case.
+  - **Standing policy:** a person's one exact approval of a small, reversible action that code may then take for each subject a trigger names, within caps (`StandingPolicy@1`). ADR 0042's call plan is its one named exception: an irreversible contact under that record's own approval and checks (item 15).
   - **Subject:** the store record one action is about (at launch, an order).
-  - **Occurrence:** one firing of a policy for one subject: the first match of an event, one deadline instance, or one schedule slot.
+  - **Occurrence:** one firing of a policy for one subject, held as one occurrence row that only code writes (item 17): the subject's first match of a subscription's predicates since it last stopped matching, one deadline instance, or one schedule slot.
   - **Code-only work:** steps that run without a model: ingestion, reconciliation, projections, sweeps, rule actions and dispatch.
 
 ## In plain words
@@ -52,8 +55,8 @@ The owner approved ADR 0042 and asked that COD Confirmation be an agent people i
 - **Agents can react to the store.** An agent can ask to hear about new or changed orders, products or stock. When something matches, Morrow notes it in a record of its own, never acting on the text Shopify sends, and either starts the agent or runs an approved action in code. Bursts are grouped, so 300 orders in a minute start one job, not 300.
 - **Agents can keep time.** Schedules run in your shop's own time zone, read from Shopify, so an Indian shop can say "every day at 9 am" in India time. Clock changes never skip or double a run.
 - **Agents can watch deadlines and numbers.** "Tell me when an order has been unfulfilled for 48 hours" and "warn me when a best seller has under 14 days of stock" are checked by code, which posts the alert itself. The AI is only asked to explain or draft something.
-- **Small, reversible actions can run on one approval.** You approve the exact action once, for example "tag late orders `morrow-late`, up to 200 orders a day", and code then does it for each order that qualifies, through the same gateway that applies, reads back and records every change. Cancelling, refunding, changing prices, discounts or stock, and messaging customers outside ADR 0042's call plans still need your approval each time.
-- **Everything stops at once.** Any stop, and two new controls, Pause rule and Revoke rule, halt these actions at their next step. Nothing that fell due while stopped is done in a burst afterwards.
+- **Small, reversible actions can run on one approval.** You approve the exact action once, for example "tag late orders `morrow-late`, up to 200 orders a day", and code then does it for each order that qualifies, through the same gateway that applies, reads back and records every change. Cancelling, refunding, changing prices, discounts or stock, and anything that cannot be undone still need your approval each time. ADR 0042's call plans, which you approved with their own checks, are the one exception, and they stay as that record wrote them.
+- **Everything stops at once.** Any stop, and two new controls, Pause rule and Revoke rule, halt these actions at their next step. Nothing that fell due while stopped is done in a burst afterwards, and lifting a stop turns no rule back on by itself.
 - **No surprise bills.** Work that runs without AI is counted but not charged until the rate card prices it, and running out of credits never blocks a time-critical action. AI runs still use credits as today.
 
 A worked example, for an order-operations agent that is not built yet:
@@ -61,7 +64,7 @@ A worked example, for an order-operations agent that is not built yet:
 1. You install it. Its setup guide asks for Shopify's `read_orders` and `write_orders`, then shows one review card: a daily digest at 09:00 in your shop's time zone; a deadline, "unfulfilled for 48 hours"; and a standing policy, "tag those orders `morrow-late`, and remove the tag once they ship, up to 200 a day". You type one phrase.
 2. On Wednesday at 10:05 an order placed on Monday at 10:00 is still unfulfilled. Code's deadline check notes it; `admit_bounded_action` checks the policy, the stops and the caps; the gateway adds the tag and reads it back.
 3. At 09:00 the next day the agent's scheduled run reads the counts, posts the digest in its area and asks you one question (ADR-0044).
-4. You press Stop AI work on Thursday. The orders that become late while it is stopped are not tagged. When you resume, only orders that become late after the resume are tagged, unless you choose to include the earlier ones.
+4. You press Stop AI work on Thursday. The orders that become late while it is stopped are not tagged. Starting the agent again leaves the tagging rule off until you turn it back on with its review; then only orders that become late afterwards are tagged, unless you choose to include those from the last 24 hours that still qualify.
 
 ## Context
 
@@ -79,7 +82,7 @@ Earlier that day the owner set the rule for the foundation: production-grade, wi
 - **Stops.** The stop check is written for contact; `contact.stop` lists three capabilities, so a new contact capability would fall outside it; generic rules have no pause or revoke; "no burst on resume" is defined only for contact.
 - **Credits.** Model runs hold credits (ADR-0039, ADR-0041 item 9). Code-only steps have no metering and no price, so an empty wallet would either block a time-critical action or let it run uncounted, and triggers waiting on credits could all fire at once when credits return.
 
-**Why it is material.** It changes authority (a standing approval for store writes; new trigger kinds for agent runs), money (credits for code-only work), public contracts and data retention. Each needs the owner's approval before dependent code (CLAUDE.md, ADR-0002). The schedule contract and the shop's zone (items 7 to 9) are routine under ADR-0002 and may start before the owner answers; they are here so that every trigger kind builds on one schedule contract.
+**Why it is material.** It changes authority (a standing approval for store writes; new trigger kinds for agent runs), money (credits for code-only work), public contracts and data retention. Each needs the owner's approval before dependent code (CLAUDE.md, ADR-0002). The schedule contract, the shop's zone and the firing of recurring schedules (items 7 and 8, and item 9 without `once` schedules) are routine under ADR-0002 and may start before the owner answers; they are here so that every trigger kind builds on one schedule contract. Item 9's code-written `once` schedules are not routine: they change ADR-0041 item 7's envelope rule, so they are an amendment of that record.
 
 ## Decision
 
@@ -94,28 +97,30 @@ Earlier that day the owner set the rule for the foundation: production-grade, wi
 3. **`StoreEventSubscription@1`** (closed, RFC 8785 digest), one row per installation and purpose, revised append-only:
    - **Topic** from a closed list: the topics ADR-0025 item 6 approves (`products/create`, `products/update`, `products/delete`, `inventory_levels/update`, and under `read_orders` only `orders/create`, `orders/updated`, `refunds/create`). Any other topic needs a dated amendment to ADR-0025 items 6 and 7 for the agent that needs it, with a closed minimiser and its scope.
    - **Predicates** from a closed list, evaluated in code on the minimised record, never free-text expressions. Orders: payment class, financial and fulfilment status, a total range in the order's currency, a chosen tag present or absent (from the closed set of tags the Owner picks), source, age. ADR 0042's COD test is one predicate (`payment_class = cod`). Products: status, a changed-field class (`title`, `body`, `media`, `price`, `status`), a collection from a list the Owner picks. Inventory: available quantity crosses a threshold, location in a list.
-   - **Action**, exactly one: `run` (start a mandate episode), `policy` (feed one standing policy, item 14, with no model), or `monitor` (re-evaluate one monitor, item 11).
+   - **Action**, exactly one: `run` (start a mandate episode), `policy` (feed one standing policy, item 14, with no model: the apply step writes an occurrence row, item 17, for each subject that begins to match), or `monitor` (re-evaluate one monitor, item 11).
    - **Window** (`coalesceSeconds`): 0 to 3,600, default 300 for `run`, 0 for `policy`.
-   - **Rate:** at most `maxRunsPerHour` runs per installation from all its event, deadline and monitor triggers together (catalogue value: default 6, at most 60). Schedules are bounded by their own frequency (item 7).
+   - **Rate:** at most `maxRunsPerHour` runs per installation from all its event, deadline and monitor triggers together (catalogue value: default 6, at most 60). Recurring schedules are bounded by their own frequency (item 7); code-written `once` schedules count toward this rate (item 9).
    - **Age:** events whose resource is older than `maxEventAge` are not acted on (ADR 0042's 30-minute transactional window is one value).
    - **Who sets it.** A subscription is a trigger-set revision (ADR-0024 item 1): a run may draft one with `routine.draft` under `workspace.routine.configure`; a person activates it with `workspace.routine.activate` (human_only), inside the mandate's trigger kinds. Its topic's scope must be granted, and the package must declare the topic (AgentPackage@2).
 
-4. **The store's topic set** (amends ADR-0025 item 6). The topics a store subscribes to are its app and compliance topics plus the union of its active installations' subscriptions, limited to granted scopes. The broker's sync lists, then creates or deletes, as reconciled operations, never blind. Each data subscription sets `includeFields` to exactly its minimiser's fields, so fields Morrow never keeps (a phone, an address, a note) are not sent at all. Deliveries are deduplicated on `X-Shopify-Event-Id` as well as the webhook id. Topics with no customer data go through a Queue after the HMAC check (plan row SD6); inventory events are combined to the latest per (item, location, `updated_at`).
+4. **The store's topic set.**
+   - **The amendment** (ADR-0025 item 6): the topics a store subscribes to are its app and compliance topics plus the union of its active installations' subscriptions, limited to granted scopes. Until AgentPackage@2 declares subscriptions (plan row SD10), the union is a static per-package map.
+   - **Routine, carrying out ADR-0025 item 6 as written:** the broker's sync lists, then creates or deletes, as reconciled operations, never blind. Each data subscription sets `includeFields` to exactly its minimiser's fields, so fields Morrow never keeps (a phone, an address, a note) are not sent at all. Deliveries are deduplicated on `X-Shopify-Event-Id` as well as the webhook id. Topics with no customer data go through a Queue after the HMAC check, with limits per verified shop (plan row SD6); inventory events are combined to the latest per (item, location, `updated_at`).
 
 5. **Trigger rows** (amends ADR-0024 item 6).
-   - Written only in the inbox-apply transaction that stores the minimised receipt, or by the shared reconciler's synthetic receipt (item 6), never by any other path.
+   - An event trigger row is written only in the inbox-apply transaction that stores the minimised receipt, including the shared reconciler's synthetic receipt (item 6). Schedule, deadline and monitor rows come only from their own writers (items 9 to 11). No other path writes a trigger row.
    - A row holds ids and closed codes only: tenant, store, installation, subscription revision, topic, window start, up to 500 resource ids with an `overflow` flag (the run then reads by query), and a count. No payload text.
    - One row per window, keyed `ev:<installation>:<subscription>:<window start UTC>`, unique. The first matching event opens the window; later matches add their ids.
    - Over the installation's hourly rate, a closed window merges into the next one the rate allows, keeping every id; nothing is dropped inside the replay horizon (24 hours).
    - `admit_mandate_run` admits the run (ADR-0024 item 6, as ADR-0039 amended it): mandate, trigger kind, the subscription revision still active, quiet hours (the row waits until they end), stops, credits, one run per trigger key. The run reads the named records through fixed documents under its own grants and is tainted by what it reads, as today.
    - A row expires 24 hours after its window closes.
 
-6. **Missed events.** One shared reconciler per (store, resource family) keeps a durable high-water mark on `updated_at` with an overlap, and writes synthetic receipts through the same minimiser and the same dedupe key (topic, resource id, `updated_at`) as real deliveries, so every consumer (projections, trigger rows, policies, ADR 0042's contact sequences) sees each change exactly once, and an older `updated_at` never overwrites a newer one. Subscriptions are re-listed hourly while a package marked time-critical is active, otherwise daily. The reconciler is routine (plan row SD7); this item makes it the only replay path for triggers.
+6. **Missed events.** One shared reconciler per (store, resource family) keeps a durable high-water mark on `updated_at` with an overlap, and writes synthetic receipts through the same minimiser and the same dedupe key (topic, resource id, `updated_at`) as real deliveries, so every consumer (projections, trigger rows, policies, ADR 0042's contact sequences) sees each change exactly once, and an older `updated_at` never overwrites a newer one. Subscriptions are re-listed hourly while a package marked time-critical is active, otherwise daily. It runs from the orchestrator's cron under explicit budgets (ADR-0038's consequence note), which puts each tenant's work, as ids, on a Queue; ADR-0038's connector object keeps only the connector's existing re-drives (its item 2, unchanged), and ADR 0042 item 18's 5-minute sweep becomes the reconciler's orders consumer. The reconciler is routine (plan row SD7); this item makes it the only replay path for triggers.
 
 ### C. Schedules, deadlines and monitors
 
 7. **`Schedule@1`**, one contract for mandate routines, standing requests (amends ADR-0040 item 12), reports and policy triggers:
-   - **Kinds:** `daily` (up to 4 local times, on 5-minute marks), `weekly` (days of the week and one time), `monthly` (a day 1 to 28 or `last`, and one time), `every` (15, 30 or 60 minutes, or 2, 3, 4, 6 or 12 hours) and `once` (one UTC instant, written only by code, item 9).
+   - **Kinds:** `daily` (up to 4 local times, on 5-minute marks), `weekly` (days of the week and one time), `monthly` (a day 1 to 28 or `last`, and one time), `every` (15, 30 or 60 minutes, or 2, 3, 4, 6 or 12 hours) and `once` (one UTC instant, written only by code under item 9's bounds; not routine, since it amends ADR-0041 item 7).
    - **Zone:** an IANA name. **Missed slots:** `skip` or `run_latest_once` (reports use `run_latest_once`). **Optional** start and end dates.
    - **Daylight saving:** a local time that does not exist fires at the next valid minute; a repeated hour fires once, at its first occurrence.
    - Nothing runs more often than every 15 minutes.
@@ -125,17 +130,25 @@ Earlier that day the owner set the rule for the foundation: production-grade, wi
    - Every schedule stores its zone. A change of the shop's zone never moves a schedule silently: it raises one Inbox item for the Owner and each schedule's owner, "Your shop's time zone changed to Asia/Kolkata. Move 3 schedules?", and each schedule moves only on a person's tap.
    - **Which zone applies where:** customer contact uses its region policy's zone (ADR 0042 item 13); mandate routines, reports, deadlines and monitors use the shop's zone; a standing request uses the shop's zone unless its signer picks their own; notifications use each person's quiet hours.
 
-9. **Firing schedules.** One ids-only definer, `fire_due_schedules`, executable only by `morrow_runtime_executor`, writes one trigger row per (schedule owner, slot), keyed `sched:<routine>:<slot UTC>`, unique. It is called per tenant from the orchestrator's cron under explicit budgets (ADR-0038's consequence note), or through ADR-0041 item 35's object if staging shows the distance problem. A run's follow-through beyond its envelope (ADR-0041 item 17) becomes a `once` schedule that code writes under the mandate, at most 20 open per installation; a model never writes one directly.
+9. **Firing schedules.**
+   - One ids-only definer, `fire_due_schedules`, executable only by `morrow_runtime_executor`, writes one trigger row per (schedule, slot), keyed `sched:<schedule id>:<slot UTC>`, unique. It is called per tenant from the orchestrator's cron under explicit budgets (ADR-0038's consequence note), or through ADR-0041 item 35's object if staging shows the distance problem.
+   - For a schedule that triggers a standing policy, the same transaction runs the policy's closed subject query (item 12) in SQL over the projection and writes one occurrence row (item 17) per subject it selects, oldest first, up to the policy's remaining cap for the day. A model never chooses the subjects.
+   - **`once` schedules** (amends ADR-0041 items 7 and 20). A run's follow-through beyond its envelope (ADR-0041 item 17) may continue only as a `once` schedule that code writes under the mandate; a model never writes one directly. Bounds:
+     - at least 15 minutes after it is written, and at most 20 open per installation;
+     - its episode counts toward the installation's `maxRunsPerHour` (item 3), with the event, deadline and monitor triggers;
+     - its episode is a successor of the run that wrote it: it inherits that run's taint and read tags and its unreconciled operations (ADR-0041 item 20), under the mandate as it then stands;
+     - that episode cannot write another `once` schedule, so they never chain.
 
 10. **Deadlines: `DeadlineRule@1`.**
     - A closed condition preset over a projection (plan row SD9): `unfulfilled_for`, `unpaid_for` (a pending manual payment, such as COD), `tag_present_for`, `cancel_requested_unresolved_for`; a duration from 1 hour to 30 days; item 3's predicates to narrow it; and an action: `run`, `policy` or `alert`.
     - A per-tenant SQL sweep every 5 minutes writes one row per (rule revision, subject, occurrence), keyed `dl:<rule revision>:<subject>:<occurrence>`, unique. A subject that leaves the condition and enters it again opens the next occurrence.
-    - For `run`, due rows in one window combine into one trigger row per installation, as in item 5. For `policy`, each row is one occurrence. For `alert`, item 11's alert rule applies.
+    - For `run`, due rows in one window combine into one trigger row per installation, as in item 5. For `policy`, the sweep writes one occurrence row (item 17) per due subject, whose entry is the time the subject entered the condition. For `alert`, item 11's alert rule applies.
     - A rule refuses to activate (`projection_incomplete`) until the projection covers the store's last 60 days (plan row SD8).
 
 11. **Monitors: `Monitor@1`.**
     - A metric from a closed list, computed in SQL in the shop's zone (`stock_cover_days`, `sales_velocity`, `inventory_available`, `unfulfilled_count`, `refund_rate`), a comparison and threshold, a scope (products, variants or locations from a list the Owner picks, or all), and an evaluation schedule or subscription.
-    - **Code posts the alert.** When the condition holds, code writes at most one alert per (monitor, scope group, window), keyed `mon:<installation>:<monitor>:<window>`: an Inbox item for the installation's owner and a system post in the agent's area conversation, built from a template with counts, ids and the titles the viewer may see. A thousand inventory events give one alert per window.
+    - **Code posts the alert.** When the condition holds, code writes at most one alert per (monitor, scope group, window), keyed `mon:<installation>:<monitor>:<scope group>:<window>`: an Inbox item for the installation's owner and a system post in the agent's area conversation, built from a template with counts and ids only. Product and variant titles are rendered from those ids when a person views the item, under that viewer's read tags; the stored post holds no store text, so a run that later reads the area reads ids, and gets titles only through fixed broker documents that taint it as usual. A thousand inventory events give one alert per window.
+    - **Notifications** about an alert follow ADR-0030 item 8 as ADR-0040 amended it: content-free, so no order number or title. An order-number variable in notifications would need its own dated note on ADR-0030 item 8, decided by the owner.
     - **Actions:** `alert`, or `alert_and_run`, which also writes one trigger row per window for a mandate episode that explains the alert or drafts a proposal. A model run never decides whether to alert.
     - Default window 24 hours, at least 1 hour.
 
@@ -144,9 +157,9 @@ Earlier that day the owner set the rule for the foundation: production-grade, wi
 12. **What a standing policy is.** `StandingPolicy@1` is closed and digested with RFC 8785. Its digest binds:
     - the store, the installation and its mandate revision;
     - its trigger: one subscription revision, deadline rule revision or schedule;
-    - one capability from item 15's allowlist, with its exact parameters (a tag from a closed list, a note template and its closed variables);
+    - one capability from item 15's allowlist (or, for contact, item 15's one exception), with its exact parameters (a tag from a closed list, a note template and its closed variables);
     - per-capability content digests (for contact, ADR 0042 item 10's templates, renderer, voices and segments);
-    - the subject audience: the trigger's predicates, which the subject must still meet when the action is admitted;
+    - the subject audience: for a subscription or a deadline rule, the trigger's predicates; for a schedule, which has no predicates, a closed subject query (item 3's order predicates and a closed age range, evaluated in SQL over the projection at the slot, item 9). The subject must still meet them when the action is admitted and on the gateway's live read (item 17);
     - caps: subjects per day (Owner-set at approval, default 200, at most 2,000), actions per subject per occurrence, and optional hours;
     - an outcome map, for capabilities with steps (contact);
     - an optional holdout share (ADR 0042 item 25's method, generalised as `Holdout@1`);
@@ -158,42 +171,51 @@ Earlier that day the owner set the rule for the foundation: production-grade, wi
 
 14. **Approval and life.**
     - **Who.** Activation is `workspace.rule.activate` (control, `human_only`, review-required), reviewed as an access change merged field by field with the class rule of the policy's capability, taking the stricter value (amends ADR-0011 Q9). Any policy whose capability changes the store or contacts anyone needs the Owner as requester or approver (as ADR-0037 item 5 does for cards). In a team, ADR-0024 item 2 and its owner question 1 (b) apply.
-    - **The card** shows the policy in plain words, the trigger, the action and its exact parameters, an example subject (an order number and total, never a customer's details), the caps, the estimate of actions a day from the last 30 days, the undo path, and what is never done.
+    - **The card** shows the policy in plain words, the trigger, the action and its exact parameters, an example subject (an order number and total, never a customer's details), the caps, the estimate of actions a day from the last 30 days, the undo path, and what is never done. For a tag it also warns that the shop's own automations (Shopify Flow, other apps) may act on the tag, and that Morrow cannot undo what they do, as ADR 0042 item 19's setup guide does.
     - **The phrase** is exact: `approve <action> for up to D <subjects> a day`, for example `approve tagging up to 200 orders a day`. A solo Owner waits out the 300-second cool-down and may cancel.
     - **At setup**, one review document holds the install with its mandate and its first policies, up to 4 digests, under one phrase and one cool-down, generalising ADR 0042 item 10's setup document. Each digest stays its own: an edit to any is a new document.
     - **Life.** A policy ends with its mandate (one renewal card covers both), its installation, a lost grant or scope (ADR-0025 item 10), a lost connection (ADR 0042 item 8), or the end of its approver's membership. Any edit is a new revision that needs a new approval; until it passes, the old revision keeps running or pauses, as the editor chose. An action is admitted only under the active revision, and its row records the digest it ran under.
 
-15. **The allowlist: reversible and bounded only.** A capability may carry `standing_policy: eligible` in `capabilities.json` only if its effect can be undone by a person, has fixed parameters, moves no money and changes no stock, price, discount, fulfilment, customer record or cancellation. At first:
-    - `orders.tags.add` (ADR 0042 item 19): one tag from a closed list, only tags that start `morrow-` or that the Owner picks at approval; `tagsAdd`, never replacing the order's tags;
-    - `orders.tags.remove`: only a tag this policy added, for example when an order ships;
-    - `orders.app_note.set`: a note in the app-owned `$app` metafield namespace from a template with closed variables, never the merchant's own order note;
-    - `contact.attempt.send` under ADR 0042, whose call plan is this record's first case, with its own checks (region policy, suppression, per-number caps, settled earlier attempts, holdout).
+15. **The allowlist: reversible and bounded only.** A capability may carry `standing_policy: eligible` in `capabilities.json` only if its `effect` is `external_write` (never `communication`, `spend` or `billable_job`), it has `irreversible: false`, its effect can be undone by a person, it has fixed parameters, and it moves no money and changes no stock, price, discount, fulfilment, customer record or cancellation. At first:
+    - `orders.tags.add` (ADR 0042 item 19): one tag from a closed list, only tags that start `morrow-` or that the Owner picks at approval; `tagsAdd`, never replacing the order's tags. The rule-action log records whether the tag was already on the order (`already_present`), in which case nothing is written;
+    - `orders.tags.remove`: only a tag this policy itself added, for example when an order ships. It is refused (`tag_not_added_by_policy`) when the policy's add found the tag `already_present`, or when no add by this policy is recorded for that order, so it never strips a tag the merchant set;
+    - `orders.app_note.set`: a note in the app-owned `$app` metafield namespace from a template with closed variables, never the merchant's own order note.
 
     Each further capability enters the list only by a dated amendment to this record.
 
-16. **What stays per action.** Cancelling, refunding, price, discount and inventory-quantity changes, fulfilment, customer writes, supplier mail and anything irreversible stay per-action proposals (ADR-0011 Q4), drafted by code or a run and approved by a person, alone or in a batch. No outcome cancels an order by itself (ADR 0042 item 20). An automatic version of any of them needs its own record after measured results.
+    **The one named exception: ADR 0042's call plan.** `contact.attempt.send` is irreversible and in the communication class (ADR 0042 item 9, which puts it on ADR-0011 Q4's irreversible list), so it is not eligible and never becomes so through this item. It carries `standing_policy: contact_plan` instead, carried over from ADR 0042 item 10's own approval: an approved `ContactRule@1` revision covers its contacts only with that record's review (the communication class's rule, the Owner as requester or approver, the owner's OK in chat before the first live day) and with every check of its item 12 (region policy, suppression, per-number caps, settled earlier attempts, holdout). `StandingPolicy@1` lends it only the shared parts: the record's life, pause and revoke, `effect_stops_clear`, the shape of the admission definer and `PolicyActionWorkflow`. It widens nothing ADR 0042 approved. No other capability may carry `contact_plan`; another exception needs its own record.
 
-17. **`admit_bounded_action`** (generalises ADR 0042 item 12's `admit_contact_attempt`). One ids-only definer, executable only by `morrow_runtime_executor`, takes (policy, revision, subject, action, occurrence) and, in one transaction:
-    - checks the policy is active and its revision and digest current; the installation unpaused and its mandate active;
-    - re-runs the authority intersection: the installation owner's current grants, the installation's grants, the mandate, connector scopes, live policy and the approver's current authority;
-    - calls `effect_stops_clear` (item 21);
-    - checks the caps and, for the subject, that it still meets the trigger's predicates on the projection;
-    - runs the capability's own checks (contact's are ADR 0042 item 12's);
-    - allows one row per (policy revision, subject, action, occurrence), unique, and creates its OperationLedger operation with one key for life.
+    `capabilities.test.mjs` (new, plan row SD17) fails any capability marked `eligible` whose `irreversible` is true or whose `effect` is not `external_write`, and any capability other than `contact.attempt.send` marked `contact_plan`.
 
-    A refusal becomes a closed code on the occurrence. The gateway then claims the operation, re-checks, re-reads the subject live, applies through the mutation registry (plan row SD13), reads back and audits. A failed or uncertain write is settled by the read, never repeated blind. Steps with timing (contact sequences) run in a `PolicyActionWorkflow`, ADR 0042's `ContactSequenceWorkflow` generalised, which only sleeps and calls this definer. `admit_bounded_action` admits a gateway operation, never a run, and issues no lease (amends ADR-0041 item 7's table by stating so).
+16. **What stays per action.** Cancelling, refunding, price, discount and inventory-quantity changes, fulfilment, customer writes, customer contact outside an approved call plan, supplier mail and anything irreversible stay per-action proposals (ADR-0011 Q4), drafted by code or a run and approved by a person, alone or in a batch. ADR 0042's call plan is the one exception (item 15). No outcome cancels an order by itself (ADR 0042 item 20). An automatic version of any of them needs its own record after measured results.
+
+17. **Occurrence rows and `admit_bounded_action`** (generalises ADR 0042 item 12's `admit_contact_attempt`).
+    - **Occurrence rows** are written only by code, in SQL, as ids: by the subscription's apply step (item 3, from a stored receipt), by the deadline sweep (item 10) and by `fire_due_schedules` (item 9). Each names the policy, the trigger-source revision that wrote it, the subject, its entry (the receipt at which the subject began to match, the time it entered the deadline's condition, or the slot) and a state (`open`, then `consumed`, a refusal code, `skipped_stop` or `expired`). No caller, run or person supplies one.
+    - **The definer.** One ids-only definer, executable only by `morrow_runtime_executor`, takes one occurrence row's id and nothing else. (For contact, the occurrence row opens one sequence, and each later attempt is admitted on that sequence's server-held (sequence, attempt number), ADR 0042 item 12's key, with every check below.) In one transaction it:
+      - locks the occurrence row and refuses unless it is `open`, was written by the trigger-source revision that the policy's active revision binds, and names a subject of that store; the policy, the action and its parameters come from the row and the active revision, never from the caller;
+      - checks the policy is active and its revision and digest current; the installation unpaused and its mandate active;
+      - re-runs the authority intersection: the installation owner's current grants, the installation's grants, the mandate, connector scopes, live policy and the approver's current authority;
+      - calls `effect_stops_clear` (item 21);
+      - checks the caps and, for the subject, that it still meets the policy's subject audience (item 12) on the projection;
+      - runs the capability's own checks (contact's are ADR 0042 item 12's, with its stricter keys: one sequence per (store, order, purpose) and one tag write per (sequence, tag));
+      - writes the rule action, unique on (policy id, subject, action, entry) across every revision of the policy and of its trigger, so a new revision never repeats an action on an occurrence already admitted; creates its OperationLedger operation with one key for life; and consumes the occurrence row.
+
+    A refusal becomes a closed code on the occurrence row. The gateway then claims the operation, re-checks, re-reads the subject live and re-checks the policy's subject audience on that live read (for a tag removal, also that this policy's add is recorded and the tag is present), and refuses with `subject_changed` and writes nothing on a mismatch. Otherwise it applies through the mutation registry (plan row SD13), reads back and audits. A failed or uncertain write is settled by the read, never repeated blind. Steps with timing (contact sequences) run in a `PolicyActionWorkflow`, ADR 0042's `ContactSequenceWorkflow` generalised, which only sleeps and calls this definer. `admit_bounded_action` admits a gateway operation, never a run, and issues no lease (amends ADR-0041 item 7's table by stating so).
+
+    `lab:standing-policies` rows: an occurrence id that no trigger wrote, or one written for another policy, trigger revision or store, is refused; a new revision of the policy or of its trigger cannot repeat an action on an entry already admitted; a forged receipt whose live read fails the policy's predicates is refused at the gateway with nothing written.
 
 18. **Plan bundles** (amends ADR-0024 item 9 and ADR-0011 Q3). One server-built `PlanBundleDocument@1` covers 2 to 50 pending proposals of up to 5 capabilities on one store, for example a reorder's spreadsheet artifact and its product note. It is bound to the actor and a session, valid 5 minutes and consumed once. The rule of each field is the strictest among its members; the phrase lists each capability's count and the summed credits and cost (`approve 3 changes and 1 cancellation for C credits`); one bad member refuses all; each member keeps its own digest and approval record.
 
 ### E. Stops
 
-19. **Rule controls.** `workspace.rule.pause` (control, `human_only`, not review-required; held by the Owner, Admins and the policy's installation owner) and `workspace.rule.revoke` (control, `human_only`, not review-required; held by the Owner and the installation owner). Agents may only propose them. Resuming is a reviewed `workspace.rule.activate`. Neither reserves or is blocked by credits (ADR-0011 Q8). ADR 0042's `contact.rule.pause` and `contact.rule.revoke` stay as the Customer contact domain's ids for the same two actions, served by the same definers.
+19. **Rule controls.** `workspace.rule.pause` (control, `human_only`, not review-required; held by the Owner, Admins and the policy's installation owner) and `workspace.rule.revoke` (control, `human_only`, not review-required; held by the Owner and the installation owner). Agents may only propose them. Resuming is a reviewed `workspace.rule.activate`. Neither reserves or is blocked by credits (ADR-0011 Q8). As ADR-0005 item 1 requires of every stop, each pause or revoke records its reason, writes an audit record and notifies the Owner (and the installation owner, when someone else pressed it). ADR 0042's `contact.rule.pause` and `contact.rule.revoke` stay as the Customer contact domain's ids for the same two actions, served by the same definers.
 
 20. **What a stop covers.** The platform stop (ADR-0022 item 15), the workspace stop (P11.T05), Stop AI work on an installation (`agents.installation.disable`), a connection stop (ADR 0042 item 8), a scope stop (ADR-0025 item 10), a capability or domain stop, and a rule pause or revoke. `contact.stop` covers every capability in the "Customer contact" domain, not a list of three.
 
-21. **One shared check: `effect_stops_clear`** (tenant, installation, capability, connection), an ids-only definer used by `admit_bounded_action`, the contact admission, the gateway's mark-started step, the trigger writers of items 5, 9 and 10, and the monitor alerter.
+21. **One shared check: `effect_stops_clear`** (tenant, installation, capability, connection), an ids-only definer used by `admit_bounded_action`, the contact admission, the gateway's mark-started step, the trigger and occurrence writers of items 5, 9, 10 and 17, and the monitor alerter.
     - **Triggers during a stop are dropped, not queued.** No trigger row is written for a stopped installation, and an occurrence or row that falls due during a stop ends `skipped_stop` (amends ADR-0024 item 6's "never dropped" for this case only).
-    - **No burst on resume.** A resume covers subjects whose triggering event, deadline or slot comes after it, unless the person resuming opts older ones in, within the 24-hour replay horizon.
+    - **Lifting a stop resumes no policy.** As ADR 0042 item 14 says of plans, lifting any stop (the platform, workspace, installation, connection, scope, capability or domain stop) resumes no standing policy by itself: each policy that was active when the stop began stays paused until a person resumes it through a reviewed `workspace.rule.activate`.
+    - **No burst on resume.** A resume covers subjects whose triggering event, deadline or slot comes after it. The person resuming may opt older ones in, within the 24-hour replay horizon: code then writes new occurrence rows from SQL (the receipts, the deadline's condition on the projection, or the schedule's subject query) for subjects that still meet the policy's subject audience. A `skipped_stop` row stays ended and is never reopened.
     - P11.T05 lands before any send or order-write switch goes on.
 
 ### F. Credits
@@ -203,7 +225,7 @@ Earlier that day the owner set the rule for the foundation: production-grade, wi
     - **Not charged until rate card v1** prices a kind, and rate card v1 publishes only with the owner's confirmation (ADR-0026 item 5).
     - **Never blocked when time-critical.** Ingestion, reconciliation, projections, stops, deletion handlers and actions under an approved policy never wait on credits. Once priced, they draw when the wallet covers them and are otherwise recorded as Morrow's own cost, as ADR-0041 item 9 does for a cache miss.
     - **Model runs hold credits** as today (ADR-0039, ADR-0041 item 9).
-    - **Combined resume** (amends ADR-0039 item 2(d) and ADR-0041 item 9). Trigger rows of one installation that wait on credits combine into one row when the wallet covers the next hold: the newest row takes the older rows' ids (up to the 500-id cap, then `overflow`), and the older rows end `combined`. Installations resume oldest first.
+    - **Combined resume** (amends ADR-0039 item 2(d) and ADR-0041 item 9). Trigger rows that wait on credits combine only within one (installation, trigger-source revision), never across subscriptions, schedules, deadline rules or monitors. When the wallet covers the next hold, each row is re-checked as it merges (its source revision still active, its mandate active, no stop), and a row that fails ends `expired` instead of riding on another; the newest row takes the passing rows' ids (up to the 500-id cap, then `overflow`), and they end `combined`. The combined rows still pass the installation's hourly rate (item 3). Installations resume oldest first.
     - **Discretionary bulk work,** such as a campaign, holds credits for all its actions at approval and is refused up front if the wallet cannot cover them. None exists at launch; the first comes by its own record.
 
 ### G. Keys, data and delivery
@@ -214,14 +236,16 @@ Earlier that day the owner set the rule for the foundation: production-grade, wi
     | --- | --- |
     | Receipt dedupe | (topic, resource id, `updated_at`); also `X-Shopify-Event-Id` |
     | Event trigger | `ev:<installation>:<subscription>:<window start UTC>` |
-    | Schedule trigger | `sched:<routine>:<slot UTC>` |
+    | Schedule trigger | `sched:<schedule id>:<slot UTC>` |
     | Deadline occurrence | `dl:<rule revision>:<subject>:<occurrence>` |
-    | Monitor alert | `mon:<installation>:<monitor>:<window>` |
-    | Rule action | unique (policy revision, subject, action, occurrence); one OperationLedger key for life |
+    | Monitor alert | `mon:<installation>:<monitor>:<scope group>:<window>` |
+    | Policy occurrence row | unique (policy id, subject, entry); written only by code (item 17) |
+    | Rule action | unique (policy id, subject, action, entry) across all revisions; one OperationLedger key for life |
+    | Contact (ADR 0042) | one sequence per (store, order, purpose); one attempt per (sequence, attempt number); one tag write per (sequence, tag) |
 
-24. **Data.** Subscriptions, schedules, deadline rules, monitors and policies are trigger-set and rule records; trigger rows, occurrences, rule-action logs and the usage ledger are content-free. Their clocks are in the proposed dated note on ADR-0031 item 1 (question 15). Rows keyed by order are deleted or blanked by the orders a `customers/redact` request lists (plan row SD3). Every new table is FORCE RLS with composite tenant keys, and every sweep lists tenants through a definer and works under each tenant's own context.
+24. **Data.** Subscriptions, schedules, deadline rules, monitors and policies are trigger-set and rule records; trigger rows, occurrence rows, rule-action logs and the usage ledger hold no content. Their clocks are in the dated note on ADR-0031 item 1 (question 15). An order id tied to an action or a trigger on that order is pseudonymous personal data, as ADR 0042 item 15 treats its digests and logs, so these rows blank their order ids 90 days after the order's date, and at once for the orders a `customers/redact` request lists (plan row SD3); their content-free counts stay 365 days. A contact's per-order outcome lives only in ADR 0042's `customer_contacts` and the classes its item 24 names, never in a generic log. Every new table is FORCE RLS with composite tenant keys, and every sweep lists tenants through a definer and works under each tenant's own context.
 
-25. **Switches and order.** Every switch is committed off: `store-event-triggers`, `schedules-v2`, `deadline-rules`, `monitors`, `standing-policies` and `plan-bundles`, beside ADR 0042's `order-events` and `order-tag-writes`. Each goes on by one reviewed commit after its labs, G9 for every class it writes, G10 for any store write, operator alerts (plan row SD22) for any switch driven by store events, and the owner's answer on the database plan (question 17) before order events. The order is in `docs/plan/store-data-foundation-implementation.md`.
+25. **Switches and order.** Every switch is committed off: `store-event-triggers`, `schedules-v2`, `deadline-rules`, `monitors`, `standing-policies` and `plan-bundles`, beside ADR 0042's `order-events` and `order-tag-writes`. Each goes on by one reviewed commit after its labs, G9 for every class it writes, G10 for any store write, and operator alerts (plan row SD22) for any switch driven by store events. `order-events` also needs the order-keyed deletion paths (plan rows SD3 and SD4) and Neon's paid plan bought and logged (question 17 (a); the owner bought it on 2026-10-26). The order is in `docs/plan/store-data-foundation-implementation.md`.
 
 ## Values
 
@@ -238,7 +262,7 @@ All values are catalogue or policy data, changed only by a new version with its 
 | Deadline sweep | every 5 minutes per tenant; durations 1 hour to 30 days |
 | Monitor window | default 24 hours; at least 1 hour |
 | Schedule frequency | at least 15 minutes apart; up to 4 daily times |
-| Code-written `once` schedules | at most 20 open per installation |
+| Code-written `once` schedules | at most 20 open per installation; at least 15 minutes ahead; counted in the hourly run rate; never written by a `once` episode |
 | Policy caps | Owner-set subjects a day, default 200, at most 2,000 |
 | Setup review document | the install and up to 3 policies, one phrase, one cool-down |
 | Plan bundle | 2 to 50 proposals, up to 5 capabilities, one store |
@@ -255,22 +279,23 @@ One invariant's granularity changes, by owner decision (question 5), with the co
 - **Permission and budget checks in code.** Predicates, caps, rates, windows, credits and stops are SQL and code; no model is on any action path (`lab:store-events`, `stops.test.mjs`).
 - **Unknown outcomes reconciled before any retry.** One key per action for life; an uncertain write is settled by the read and never promoted (gateway labs).
 - **Credentials only in the broker.** Unchanged; the sync and the reconciler read Shopify only through the broker's fixed documents.
-- **Default deny.** Every switch committed off; an unknown topic, predicate, preset, capability or schedule kind is refused; a capability without `standing_policy: eligible` cannot be in a policy (`capabilities.test.mjs`, `edge:check`).
+- **Default deny.** Every switch committed off; an unknown topic, predicate, preset, capability or schedule kind is refused; a capability without `standing_policy: eligible` cannot be in a policy, except `contact.attempt.send` under ADR 0042's own approval (`standing_policy: contact_plan`); an eligible capability is never irreversible and never a communication, spend or billable effect (`capabilities.test.mjs`, `edge:check`).
 - **Kill switches `human_only`.** Rule pause and revoke need no second approver, and agents only propose them; resuming is reviewed (`stops.test.mjs`).
 - **No agent-initiated external effect before P11.** Rule actions are gateway operations only, behind G10.
 - **Customer data.** Trigger rows hold no payload text; triggered runs get Level 1 only; `includeFields` keeps unneeded fields out of the webhook path (`lab:shopify-privacy`).
 - **Immutable migrations.** Forward only (`migration-history.test.mjs`).
 - **Accepted residuals.**
-  - A compromised orchestrator could delay or skip occurrences, but cannot add one, bring one forward, widen a policy or pass a stop: admission re-reads the policy, the subject and the stops in SQL.
-  - A compromised connector could drop or replay deliveries; the dedupe keys and the reconciler bound it, and a replay changes nothing.
+  - A compromised orchestrator could delay or skip occurrences, but cannot add one, bring one forward, repeat one, widen a policy or pass a stop: only code writes occurrence rows, in SQL, from receipts, the projection and slots; admission takes only an occurrence row's id, checks that its trigger revision and subject belong to the policy, consumes it, and re-reads the policy, the subject and the stops in SQL; an action is unique per (policy id, subject, action, entry) across revisions.
+  - A compromised connector could drop, replay or forge deliveries. The dedupe keys and the reconciler bound drops and replays, and a replay changes nothing. A forged receipt can at most open an occurrence row: the gateway re-reads the subject live through the broker and re-checks the policy's predicates, so a subject that does not really match is refused with nothing written. A subject that does match may be acted on sooner than a real event would have caused, within the policy's caps.
   - A policy acts on the store as the store is when the action is admitted. A staff edit between admission and apply is caught by the gateway's re-read, which refuses rather than overwrites.
+  - A tag can drive the shop's own automations (Shopify Flow, other apps), and Morrow cannot undo what they do. The card warns of it (item 14), `morrow-` tags are the default, and a removal never strips a tag the merchant set (item 15).
 
 ## Consequences
 
 - **Agents of every kind share one pipeline.** COD Confirmation, an order-operations agent, the Analyst's watches and the Inventory agent's alerts all use the same subscriptions, schedules, deadlines, monitors and policies. A new agent is a package that declares them (AgentPackage@2), not new plumbing.
 - **ADR 0042 gets smaller.** Its order filter, sweep, admission definer, stop check and tag path become cases of this record's general parts; its call plan, templates, region policy and contact checks stay its own.
 - **Fewer taps, the same control.** The Owner approves an exact policy once instead of each tag. Irreversible and money effects still need their own approval.
-- **Plan documents follow** when the owner answers (plan row SD2): `mvp.md` (the trigger kinds and standing policies in scope), `v1-build-order.md` (PR 21 builds on items 3 to 11), the build plan's lettered children, and CLAUDE.md's wording.
+- **Plan documents follow** in plan row SD2, now that the owner has answered: `mvp.md` (the trigger kinds and standing policies in scope), `v1-build-order.md` (PR 21 builds on items 3 to 11), the build plan's lettered children, the dated notes in the records this one amends, and CLAUDE.md's wording after CS2, once the owner confirms its words.
 - **Risks.**
   - Event storms (a bulk import, a sale). Mitigation: windows, the per-installation rate, Queue ingress per verified shop, the per-shop Shopify budget and inventory coalescing.
   - Policies that act on stale data. Mitigation: predicates re-checked at admission and the subject re-read live at the gateway.
@@ -295,21 +320,40 @@ One invariant's granularity changes, by owner decision (question 5), with the co
 
 ## Owner questions
 
-Each is one item on the decision sheet Q-store-data-foundation, which gives each question with its options, its recommendation and why. Questions 11 to 14 are ADR-0044's, 15 is the note on ADR-0031, and 16 and 17 are operations.
+Each is one item on the decision sheet Q-store-data-foundation, which gives each question with its options, its recommendation and why. Questions 11 to 14 are ADR-0044's, 15 is the note on ADR-0031, and 16 and 17 are operations. The owner answered every one as recommended on 2026-10-26 (OD-2026-10-26-11), and the items named below carry each answer.
 
-1. Store events as triggers for any installed agent, by this record. *Recommended: yes.* (items 3 to 6)
-2. The trigger values: a 5-minute window, at most 6 runs an hour per installation, 500 ids a row, a 24-hour replay horizon. *Recommended: as written, as catalogue values.* (item 5; Values)
-3. Deadlines and monitors post alerts built by code; a model runs only to explain or draft, at most once per window. *Recommended: yes.* (items 10 and 11)
-4. Topics stay those ADR-0025 item 6 already approves; more come only per agent, by dated amendment. *Recommended: yes.* (item 3)
-5. Standing action policies: one exact approval covers each small, reversible action inside it, with the allowlist of item 15 and the CLAUDE.md wording on the sheet. *Recommended: yes.* (items 12 to 17)
-6. Cancelling, refunding, prices, discounts, stock, fulfilment, customer writes and supplier mail stay per action. *Recommended: yes.* (item 16)
-7. Plan bundles: one typed confirmation over pending proposals of several capabilities on one store, under the strictest rule. *Recommended: yes.* (item 18)
-8. Pause rule and Revoke rule, `human_only`, with no second approver; resuming is reviewed. *Recommended: yes.* (item 19)
-9. One stop check for every automated path; triggers during a stop dropped; no burst on resume; `contact.stop` covers the whole domain; P11.T05 before any send or order-write switch. *Recommended: yes.* (items 20 and 21)
-10. Credits for code-only work: (a) metered, not charged until rate card v1, never blocking time-critical work, waiting triggers combined, discretionary bulk work held up front; (b) priced per step now. *Recommended: (a).* (item 22)
+1. Store events as triggers for any installed agent, by this record: approved. (items 3 to 6)
+2. The trigger values: a 5-minute window, at most 6 runs an hour per installation, 500 ids a row, a 24-hour replay horizon, as catalogue values: approved. (item 5; Values)
+3. Deadlines and monitors post alerts built by code; a model runs only to explain or draft, at most once per window: approved. (items 10 and 11)
+4. Topics stay those ADR-0025 item 6 already approves; more come only per agent, by dated amendment: approved. (item 3)
+5. Standing action policies: one exact approval covers each small, reversible action inside it, with the allowlist of item 15 and the CLAUDE.md change: approved. The CLAUDE.md words are confirmed by the owner before their commit (Approval). (items 12 to 17)
+6. Cancelling, refunding, prices, discounts, stock, fulfilment, customer writes, supplier mail and anything irreversible stay per action, ADR 0042's call plans being the one exception under their own approval: approved. (items 15 and 16)
+7. Plan bundles: one typed confirmation over pending proposals of several capabilities on one store, under the strictest rule: approved. (item 18)
+8. Pause rule and Revoke rule, `human_only`, with no second approver; resuming is reviewed: approved. (item 19)
+9. One stop check for every automated path; triggers during a stop dropped; no burst on resume; `contact.stop` covers the whole domain; P11.T05 before any send or order-write switch: approved. (items 20 and 21)
+10. Credits for code-only work: option (a), metered, not charged until rate card v1, never blocking time-critical work, waiting triggers combined, discretionary bulk work held up front. (item 22)
 
 ## Approval
 
-Not approved. This record is Proposed.
+This record is Accepted. The owner's message in chat, verbatim, on 2026-10-26 (OD-2026-10-26-11), answering the decision sheet Q-store-data-foundation, which put 17 questions, each with one recommendation:
 
-Approval is the owner's own statement in chat, quoted here verbatim with its OD number: for example "approve ADR-0043 and ADR-0044 as recommended", or answers by question number. Until then nothing that depends on this record merges, except the routine parts that the plan marks as starting now (items 7 to 9, and the plan rows that need no owner decision). The records PR (plan row SD1) may merge with the record still marked Proposed.
+> recommended, and yes to the paid Neon plan
+
+What it approves: this record as recommended, with each of its owner questions 1 to 10 decided as the sheet recommended. The lead reads "recommended" as every recommendation on the sheet, since each question carried exactly one and the sheet named "approve ADR-0043 and ADR-0044 as recommended" as the form of approval. Among them: store events, deadlines and monitors as triggers for any installed agent, with their windows, rates and replay horizon (questions 1 to 4, items 3 to 11); standing action policies with the allowlist of item 15, and plan bundles (questions 5 to 7, items 12 to 18); Pause rule and Revoke rule, and one stop check with no burst on resume (questions 8 and 9, items 19 to 21); and code-only work metered and not charged until rate card v1 (question 10, item 22). The routine items the sheet did not ask about (the schedule contract and the shop's zone, items 7 to 9) were accepted as written, the sheet having said the owner could say otherwise.
+
+**Review fixes after the answer.** An AI review of the records (separate context, same model family) found defects in the text the owner answered. Its fixes, made the same day after the answer, each narrow or make exact what the owner approved and widen nothing; OD-2026-10-26-11 lists them:
+
+- `contact.attempt.send` is not on item 15's allowlist; ADR 0042's call plan is the one named exception, under its own approval and checks (`standing_policy: contact_plan`).
+- `admit_bounded_action` takes only the id of an occurrence row that code wrote, actions are unique across revisions, and the gateway re-checks the predicates on its live read (item 17).
+- A schedule acts only on subjects a closed subject query in the policy's digest selects (items 9 and 12).
+- Lifting a stop resumes no policy; opting older subjects in writes new occurrence rows from SQL (item 21).
+- Code-written `once` schedules are bounded (15 minutes ahead, counted in the hourly rate, a successor episode that inherits taint and read tags, no chains) and listed as an amendment of ADR-0041 items 7 and 20, not as routine (item 9).
+- Credits-waiting rows combine per trigger source, never across sources, so an agent with two waiting triggers resumes as two runs, still within its hourly rate (item 22).
+- Order ids in the content-free logs are blanked after 90 days (the dated note on ADR-0031 item 1).
+- Smaller fixes: the keys of items 9 and 11, the writers of item 5, titles in alerts rendered from ids, content-free notifications, the tag warning and `already_present`, and ADR-0005's reason, audit and notice for rule controls.
+
+**The CLAUDE.md wording.** The answer approves the change to CLAUDE.md that question 5 put. The review found that question 5's text started from CLAUDE.md as it stands today, so it would have overwritten three of ADR 0042's four lines, which the owner approved word for word (ADR 0042 question 6), and dropped their exceptions. The corrected text, built on those lines as ADR 0042's CS2 commits them, is on the sheet under question 5. Because CLAUDE.md's standing rules change only with the owner's own confirmation of the words (OD-2026-10-23-10), the corrected words go back to the owner, and the change lands as its own commit after CS2's once the owner confirms them.
+
+**Question 17** (the paid database plan) is answered (a), "yes to the paid Neon plan". The owner bought Neon's paid plan in Neon's own console on 2026-10-26. Claude bought nothing; the purchase's line in `docs/evidence/activity-log.md` is recorded in its own change.
+
+**What follows:** the work that depends on this record may merge in the order of `docs/plan/store-data-foundation-implementation.md`, each PR behind its switch, committed off, with its tests and review, once SD2 has written the dated note in each record it amends. Each switch still goes on by one reviewed commit after its labs, gates and evals (item 25).
