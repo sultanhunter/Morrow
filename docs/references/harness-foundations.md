@@ -1,6 +1,6 @@
 # Morrow's agent harness, A to Z
 
-- What this is: a plain-words reference for the owner and the team on how Morrow's agents work: how they think, remember, keep going, work together and stay safe. It explains ADR-0041 (harness foundations) and ADR-0040 (messaging with agents), both proposed on 2026-10-26. It describes what they propose: nothing here is approved unless it names an owner decision (OD-2026-10-26-3 to OD-2026-10-26-6, and the earlier records it cites).
+- What this is: a plain-words reference for the owner and the team on how Morrow's agents work: how they think, remember, keep going, work together and stay safe. It explains ADR-0041 (harness foundations) and ADR-0040 (messaging with agents), both accepted on 2026-10-26: the owner answered every question on their decision sheet as recommended (OD-2026-10-26-7), after setting their direction (OD-2026-10-26-3 to OD-2026-10-26-6).
 - Where it lives: `docs/references/harness-foundations.md`. Where it and an ADR disagree, the ADR wins (CLAUDE.md).
 - Written: 2026-10-26, from five research reports, four area designs and three reviews of the same day. Sources are listed under each topic and in full at the end.
 
@@ -119,7 +119,7 @@ All of these are data that a new catalogue or policy version can change, with it
 - Before each step, a job sets aside the most that step could cost; after it, it pays what it actually used. All of this happens in the database under a lock, so parallel jobs never spend past the balance.
 - The set-aside follows the cache: the part already cached is held at the cheap cache-read rate.
 - Summaries, reviews, memory tidying and retries after an unclear provider failure are ordinary paid steps. Jobs that fail because of an error on Morrow's or Anthropic's side are free: the charge is refunded when the job settles.
-- **When the balance runs out, the job pauses** ("Paused: out of credits", with Add credits and Stop) and carries on by itself once credits are added. Nothing is lost. (The earlier rule was to finish with whatever answer it had; that needs your word to change, owner question 6.)
+- **When the balance runs out, the job pauses** ("Paused: out of credits", with Add credits and Stop) and carries on by itself once credits are added. Nothing is lost. (The earlier rule was to finish with whatever answer it had; you replaced it with this pause, OD-2026-10-26-7.)
 - Agents never see a balance, a budget or a countdown, because a countdown makes models wrap up early. You see spend on each request's card.
 - To protect every shop from one runaway, each workspace may have 12 model calls in flight at once, and new jobs pause if Morrow's monthly provider spend reaches 80% of your Anthropic limit.
 
@@ -154,7 +154,7 @@ All of these are data that a new catalogue or policy version can change, with it
 
 **What Morrow does.**
 - Opus 5.5 for every agent. Morrow at high effort, every teammate at medium. Summaries and checks use the same model and the effort of the agent whose work they concern; a check of Morrow's work runs at high.
-- Haiku and Sonnet are removed from every catalogue, Listings' included. They go because you ruled out cheaper models (OD-2026-10-26-5); dropping low effort too is put to you (owner question 1). Extra-high and max effort come later, once tests show they help.
+- Haiku and Sonnet are removed from every catalogue, Listings' included. They go because you ruled out cheaper models (OD-2026-10-26-5); low effort goes too, and the Owner may still raise a teammate to high (OD-2026-10-26-7). Extra-high and max effort come later, once tests show they help.
 - The model and effort never change in the middle of a context, because that would throw away the cache and the model's reasoning.
 - Morrow's first reply runs at high effort too. "Seen by Morrow" and the status line make it feel immediate; the real reply comes as fast as a high-effort turn allows, measured on staging.
 
@@ -401,9 +401,9 @@ All of these are data that a new catalogue or policy version can change, with it
 
 **Sources:** https://www.trychroma.com/research/context-rot ; https://arxiv.org/abs/2307.03172 ; https://platform.claude.com/docs/en/build-with-claude/context-windows ; https://cognition.com/blog/devin-sonnet-4-5-lessons-and-challenges.
 
-## What is still yours to decide
+## What you decided
 
-The combined decision sheet (Q-adr-0040-0041-owner-questions in the project graph, 35 questions) puts each value, money rule, security trade-off and retention clock to the owner with a recommendation. The largest ones: renewable leases within the job envelope; pausing instead of finishing when credits run out; safety check-ins in place of turn and time limits; caching the whole conversation; using Anthropic's beta compaction behind a switch; personal memory's privacy; the live channel and phone notifications at launch; and standing requests for Morrow.
+The combined decision sheet (Q-adr-0040-0041-owner-questions in the project graph, 35 questions) put each value, money rule, security trade-off and retention clock to the owner with a recommendation, and the owner accepted every recommendation on 2026-10-26 (OD-2026-10-26-7). The largest ones: renewable leases within the job envelope; pausing instead of finishing when credits run out; safety check-ins in place of turn and time limits; caching the whole conversation; using Anthropic's beta compaction behind a switch; personal memory's privacy; the live channel and phone notifications at launch; and standing requests for Morrow.
 
 ## Words used here
 

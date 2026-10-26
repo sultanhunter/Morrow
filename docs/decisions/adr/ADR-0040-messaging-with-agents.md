@@ -1,6 +1,6 @@
 # ADR-0040 Messaging with agents: write first, see it read at once, work in the background, get complete results
 
-- Status: Proposed 2026-10-26, revised the same day to stand on ADR-0041 and the owner's production-grade direction. A draft for the owner; nothing in it is approved (see "Approval left for the owner").
+- Status: Accepted 2026-10-26 (the owner, OD-2026-10-26-7: this record as recommended, with owner questions 12 and 23 to 35 of Q-adr-0040-0041-owner-questions answered as recommended; see Approval). Proposed earlier the same day and revised that day to stand on ADR-0041 and the owner's production-grade direction.
 - Date: 2026-10-26
 - Supersedes: no accepted record. It takes the place of:
   - the harness guide's row 21 recommendation (one open Morrow run per conversation, posting paused while it is open, Stop on the composer), which no accepted record holds and the owner's message set aside;
@@ -13,14 +13,14 @@
     - `screen-contracts.md`: the two streaming rules, and the Ask conversation row, which becomes the Morrow conversation (items 1 and 11);
     - `workspace-routes.json` and `workspace-routes.md`: a `morrow` destination with its own badge kind replaces "Ask is the entry action, not a destination", and a `live` WebSocket route (items 11 and 15);
     - `capabilities.json`: `workspace.job.stop` and `workspace.standing_request.revoke`, both `human_only` (items 10 and 12).
-  - **ADR-0016** item 5's accepted disclosure that a viewer may learn a streamed message started (item 1; owner question 33).
+  - **ADR-0016** item 5's accepted disclosure that a viewer may learn a streamed message started (item 1; OD-2026-10-26-7, question 33).
   - **ADR-0022** items 6 and 7: the api gains one service binding to an orchestrator entrypoint, `ApiRunStarter`, on item 7's one-entrypoint-per-caller pattern, and a WebSocket route to the live channel (items 3 and 15).
   - **ADR-0027** item 5: another member's post is untrusted content with its own taint kind, `other_member` (item 13). Item 8 and **ADR-0034** answer 4 ("Morrow never checks in on its own schedule"): Morrow may run a person's standing request, on ADR-0024's pattern (item 12).
   - **ADR-0034** item 9: `job_card` for the system author, and `job_plan` for Morrow (items 4 and 5).
   - **ADR-0038** item 1: a second Durable Object class, `LiveChannel` in the api Worker, with hibernatable WebSockets, an alarm and publisher bindings (item 15).
   - **ADR-0030** item 8 and **ADR-0007** item 2: Web Push as fixed, content-free notifications, with a VAPID key held by the broker (item 16).
   - **ADR-0031** items 1 and 7: new data classes, and the browsers' push services in `data-regions.json` (items 16 and 17).
-  - **ADR-0032** item 1, for the Morrow conversation only and only if the owner answers question 34 yes: the person's own messages sit on the right (item 11).
+  - **ADR-0032** item 1, for the Morrow conversation only, as the owner decided (OD-2026-10-26-7, question 34): the person's own messages sit on the right (item 11).
   - **The M3 brief's owner decision 5 of 2026-10-22** ("a run starts within a minute of admission"), for loop runs (item 3).
 - Does not change:
   - **ADR-0016 items 3 and 5**, apart from the disclosure above and the harness writes ADR-0041 item 33 names. Asks stay private; admin reads stay audited and paged; admins get no Ask events or live updates, and the admin grant gives no command over another member's Ask.
@@ -32,7 +32,7 @@
   - **ADR-0005.** Kill switches.
   - **ADR-0032**, apart from the conditional change above: no emoji, no coloured bubbles, Sunrise's badges and plain words.
   - Every security invariant.
-- Implements: the owner's message of 2026-10-26 quoted under Context (OD-2026-10-26-4), under ADR-0041 and the owner's production-grade rule of the same day (OD-2026-10-26-6). Its owner questions, with ADR-0041's, are Q-adr-0040-0041-owner-questions.
+- Implements: the owner's message of 2026-10-26 quoted under Context (OD-2026-10-26-4), under ADR-0041 and the owner's production-grade rule of the same day (OD-2026-10-26-6). Its owner questions, with ADR-0041's, are Q-adr-0040-0041-owner-questions, all answered as recommended (OD-2026-10-26-7).
 - Relies on:
   - **ADR-0041:** the main thread and forks (item 5), leases and the job envelope (item 7), streaming in the broker (item 8), the plan and `run.complete` (item 16), waits and follow-through (item 17), check-ins (item 18), calls and guidance (item 21), memory (items 25 to 29), the role rule (item 13), the customer identifier screen (item 31), the Ask-bound writes (item 33) and `RunEvent@1` (item 36);
   - P05.T04b (no agent runs in an Ask before it); P06.T02a (sealed cursors); P07.T03 (conversations and messages); P11.T05 (the workspace stop); P09.T05 (the customer deletion path); G7 (the email domain).
@@ -99,7 +99,7 @@ This record is material under CLAUDE.md and ADR-0002: it changes a public contra
    - The provider's stream ends in the broker (ADR-0041 item 8). Nothing types itself out on screen.
    - Collaboration contract v1.2: `MessageStatus` keeps only `completed` for new messages; `MessageDelta` and `StreamFrame`'s `message_delta` retire; the `message` transitions give way to the delivery and request states of items 2 and 5.
    - Work in progress lives in the status line and on the request card, never in a message. Typing indicators ("Listings is writing…") and placeholder posts ("Looking at your shop knowledge…") go.
-   - ADR-0016 item 5's accepted disclosure becomes: "a viewer of a shared conversation may learn that a request started there, and its state, teammates and times. A viewer never learns content, or a step, that they cannot see. A private Ask shows none of this to anyone but its owner, except through the audited admin read" (owner question 33).
+   - ADR-0016 item 5's accepted disclosure becomes: "a viewer of a shared conversation may learn that a request started there, and its state, teammates and times. A viewer never learns content, or a step, that they cannot see. A private Ask shows none of this to anyone but its owner, except through the audited admin read" (OD-2026-10-26-7, question 33).
    - `changes.json` records each change and `release-baseline.json` its hash.
 
 2. **Write first, then deliver: the conversation inbox.**
@@ -129,7 +129,7 @@ This record is material under CLAUDE.md and ADR-0002: it changes a public contra
    - **Starting it.** After the commit, the api calls `ApiRunStarter.start(runId)`: a `WorkerEntrypoint` on the orchestrator (ADR-0022 item 7's one-entrypoint-per-caller pattern) with two methods taking ids only, `start(runId)` and `hint(runId, waitSeq)`. Each re-reads SQL and checks that the run is admitted, leased and in the right state, then creates the Workflow instance (ADR-0041 item 6's id rule; "already exists" counts as success) or sends the `w-<waitSeq>` event.
    - **The api holds no Workflows binding,** so it cannot list, terminate, pause or restart a run. `edge:check` pins the api's service binding to `ApiRunStarter` and refuses a Workflows binding on every Worker but the orchestrator; `verify:boundaries` refuses any other use; the orchestrator stays unrouted (ADR-0022 item 6).
    - **Why it is safe.** Instance parameters carry ids only, and the start step re-enters the run's lease from SQL. An id that SQL never admitted ends at once. The one-minute cron stays as the safety net.
-   - **Targets,** measured by T17 on staging and reported per release: "Seen by Morrow" within 6 s at p95, including the burst pause (item 7); a working request's screen updated within 1 s of a change while the live channel is up (item 15); Morrow's first reply (an answer, one question, or what it understood) at p50 and p95 set from measured `high`-effort latency, which the lead brings to the owner with the step-latency measurements of ADR-0041 item 35. The draft's 10-second target assumed a low-effort first turn, which ADR-0041 item 2 removes (the owner ruled out cheaper models, OD-2026-10-26-5; dropping `low` is ADR-0041 owner question 1).
+   - **Targets,** measured by T17 on staging and reported per release: "Seen by Morrow" within 6 s at p95, including the burst pause (item 7); a working request's screen updated within 1 s of a change while the live channel is up (item 15); Morrow's first reply (an answer, one question, or what it understood) at p50 and p95 set from measured `high`-effort latency, which the lead brings to the owner with the step-latency measurements of ADR-0041 item 35. The draft's 10-second target assumed a low-effort first turn, which ADR-0041 item 2 removes (the owner ruled out cheaper models, OD-2026-10-26-5, and lower effort with them, OD-2026-10-26-7, question 1).
 
 4. **Morrow's first reply, then the work** (ADR-0041 item 5).
    - **(a) What code shows, free and at once:** the status line, and a request card once work goes to the background (item 5).
@@ -142,7 +142,7 @@ This record is material under CLAUDE.md and ADR-0002: it changes a public contra
      - 1 to 6 steps, each a title of up to 80 characters and who does it: `morrow`, or a teammate id from the opening's code-built list (`unknown_teammate` otherwise).
      - No field takes a time, credits, a capability, a scope, a store or a recipient. The system text forbids times, credits and promises in `understood`; a T12 eval checks it.
      - **What it renders:** one message with the `understood` sentence plus a line written by code, "Asking Inventory and Business Analyst · about 4 to 8 credits" (the credit range by ADR-0034 item 2's method, shown to the person only; the model never sees credits). The steps sit behind the card's "Show steps". A later plan change reads "Morrow changed course: …". The screen never calls it a plan.
-   - **(d) Credits.** The status line and the card are system writes and cost nothing. A quick answer costs one or two `high`-effort turns, mostly cache reads. A post the wallet cannot cover starts nothing ("Not started · Not enough credits", with Add credits); it never starts by itself when credits arrive, and Send again is a new act. A request already working parks when credits run out (ADR-0041 item 9, owner question 6).
+   - **(d) Credits.** The status line and the card are system writes and cost nothing. A quick answer costs one or two `high`-effort turns, mostly cache reads. A post the wallet cannot cover starts nothing ("Not started · Not enough credits", with Add credits); it never starts by itself when credits arrive, and Send again is a new act. A request already working parks when credits run out (ADR-0041 item 9; OD-2026-10-26-7, question 6).
 
 5. **Progress is a request card that code keeps.**
    - **When a card appears:** when work goes to the background (`run.plan` in the main thread or a project, a teammate call or a hand-off), and for every proactive request and standing-request firing. A quick answer ends as the answer message plus "Seen by Morrow", with no card.
@@ -247,19 +247,19 @@ This record is material under CLAUDE.md and ADR-0002: it changes a public contra
 
 11. **Who you talk to.**
     - **Your Morrow conversation is your Ask.** Each person has one current, private conversation with Morrow in each workspace. ADR-0016 items 3 and 5 still apply, with ADR-0041 item 33's named harness writes; `AskPrivacyNotice` stays pinned and says exactly what an admin read covers (messages, not memory suggestions, checkpoints or plans).
-    - **Morrow remembers it.** The conversation is backed by Morrow's main thread (ADR-0041 item 5): one continuing, compacted memory, private to you, rebuilt from records you may still see whenever your access narrows (owner question 12).
+    - **Morrow remembers it.** The conversation is backed by Morrow's main thread (ADR-0041 item 5): one continuing, compacted memory, private to you, rebuilt from records you may still see whenever your access narrows (OD-2026-10-26-7, question 12).
     - **First open:** Morrow's character, one sentence ("Tell Morrow what you want to get done. It answers, or gets your team on it.") and three starters drawn from the shop.
     - **Start fresh** opens a new conversation (and a new main thread) when nothing of yours is working in the current one. Earlier ones stay under "Earlier conversations".
     - **One sidebar entry.** "Ask Morrow" becomes "Morrow", first in the sidebar, bold when unread, with a neutral count chip and a status word. Team › Morrow opens the same place. `workspace-routes.json` gains the `morrow` destination.
     - **Recent.** A Recent list with "Working now" and "Done" filters lists your requests; opening one scrolls to it. There is no separate Jobs view; Home's Today keeps the schedules.
     - **Nothing runs in it before P05.T04b.**
     - **Morrow's tools there** follow ADR-0041 item 33: read-only teammate calls in forks, no hand-off and no agent card; `run.plan`, `run.wait`, `agent.message`, `agent.cancel` and `memory.suggest` are added.
-    - **Work that changes the store, or that a teammate must own,** goes through Morrow's plan card and one tap on Start (ADR-0034 items 5 and 6) and runs in a project (owner question 32). The request's card posts in the project; the system author posts a `job_card` pointer in the person's Morrow conversation, rendered for that person only, which follows the request live, docks any question it raises for that person (answering in either place resolves both), and shows the result summary and "12 suggested changes · Open review". A post in the Morrow conversation never reaches a project run.
-    - **Optional layout** (owner question 34): in the Morrow conversation only, your own messages sit on the right on a light warm-grey surface, with no coloured bubble and no emoji; agents stay on the left with their character. Projects keep left-aligned rows.
+    - **Work that changes the store, or that a teammate must own,** goes through Morrow's plan card and one tap on Start (ADR-0034 items 5 and 6) and runs in a project (OD-2026-10-26-7, question 32: option (a)). The request's card posts in the project; the system author posts a `job_card` pointer in the person's Morrow conversation, rendered for that person only, which follows the request live, docks any question it raises for that person (answering in either place resolves both), and shows the result summary and "12 suggested changes · Open review". A post in the Morrow conversation never reaches a project run.
+    - **Your messages on the right** (OD-2026-10-26-7, question 34): in the Morrow conversation only, your own messages sit on the right on a light warm-grey surface, with no coloured bubble and no emoji; agents stay on the left with their character. Projects keep left-aligned rows. The recommendation the owner accepted was "approve, after seeing the conversation drawn both ways"; the lead reads that as a check before the screens (PR 12b) merge: the owner sees the conversation drawn both ways, and this layout stands unless the owner then says otherwise.
     - **Project conversations:** @Morrow and "Plan next steps" go through the inbox like any post, each starting a request with a fresh context compiled from what the poster may see (ADR-0041 item 26). Everyone who can see the project sees its request cards under item 5's per-viewer rules.
     - **Teammates.** Teammate threads are a hand-off's child task thread and the thread of each step task. The Team list shows each teammate's status word only. "Message Listings" opens the Morrow conversation with "For Listings:" filled in; Morrow calls Listings, and its reply carries a code-rendered "Asked Listings" line with Listings' character. Morrow writes that message, so Listings is never shown as its author. Teammates speak to people through Morrow or their own task threads; a free-standing direct conversation with a teammate would let a teammate own a person's conversation outside a task, which ADR-0037 rules out.
 
-12. **Proactive messages: standing requests for Morrow, and teammates' own work** (amends ADR-0027 item 8 and ADR-0034 answer 4, on ADR-0024's pattern; owner question 30).
+12. **Proactive messages: standing requests for Morrow, and teammates' own work** (amends ADR-0027 item 8 and ADR-0034 answer 4, on ADR-0024's pattern; OD-2026-10-26-7, question 30).
     - **A standing request** is a person's own request on a schedule: "Every Monday, check which best sellers will run out in the next two weeks."
       - **Created by the person.** Morrow drafts a standing-request card (`StandingRequest@1`: the person's own words, filled by code; a schedule from a closed cron subset with a time zone; an expiry). Confirming it opens a server-built document bound to the actor, a standalone-workspace session and the card's digest, valid 5 minutes, consumed once.
       - **Each firing** writes one server-held trigger row; only `admit_standing_request_run` (ids-only, executable only by `morrow_runtime_executor`) admits a run from it (ADR-0041 item 7). The orchestrator's timer never admits directly. One firing per schedule slot.
@@ -290,7 +290,7 @@ This record is material under CLAUDE.md and ADR-0002: it changes a public contra
     - **Files** keep ADR-0029's and ADR-0031's rules; agents' files are result items or artifacts linked from the result message.
     - **Drafts and the outbox** of unsent posts are kept in browser storage per principal and workspace, as text only. They are purged on sign-out, on detected session expiry and when a different principal signs in, and a draft that the published identifier patterns flag is not kept.
 
-15. **Live delivery to the browser: the live channel** (amends ADR-0038 item 1 and ADR-0022 items 6 and 7; owner question 27).
+15. **Live delivery to the browser: the live channel** (amends ADR-0038 item 1 and ADR-0022 items 6 and 7; OD-2026-10-26-7, question 27).
     - **The object.** `LiveChannel`, a SQLite-backed Durable Object class in the api Worker, one object per (workspace, principal), named on the server from the session's ids, never from the client. Hibernatable WebSockets. Its storage stays empty; hibernation attachments hold the session id and expiry only. One alarm, to close sockets when their session expires.
     - **The upgrade.** `GET /workspace/:ws/live` on the api, authenticated with the same-origin `__Host-` session cookie and an exact Origin check, never a token in the query string. The api passes only server-derived values (workspace, principal, membership, session, expiry) to the object, in headers it sets after removing any the client sent.
     - **Hints, not content.** In the same transaction as each change, SQL writes `live_outbox` rows naming each principal who can see it, by item 5's per-viewer rules (an Ask's activity names only its owner). After commit, the Worker that committed publishes them through an ids-only RPC on the object's namespace, bound by `script_name` in the orchestrator and the connector; the one-minute cron re-publishes anything unsent. A hint carries only a per-viewer nonce. The client never renders a hint: it pulls through the sealed changes read below.
@@ -300,7 +300,7 @@ This record is material under CLAUDE.md and ADR-0002: it changes a public contra
     - **Tests:** `lab:visibility` (activity in A's Ask sends no frame and no change to B), `edge:check` (the class, its binding, the migration and the `script_name` publishers pinned; refused anywhere else), `lab:edge-workers` (an upgrade without the cookie or with another Origin refused).
     - CLAUDE.md's stack line gains "Durable Objects (ADR-0038, ADR-0040)" with the follow-up PR.
 
-16. **Notifications** (amends ADR-0030 item 8, ADR-0007 item 2 and ADR-0031 items 1 and 7; owner question 28).
+16. **Notifications** (amends ADR-0030 item 8, ADR-0007 item 2 and ADR-0031 items 1 and 7; OD-2026-10-26-7, question 28).
     - **The policy, in code.** "Needs you" (a question, an approval, a check-in, a paused request) notifies at once; "Done" (a request you asked for) notifies when you have not seen it within 2 minutes; findings you did not ask for (look-for-work ideas, teammates' routines) never notify and appear in counts and the daily summary. A member gets at most 6 pushes an hour, and nothing during their quiet hours (sent when they end).
     - **Web Push, at launch:**
       - the VAPID private key is a broker secret the owner places with `wrangler secret put`; signing and RFC 8291 encryption happen only in the broker, with a rotation runbook;
@@ -366,7 +366,7 @@ None is weakened. The one widened residual, renewable leases inside an absolute 
 - **Project runs will often be tainted.** Any other member's post in a run's compiled view marks it `other_member`, and its author cannot approve the resulting proposal. That is the honest account of whose words shaped a change.
 - **Latency risk.** The first reply depends on a `high`-effort turn and on the orchestrator's distance to the database; ADR-0041 item 35's measurement and remedy cover both, and the lead brings the measured targets to the owner.
 - **Residual risks.** Injected text in a shared thread reaches later runs only as wrapped, tainted, attributed data. Parallel requests spend a balance faster; credits, check-ins, Stop and the workspace stop bound it. Push services see only empty tickles and endpoints.
-- **Schedule.** Until this record is accepted, nothing that depends on it merges. The G11 checkpoint (W4) does not depend on it: its demo can use `listings-run@1` (ADR-0027, Consequences).
+- **Schedule.** The record is accepted (OD-2026-10-26-7), so the work that depends on it may merge in the order of item 18, each PR behind its switch, committed off. The G11 checkpoint (W4) does not depend on it: its demo can use `listings-run@1` (ADR-0027, Consequences).
 
 ## Alternatives considered
 
@@ -375,7 +375,7 @@ None is weakened. The one widened residual, renewable leases inside an absolute 
 - **Every new message redirects the running request, as Grok does by default.** It mixes unrelated requests. Routing in code through Reply and the preview is visible and certain.
 - **Every new message waits in line.** Quick questions would wait behind long requests.
 - **Morrow routes follow-ups between requests.** It would cost a turn per message, and model output would choose where a person's words go.
-- **A low-effort first reply, or a second small model to acknowledge.** The owner ruled out cheaper models (OD-2026-10-26-5), which ADR-0041 reads as ruling out lower effort too (its owner question 1); code gives the instant receipt instead.
+- **A low-effort first reply, or a second small model to acknowledge.** The owner ruled out cheaper models (OD-2026-10-26-5), which ADR-0041 reads as ruling out lower effort too, a reading the owner accepted (OD-2026-10-26-7, question 1); code gives the instant receipt instead.
 - **A next run admitted while the current run is on its final turn** (the first draft). There is no final turn any more; the post-versus-finish race is settled by the request's lock.
 - **Refusing a sixth working request** (the first draft). It stopped work for a reason other than safety or credits; a waiting line admitted in the person's own act does not.
 - **Polling only, with the live channel later** (the first draft). Two-second polling keeps Neon awake, costs a query per tab, and still lags; the live channel is the production design and polling stays as its fallback.
@@ -401,31 +401,35 @@ Two AI reviews (separate context, same model family) read the first draft (secur
 
 ## Owner questions
 
-Each is one item on the combined decision sheet, Q-adr-0040-0041-owner-questions in the project graph, which also holds ADR-0041's questions and gives each with its recommendation and why; the numbers are the sheet's.
+Each is one item on the combined decision sheet, Q-adr-0040-0041-owner-questions in the project graph, which also holds ADR-0041's questions and gives each with its recommendation and why; the numbers are the sheet's. The owner answered every one as recommended on 2026-10-26 (OD-2026-10-26-7):
 
-- 12. One Morrow conversation per person that Morrow remembers, with Start fresh (items 11 and 13).
-- 23. Customer details typed into messages are refused for now (item 2).
-- 24. Should Morrow work like messaging a team of agents, as this record describes?
-- 25. Where does a message go if you write while a request is working? (item 7)
-- 26. Five working requests per person, a waiting line beyond, a 2-second burst pause (item 9).
-- 27. Live updates through a live channel at launch, with polling as its fallback (item 15).
-- 28. Reaching you when you're away: phone and desktop notifications at launch, email after G7, and the notification policy (item 16).
-- 29. Read marks and feedback (item 14).
-- 30. Messages agents send on their own: standing requests for Morrow, and teammates' routines (item 12).
-- 31. Who may stop a request, and how the workspace stop is lifted (item 10).
-- 32. Where store-changing work runs (item 11).
-- 33. What other people can see in shared projects (item 1).
-- 34. Your messages on the right (item 11).
-- 35. Milestone findings on long requests (item 6).
+- 12. One Morrow conversation per person that Morrow remembers, with Start fresh: approved (items 11 and 13).
+- 23. Customer details typed into messages are refused until P09.T05; order numbers pass (item 2).
+- 24. Morrow works like messaging a team of agents, as this record describes: approved as written.
+- 25. Option (a): a reply to a working request steers it; with ✕ it goes to Morrow as a new message (item 7).
+- 26. Five working requests per person, a waiting line of up to 20 for up to 24 hours, a 2-second burst pause (item 9).
+- 27. Live updates through a live channel from launch, with polling as its fallback (item 15).
+- 28. Phone and desktop notifications from launch, email after G7, and the notification policy (item 16).
+- 29. "Seen by Morrow", no read marks between people, and feedback marks on agents' messages (item 14).
+- 30. Standing requests for Morrow on item 12's terms, and teammates' routines reporting where they were set up (item 12).
+- 31. The requester can always stop a request; the workspace stop for the Owner and Admins, lifted by a reviewed step (item 10).
+- 32. Option (a): store-changing work starts with Start and runs in a project (item 11).
+- 33. Shared projects show a request's start, state, teammates and times, never hidden content (item 1).
+- 34. Your messages on the right in the Morrow conversation, after the owner sees it drawn both ways (item 11).
+- 35. Milestone findings on long requests, under item 6's limits (item 6).
 
-## Approval left for the owner
+## Approval
 
-This record is Proposed. The owner's message of 2026-10-26 (quoted under Context, OD-2026-10-26-4) asks for this behaviour and invites architecture changes; it does not approve this text.
+This record is Accepted. The owner's message of 2026-10-26 quoted under Context (OD-2026-10-26-4) asked for this behaviour and invited architecture changes; it did not approve this text. The owner's later message the same day, quoted below (OD-2026-10-26-7), approves it.
 
-What it approves: conversations that work like messaging a team of agents, where the agent receives a message at once and answers with what it understood, what it is doing, or the result, instead of a streamed reply with a Stop button. What it does not approve: this record's text, values and trade-offs, each put to the owner on the decision sheet.
+1. OD-2026-10-26-4, quoted in full under Context. What it approves: conversations that work like messaging a team of agents, where the agent receives a message at once and answers with what it understood, what it is doing, or the result, instead of a streamed reply with a Stop button. What it did not approve: this record's text, values and trade-offs, each put to the owner on the decision sheet.
 
-**What approval would be.** The owner's statement in chat, recorded verbatim with its OD number. For example, "approve ADR-0040 as recommended" would approve this record as written and each of its owner questions with its recommendation.
+2. The owner's message in chat, verbatim (OD-2026-10-26-7), answering the decision sheet, which put each of the 35 questions with the lead's recommendation:
 
-**Until then, nothing that depends on items 1 to 18 merges:** contract v1.2, the new tables, capabilities and tools, `ApiRunStarter` and the api's bindings, the live channel, Web Push, standing requests and routing. Work that ADR-0041 already covers, such as run lineage in PR #64's migration, follows ADR-0041's approval.
+   > lets accept the recommended options, also i want to know one thing since we are building a full fledged ai workspace with people and ai agents teammates to run shopify business will the user able to suppose create a agent for suppose a cod order appears then the agent calls the customers to confirm the cod order so the rate of cancellation decreases(ofcourse all the apis access for the external services that will be provided by the user like the calling service etc.)
 
-**What else changes with this record:** CLAUDE.md's stack line (Durable Objects, item 15), with the follow-up PR after approval. No new model provider comes with it; the browsers' push services are recorded as processors in `data-regions.json`.
+   What it approves: this record as written, items 1 to 18, and each of its owner questions 12 and 23 to 35 with the recommendation the decision sheet gave it. The lead reads "the recommended options" as every recommendation on the sheet, since each question carried exactly one and the sheet named "approve ... as recommended" as the form of approval. Among them: complete messages with no token streaming to browsers (question 24, item 1); option (a) for routing follow-ups (question 25, items 7 and 8); 5 working requests per person with a waiting line (question 26, item 9); the `LiveChannel` Durable Object from launch (question 27, item 15); Web Push from launch with the VAPID key in the broker (question 28, item 16); read marks and feedback (question 29, item 14); standing requests (question 30, item 12); who may stop a request, and the workspace stop (question 31, item 10); store-changing work in a project (question 32, item 11); the new disclosure in place of ADR-0016 item 5's (question 33, item 1); your messages on the right, after the owner sees both drawings (question 34, item 11); milestone findings (question 35, item 6); and, shared with ADR-0041, one remembered Morrow conversation per person (question 12) and the customer identifier screen (question 23).
+
+   Not approved by it: the rest of the message is a question, whether a person can create an agent that calls customers to confirm cash-on-delivery orders, with the calling service and its API access provided by the merchant. The lead answers it in a separate record; it changes nothing here.
+
+**What follows:** contract v1.2, the new tables, capabilities and tools, `ApiRunStarter` and the api's bindings, the live channel, Web Push, standing requests and routing may merge in item 18's order (`docs/plan/harness-foundations-implementation.md`), each behind its switch, committed off, with its tests and review. CLAUDE.md's stack line (Durable Objects, item 15) changes in the follow-up PR, with the owner's own confirmation of its text. No new model provider comes with this record; the browsers' push services are recorded as processors in `data-regions.json`.

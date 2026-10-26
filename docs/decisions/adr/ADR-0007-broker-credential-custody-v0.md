@@ -95,9 +95,9 @@ The production credential custody decision is still pending.
 
 ## Amendments
 
-### 2026-10-26: item 2, request assembly in the broker and the Web Push key (ADR-0041 and ADR-0040, proposed)
+### 2026-10-26: item 2, request assembly in the broker and the Web Push key (ADR-0041 and ADR-0040)
 
-Proposed, not decided: ADR-0041 and ADR-0040 (both Proposed 2026-10-26) would change item 2 as below. The text above stands until the owner approves them (Q-adr-0040-0041-owner-questions).
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0041 and ADR-0040 as recommended) changes item 2 as below; the text above is kept as approved.
 
-- **Request assembly** (ADR-0041 item 8). The broker would build each model request from SQL with the context's pinned renderer, through a dedicated least-privilege database role: read-only on the run-content tables, FORCE RLS, no `BYPASSRLS`, the tenant taken only from `enter_lease` on the run and lease generation the call names, and a stale lease refused. Provider keys would live in a module the renderer cannot import (`verify:boundaries`). The production custody record (item 9) carries this over or decides it again.
-- **Web Push** (ADR-0040 item 16, owner question 28). A VAPID private key would be a broker secret that the owner places with `wrangler secret put`; signing and RFC 8291 encryption happen only in the broker, and push endpoints and their keys are readable only by the broker's role.
+- **Request assembly** (ADR-0041 item 8). The broker builds each model request from SQL with the context's pinned renderer, through a dedicated least-privilege database role: read-only on the run-content tables, FORCE RLS, no `BYPASSRLS`, the tenant taken only from `enter_lease` on the run and lease generation the call names, and a stale lease refused. Provider keys live in a module the renderer cannot import (`verify:boundaries`). The production custody record (item 9) carries this over or decides it again.
+- **Web Push** (ADR-0040 item 16, owner question 28). A VAPID private key is a broker secret that the owner places with `wrangler secret put`; signing and RFC 8291 encryption happen only in the broker, and push endpoints and their keys are readable only by the broker's role.

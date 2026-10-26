@@ -3,7 +3,7 @@ id: Q-adr-0040-0041-owner-questions
 type: question
 kind: decide
 title: "The combined decision sheet for ADR-0040 and ADR-0041: 35 questions, each with the lead's recommendation"
-status: open
+status: answered
 asked_of: owner
 links:
   raised_by: [ADR-0040, ADR-0041]
@@ -322,3 +322,5 @@ question below with its recommendation. Until then nothing that depends on them 
     - Why: Dots-style agents share substance during long work, which code-written progress words
       can't carry. The limits and the code-built status line keep it from becoming chatter or
       contradicting what actually happened. (ADR-0040 item 6.)
+
+Answered 2026-10-26 (OD-2026-10-26-7): "lets accept the recommended options": all 35 as recommended, so ADR-0040 and ADR-0041 are Accepted as recommended.

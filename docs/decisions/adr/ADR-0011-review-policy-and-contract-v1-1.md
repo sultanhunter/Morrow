@@ -130,8 +130,8 @@ This accepts the recommended answers to P01.T02a Q0–Q9. The question's summary
 
 ## Amendments
 
-### 2026-10-26: Q1, whoever's words shaped a proposal (ADR-0041, proposed)
+### 2026-10-26: Q1, whoever's words shaped a proposal (ADR-0041)
 
-Proposed, not decided: ADR-0041 item 32 (Proposed 2026-10-26; owner question 17 in Q-adr-0040-0041-owner-questions) would change Q1 as below. The text above stands until the owner approves it.
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0041 as recommended, owner question 17 included) changes Q1 as below (ADR-0041 item 32); the text above is kept as approved.
 
-A proposal's conflict set, checked when it is decided and again at dispatch, would gain every principal whose words or memory reached the drafting run: the authors of its `other_member` sources (ADR-0040 item 13), the requester of each notebook entry it read, and the authors cited by summaries or checkpoints it loaded. The review card names them. When every other eligible approver in a team is conflicted, the Owner may approve with the solo-owner confirmation phrase and cool-down, unless the Owner is one of them.
+A proposal's conflict set, checked when it is decided and again at dispatch, gains every principal whose words or memory reached the drafting run: the authors of its `other_member` sources (ADR-0040 item 13), the requester of each notebook entry it read, and the authors cited by summaries or checkpoints it loaded. The review card names them. When every other eligible approver in a team is conflicted, the Owner may approve with the solo-owner confirmation phrase and cool-down, unless the Owner is one of them.

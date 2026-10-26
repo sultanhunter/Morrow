@@ -108,11 +108,11 @@ What it approves: Morrow orchestrating teammates in any way, any number of calls
 
 ## Amendments
 
-### 2026-10-26: items 2, 3 and 3(a), asynchronous calls, follow-ups and the envelope (ADR-0041, proposed)
+### 2026-10-26: items 2, 3 and 3(a), asynchronous calls, follow-ups and the envelope (ADR-0041)
 
-Proposed, not decided: ADR-0041 items 5, 7, 21 and 22 (Proposed 2026-10-26; owner questions 2, 12 and 19 in Q-adr-0040-0041-owner-questions) would change these items as below. The text above stands until the owner approves it.
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0041 as recommended, owner questions 2, 12 and 19 included) changes these items as below (ADR-0041 items 5, 7, 21 and 22); the text above is kept as approved.
 
 - **Item 2.** "Each call a fresh run" gives way to follow-ups: `agent.ask {followUpOf}` reopens the same teammate's context, admitted again under the full intersection with a fresh hold; a plain `agent.ask` still starts a fresh child.
-- **Item 3.** A call becomes asynchronous: `agent.ask` admits the child and returns a handle at once, and Morrow keeps working, waits with `run.wait`, sends guidance with `agent.message` or cancels with `agent.cancel`; `agent.map` fans the same work out over many records. A call is no longer bounded by the teammate's 30-minute wall time. The kernel's 32 children stay per envelope: at 32 the job checks in, and the requester's Continue issues a successor envelope. Teammate calls happen in a background request's fork, never in Morrow's main thread.
+- **Item 3.** A call is asynchronous: `agent.ask` admits the child and returns a handle at once, and Morrow keeps working, waits with `run.wait`, sends guidance with `agent.message` or cancels with `agent.cancel`; `agent.map` fans the same work out over many records. A call is no longer bounded by the teammate's 30-minute wall time. The kernel's 32 children stay per envelope: at 32 the job checks in, and the requester's Continue issues a successor envelope. Teammate calls happen in a background request's fork, never in Morrow's main thread.
 - **Item 3(a).** The lease re-issue after teammate calls is generalised into ADR-0041 item 7's table of lease sources.
-- **Consequences' open items** (compaction, caching the conversation, per-person memory, the notebook read-back path, a graceful final turn) are proposed in ADR-0041 items 10 to 15, 27 and 29, with no graceful final turn, following the owner's rule of 2026-10-26 (OD-2026-10-26-6).
+- **Consequences' open items** (compaction, caching the conversation, per-person memory, the notebook read-back path, a graceful final turn) are settled by ADR-0041 items 10 to 15, 27 and 29, with no graceful final turn, following the owner's rule of 2026-10-26 (OD-2026-10-26-6).

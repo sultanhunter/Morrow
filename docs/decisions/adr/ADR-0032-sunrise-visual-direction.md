@@ -103,6 +103,6 @@ What they approve: Sunrise as Morrow's visual direction, this record, and the CL
 
 ## Amendments
 
-### 2026-10-26: item 1, your own messages on the right in the Morrow conversation (ADR-0040, proposed and conditional)
+### 2026-10-26: item 1, your own messages on the right in the Morrow conversation (ADR-0040)
 
-Proposed, not decided, and only if the owner answers ADR-0040's owner question 34 (Q-adr-0040-0041-owner-questions) yes: in the Morrow conversation only, a person's own messages would sit on the right on a light warm-grey surface, with no coloured bubble and no emoji, while agents stay on the left with their character; project conversations keep left-aligned rows. The text above stands until then.
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0040 as recommended) answers its owner question 34 with the recommendation, "approve, after seeing the conversation drawn both ways"; the text above is kept as approved. In the Morrow conversation only, a person's own messages sit on the right on a light warm-grey surface, with no coloured bubble and no emoji, while agents stay on the left with their character; project conversations keep left-aligned rows (ADR-0040 item 11). The lead reads the recommendation's condition as a check before ADR-0040's screens merge: the owner sees the conversation drawn both ways, and this layout stands unless the owner then says otherwise.

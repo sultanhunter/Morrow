@@ -87,8 +87,8 @@ The rest of the statement changes owner question 1: every email job picks its se
 
 ## Amendments
 
-### 2026-10-26: item 8, phone and desktop notifications (ADR-0040, proposed)
+### 2026-10-26: item 8, phone and desktop notifications (ADR-0040)
 
-Proposed, not decided: ADR-0040 item 16 (Proposed 2026-10-26; owner question 28 in Q-adr-0040-0041-owner-questions) would add Web Push beside item 8's fixed-template email. The text above stands until the owner approves it.
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0040 as recommended, owner question 28 included) adds Web Push beside item 8's fixed-template email (ADR-0040 item 16); the text above is kept as approved.
 
-Pushes would be empty: the device fetches counts with its session and shows a fixed template ("Morrow · 1 finished · 2 need you"). A policy in code sends "Needs you" at once and "Done" after 2 minutes unseen, at most 6 pushes an hour and none in quiet hours. Endpoints must be on an allowlist and are readable only by the broker's role; each send has one delivery key, and an uncertain send is never resent with a new key. Email after G7 stays item 8's templates, batched, at most one an hour.
+Pushes are empty: the device fetches counts with its session and shows a fixed template ("Morrow · 1 finished · 2 need you"). A policy in code sends "Needs you" at once and "Done" after 2 minutes unseen, at most 6 pushes an hour and none in quiet hours. Endpoints must be on an allowlist and are readable only by the broker's role; each send has one delivery key, and an uncertain send is never resent with a new key. Email after G7 stays item 8's templates, batched, at most one an hour.

@@ -73,9 +73,9 @@ What it approves: this record as written, items 1 to 5. The longer time limits (
 
 ## Amendments
 
-### 2026-10-26: item 1, a second class and a conditional third (ADR-0040 and ADR-0041, proposed)
+### 2026-10-26: item 1, a second class and a conditional third (ADR-0040 and ADR-0041)
 
-Proposed, not decided: ADR-0040 item 15 and ADR-0041 item 35 (both Proposed 2026-10-26; owner questions 27 and 21 in Q-adr-0040-0041-owner-questions) would change item 1's "exactly one" class as below. The text above stands until the owner approves them.
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0040 and ADR-0041 as recommended, owner questions 27 and 21 included) changes item 1's "exactly one" class as below (ADR-0040 item 15, ADR-0041 item 35); the text above is kept as approved.
 
 - **`LiveChannel`** (ADR-0040 item 15). A SQLite-backed class in the api Worker, one object per (workspace, principal), named on the server from the session's ids, with hibernatable WebSockets, empty storage, one alarm that closes sockets at session expiry, and ids-only publisher bindings by `script_name` from the orchestrator and the connector. It carries content-free hints only.
 - **A runtime SQL object, only if staging needs it** (ADR-0041 item 35). If T17's step-latency measurement misses its budget, the runtime's definers run through a location-hinted object near Neon: one class in the orchestrator Worker, ids-only RPC, no storage, no alarms, no route.

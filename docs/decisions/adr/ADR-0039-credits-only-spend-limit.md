@@ -108,12 +108,12 @@ The owner's answer on 2026-10-26 to Q-adr-0039-run-endings (OD-2026-10-26-2), in
 
 ## Amendments
 
-### 2026-10-26: items 2(c) to 2(g), 5, 6 and 9 (ADR-0041, proposed)
+### 2026-10-26: items 2(c) to 2(g), 5, 6 and 9 (ADR-0041)
 
-Proposed, not decided: ADR-0041 items 3, 8, 9, 18 and 34 (Proposed 2026-10-26; owner questions 3, 4, 6, 7, 8 and 10 in Q-adr-0040-0041-owner-questions) would change these items as below. The text above, with the final-turn reserve the owner confirmed on 2026-10-26 (OD-2026-10-26-1), stands until the owner approves them. The owner's later rule of the same day, no finishing a job near a limit with an answer (OD-2026-10-26-6), is why owner question 6 asks.
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0041 as recommended, owner questions 3, 4, 6, 7, 8 and 10 included) changes these items as below (ADR-0041 items 3, 8, 9, 18 and 34); the text above is kept as approved. Owner question 6's answer replaces the final-turn reserve the owner confirmed earlier that day (OD-2026-10-26-1 item 2), under the owner's later rule of no finishing a job near a limit with an answer (OD-2026-10-26-6).
 
 - **Items 2(c) to 2(f).** The final-turn reserve and `credits_exhausted` give way to parking: when a step's hold cannot be covered, the whole job pauses ("Paused: out of credits", with Add credits and Stop), draws nothing while paused, resumes oldest first once the wallet covers the next hold, and closes after 7 days paused, keeping its context. Holds follow the cache (the cached prefix at the cache-read rate). Compaction, checkpoints, reviews, summaries, consolidation and resends are ordinary paid steps; a failed ending stays free, as a refund at settlement (OD-2026-10-26-2).
 - **Item 2(g).** The limit endings it lists no longer exist; the free and charged endings and the three-failure breaker stand (OD-2026-10-26-2).
 - **Item 5.** The turn limit, 4 tool calls a turn and 40 a run, 2 questions, 30 minutes of wall time and the 64,000-token input cap give way to safety detectors and check-ins that pause a job and ask a person: 1,000 turns, 10,000 tool calls, 24 hours of active time, 7 days since the requester's last act, 32 children, and a cost check-in. None of them ends a job.
 - **Item 6.** A call that the owner's Anthropic monthly limit refuses (`spend_limit`) parks the job until a person continues, instead of ending the run; nothing is drawn and the owner is told. The limit itself stays outside Morrow, and raising it stays the owner's choice.
-- **Item 9.** End reasons drop `turn_limit`, `tool_call_limit`, `wall_time`, `deadline` and, with owner question 6, `credits_exhausted`, kept in the enums for old records; they add `person_wait_expired`, `checkin_unanswered`, `envelope_expired`, `lease_lapsed`, `internal_error` and `released`.
+- **Item 9.** End reasons drop `turn_limit`, `tool_call_limit`, `wall_time`, `deadline` and `credits_exhausted`, kept in the enums for old records; they add `person_wait_expired`, `checkin_unanswered`, `envelope_expired`, `lease_lapsed`, `internal_error` and `released`.
