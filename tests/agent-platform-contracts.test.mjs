@@ -4,7 +4,9 @@
 // ModelResult@2, run_turns and run_tool_calls, model profiles), ADR-0030 item 10 (sending
 // addresses) and ADR-0031 (read tags), their two new capabilities, and the fakes the loop and
 // the screens build against; ADR-0037 PR 2's teammate, result-item and agent-card contracts,
-// with ADR-0028's specialist contracts retired. Pure: the ahead-of-time validators only.
+// with ADR-0028's specialist contracts retired; plan row H5's merged teammate contracts and
+// catalogue version 4's orchestration, memory and harness inputs (ADR-0041 items 16 to 24 and
+// 34). Pure: the ahead-of-time validators only.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -32,6 +34,12 @@ const edit = (value, change) => {
   return copy;
 };
 const digest = "a".repeat(64);
+const verdict = () => ({
+  index: 0,
+  verdict: "fail",
+  evidence: { kind: "list", refs: [{ kind: "product", id: "product:1001" }] },
+  note: { kind: "text", text: "The title is still 92 characters." },
+});
 
 test("every fake validates against its contract", () => {
   const cases = [
@@ -43,8 +51,22 @@ test("every fake validates against its contract", () => {
     ["SupportReplyParameters", fakes.fakeSupportReplyParameters()],
     ["ReportArtifact", fakes.fakeReportArtifact()],
     ["RunTaint", fakes.fakeTaint()],
+    ["RunTaint", fakes.fakeCleanTaint()],
+    ["TeammateBriefInput", fakes.fakeTeammateBriefInput()],
     ["TeammateBrief", fakes.fakeTeammateBrief()],
-    ["ToolInputResultSubmit", fakes.fakeResultSubmit()],
+    ["ToolInputAgentAsk", fakes.fakeAgentAskInput()],
+    ["ToolInputAgentMap", fakes.fakeAgentMapInput()],
+    ["ToolInputAgentMessage", fakes.fakeAgentMessageInput()],
+    ["ToolInputAgentCancel", fakes.fakeAgentCancelInput()],
+    ["ToolInputRunComplete", fakes.fakeRunCompleteChild()],
+    ["ToolInputRunComplete", fakes.fakeRunCompleteInput()],
+    ["ToolInputRunPlan", fakes.fakeRunPlanInput()],
+    ["ToolInputRunWait", fakes.fakeRunWaitInput()],
+    ["ToolInputResultWrite", fakes.fakeResultWriteInput()],
+    ["ToolInputContextCheckpoint", fakes.fakeContextCheckpointInput()],
+    ["ToolInputMemorySearch", fakes.fakeMemorySearchInput()],
+    ["ToolInputMemoryRead", fakes.fakeMemoryReadInput()],
+    ["ToolInputMemorySuggest", fakes.fakeMemorySuggestInput()],
     ["TeammateResult", fakes.fakeTeammateResult()],
     ["ResultItem", fakes.fakeResultItem()],
     ["ResultItemPage", fakes.fakeResultItemPage()],
@@ -83,6 +105,11 @@ test("every fake validates against its contract", () => {
     "SpecialistBrief",
     "SpecialistInputRef",
     "ToolInputSpecialistDraft",
+    // ADR-0041 item 24: memory.read and run.complete's child form replace them.
+    "ToolInputAgentResultRead",
+    "ToolInputResultSubmit",
+    "ToolModelInputAgentResultRead",
+    "ToolModelInputResultSubmit",
   ])
     assert.equal(core.$defs[name], undefined, name);
   // Synthetic data only: reserved example domains, no real shop.
@@ -477,7 +504,20 @@ test("ADR-0037 item 3(a): TeammateResult@1 is closed and structured; code sets t
     ["a model outcome without a summary", (r) => (r.summary = null)],
     ["an outcome outside the list", (r) => (r.outcome = "approved")],
     ["a next step outside the closed codes", (r) => r.nextSteps.push("publish_now")],
-    ["a created record of another kind", (r) => r.created.push({ kind: "grant", id: "g_1" })],
+    [
+      "a created record of another kind",
+      (r) => r.created.records.push({ kind: "grant", id: "g_1" }),
+    ],
+    ["created as a bare list", (r) => (r.created = [])],
+    ["no call id", (r) => delete r.callId],
+    ["sequence 0", (r) => (r.sequence = 0)],
+    ["a mode outside the list", (r) => (r.mode = "route")],
+    ["a next hint outside the codes", (r) => (r.next = "approve")],
+    ["a criterion status the model writes freely", (r) => (r.criteria[0].status = "approved")],
+    ["needs on a done result", (r) => (r.needs = { kind: "decision", question: null })],
+    ["verdicts on an ask", (r) => r.verdicts.push(verdict())],
+    ["an unknown verifier verdict", (r) => (r.verification.verifierVerdict = "approved")],
+    ["unresolved as a bare list", (r) => (r.unresolved = [])],
     ["a finding of an unknown kind", (r) => (r.findings[0].kind = "instruction")],
     ["a finding's text as a bare string", (r) => (r.findings[0].detail = "text")],
     [
@@ -485,12 +525,85 @@ test("ADR-0037 item 3(a): TeammateResult@1 is closed and structured; code sets t
       (r) => r.items.push({ itemId: "item_1", kind: "text", title: "T", pageCount: 1 }),
     ],
     ["tainted without a source", (r) => (r.taint.sources = [])],
+    ["tainted without a kind", (r) => (r.taint.kinds = [])],
+    ["taint without its count", (r) => delete r.taint.omittedSources],
     [
       "untainted with a source",
-      (r) => (r.taint = { contextTaint: "none", sources: [{ source: "product", sourceId: null }] }),
+      (r) =>
+        (r.taint = {
+          contextTaint: "none",
+          kinds: [],
+          sources: [{ source: "product", sourceId: null }],
+          omittedSources: 0,
+        }),
+    ],
+    [
+      "untainted with omitted sources",
+      (r) => (r.taint = { contextTaint: "none", kinds: [], sources: [], omittedSources: 3 }),
     ],
   ])
     assert.equal(valid("TeammateResult", edit(result, change)), false, name);
+  // Uncapped: the created list and the unresolved list hold any number, or move to an item.
+  const many = Array.from({ length: 5000 }, (_, i) => ({ kind: "proposal", id: `p_${i}` }));
+  assert.ok(
+    valid(
+      "TeammateResult",
+      edit(result, (r) => (r.created.records = many)),
+    ),
+  );
+  assert.ok(
+    valid(
+      "TeammateResult",
+      edit(result, (r) => {
+        r.created = { kind: "item", itemId: "item_created", count: 5000 };
+        r.items.push({
+          itemId: "item_created",
+          kind: "text",
+          title: "Records created (5000)",
+          sizeBytes: 200000,
+          pageCount: 40,
+        });
+      }),
+    ),
+  );
+  // Counts are a safety range, not a cap on work (agent.map sums its batches).
+  assert.ok(
+    valid(
+      "TeammateResult",
+      edit(result, (r) => (r.counts.checked = 20000)),
+    ),
+  );
+  // A review result carries a verdict per criterion; it never approves.
+  const review = edit(result, (r) => {
+    r.mode = "review";
+    r.verdicts = [verdict()];
+  });
+  assert.ok(valid("TeammateResult", review));
+  assert.equal(
+    valid(
+      "TeammateResult",
+      edit(review, (r) => (r.verdicts[0].verdict = "approve")),
+    ),
+    false,
+  );
+  // Blocked and partial carry what the teammate needs, with every end reason.
+  for (const [outcome, endReason] of [
+    ["blocked", "completed"],
+    ["partial", "stopped"],
+    ["partial", "provider_error"],
+  ])
+    assert.ok(
+      valid(
+        "TeammateResult",
+        edit(result, (r) => {
+          r.outcome = outcome;
+          r.endReason = endReason;
+          r.needs = { kind: "information", question: { kind: "text", text: "Which collection?" } };
+          r.next = "ask_person";
+        }),
+      ),
+      `${outcome} ${endReason}`,
+    );
   const ended = (outcome, endReason) =>
     edit(result, (r) => {
       r.outcome = outcome;
@@ -498,12 +611,19 @@ test("ADR-0037 item 3(a): TeammateResult@1 is closed and structured; code sets t
       r.summary = null;
       r.findings = [];
       r.nextSteps = [];
+      // Nothing produced: a run that created a record is partial, never one of these.
+      r.created = { kind: "list", records: [] };
     });
   assert.ok(valid("TeammateResult", ended("no_result", "turn_limit")));
-  assert.ok(
-    valid("TeammateResult", ended("no_result", "completed")),
-    "ended without result.submit",
+  assert.equal(
+    valid(
+      "TeammateResult",
+      edit(ended("stopped", "stopped"), (r) => r.created.records.push({ kind: "task", id: "t_1" })),
+    ),
+    false,
+    "work kept is partial, never stopped",
   );
+  assert.ok(valid("TeammateResult", ended("no_result", "completed")), "ended without run.complete");
   assert.ok(valid("TeammateResult", ended("stopped", "stopped")));
   assert.ok(valid("TeammateResult", ended("failed", "provider_error")));
   assert.equal(valid("TeammateResult", ended("stopped", "completed")), false);
@@ -515,11 +635,83 @@ test("ADR-0037 item 3(a): TeammateResult@1 is closed and structured; code sets t
     false,
     "a code outcome carries no model text",
   );
-  // result.submit: the model chooses only its four outcomes.
+  // run.complete: the model chooses only its own outcomes, never a code outcome.
+  for (const outcome of ["stopped", "failed", "no_result"])
+    assert.equal(
+      valid("ToolInputRunComplete", { ...fakes.fakeRunCompleteChild(), outcome }),
+      false,
+      outcome,
+    );
+  // The child form names no record created, no taint, no read tags and no next hint: code's.
+  for (const field of ["created", "taint", "readTags", "next", "unresolved", "callId"])
+    assert.equal(
+      valid("ToolInputRunComplete", {
+        ...fakes.fakeRunCompleteChild(),
+        result: { ...fakes.fakeRunCompleteChild().result, [field]: [] },
+      }),
+      false,
+      field,
+    );
+});
+
+test("ADR-0041 item 21: the brief Morrow writes is TeammateBriefInput; code adds request, mode and followUpOf", () => {
+  const input = fakes.fakeTeammateBriefInput();
+  const brief = fakes.fakeTeammateBrief();
+  const { request, mode, followUpOf, ...written } = brief;
+  assert.deepEqual(written, input, "the brief is the input as written, plus code's fields");
+  assert.ok(request !== null && mode === "ask" && followUpOf === null);
+  // Morrow cannot write the requester's words, the mode or a follow-up into its brief.
+  for (const field of ["request", "mode", "followUpOf"])
+    assert.equal(valid("TeammateBriefInput", { ...input, [field]: null }), false, field);
+  assert.ok(valid("TeammateBrief", { ...brief, request: null }), "a mandate episode");
+  for (const mode of ["ask", "review", "route", "map_batch"])
+    assert.ok(valid("TeammateBrief", { ...brief, mode }), mode);
+  assert.equal(valid("TeammateBrief", { ...brief, mode: "approve" }), false);
+  assert.equal(valid("TeammateBriefInput", { ...input, doneCriteria: [] }), false);
   assert.equal(
-    valid("ToolInputResultSubmit", { ...fakes.fakeResultSubmit(), outcome: "stopped" }),
+    valid("TeammateBriefInput", { ...input, outputFormat: { ...input.outputFormat, tools: [] } }),
     false,
   );
+  assert.equal(
+    valid("TeammateRequest", { ...brief.request, author: fakes.fakeOwner() }),
+    false,
+    "authority comes from the envelope, never the request",
+  );
+});
+
+test("ADR-0041 item 34: RunTaint keeps every kind, 256 sources inline and a count of the rest", () => {
+  const kinds = core.$defs.ModelUntrustedSource.enum;
+  for (const source of [
+    "teammate_result",
+    "result_item",
+    "notebook_entry",
+    "conversation_summary",
+    "person_memory",
+    "context_checkpoint",
+    "thread_post",
+    "other_member",
+  ])
+    assert.ok(kinds.includes(source), source);
+  const sources = Array.from({ length: 256 }, (_, i) => ({
+    source: "product",
+    sourceId: `p_${i}`,
+  }));
+  const taint = {
+    contextTaint: "untrusted_external",
+    kinds: ["product"],
+    sources,
+    omittedSources: 0,
+  };
+  assert.ok(valid("RunTaint", taint));
+  assert.ok(valid("RunTaint", { ...taint, omittedSources: 100000 }));
+  assert.equal(
+    valid("RunTaint", { ...taint, sources: [...sources, { source: "product", sourceId: "p_x" }] }),
+    false,
+    "257 inline: the rest are counted",
+  );
+  assert.ok(valid("RunTaint", { ...taint, kinds: [...kinds] }), "every kind at once");
+  assert.equal(valid("RunTaint", { ...taint, kinds: ["product", "product"] }), false);
+  assert.equal(valid("RunTaint", { ...taint, omittedSources: -1 }), false);
 });
 
 test("ADR-0037 items 3(a) and 8: result items are run content with read tags, taint and closed text types", () => {
@@ -615,9 +807,37 @@ test("catalogue version 4's codes: teammate refusals, records and sources; route
     "card_limit",
   ])
     assert.ok(refusals.includes(code), code);
+  // ADR-0041 item 34 and the harness tools.
+  for (const code of [
+    "parallel_limit",
+    "fork_first",
+    "retry_blocked",
+    "recall_out_of_scope",
+    "call_not_found",
+    "call_not_idle",
+    "milestone_too_soon",
+    "checkpoint_not_requested",
+    "plan_not_set",
+    "verification_failed",
+    "item_closed",
+  ])
+    assert.ok(refusals.includes(code), code);
   const records = core.$defs.RunToolCallRecordRef.properties.kind.enum;
   assert.equal(records.includes("specialist_spec"), false);
-  for (const kind of ["agent_card", "teammate_run", "teammate_result"])
+  for (const kind of [
+    "agent_card",
+    "teammate_run",
+    "teammate_result",
+    "agent_call",
+    "agent_map",
+    "agent_message",
+    "memory_suggestion",
+    "run_plan_revision",
+    "run_completion",
+    "run_wait",
+    "result_item",
+    "context_checkpoint",
+  ])
     assert.ok(records.includes(kind), kind);
   for (const source of ["teammate_result", "result_item"])
     assert.ok(core.$defs.ModelUntrustedSource.enum.includes(source), source);
@@ -627,12 +847,44 @@ test("catalogue version 4's codes: teammate refusals, records and sources; route
       type: "tool_use",
       id: "toolu_ask_1",
       name: "agent.ask",
-      input: {
-        installationId: fakes.fakeIds.listingsInstallationId,
-        brief: fakes.fakeTeammateBrief(),
-      },
+      input: fakes.fakeAgentAskInput(),
     }),
   );
+  // The model's brief is the input form: the code-filled brief is never a tool input.
+  assert.equal(
+    valid("ModelToolUseBlock", {
+      type: "tool_use",
+      id: "toolu_ask_1",
+      name: "agent.ask",
+      input: { ...fakes.fakeAgentAskInput(), brief: fakes.fakeTeammateBrief() },
+    }),
+    false,
+  );
+  for (const [name, input] of [
+    ["agent.map", fakes.fakeAgentMapInput()],
+    ["agent.message", fakes.fakeAgentMessageInput()],
+    ["agent.cancel", fakes.fakeAgentCancelInput()],
+    ["memory.search", fakes.fakeMemorySearchInput()],
+    ["memory.read", fakes.fakeMemoryReadInput()],
+    ["memory.suggest", fakes.fakeMemorySuggestInput()],
+    ["run.plan", fakes.fakeRunPlanInput()],
+    ["run.complete", fakes.fakeRunCompleteChild()],
+    ["run.wait", fakes.fakeRunWaitInput()],
+    ["result.write", fakes.fakeResultWriteInput()],
+    ["context.checkpoint", fakes.fakeContextCheckpointInput()],
+  ])
+    assert.ok(valid("ModelToolUseBlock", { type: "tool_use", id: "toolu_x_1", name, input }), name);
+  for (const retired of ["agent.result.read", "result.submit"])
+    assert.equal(
+      valid("ModelToolUseBlock", {
+        type: "tool_use",
+        id: "toolu_x_1",
+        name: retired,
+        input: { itemId: "item_1", page: 1 },
+      }),
+      false,
+      retired,
+    );
   assert.equal(
     valid("ModelToolUseBlock", {
       type: "tool_use",

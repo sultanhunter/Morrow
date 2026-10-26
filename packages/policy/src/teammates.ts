@@ -835,7 +835,8 @@ const itemIdsOf = (result: Current_TeammateResult) => {
     if (f.table?.kind === "item") referenced.push(f.table.itemId);
   }
   text(result.needs?.question ?? null);
-  for (const c of result.criteria) if (c.evidence.kind === "item") referenced.push(c.evidence.itemId);
+  for (const c of result.criteria)
+    if (c.evidence.kind === "item") referenced.push(c.evidence.itemId);
   for (const v of result.verdicts) {
     if (v.evidence.kind === "item") referenced.push(v.evidence.itemId);
     text(v.note);

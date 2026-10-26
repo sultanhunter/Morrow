@@ -280,8 +280,7 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, validat
         if (!/^(run|result|context)\./.test(String(tool.name)))
           at("a harness tool is named run.*, result.* or context.*");
       } else {
-        if (!String(tool.name).startsWith("memory."))
-          at("a memory tool is named memory.*");
+        if (!String(tool.name).startsWith("memory.")) at("a memory tool is named memory.*");
         if (!["read", "internal_write"].includes(tool.replayClass))
           at("a memory tool replays as a read or an internal write");
       }
@@ -295,7 +294,10 @@ export function inspectToolCatalogue({ catalogue, capabilities, schemas, validat
         at("look-for-work offers only reads and suggestions");
       if (contexts.includes("call") && personFacingTools.has(tool.name))
         at("a called teammate never asks or posts to the person");
-      if (personFacingTools.has(tool.name) && contexts.some((c) => !["coordinator", "routed"].includes(c)))
+      if (
+        personFacingTools.has(tool.name) &&
+        contexts.some((c) => !["coordinator", "routed"].includes(c))
+      )
         at("a memory suggestion goes only to the person a job works for (Morrow and hand-offs)");
       if (
         everyContextToolNames.includes(tool.name) &&

@@ -170,9 +170,7 @@ export function offeredTools(
     declared.some((name) => !byName.has(name) || isContextTool(name))
   )
     throw invalid();
-  return Object.freeze(
-    allowed.filter((name) => declared.includes(name) || isContextTool(name)),
-  );
+  return Object.freeze(allowed.filter((name) => declared.includes(name) || isContextTool(name)));
 }
 /** The broker's tool definitions for offered tools, in catalogue order (a stable prefix). */
 export function modelToolDefinitions(names: readonly string[]): readonly ModelToolDefinition[] {

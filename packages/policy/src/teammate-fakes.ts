@@ -149,8 +149,9 @@ const measured = (content: ResultItemContent) => {
     };
   const table = shown.table;
   return {
-    sizeBytes: new TextEncoder().encode(JSON.stringify({ columns: table.columns, rows: table.rows }))
-      .length,
+    sizeBytes: new TextEncoder().encode(
+      JSON.stringify({ columns: table.columns, rows: table.rows }),
+    ).length,
     pageCount: tablePages(table)!.length,
   };
 };
@@ -259,7 +260,8 @@ export function createFakeResultItemStore(options: {
           // Only this run's own written items: anything else reads as not received.
           if (!existing || !existing.written || existing.record.runId !== run.runId)
             return { ok: false, outcome: "refused", refusal: "item_not_received" };
-          if (!existing.record.open) return { ok: false, outcome: "refused", refusal: "item_closed" };
+          if (!existing.record.open)
+            return { ok: false, outcome: "refused", refusal: "item_closed" };
           // Text goes only to text and file items, rows only to tables, one cell per column.
           const current = existing.content;
           const fits =
@@ -451,7 +453,8 @@ export function createFakeTeammateRunner(options: {
     children: (parentRunId) => children.get(parentRunId) ?? 0,
     cancel(parentRunId, callId) {
       const call = calls.get(callId);
-      if (!call || call.parentRunId !== parentRunId) return { ok: false, refusal: "call_not_found" };
+      if (!call || call.parentRunId !== parentRunId)
+        return { ok: false, refusal: "call_not_found" };
       if (call.state !== "idle") return { ok: false, refusal: "call_not_idle" };
       call.state = "released";
       return { ok: true, state: "released" };
@@ -481,7 +484,8 @@ export function createFakeTeammateRunner(options: {
       const count = children.get(parentRunId) ?? 0;
       if (call === null && count >= maximumChildrenPerEnvelope)
         return { ok: false, wait: "children_checkin" };
-      if (!options.coversCall({ parentRunId, installationId })) return { ok: false, wait: "credits" };
+      if (!options.coversCall({ parentRunId, installationId }))
+        return { ok: false, wait: "credits" };
       const brief = teammateBrief(input.brief, {
         request,
         mode: input.mode,

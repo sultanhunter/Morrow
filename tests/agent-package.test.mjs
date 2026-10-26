@@ -41,10 +41,19 @@ for (const [name, change, expected] of [
   // ADR-0037 item 2: depth 1. A teammate never holds an agent.* tool, delegation or agents.*.
   ["a teammate call", (p) => p.tools.push("agent.ask"), "AGENT_AUTHORITY_OUTSIDE_COORDINATOR"],
   [
-    "the result reader",
-    (p) => p.tools.push("agent.result.read"),
+    "guidance to a teammate",
+    (p) => p.tools.push("agent.message"),
     "AGENT_AUTHORITY_OUTSIDE_COORDINATOR",
   ],
+  [
+    "a batch of teammate calls",
+    (p) => p.tools.push("agent.map"),
+    "AGENT_AUTHORITY_OUTSIDE_COORDINATOR",
+  ],
+  // ADR-0041 item 24: a memory or harness tool is the context's to offer, never declared.
+  ["a declared completion tool", (p) => p.tools.push("run.complete"), "TOOL_NOT_FOR_KIND"],
+  ["a declared result writer", (p) => p.tools.push("result.write"), "TOOL_NOT_FOR_KIND"],
+  ["a declared memory read", (p) => p.tools.push("memory.read"), "TOOL_NOT_FOR_KIND"],
   ["an agent card", (p) => p.tools.push("agent.propose"), "AGENT_AUTHORITY_OUTSIDE_COORDINATOR"],
   [
     "delegation without a tool",
@@ -173,12 +182,16 @@ test("built-in kinds: the Coordinator holds exactly its tools; neither built-in 
       "task.create",
       "agent.route",
       "agent.ask",
-      "agent.result.read",
+      "agent.map",
+      "agent.message",
+      "agent.cancel",
       "agent.propose",
       "plan.draft",
+      "knowledge.propose",
     ];
     p.capabilities = [
       { capabilityId: "workspace.knowledge.read", verbs: ["view"] },
+      { capabilityId: "workspace.knowledge.propose", verbs: ["execute"] },
       { capabilityId: "workspace.artifact.read", verbs: ["view"] },
       { capabilityId: "workspace.conversation.post", verbs: ["execute"] },
       { capabilityId: "workspace.question.request", verbs: ["execute"] },
@@ -193,6 +206,12 @@ test("built-in kinds: the Coordinator holds exactly its tools; neither built-in 
   assert.ok(
     check({ ...coordinator, tools: coordinator.tools.slice(1) }).includes(
       "COORDINATOR_TOOLS_NOT_FIXED",
+    ),
+  );
+  // Its memory and harness tools come with its context (ADR-0041 item 24), never declared.
+  assert.ok(
+    check({ ...coordinator, tools: [...coordinator.tools, "run.plan"] }).includes(
+      "TOOL_NOT_FOR_KIND",
     ),
   );
   assert.deepEqual(check({ ...coordinator, triggerKinds: ["schedule"] }), ["PACKAGE_INVALID"]);
@@ -290,9 +309,10 @@ for (const [name, change, expected] of [
     "WORKSPACE_GRANTS_NOT_DERIVED",
   ],
   [
-    "no teammate result tool",
-    (p) => (p.tools = p.tools.filter((t) => t !== "result.submit")),
-    "WORKSPACE_GRANTS_NOT_DERIVED",
+    // ADR-0041 item 24: a called teammate needs no declared tool to return its result.
+    "a declared harness tool",
+    (p) => p.tools.push("result.write"),
+    "TOOL_NOT_FOR_KIND",
   ],
   ["a first-party id", (p) => (p.id = "morrow.restock"), "PACKAGE_ID_ORIGIN_MISMATCH"],
   [

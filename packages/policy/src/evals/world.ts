@@ -6,7 +6,13 @@
 // item 3). Nothing here is a money cap: the wallet's balance is the only spend limit
 // (ADR-0039 item 1).
 import { fakeIds } from "../agent-platform-fakes";
-import { checkToolInput, offeredTools, toolEntry, toolsForContext } from "../tool-catalogue";
+import {
+  checkToolInput,
+  isContextTool,
+  offeredTools,
+  toolEntry,
+  toolsForContext,
+} from "../tool-catalogue";
 import type { EvalAgentRef, EvalDesign, EvalTeammateRef, EvalToolName } from "./format";
 import { evalCatalogueTools } from "./format";
 
@@ -173,7 +179,9 @@ export function evalOfferedTools(
   if (route?.capabilityId !== handoffOnlyRoute.capabilityId || route.verb !== handoffOnlyRoute.verb)
     throw Error("EVAL_WORLD_DRIFT:agent.route");
   for (const [agent, tools] of Object.entries(evalTeammateTools)) {
-    if (offeredTools("routed", [...tools]).length !== tools.length)
+    // Catalogue version 4 also offers the context's memory and harness tools, which this world
+    // does not serve yet (plan row H18): only the declared grant tools are compared.
+    if (offeredTools("routed", [...tools]).filter((t) => !isContextTool(t)).length !== tools.length)
       throw Error("EVAL_WORLD_DRIFT:routed:" + agent);
     if (tools.some((tool) => !(evalCatalogueTools as readonly string[]).includes(tool)))
       throw Error("EVAL_WORLD_DRIFT:catalogue:" + agent);

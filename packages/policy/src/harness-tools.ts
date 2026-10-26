@@ -80,18 +80,28 @@ export function runPlanSetValid(plan: Current_RunPlanSetInput, context: ToolCont
 export function runPlanChangeValid(change: Current_RunPlanChange): boolean {
   const only = (...names: (keyof Current_RunPlanChange)[]) =>
     (
-      ["itemKey", "status", "reason", "phase", "item", "note", "followThrough", "criterion"] as const
+      [
+        "itemKey",
+        "status",
+        "reason",
+        "phase",
+        "item",
+        "note",
+        "followThrough",
+        "criterion",
+      ] as const
     ).every((name) => names.includes(name) === (change[name] !== null)) &&
     (names.includes("evidence") || change.evidence.length === 0);
   switch (change.kind) {
     case "item_status":
       // A drop or a block says why; done may say nothing more than its evidence.
       return change.status === "done"
-        ? only("itemKey", "status", "evidence") ||
-            only("itemKey", "status", "evidence", "reason")
+        ? only("itemKey", "status", "evidence") || only("itemKey", "status", "evidence", "reason")
         : only("itemKey", "status", "reason", "evidence");
     case "add_item":
-      return only("phase", "item") && change.item!.dependsOn.every((d) => d !== change.item!.itemKey);
+      return (
+        only("phase", "item") && change.item!.dependsOn.every((d) => d !== change.item!.itemKey)
+      );
     case "add_note":
       return only("note");
     case "add_follow_through":

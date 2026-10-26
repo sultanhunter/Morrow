@@ -130,7 +130,8 @@ export function deriveCardGrants(picked: readonly string[]): CardGrants {
   const verbs = new Map<string, Set<PermissionVerb>>();
   for (const tool of tools) {
     // cardToolAllowed admitted grant tools only: each names one capability and verb.
-    if (tool.capabilityId === null || tool.verb === null) throw new AgentCardError("card_tool_excluded");
+    if (tool.capabilityId === null || tool.verb === null)
+      throw new AgentCardError("card_tool_excluded");
     const set = verbs.get(tool.capabilityId) ?? new Set<PermissionVerb>();
     set.add(tool.verb);
     verbs.set(tool.capabilityId, set);

@@ -58,11 +58,13 @@ test("Morrow's draft becomes the card the fake shows: code writes every grant, s
   assert.ok(validateCurrentDefinition("AgentProposal", result.card));
   assert.ok(Object.isFrozen(result.card) && Object.isFrozen(result.card.capabilities[0].verbs));
   // Order reads: the read_orders scope, level 1 aggregates and the Owner as requester or
-  // approver (item 5); the teammate result tool is added so the teammate can be called.
+  // approver (item 5). Code adds no tool: every call of the teammate is offered the call
+  // context's run.complete and result.write, which hold no capability (ADR-0041 item 24).
   assert.deepEqual(result.card.optionalScopes, ["read_orders"]);
   assert.equal(result.card.customerData, "level1");
   assert.deepEqual(result.card.ownerOnly, ["orders_or_customer"]);
-  assert.ok(result.card.tools.includes("result.submit"));
+  assert.deepEqual(result.card.tools, input().tools);
+  assert.ok(!result.card.capabilities.some((c) => c.capabilityId === "workspace.artifact.edit"));
   // No money anywhere on a card (item 6, ADR-0039).
   assert.doesNotMatch(JSON.stringify(result.card), /usd|credit|cap"|budget|hold/i);
 });
@@ -71,11 +73,23 @@ test("ADR-0037 item 5: the fixed catalogue only; agent.*, support, delegation an
   for (const tool of [
     "agent.route",
     "agent.ask",
-    "agent.result.read",
+    "agent.map",
+    "agent.message",
+    "agent.cancel",
     "agent.propose",
     "plan.draft",
     "support.thread.read",
     "proposal.reply",
+    // ADR-0041 item 24: memory and harness tools are the context's, never a card's.
+    "memory.search",
+    "memory.read",
+    "memory.suggest",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "result.write",
+    "context.checkpoint",
+    "agent.result.read",
     "result.submit",
     "specialist.draft",
     "sql.run",
@@ -150,24 +164,24 @@ test("ADR-0037 item 4: the model never names a capability, scope, store, model o
 
 test("a store change is the Owner's: a proposal tool marks store_effect; grants come from tools alone", () => {
   const grants = deriveCardGrants(["products.read", "proposal.listing"]);
-  assert.deepEqual([...grants.tools], ["products.read", "proposal.listing", "result.submit"]);
+  assert.deepEqual([...grants.tools], ["products.read", "proposal.listing"]);
   assert.deepEqual(
     grants.capabilities.map((c) => [c.capabilityId, [...c.verbs]]),
     [
       ["catalog.content.publish", ["propose"]],
       ["catalog.products.read", ["view"]],
-      ["workspace.artifact.edit", ["execute"]],
     ],
   );
   assert.deepEqual([...grants.ownerOnly], ["store_effect"]);
   assert.equal(grants.customerData, "none");
   assert.deepEqual([...grants.optionalScopes], []);
-  // report.write and result.submit share one capability: one row, one verb.
+  // report.write's capability is its own: nothing else adds workspace.artifact.edit.
   const shared = deriveCardGrants(["report.write"]);
   assert.deepEqual(
-    shared.capabilities.map((c) => c.capabilityId),
-    ["workspace.artifact.edit"],
+    shared.capabilities.map((c) => [c.capabilityId, [...c.verbs]]),
+    [["workspace.artifact.edit", ["execute"]]],
   );
+  assert.throws(() => deriveCardGrants(["products.read", "run.complete"]), /card_tool_excluded/);
   for (const bad of [[], ["products.read", "products.read"], "products.read"])
     assert.throws(() => deriveCardGrants(bad), /input_invalid/);
 });
@@ -231,7 +245,7 @@ test("the digest binds every field; an edit is a new revision that keeps the tai
   assert.notEqual(await agentCardDigest(edited.card), digest);
   for (const [name, edit] of [
     ["a tool the card lacks", { removeTools: ["products.read"] }],
-    ["the result tool", { removeTools: ["result.submit"] }],
+    ["a context tool the card never holds", { removeTools: ["run.complete"] }],
     [
       "every picked tool",
       {

@@ -460,8 +460,18 @@ export function fakeRunPlanInput(): Current_ToolInputRunPlan {
         {
           title: "Check and propose",
           items: [
-            { itemKey: "check", title: "Ask Listings to check the titles", criteria: [0], dependsOn: [] },
-            { itemKey: "review", title: "Review the proposals", criteria: [1], dependsOn: ["check"] },
+            {
+              itemKey: "check",
+              title: "Ask Listings to check the titles",
+              criteria: [0],
+              dependsOn: [],
+            },
+            {
+              itemKey: "review",
+              title: "Review the proposals",
+              criteria: [1],
+              dependsOn: ["check"],
+            },
           ],
         },
       ],
@@ -514,7 +524,9 @@ export function fakeContextCheckpointInput(): Current_ToolInputContextCheckpoint
     statusNote: "Listings is checking the titles.",
     done: [{ text: "Plan set and Listings asked.", refs: ["c2", "c3"] }],
     inProgress: [{ text: "Listings' check of twelve products.", refs: ["c3"] }],
-    decisions: [{ decision: "Check every product.", reason: "The person asked for all.", refs: ["m1"] }],
+    decisions: [
+      { decision: "Check every product.", reason: "The person asked for all.", refs: ["m1"] },
+    ],
     setAside: [],
     facts: [{ fact: "product:1001 has a 92-character title.", exact: true, refs: ["c4"] }],
     difficulties: [],

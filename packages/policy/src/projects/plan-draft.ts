@@ -12,7 +12,6 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import planDraftsSwitch from "../../../../docs/decisions/plan-drafts-staging.json";
-import { shopKnowledgeRecord } from "../knowledge/rules";
 import { type TeamSwitchState, teamSwitchState } from "../teammates";
 import { type ToolEntry, toolEntry } from "../tool-catalogue";
 import { canonicalText, sha256Hex } from "./digest";
@@ -86,6 +85,14 @@ export const coordinatorGrantTools = Object.freeze([
   "context.checkpoint",
 ] as const);
 export type CoordinatorTool = (typeof coordinatorGrantTools)[number];
+/**
+ * Morrow's tools in catalogue version 4 whose path for Morrow a later plan row builds, so no
+ * Morrow context is offered them yet: memory.suggest with person memory and its switch (H12b),
+ * and knowledge.propose with Morrow's own principal-keyed proposals (H12d; PR 20's definer
+ * keys a proposal by the run's installation, which Morrow's run has none of, so it would fail
+ * closed). knowledge/tools.ts refuses Morrow's knowledge.propose too, until then.
+ */
+export const pendingMorrowTools = Object.freeze(["memory.suggest", "knowledge.propose"] as const);
 /** The teammate-call tools (ADR-0041 items 21 and 22), all behind the teammate-calls switch. */
 const teammateCallTools: readonly CoordinatorTool[] = [
   "agent.ask",
@@ -99,25 +106,22 @@ const teammateCallTools: readonly CoordinatorTool[] = [
  * task.create is left out, so Morrow creates no task at launch. plan.draft is in it only
  * while the plan-drafts switch is on; agent.ask, agent.map, agent.message and agent.cancel
  * only while the teammate-calls switch is on, and agent.propose only while the agent-cards
- * switch is on (ADR-0037 item 9; both committed off); knowledge.propose only while the
- * shop-knowledge switch's agent_tools is on (committed off). memory.suggest waits for the
- * person-memory switch its plan row adds (H12b), so it is left out until then. The memory
+ * switch is on (ADR-0037 item 9; both committed off). Two tools wait for the plan rows that
+ * build their paths for Morrow, and are left out until then (pendingMorrowTools). The memory
  * reads and the harness tools grant nothing and sit behind the agent-loop switch itself.
  */
 export function coordinatorLaunchTools(
   switchState: "on" | "off" = planDraftsRecord.switch,
   team: TeamSwitchState = teamSwitchState(),
-  knowledgeTools: "on" | "off" = shopKnowledgeRecord.agent_tools,
 ) {
   return Object.freeze(
     coordinatorGrantTools.filter(
       (t) =>
         t !== "task.create" &&
-        t !== "memory.suggest" &&
+        !(pendingMorrowTools as readonly string[]).includes(t) &&
         (t !== "plan.draft" || switchState === "on") &&
         (!teammateCallTools.includes(t) || team.teammateCalls === "on") &&
-        (t !== "agent.propose" || team.agentCards === "on") &&
-        (t !== "knowledge.propose" || knowledgeTools === "on"),
+        (t !== "agent.propose" || team.agentCards === "on"),
     ),
   );
 }

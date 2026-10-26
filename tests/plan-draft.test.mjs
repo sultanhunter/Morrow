@@ -23,6 +23,7 @@ import {
   decideCoordinatorMention,
   decidePlanDraft,
   mentionRunTools,
+  pendingMorrowTools,
   planDraftDigest,
   planDraftFromToolInput,
   planDraftsRecord,
@@ -295,16 +296,37 @@ test("the launch Coordinator subset leaves task.create out; the grant set keeps 
   assert.ok(coordinatorLaunchTools("on").includes("plan.draft"));
   assert.ok(!coordinatorLaunchTools("off").includes("plan.draft"), "absent while off");
   assert.ok(!coordinatorLaunchTools().includes("plan.draft"), "committed off");
-  // ADR-0037 item 9: the teammate tools follow their own switches, both committed off.
+  // ADR-0037 item 9: the teammate tools follow their own switches, both committed off; tool
+  // catalogue version 4 puts agent.map, agent.message and agent.cancel beside agent.ask.
   const team = (teammateCalls, agentCards) => ({ teammateCalls, agentCards });
-  for (const tool of ["agent.ask", "agent.result.read", "agent.propose"])
+  const calls = ["agent.ask", "agent.map", "agent.message", "agent.cancel"];
+  for (const tool of [...calls, "agent.propose", "knowledge.propose"])
     assert.ok(!coordinatorLaunchTools().includes(tool), tool + " committed off");
-  assert.ok(coordinatorLaunchTools("on", team("on", "off")).includes("agent.ask"));
-  assert.ok(coordinatorLaunchTools("on", team("on", "off")).includes("agent.result.read"));
+  for (const tool of calls)
+    assert.ok(coordinatorLaunchTools("on", team("on", "off")).includes(tool), tool);
   assert.ok(!coordinatorLaunchTools("on", team("on", "off")).includes("agent.propose"));
   assert.ok(coordinatorLaunchTools("on", team("off", "on")).includes("agent.propose"));
-  assert.ok(!coordinatorLaunchTools("on", team("off", "on")).includes("agent.ask"));
+  for (const tool of calls)
+    assert.ok(!coordinatorLaunchTools("on", team("off", "on")).includes(tool), tool);
   assert.ok(coordinatorLaunchTools("off", team("off", "off")).includes("agent.route"));
+  // Morrow's memory suggestions and knowledge proposals (OD-2026-10-26-7, question 15) are in
+  // catalogue version 4, but wait for the plan rows that build their paths (H12b, H12d).
+  assert.deepEqual([...pendingMorrowTools], ["memory.suggest", "knowledge.propose"]);
+  for (const tool of pendingMorrowTools) {
+    assert.ok(coordinatorGrantTools.includes(tool), tool);
+    assert.ok(!coordinatorLaunchTools("on", team("on", "on")).includes(tool), tool);
+  }
+  // The memory reads and harness tools grant nothing and sit behind the agent-loop switch.
+  for (const tool of [
+    "memory.search",
+    "memory.read",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "context.checkpoint",
+  ])
+    assert.ok(coordinatorLaunchTools("off", team("off", "off")).includes(tool), tool);
+  assert.ok(!coordinatorGrantTools.includes("result.write"), "Morrow builds no result items");
 });
 
 test("Morrow in an Ask: only under the envelope; never task.create, agent.propose, inbox.ask", () => {
