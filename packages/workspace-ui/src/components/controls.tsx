@@ -71,13 +71,27 @@ interface FieldProps {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly hint?: string;
+  /**
+   * A standing line under the field, read with it (H9a: "Don't include customers' names or
+   * contact details." under every composer that writes to an agent).
+   */
+  readonly standing?: string;
   readonly error?: string | null;
   readonly disabled?: boolean;
   readonly maxLength?: number;
   readonly required?: boolean;
 }
-function describedBy(hintId: string, errorId: string, hint?: string, error?: string | null) {
-  const ids = [hint ? hintId : null, error ? errorId : null].filter(Boolean);
+function describedBy(
+  hintId: string,
+  errorId: string,
+  hint?: string,
+  error?: string | null,
+  standingId?: string,
+  standing?: string,
+) {
+  const ids = [hint ? hintId : null, standing ? standingId : null, error ? errorId : null].filter(
+    Boolean,
+  );
   return ids.length ? ids.join(" ") : undefined;
 }
 export function TextField({
@@ -85,6 +99,7 @@ export function TextField({
   value,
   onChange,
   hint,
+  standing,
   error,
   disabled,
   maxLength,
@@ -102,10 +117,22 @@ export function TextField({
         maxLength={maxLength}
         required={required}
         aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(id + "-hint", id + "-error", hint, error)}
+        aria-describedby={describedBy(
+          id + "-hint",
+          id + "-error",
+          hint,
+          error,
+          id + "-standing",
+          standing,
+        )}
         onChange={(event) => onChange(event.target.value)}
       />
       {hint ? <small id={id + "-hint"}>{hint}</small> : null}
+      {standing ? (
+        <small id={id + "-standing"} className="field-standing">
+          {standing}
+        </small>
+      ) : null}
       {error ? (
         <p id={id + "-error"} className="field-error">
           {error}
@@ -119,6 +146,7 @@ export function TextArea({
   value,
   onChange,
   hint,
+  standing,
   error,
   disabled,
   maxLength,
@@ -136,10 +164,22 @@ export function TextArea({
         maxLength={maxLength}
         required={required}
         aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(id + "-hint", id + "-error", hint, error)}
+        aria-describedby={describedBy(
+          id + "-hint",
+          id + "-error",
+          hint,
+          error,
+          id + "-standing",
+          standing,
+        )}
         onChange={(event) => onChange(event.target.value)}
       />
       {hint ? <small id={id + "-hint"}>{hint}</small> : null}
+      {standing ? (
+        <small id={id + "-standing"} className="field-standing">
+          {standing}
+        </small>
+      ) : null}
       {error ? (
         <p id={id + "-error"} className="field-error">
           {error}

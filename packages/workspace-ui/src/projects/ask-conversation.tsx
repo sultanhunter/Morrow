@@ -7,6 +7,7 @@ import { useId, useState, type FormEvent } from "react";
 import type { Id, WorkspaceView } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
 import { Button, TextArea, TextField } from "../components/controls";
+import { copy } from "../copy";
 import { StateView, outcomeState } from "../components/feedback";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
@@ -124,6 +125,7 @@ function ChoiceQuestion({
                 label={a.otherLabel}
                 value={other}
                 onChange={setOther}
+                standing={copy.customerDetails.standing}
                 error={otherChecked && !otherValid ? a.otherInvalid : null}
                 disabled={command.busy}
                 maxLength={2048}
@@ -289,6 +291,7 @@ export function AskConversationScreen({
                 label={a.messageLabel}
                 value={text}
                 onChange={setText}
+                standing={copy.customerDetails.standing}
                 error={checked && !valid ? a.invalid : null}
                 disabled={command.busy}
                 maxLength={askTextLimit}

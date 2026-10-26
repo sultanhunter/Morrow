@@ -8,6 +8,7 @@ import type {
   Current_ToolRefusalCode,
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
+import { screenModelWrittenSync } from "../customer-screen";
 import { checkToolInput, toolEntry, type ToolContext } from "../tool-catalogue";
 import { customerTagged, sourcesValid, storableText, unionTags } from "./rules";
 
@@ -19,8 +20,12 @@ import { customerTagged, sourcesValid, storableText, unionTags } from "./rules";
 //   * notebook.write (workspace.notebook.write, execute) writes one entry in the run's own
 //     installation's notebook.
 // The run's read tags are the union of its tool results' tags, computed by the loop, never by
-// a model; a run that read customer data (the support.case.read tag) can do neither. Each
-// refusal is a ToolRefusalCode; an input outside the tool's full definition is invalid_input.
+// a model; a run that read customer data (the support.case.read tag) can do neither. H9a
+// (ADR-0041 item 31): the text the model wrote (a proposal's title, text and source values, a
+// notebook entry's text) passes the customer identifier screen before the command; an email,
+// phone, street address or customer id in it is refused as customer_data, and nothing of it is
+// stored. Each refusal is a ToolRefusalCode; an input outside the tool's full definition is
+// invalid_input.
 
 /** What the loop knows about the run making the call (server-held, never model output). */
 export interface KnowledgeRunFacts {
@@ -112,6 +117,14 @@ export function decideKnowledgePropose(
   const i = input as Current_ToolInputKnowledgePropose;
   if (!storableText(i.title) || !storableText(i.text) || !sourcesValid(i.sources))
     return invalidInput;
+  if (
+    !screenModelWrittenSync("knowledge_proposal", {
+      title: i.title,
+      text: i.text,
+      sources: i.sources.map((s) => s.value),
+    }).ok
+  )
+    return refused("customer_data");
   return Object.freeze({
     ok: true as const,
     args: Object.freeze({
@@ -135,6 +148,7 @@ export function decideNotebookWrite(
   if (refusal) return refusal;
   const i = input as Current_ToolInputNotebookWrite;
   if (!storableText(i.text)) return invalidInput;
+  if (!screenModelWrittenSync("notebook_entry", i.text).ok) return refused("customer_data");
   return Object.freeze({
     ok: true as const,
     args: Object.freeze({ text: i.text, readTags: run.readTags }),

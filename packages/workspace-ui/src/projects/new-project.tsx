@@ -7,6 +7,7 @@ import { buildWorkspacePath, workspaceRoutes } from "@morrow/contracts/routes";
 import type { Id } from "../model";
 import { useCommand, useDirty, useServices } from "../services";
 import { Button, Dialog, TextArea, TextField } from "../components/controls";
+import { copy } from "../copy";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
 import { parseDay } from "./format";
@@ -114,6 +115,7 @@ export function TellMorrowDialog({
             label={c.label}
             value={text}
             onChange={setText}
+            standing={copy.customerDetails.standing}
             error={checked && !valid ? c.invalid : null}
             disabled={command.busy}
             maxLength={askTextLimit}

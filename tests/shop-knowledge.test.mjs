@@ -366,6 +366,34 @@ test("notebook.write's checks in code: its own notebook, never customer data", (
     });
 });
 
+test("H9a: a customer identifier the model wrote is refused before the command (ADR-0041 item 31)", () => {
+  const refused = { ok: false, outcome: "refused", refusal: "customer_data" };
+  // In a proposal's title, text or a source's value; and in a notebook entry's text.
+  for (const input of [
+    proposeInput({ text: "Refunds go to jane.doe@example.com within a week." }),
+    proposeInput({ title: "Call +44 20 7946 0958" }),
+    proposeInput({ text: "Returns: post them to 221B Baker Street." }),
+    proposeInput({ sources: [{ kind: "note", value: "gid://shopify/Customer/7234567890123" }] }),
+    proposeInput({ text: "Write to jane (at) example (dot) com" }),
+  ])
+    assert.deepEqual(decideKnowledgePropose(input, run()), refused, JSON.stringify(input));
+  for (const text of [
+    "Jane prefers WhatsApp: 0300-1234567",
+    "Customer 7234567890123 asked for a gift wrap.",
+    "jane&#64;example.com",
+  ])
+    assert.deepEqual(decideNotebookWrite({ text }, run()), refused, text);
+  // Order numbers, order and product ids, prices and dates are not customer data.
+  const fine = "Order #1042 (gid://shopify/Order/5123456789012) shipped 2026-10-20; $54.20.";
+  assert.equal(decideKnowledgePropose(proposeInput({ text: fine }), run()).ok, true);
+  assert.equal(decideNotebookWrite({ text: fine }, run()).ok, true);
+  // An invalid input stays invalid_input: the screen runs on a valid input only.
+  assert.equal(
+    decideNotebookWrite({ text: "jane@example.com", installationId: "i" }, run()).outcome,
+    "invalid_input",
+  );
+});
+
 test("a run's reads hand back their content's read tags, and a later write carries them (review R1)", async () => {
   // ADR-0031 item 6: a run's read tags are the union of its tool results' tags, and they only
   // narrow. A page's tags can be wider than the tool's own (an accepted proposal adds the

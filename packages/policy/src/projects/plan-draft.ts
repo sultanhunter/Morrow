@@ -12,6 +12,7 @@ import type {
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import planDraftsSwitch from "../../../../docs/decisions/plan-drafts-staging.json";
+import { screenModelWrittenSync } from "../customer-screen";
 import { type ToolEntry, toolEntry } from "../tool-catalogue";
 import { canonicalText, sha256Hex } from "./digest";
 
@@ -106,7 +107,9 @@ export type ToolRefusal =
   | "route_used"
   | "choice_budget_spent"
   | "card_kind_not_allowed"
-  | "input_invalid";
+  | "input_invalid"
+  /** H9a (ADR-0041 item 31): the card holds an email, phone, street address or customer id. */
+  | "customer_data";
 export interface TurnFacts {
   readonly conversation: ConversationKind;
   /** The run was started by @Morrow or "Plan next steps" in a project conversation. */
@@ -299,7 +302,8 @@ export const planDraftDigest = (draft: Current_PlanDraft): Promise<string> =>
 /**
  * One plan.draft call, decided in code. Refused while the switch is off, in a turn holding
  * a report (`report_in_context`), in an Ask without its envelope, outside the turn's tool
- * subset; a mention run drafts only task or plan-change cards. The input is the recorded
+ * subset; a mention run drafts only task or plan-change cards; a card holding a customer
+ * identifier is `customer_data` (H9a). The input is the recorded
  * tool_use input (ToolInputPlanDraft, ToolCatalogue@1 version 2), mapped to the closed
  * PlanDraft@1 by planDraftFromToolInput; nothing a model writes names a capability, scope,
  * grant, cap, model, recipient, sender or store.
@@ -320,6 +324,11 @@ export async function decidePlanDraft(
   if (mapped === null || !planDraftValid(mapped)) return { ok: false, refusal: "input_invalid" };
   if (turn.mentionRun && mapped.kind !== "task" && mapped.kind !== "plan_change")
     return { ok: false, refusal: "card_kind_not_allowed" };
+  // Every text of the card the model wrote passes the customer identifier screen before it is
+  // stored (H9a, ADR-0041 item 31); the card's ids and keys pass it too (order and product ids
+  // are not customer data).
+  if (!screenModelWrittenSync("plan_card", mapped).ok)
+    return { ok: false, refusal: "customer_data" };
   const draft = structuredClone(mapped);
   return { ok: true, draft, digest: await planDraftDigest(draft) };
 }

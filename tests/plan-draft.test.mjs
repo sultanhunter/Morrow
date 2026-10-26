@@ -386,6 +386,37 @@ test("plan.draft: refused while off, in a turn holding a report, without the Ask
   assert.equal((await decidePlanDraft(turn({ mentionRun: true }), asToolInput(change))).ok, true);
 });
 
+test("plan.draft: a card holding a customer identifier is refused before it is stored (H9a)", async () => {
+  // ADR-0041 item 31: every text of the card the model wrote passes the screen.
+  for (const card of [
+    { ...project, why: "Jane (jane.doe@example.com) asked for it twice." },
+    { ...project, doneWhen: "Call +44 20 7946 0958 to confirm." },
+    { ...task, steps: [{ ...task.steps[0], title: "Ship to 221B Baker Street" }] },
+    {
+      ...project,
+      steps: [
+        { ...project.steps[0] },
+        {
+          ...project.steps[1],
+          assignee: { kind: "specialist", purpose: "customer 7234567890123" },
+        },
+        project.steps[2],
+      ],
+    },
+  ])
+    assert.deepEqual(await decidePlanDraft(turn(), asToolInput(card)), {
+      ok: false,
+      refusal: "customer_data",
+    });
+  // The fixtures' dates, ids and counts pass.
+  assert.equal((await decidePlanDraft(turn(), asToolInput(project))).ok, true);
+  // The earlier checks keep their order: an invalid card is input_invalid, not customer_data.
+  assert.deepEqual(
+    await decidePlanDraft(turn(), asToolInput({ ...project, title: "Tote", why: "a@b.co" })),
+    { ok: false, refusal: "input_invalid" },
+  );
+});
+
 test("PlanDraft@1's code rules: titles, kinds, keys, order, start values, dates", () => {
   for (const d of [project, task, change]) assert.equal(planDraftValid(d), true, d.kind);
   const bad = {
