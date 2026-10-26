@@ -100,8 +100,66 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
 // carries `workspace_period_unrecovered_cost_cap_usd` (pinned, still within the
 // rest of the plan revenue, and enforced nowhere); any other version that carries
 // one is refused.
+// ADR-0039 made credits the only spend limit: only versions 1 and 3, published before it,
+// carry `run_cost_cap_usd` and `workspace_daily_cost_cap_usd` (pinned, checked as published,
+// and enforced nowhere once version 4 is active). A per-product version after 3 that carries
+// either, and a loop version that carries any money cap, is refused; the margin rules stay.
+// The owner chose the best model for every agent (2026-10-26, in chat: "we don't want to cheap
+// out on models"): from version 4, a version of either run shape holds only Claude Opus 5.5
+// entries, and any other model is refused: Haiku or Sonnet, and an older Opus such as
+// claude_opus_4_1 as much as a newer one. A later model needs a reviewed change to this rule
+// (OPUS_ONLY_MODEL), not just a new catalogue version. The owner's answer to question 1 on
+// pull request 82 (2026-10-26, the recommendation "Drop low effort everywhere") drops low
+// effort under the same rule: medium and high only (xhigh and max may come in a later version
+// once tests show they help). The rule holds from version 4 and, since review finding A2, for
+// every published (active or retired) version other than 1 and 3, so publishing the loop's
+// version 2 as it stands is refused too. Versions 1 and 3 keep their Haiku, Sonnet and low
+// effort as published; the loop's version 2 keeps them only while it is proposed (pull request
+// 64 rewrites it under ADR-0041).
+export const OPUS_ONLY_FROM_VERSION = 4;
+export const PUBLISHED_BEFORE_OPUS_ONLY = Object.freeze([1, 3]);
+export const OPUS_ONLY_REFUSED_EFFORTS = Object.freeze(["low"]);
+export const OPUS_ONLY_MODEL = Object.freeze({
+  provider: "anthropic",
+  key: "claude_opus_5_5",
+  provider_model_id: "claude-opus-5-5",
+});
 export const UNRECOVERED_CAP_VERSIONS = Object.freeze([1]);
+export const COST_CAP_VERSIONS = Object.freeze([1, 3]);
+/**
+ * Exactly Claude Opus 5.5: Anthropic's, the key claude_opus_5_5 and the provider model ID
+ * claude-opus-5-5, so a key never names one model and calls another, and no other Opus
+ * generation passes.
+ */
+export const isOpusModel = (model) =>
+  model?.provider === OPUS_ONLY_MODEL.provider &&
+  model.key === OPUS_ONLY_MODEL.key &&
+  model.provider_model_id === OPUS_ONLY_MODEL.provider_model_id;
+/**
+ * Whether the owner's Opus-only rule holds for a version, of either run shape: every version
+ * from 4, and every published (active or retired) version other than 1 and 3 (review A2).
+ */
+export const opusOnlyApplies = (entry) =>
+  Number.isInteger(entry?.version) &&
+  (entry.version >= OPUS_ONLY_FROM_VERSION ||
+    (["active", "retired"].includes(entry.status) &&
+      !PUBLISHED_BEFORE_OPUS_ONLY.includes(entry.version)));
+const OPUS_ONLY_SCOPE = "from version 4, and in every published version but 1 and 3,";
+const refuseNonOpus = (entry, model, fail) => {
+  if (opusOnlyApplies(entry) && !isOpusModel(model))
+    fail(`${model.key} is not Claude Opus 5.5; ${OPUS_ONLY_SCOPE} every entry is Claude Opus 5.5`);
+};
+const refuseOpusOnlyEffort = (entry, effort, fail) => {
+  if (opusOnlyApplies(entry) && OPUS_ONLY_REFUSED_EFFORTS.includes(effort.key))
+    fail(`effort ${effort.key} is refused; ${OPUS_ONLY_SCOPE} entries run at medium or high`);
+};
 const unrecoveredCapField = "workspace_period_unrecovered_cost_cap_usd";
+const costCapFields = Object.freeze(["run_cost_cap_usd", "workspace_daily_cost_cap_usd"]);
+const loopMoneyCapFields = Object.freeze([
+  ...costCapFields,
+  "look_for_work_daily_cost_cap_usd",
+  unrecoveredCapField,
+]);
 const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
 const VERSION_STATUSES = ["proposed", "active", "retired"];
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -147,7 +205,9 @@ export const runShapeOf = (entry) =>
 // per-product credits (the rate card prices runs, ADR-0026 item 5). Every entry's worst-case
 // turn is the input cap at the 5-minute cache-write rate (the dearest input rate) plus the
 // effort's whole max_tokens at the output rate; it must fit one call budget of at most 600 s
-// at the 128,000-tokens-an-hour floor and two worst-case turns of the run backstop.
+// at the 128,000-tokens-an-hour floor. No loop version carries a money cap (ADR-0039 item 1:
+// the run and daily backstops, the look-for-work cap and the unrecovered-cost cap are gone);
+// a run's turns hold and draw credits from the wallet.
 export const LOOP_KINDS = ["coordinator", "specialist", "installed"];
 const LOOP_LIMITS = {
   max_input_tokens_per_turn: [1, 64000],
@@ -176,6 +236,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     // No xhigh or max at launch: the send is non-streaming (ADR-0027 item 12).
     if (!["low", "medium", "high"].includes(effort.key) || efforts.has(effort.key))
       fail(`invalid loop effort ${effort.key}`);
+    refuseOpusOnlyEffort(entry, effort, fail);
     if (
       JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
       JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||
@@ -198,26 +259,13 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     fail("the Coordinator's turn limit exceeds the run's");
   if (limits.specialist_default_run_minutes > limits.specialist_max_run_minutes)
     fail("the specialist default run exceeds its maximum");
-  // The per-run and per-day backstops (ADR-0026 item 4) and the per-agent daily look-for-work
-  // cap (ADR-0036 item 7); no unrecovered-cost cap (ADR-0036).
-  const caps = [
-    limits.run_cost_cap_usd,
-    limits.workspace_daily_cost_cap_usd,
-    limits.look_for_work_daily_cost_cap_usd,
-  ];
-  let runCap = null;
-  let lookCap = null;
-  if (!caps.every(isDecimal) || caps.some((cap) => scaled(cap, 12) === 0n))
-    fail("missing USD caps");
-  else {
-    runCap = scaled(limits.run_cost_cap_usd, 12);
-    lookCap = scaled(limits.look_for_work_daily_cost_cap_usd, 12);
-    if (scaled(limits.workspace_daily_cost_cap_usd, 12) < runCap)
-      fail("the daily cap is below the run cap");
-    if (lookCap > runCap) fail("the look-for-work cap is above the run cap");
-  }
+  // No money cap (ADR-0039 item 1): not the run or daily backstop, not the look-for-work cap
+  // (ADR-0036 item 7 set it; ADR-0039 removed it) and not the unrecovered-cost cap (ADR-0036).
   if (Object.hasOwn(limits, unrecoveredCapField))
     fail("carries an unrecovered-cost cap, which ADR-0036 removed");
+  for (const field of loopMoneyCapFields)
+    if (field !== unrecoveredCapField && Object.hasOwn(limits, field))
+      fail(`carries ${field}, a money cap, which ADR-0039 removed`);
   const expected = entry.expected_turn ?? {};
   if (
     !isCount(expected.input_tokens) ||
@@ -228,7 +276,6 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     fail("the expected turn must fit the input cap");
   const inputCap = limits.max_input_tokens_per_turn;
   const models = new Map();
-  const worstCase = new Map();
   for (const model of entry.models ?? []) {
     const price = model.rates_usd_per_million_tokens ?? {};
     if (!KEY.test(model.key ?? "") || models.has(model.key)) fail(`invalid model key ${model.key}`);
@@ -241,6 +288,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
       /latest/.test(model.provider_model_id)
     )
       fail(`${model.key} has an unpinned provider model`);
+    refuseNonOpus(entry, model, fail);
     const kinds = ["input", "output", "cache_write_5m", "cache_read"];
     const priced =
       JSON.stringify(Object.keys(price).sort()) === JSON.stringify([...kinds].sort()) &&
@@ -270,9 +318,6 @@ function inspectLoopCatalogueVersion(entry, adapters) {
       const worst =
         BigInt(inputCap) * scaled(price.cache_write_5m, 6) +
         BigInt(effort.max_output_tokens) * scaled(price.output, 6);
-      if (runCap !== null && worst * 2n > runCap)
-        fail(`${model.key} at ${key}: two worst-case turns exceed the run backstop`);
-      worstCase.set(`${model.key} ${key}`, worst);
       selections.push({
         model: model.key,
         effort: key,
@@ -294,11 +339,6 @@ function inspectLoopCatalogueVersion(entry, adapters) {
     )
       fail(`the ${kind} default profile must be an entry of this version`);
   }
-  // ADR-0036 item 7: a look-for-work pass is a mandate run, so it needs a tool turn and a
-  // final turn; the cap must hold two worst-case turns of the installed default.
-  const installed = worstCase.get(`${profiles.installed?.model} ${profiles.installed?.effort}`);
-  if (lookCap !== null && installed !== undefined && installed * 2n > lookCap)
-    fail("the look-for-work cap cannot hold two worst-case turns of the installed default");
   return { errors, selections };
 }
 
@@ -317,6 +357,7 @@ function inspectCatalogueVersion(entry, adapters) {
     const request = effort.request ?? {};
     if (!EFFORT_LEVELS.includes(effort.key) || efforts.has(effort.key))
       fail(`invalid effort ${effort.key}`);
+    refuseOpusOnlyEffort(entry, effort, fail);
     if (
       JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
       JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||
@@ -339,18 +380,25 @@ function inspectCatalogueVersion(entry, adapters) {
     limits.max_consecutive_failed_products > maxProducts
   )
     fail("the failure breaker must stop a run within its product limit");
-  // The per-run and per-day caps; version 1 alone also carries its unrecovered-cost cap,
-  // pinned and checked as published, and enforced nowhere since ADR-0036.
+  // The per-run and per-day caps, on versions 1 and 3 only (published before ADR-0039 and
+  // checked as published; enforced nowhere once version 4 is active); version 1 alone also
+  // carries its unrecovered-cost cap, enforced nowhere since ADR-0036. A later version that
+  // carries either cost cap is refused: credits are the only spend limit (ADR-0039 item 1).
+  const carriesCostCaps = COST_CAP_VERSIONS.includes(entry.version);
   const carriesUnrecoveredCap = UNRECOVERED_CAP_VERSIONS.includes(entry.version);
-  const caps = [limits.run_cost_cap_usd, limits.workspace_daily_cost_cap_usd];
+  const caps = carriesCostCaps
+    ? [limits.run_cost_cap_usd, limits.workspace_daily_cost_cap_usd]
+    : [];
   if (carriesUnrecoveredCap) caps.push(limits[unrecoveredCapField]);
   else if (Object.hasOwn(limits, unrecoveredCapField))
     fail("carries an unrecovered-cost cap, which ADR-0036 removed");
+  if (!carriesCostCaps && costCapFields.some((field) => Object.hasOwn(limits, field)))
+    fail("carries a run or daily cost cap, which ADR-0039 removed");
   let runCap = null;
   let unrecoveredCap = null;
   if (!caps.every(isDecimal) || caps.some((cap) => scaled(cap, 12) === 0n))
     fail("missing USD caps");
-  else {
+  else if (carriesCostCaps) {
     runCap = scaled(limits.run_cost_cap_usd, 12);
     if (carriesUnrecoveredCap) unrecoveredCap = scaled(limits[unrecoveredCapField], 12);
     if (scaled(limits.workspace_daily_cost_cap_usd, 12) < runCap)
@@ -407,6 +455,7 @@ function inspectCatalogueVersion(entry, adapters) {
       /latest/.test(model.provider_model_id)
     )
       fail(`${model.key} has an unpinned provider model`);
+    refuseNonOpus(entry, model, fail);
     const priced = isDecimal(price.input) && isDecimal(price.output);
     if (!priced) fail(`${model.key} has no rates`);
     // The catalogue prices one tier; null means one price for the whole context.
@@ -441,13 +490,16 @@ function inspectCatalogueVersion(entry, adapters) {
         fail(
           `${model.key} at ${key} worst case exceeds ${economics.max_worst_case_share} of its credits' net revenue`,
         );
+      // A version with a run cap (1 and 3) admits the lower of its product limit and the cap
+      // over the worst case; from version 4 every entry admits the product limit (ADR-0039
+      // item 4), held up front in credits.
       let productsPerRun = null;
       if (runCap !== null && isCount(maxProducts)) {
         const fit = worst === 0n ? BigInt(maxProducts) : runCap / worst;
         productsPerRun = Number(fit < BigInt(maxProducts) ? fit : BigInt(maxProducts));
         if (productsPerRun < 1)
           fail(`${model.key} at ${key} does not fit one product in the run cap`);
-      }
+      } else if (!carriesCostCaps && isCount(maxProducts)) productsPerRun = maxProducts;
       selections.push({
         model: model.key,
         effort: key,

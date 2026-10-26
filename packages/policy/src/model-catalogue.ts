@@ -10,7 +10,17 @@
 //   per product are at most the workspace ceiling (by default the default selection's
 //   credits: 4 for Opus 5.5 at medium since version 3, ADR-0036); holders may pick any entry,
 //   since they could raise the ceiling.
-// - No unrecovered-cost cap (ADR-0036): the per-run and per-day caps are the USD limits.
+// - No unrecovered-cost cap (ADR-0036), and no run or daily cost cap from version 4 (ADR-0039:
+//   credits are the only spend limit). Versions 1 and 3 keep their published US$7 and US$25,
+//   which nothing enforces once version 4 is active; their entries' run limits stay as
+//   published (the lower of 25 and US$7 over the worst case). From version 4 every entry's
+//   run limit is the version's max_products_per_run, 25.
+// - From version 4 every entry is Claude Opus 5.5 at medium or high (the owner, 2026-10-26:
+//   Haiku 5.5 and Sonnet 5.5 leave the catalogue, and then low effort; verify refuses any
+//   other model, an older or newer Opus included, until a reviewed change to its rule, and low
+//   effort). A Haiku, Sonnet or Opus-at-low selection is an unknown key, and a stored
+//   workspace default naming one falls back to the catalogue default. The cheapest entry is
+//   Opus 5.5 at medium, 4 credits, so a stored member ceiling below 4 admits no entry.
 // - A run is booked at its own recorded catalogue version, even after a newer one is active.
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { generatedModelCatalogue } from "./generated/model-catalogue";
@@ -31,7 +41,10 @@ export interface CatalogueEntry {
   readonly worstCasePerProductUsd8: bigint;
   /** The worst case of one attempt, booked for an `uncertain` outcome (ADR-0022 item 10). */
   readonly worstCasePerAttemptUsd8: bigint;
-  /** min(maxProductsPerRun, floor(runCostCap / worstCasePerProduct)). */
+  /**
+   * maxProductsPerRun from version 4 (ADR-0039 item 4); at versions 1 and 3, as published,
+   * min(maxProductsPerRun, floor(runCostCap / worstCasePerProduct)).
+   */
   readonly runProductLimit: number;
   readonly maxOutputTokens: number;
   readonly inputUsd8PerToken: bigint;
@@ -49,8 +62,10 @@ export interface CatalogueLimits {
   readonly maxAttemptsPerProduct: number;
   readonly maxProductsPerRun: number;
   readonly maxConsecutiveFailedProducts: number;
-  readonly runCostCapUsd8: bigint;
-  readonly workspaceDailyCostCapUsd8: bigint;
+  /** Versions 1 and 3 only, as published; null from version 4 (ADR-0039). Enforced nowhere. */
+  readonly runCostCapUsd8: bigint | null;
+  /** Versions 1 and 3 only, as published; null from version 4 (ADR-0039). Enforced nowhere. */
+  readonly workspaceDailyCostCapUsd8: bigint | null;
 }
 export type SelectionRefusal =
   /** Not a ModelSelection@1 (a provider model string, an extra field, a non-key). */
@@ -91,8 +106,8 @@ export interface ModelCatalogueVersionData {
     readonly maxAttemptsPerProduct: number;
     readonly maxProductsPerRun: number;
     readonly maxConsecutiveFailedProducts: number;
-    readonly runCostCapUsd8: number;
-    readonly workspaceDailyCostCapUsd8: number;
+    readonly runCostCapUsd8: number | null;
+    readonly workspaceDailyCostCapUsd8: number | null;
   };
   readonly efforts: readonly { readonly key: string; readonly maxOutputTokens: number }[];
   readonly models: readonly {
@@ -136,8 +151,11 @@ function limitsOf(v: ModelCatalogueVersionData): CatalogueLimits {
     maxAttemptsPerProduct: v.limits.maxAttemptsPerProduct,
     maxProductsPerRun: v.limits.maxProductsPerRun,
     maxConsecutiveFailedProducts: v.limits.maxConsecutiveFailedProducts,
-    runCostCapUsd8: BigInt(v.limits.runCostCapUsd8),
-    workspaceDailyCostCapUsd8: BigInt(v.limits.workspaceDailyCostCapUsd8),
+    runCostCapUsd8: v.limits.runCostCapUsd8 === null ? null : BigInt(v.limits.runCostCapUsd8),
+    workspaceDailyCostCapUsd8:
+      v.limits.workspaceDailyCostCapUsd8 === null
+        ? null
+        : BigInt(v.limits.workspaceDailyCostCapUsd8),
   });
 }
 
@@ -156,7 +174,8 @@ function entryOf(
     BigInt(v.limits.maxInputTokensPerCall) * input + BigInt(e.maxOutputTokens) * output;
   const product = BigInt(v.limits.maxAttemptsPerProduct) * attempt;
   const most = BigInt(v.limits.maxProductsPerRun);
-  const fit = product === 0n ? most : BigInt(v.limits.runCostCapUsd8) / product;
+  const cap = v.limits.runCostCapUsd8;
+  const fit = cap === null || product === 0n ? most : BigInt(cap) / product;
   return Object.freeze({
     catalogueVersion: v.version,
     status: v.status as CatalogueStatus,
@@ -249,7 +268,7 @@ export function createModelCatalogue(data: ModelCatalogueData) {
         ? Object.freeze({ model: v.defaultSelection.model, effort: v.defaultSelection.effort })
         : null;
     },
-    /** The default member ceiling of the active version (1 in version 1, 4 in version 3). */
+    /** The default member ceiling of the active version (1 in version 1, 4 in versions 3 and 4). */
     defaultMemberCreditCeiling: (): number | null =>
       activeVersion()?.defaultMemberCreditCeiling ?? null,
     /**

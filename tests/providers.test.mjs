@@ -95,8 +95,22 @@ test("the model catalogue is adapter-backed, within its margin and never loses m
   assert.deepEqual(validateModelPolicy(modelPolicy, registry), []));
 test("the catalogue derives each selection's worst case and run limit", () => {
   const versions = inspectModelPolicy(modelPolicy, registry).versions;
-  const [v1, v3] = [versions[0], versions[2]];
-  assert.deepEqual([v1.version, v1.status, v3.version, v3.status], [1, "retired", 3, "active"]);
+  const [v1, v3, v4] = [versions[0], versions[2], versions[3]];
+  assert.deepEqual(
+    [v1.version, v1.status, v3.version, v3.status, v4.version, v4.status],
+    [1, "retired", 3, "retired", 4, "active"],
+  );
+  // Version 4 keeps every price of version 3's Opus 5.5 at medium and high (ADR-0039 removes
+  // the caps, not a price; the owner's decisions of 2026-10-26 remove Haiku 5.5, Sonnet 5.5
+  // and low effort), and every entry admits the version's 25 products: no run cost cap
+  // lowers it.
+  assert.deepEqual(
+    v4.selections,
+    v3.selections
+      .filter((row) => row.model === "claude_opus_5_5" && row.effort !== "low")
+      .map((row) => ({ ...row, products_per_run: 25 })),
+  );
+  assert.equal(v4.selections.length, 2);
   // Version 3 keeps every entry of version 1 (ADR-0036 changes its default, not its prices).
   assert.deepEqual(v3.selections, v1.selections);
   const row = (model, effort) =>
@@ -120,8 +134,9 @@ test("the catalogue derives each selection's worst case and run limit", () => {
   assert.equal(row("claude_sonnet_5_5", "high").products_per_run, 19);
 });
 // Catalogue v1 was published on the owner's confirmation (2026-10-19); its digest is pinned.
-// ADR-0036 (OD-2026-10-25-1) published version 3 and retired version 1.
-test("catalogue v1 is retired and v3 active, each with the owner's confirmation and its pinned digest", () => {
+// ADR-0036 (OD-2026-10-25-1) published version 3 and retired version 1; ADR-0039
+// (OD-2026-10-25-4) published version 4 and retired version 3.
+test("catalogue v1 and v3 are retired and v4 active, each with the owner's confirmation and its pinned digest", () => {
   const v1 = modelPolicy.catalogue.versions[0];
   assert.equal(v1.status, "retired");
   assert.match(v1.owner_confirmation, /Confirm all \(Recommended\)/);
@@ -131,9 +146,9 @@ test("catalogue v1 is retired and v3 active, each with the owner's confirmation 
   assert.equal(v1.limits.workspace_period_unrecovered_cost_cap_usd, "4.50");
   const v3 = modelPolicy.catalogue.versions[2];
   assert.equal(v3.version, 3);
-  assert.equal(v3.status, "active");
+  assert.equal(v3.status, "retired");
   assert.equal(v3.run_shape, undefined);
-  assert.equal(modelPolicy.catalogue.active_versions.per_product, 3);
+  assert.equal(modelPolicy.catalogue.active_versions.per_product, 4);
   assert.ok(
     v3.owner_confirmation.includes(
       "use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost",
@@ -163,6 +178,43 @@ test("catalogue v1 is retired and v3 active, each with the owner's confirmation 
     return rest;
   };
   assert.deepEqual(strip(v3), strip(v1));
+  // Version 4: version 3 without the run and daily caps (ADR-0039 item 4), and with Claude
+  // Opus 5.5 at medium and high only (the owner, 2026-10-26).
+  const v4 = modelPolicy.catalogue.versions[3];
+  assert.deepEqual([v4.version, v4.status, v4.run_shape], [4, "active", undefined]);
+  assert.match(v4.owner_confirmation, /OD-2026-10-25-4/);
+  assert.match(v4.owner_confirmation, /Owner, 2026-10-26, in chat: "one more thing/);
+  assert.match(
+    v4.owner_confirmation,
+    /Owner, 2026-10-26, in chat, answering owner question 1 on pull request 82 .*: "lets accept the recommended options/,
+  );
+  assert.equal(v4.effective_from, "2026-10-26");
+  assert.equal(modelPolicy.catalogue.published_digests["4"], catalogueVersionDigest(v4));
+  assert.deepEqual(v4.default_selection, v3.default_selection);
+  assert.equal(v4.default_member_credit_ceiling, v3.default_member_credit_ceiling);
+  for (const field of ["run_cost_cap_usd", "workspace_daily_cost_cap_usd"]) {
+    assert.equal(Object.hasOwn(v4.limits, field), false, field);
+    assert.ok(Object.hasOwn(v3.limits, field), field);
+  }
+  const strip4 = (v) => {
+    const rest = strip(v);
+    delete rest.limits.run_cost_cap_usd;
+    delete rest.limits.workspace_daily_cost_cap_usd;
+    rest.models = rest.models.filter((m) => m.key === "claude_opus_5_5");
+    rest.efforts = rest.efforts.filter((e) => e.key !== "low");
+    for (const m of rest.models) delete m.credits_per_product.low;
+    return rest;
+  };
+  assert.deepEqual(
+    v4.models.map((m) => m.key),
+    ["claude_opus_5_5"],
+  );
+  assert.deepEqual(
+    v4.efforts.map((e) => e.key),
+    ["medium", "high"],
+  );
+  assert.deepEqual(strip4(v4), strip4(v3));
+  assert.deepEqual(v4.default_selection, { model: "claude_opus_5_5", effort: "medium" });
 });
 // The rule cases start from v1 as it stood before publication: proposed, nothing pinned. They
 // are the per-product shape's, so the proposed loop version (v2, PR 10) and the later
@@ -360,6 +412,33 @@ for (const [name, change, expected] of [
   [
     "version 1 without its published unrecovered-cost cap",
     (p) => delete latest(p).limits.workspace_period_unrecovered_cost_cap_usd,
+    /model catalogue v1: missing USD caps/,
+  ],
+  [
+    "a run cost cap on a per-product version after 3 (ADR-0039)",
+    (p) => {
+      const next = structuredClone(latest(p));
+      next.version = 2;
+      delete next.limits.workspace_period_unrecovered_cost_cap_usd;
+      delete next.limits.workspace_daily_cost_cap_usd;
+      p.catalogue.versions.push(next);
+    },
+    /model catalogue v2: carries a run or daily cost cap, which ADR-0039 removed/,
+  ],
+  [
+    "a daily cost cap on a per-product version after 3 (ADR-0039)",
+    (p) => {
+      const next = structuredClone(latest(p));
+      next.version = 2;
+      delete next.limits.workspace_period_unrecovered_cost_cap_usd;
+      delete next.limits.run_cost_cap_usd;
+      p.catalogue.versions.push(next);
+    },
+    /model catalogue v2: carries a run or daily cost cap, which ADR-0039 removed/,
+  ],
+  [
+    "version 1 without its published daily cap",
+    (p) => delete latest(p).limits.workspace_daily_cost_cap_usd,
     /model catalogue v1: missing USD caps/,
   ],
   [
