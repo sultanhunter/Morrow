@@ -7,7 +7,7 @@
 ## The short version
 
 - **Morrow keeps its own harness.** The loop that runs every agent is Morrow's code on Cloudflare Workflows, talking to Anthropic's plain Messages API. No Claude Agent SDK and no Claude Managed Agents run inside the product, so who may do what, credits, approvals and data retention stay in Morrow's code.
-- **Every agent is Claude Opus 5.5.** Morrow thinks at high effort; every teammate at medium. No Haiku, no Sonnet, no low effort.
+- **Every agent is Claude Opus 5.5.** Morrow thinks at high effort; every teammate at medium. No Haiku, no Sonnet. Whether low effort also goes is your call (question 1).
 - **Nothing ends early because of a limit.** There are no turn limits, no 30-minute clock and no reading cap. When a safety check fires, the job pauses, keeps everything it has done and asks a person.
 - **Agents never run out of room.** When an agent's working memory fills up, older parts are summarised and the agent carries on. The facts that matter (your words, approvals, changes, ids) are rewritten from Morrow's records by code, never from the summary.
 - **It feels like messaging a team.** You see "Seen by Morrow" at once; quick questions are answered in place; longer work runs in the background on a card; results arrive as finished messages; you get a notification when something needs you or is done.
@@ -154,7 +154,7 @@ All of these are data that a new catalogue or policy version can change, with it
 
 **What Morrow does.**
 - Opus 5.5 for every agent. Morrow at high effort, every teammate at medium. Summaries and checks use the same model and the effort of the agent whose work they concern; a check of Morrow's work runs at high.
-- Haiku, Sonnet and low effort are removed from every catalogue, Listings' included. Haiku and Sonnet go because you ruled out cheaper models (OD-2026-10-26-5); dropping low effort too is put to you (owner question 1). Extra-high and max effort come later, once tests show they help.
+- Haiku and Sonnet are removed from every catalogue, Listings' included. They go because you ruled out cheaper models (OD-2026-10-26-5); dropping low effort too is put to you (owner question 1). Extra-high and max effort come later, once tests show they help.
 - The model and effort never change in the middle of a context, because that would throw away the cache and the model's reasoning.
 - Morrow's first reply runs at high effort too. "Seen by Morrow" and the status line make it feel immediate; the real reply comes as fast as a high-effort turn allows, measured on staging.
 
