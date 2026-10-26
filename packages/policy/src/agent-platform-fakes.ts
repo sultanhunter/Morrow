@@ -263,7 +263,8 @@ export function fakeReportArtifact(): Current_ReportArtifact {
 /**
  * The safety values admission pins (AgentRunSafety@1, ADR-0041 items 3, 7, 8, 9, 17 and 18) at
  * the record's seeds: Morrow at high effort (max_tokens 64,000), every other kind at medium
- * (32,000). Catalogue data in production; the model never sees any of it.
+ * (32,000). No cost check-in: credits are the only budget (OD-2026-10-26-12). Catalogue data in
+ * production; the model never sees any of it.
  */
 export function fakeAgentRunSafety(effort: "high" | "medium" = "medium"): Current_AgentRunSafety {
   const hour = 3_600_000;
@@ -278,8 +279,6 @@ export function fakeAgentRunSafety(effort: "high" | "medium" = "medium"): Curren
       activeMs: day,
       sinceRequesterActMs: 7 * day,
       children: 32,
-      costMultiple: 5,
-      costFallbackUsd: "25",
     },
     detectors: {
       signatureRing: 32,

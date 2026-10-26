@@ -17,3 +17,6 @@ v1.1 set, with deterministic fakes, the context policy's version 1 (proposed) an
 and conformance tests. No migration, route, capability or switch. ADR-0040's contracts (v1.2,
 StandingRequest@1, the stop and revoke capabilities, the morrow and live routes) follow in the
 second PR.
+
+Merged main at 14644dec (pull request 89, OD-2026-10-26-12): AgentRunSafety@1 has no cost
+check-in and CheckInCode no cost; the slot wait is a send slot, with no per-person cap.

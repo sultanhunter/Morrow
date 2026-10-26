@@ -8523,7 +8523,7 @@
           "additionalProperties": false
         },
         "checkIns": {
-          "description": "Backstops that check in, never endings (ADR-0041 item 18): a trip commits a checkin wait, the plan state and a code-built post with Continue, Continue with guidance and Stop.",
+          "description": "Backstops that check in, never endings (ADR-0041 item 18): a trip commits a checkin wait, the plan state and a code-built post with Continue, Continue with guidance and Stop. None is about money: credits are the only budget, so there is no cost check-in (OD-2026-10-26-12; ADR-0041's 2026-10-26 Amendments, item 18), and the only detector that watches credits is costWithoutProgress, measured against the run's own progress.",
           "type": "object",
           "properties": {
             "modelTurns": {
@@ -8552,16 +8552,6 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 32
-            },
-            "costMultiple": {
-              "description": "Drawn credits above this multiple of the usual credits for the job's kind (the p95 staging measures) check in (OD-2026-10-26-7, question 4).",
-              "type": "integer",
-              "minimum": 2,
-              "maximum": 100
-            },
-            "costFallbackUsd": {
-              "description": "Until staging measures the usual credits, the credits worth this much model use check in (US$25).",
-              "$ref": "#/$defs/UsdCost"
             }
           },
           "required": [
@@ -8569,9 +8559,7 @@
             "toolCalls",
             "activeMs",
             "sinceRequesterActMs",
-            "children",
-            "costMultiple",
-            "costFallbackUsd"
+            "children"
           ],
           "additionalProperties": false
         },
@@ -18879,7 +18867,7 @@
       ]
     },
     "RunWaitKind": {
-      "description": "A durable wait (ADR-0041 items 4, 9, 17 and 18). One open wait per run; a wait holds no lease and no credits.",
+      "description": "A durable wait (ADR-0041 items 4, 9, 17 and 18). One open wait per run; a wait holds no lease and no credits. slot: an admitted run waits for a send slot while its workspace's 12 model calls in flight are taken; it is never refused or ended, and there is no per-person cap or waiting line (OD-2026-10-26-12; ADR-0041's 2026-10-26 Amendments, items 7, 9 and 21).",
       "type": "string",
       "enum": [
         "question",
@@ -18896,7 +18884,7 @@
       ]
     },
     "CheckInCode": {
-      "description": "Why a job checked in (ADR-0041 item 18): a backstop, the envelope, the kernel's 32 children, the cost check-in, or 24 hours parked on the provider.",
+      "description": "Why a job checked in (ADR-0041 item 18): a backstop, the envelope, the kernel's 32 children, or 24 hours parked on the provider. There is no cost check-in (OD-2026-10-26-12; ADR-0041's 2026-10-26 Amendments, item 18).",
       "type": "string",
       "enum": [
         "turns",
@@ -18904,7 +18892,6 @@
         "active_time",
         "envelope",
         "children",
-        "cost",
         "provider"
       ]
     },
@@ -19164,7 +19151,7 @@
       ]
     },
     "RunWait": {
-      "description": "RunWait@1 (ADR-0041 items 4, 7 and 17; H6): one row of run_waits. A timer, a finished child, a top-up, an approval or gateway outcome, a provider back-off or a free slot only marks the wait resolvable in SQL; the run resumes only when agent_run_resume re-runs admission's checks and re-issues the lease, within the envelope. Approval waits carry the operation's status from SQL; only applied with a matching read-back satisfies them.",
+      "description": "RunWait@1 (ADR-0041 items 4, 7 and 17; H6): one row of run_waits. A timer, a finished child, a top-up, an approval or gateway outcome, a provider back-off or a free send slot only marks the wait resolvable in SQL; the run resumes only when agent_run_resume re-runs admission's checks and re-issues the lease, within the envelope. Approval waits carry the operation's status from SQL; only applied with a matching read-back satisfies them.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -20159,7 +20146,7 @@
       ]
     },
     "JobState": {
-      "description": "A request's state (ADR-0040 item 5). checking overrides done, stopped and failed while any operation's outcome is unreconciled (dispatching, submitted, verifying, uncertain or cancel_requested: unknownOperationStatuses in packages/policy/src/harness.ts), and is never shown as done.",
+      "description": "A request's state (ADR-0040 item 5). queued: a request whose first model call waits for a send slot because the system is busy (ADR-0040's 2026-10-26 Amendments, items 2 and 5: \"Waiting its turn · starts shortly\"); a later send-slot wait leaves it working, so a card never flips back from working to queued. checking overrides done, stopped and failed while any operation's outcome is unreconciled (dispatching, submitted, verifying, uncertain or cancel_requested: unknownOperationStatuses in packages/policy/src/harness.ts), and is never shown as done.",
       "type": "string",
       "enum": [
         "not_started",

@@ -217,7 +217,9 @@ test("AgentRunSafety@1: the seeds pass, the schema holds only safety ranges, and
     ["a lease above 30 minutes", edit(seed, (s) => (s.lease.ms = 1_800_001))],
     ["a person wait under a day", edit(seed, (s) => (s.personWait.ms = day - 1))],
     ["a person wait over 365 days", edit(seed, (s) => (s.personWait.ms = 365 * day + 1))],
-    ["a cost fallback in cents", edit(seed, (s) => (s.checkIns.costFallbackUsd = "25.000000001"))],
+    // OD-2026-10-26-12: credits are the only budget, so no check-in rests on a total of spend.
+    ["a cost check-in", edit(seed, (s) => (s.checkIns.costMultiple = 5))],
+    ["a cost check-in's fallback", edit(seed, (s) => (s.checkIns.costFallbackUsd = "25"))],
     ["the retired turn cap", edit(seed, (s) => (s.maxTurns = 16))],
     ["a money cap", edit(seed, (s) => (s.holdUsd = "3.84"))],
     ["no detectors", edit(seed, (s) => delete s.detectors)],
@@ -735,7 +737,14 @@ test("RunWait@1: one condition per kind, no lease, and a resolution only once re
       "a resolution by an unknown lease source",
       edit(fakes.fakeResolvedRunWait(), (w) => (w.resolution.leaseSource = "sweep")),
     ],
+    // OD-2026-10-26-12 (ADR-0041's 2026-10-26 Amendments, item 18): no cost check-in.
+    ["a cost check-in", edit(fakes.fakeRunWait("checkin"), (w) => (w.condition.code = "cost"))],
   ]);
+  assert.deepEqual(
+    enumOf("CheckInCode"),
+    ["turns", "tool_calls", "active_time", "envelope", "children", "provider"],
+    "the check-ins are backstops, the envelope, the kernel's children and the provider; none is money",
+  );
   assert.ok(
     valid("RunWait", {
       ...fakes.fakeResolvedRunWait(),
@@ -764,7 +773,10 @@ test("RunEvent@1 is content-free and typed by kind; JobStatus@1 is a projection 
     ["credits drawn without the amount", { ...drawn, credits: null }],
     ["credits in dollars", { ...drawn, credits: "0.38" }],
     ["a wait event naming a run", { ...opened, ref: { kind: "run", id: "run_x" } }],
-    ["a detector event with a check-in code", { ...ended, kind: "detector.tripped", code: "cost" }],
+    [
+      "a detector event with a check-in code",
+      { ...ended, kind: "detector.tripped", code: "active_time" },
+    ],
     ["content", { ...ended, text: "Proposed 12 titles." }],
     ["an unknown kind", { ...ended, kind: "model.said" }],
   ]);

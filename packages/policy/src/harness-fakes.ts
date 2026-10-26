@@ -558,7 +558,7 @@ export function fakeReviewVerdict(
 // --- Waits (ADR-0041 items 7, 9, 17, 18 and 21) -------------------------------------------
 const waitConditions: Readonly<Record<Current_RunWaitKind, Current_RunWaitCondition>> = {
   question: { kind: "question", questionId: ids.questionId },
-  checkin: { kind: "checkin", code: "cost" },
+  checkin: { kind: "checkin", code: "active_time" },
   detector: { kind: "detector", code: "repetition" },
   credits: { kind: "credits" },
   agent_credit_limit: {
