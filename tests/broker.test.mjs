@@ -513,8 +513,9 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   // connector its three Shopify methods and M2 PR-3 the token's destruction; M2 PR-3 gives
   // the orchestrator shopifyRead (one product under a run lease) and M3 PR-2 modelRespond;
   // build order PR 7 the computer's runtimeExecute and runtimeSweep (held while the runtime
-  // switch is off, tests/broker-runtime.test.mjs). The shop-specific webhook subscriptions
-  // give the connector shopifyWebhookSubscriptionsSync (a budget only).
+  // switch is off, tests/broker-runtime.test.mjs); build order PR 11 modelTurn (held while the
+  // agent-loop switch is off, tests/broker-agent-turn.test.mjs). The shop-specific webhook
+  // subscriptions give the connector shopifyWebhookSubscriptionsSync (a budget only).
   assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
     "constructor",
     "health",
@@ -529,6 +530,7 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
     "constructor",
     "health",
     "modelRespond",
+    "modelTurn",
     "neonLease",
     "runtimeExecute",
     "runtimeSweep",
@@ -709,6 +711,23 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
       ["runtimeSweep", "INPUT_INVALID"],
       ["runtimeExecute", "RUNTIME_UNAVAILABLE"],
       ["runtimeSweep", "RUNTIME_UNAVAILABLE"],
+    ],
+  );
+  // Build order PR 11: the agent loop's turn gateway is the orchestrator's alone, with its
+  // exact arity; with the agent-loop switch off (this env carries no MORROW_AGENT_LOOP) a
+  // well-formed call holds MODEL_UNAVAILABLE.
+  assert.equal(typeof entry.modelTurn, "undefined");
+  assert.equal(typeof connector.modelTurn, "undefined");
+  logs.length = 0;
+  await failure(runtime.modelTurn(readLease, 1, "{}"));
+  await failure(runtime.modelTurn(readLease, 1, "{}", 60000, 1));
+  await failure(runtime.modelTurn(readLease, 1, "{}", 60000));
+  assert.deepEqual(
+    logs.map((line) => [JSON.parse(line).method, JSON.parse(line).code]),
+    [
+      ["modelTurn", "INPUT_INVALID"],
+      ["modelTurn", "INPUT_INVALID"],
+      ["modelTurn", "MODEL_UNAVAILABLE"],
     ],
   );
   await failure(entry.neonLease(neonLeaseNamespace(parsed, "morrow_runtime_executor")));

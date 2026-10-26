@@ -13,6 +13,7 @@ import type {
   Current_ReadTag,
   Current_ResourceRef,
 } from "@morrow/contracts";
+import { planStepAdmitterOff } from "../loop/admission.js";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { createHumanPolicyService, type HumanAuthority, type PermissionVerb } from "@morrow/policy";
 import {
@@ -807,12 +808,14 @@ async function start(
     live,
     JSON.stringify(assignees),
   ]);
-  // After commit, each run on its own (ADR-0034 item 6); none while the loop is off. T4's
-  // admission composes the loop switch and whether the actor is the Owner; until then every
-  // agent or specialist step is `not_started` with `agent_loop_off`.
+  // After commit, each run on its own (ADR-0034 item 6); none while the loop is off. The
+  // loop's seam is PlanStepAdmitter (packages/work/src/loop/admission.ts): committed off, it
+  // admits nothing and every agent or specialist step is `not_started` with
+  // `agent_loop_off`; PR 12 composes the on admitter (whether the actor is the Owner, then
+  // one admission per intent after this commit) behind the reviewed switch.
   const runs = planStepRuns(card, {
     actorIsOwner: false,
-    agentLoop: "off",
+    agentLoop: planStepAdmitterOff.agentLoop,
   }).runs;
   const answer: Current_PlanStartResult = {
     goalId: (result.goalId as string | null) ?? null,

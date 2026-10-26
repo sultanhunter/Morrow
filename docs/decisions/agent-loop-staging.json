@@ -4,5 +4,12 @@
   "workflow": "agent-run@1",
   "switch": "off",
   "observed_on": null,
-  "scope": "The reviewed switch of AgentRunWorkflow (agent-run@1) on the deployed environment (ADR-0027 item 11; PR 10 commits it off). No Worker reads it yet: PR 11 wires it so that, while off, admission answers 503 before any reservation and the Workflow throws dispatch_disabled before any step, and edge:check refuses a mixed state. It turns on only by one reviewed commit after G10 and G12 and the loop's safety tests pass, with catalogue version 2 published on the owner's recorded confirmation. Production refuses it until the production custody ADR."
+  "prerequisites": {
+    "catalogue_version_2_confirmed": null,
+    "gateway_reservations_stops": null,
+    "lab_agent_loop": null,
+    "shared_wallet": null,
+    "store_content_cleanup": null
+  },
+  "scope": "The reviewed switch of AgentRunWorkflow (agent-run@1) on the deployed environment (ADR-0027 item 11; PR 10 committed it off; PR 11, docs/briefs/t4-agent-loop.md, wires it). Committed off: the orchestrator maps no AGENT_RUN dispatch and AgentRunWorkflow throws dispatch_disabled before any step, the cron starts no agent run, RuntimeBroker.modelTurn answers BROKER_HELD (MODEL_UNAVAILABLE) before any input, database or provider access, agent-run admission refuses switch_off before any statement, and the plan start's agent and specialist steps stay not_started with agent_loop_off. Its runtime image is the var MORROW_AGENT_LOOP, exactly \"on\", on the staging api, broker and orchestrator, beside the model-provider switch's var (the loop needs both); edge:check refuses any mixed state. It turns on only by one reviewed commit that records every prerequisite here, each as {recorded_on, evidence} with its docs/evidence/ record: catalogue version 2 published on the owner's recorded confirmation (a forward migration sets it active in SQL and the generated catalogue), G10 (the gateway, reservations and stops merged), lab:agent-loop passing on the hosted CI, the shared wallet (ADR-0039 items 2 and 3, its PR 3: every loop turn holds and draws credits from the workspace's one wallet under its row lock, beside Listings' products, with the final-turn reserve and insufficient_credits; credits are the only spend limit and no money cap stands in for them), and run_turns' store-content cleanup handler before any tool that reads a store's content is composed. Production refuses it until G12 and the production custody ADR."
 }

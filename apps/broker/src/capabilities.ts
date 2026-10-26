@@ -6,6 +6,8 @@ import {
   type LoginControl,
 } from "../../../packages/identity/src/standalone-login-protocol.js";
 import {
+  agentLoopOn,
+  agentLoopVar,
   anthropicKeyPattern,
   brokerCallerRoles,
   brokerPasswordSecret,
@@ -65,6 +67,8 @@ export type BrokerMethod =
   | "stripeWebhookVerify"
   // M3 PR-2 (RuntimeBroker): the provider-neutral model gateway.
   | "modelRespond"
+  // Build order PR 11 (RuntimeBroker): the agent loop's turn gateway (ModelCall@2).
+  | "modelTurn"
   // Build order PR 7 (RuntimeBroker): the computer's door and its reconciliation sweep.
   | "runtimeExecute"
   | "runtimeSweep"
@@ -179,6 +183,13 @@ export interface BrokerCapabilities {
    */
   readonly shopifyWrite: "off" | "on";
   /**
+   * Build order PR 11: the agent-loop switch as this broker sees it: "on" only with
+   * MORROW_AGENT_LOOP exactly "on", in development or staging, with the vault (the turn
+   * fence's definers run on the broker's own login). Absent (the committed state) or anything
+   * else is off, and modelTurn holds every call.
+   */
+  readonly agentLoop: "off" | "on";
+  /**
    * Shop-specific webhook subscriptions: the connector's own origin, from
    * CONNECTOR_CONFIGURATION_JSON (byte-equal to the connector's, which edge:check holds), in
    * development or staging and only with the vault (the registration definers run on the
@@ -205,6 +216,7 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   computer: null,
   computerMode: "off",
   shopifyWrite: "off",
+  agentLoop: "off",
   shopifyWebhookOrigin: null,
   challengeRequired: true,
 });
@@ -454,6 +466,20 @@ function shopifyWrite(
     : "off";
 }
 
+// The agent-loop switch (build order PR 11): on only with MORROW_AGENT_LOOP exactly "on",
+// in development or staging, and only with the vault.
+function agentLoop(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): "off" | "on" {
+  return environment !== "production" &&
+    vaultCapability !== null &&
+    own(env, agentLoopVar) === agentLoopOn
+    ? "on"
+    : "off";
+}
+
 // Shop-specific webhook subscriptions: the connector's origin from its own reviewed
 // configuration, parsed as the connector parses it; development or staging, and only with
 // the vault. Production holds it with the vault.
@@ -493,6 +519,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         computer: computer(env, environment, vaultCapability),
         computerMode: computerMode(env, environment),
         shopifyWrite: shopifyWrite(env, environment, vaultCapability),
+        agentLoop: agentLoop(env, environment, vaultCapability),
         shopifyWebhookOrigin: shopifyWebhookOrigin(env, environment, vaultCapability),
         challengeRequired: environment !== "development",
       });
@@ -516,6 +543,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       computer: result.computer !== null,
       computerMode: result.computerMode,
       shopifyWrite: result.shopifyWrite,
+      agentLoop: result.agentLoop,
       shopifyWebhooks: result.shopifyWebhookOrigin !== null,
     }),
   );

@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["src/orchestrator.ts", "src/listings-run.ts"]
+  "exclude": ["src/orchestrator.ts", "src/listings-run.ts", "src/agent-run.ts"]
 }

@@ -102,6 +102,17 @@ const brokerRequiredSecretsWithStripe: readonly string[] = Object.freeze([
 // staging api, broker and orchestrator; any other value is off. Production has no switch
 // until the ADR-0007 item 9 custody ADR.
 export const brokerModelSecrets: readonly string[] = Object.freeze(["ANTHROPIC_API_KEY"]);
+// Build order PR 11 (ADR-0027 items 4 and 11): the agent-loop switch. Its reviewed record is
+// docs/decisions/agent-loop-staging.json, committed "off"; edge:check refuses it on until its
+// prerequisites are recorded there. Its runtime image is the var MORROW_AGENT_LOOP, exactly
+// "on" while the switch is on, on the staging api, broker and orchestrator, beside the
+// model-provider switch's var (the loop needs both); any other value is off. While it is off
+// RuntimeBroker.modelTurn answers BROKER_HELD (MODEL_UNAVAILABLE) before any input, database
+// or provider access, the orchestrator never starts AgentRunWorkflow (which throws
+// dispatch_disabled before any step) and agent-run admission refuses switch_off before any
+// statement. Production has no switch until the ADR-0007 item 9 custody ADR.
+export const agentLoopVar = "MORROW_AGENT_LOOP";
+export const agentLoopOn = "on";
 export type BrokerModelSwitch = "off" | "on";
 export const modelProviderVar = "MORROW_MODEL_PROVIDER";
 export const modelProviderAnthropic = "anthropic";
@@ -308,6 +319,20 @@ export interface RuntimeBrokerRpc {
     callJson: string,
     budgetMs: number,
   ): Promise<string>;
+  // Build order PR 11 (ADR-0027 item 4): the agent loop's provider-neutral turn gateway.
+  // The lease is the agent run's; callJson is ModelCall@2 (closed: no model, effort,
+  // catalogue version, tool list, limit or provider); the result is a ModelResult@2 string.
+  // The broker reads the selection, the offered tools and the system text from the run its
+  // lease names, checks the conversation's prefix against the digest it recorded after the
+  // previous reply (append-only) and fences every send in SQL before any provider request.
+  // A held broker (either switch off, an invalid call, a stop, a spent hold, an open call)
+  // throws BROKER_HELD.
+  modelTurn(
+    leaseId: string,
+    generation: number,
+    callJson: string,
+    budgetMs: number,
+  ): Promise<string>;
   // Build order PR 7 (ADR-0029): the computer's one door. The lease is the run's; jobJson is
   // RuntimeJob@1 (closed: a step key, a script, minimised extracts and declared outputs; no
   // command, template, network, environment or limit); the result is a RuntimeResult@1
@@ -341,6 +366,12 @@ export const modelGatewayLimits = Object.freeze({
   // The official TypeScript SDK's default timeout for a non-streaming request of up to about
   // 21,000 max_tokens; migration listings-runs bounds the fence's budget_ms the same way.
   budgetMaxMs: 600_000,
+});
+// ModelCall@2 and ModelResult@2 carry a whole conversation: at most 33 messages of at most
+// 32 blocks, each bounded by the contract (a turn's input at most 64,000 tokens).
+export const modelTurnLimits = Object.freeze({
+  callMaxBytes: 1_000_000,
+  resultMaxBytes: 400_000,
 });
 // Sizing one non-streaming Messages send (ADR-0022 item 10 sends no stream): the send is
 // given the time to produce its effort's whole max_tokens at the floor output rate, plus a

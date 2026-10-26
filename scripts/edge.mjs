@@ -477,8 +477,9 @@ export const connectorPackageAllowlist = Object.freeze([
 // P04.T02a's ban on all package source): ListingsRunWorkflow's logic (runs/), the run lease
 // steps (runtime/), the agent kernel and its SQL fact reader, M5's billing facts reader, the
 // review library the producer uses, the generated validators (the drafts are validated
-// against ListingDraft@1 and CatalogContentChangeSet@1) and the broker protocol. No api
-// handler, command definer client, pool of another login, Shopify library or broker source.
+// against ListingDraft@1 and CatalogContentChangeSet@1), the broker protocol and (build order
+// PR 11) AgentRunWorkflow's loop runner with its catalogues. No api handler, command definer
+// client, pool of another login, Shopify library or broker source.
 // A new import is a reviewed change to this list.
 export const orchestratorPackageAllowlist = Object.freeze([
   "packages/contracts/src/generated/runtime-validators.mjs",
@@ -494,6 +495,12 @@ export const orchestratorPackageAllowlist = Object.freeze([
   // M3 PR-2 review: the catalogue's data only (each run's call budget from its effort's
   // max_tokens); the broker ships the same file.
   "packages/policy/src/generated/model-catalogue.ts",
+  // Build order PR 11: AgentRunWorkflow's pure policy: the tool catalogue (each tool's entry
+  // and input check) with its generated data and the Specialist ceiling. The loop catalogue's
+  // rules left the runner with ADR-0039 (no money cap: a turn's caps are the turn limit and
+  // the time); prompts and admission stay the api's.
+  "packages/policy/src/generated/specialist-ceiling.ts",
+  "packages/policy/src/generated/tool-catalogue.ts",
   "packages/policy/src/index.ts",
   "packages/policy/src/json-boundary.ts",
   "packages/policy/src/paid-work.ts",
@@ -501,12 +508,20 @@ export const orchestratorPackageAllowlist = Object.freeze([
   "packages/policy/src/review.ts",
   "packages/policy/src/store-link-template.ts",
   "packages/policy/src/store-resource.ts",
+  "packages/policy/src/tool-catalogue.ts",
   "packages/work/src/agents/delegation-reader.ts",
   "packages/work/src/approvals/digests.ts",
   "packages/work/src/billing-route.ts",
   "packages/work/src/billing/facts.ts",
   "packages/work/src/context.ts",
   "packages/work/src/digest.ts",
+  // Build order PR 11: the agent loop's runner, its steps' fixed SQL, the conversation, the
+  // tool seam and the authority adapter (no admission, no index barrel).
+  "packages/work/src/loop/authority.ts",
+  "packages/work/src/loop/conversation.ts",
+  "packages/work/src/loop/runner.ts",
+  "packages/work/src/loop/steps.ts",
+  "packages/work/src/loop/tools.ts",
   "packages/work/src/runs/drafting.ts",
   "packages/work/src/runs/html.ts",
   // v1 PR 3: the one canonical listing snapshot text drafting.ts builds its snapshots with
@@ -683,8 +698,12 @@ export function edgeVarNames(
   model = "off",
   runtime = "off",
   apply = "off",
+  loop = "off",
 ) {
-  const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
+  const modelVars = [
+    ...(model === "on" ? edgeModelVarNames(worker, environment) : []),
+    ...(loop === "on" ? edgeAgentLoopVarNames(worker, environment) : []),
+  ];
   if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
   if (environment !== "staging") return ["MORROW_ENVIRONMENT"];
   // v1 PR 1: the staging connector's two reviewed identifiers (its own origin and the
@@ -779,9 +798,10 @@ export function reviewedModelRecord(record) {
 // PR 18, the plan-drafts switch (ADR-0034 item 10; committed off, start routes held): the
 // api composes it from docs/decisions/plan-drafts-staging.json (packages/policy's
 // planDraftsRecord), so it carries no var or secret. It may be on only once the agent-loop
-// switch (ADR-0027 item 11) is on and P05.T04b's Ask-bound envelope exists. Neither exists
-// yet: until each lands with its own reviewed record, both count as off here, so an "on"
-// plan-drafts record is a problem. start_routes goes `ready` only after lab:plan-start.
+// switch (ADR-0027 item 11) is on and P05.T04b's Ask-bound envelope exists. Build order PR 11
+// gives the loop its reviewed record (docs/decisions/agent-loop-staging.json, committed off),
+// which verifyEdgeConfig passes in; the envelope has none yet and counts as absent, so an
+// "on" plan-drafts record is a problem. start_routes goes `ready` only after lab:plan-start.
 export const edgePlanDraftsPrerequisites = Object.freeze({ agentLoop: "off", askEnvelope: false });
 export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsPrerequisites) {
   if (
@@ -892,6 +912,73 @@ export function reviewedApplyRecord(record) {
     typeof record.scope !== "string"
   )
     throw Error("EDGE_STAGING_APPLY_RECORD");
+  return Object.freeze({ switch: record.switch });
+}
+// Build order PR 11, the agent-loop switch (ADR-0027 item 11; committed off): its runtime
+// image is the var MORROW_AGENT_LOOP ("on") on the staging api, broker and orchestrator,
+// beside the model-provider switch's var (the loop needs both: on without the model provider
+// is a problem); no secret. Development's committed config never carries it, and production
+// has no switch. It may be on only once every prerequisite its record names is recorded
+// ({recorded_on, evidence}, the evidence a docs/evidence/ file that exists). `shared_wallet`
+// (ADR-0039, its PR 3): loop turns and Listings' products hold and draw credits from the
+// workspace's one wallet; credits are the only spend limit, so no loop run runs before it.
+export const edgeAgentLoopVar = "MORROW_AGENT_LOOP";
+export const edgeAgentLoopValue = "on";
+export const edgeAgentLoopPrerequisites = Object.freeze([
+  "catalogue_version_2_confirmed",
+  "gateway_reservations_stops",
+  "lab_agent_loop",
+  "shared_wallet",
+  "store_content_cleanup",
+]);
+export function edgeAgentLoopVarNames(worker, environment) {
+  if (environment !== "staging") return [];
+  return ["api", "broker", "orchestrator"].includes(worker) ? [edgeAgentLoopVar] : [];
+}
+// The reviewed staging agent-loop record (build order PR 11; committed off). Returns the
+// switch, or throws: EDGE_AGENT_LOOP_PREREQUISITES when it is on before every prerequisite
+// is recorded. observed_on is null, or a date only while the switch is on. The record rules
+// are exactly verify's (scripts/generate-agent-platform.mjs, inspectAgentPlatformSwitches);
+// this check also needs each recorded evidence file to exist.
+export function reviewedAgentLoopRecord(record, evidenceRoot = repositoryRoot) {
+  const prerequisites = record?.prerequisites;
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "environment_kind,observed_on,prerequisites,schema_version,scope,switch,workflow" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.workflow !== "agent-run@1" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.scope !== "string" ||
+    (record.observed_on !== null &&
+      (record.switch !== "on" ||
+        typeof record.observed_on !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
+    !prerequisites ||
+    typeof prerequisites !== "object" ||
+    Array.isArray(prerequisites) ||
+    Object.keys(prerequisites).sort().join() !== [...edgeAgentLoopPrerequisites].sort().join() ||
+    !Object.values(prerequisites).every(
+      (p) =>
+        p === null ||
+        (p &&
+          typeof p === "object" &&
+          !Array.isArray(p) &&
+          Object.keys(p).sort().join() === "evidence,recorded_on" &&
+          typeof p.recorded_on === "string" &&
+          /^\d{4}-\d{2}-\d{2}$/.test(p.recorded_on) &&
+          typeof p.evidence === "string" &&
+          /^docs\/evidence\/[a-z0-9/._-]{1,160}\.md$/.test(p.evidence) &&
+          !p.evidence.includes("..") &&
+          evidenceFile(evidenceRoot, p.evidence)),
+    )
+  )
+    throw Error("EDGE_STAGING_AGENT_LOOP_RECORD");
+  if (record.switch === "on" && Object.values(prerequisites).some((p) => p === null))
+    throw Error("EDGE_AGENT_LOOP_PREREQUISITES");
   return Object.freeze({ switch: record.switch });
 }
 // Build order PR 7, the runtime switch (ADR-0029 item 10; ADR-0035 item 6; committed off):
@@ -1346,6 +1433,7 @@ export async function verifyEdgeConfig({
   runtimePath = join(repositoryRoot, "docs/decisions/runtime-staging.json"),
   evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
+  agentLoopPath = join(repositoryRoot, "docs/decisions/agent-loop-staging.json"),
   liveEvalsPath = join(repositoryRoot, "docs/decisions/agent-evals-live.json"),
   // fix-connector-cron-latency: the cron object's location hint, read from the connector's
   // source (worker/cron.ts) unless a test names another.
@@ -1375,6 +1463,8 @@ export async function verifyEdgeConfig({
     runtimeSwitchValues,
     shopifyWriteVar,
     shopifyWriteOn,
+    agentLoopVar,
+    agentLoopOn,
   } = await tsImport("../packages/identity/src/broker-protocol.ts", here);
   const { reservedWorkerPaths } = await tsImport("../apps/api/src/reserved-paths.ts", here);
   const { unstable_readConfig } = await loadWranglerApi();
@@ -1427,6 +1517,29 @@ export async function verifyEdgeConfig({
     environment === "staging" && applied?.switch === "on" ? "on" : "off";
   if (shopifyWriteVar !== edgeApplyVar || shopifyWriteOn !== edgeApplyValue)
     problem("EDGE_APPLY_SWITCH_NAMES", "broker-protocol");
+  // Build order PR 11, the agent-loop switch: refused on before its prerequisites, and on only
+  // beside the model-provider switch.
+  const agentLoopRecord = readJson(agentLoopPath);
+  let agentLoop = null;
+  if (agentLoopRecord === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "agent-loop-staging.json");
+  else
+    try {
+      agentLoop = reviewedAgentLoopRecord(agentLoopRecord, evidenceRoot);
+    } catch (error) {
+      problem(
+        error instanceof Error && error.message === "EDGE_AGENT_LOOP_PREREQUISITES"
+          ? "EDGE_AGENT_LOOP_PREREQUISITES"
+          : "EDGE_STAGING_AGENT_LOOP_RECORD",
+        "agent-loop-staging.json",
+      );
+    }
+  const loopSwitch = (environment) =>
+    environment === "staging" && agentLoop?.switch === "on" ? "on" : "off";
+  if (loopSwitch("staging") === "on" && modelSwitch("staging") !== "on")
+    problem("EDGE_AGENT_LOOP_WITHOUT_MODEL", "agent-loop-staging.json");
+  if (agentLoopVar !== edgeAgentLoopVar || agentLoopOn !== edgeAgentLoopValue)
+    problem("EDGE_AGENT_LOOP_SWITCH_NAMES", "broker-protocol");
   // PR 18, the plan-drafts switch: refused on while the agent loop is off (ADR-0034 item 10).
   // PR 20, the shop-knowledge switch: refused on before its grants, the tools before the loop.
   const shopKnowledge = readJson(shopKnowledgePath);
@@ -1449,7 +1562,10 @@ export async function verifyEdgeConfig({
     problem("EDGE_STAGING_RECORD_UNREADABLE", "plan-drafts-staging.json");
   else
     try {
-      reviewedPlanDraftsRecord(planDraftsRecord);
+      reviewedPlanDraftsRecord(planDraftsRecord, {
+        agentLoop: loopSwitch("staging"),
+        askEnvelope: edgePlanDraftsPrerequisites.askEnvelope,
+      });
     } catch (error) {
       problem(
         error instanceof Error && error.message === "EDGE_PLAN_DRAFTS_BEFORE_LOOP"
@@ -1458,12 +1574,16 @@ export async function verifyEdgeConfig({
         "plan-drafts-staging.json",
       );
     }
-  // ADR-0037 plan PR 9, the live-evals switch: refused on before the loop and the driver.
+  // ADR-0037 plan PR 9, the live-evals switch: refused on before the loop and the driver. The
+  // loop's state is its reviewed record's (build order PR 11); no driver is recorded yet.
   const liveEvalsRecord = readJson(liveEvalsPath);
   if (liveEvalsRecord === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "agent-evals-live.json");
   else
     try {
-      reviewedLiveEvalsRecord(liveEvalsRecord);
+      reviewedLiveEvalsRecord(liveEvalsRecord, {
+        agentLoop: loopSwitch("staging"),
+        liveDriver: edgeLiveEvalsPrerequisites.liveDriver,
+      });
     } catch (error) {
       problem(
         error instanceof Error && error.message === "EDGE_LIVE_EVALS_BEFORE_LOOP"
@@ -1581,6 +1701,7 @@ export async function verifyEdgeConfig({
       const modelSwitched = modelSwitch(environment);
       const runtimeSwitched = runtimeSwitch(environment);
       const applySwitched = applySwitch(environment);
+      const loopSwitched = loopSwitch(environment);
       const varNames = edgeVarNames(
         worker.key,
         environment,
@@ -1588,6 +1709,7 @@ export async function verifyEdgeConfig({
         modelSwitched,
         runtimeSwitched,
         applySwitched,
+        loopSwitched,
       );
       if (
         vars === null ||
@@ -1601,9 +1723,17 @@ export async function verifyEdgeConfig({
         // The broker's runtime var is exactly the reviewed switch (on or cleanup_only).
         (varNames.includes(edgeRuntimeSwitchVar) &&
           vars[edgeRuntimeSwitchVar] !== runtimeSwitched) ||
-        (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue)
+        (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue) ||
+        (varNames.includes(edgeAgentLoopVar) && vars[edgeAgentLoopVar] !== edgeAgentLoopValue)
       )
         problem("EDGE_VARS", where);
+      // Build order PR 11: no mixed agent-loop state: while the switch is off no Worker
+      // carries its var; while it is on, exactly the staging api, broker and orchestrator do.
+      const loopCarried =
+        vars !== null && typeof vars === "object" && Object.hasOwn(vars, edgeAgentLoopVar);
+      const loopRequired =
+        loopSwitched === "on" ? edgeAgentLoopVarNames(worker.key, environment) : [];
+      if (loopCarried !== loopRequired.length > 0) problem("EDGE_AGENT_LOOP_SWITCH_MIXED", where);
       // Build order PR 7: no mixed runtime state. While off no Worker carries the runtime var
       // or E2B_API_KEY; while on or cleanup-only the staging broker carries both.
       const runtimeCarried = edgeRuntimeNames.filter(
@@ -1731,13 +1861,19 @@ export async function verifyEdgeConfig({
       if (worker.key === "orchestrator") {
         const prefix = "morrow-" + environment;
         // M3 PR-2: ListingsRunWorkflow replaces MorrowWorkWorkflow; the broker's
-        // RuntimeBroker entrypoint and the one-minute cron of pending starts.
+        // RuntimeBroker entrypoint and the one-minute cron of pending starts. Build order
+        // PR 11: AgentRunWorkflow beside it.
         if (
           !same(config.workflows, [
             {
               name: prefix + "-listings-run",
               binding: "LISTINGS_RUN",
               class_name: "ListingsRunWorkflow",
+            },
+            {
+              name: prefix + "-agent-run",
+              binding: "AGENT_RUN",
+              class_name: "AgentRunWorkflow",
             },
           ]) ||
           !same(config.services, [

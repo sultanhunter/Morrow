@@ -1,4 +1,6 @@
 import {
+  agentLoopOn,
+  agentLoopVar,
   modelProviderAnthropic,
   modelProviderVar,
   parseBrokerDatabaseBinding,
@@ -20,6 +22,12 @@ import {
 // answers every method name, so the method check documents the binding's shape and the
 // read's presence is a reviewed constant (orchestrator.ts productReadAvailable, true since
 // M2 PR-3), not a probe.
+// Build order PR 11: the agent loop's dispatch is a second gate on top of the first. Only
+// while the reviewed agent-loop switch is on (MORROW_AGENT_LOOP exactly "on", beside the
+// model-provider switch) does the mapping carry the AGENT_RUN Workflow binding (create and
+// get) and require modelTurn on the RuntimeBroker binding; otherwise agentRuns is null and
+// AgentRunWorkflow throws dispatch_disabled before any step. A switch that is on with a
+// broken binding fails the whole mapping closed.
 // Production never maps (its database binding waits for ADR-0007 item 9).
 
 export type OrchestratorEnvironmentCode =
@@ -35,6 +43,12 @@ export type OrchestratorEnvironmentCode =
 export interface WorkflowBinding {
   create(options: { id: string; params: unknown }): Promise<unknown>;
 }
+/** The AGENT_RUN binding: a new run's Workflow, or the waiting one woken by its answer. */
+export interface AgentWorkflowBinding extends WorkflowBinding {
+  get(id: string): Promise<{
+    sendEvent(event: { type: string; payload: unknown }): Promise<void>;
+  }>;
+}
 export type OrchestratorEnvironmentMapping =
   | Readonly<{
       ok: true;
@@ -42,6 +56,8 @@ export type OrchestratorEnvironmentMapping =
       binding: Readonly<BrokerDatabaseBinding>;
       broker: RuntimeBrokerRpc;
       workflow: WorkflowBinding;
+      /** The agent loop's Workflow, only while its switch is on. */
+      agentRuns: AgentWorkflowBinding | null;
     }>
   | Readonly<{ ok: false; code: OrchestratorEnvironmentCode }>;
 
@@ -106,12 +122,21 @@ export function mapOrchestratorEnvironment(env: unknown): OrchestratorEnvironmen
       return fail("ORCHESTRATOR_ENV_BROKER_BINDING_INVALID");
     const workflow = own(record, "LISTINGS_RUN");
     if (!callable(workflow, "create")) return fail("ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID");
+    let agentRuns: AgentWorkflowBinding | null = null;
+    if (own(record, agentLoopVar) === agentLoopOn) {
+      const agent = own(record, "AGENT_RUN");
+      if (!callable(broker, "modelTurn")) return fail("ORCHESTRATOR_ENV_BROKER_BINDING_INVALID");
+      if (!callable(agent, "create") || !callable(agent, "get"))
+        return fail("ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID");
+      agentRuns = agent as AgentWorkflowBinding;
+    }
     return Object.freeze({
       ok: true,
       environment: binding.environment,
       binding,
       broker: broker as RuntimeBrokerRpc,
       workflow: workflow as WorkflowBinding,
+      agentRuns,
     });
   } catch {
     return fail("ORCHESTRATOR_ENV_VALUE_INVALID");

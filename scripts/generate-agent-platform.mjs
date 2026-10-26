@@ -411,22 +411,58 @@ export function inspectSpecialistCeiling(ceiling, capabilities) {
   return errors;
 }
 
-/** The two switches stay committed off until their reviewed commits (ADR-0027 item 11, ADR-0028 item 8). */
+/**
+ * The two switches stay committed off until their reviewed commits (ADR-0027 item 11, ADR-0028
+ * item 8). Build order PR 11: the agent-loop record names its prerequisites; it may be on only
+ * once every one is recorded ({recorded_on, evidence}: a date and a docs/evidence/ .md path
+ * with no ".."), and it carries a date in observed_on only while it is on. These are exactly
+ * edge:check's rules for the same record (scripts/edge.mjs, reviewedAgentLoopRecord), which
+ * also checks each evidence file exists and the vars. `shared_wallet` is ADR-0039's credit
+ * holds (its PR 3): credits are the only spend limit.
+ */
+export const agentLoopPrerequisites = Object.freeze([
+  "catalogue_version_2_confirmed",
+  "gateway_reservations_stops",
+  "lab_agent_loop",
+  "shared_wallet",
+  "store_content_cleanup",
+]);
 export function inspectAgentPlatformSwitches(loop, specialists) {
   const errors = [];
   const keys = (value) =>
     Object.keys(value ?? {})
       .sort()
       .join(",");
+  const prerequisites = loop?.prerequisites;
+  const date = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const recorded = (p) =>
+    p !== null &&
+    typeof p === "object" &&
+    !Array.isArray(p) &&
+    keys(p) === "evidence,recorded_on" &&
+    date(p.recorded_on) &&
+    typeof p.evidence === "string" &&
+    /^docs\/evidence\/[a-z0-9/._-]{1,160}\.md$/.test(p.evidence) &&
+    !p.evidence.includes("..");
   if (
-    keys(loop) !== "environment_kind,observed_on,schema_version,scope,switch,workflow" ||
+    keys(loop) !==
+      "environment_kind,observed_on,prerequisites,schema_version,scope,switch,workflow" ||
     loop.schema_version !== 1 ||
     loop.environment_kind !== "staging" ||
     loop.workflow !== "agent-run@1" ||
-    loop.switch !== "off" ||
-    loop.observed_on !== null
+    !["off", "on"].includes(loop.switch) ||
+    typeof loop.scope !== "string" ||
+    (loop.observed_on !== null && (loop.switch !== "on" || !date(loop.observed_on))) ||
+    prerequisites === null ||
+    typeof prerequisites !== "object" ||
+    Array.isArray(prerequisites) ||
+    keys(prerequisites) !== [...agentLoopPrerequisites].sort().join(",") ||
+    !Object.values(prerequisites).every((p) => p === null || recorded(p)) ||
+    (loop.switch === "on" && !Object.values(prerequisites).every(recorded))
   )
-    errors.push("agent-loop-staging.json must be committed off (ADR-0027 item 11)");
+    errors.push(
+      "agent-loop-staging.json must be committed off until every prerequisite is recorded, with observed_on dated only while on (ADR-0027 item 11)",
+    );
   if (
     keys(specialists) !== "environment_kind,observed_on,release,schema_version,scope,switch" ||
     specialists.schema_version !== 1 ||

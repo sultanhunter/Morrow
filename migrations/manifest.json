@@ -402,6 +402,13 @@
       "sha256": "4597c094203277ee75c2416ea591676c24da7f8fddd83841e5eadb69b6378f0a",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/shop-knowledge.md"
+    },
+    {
+      "sequence": 53,
+      "file": "0053.agent-runs.sql",
+      "sha256": "ca2ccf4f897edd7688ac4c9e9df71ea2592df5e0c1928a8c3bc418e091a64fec",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/t4-agent-loop.md"
     }
   ]
 }

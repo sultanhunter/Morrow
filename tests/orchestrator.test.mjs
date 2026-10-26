@@ -95,9 +95,14 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step un
   assert.equal(module.MorrowWorkWorkflow, undefined);
   // workerd starts a module only when every named export is a function or an object (a
   // boolean export fails the Worker at startup: "Incorrect type for map entry"); the
-  // orchestrator exports its two entrypoints and nothing else. The product read's reviewed
-  // constant stays the protocol's (true since M2 PR-3 and M3 PR-2 were integrated).
-  assert.deepEqual(Object.keys(module).sort(), ["ListingsRunWorkflow", "default"]);
+  // orchestrator exports its entrypoints and nothing else (build order PR 11 adds
+  // AgentRunWorkflow). The product read's reviewed constant stays the protocol's (true since
+  // M2 PR-3 and M3 PR-2 were integrated).
+  assert.deepEqual(Object.keys(module).sort(), [
+    "AgentRunWorkflow",
+    "ListingsRunWorkflow",
+    "default",
+  ]);
   assert.ok(
     Object.values(module).every(
       (value) => typeof value === "function" || (typeof value === "object" && value !== null),
@@ -143,6 +148,60 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step un
       );
   }
   assert.equal(steps, 0);
+  // Build order PR 11: AgentRunWorkflow is disabled before any step unless the agent-loop
+  // switch is on as well, with modelTurn and the AGENT_RUN binding: the model switch alone
+  // (every binding, Node's process.env emptied as workerd's is), the loop var without the
+  // model switch, and the loop var with a broken binding each refuse before any step.
+  {
+    const saved = process.env;
+    process.env = {};
+    try {
+      const agentBroker = { ...broker, modelTurn() {} };
+      const agentBinding = { create: () => Promise.resolve(), get: () => Promise.resolve({}) };
+      const loop = { MORROW_AGENT_LOOP: "on", AGENT_RUN: agentBinding };
+      const params = {
+        schemaVersion: 1,
+        workflow: "agent-run@1",
+        organizationId: "org_o",
+        workspaceId: "ws_w",
+        runId: "00000000-0000-4000-8000-0000000000aa",
+      };
+      for (const env of [
+        { MORROW_ENVIRONMENT: "staging" },
+        { ...full },
+        { ...full, BROKER: agentBroker, AGENT_RUN: agentBinding },
+        { ...full, MORROW_AGENT_LOOP: "yes", BROKER: agentBroker, AGENT_RUN: agentBinding },
+        { ...switchOff, ...loop, BROKER: agentBroker },
+        { ...full, ...loop },
+        { ...full, ...loop, BROKER: agentBroker, AGENT_RUN: { create() {} } },
+        { ...full, ...loop, BROKER: agentBroker, MORROW_ENVIRONMENT: "production" },
+      ]) {
+        const workflow = new module.AgentRunWorkflow({}, env);
+        await assert.rejects(
+          workflow.run({ payload: params, timestamp: new Date(), instanceId: params.runId }, step),
+          (error) =>
+            error.constructor.name === "NonRetryableError" && error.message === "dispatch_disabled",
+        );
+      }
+      assert.equal(steps, 0);
+      // Both switches with every binding: enabled; a payload that is not AgentRunParams@1, or
+      // whose run is not the instance id, is refused before any step.
+      const enabled = new module.AgentRunWorkflow({}, { ...full, ...loop, BROKER: agentBroker });
+      for (const [payload, instanceId] of [
+        [{}, params.runId],
+        [{ ...params, extra: 1 }, params.runId],
+        [params, "00000000-0000-4000-8000-0000000000bb"],
+      ])
+        await assert.rejects(
+          enabled.run({ payload, timestamp: new Date(), instanceId }, step),
+          (error) =>
+            error.constructor.name === "NonRetryableError" && error.message === "payload_invalid",
+        );
+      assert.equal(steps, 0);
+    } finally {
+      process.env = saved;
+    }
+  }
   // Every binding with the switch on: dispatch is enabled (the switch is the only gate), and
   // a payload that is not a lease reference is refused before any step. workerd never
   // populates process.env (nodejs_compat_do_not_populate_process_env); Node does.
@@ -235,6 +294,23 @@ test("the orchestrator's environment is deny-all: no credential, no production, 
       "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID",
     ],
     [{ LISTINGS_RUN: {} }, "ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID"],
+    // Build order PR 11: the agent-loop switch on needs modelTurn and the AGENT_RUN binding.
+    [
+      { MORROW_AGENT_LOOP: "on", AGENT_RUN: { create() {}, get() {} } },
+      "ORCHESTRATOR_ENV_BROKER_BINDING_INVALID",
+    ],
+    [
+      {
+        MORROW_AGENT_LOOP: "on",
+        BROKER: { ...full.BROKER, modelTurn() {} },
+        AGENT_RUN: { create() {} },
+      },
+      "ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID",
+    ],
+    [
+      { MORROW_AGENT_LOOP: "on", BROKER: { ...full.BROKER, modelTurn() {} } },
+      "ORCHESTRATOR_ENV_WORKFLOW_BINDING_INVALID",
+    ],
   ]) {
     const env = { ...full, ...patch };
     for (const [key, value] of Object.entries(patch)) if (value === undefined) delete env[key];
@@ -242,6 +318,124 @@ test("the orchestrator's environment is deny-all: no credential, no production, 
     assert.equal(mapped.ok, false, code);
     assert.equal(mapped.code, code);
   }
+  // The agent loop's dispatch: null unless MORROW_AGENT_LOOP is exactly "on" (the committed
+  // state has no var), a binding then.
+  assert.equal(mapOrchestratorEnvironment(full).agentRuns, null);
+  for (const value of ["yes", "ON", "true", 1])
+    assert.equal(
+      mapOrchestratorEnvironment({
+        ...full,
+        MORROW_AGENT_LOOP: value,
+        AGENT_RUN: { create() {}, get() {} },
+      }).agentRuns,
+      null,
+    );
+  const agentRun = { create() {}, get() {} };
+  const on = mapOrchestratorEnvironment({
+    ...full,
+    MORROW_AGENT_LOOP: "on",
+    BROKER: { ...full.BROKER, modelTurn() {} },
+    AGENT_RUN: agentRun,
+  });
+  assert.equal(on.ok, true);
+  assert.equal(on.agentRuns, agentRun);
+});
+
+// Build order PR 11: AgentRunWorkflow's body (apps/workers/src/agent-run.ts) checks the
+// payload, gives every step the reviewed options, retries only a lease transaction failure,
+// and waits for the answer event by its type.
+test("the agent Workflow's body: ids-only payload, the reviewed step options and the answer event", async (t) => {
+  const module = await load(t, "apps/workers/src/agent-run.ts");
+  const runId = "00000000-0000-4000-8000-0000000000aa";
+  const params = {
+    schemaVersion: 1,
+    workflow: "agent-run@1",
+    organizationId: "org_o",
+    workspaceId: "ws_w",
+    runId,
+  };
+  const configs = [];
+  const step = {
+    async do(name, config, body) {
+      configs.push([name, config]);
+      return body();
+    },
+  };
+  const event = (p = params, instanceId = runId) => ({
+    payload: p,
+    instanceId,
+    timestamp: new Date(),
+  });
+  // The run's lease is gone (resolveLease finds none): interrupted at the start step.
+  const ports = (resolveLease) => ({
+    lease: async () => {
+      throw Error("not expected");
+    },
+    resolveLease,
+    modelTurn: async () => {
+      throw Error("not expected");
+    },
+    tools: { available: () => [], get: () => null },
+    authority: { decide: async () => "authority_denied" },
+    now: () => Date.now(),
+    sleep: async () => {},
+  });
+  assert.equal(
+    await module.runAgentWorkflow(
+      ports(async () => null),
+      event(),
+      step,
+    ),
+    "interrupted",
+  );
+  assert.deepEqual(configs, [
+    [
+      "start",
+      { retries: { limit: 4, delay: "15 seconds", backoff: "exponential" }, timeout: "30 minutes" },
+    ],
+  ]);
+  assert.equal(module.agentAnswerEvent, "agent-run-answer");
+  // A failed lookup transaction is AgentRunRetry (the Workflow retries the step); any other
+  // fault is NonRetryableError(step_fault).
+  await assert.rejects(
+    module.runAgentWorkflow(
+      ports(async () => "failed"),
+      event(),
+      step,
+    ),
+    (error) => error.name === "AgentRunRetry" && error.code === "resolve",
+  );
+  await assert.rejects(
+    module.runAgentWorkflow(
+      ports(async () => {
+        throw Error("RUNTIME_SQL_UNAVAILABLE");
+      }),
+      event(),
+      step,
+    ),
+    (error) => error.constructor.name === "NonRetryableError" && error.message === "step_fault",
+  );
+  // No ports, a payload that is not AgentRunParams@1, or another instance id: refused before
+  // any step.
+  const before = configs.length;
+  await assert.rejects(
+    module.runAgentWorkflow(null, event(), step),
+    (error) => error.message === "dispatch_disabled",
+  );
+  for (const [p, id] of [
+    [{}, runId],
+    [{ ...params, workflow: "listings-run@1" }, runId],
+    [params, "00000000-0000-4000-8000-0000000000bb"],
+  ])
+    await assert.rejects(
+      module.runAgentWorkflow(
+        ports(async () => null),
+        event(p, id),
+        step,
+      ),
+      (error) => error.message === "payload_invalid",
+    );
+  assert.equal(configs.length, before);
 });
 
 // M2 PR-2 replaced the placeholder with worker/index.ts. Its committed configuration (only

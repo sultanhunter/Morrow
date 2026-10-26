@@ -1040,15 +1040,29 @@ test("the staging runner lab is in pg-http and runs once in CI, on the http leg"
   assert.ok(ci.jobs.foundation.needs.includes("postgres"));
 });
 
-// PR 20: the shop-knowledge lab runs in the pg-http group only, last, on the `http` leg once.
-test("the shop-knowledge lab is last in pg-http and runs once in CI, on the http leg", () => {
+// PR 20: the shop-knowledge lab runs in the pg-http group only, on the `http` leg once, just
+// before build order PR 11's agent loop lab, which is last.
+test("the shop-knowledge lab is in pg-http just before the agent loop lab and runs once in CI, on the http leg", () => {
   const holding = Object.entries(scripts)
     .filter(([name]) => name.startsWith("lab:group:"))
     .filter(([, text]) => rootScriptsRun(text).includes("lab:shop-knowledge"))
     .map(([name]) => name);
   assert.deepEqual(holding, ["lab:group:pg-http"]);
-  assert.equal(rootScriptsRun(scripts["lab:group:pg-http"]).at(-1), "lab:shop-knowledge");
+  assert.equal(rootScriptsRun(scripts["lab:group:pg-http"]).at(-2), "lab:shop-knowledge");
   assert.equal(scriptsReachedByCi().get("lab:shop-knowledge"), 1);
+});
+
+// Build order PR 11: the agent loop lab (PostgreSQL 17, the runner, the broker's turn gateway
+// and a fake model) runs once in CI, last in pg-http, on the http leg.
+test("the agent loop lab is the last of pg-http and runs once in CI, on the http leg", () => {
+  const holding = Object.entries(scripts)
+    .filter(([name]) => name.startsWith("lab:group:"))
+    .filter(([, text]) => rootScriptsRun(text).includes("lab:agent-loop"))
+    .map(([name]) => name);
+  assert.deepEqual(holding, ["lab:group:pg-http"]);
+  assert.equal(rootScriptsRun(scripts["lab:group:pg-http"]).at(-1), "lab:agent-loop");
+  assert.equal(scripts["lab:agent-loop"], "node --import tsx scripts/agent-loop-lab.mjs");
+  assert.equal(scriptsReachedByCi().get("lab:agent-loop"), 1);
 });
 
 // ADR-0014, amendment of 2026-10-22: ci.yml alone may run on the owner's Mac runner, chosen

@@ -186,6 +186,10 @@ test("P1: with no context both roles see zero rows and every api function is ine
       return `SELECT x.outcome FROM (SELECT '${doc}'::text AS c) d, morrow_work.cmd_plan_start_document('${uuid}','${digest}','corr','${id}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'${digest}','${digest}') x`;
     })(),
     "cmd_plan_start(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_plan_start('${uuid}','${digest}','corr','${digest}','${digest}','${digest}','{}')`,
+    // Build order PR 11 (0053 agent-runs): agent-run admission and the requester's answer, every scalar
+    // well-formed, so only the missing context refuses.
+    "cmd_agent_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_agent_run_admit('${uuid}','${digest}','corr','${records.A.task}','store_probe','installation_probe','${randomUUID()}','${randomUUID()}','${randomUUID()}','${randomUUID()}','agent_${randomUUID()}','${randomUUID()}','2','claude_haiku_5_5','low','["inbox.ask"]','3','${digest}','${digest}','{"schemaVersion":1}','2026-10-24T00:00:00.000Z')`,
+    "cmd_agent_run_answer(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_agent_run_answer('${uuid}','${digest}','corr','${randomUUID()}','Plain')`,
     // PR 20 (0052): the knowledge and notebook commands, every scalar well-formed.
     "begin_knowledge_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_knowledge_command('knowledge.write','${uuid}','${digest}')`,
     "cmd_knowledge_write(text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_write('${uuid}','${digest}','corr',NULL,'${randomUUID()}','policy',NULL,'Returns','Thirty days.','[]')`,

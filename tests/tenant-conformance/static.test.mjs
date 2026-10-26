@@ -348,6 +348,35 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || product_id) = current_setting('morrow.vault_undo_product'::text, true)))",
   ],
 };
+// Build order PR 11 (0053 agent-runs): the broker's two turn definers reach, as the broker's
+// login only, the one run (and call) their own transaction-local settings name; the runtime
+// login's cron and lease lookup read queued and running runs only.
+const brokerAgentRun = (column) =>
+  `((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (${column})::text) = current_setting('morrow.vault_agent_run'::text, true)))`;
+extraPolicies.broker_agent_run = [
+  "ALL",
+  "{morrow_work_command}",
+  brokerAgentRun("id"),
+  brokerAgentRun("id"),
+];
+extraPolicies.broker_agent_turn = [
+  "ALL",
+  "{morrow_work_command}",
+  brokerAgentRun("run_id"),
+  brokerAgentRun("run_id"),
+];
+extraPolicies.broker_agent_call = [
+  "ALL",
+  "{morrow_work_command}",
+  "((SESSION_USER = 'morrow_vault_broker'::name) AND (((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_agent_run'::text, true)) OR ((id)::text = current_setting('morrow.vault_agent_call'::text, true))))",
+  brokerAgentRun("run_id"),
+];
+extraPolicies.runtime_agent_open = [
+  "SELECT",
+  "{morrow_work_command}",
+  "((SESSION_USER = 'morrow_runtime_executor'::name) AND (status = ANY (ARRAY['queued'::text, 'running'::text, 'waiting'::text])))",
+  null,
+];
 // The only restrictive policies; every other policy is permissive.
 const restrictivePolicies = new Set(["connector_content_delete_only"]);
 // One table's policies against the template of its class and its registry extras.

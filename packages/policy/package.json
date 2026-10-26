@@ -11,6 +11,7 @@
     "./evals": "./src/evals/index.ts",
     "./fake-model-gateway": "./src/fake-model-gateway.ts",
     "./loop-catalogue": "./src/loop-catalogue.ts",
+    "./loop-prompts": "./src/loop-prompts.ts",
     "./tool-catalogue": "./src/tool-catalogue.ts",
     "./billing-state": "./src/billing-state.ts",
     "./connection-authority": "./src/connection-authority.ts",
