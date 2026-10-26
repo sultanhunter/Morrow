@@ -19,5 +19,7 @@ Owner may still raise a teammate to high, never lower or to another model (ADR-0
 OD-2026-10-26-7, owner question 1). By default the Coordinator runs Opus 5.5 at high and every teammate of either origin (the
 five installed agents, Listings included, and those Morrow creates) Opus 5.5 at medium (ADR-0036;
 ADR-0037 item 4: a new teammate takes the workspace's default for new teammates, the former
-specialist profile). A change applies from the next run and never changes what the agent may do
-(ADR-0027 item 12). V1-PR12.
+specialist profile). A change applies from the agent's next job, that is, its next context: a run
+that continues an existing context (a follow-up, a reply to a job, a Continue) keeps that context's
+model and effort (ADR-0041 item 2). A change never changes what the agent may do (ADR-0027 item
+12). V1-PR12.

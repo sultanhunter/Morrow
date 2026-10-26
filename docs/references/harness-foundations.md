@@ -7,7 +7,7 @@
 ## The short version
 
 - **Morrow keeps its own harness.** The loop that runs every agent is Morrow's code on Cloudflare Workflows, talking to Anthropic's plain Messages API. No Claude Agent SDK and no Claude Managed Agents run inside the product, so who may do what, credits, approvals and data retention stay in Morrow's code.
-- **Every agent is Claude Opus 5.5.** Morrow thinks at high effort; every teammate at medium. No Haiku, no Sonnet. Whether low effort also goes is your call (question 1).
+- **Every agent is Claude Opus 5.5.** Morrow thinks at high effort; every teammate at medium. No Haiku, no Sonnet and no low effort; the Owner may still raise a single teammate to high, never lower or to another model (question 1).
 - **Nothing ends early because of a limit.** There are no turn limits, no 30-minute clock and no reading cap. When a safety check fires, the job pauses, keeps everything it has done and asks a person.
 - **Agents never run out of room.** When an agent's working memory fills up, older parts are summarised and the agent carries on. The facts that matter (your words, approvals, changes, ids) are rewritten from Morrow's records by code, never from the summary.
 - **It feels like messaging a team.** You see "Seen by Morrow" at once; quick questions are answered in place; longer work runs in the background on a card; results arrive as finished messages; you get a notification when something needs you or is done.
@@ -27,7 +27,7 @@ All of these are data that a new catalogue or policy version can change, with it
 | Tool calls run per turn | 16 |
 | Run lease / job envelope | 30 minutes, renewed every step / 24 hours of work or 7 days |
 | A person's answer is awaited | 7 days, with reminders at 24 and 72 hours |
-| Check-ins | 1,000 turns, 10,000 tool calls, 24 hours of work, 7 days, 32 teammate runs, or 5 times the usual credits |
+| Check-ins | 1,000 turns, 10,000 tool calls, 24 hours of work, 7 days, 32 teammate runs, or 5 times the usual credits (the p95 staging measures) |
 | Working requests per person | 5 at once, then a waiting line |
 | Teammates per job envelope | 32, then a person's Continue |
 | Model calls in flight per workspace | 12 |
@@ -130,6 +130,8 @@ All of these are data that a new catalogue or policy version can change, with it
 **What it is.** Names, emails, addresses and phone numbers of your customers may not be stored until Morrow's customer-deletion path exists (P09.T05).
 
 **What Morrow does.** One check in code looks for emails, phone numbers, street addresses, Shopify customer ids and known customer email fingerprints. It runs on every message you send to an agent ("Morrow can't keep customer details yet. Remove them and send again.") and on every text a model writes that Morrow stores: summaries, plans, results and messages. Order numbers are fine. Morrow itself never sees customer-tagged data.
+
+**What it can't catch.** A customer's name typed as plain words ("Jane Smith asked for a refund") looks like any other words, and Morrow keeps no list of customer names to compare against yet. So the box you write in to an agent carries a standing line, "Don't include customers' names or contact details", and deleting such a message removes its copies in the agents' working records and summaries at once. Whether that is enough comes to you as its own question before messaging with agents is switched on (ADR-0041 item 31).
 
 **Sources:** CLAUDE.md; ADR-0031 items 2 and 6.
 
@@ -308,7 +310,7 @@ All of these are data that a new catalogue or policy version can change, with it
 **What it is.** Agents getting in touch without being asked each time.
 
 **What Morrow does.**
-- **Standing requests:** you can ask Morrow to do something on a schedule ("every Monday, check which best sellers will run out"). You confirm it once. Each time it runs with your permissions at that moment, posts only in your own Morrow conversation, can read and suggest but not change anything, and expires after 90 days unless you renew it. You or the Owner can stop it at any time.
+- **Standing requests:** you can ask Morrow to do something on a schedule ("every Monday, check which best sellers will run out"). You confirm it once. Each time it runs with your permissions at that moment, posts only in your own Morrow conversation, can read and suggest but not change anything, and expires after 90 days unless you renew it. You or the Owner can stop it at any time. The Owner sees that it exists, whose it is, its schedule and its status, never your words.
 - **Follow-through:** a job can wait for your approval or for a change to be confirmed, then carry on by itself ("Waiting for your approval · then: draft the announcement").
 - **Teammates' own routines** report in their area and point to you when something needs you.
 - **Long jobs** may post one short interim finding per phase ("6 at-risk products so far"), never step-by-step chatter, and never a claim that something was approved or done unless the records say so.
