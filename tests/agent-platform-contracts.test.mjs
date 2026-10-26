@@ -236,11 +236,12 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
     // ADR-0041 item 19: a review run is admitted by code at depth 1 under the root's envelope.
     ["a review at depth 0", edit(review, (m) => (m.lineage.depth = 0))],
     ["a review outside an envelope", edit(review, (m) => (m.envelopeId = null))],
-    // ADR-0041 items 26 and 27: an upkeep run holds no job, task or envelope, and a person
-    // requested it.
+    // ADR-0041 items 26 and 27: an upkeep run holds no job or task, and a person requested it.
+    // Like every run it acts inside an absolute envelope (item 7: no sliding lease without an
+    // absolute bound), the one admit_upkeep_run issues and no act renews.
     ["an upkeep run in a job", edit(upkeep, (m) => (m.jobId = "job_x"))],
     ["an upkeep run on a task", edit(upkeep, (m) => (m.taskId = "task_x"))],
-    ["an upkeep run under an envelope", edit(upkeep, (m) => (m.envelopeId = "env_x"))],
+    ["an upkeep run without an envelope", edit(upkeep, (m) => (m.envelopeId = null))],
     [
       "an upkeep run requested by an installation",
       edit(upkeep, (m) => (m.requester = fakes.fakeMandateRequester())),
@@ -282,6 +283,26 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
     ["a field the manifest does not have", edit(routed, (m) => (m.provider = "anthropic"))],
   ])
     assert.equal(valid("AgentRunManifest", value), false, name);
+  // No kind of run renews a lease without an absolute bound (ADR-0041 item 7).
+  for (const [kind, manifest] of Object.entries({
+    coordinator,
+    routed,
+    mandate,
+    specialist,
+    call,
+    review,
+    upkeep,
+  })) {
+    assert.ok(manifest.envelopeId, kind);
+    assert.equal(
+      valid(
+        "AgentRunManifest",
+        edit(manifest, (m) => (m.envelopeId = null)),
+      ),
+      false,
+      kind,
+    );
+  }
   // A conversation turn of Morrow's main thread, and a Continue that attaches to a context.
   const conversation = edit(coordinator, (m) => {
     m.purpose = "conversation";

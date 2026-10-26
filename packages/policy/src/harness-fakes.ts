@@ -18,6 +18,7 @@ import type {
   Current_ContextPolicy,
   Current_ContextSectionTokens,
   Current_ConversationSummary,
+  Current_DerivedTaint,
   Current_JobState,
   Current_JobStatus,
   Current_MemorySearchHit,
@@ -37,6 +38,7 @@ import type {
 } from "@morrow/contracts";
 import { fakeDigest, fakeHarnessIds, fakeIds } from "./agent-platform-fakes";
 import { contextPolicyRow } from "./context-policy";
+import { joinTaint } from "./harness";
 
 const at = "2026-10-26T09:00:00.000Z";
 const later = (minutes: number) => new Date(Date.parse(at) + minutes * 60_000).toISOString();
@@ -56,6 +58,22 @@ const productsTag: Current_ReadTag = {
   capability: "catalog.products.read",
 };
 const projectId = "project_fake_1";
+/** Nothing untrusted behind the row: the requester's own words and SQL's records only. */
+const untainted = (): Current_DerivedTaint => ({ kinds: [], sourceCount: 0 });
+/** Listings' item i1: the titles it drafted from the 14 summer dresses it read. */
+const itemTaint = (): Current_DerivedTaint => ({ kinds: ["product"], sourceCount: 14 });
+/**
+ * The fork's taint once it has read the products (c3), Listings' result (j1) and its item (i1),
+ * joined without loss (ADR-0027 item 5, ADR-0041 item 34): every row derived from the fork (its
+ * checkpoint, ledger and plan, and the review of its proposals) carries at least this.
+ */
+const forkTaint = (): Current_DerivedTaint =>
+  joinTaint(
+    { kinds: ["product"], sourceCount: 14 },
+    { kinds: ["teammate_result"], sourceCount: 1 },
+    { kinds: ["result_item"], sourceCount: 1 },
+    itemTaint(),
+  );
 
 // --- Model calls (ModelCall@2 and ModelResult@2, ADR-0041 item 8) -------------------------
 /** The run parameters of the fork's first segment: ids only. */
@@ -195,7 +213,7 @@ export function fakeContextEpoch(kind: "initial" | "compaction" = "initial"): Cu
 /**
  * The fork's hand-off at its first compaction: the fallback strategy's ContextCheckpoint@1
  * (narrative, facts cited by label, a promise, stated states that match SQL), or the provider
- * strategy's compaction block summary.
+ * strategy's opaque compaction block with its readable summary.
  */
 export function fakeContextCheckpoint(
   kind: "fallback" | "provider_compaction" = "fallback",
@@ -214,6 +232,8 @@ export function fakeContextCheckpoint(
       kind === "provider_compaction"
         ? "Read 14 summer dresses (c3). Listings drafted titles (j1); 12 are proposed (p1)."
         : null,
+    // The provider's opaque block, kept here and sent first, unchanged, in epoch 2's request.
+    block: kind === "provider_compaction" ? "Y29tcGFjdGlvbiBibG9jayBvZiBlcG9jaCAx" : null,
     content:
       kind === "fallback"
         ? {
@@ -242,7 +262,7 @@ export function fakeContextCheckpoint(
     readTags: [productsTag],
     audience: ownerAudience,
     sourceSubjects: [{ kind: "conversation", id: ids.conversationId }],
-    taint: [],
+    taint: forkTaint(),
     createdAt: later(94),
     expiresAt: null,
   });
@@ -308,7 +328,7 @@ export function fakeContextLedger(): Current_ContextLedger {
     ],
     refusals: [{ label: "c7", tool: "products.read", code: "id_out_of_scope", next: "rebrief" }],
     waits: [],
-    taint: { kinds: [], sourceCount: 0 },
+    taint: forkTaint(),
     plan: [
       { key: "read_dresses", title: "Read the summer dresses", status: "done" },
       { key: "draft_titles", title: "Propose new titles", status: "done" },
@@ -422,7 +442,7 @@ export function fakeRunPlan(revision: 1 | 2 = 1): Current_RunPlan {
     change: done ? { kind: "requester_message", messageId: ids.followUpMessageId } : null,
     readTags: [productsTag],
     audience: ownerAudience,
-    taint: [],
+    taint: forkTaint(),
     createdAt: done ? later(30) : at,
   });
 }
@@ -530,7 +550,7 @@ export function fakeReviewVerdict(
       : "Every proposed title starts with the brand name.",
     readTags: [productsTag],
     audience: ownerAudience,
-    taint: [],
+    taint: forkTaint(),
     createdAt: later(98),
   });
 }
@@ -714,7 +734,7 @@ export function fakeConversationSummary(): Current_ConversationSummary {
     readTags: [],
     audience: { kind: "subject", subject: { kind: "project", id: projectId } },
     sourceSubjects: [{ kind: "conversation", id: ids.projectConversationId }],
-    taint: ["other_member"],
+    taint: { kinds: ["other_member"], sourceCount: 1 },
     createdAt: later(120),
   });
 }
@@ -774,7 +794,7 @@ export function fakeNotebookEntryV2(): Current_NotebookEntryV2 {
     readTags: [],
     audience: { kind: "workspace" },
     sourceSubjects: [],
-    taint: [],
+    taint: untainted(),
     useCount: 0,
     lastUsedAt: null,
     affirmedAt: at,
@@ -793,7 +813,7 @@ export function fakeMemorySearchHits(): readonly Current_MemorySearchHit[] {
       title: "Brand voice",
       snippet: "Warm, plain words. The brand name leads every title.",
       trust: "approved_knowledge",
-      taint: [],
+      taint: untainted(),
       score: 912,
       updatedAt: at,
     },
@@ -805,7 +825,7 @@ export function fakeMemorySearchHits(): readonly Current_MemorySearchHit[] {
       title: "Titles: brand first",
       snippet: "This shop's titles start with the brand name.",
       trust: "agent_lesson",
-      taint: [],
+      taint: untainted(),
       score: 744,
       updatedAt: at,
     },
@@ -817,7 +837,7 @@ export function fakeMemorySearchHits(): readonly Current_MemorySearchHit[] {
       title: "Summer dress titles",
       snippet: "product:3 Linen wrap dress → Morrow Linen Wrap Dress",
       trust: "work_record",
-      taint: ["untrusted_external"],
+      taint: itemTaint(),
       score: 610,
       updatedAt: later(60),
     },

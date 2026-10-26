@@ -323,6 +323,7 @@ export const fakeHarnessIds = Object.freeze({
   projectConversationId: "conv_project_fake_1",
   inboxId: "inbox_fake_1",
   envelopeId: "env_fake_1",
+  upkeepEnvelopeId: "env_upkeep_fake_1",
   mainThreadContextId: "ctx_main_fake_1",
   mainThreadRunId: "run_main_fake_1",
   forkContextId: "ctx_fork_fake_1",
@@ -506,7 +507,8 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
       });
     case "upkeep":
       // Consolidation of Listings' notebook, requested by the person whose write crossed the
-      // threshold (ADR-0041 item 27): no job, no envelope, nothing posted.
+      // threshold (ADR-0041 item 27): no job and nothing posted, inside the short absolute
+      // envelope admit_upkeep_run issues, which no act renews (item 7).
       return freeze({
         ...base,
         ...listings,
@@ -515,7 +517,7 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
         purpose: null,
         taskId: null,
         jobId: null,
-        envelopeId: null,
+        envelopeId: fakeHarnessIds.upkeepEnvelopeId,
         contextId: fakeHarnessIds.upkeepContextId,
         lineage: lineage(fakeHarnessIds.upkeepRunId),
         mandateId: null,
@@ -583,7 +585,8 @@ export function fakeRunTurn(): Current_RunTurn {
     sectionTokens: { tools: 3000, system: 9000, workspace: 40, opening: 6000, conversation: 1860 },
     readTags: [],
     audience: { kind: "subject", subject: { kind: "task", id: fakeIds.taskId } },
-    taint: [],
+    // The epoch's first turn: nothing untrusted has been read yet.
+    taint: { kinds: [], sourceCount: 0 },
     createdAt: at,
     expiresAt: null,
   });

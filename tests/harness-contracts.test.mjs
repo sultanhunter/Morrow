@@ -41,7 +41,8 @@ import {
 } from "../scripts/generate-context-policy.mjs";
 
 const core = JSON.parse(readFileSync("docs/contracts/schemas/v1.1/core.schema.json", "utf8"));
-const enumOf = (name) => core.$defs[name].enum;
+const coreV1 = JSON.parse(readFileSync("docs/contracts/schemas/v1/core.schema.json", "utf8"));
+const enumOf = (name) => (core.$defs[name] ?? coreV1.$defs[name]).enum;
 const valid = (name, value) => validateCurrentDefinition(name, value);
 const edit = (value, change) => {
   const copy = structuredClone(value);
@@ -126,8 +127,58 @@ test("ADR-0041 item 34: end reasons are retired, never removed; the six new ones
   }
   assert.equal(harness.writableEndReason("credits_exhausted"), false, "never existed here");
   assert.equal(harness.writableEndReason(7), false);
-  for (const set of [harness.freeRunEndReasons, harness.lapsedWaitEndReasons])
-    for (const reason of set) assert.ok(live.has(reason), reason);
+  for (const reason of harness.lapsedWaitEndReasons) assert.ok(live.has(reason), reason);
+  // Who pays, pinned exactly so that H8's settlement cannot charge a run Morrow or the provider
+  // ended (OD-2026-10-26-2). ADR-0039 item 2(g)'s free list less its retired limit endings, then
+  // ADR-0041 item 3(d)'s internal_error and the three readings the brief puts to the owner.
+  const adr0039Free = [
+    "provider_error",
+    "spend_limit",
+    "invalid_output",
+    "refusal",
+    "prefix_mismatch",
+    "lease_ended",
+    "switch_off",
+    "wall_time",
+    "deadline",
+  ];
+  assert.deepEqual(
+    [...harness.freeRunEndReasons].sort(),
+    [
+      ...adr0039Free.filter((reason) => !retired.has(reason)),
+      "internal_error",
+      "lease_lapsed",
+      "envelope_expired",
+      "cost_budget",
+    ].sort(),
+  );
+  for (const reason of ["lease_ended", "switch_off"])
+    assert.ok(harness.freeRunEndReasons.includes(reason), reason);
+  // 2(g)'s charged list less what retired or never existed here, then the successors of its
+  // question_unanswered and an idle teammate's release.
+  const adr0039Metered = [
+    "completed",
+    "credits_exhausted",
+    "turn_limit",
+    "tool_call_limit",
+    "stopped",
+    "task_closed",
+    "mandate_ended",
+    "question_unanswered",
+  ];
+  assert.deepEqual(
+    [...harness.meteredRunEndReasons].sort(),
+    [
+      ...adr0039Metered.filter((reason) => live.has(reason)),
+      "person_wait_expired",
+      "checkin_unanswered",
+      "released",
+    ].sort(),
+  );
+  // Every live reason is free or metered, never both, so a new reason needs its own decision.
+  const free = new Set(harness.freeRunEndReasons);
+  assert.deepEqual([...free, ...harness.meteredRunEndReasons].sort(), [...live].sort());
+  for (const reason of harness.meteredRunEndReasons) assert.equal(free.has(reason), false, reason);
   // cost_budget stays only for a booking above any possible worst case.
   assert.ok(live.has("cost_budget"));
   // Refusals: the eight new codes exist, and the retired ones stay in the enum.
@@ -225,8 +276,37 @@ test("AgentRunSafety@1: the seeds pass, the schema holds only safety ranges, and
       "segments: a run rolls before any wait longer than its lease",
       (s) => (s.segments.rollBeforeWaitMs = 31 * 60_000),
     ],
+    [
+      "lease: a renewal at a turn step's entry covers the turn step",
+      (s) => {
+        s.lease.ms = 20 * 60_000;
+        s.lease.renewBelowMs = 15 * 60_000;
+      },
+    ],
+    [
+      "lease: the lease kept at any other step's entry covers its 10 minutes",
+      (s) => (s.lease.renewBelowMs = 5 * 60_000),
+    ],
   ])
     assert.ok(problems(change).includes(expected), expected);
+  // ADR-0041 items 6 and 7: whatever remains at a step's entry, the lease kept after the renewal
+  // check covers the step, so the sweep never closes healthy work lease_lapsed mid-call. The
+  // seeds' turn step (28 minutes plus 2) is longer than renewBelowMs (20 minutes), so a turn step
+  // always renews; renewing it only below 20 minutes would start a 30-minute call on 20.
+  for (const effort of ["high", "medium"]) {
+    const safety = platform.fakeAgentRunSafety(effort);
+    const timeouts = { turn: harness.turnStepTimeoutMs(safety), other: harness.otherStepTimeoutMs };
+    assert.equal(timeouts.turn, 30 * 60_000, effort);
+    assert.ok(timeouts.turn > safety.lease.renewBelowMs, "the case the turn rule exists for");
+    for (const step of ["turn", "other"])
+      for (let remaining = 0; remaining <= safety.lease.ms; remaining += 30_000) {
+        const kept = harness.leaseRenewalDue(safety, step, remaining) ? safety.lease.ms : remaining;
+        assert.ok(kept >= timeouts[step], `${effort}: a ${step} step entered with ${remaining} ms`);
+      }
+  }
+  assert.equal(harness.leaseRenewalDue(seed, "turn", 25 * 60_000), true);
+  assert.equal(harness.leaseRenewalDue(seed, "other", 25 * 60_000), false);
+  assert.equal(harness.leaseRenewalDue(seed, "other", 19 * 60_000), true);
 });
 
 test("ADR-0041 item 6: segment instance ids and wake event types follow one rule", () => {
@@ -428,7 +508,23 @@ test("ContextEpoch@1 and ContextCheckpoint@1: references, never copies; the chec
     assert.ok(valid("ContextEpoch", { ...second, kind }), kind);
   const fallback = fakes.fakeContextCheckpoint("fallback");
   const provider = fakes.fakeContextCheckpoint("provider_compaction");
+  // ADR-0041 items 4 and 11: the stored provider block is the next epoch's head, so the broker,
+  // which builds every request from SQL, reads it from the checkpoint the opening names.
+  assert.equal(typeof provider.block, "string");
+  assert.equal(fallback.block, null);
+  assert.equal(
+    core.$defs.ContextCheckpoint.properties.block.anyOf[0].$ref,
+    "#/$defs/CompactionBlock",
+  );
+  assert.equal(core.$defs.ModelCompaction.properties.continuity.$ref, "#/$defs/CompactionBlock");
+  assert.ok(valid("ModelCompaction", { summary: provider.summary, continuity: provider.block }));
   refuses("ContextCheckpoint", [
+    ["a provider compaction without its block", edit(provider, (c) => (c.block = null))],
+    ["a provider compaction missing the field", edit(provider, (c) => delete c.block)],
+    ["a fallback with a provider block", edit(fallback, (c) => (c.block = provider.block))],
+    ["an empty block", edit(provider, (c) => (c.block = ""))],
+    ["a block that is not opaque base64", edit(provider, (c) => (c.block = "not base64!"))],
+    ["a block over 1 MiB", edit(provider, (c) => (c.block = "A".repeat(1_048_577)))],
     ["a fallback with a provider summary", edit(fallback, (c) => (c.summary = "x"))],
     ["a provider block with fallback content", { ...provider, content: fallback.content }],
     [
@@ -452,7 +548,13 @@ test("ContextEpoch@1 and ContextCheckpoint@1: references, never copies; the chec
       edit(fallback, (c) => (c.content.discussed[0].quote.text = "x".repeat(1001))),
     ],
     ["no audience", edit(fallback, (c) => delete c.audience)],
-    ["a duplicate taint kind", edit(fallback, (c) => (c.taint = ["other_member", "other_member"]))],
+    [
+      "a duplicate taint kind",
+      edit(
+        fallback,
+        (c) => (c.taint = { kinds: ["other_member", "other_member"], sourceCount: 2 }),
+      ),
+    ],
   ]);
   for (const code of enumOf("CheckpointRejection"))
     assert.ok(
@@ -472,8 +574,23 @@ test("ContextEpoch@1 and ContextCheckpoint@1: references, never copies; the chec
 test("ContextLedger@1: SQL's records, with every in-flight operation shown as unknown", () => {
   const ledger = fakes.fakeContextLedger();
   assert.equal(ledger.operations[0].unknown, true);
+  // Every status whose outcome is unreconciled shows UNKNOWN, cancel_requested included (the
+  // gateway can still end it verifying, the change applied); a settled status may show known.
+  // The schema's binding is code's one set, which the renderer and the request card read too.
+  const unknown = new Set(harness.unknownOperationStatuses);
+  assert.ok(unknown.has("cancel_requested"));
+  const binding =
+    core.$defs.ContextLedger.properties.operations.items.allOf[0].if.properties.status.enum;
+  assert.deepEqual([...binding].sort(), [...unknown].sort(), "the schema binds code's set");
+  for (const status of enumOf("OperationStatus")) {
+    const shownKnown = edit(ledger, (l) => {
+      l.operations[0].status = status;
+      l.operations[0].unknown = false;
+    });
+    assert.equal(valid("ContextLedger", shownKnown), !unknown.has(status), status);
+  }
   refuses("ContextLedger", [
-    ...["submitted", "verifying", "uncertain", "dispatching"].map((status) => [
+    ...harness.unknownOperationStatuses.map((status) => [
       `a ${status} operation shown as known`,
       edit(ledger, (l) => {
         l.operations[0].status = status;
@@ -722,6 +839,188 @@ test("memory contracts: audience on every derived row, person memory only its pe
   ]);
 });
 
+// --- Taint (ADR-0027 item 5, ADR-0041 item 34) --------------------------------------------
+test("taint: one vocabulary, ModelUntrustedSource's kinds, on every derived row and joined without loss", () => {
+  const kinds = enumOf("ModelUntrustedSource");
+  assert.deepEqual([...harness.taintKindOrder], kinds, "joinTaint's order is the schema's");
+  // ADR-0041 item 34's additions beside ADR-0040's other_member, as H5 (pull request 79) has them.
+  for (const kind of [
+    "teammate_result",
+    "result_item",
+    "notebook_entry",
+    "conversation_summary",
+    "person_memory",
+    "context_checkpoint",
+    "thread_post",
+    "other_member",
+  ])
+    assert.ok(kinds.includes(kind), kind);
+  assert.equal(core.$defs.TaintKind, undefined, "no second vocabulary of kinds");
+  assert.equal(core.$defs.TaintKinds.items.$ref, "#/$defs/ModelUntrustedSource");
+  assert.equal(
+    core.$defs.TaintKinds.maxItems,
+    kinds.length,
+    "room for every kind: never truncated",
+  );
+  // Every derived row carries the same shape: every kind and how many sources. Any other row
+  // that carries taint carries H5's RunTaint (pull request 79: results, items, proposals and
+  // cards, with their first sources inline), whose kinds are the same ModelUntrustedSource; no
+  // row carries a bare list of kinds or a vocabulary of its own.
+  const derivedRows = [
+    "RunTurn",
+    "ModelStateBlock",
+    "ContextCheckpoint",
+    "ContextLedger",
+    "RunPlan",
+    "ReviewVerdict",
+    "ConversationSummary",
+    "NotebookEntryV2",
+    "MemorySearchHit",
+  ];
+  for (const name of derivedRows)
+    assert.equal(core.$defs[name].properties.taint.$ref, "#/$defs/DerivedTaint", name);
+  const carriers = Object.entries(core.$defs).filter(([, d]) => d.properties?.taint);
+  for (const [name, definition] of carriers)
+    assert.ok(
+      ["#/$defs/DerivedTaint", "#/$defs/RunTaint"].includes(definition.properties.taint.$ref),
+      name,
+    );
+  refuses("DerivedTaint", [
+    ["a context-taint value as a kind", { kinds: ["untrusted_external"], sourceCount: 1 }],
+    ["a kind with no source", { kinds: ["product"], sourceCount: 0 }],
+    ["sources with no kind", { kinds: [], sourceCount: 2 }],
+    ["a duplicate kind", { kinds: ["product", "product"], sourceCount: 2 }],
+    ["a bare list of kinds", ["product"]],
+  ]);
+  // A reader that joins a derived row keeps every kind the row carries, beside its own, and
+  // never counts fewer sources than both hold.
+  const reader = { kinds: ["message"], sourceCount: 2 };
+  for (const kind of kinds) {
+    const joined = harness.joinTaint(reader, { kinds: [kind], sourceCount: 3 });
+    assert.ok(joined.kinds.includes(kind) && joined.kinds.includes("message"), kind);
+    assert.equal(joined.sourceCount, 5, kind);
+    assert.ok(valid("DerivedTaint", joined), kind);
+  }
+  const everything = harness.joinTaint(...kinds.map((kind) => ({ kinds: [kind], sourceCount: 1 })));
+  assert.deepEqual(everything.kinds, kinds, "in the schema's order");
+  assert.ok(valid("DerivedTaint", everything), "every kind fits");
+  assert.ok(
+    valid("DerivedTaint", harness.joinTaint(everything, everything)),
+    "a join never grows past the kinds",
+  );
+  assert.deepEqual(harness.joinTaint(), { kinds: [], sourceCount: 0 });
+  const most = 2_147_483_647;
+  assert.equal(
+    harness.joinTaint(
+      { kinds: ["product"], sourceCount: most },
+      { kinds: ["upload"], sourceCount: 9 },
+    ).sourceCount,
+    most,
+    "the count saturates rather than wraps",
+  );
+  // The event a join writes names the kind joined.
+  const event = { ...fakes.fakeRunEvents()[0], kind: "taint.joined", ref: null };
+  assert.ok(valid("RunEvent", { ...event, code: "teammate_result" }));
+  assert.equal(valid("RunEvent", { ...event, code: "untrusted_external" }), false);
+});
+
+test("the fork's derived fakes carry at least the taint of what they read and cite", () => {
+  const ids = platform.fakeHarnessIds;
+  const item = fakes.fakeMemorySearchHits().find((hit) => hit.id === ids.itemId);
+  assert.ok(item.taint.kinds.length > 0, "Listings' item i1 is untrusted");
+  // What the fork read: the products (c3), Listings' result (j1) and the item it opened (i1).
+  const consumed = harness.joinTaint(
+    { kinds: ["product"], sourceCount: 14 },
+    { kinds: ["teammate_result"], sourceCount: 1 },
+    { kinds: ["result_item"], sourceCount: 1 },
+    item.taint,
+  );
+  const rows = [
+    ["fallback checkpoint", fakes.fakeContextCheckpoint("fallback")],
+    ["provider checkpoint", fakes.fakeContextCheckpoint("provider_compaction")],
+    ["ledger", fakes.fakeContextLedger()],
+    ["plan revision 1", fakes.fakeRunPlan(1)],
+    ["plan revision 2", fakes.fakeRunPlan(2)],
+    ["review with no objection", fakes.fakeReviewVerdict("no_objection")],
+    ["review that blocks", fakes.fakeReviewVerdict("blocks")],
+    ["conversation summary", fakes.fakeConversationSummary()],
+    ["notebook entry", fakes.fakeNotebookEntryV2()],
+    ...fakes.fakeMemorySearchHits().map((hit) => [`${hit.layer} hit`, hit]),
+  ];
+  const fromFork = rows.filter(
+    ([, row]) =>
+      row.contextId === ids.forkContextId ||
+      row.runId === ids.forkRunId ||
+      row.reviewedRunId === ids.forkRunId,
+  );
+  assert.equal(fromFork.length, 7, "checkpoints, ledger, plans and reviews of the fork");
+  for (const [name, row] of fromFork) {
+    for (const kind of consumed.kinds)
+      assert.ok(row.taint.kinds.includes(kind), `${name}: ${kind}`);
+    assert.ok(row.taint.sourceCount >= consumed.sourceCount, `${name}: its sources`);
+  }
+});
+
+// The H5 merge step (docs/briefs/h6-harness-contracts.md): H5 (pull request 79) brings RunTaint.
+// The lead merges it first; this branch then merges main again and regenerates, and from then
+// on this test runs as written instead of skipping. A run that reads a derived row joins the
+// row's DerivedTaint into its RunTaint: an untainted row adds nothing; a tainted row adds every
+// kind it carries and its own kind (the kind it is read back as), itself as one inline source,
+// and its counted sources as omitted, so the reader never holds fewer kinds or sources.
+test(
+  "taint: a RunTaint joined from every derived fake keeps every kind",
+  { skip: core.$defs.RunTaint ? false : "RunTaint arrives with pull request 79 (H5)" },
+  () => {
+    const runTaint = core.$defs.RunTaint;
+    assert.equal(runTaint.properties.kinds.items.$ref, "#/$defs/ModelUntrustedSource");
+    assert.ok(runTaint.properties.kinds.maxItems >= core.$defs.TaintKinds.maxItems);
+    assert.ok(
+      runTaint.properties.omittedSources.maximum >=
+        core.$defs.DerivedTaint.properties.sourceCount.maximum,
+    );
+    const readDerivedRow = (rowKind, rowId, derived) =>
+      derived.kinds.length === 0
+        ? { contextTaint: "none", kinds: [], sources: [], omittedSources: 0 }
+        : {
+            contextTaint: "untrusted_external",
+            kinds: harness.taintKindOrder.filter(
+              (kind) => kind === rowKind || derived.kinds.includes(kind),
+            ),
+            sources: [{ source: rowKind, sourceId: rowId }],
+            omittedSources: derived.sourceCount,
+          };
+    const kinds = enumOf("ModelUntrustedSource");
+    const rows = [
+      ["run turn", platform.fakeRunTurn()],
+      ["fallback checkpoint", fakes.fakeContextCheckpoint("fallback")],
+      ["provider checkpoint", fakes.fakeContextCheckpoint("provider_compaction")],
+      ["ledger", fakes.fakeContextLedger()],
+      ["plan", fakes.fakeRunPlan(2)],
+      ["review", fakes.fakeReviewVerdict("blocks")],
+      ["conversation summary", fakes.fakeConversationSummary()],
+      ["notebook entry", fakes.fakeNotebookEntryV2()],
+      ...fakes.fakeMemorySearchHits().map((hit) => [`${hit.layer} hit`, hit]),
+      [
+        "every kind at the largest count",
+        {
+          taint: harness.joinTaint(
+            ...kinds.map((kind) => ({ kinds: [kind], sourceCount: 2_147_483_647 })),
+          ),
+        },
+      ],
+    ];
+    for (const [name, row] of rows)
+      for (const rowKind of kinds) {
+        const joined = readDerivedRow(rowKind, "row_fake_1", row.taint);
+        assert.ok(valid("RunTaint", joined), `${name} read as ${rowKind}`);
+        for (const kind of row.taint.kinds)
+          assert.ok(joined.kinds.includes(kind), `${name}: ${kind}`);
+        assert.ok(joined.omittedSources + joined.sources.length >= row.taint.sourceCount, name);
+        assert.equal(joined.contextTaint === "none", row.taint.kinds.length === 0, name);
+      }
+  },
+);
+
 // --- Message blocks and ModelResult@2's compaction (ADR-0041 items 8, 11, 13 and 15) -----
 test("message blocks: posts and state stay on the user side, notices are closed codes, and a compaction is its own outcome", () => {
   const post = {
@@ -736,7 +1035,7 @@ test("message blocks: posts and state stay on the user side, notices are closed 
     type: "state",
     kind: "ledger",
     digest,
-    taint: [],
+    taint: { kinds: [], sourceCount: 0 },
     text: "Where the summary disagrees with these records, the records are right.",
   };
   assert.ok(valid("UserModelMessage", { role: "user", content: [post, state] }));
@@ -972,7 +1271,7 @@ test("the fake broker: compaction, a new epoch, the hard guard and the append-on
     (e) => e instanceof FakeModelGatewayError && e.code === "SCRIPT_EXHAUSTED",
   );
   // A scripted compaction for a turn call is a broken script, not a result.
-  const mismatched = createFakeModelGateway([{ compaction: { summary: "x", continuity: "" } }], {
+  const mismatched = createFakeModelGateway([{ compaction: { summary: "x", continuity: "eA" } }], {
     store,
   });
   await assert.rejects(

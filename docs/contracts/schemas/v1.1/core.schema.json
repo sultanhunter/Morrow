@@ -9294,15 +9294,8 @@
           "$ref": "#/$defs/AgentRunLineage"
         },
         "envelopeId": {
-          "description": "The job envelope (ADR-0041 item 7); its expiry and active time live on the run row, since only the requester's act renews them. Null only for an upkeep run.",
-          "anyOf": [
-            {
-              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The envelope this run acts inside (ADR-0041 item 7): its job's, a call's or review's root's, or, for an upkeep run, the envelope admit_upkeep_run issues from the pinned safety profile, which no act renews (nothing inside an upkeep run is its requester's act). Every run has one, so every lease renewal and resume is refused after an absolute expiry. Its expiry and active time live on the run row.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
         },
         "installationId": {
           "anyOf": [
@@ -9464,9 +9457,6 @@
               "requester": {
                 "$ref": "#/$defs/HumanActorRef"
               },
-              "envelopeId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
-              },
               "lineage": {
                 "type": "object",
                 "properties": {
@@ -9522,9 +9512,6 @@
               },
               "requester": {
                 "$ref": "#/$defs/HumanActorRef"
-              },
-              "envelopeId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
               }
             }
           }
@@ -9573,9 +9560,6 @@
               },
               "requester": {
                 "$ref": "#/$defs/MandateActorRef"
-              },
-              "envelopeId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
               },
               "lineage": {
                 "type": "object",
@@ -9632,9 +9616,6 @@
               },
               "requester": {
                 "$ref": "#/$defs/HumanActorRef"
-              },
-              "envelopeId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
               }
             }
           }
@@ -9677,9 +9658,6 @@
               },
               "purpose": {
                 "type": "null"
-              },
-              "envelopeId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
               },
               "lineage": {
                 "type": "object",
@@ -9724,9 +9702,6 @@
               },
               "purpose": {
                 "type": "null"
-              },
-              "envelopeId": {
-                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
               },
               "lineage": {
                 "type": "object",
@@ -9773,9 +9748,6 @@
                 "type": "null"
               },
               "jobId": {
-                "type": "null"
-              },
-              "envelopeId": {
                 "type": "null"
               },
               "requester": {
@@ -10012,7 +9984,7 @@
       "additionalProperties": false
     },
     "ModelUntrustedSource": {
-      "description": "The source a wrapped piece of untrusted data names (ADR-0027 item 5).",
+      "description": "The source a wrapped piece of untrusted data names (ADR-0027 item 5), and a taint kind. teammate_result and result_item: a teammate's result and an opened item (ADR-0037 item 3(a)). ADR-0041 item 34 adds notebook_entry, conversation_summary, person_memory and context_checkpoint (memory read back into a run), thread_post (a post in a shared thread) and other_member (the words of a member who is not the run's requester, ADR-0040).",
       "type": "string",
       "enum": [
         "product",
@@ -10025,7 +9997,15 @@
         "upload",
         "sandbox_output",
         "tool_result",
-        "message"
+        "message",
+        "teammate_result",
+        "result_item",
+        "notebook_entry",
+        "conversation_summary",
+        "person_memory",
+        "context_checkpoint",
+        "thread_post",
+        "other_member"
       ]
     },
     "ModelTextBlock": {
@@ -11261,7 +11241,7 @@
           "$ref": "#/$defs/Audience"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "createdAt": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
@@ -15615,23 +15595,81 @@
       "type": "string",
       "pattern": "^[ctmqpoijkr][1-9][0-9]{0,8}$"
     },
-    "TaintKind": {
-      "description": "A taint kind (ADR-0027 item 5, ADR-0040 item 13, ADR-0041 item 34): untrusted_external (product, mail, upload, tool or teammate text) and other_member (another member's words reached the run). Taint is sticky, follows lineage, and approval never clears it.",
-      "type": "string",
-      "enum": [
-        "untrusted_external",
-        "other_member"
-      ]
-    },
     "TaintKinds": {
-      "description": "Every taint kind a row or run carries; never truncated, never shrinks. The sources stay in run_taint_sources and RunTaint.",
+      "description": "Every taint kind a row or run carries (ADR-0041 item 34): the kinds of untrusted source it consumed, the same values as ModelUntrustedSource. Never truncated (room for every kind) and never shrinks.",
       "type": "array",
       "items": {
-        "$ref": "#/$defs/TaintKind"
+        "$ref": "#/$defs/ModelUntrustedSource"
       },
       "minItems": 0,
-      "maxItems": 8,
+      "maxItems": 19,
       "uniqueItems": true
+    },
+    "DerivedTaint": {
+      "description": "The taint a derived row carries (turns, state blocks, checkpoints, the ledger, plans, verdicts, summaries, notebook entries, search hits; ADR-0027 item 5, ADR-0041 item 34): every kind of untrusted source behind it and how many sources, never fewer than there are. Server-derived; approval and review never clear it. A run that reads the row joins it without loss: the union of kinds and the sum of counts (joinTaint in packages/policy/src/harness.ts); the sources themselves stay in run_taint_sources.",
+      "type": "object",
+      "properties": {
+        "kinds": {
+          "$ref": "#/$defs/TaintKinds"
+        },
+        "sourceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "kinds",
+        "sourceCount"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kinds": {
+                "type": "array",
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "kinds"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "sourceCount": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kinds": {
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kinds"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "sourceCount": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      ]
     },
     "MemorySubjectRef": {
       "description": "A subject whose live view a reader must hold (ADR-0041 item 25).",
@@ -15867,7 +15905,7 @@
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "text": {
           "description": "Rendered by code with the context's pinned renderer.",
@@ -15886,6 +15924,13 @@
       ],
       "additionalProperties": false
     },
+    "CompactionBlock": {
+      "description": "A provider's compaction block (ADR-0041 item 11), opaque and sent back unchanged: base64 text of at most 1 MiB. The same bytes from the provider's reply (ModelCompaction) to the stored checkpoint (ContextCheckpoint@1) to the head of the next epoch's request.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1048576,
+      "pattern": "^[A-Za-z0-9+/=_-]*$"
+    },
     "ModelCompaction": {
       "description": "An on-demand compaction's block (ADR-0041 item 11, provider strategy). It passes the customer identifier screen and the claim checks before it is stored; a flagged block is refused and the fallback reset runs on code facts.",
       "type": "object",
@@ -15898,10 +15943,8 @@
           "pattern": "\\S"
         },
         "continuity": {
-          "description": "The provider's compaction block, opaque, sent back unchanged at the head of the next epoch.",
-          "type": "string",
-          "maxLength": 1048576,
-          "pattern": "^[A-Za-z0-9+/=_-]*$"
+          "description": "The provider's compaction block, stored in its ContextCheckpoint@1's block and sent back unchanged at the head of the next epoch.",
+          "$ref": "#/$defs/CompactionBlock"
         }
       },
       "required": [
@@ -16350,7 +16393,7 @@
       "additionalProperties": false
     },
     "ContextOpening": {
-      "description": "An epoch's opening as a manifest of references and digests, never a copy (ADR-0041 item 14): facts, indexes and pinned material, then the ledger, the checkpoint (fallback) and the plan, then the request or brief last. Opening it is one definer round trip; a replay reuses the recorded manifest, never recompiles it.",
+      "description": "An epoch's opening as a manifest of references and digests, never a copy (ADR-0041 item 14): facts, indexes and pinned material, then the ledger, the checkpoint (a fallback's body, or a provider compaction's block, sent first and unchanged) and the plan, then the request or brief last. Opening it is one definer round trip; a replay reuses the recorded manifest, never recompiles it.",
       "type": "object",
       "properties": {
         "facts": {
@@ -17100,7 +17143,7 @@
       ]
     },
     "ContextCheckpoint": {
-      "description": "ContextCheckpoint@1 (ADR-0041 items 4, 11 and 13; H6): the model-written hand-off of one epoch, with its validation, read tags, audience and taint. A provider compaction stores its block's readable summary (the opaque block stays with the next epoch); the fallback stores context.checkpoint's body. Narrative only: the ledger rewrites the exact facts from SQL.",
+      "description": "ContextCheckpoint@1 (ADR-0041 items 4, 11 and 13; H6): the hand-off of one epoch, with its validation, read tags, audience and taint. A provider compaction stores its opaque block (block), which the broker sends first and unchanged in the next epoch's request, and the block's readable summary; the fallback stores context.checkpoint's body and no block. Narrative only: the ledger rewrites the exact facts from SQL.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -17153,6 +17196,17 @@
             }
           ]
         },
+        "block": {
+          "description": "A provider compaction's block, as the provider returned it (ModelCompaction.continuity); null for a fallback checkpoint. The next epoch's opening names this checkpoint by id and digest, so the broker reads the block from SQL and checks it, never from a caller. Run content: on its epoch's clock and deleted with the checkpoint, by redaction as well (ADR-0041 item 14).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompactionBlock"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "content": {
           "anyOf": [
             {
@@ -17176,7 +17230,7 @@
           "$ref": "#/$defs/SourceSubjects"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "createdAt": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
@@ -17203,6 +17257,7 @@
         "kind",
         "throughSequence",
         "summary",
+        "block",
         "content",
         "validation",
         "readTags",
@@ -17234,6 +17289,9 @@
               },
               "content": {
                 "type": "null"
+              },
+              "block": {
+                "type": "string"
               }
             }
           }
@@ -17258,6 +17316,9 @@
               },
               "content": {
                 "type": "object"
+              },
+              "block": {
+                "type": "null"
               }
             }
           }
@@ -17506,7 +17567,7 @@
                 "$ref": "urn:morrow:contracts:core:v1#/$defs/OperationStatus"
               },
               "unknown": {
-                "description": "Rendered \"UNKNOWN: being checked; do not assume it happened; do not repeat it\" while submitted, verifying or uncertain.",
+                "description": "Rendered \"UNKNOWN: being checked; do not assume it happened; do not repeat it\" while the outcome is unreconciled: dispatching, submitted, verifying, uncertain or cancel_requested (a cancel request can still end in an applied change). One set in code, unknownOperationStatuses (packages/policy/src/harness.ts), which the ledger's renderer and JobStatus@1's checking state also use.",
                 "type": "boolean"
               }
             },
@@ -17528,7 +17589,8 @@
                         "submitted",
                         "verifying",
                         "uncertain",
-                        "dispatching"
+                        "dispatching",
+                        "cancel_requested"
                       ]
                     }
                   },
@@ -17719,22 +17781,7 @@
           "maxItems": 8
         },
         "taint": {
-          "type": "object",
-          "properties": {
-            "kinds": {
-              "$ref": "#/$defs/TaintKinds"
-            },
-            "sourceCount": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1000000
-            }
-          },
-          "required": [
-            "kinds",
-            "sourceCount"
-          ],
-          "additionalProperties": false
+          "$ref": "#/$defs/DerivedTaint"
         },
         "plan": {
           "description": "The plan's titles and statuses.",
@@ -18287,7 +18334,7 @@
           "$ref": "#/$defs/Audience"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "createdAt": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
@@ -18764,7 +18811,7 @@
           "$ref": "#/$defs/Audience"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "createdAt": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
@@ -19688,7 +19735,7 @@
           "$ref": "#/$defs/PlanItemStatus"
         },
         {
-          "$ref": "#/$defs/TaintKind"
+          "$ref": "#/$defs/ModelUntrustedSource"
         }
       ]
     },
@@ -20078,7 +20125,7 @@
             "type": "object",
             "properties": {
               "code": {
-                "$ref": "#/$defs/TaintKind"
+                "$ref": "#/$defs/ModelUntrustedSource"
               }
             }
           }
@@ -20112,7 +20159,7 @@
       ]
     },
     "JobState": {
-      "description": "A request's state (ADR-0040 item 5). checking overrides done, stopped and failed while any operation is submitted, uncertain or verifying, and is never shown as done.",
+      "description": "A request's state (ADR-0040 item 5). checking overrides done, stopped and failed while any operation's outcome is unreconciled (dispatching, submitted, verifying, uncertain or cancel_requested: unknownOperationStatuses in packages/policy/src/harness.ts), and is never shown as done.",
       "type": "string",
       "enum": [
         "not_started",
@@ -20625,7 +20672,7 @@
           "$ref": "#/$defs/SourceSubjects"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "createdAt": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
@@ -20944,7 +20991,7 @@
           "$ref": "#/$defs/SourceSubjects"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "useCount": {
           "type": "integer",
@@ -21053,7 +21100,7 @@
           "$ref": "#/$defs/MemoryTrustClass"
         },
         "taint": {
-          "$ref": "#/$defs/TaintKinds"
+          "$ref": "#/$defs/DerivedTaint"
         },
         "score": {
           "description": "The fused rank score (reciprocal rank with small trust, recency and use priors), times one million.",
