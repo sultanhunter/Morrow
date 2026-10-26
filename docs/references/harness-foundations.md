@@ -1,6 +1,6 @@
 # Morrow's agent harness, A to Z
 
-- What this is: a plain-words reference for the owner and the team on how Morrow's agents work: how they think, remember, keep going, work together and stay safe. It explains ADR-0041 (harness foundations) and ADR-0040 (messaging with agents), both accepted on 2026-10-26: the owner answered every question on their decision sheet as recommended (OD-2026-10-26-7), after setting their direction (OD-2026-10-26-3 to OD-2026-10-26-6).
+- What this is: a plain-words reference for the owner and the team on how Morrow's agents work: how they think, remember, keep going, work together and stay safe. It explains ADR-0041 (harness foundations) and ADR-0040 (messaging with agents), both accepted on 2026-10-26: the owner answered every question on their decision sheet as recommended (OD-2026-10-26-7), after setting their direction (OD-2026-10-26-3 to OD-2026-10-26-6), and later that day made credits the only budget (OD-2026-10-26-9).
 - Where it lives: `docs/references/harness-foundations.md`. Where it and an ADR disagree, the ADR wins (CLAUDE.md).
 - Written: 2026-10-26, from five research reports, four area designs and three reviews of the same day. Sources are listed under each topic and in full at the end.
 
@@ -27,10 +27,11 @@ All of these are data that a new catalogue or policy version can change, with it
 | Tool calls run per turn | 16 |
 | Run lease / job envelope | 30 minutes, renewed every step / 24 hours of work or 7 days |
 | A person's answer is awaited | 7 days, with reminders at 24 and 72 hours |
-| Check-ins | 1,000 turns, 10,000 tool calls, 24 hours of work, 7 days, 32 teammate runs, or 5 times the usual credits (the p95 staging measures) |
-| Working requests per person | 5 at once, then a waiting line |
+| Check-ins | 1,000 turns, 10,000 tool calls, 24 hours of work, 7 days, or 32 teammate runs |
+| Requests per person | no limit; work waits only when the system is busy |
 | Teammates per job envelope | 32, then a person's Continue |
-| Model calls in flight per workspace | 12 |
+| Model calls in flight per workspace | 12; more work waits its turn and is never refused |
+| Morrow's provider spend | an alert to the owner at 80% of the Anthropic monthly limit; nothing pauses |
 
 ## A. Approvals, and who may approve
 
@@ -52,7 +53,7 @@ All of these are data that a new catalogue or policy version can change, with it
 **What Morrow does.**
 - Your Morrow conversation has one continuing memory, the **main thread**. It is private to you.
 - A new message goes to the main thread. Morrow answers it there if it can, asks you one question, or starts a **background request**.
-- Starting a background request **forks** the main thread: the request gets its own copy of everything Morrow knew at that moment and works on its own. That is why each request starts from your whole conversation, and why five requests can run side by side without getting in each other's way.
+- Starting a background request **forks** the main thread: the request gets its own copy of everything Morrow knew at that moment and works on its own. That is why each request starts from your whole conversation, and why several requests can run side by side without getting in each other's way. There is no limit on how many requests one person has working at once (OD-2026-10-26-9); work waits only when the system is busy.
 - Teammates are always asked from a background request, never from the main thread, so the main thread is always free for your next message.
 - When a request finishes, its result appears in the conversation and the main thread is told, by code, that it finished.
 - In shared project conversations there is no private main thread: each @Morrow request starts fresh, from a view of the thread built for the person who asked.
@@ -83,7 +84,7 @@ All of these are data that a new catalogue or policy version can change, with it
 **What Morrow does.**
 - Code watches every turn for behaviour that means trouble: the same call repeated with the same result, the same error again and again, flipping between two actions, turns that do nothing, long stretches with no progress, credits spent with no progress, and summaries that keep failing to free up room.
 - First it nudges the agent with a short note ("repeating will not work; change approach"). If the problem continues, the job **pauses and checks in**: it saves its place and posts a message with Continue, Continue with guidance, and Stop.
-- Backstops that only check in, never end: 1,000 turns, 10,000 tool calls, 24 hours of work, 7 days since you last touched the job, 32 teammate runs, or 5 times the usual credits for that kind of job.
+- Backstops that only check in, never end: 1,000 turns, 10,000 tool calls, 24 hours of work, 7 days since you last touched the job, or 32 teammate runs. None of them is about money: credits are the only budget, so there is no check-in for how much a job has spent (OD-2026-10-26-9). The detectors above protect your credits from loops.
 - Only the person who asked can Continue; for a scheduled agent, its owner or the Owner. Anyone with a stop can Stop.
 - A teammate never asks you directly: if it gets stuck, it hands its partial work back to Morrow, which decides.
 
@@ -121,7 +122,7 @@ All of these are data that a new catalogue or policy version can change, with it
 - Summaries, reviews, memory tidying and retries after an unclear provider failure are ordinary paid steps. Jobs that fail because of an error on Morrow's or Anthropic's side are free: the charge is refunded when the job settles.
 - **When the balance runs out, the job pauses** ("Paused: out of credits", with Add credits and Stop) and carries on by itself once credits are added. Nothing is lost. (The earlier rule was to finish with whatever answer it had; you replaced it with this pause, OD-2026-10-26-7.)
 - Agents never see a balance, a budget or a countdown, because a countdown makes models wrap up early. You see spend on each request's card.
-- To protect every shop from one runaway, each workspace may have 12 model calls in flight at once, and new jobs pause if Morrow's monthly provider spend reaches 80% of your Anthropic limit.
+- Credits are the only budget (OD-2026-10-26-9). To keep one shop from crowding out the others, each workspace may have 12 model calls in flight at once; more work waits its turn and is never refused. If Morrow's provider spend this month reaches 80% of your Anthropic monthly limit, you, as Morrow's operator, get an alert, and nothing pauses. A job pauses on that limit only if Anthropic actually refuses a call, and carries on when a person continues.
 
 **Sources:** ADR-0039; https://platform.claude.com/docs/en/build-with-claude/task-budgets (budgets that are too small cause early stops).
 
@@ -405,7 +406,7 @@ All of these are data that a new catalogue or policy version can change, with it
 
 ## What you decided
 
-The combined decision sheet (Q-adr-0040-0041-owner-questions in the project graph, 35 questions) put each value, money rule, security trade-off and retention clock to the owner with a recommendation, and the owner accepted every recommendation on 2026-10-26 (OD-2026-10-26-7). The largest ones: renewable leases within the job envelope; pausing instead of finishing when credits run out; safety check-ins in place of turn and time limits; caching the whole conversation; using Anthropic's beta compaction behind a switch; personal memory's privacy; the live channel and phone notifications at launch; and standing requests for Morrow.
+The combined decision sheet (Q-adr-0040-0041-owner-questions in the project graph, 35 questions) put each value, money rule, security trade-off and retention clock to the owner with a recommendation, and the owner accepted every recommendation on 2026-10-26 (OD-2026-10-26-7). The largest ones: renewable leases within the job envelope; pausing instead of finishing when credits run out; safety check-ins in place of turn and time limits; caching the whole conversation; using Anthropic's beta compaction behind a switch; personal memory's privacy; the live channel and phone notifications at launch; and standing requests for Morrow. Later the same day you made credits the only budget (OD-2026-10-26-9): the check-in at 5 times a job's usual credits and the per-person limits on working, waiting and standing requests went, and the pause of new jobs at 80% of your Anthropic limit became an alert to you.
 
 ## Words used here
 
