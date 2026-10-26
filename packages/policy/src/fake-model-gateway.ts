@@ -290,7 +290,7 @@ export class FakeModelGatewayError extends Error {
 
 const usageOf = (usage: Current_ModelUsageV2 | undefined): Current_ModelUsageV2 =>
   usage ?? { inputTokens: 1000, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 200 };
-// A deterministic token estimate: four characters of the RFC 8785 text per token.
+// A deterministic token estimate: four characters of the JSON text per token.
 const estimate = (value: unknown): number => Math.ceil(JSON.stringify(value).length / 4);
 // The safety range of tool calls in one reply; code runs 16 a turn and answers the rest.
 const maxToolUsesPerReply = 64;
