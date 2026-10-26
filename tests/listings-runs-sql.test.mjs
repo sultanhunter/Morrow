@@ -77,7 +77,12 @@ test("the model definers read FOUND before any PERFORM resets it", () => {
   }
 });
 
-test("the daily cap counts that day's overflow bookings (run_reserve revised)", () => {
+// History, not live behaviour: this migration's revision of run_reserve counted the day's
+// overflow bookings in the US$25 daily cap. ADR-0039 (credits are the only spend limit)
+// removed that cap: the credits-only migration (located by slug) replaces run_reserve without
+// it, and no later definition may bring it back. tests/credits-only.test.mjs pins the new body
+// and lab:run-credits (C3) and lab:listings-runs (C1) prove it on PostgreSQL 17.
+test("this migration's run_reserve counted overflow in the daily cap; ADR-0039 replaced it", () => {
   const reserve = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION morrow_billing.run_reserve("));
   const text = reserve.slice(0, reserve.indexOf("END $$;"));
   assert.ok(text.length > 0);
@@ -85,6 +90,27 @@ test("the daily cap counts that day's overflow bookings (run_reserve revised)", 
   const overflow = at(text, "b.kind='overflow'");
   const capped = at(text, "workspace_daily_cost_cap_usd THEN");
   assert.ok(daily < overflow && overflow < capped);
+  // The live definition is the last migration's to define run_reserve: the credits-only
+  // migration's, or a later one's, and never with the daily cap.
+  const own = manifest.migrations.find((m) => m.file === file);
+  const creditsOnly = manifest.migrations.find((m) =>
+    m.file.endsWith(".credits-only-catalogue.sql"),
+  );
+  assert.ok(creditsOnly.sequence > own.sequence);
+  const defining = manifest.migrations.filter((m) =>
+    /CREATE (OR REPLACE )?FUNCTION morrow_billing\.run_reserve\(/.test(
+      readFileSync("migrations/" + m.file, "utf8").replace(/--.*$/gm, ""),
+    ),
+  );
+  assert.ok(defining.includes(creditsOnly));
+  assert.ok(defining.at(-1).sequence >= creditsOnly.sequence);
+  const live = readFileSync("migrations/" + defining.at(-1).file, "utf8").replace(/--.*$/gm, "");
+  const liveReserve = live.slice(
+    live.indexOf("CREATE OR REPLACE FUNCTION morrow_billing.run_reserve("),
+  );
+  const liveText = liveReserve.slice(0, liveReserve.indexOf("END $$;"));
+  assert.ok(liveText.length > 0);
+  assert.doesNotMatch(liveText, /v_today|workspace_daily_cost_cap_usd|daily_cap/);
 });
 
 /** The body of one CREATE OR REPLACE FUNCTION of the migration (a revised owner helper). */

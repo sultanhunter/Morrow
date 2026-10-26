@@ -6,15 +6,24 @@
 //   C1 two reservations racing for a balance for one: exactly one is admitted, both orders;
 //   C2 release restores the wallet; settlement never exceeds the reservation; the wallet
 //      conserves available+reserved+consumed;
-//   C3 the US$25 daily cap counts open reservations at their maximum and settled ones at
-//      their booked cost;
+//   C3 credits are the only spend limit (ADR-0039, migration 0056): a third 25-product run
+//      is admitted past US$25 of the day's cost when the wallet covers it (no daily cap), and
+//      two 25-product runs racing for the last credits admit exactly one, both orders;
 //   C4 the unrecovered-cost ledger accrues failed and uncertain bookings and caps nothing
-//      (ADR-0036, migration 0051): past the former US$4.50, admission still reserves,
-//      while the US$7 run limit and the US$25 daily cap still refuse;
-//   C5 Opus high reserves 6 credits per product and admits at most 9 products;
+//      (ADR-0036, migration 0051): past the former US$4.50, admission still reserves; the
+//      25-product run limit still refuses, and no daily cap does (ADR-0039);
+//   C5 Opus high reserves 6 credits per product and admits at most 25 products (catalogue
+//      version 4: no US$7 run cap lowers the limit);
 //   C6 a reservation keeps its catalogue version after a newer one is active;
-//   C12 after 0051, version 3 is active (Opus 5.5 at medium, ceiling 4, no cap), version 1
-//      is retired and refused for new runs, and no later version may carry a cap;
+//   C12 after 0051, version 3 was active (Opus 5.5 at medium, ceiling 4, no unrecovered-cost
+//      cap) and version 1 retired; after 0056 both are retired, keep their published caps and
+//      are refused for new runs, and no later version may carry an unrecovered-cost cap;
+//   C13 after 0056 (ADR-0039 and the owner's decisions of 2026-10-26 on the models and on low
+//      effort), version 4 is active with version 3's default and its Opus 5.5 entries at
+//      medium and high only, no run or daily cap and 25 products for every entry; Haiku,
+//      Sonnet and Opus at low are refused at version 4; no version but 1 and 3 may carry a
+//      run or daily cap, and neither may lose its own. The lab's other runs are Opus 5.5 at
+//      medium, 4 credits a product;
 //   C7 refusals: duplicate, no wallet, no billing period, another tenant;
 //   C8 the lease context: a run step books and settles its own run only;
 //   C9 a booking is recorded by its entry id before any total changes: a repeat replays
@@ -216,12 +225,13 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
   };
   const period = "timestamptz '2026-10-01T00:00:00Z'";
   const nextPeriod = "timestamptz '2026-11-01T00:00:00Z'";
-  // C6-C8 run in later periods: C4 leaves October's unrecovered cost past the former cap.
+  // C6-C8 and C12-C13 run in later periods: C4 leaves October's unrecovered cost past the
+  // former cap.
   const laterPeriod = "timestamptz '2027-01-01T00:00:00Z'";
   const reserveCall = (account, run, model, effort, products, o = {}) => {
     const a = accountOf(account);
     if (!runs.has(run)) runs.set(run, o.ws ?? a.ws);
-    return `SELECT outcome||'|'||coalesce(credits_reserved,'')||'|'||coalesce(vendor_maximum_usd,'') FROM morrow_billing.run_reserve(${literal(o.org ?? a.org)},${literal(o.ws ?? a.ws)},${literal(account)},${literal(run)},${literal("credit_" + run)},${literal("vendor_" + run)},${literal("allocation_" + run)},${literal("a".repeat(64))},${o.version ?? 3},${literal(model)},${literal(effort)},${products},${o.period === undefined ? period : o.period});`;
+    return `SELECT outcome||'|'||coalesce(credits_reserved,'')||'|'||coalesce(vendor_maximum_usd,'') FROM morrow_billing.run_reserve(${literal(o.org ?? a.org)},${literal(o.ws ?? a.ws)},${literal(account)},${literal(run)},${literal("credit_" + run)},${literal("vendor_" + run)},${literal("allocation_" + run)},${literal("a".repeat(64))},${o.version ?? 4},${literal(model)},${literal(effort)},${products},${o.period === undefined ? period : o.period});`;
   };
   const reserve = (account, run, model, effort, products, o = {}) =>
     last(
@@ -263,58 +273,62 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
       `SELECT c.status,c.credits_reserved::int,c.credits_settled::int,c.credits_per_product,c.product_count,c.catalogue_version,v.maximum_cost_usd::text,v.booked_cost_usd::text,v.unrecovered_cost_usd::text,v.status AS vendor_status FROM morrow_billing.credit_reservations c JOIN morrow_billing.vendor_cost_reservations v ON v.organization_id=c.organization_id AND v.workspace_id=c.workspace_id AND v.credit_reservation_id=c.id WHERE c.root_run_id=${literal(run)}`,
     )[0];
 
+  // Two runs racing for one balance: the first session reserves and holds its transaction
+  // open; the second waits on the workspace interlock, then sees the debited wallet. The hold
+  // is 5 s (it was 1.5 s): starting the second session and observing its lock wait each take
+  // a container exec, and on a loaded host 1.5 s let the first commit before the wait was
+  // seen, while the outcomes were already right.
+  const race = async (account, label, [first, second], model, effort, products) => {
+    const hold = (run, app) =>
+      db.runAsync(
+        asCommandRole(
+          accountOf(account).p,
+          reserveCall(account, run, model, effort, products) + "\nSELECT pg_sleep(5);",
+          {
+            end: "COMMIT",
+          },
+        ),
+        { applicationName: app },
+      );
+    const appA = "credits_race_" + label + "_1";
+    const appB = "credits_race_" + label + "_2";
+    const one = hold(first, appA);
+    // Wait until the first session holds its reservation (it is sleeping).
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      const r = await db.runAsync(
+        `SELECT count(*) FROM pg_stat_activity WHERE application_name=${literal(appA)} AND wait_event='PgSleep';`,
+      );
+      if (r.ok && last(r.stdout) === "1") break;
+      await sleep(25);
+    }
+    const two = db.runAsync(
+      asCommandRole(accountOf(account).p, reserveCall(account, second, model, effort, products), {
+        end: "COMMIT",
+      }),
+      {
+        applicationName: appB,
+      },
+    );
+    const waited = await db.waitForLockWait(`application_name=${literal(appB)}`);
+    const [a, b] = await Promise.all([one, two]);
+    const outcomes = [a, b].map((r) =>
+      r.ok ? last(r.stdout.split("\n").filter((l) => l.includes("|"))) : "error",
+    );
+    return { waited, outcomes };
+  };
+
   // -------------------------------------------------------------------------
   phase("race");
   {
-    // C1: a balance for one Opus-high product (6 credits), two runs racing for it. The first
-    // session reserves and holds its transaction open; the second waits on the workspace
-    // interlock, then sees the debited wallet. Both orders.
-    for (const [round, [first, second]] of [
+    // C1: a balance for one Opus-high product (6 credits), two runs racing for it. Both orders.
+    for (const [round, runs] of [
       ["ab", ["race_a1", "race_b1"]],
       ["ba", ["race_b2", "race_a2"]],
     ]) {
       const account = "account_race_" + round;
       fund(account, 6);
-      const hold = (run, app) =>
-        db.runAsync(
-          asCommandRole(
-            accountOf(account).p,
-            reserveCall(account, run, "claude_opus_5_5", "high", 1) + "\nSELECT pg_sleep(1.5);",
-            {
-              end: "COMMIT",
-            },
-          ),
-          { applicationName: app },
-        );
-      const appA = "credits_race_" + round + "_1";
-      const appB = "credits_race_" + round + "_2";
-      const one = hold(first, appA);
-      // Wait until the first session holds its reservation (it is sleeping).
-      const deadline = Date.now() + 30000;
-      while (Date.now() < deadline) {
-        const r = await db.runAsync(
-          `SELECT count(*) FROM pg_stat_activity WHERE application_name=${literal(appA)} AND wait_event='PgSleep';`,
-        );
-        if (r.ok && last(r.stdout) === "1") break;
-        await sleep(25);
-      }
-      const two = db.runAsync(
-        asCommandRole(
-          accountOf(account).p,
-          reserveCall(account, second, "claude_opus_5_5", "high", 1),
-          {
-            end: "COMMIT",
-          },
-        ),
-        {
-          applicationName: appB,
-        },
-      );
-      const waited = await db.waitForLockWait(`application_name=${literal(appB)}`);
-      const [a, b] = await Promise.all([one, two]);
-      const outcomes = [a, b].map((r) =>
-        r.ok ? last(r.stdout.split("\n").filter((l) => l.includes("|"))) : "error",
-      );
+      const { waited, outcomes } = await race(account, round, runs, "claude_opus_5_5", "high", 1);
       const w = wallet(account);
       check(
         "C1:race_admits_exactly_one_" + round,
@@ -336,15 +350,15 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
     // C2: a failed run releases everything; settlement is capped at the reservation and
     // charges only drafted products; the sum is conserved at every step.
     const before = wallet("account_main");
-    const r1 = reserve("account_main", "run_release", "claude_sonnet_5_5", "medium", 3);
+    const r1 = reserve("account_main", "run_release", "claude_opus_5_5", "medium", 3);
     const mid = wallet("account_main");
     const released = release("run_release");
     const after = wallet("account_main");
     check(
       "C2:release_restores_the_wallet",
-      r1.startsWith("reserved|6|0.81600000") &&
-        mid.available === before.available - 6 &&
-        mid.reserved === 6 &&
+      r1.startsWith("reserved|12|1.63200000") &&
+        mid.available === before.available - 12 &&
+        mid.reserved === 12 &&
         released === "released|0" &&
         after.available === before.available &&
         after.reserved === 0 &&
@@ -353,18 +367,18 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
         reservation("run_release").vendor_status === "released",
       { r1, mid, released, after },
     );
-    reserve("account_main", "run_settle_cap", "claude_sonnet_5_5", "medium", 3);
+    reserve("account_main", "run_settle_cap", "claude_opus_5_5", "medium", 3);
     const capped = settle("run_settle_cap", 5);
-    reserve("account_main", "run_settle_part", "claude_sonnet_5_5", "medium", 3);
+    reserve("account_main", "run_settle_part", "claude_opus_5_5", "medium", 3);
     const partial = settle("run_settle_part", 1);
     const ended = settle("run_settle_part", 3);
     const w = wallet("account_main");
     check(
       "C2:settlement_never_exceeds_the_reservation",
-      capped === "settled|6" &&
-        partial === "settled|2" &&
+      capped === "settled|12" &&
+        partial === "settled|4" &&
         ended === "ended|" &&
-        w.consumed === 8 &&
+        w.consumed === 16 &&
         w.reserved === 0 &&
         w.available + w.reserved + w.consumed === 1000,
       { capped, partial, ended, w },
@@ -410,43 +424,68 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
   }
 
   // -------------------------------------------------------------------------
-  phase("opus_and_daily_cap");
+  phase("opus_and_credits_only");
   {
-    // C5: Opus high: 6 credits per product, at most 9 products (the run cost cap).
+    // C5: Opus high: 6 credits per product, at most 25 products (catalogue version 4: no US$7
+    // run cap lowers the limit, ADR-0039 item 4); 26 are refused.
     fund("account_daily", 10000);
-    const ten = reserve("account_daily", "run_opus_10", "claude_opus_5_5", "high", 10);
-    const nine = reserve("account_daily", "run_opus_9", "claude_opus_5_5", "high", 9);
-    const r = reservation("run_opus_9");
+    const over = reserve("account_daily", "run_opus_26", "claude_opus_5_5", "high", 26);
+    const all = reserve("account_daily", "run_opus_25", "claude_opus_5_5", "high", 25);
+    const r = reservation("run_opus_25");
     check(
-      "C5:opus_high_six_credits_nine_products",
-      ten === "run_product_limit||" &&
-        nine === "reserved|54|6.33600000" &&
+      "C5:opus_high_six_credits_twenty_five_products",
+      over === "run_product_limit||" &&
+        all === "reserved|150|17.60000000" &&
         r.credits_per_product === 6 &&
-        r.product_count === 9 &&
-        r.maximum_cost_usd === "6.33600000",
-      { ten, nine, r },
+        r.product_count === 25 &&
+        r.catalogue_version === 4 &&
+        r.maximum_cost_usd === "17.60000000",
+      { over, all, r },
     );
-    // C3: the daily cap (US$25): open reservations count at their maximum. Two more 9-product
-    // Opus-high runs reach 19.008; a fourth (25.344) is refused. Settling one at its booked
-    // cost (0.50) frees the difference, and the fourth is admitted.
-    const two = reserve("account_daily", "run_daily_2", "claude_opus_5_5", "high", 9);
-    const three = reserve("account_daily", "run_daily_3", "claude_opus_5_5", "high", 9);
-    const four = reserve("account_daily", "run_daily_4", "claude_opus_5_5", "high", 9);
-    const booked = book("run_opus_9", "0.50000000", "drafted");
-    const settled = settle("run_opus_9", 1);
-    const fourAgain = reserve("account_daily", "run_daily_4b", "claude_opus_5_5", "high", 9);
-    // Small runs still fit under the cap while it has room.
+    // C3 (ADR-0039 items 1 and 4): no daily cap. Two more 25-product Opus-high runs take the
+    // day's open worst case to US$52.80, past the former US$25: each is admitted, since the
+    // wallet covers it. The vendor reservations still record each run's worst case.
+    const two = reserve("account_daily", "run_daily_2", "claude_opus_5_5", "high", 25);
+    const three = reserve("account_daily", "run_daily_3", "claude_opus_5_5", "high", 25);
+    const day = db.rows(
+      `SELECT sum(maximum_cost_usd)::text AS open FROM morrow_billing.vendor_cost_reservations WHERE organization_id=${literal(O)} AND workspace_id=${literal(accountOf("account_daily").ws)} AND status='reserved' AND created_day=(clock_timestamp() AT TIME ZONE 'UTC')::date`,
+    )[0];
+    const w = wallet("account_daily");
     check(
-      "C3:daily_cap_counts_open_and_settled",
-      two.startsWith("reserved|") &&
-        three.startsWith("reserved|") &&
-        four === "daily_cap||" &&
-        booked === "booked|0.50000000|0.00000000" &&
-        settled === "settled|6" &&
-        fourAgain.startsWith("reserved|54|"),
-      { two, three, four, booked, settled, fourAgain },
+      "C3:a_third_run_past_us25_of_the_day_is_admitted_while_credits_cover_it",
+      two === "reserved|150|17.60000000" &&
+        three === "reserved|150|17.60000000" &&
+        day?.open === "52.80000000" &&
+        w.reserved === 450 &&
+        w.available === 9550,
+      { two, three, day, w },
     );
-    for (const run of ["run_daily_2", "run_daily_3", "run_daily_4b"]) release(run);
+    for (const run of ["run_opus_25", "run_daily_2", "run_daily_3"]) release(run);
+    // C3: the wallet is the limit. 300 credits: one 25-product Opus-high run (150), then two
+    // more race for the last 150: exactly one is admitted, the other is insufficient_credits,
+    // both orders, whatever the day's cost.
+    for (const [round, runs] of [
+      ["ab", ["last_a1", "last_b1"]],
+      ["ba", ["last_b2", "last_a2"]],
+    ]) {
+      const account = "account_last_" + round;
+      fund(account, 300);
+      const first = reserve(account, "last_first_" + round, "claude_opus_5_5", "high", 25);
+      const label = "last_" + round;
+      const { waited, outcomes } = await race(account, label, runs, "claude_opus_5_5", "high", 25);
+      const after = wallet(account);
+      check(
+        "C3:two_runs_racing_for_the_last_credits_admit_exactly_one_" + round,
+        first === "reserved|150|17.60000000" &&
+          waited &&
+          outcomes[0] === "reserved|150|17.60000000" &&
+          outcomes[1] === "insufficient_credits||" &&
+          after.available === 0 &&
+          after.reserved === 300 &&
+          after.consumed === 0,
+        { first, waited, outcomes, after },
+      );
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -454,8 +493,8 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
   {
     // C4: failed products and uncertain attempts accrue to the period's unrecovered cost.
     // Drafted cost is not unrecovered. A booking never exceeds the reservation. ADR-0036
-    // removed the cap: past the former US$4.50, admission still reserves; the per-run and
-    // per-day backstops still refuse.
+    // removed the cap: past the former US$4.50, admission still reserves; the 25-product run
+    // limit still refuses, and no daily cap does (ADR-0039).
     fund("account_unrecovered", 1000);
     const run = "run_failing";
     const r = reserve("account_unrecovered", run, "claude_opus_5_5", "high", 9);
@@ -472,11 +511,11 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
     );
     // 3.872 unrecovered: Opus high (0.704 more) would have passed the former 4.50.
     const opus = reserve("account_unrecovered", "run_after_opus", "claude_opus_5_5", "high", 1);
-    const sonnet = reserve(
+    const opusMedium = reserve(
       "account_unrecovered",
-      "run_after_sonnet",
-      "claude_sonnet_5_5",
-      "low",
+      "run_after_opus_medium",
+      "claude_opus_5_5",
+      "medium",
       1,
     );
     const nextPeriodRun = reserve(
@@ -487,9 +526,16 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
       1,
       { period: nextPeriod },
     );
-    // One more failure takes the period past US$4.50: Haiku and Opus are still admitted.
+    // One more failure takes the period past US$4.50: Opus at medium and at high are still
+    // admitted.
     const past = book(run, "0.70400000", "failed_product");
-    const haiku = reserve("account_unrecovered", "run_after_haiku", "claude_haiku_5_5", "low", 1);
+    const opusMediumAgain = reserve(
+      "account_unrecovered",
+      "run_after_opus_medium_again",
+      "claude_opus_5_5",
+      "medium",
+      1,
+    );
     const opusAgain = reserve(
       "account_unrecovered",
       "run_after_opus_again",
@@ -509,9 +555,9 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
         `SELECT concat_ws('|',morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},${period},3,0.70400000)::text,morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},${period},1,99.00000000)::text,morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},${period},9,0.00660000)::text,morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},NULL,3,0.00660000)::text,morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},${period},3,-1)::text,coalesce(morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},${period},3,NULL)::text,'null'));`,
       ),
     );
-    // The backstops still refuse past the former cap: more than the run limit (9 Opus high
-    // products, US$7) and, with open reservations, the US$25 daily cap.
-    const overRun = reserve("account_unrecovered", "run_over_limit", "claude_opus_5_5", "high", 10);
+    // Past the former cap the run limit still refuses (26 Opus high products at version 4)
+    // and, with open reservations past US$25 of the day, no daily cap does (ADR-0039).
+    const overRun = reserve("account_unrecovered", "run_over_limit", "claude_opus_5_5", "high", 26);
     const day1 = reserve("account_unrecovered", "run_day_1", "claude_opus_5_5", "high", 9);
     const day2 = reserve("account_unrecovered", "run_day_2", "claude_opus_5_5", "high", 9);
     const day3 = reserve("account_unrecovered", "run_day_3", "claude_opus_5_5", "high", 9);
@@ -529,17 +575,17 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
             { kind: "uncertain_attempt", n: 1 },
           ]) &&
         opus.startsWith("reserved|6|") &&
-        sonnet.startsWith("reserved|") &&
+        opusMedium.startsWith("reserved|4|") &&
         nextPeriodRun.startsWith("reserved|") &&
         past.startsWith("booked|") &&
         pastTotal === "4.57600000" &&
-        haiku.startsWith("reserved|1|") &&
+        opusMediumAgain.startsWith("reserved|4|") &&
         opusAgain.startsWith("reserved|6|") &&
         allows === "true|true|false|false|false|false" &&
         overRun === "run_product_limit||" &&
         day1.startsWith("reserved|54|") &&
         day2.startsWith("reserved|54|") &&
-        day3 === "daily_cap||",
+        day3.startsWith("reserved|54|"),
       {
         r,
         failed,
@@ -549,11 +595,11 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
         total,
         entries,
         opus,
-        sonnet,
+        opusMedium,
         nextPeriodRun,
         past,
         pastTotal,
-        haiku,
+        opusMediumAgain,
         opusAgain,
         allows,
         overRun,
@@ -582,13 +628,14 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
         ),
     );
     for (const id of [
-      "run_after_sonnet",
+      "run_after_opus_medium",
       "run_next_period",
       "run_after_opus",
-      "run_after_haiku",
+      "run_after_opus_medium_again",
       "run_after_opus_again",
       "run_day_1",
       "run_day_2",
+      "run_day_3",
     ])
       release(id);
     // Settling the failing run charges only drafted products (none here): nothing consumed.
@@ -598,45 +645,45 @@ ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`)
   // -------------------------------------------------------------------------
   phase("catalogue_version");
   {
-    // C6: a reservation keeps its catalogue version; after version 4 is active (sim: the
-    // shape of a future catalogue migration, as 0051 published version 3), version 3 is
+    // C6: a reservation keeps its catalogue version; after version 5 is active (sim: the
+    // shape of a future catalogue migration, as 0056 published version 4), version 4 is
     // refused for new runs but the open run books and settles at its own version.
     fund("account_version", 100);
-    const before = reserve("account_version", "run_v3", "claude_sonnet_5_5", "low", 2, {
+    const before = reserve("account_version", "run_v4", "claude_opus_5_5", "medium", 2, {
       period: laterPeriod,
     });
-    db.sql(`BEGIN; SET LOCAL ROLE morrow_work_owner;
-ALTER TABLE morrow_work.model_catalogue_versions DISABLE TRIGGER append_only;
-UPDATE morrow_work.model_catalogue_versions SET status='retired' WHERE version=3;
-ALTER TABLE morrow_work.model_catalogue_versions ENABLE TRIGGER append_only;
-INSERT INTO morrow_work.model_catalogue_versions VALUES(4,'active','${"b".repeat(64)}','claude_sonnet_5_5','low',1,25,7.00000000,25.00000000,NULL);
-INSERT INTO morrow_work.model_catalogue_entries VALUES(4,'claude_sonnet_5_5','low',2,0.26400000,0.13200000,25);
-COMMIT;`);
-    const retired = reserve("account_version", "run_v3_late", "claude_sonnet_5_5", "low", 2, {
-      period: laterPeriod,
-    });
-    const v4 = reserve("account_version", "run_v4", "claude_sonnet_5_5", "low", 2, {
-      period: laterPeriod,
-      version: 4,
-    });
-    const bookOld = book("run_v3", "0.13200000", "drafted");
-    const settleOld = settle("run_v3", 2);
-    check(
-      "C6:booked_at_the_runs_recorded_version",
-      before === "reserved|2|0.26400000" &&
-        retired === "catalogue_inactive||" &&
-        v4 === "reserved|4|0.52800000" &&
-        bookOld === "booked|0.13200000|0.00000000" &&
-        settleOld === "settled|2" &&
-        reservation("run_v3").catalogue_version === 3 &&
-        reservation("run_v4").catalogue_version === 4,
-      { before, retired, v4, bookOld, settleOld },
-    );
-    release("run_v4");
     db.sql(`BEGIN; SET LOCAL ROLE morrow_work_owner;
 ALTER TABLE morrow_work.model_catalogue_versions DISABLE TRIGGER append_only;
 UPDATE morrow_work.model_catalogue_versions SET status='retired' WHERE version=4;
-UPDATE morrow_work.model_catalogue_versions SET status='active' WHERE version=3;
+ALTER TABLE morrow_work.model_catalogue_versions ENABLE TRIGGER append_only;
+INSERT INTO morrow_work.model_catalogue_versions VALUES(5,'active','${"b".repeat(64)}','claude_opus_5_5','medium',6,25,NULL,NULL,NULL);
+INSERT INTO morrow_work.model_catalogue_entries VALUES(5,'claude_opus_5_5','medium',6,0.81600000,0.40800000,25);
+COMMIT;`);
+    const retired = reserve("account_version", "run_v4_late", "claude_opus_5_5", "medium", 2, {
+      period: laterPeriod,
+    });
+    const v5 = reserve("account_version", "run_v5", "claude_opus_5_5", "medium", 2, {
+      period: laterPeriod,
+      version: 5,
+    });
+    const bookOld = book("run_v4", "0.27200000", "drafted");
+    const settleOld = settle("run_v4", 2);
+    check(
+      "C6:booked_at_the_runs_recorded_version",
+      before === "reserved|8|1.08800000" &&
+        retired === "catalogue_inactive||" &&
+        v5 === "reserved|12|1.63200000" &&
+        bookOld === "booked|0.27200000|0.00000000" &&
+        settleOld === "settled|8" &&
+        reservation("run_v4").catalogue_version === 4 &&
+        reservation("run_v5").catalogue_version === 5,
+      { before, retired, v5, bookOld, settleOld },
+    );
+    release("run_v5");
+    db.sql(`BEGIN; SET LOCAL ROLE morrow_work_owner;
+ALTER TABLE morrow_work.model_catalogue_versions DISABLE TRIGGER append_only;
+UPDATE morrow_work.model_catalogue_versions SET status='retired' WHERE version=5;
+UPDATE morrow_work.model_catalogue_versions SET status='active' WHERE version=4;
 ALTER TABLE morrow_work.model_catalogue_versions ENABLE TRIGGER append_only;
 COMMIT;`);
   }
@@ -644,10 +691,11 @@ COMMIT;`);
   // -------------------------------------------------------------------------
   phase("adr_0036_catalogue");
   {
-    // C12: migration 0051 (ADR-0036). Version 3 is the active version with Opus 5.5 at medium
-    // as its default, the default member ceiling 4 and no unrecovered-cost cap; version 1 is
-    // retired with its published US$4.50 kept, and a reservation at version 1 is refused. No
-    // version but 1 may carry a cap, and version 1 may not lose its own.
+    // C12: migration 0051 (ADR-0036), as 0056 left it. Version 3 has Opus 5.5 at medium as
+    // its default, the default member ceiling 4 and no unrecovered-cost cap, and is retired
+    // since 0056; version 1 is retired with its published US$4.50 kept. A reservation at
+    // either is refused. No version but 1 may carry an unrecovered-cost cap, and version 1 may
+    // not lose its own.
     const versions = db.rows(
       "SELECT version::int,status,default_model,default_effort,default_member_credit_ceiling::int AS ceiling,coalesce(workspace_period_unrecovered_cost_cap_usd::text,'none') AS cap FROM morrow_work.model_catalogue_versions WHERE version IN (1,3) ORDER BY version",
     );
@@ -659,19 +707,12 @@ COMMIT;`);
       period: laterPeriod,
       version: 1,
     });
-    const atDefault = reserve("account_adr_0036", "run_at_v3", "claude_opus_5_5", "medium", 12, {
+    const atV3 = reserve("account_adr_0036", "run_at_v3", "claude_opus_5_5", "medium", 1, {
       period: laterPeriod,
+      version: 3,
     });
-    const overDefault = reserve(
-      "account_adr_0036",
-      "run_over_v3",
-      "claude_opus_5_5",
-      "medium",
-      13,
-      { period: laterPeriod },
-    );
     check(
-      "C12:version_3_active_without_a_cap",
+      "C12:versions_1_and_3_retired_with_their_published_values",
       JSON.stringify(versions) ===
         JSON.stringify([
           {
@@ -684,7 +725,7 @@ COMMIT;`);
           },
           {
             version: 3,
-            status: "active",
+            status: "retired",
             default_model: "claude_opus_5_5",
             default_effort: "medium",
             ceiling: 4,
@@ -693,20 +734,130 @@ COMMIT;`);
         ]) &&
         entries === 9 &&
         atV1 === "catalogue_inactive||" &&
-        atDefault === "reserved|48|6.52800000" &&
-        overDefault === "run_product_limit||" &&
+        atV3 === "catalogue_inactive||" &&
         // Each attempt rolls back whatever happens, so a missing CHECK cannot leave a row.
         refused(
-          `BEGIN; SET LOCAL ROLE morrow_work_owner; INSERT INTO morrow_work.model_catalogue_versions VALUES(5,'retired','${"c".repeat(64)}','claude_sonnet_5_5','low',1,25,7.00000000,25.00000000,4.50000000); ROLLBACK;`,
+          `BEGIN; SET LOCAL ROLE morrow_work_owner; INSERT INTO morrow_work.model_catalogue_versions VALUES(6,'retired','${"c".repeat(64)}','claude_sonnet_5_5','low',1,25,NULL,NULL,4.50000000); ROLLBACK;`,
           "model_catalogue_versions_unrecovered_cap",
         ) &&
         refused(
           `BEGIN; SET LOCAL ROLE morrow_work_owner; ALTER TABLE morrow_work.model_catalogue_versions DISABLE TRIGGER append_only; UPDATE morrow_work.model_catalogue_versions SET workspace_period_unrecovered_cost_cap_usd=NULL WHERE version=1; ROLLBACK;`,
           "model_catalogue_versions_unrecovered_cap",
         ),
-      { versions, entries, atV1, atDefault, overDefault },
+      { versions, entries, atV1, atV3 },
     );
-    release("run_at_v3");
+  }
+
+  // -------------------------------------------------------------------------
+  phase("adr_0039_catalogue");
+  {
+    // C13: migration 0056 (ADR-0039, and the owner's decisions of 2026-10-26 on the models and
+    // on low effort). Version 4 is the active version: version 3's default and ceiling, and
+    // only its Opus 5.5 entries at medium and high (credits, worst cases, rate), no run or
+    // daily cap, and 25 products for every entry. Haiku 5.5, Sonnet 5.5 and Opus 5.5 at low
+    // are not entries of version 4, so a run at any of them is refused catalogue_inactive.
+    // Versions 1 and 3 keep their published US$7 and US$25. No other version may carry a run
+    // or daily cap, and neither 1 nor 3 may lose its own.
+    const versions = db.rows(
+      "SELECT version::int,status,default_model,default_effort,default_member_credit_ceiling::int AS ceiling,max_products_per_run::int AS products,coalesce(run_cost_cap_usd::text,'none') AS run,coalesce(workspace_daily_cost_cap_usd::text,'none') AS day FROM morrow_work.model_catalogue_versions WHERE version IN (1,3,4) ORDER BY version",
+    );
+    const same = db.rows(
+      "SELECT count(*)::int AS n FROM morrow_work.model_catalogue_entries a JOIN morrow_work.model_catalogue_entries b USING (model_key,effort_key) WHERE a.version=3 AND b.version=4 AND a.credits_per_product=b.credits_per_product AND a.worst_case_per_product_usd=b.worst_case_per_product_usd AND a.worst_case_per_attempt_usd=b.worst_case_per_attempt_usd AND b.run_product_limit=25",
+    )[0]?.n;
+    const rates = db.rows(
+      "SELECT count(*)::int AS n FROM morrow_work.model_catalogue_rates a JOIN morrow_work.model_catalogue_rates b USING (model_key) WHERE a.version=3 AND b.version=4 AND a.provider=b.provider AND a.provider_model_id=b.provider_model_id AND a.input_usd8_per_token=b.input_usd8_per_token AND a.output_usd8_per_token=b.output_usd8_per_token AND a.max_input_tokens=b.max_input_tokens",
+    )[0]?.n;
+    // Every entry and rate of version 4, by model: Opus 5.5 only.
+    const models = db.rows(
+      "SELECT 'entry' AS kind,model_key,count(*)::int AS n FROM morrow_work.model_catalogue_entries WHERE version=4 GROUP BY model_key UNION ALL SELECT 'rate',model_key||'|'||provider_model_id,count(*)::int FROM morrow_work.model_catalogue_rates WHERE version=4 GROUP BY model_key,provider_model_id ORDER BY 1,2",
+    );
+    fund("account_adr_0039", 1000);
+    const atDefault = reserve("account_adr_0039", "run_at_v4", "claude_opus_5_5", "medium", 25, {
+      period: laterPeriod,
+    });
+    const overDefault = reserve(
+      "account_adr_0039",
+      "run_over_v4",
+      "claude_opus_5_5",
+      "medium",
+      26,
+      { period: laterPeriod },
+    );
+    const haikuAtV4 = reserve("account_adr_0039", "run_haiku_v4", "claude_haiku_5_5", "low", 1, {
+      period: laterPeriod,
+    });
+    const sonnetAtV4 = reserve(
+      "account_adr_0039",
+      "run_sonnet_v4",
+      "claude_sonnet_5_5",
+      "high",
+      1,
+      { period: laterPeriod },
+    );
+    const opusLowAtV4 = reserve(
+      "account_adr_0039",
+      "run_opus_low_v4",
+      "claude_opus_5_5",
+      "low",
+      1,
+      { period: laterPeriod },
+    );
+    const capped = (version, run, day) => ({
+      version,
+      run,
+      day,
+    });
+    check(
+      "C13:version_4_active_without_a_run_or_daily_cap",
+      JSON.stringify(
+        versions.map((v) => ({ ...capped(v.version, v.run, v.day), status: v.status })),
+      ) ===
+        JSON.stringify([
+          { ...capped(1, "7.00000000", "25.00000000"), status: "retired" },
+          { ...capped(3, "7.00000000", "25.00000000"), status: "retired" },
+          { ...capped(4, "none", "none"), status: "active" },
+        ]) &&
+        versions[2].default_model === "claude_opus_5_5" &&
+        versions[2].default_effort === "medium" &&
+        versions[2].ceiling === 4 &&
+        versions[2].products === 25 &&
+        same === 2 &&
+        rates === 1 &&
+        JSON.stringify(models) ===
+          JSON.stringify([
+            { kind: "entry", model_key: "claude_opus_5_5", n: 2 },
+            { kind: "rate", model_key: "claude_opus_5_5|claude-opus-5-5", n: 1 },
+          ]) &&
+        atDefault === "reserved|100|13.60000000" &&
+        overDefault === "run_product_limit||" &&
+        haikuAtV4 === "catalogue_inactive||" &&
+        sonnetAtV4 === "catalogue_inactive||" &&
+        opusLowAtV4 === "catalogue_inactive||" &&
+        refused(
+          `BEGIN; SET LOCAL ROLE morrow_work_owner; INSERT INTO morrow_work.model_catalogue_versions VALUES(6,'retired','${"c".repeat(64)}','claude_sonnet_5_5','low',1,25,7.00000000,NULL,NULL); ROLLBACK;`,
+          "model_catalogue_versions_cost_caps",
+        ) &&
+        refused(
+          `BEGIN; SET LOCAL ROLE morrow_work_owner; INSERT INTO morrow_work.model_catalogue_versions VALUES(6,'retired','${"c".repeat(64)}','claude_sonnet_5_5','low',1,25,NULL,25.00000000,NULL); ROLLBACK;`,
+          "model_catalogue_versions_cost_caps",
+        ) &&
+        refused(
+          `BEGIN; SET LOCAL ROLE morrow_work_owner; ALTER TABLE morrow_work.model_catalogue_versions DISABLE TRIGGER append_only; UPDATE morrow_work.model_catalogue_versions SET run_cost_cap_usd=NULL WHERE version=3; ROLLBACK;`,
+          "model_catalogue_versions_cost_caps",
+        ),
+      {
+        versions,
+        same,
+        rates,
+        models,
+        atDefault,
+        overDefault,
+        haikuAtV4,
+        sonnetAtV4,
+        opusLowAtV4,
+      },
+    );
+    release("run_at_v4");
   }
 
   // -------------------------------------------------------------------------
@@ -714,15 +865,15 @@ COMMIT;`);
   {
     // C7: a duplicate run, no wallet, no billing period, an unknown key, another tenant.
     fund("account_refusals", 100);
-    reserve("account_refusals", "run_dup", "claude_haiku_5_5", "low", 1, { period: laterPeriod });
+    reserve("account_refusals", "run_dup", "claude_opus_5_5", "medium", 1, { period: laterPeriod });
     const results = {
-      duplicate: reserve("account_refusals", "run_dup", "claude_haiku_5_5", "low", 1, {
+      duplicate: reserve("account_refusals", "run_dup", "claude_opus_5_5", "medium", 1, {
         period: laterPeriod,
       }),
-      noWallet: reserve("account_missing", "run_nw", "claude_haiku_5_5", "low", 1, {
+      noWallet: reserve("account_missing", "run_nw", "claude_opus_5_5", "medium", 1, {
         period: laterPeriod,
       }),
-      noPeriod: reserve("account_refusals", "run_np", "claude_haiku_5_5", "low", 1, {
+      noPeriod: reserve("account_refusals", "run_np", "claude_opus_5_5", "medium", 1, {
         period: "NULL",
       }),
       unknownKey: reserve("account_refusals", "run_uk", "claude_opus_9", "low", 1, {
@@ -731,11 +882,11 @@ COMMIT;`);
       xhigh: reserve("account_refusals", "run_xh", "claude_opus_5_5", "xhigh", 1, {
         period: laterPeriod,
       }),
-      zero: reserve("account_refusals", "run_zero", "claude_haiku_5_5", "low", 0, {
+      zero: reserve("account_refusals", "run_zero", "claude_opus_5_5", "medium", 0, {
         period: laterPeriod,
       }),
       // Y (another organization) names A's tenant: its policies hide A's wallet.
-      otherTenant: reserve("account_refusals", "run_y", "claude_haiku_5_5", "low", 1, {
+      otherTenant: reserve("account_refusals", "run_y", "claude_opus_5_5", "medium", 1, {
         period: laterPeriod,
         p: P.Y,
       }),
@@ -749,7 +900,7 @@ COMMIT;`);
         results.xhigh === "catalogue_inactive||" &&
         results.zero === "run_product_limit||" &&
         results.otherTenant === "wallet_not_found||" &&
-        wallet("account_refusals").reserved === 1,
+        wallet("account_refusals").reserved === 4,
       results,
     );
     // The api reads its tenant's reservations column by column, never the ledger, and
@@ -773,7 +924,7 @@ COMMIT;`);
         refused(
           asApi(
             accountOf("account_refusals").p,
-            reserveCall("account_refusals", "run_api", "claude_haiku_5_5", "low", 1),
+            reserveCall("account_refusals", "run_api", "claude_opus_5_5", "medium", 1),
           ),
           "permission denied",
           "morrow_api_worker",
@@ -788,9 +939,9 @@ COMMIT;`);
     // C8: under a run lease, a run step books and settles its own run (tenant_lease); with
     // no lease, nothing; and the lease's tenant never reaches another tenant's rows.
     fund("account_lease", 100);
-    reserve("account_lease", "run_lease", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
+    reserve("account_lease", "run_lease", "claude_opus_5_5", "medium", 2, { period: laterPeriod });
     fund("account_lease_y", 100, P.Y);
-    reserve("account_lease_y", "run_lease_y", "claude_sonnet_5_5", "low", 2, {
+    reserve("account_lease_y", "run_lease_y", "claude_opus_5_5", "medium", 2, {
       period: laterPeriod,
     });
     const [line] = cmd(
@@ -823,7 +974,7 @@ COMMIT;`);
       "C8:lease_context_books_and_settles_its_own_run",
       opened === "opened" &&
         booked === "booked" &&
-        settled === "settled|1" &&
+        settled === "settled|4" &&
         noLease === "denied" &&
         foreign === "not_found" &&
         reservation("run_lease_y").status === "reserved",
@@ -839,8 +990,10 @@ COMMIT;`);
     // is a conflict; a booking without an id is invalid. After settlement, a repeat still
     // learns the earlier outcome (never `ended`).
     fund("account_replay", 100);
-    reserve("account_replay", "run_replay", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
-    reserve("account_replay", "run_replay_b", "claude_sonnet_5_5", "low", 2, {
+    reserve("account_replay", "run_replay", "claude_opus_5_5", "medium", 2, {
+      period: laterPeriod,
+    });
+    reserve("account_replay", "run_replay_b", "claude_opus_5_5", "medium", 2, {
       period: laterPeriod,
     });
     const first = book("run_replay", "0.05000000", "failed_product", "entry_replay_1");
@@ -880,7 +1033,7 @@ COMMIT;`);
         r.unrecovered_cost_usd === "0.05000000" &&
         entries.length === 2 &&
         lost === 1 &&
-        settled === "settled|1" &&
+        settled === "settled|4" &&
         afterSettle === drafted &&
         lateNew === "ended||",
       {
@@ -925,7 +1078,9 @@ COMMIT;`);
     // after): run_settle refuses with wallet_not_found, and the reservation and the wallet
     // keep their state, so the credits are never stranded.
     fund("account_hidden", 100);
-    reserve("account_hidden", "run_hidden", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
+    reserve("account_hidden", "run_hidden", "claude_opus_5_5", "medium", 2, {
+      period: laterPeriod,
+    });
     const [line] = cmd(
       accountOf("account_hidden").p,
       "SELECT concat_ws('|',outcome,lease_id,generation) FROM morrow_work.lease_open('run','run_hidden','store_1','connection_1','installation_1');",
@@ -970,7 +1125,7 @@ COMMIT;`);
     // C11: the lease twins of 0029's wallet policies (0033) read and update, never insert,
     // and M5's wallet_guard holds in the lease context. A workspace with a billing account
     // and no wallet (owner-seeded) cannot get one from its run lease. Under the funded
-    // workspace's run lease, after a settlement (consumed 1): raising available without a
+    // workspace's run lease, after a settlement (consumed 4): raising available without a
     // credit grant, or a sum-preserving move that lowers consumed, is BILLING_WALLET_INVALID;
     // a sum-preserving reserve passes (rolled back); another tenant's wallet matches no row.
     // No lease: definers with no lease check of their own read the wallet and update it
@@ -985,7 +1140,9 @@ COMMIT;`);
     // left it.
     fund("account_wallet", 100);
     const a = accountOf("account_wallet");
-    reserve("account_wallet", "run_wallet", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
+    reserve("account_wallet", "run_wallet", "claude_opus_5_5", "medium", 2, {
+      period: laterPeriod,
+    });
     const leaseOf = (p, run) => {
       const [line] = cmd(
         p,
@@ -1064,8 +1221,8 @@ INSERT INTO morrow_identity.workspace_memberships VALUES(${literal(bare.org)},${
         !insert.ok &&
         /row-level security/.test(insert.stderr) &&
         bareWallets() === 0 &&
-        out(settled) === "settled|1" &&
-        settledWallet.consumed === 1 &&
+        out(settled) === "settled|4" &&
+        settledWallet.consumed === 4 &&
         !raise.ok &&
         /BILLING_WALLET_INVALID/.test(raise.stderr) &&
         !lower.ok &&
@@ -1132,7 +1289,7 @@ async function main() {
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, provider, payment or merchant data.",
       "The wallets are M5 PR-1's (one billing account per synthetic workspace); funding is superuser maintenance with wallet_guard disabled for that one update (sim), where M5 PR-1 funds them from verified payments (lab:billing).",
       "The run steps are stood in for by lab-only command-owned definers (lab_credits); M3 PR-2 lands the runtime definers.",
-      "Catalogue version 4 is installed by superuser maintenance (sim), the shape of a future catalogue migration such as 0051.",
+      "Catalogue version 5 is installed by superuser maintenance (sim), the shape of a future catalogue migration such as 0056.",
     ],
   });
   if (result.failures.length) {

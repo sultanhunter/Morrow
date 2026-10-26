@@ -4,7 +4,7 @@
 // model IDs are for the broker (M3 PR-2) and never reach an api response.
 export const generatedModelCatalogue = {
   id: "morrow-model-catalogue",
-  activeVersion: 3,
+  activeVersion: 4,
   versions: [
     {
       version: 1,
@@ -79,7 +79,7 @@ export const generatedModelCatalogue = {
     },
     {
       version: 3,
-      status: "active",
+      status: "retired",
       digest: "f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0",
       effectiveFrom: "2026-10-25",
       defaultSelection: {
@@ -142,6 +142,48 @@ export const generatedModelCatalogue = {
           outputUsd8PerToken: 2000,
           creditsPerProduct: {
             low: 2,
+            medium: 4,
+            high: 6,
+          },
+        },
+      ],
+    },
+    {
+      version: 4,
+      status: "active",
+      digest: "189ba14bcad6b5cbdf15d7d6e2a51d1b571720615d3688042e17f0777b74c62c",
+      effectiveFrom: "2026-10-26",
+      defaultSelection: {
+        model: "claude_opus_5_5",
+        effort: "medium",
+      },
+      defaultMemberCreditCeiling: 4,
+      limits: {
+        maxInputTokensPerCall: 8000,
+        maxAttemptsPerProduct: 2,
+        maxProductsPerRun: 25,
+        maxConsecutiveFailedProducts: 3,
+        runCostCapUsd8: null,
+        workspaceDailyCostCapUsd8: null,
+      },
+      efforts: [
+        {
+          key: "medium",
+          maxOutputTokens: 12000,
+        },
+        {
+          key: "high",
+          maxOutputTokens: 16000,
+        },
+      ],
+      models: [
+        {
+          key: "claude_opus_5_5",
+          provider: "anthropic",
+          providerModelId: "claude-opus-5-5",
+          inputUsd8PerToken: 400,
+          outputUsd8PerToken: 2000,
+          creditsPerProduct: {
             medium: 4,
             high: 6,
           },

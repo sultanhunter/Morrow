@@ -1,7 +1,10 @@
 // ADR-0036 (OD-2026-10-25-1, OD-2026-10-25-2): Opus 5.5 by default for every agent, no
 // unrecovered-cost cap, the member ceiling of 4 and the look-for-work cap of US$1.12 a day.
-// Pure: no I/O beyond reading the repository files. lab:run-credits (C4, C12) and
-// lab:listings-runs (M1, U1) prove migration 0051 on PostgreSQL 17.
+// ADR-0039 (OD-2026-10-25-4) later removed the look-for-work cap and the US$7 and US$25
+// backstops (catalogue version 4, migration 0056; tests/credits-only.test.mjs); the cases
+// below keep ADR-0036's records and say what ADR-0039 changed. Pure: no I/O beyond reading
+// the repository files. lab:run-credits (C4, C12) and lab:listings-runs (M1, U1) prove
+// migration 0051 on PostgreSQL 17.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -17,19 +20,16 @@ import {
   defaultSelection,
   resolveSelection,
 } from "../packages/policy/src/model-catalogue.ts";
+import * as loopCatalogue from "../packages/policy/src/loop-catalogue.ts";
 import {
   defaultLoopProfile,
-  fitsDailyBackstop,
-  lookForWorkDailyCapUsd12,
-  lookForWorkHold,
   loopEntries,
   loopEntry,
   runHold,
   turnLimit,
 } from "../packages/policy/src/loop-catalogue.ts";
-import { fakeRateCard } from "../packages/policy/src/agent-platform-fakes.ts";
+import * as runCredits from "../packages/policy/src/run-credits.ts";
 import {
-  dailyCapAllows,
   failureBreaker,
   parseUsd8,
   reservationSize,
@@ -159,45 +159,29 @@ test("version 3's default member ceiling of 4 is owner-confirmed (OD-2026-10-25-
     );
 });
 
-// OD-2026-10-25-2 Q2 (ADR-0036 item 7): the daily look-for-work pass keeps Opus 5.5 at medium,
-// and its cap is US$1.12 per agent per day, two worst-case turns at that default, in place of
-// 1% of the monthly grant. PR 21's admission takes lookForWorkHold; nothing admits a pass yet.
-test("the look-for-work cap: one pass a day at the installed default, within US$1.12", () => {
+// OD-2026-10-25-2 Q2 (ADR-0036 item 7) set the daily look-for-work cap to US$1.12 per agent,
+// two worst-case turns at the installed default. ADR-0039 item 1 removed it with every other
+// money cap: one pass per agent a day stays (a count, not money), and the pass holds and
+// draws credits like any run (ADR-0039 PR 2 and 3).
+test("the look-for-work cap of US$1.12 is recorded by ADR-0036 and removed by ADR-0039", () => {
   const v2 = policy.catalogue.versions[1];
-  assert.equal(v2.limits.look_for_work_daily_cost_cap_usd, "1.12");
+  assert.equal(Object.hasOwn(v2.limits, "look_for_work_daily_cost_cap_usd"), false);
   const generated = generatedLoopCatalogue.versions.find((v) => v.version === 2);
-  assert.equal(generated.limits.lookForWorkDailyCostCapUsd12, 1_120_000_000_000);
-  assert.equal(lookForWorkDailyCapUsd12(2), usd12(1.12));
+  assert.equal(Object.hasOwn(generated.limits, "lookForWorkDailyCostCapUsd12"), false);
+  for (const name of ["lookForWorkHold", "lookForWorkDailyCapUsd12"])
+    assert.equal(Object.hasOwn(loopCatalogue, name), false, name);
+  // The installed default is still Opus 5.5 at medium (ADR-0036), whose two worst-case turns
+  // were the US$1.12.
   const installed = defaultLoopProfile(2, "installed");
   const entry = loopEntry(2, installed.model, installed.effort);
   assert.deepEqual([entry.model, entry.effort], ["claude_opus_5_5", "medium"]);
-  assert.equal(2n * entry.worstCaseTurnUsd12, usd12(1.12), "exactly two worst-case turns");
-  // The first pass of the day is admitted at the default: US$1.12 held, two turns.
-  const first = lookForWorkHold({ entry, passesToday: 0 });
-  assert.equal(first.ok, true);
-  assert.equal(first.holdUsd12, usd12(1.12));
-  assert.equal(first.worstCaseTurns, 2);
-  assert.equal(first.toolTurnsRequired, 2);
-  // A second pass the same day, or a costlier profile, is refused.
-  assert.deepEqual(lookForWorkHold({ entry, passesToday: 1 }), {
-    ok: false,
-    code: "trigger_used",
-  });
-  assert.deepEqual(
-    lookForWorkHold({ entry: loopEntry(2, "claude_opus_5_5", "high"), passesToday: 0 }),
-    { ok: false, code: "cap_below_turn" },
-  );
-  // The rate card's shape carries the same cap as a USD amount, not basis points.
-  const card = fakeRateCard();
-  assert.deepEqual(card.caps.lookForWorkDailyUsd, { amount: "1.12", currency: "USD" });
-  assert.equal(Object.hasOwn(card.caps, "lookForWorkPassBasisPoints"), false);
-  // The records: ADR-0036 item 7, ADR-0026's and ADR-0027's dated notes.
+  assert.equal(2n * entry.worstCaseTurnUsd12, usd12(1.12));
+  // The records: ADR-0036 item 7 and ADR-0026's and ADR-0027's dated notes are kept.
   const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
   assert.match(
     adr,
     /^7\. \*\*The look-for-work cap: US\$1\.12 per agent per day\*\* \(OD-2026-10-25-2;/m,
   );
-  assert.ok(adr.includes("No code admits a pass yet. Build order PR 21's `admit_mandate_run`"));
   assert.ok(
     read("docs/decisions/adr/ADR-0026-billing-and-price.md").includes(
       "### 2026-10-25: item 4's look-for-work cap becomes US$1.12 per agent per day (ADR-0036 item 7)",
@@ -210,18 +194,25 @@ test("the look-for-work cap: one pass a day at the installed default, within US$
   );
 });
 
-// OD-2026-10-25-2 Q3: the per-run US$7 and per-day US$25 backstops stay, reconfirmed.
-test("the US$7 and US$25 backstops are unchanged and recorded as reconfirmed", () => {
-  for (const index of [1, 2]) {
-    const { limits } = policy.catalogue.versions[index];
-    assert.equal(limits.run_cost_cap_usd, "7");
-    assert.equal(limits.workspace_daily_cost_cap_usd, "25");
+// OD-2026-10-25-2 Q3 kept the per-run US$7 and per-day US$25 backstops; OD-2026-10-25-4
+// (ADR-0039) removed them. Versions 1 and 3 keep the values they were published with, which
+// nothing enforces once version 4 is active.
+test("the US$7 and US$25 backstops: reconfirmed by ADR-0036, removed by ADR-0039", () => {
+  for (const index of [0, 2]) {
+    const { version, limits } = policy.catalogue.versions[index];
+    assert.equal(limits.run_cost_cap_usd, "7", `v${version}`);
+    assert.equal(limits.workspace_daily_cost_cap_usd, "25", `v${version}`);
   }
-  const card = fakeRateCard();
-  assert.deepEqual(card.backstops, {
-    runUsd: { amount: "7", currency: "USD" },
-    workspaceDailyUsd: { amount: "25", currency: "USD" },
-  });
+  for (const index of [1, 3]) {
+    const { version, limits } = policy.catalogue.versions[index];
+    assert.equal(Object.hasOwn(limits, "run_cost_cap_usd"), false, `v${version}`);
+    assert.equal(Object.hasOwn(limits, "workspace_daily_cost_cap_usd"), false, `v${version}`);
+  }
+  assert.equal(catalogueLimits(4).runCostCapUsd8, null);
+  assert.equal(catalogueLimits(4).workspaceDailyCostCapUsd8, null);
+  assert.equal(Object.hasOwn(runCredits, "dailyCapAllows"), false);
+  assert.equal(Object.hasOwn(loopCatalogue, "fitsDailyBackstop"), false);
+  // ADR-0036's own record of the owner's answer is unchanged.
   const adr = read("docs/decisions/adr/ADR-0036-model-defaults-and-cost-cap.md");
   assert.ok(
     adr.includes(
@@ -251,8 +242,9 @@ test("defaults: Morrow on Opus 5.5 at high, every other kind on Opus 5.5 at medi
       { model: "claude_opus_5_5", effort: "medium" },
       kind,
     );
-  // Listings' per-product runs: catalogue version 3's default and its member ceiling.
-  assert.equal(activeCatalogueVersion(), 3);
+  // Listings' per-product runs: catalogue version 3's default and its member ceiling, which
+  // version 4 keeps (ADR-0039 removed only its caps).
+  assert.equal(activeCatalogueVersion(), 4);
   assert.deepEqual(defaultSelection(), { model: "claude_opus_5_5", effort: "medium" });
   assert.equal(defaultMemberCreditCeiling(), 4);
   const member = resolveSelection({
@@ -294,42 +286,33 @@ test("no unrecovered-cost cap in the policy or the generated catalogues", () => 
   }
 });
 
-test("the per-run and per-day backstops and the breaker still refuse (TypeScript twins)", () => {
-  const limits = catalogueLimits(3);
-  const opusMedium = catalogueEntry(3, "claude_opus_5_5", "medium");
-  // US$7 a run: twelve products at the default (US$6.528), not thirteen.
-  const twelve = reservationSize(opusMedium, 12);
+test("version 3's published run limits stay for its runs; version 4 and the loop have no money cap", () => {
+  // A run recorded at version 3 keeps version 3's limits: twelve products at the default
+  // (US$6.528), not thirteen.
+  const opusMedium3 = catalogueEntry(3, "claude_opus_5_5", "medium");
+  const twelve = reservationSize(opusMedium3, 12);
   assert.equal(twelve.ok, true);
   assert.equal(usd8Text(twelve.reservation.vendorMaximumUsd8), "6.52800000");
   assert.equal(twelve.reservation.credits, 48n);
-  assert.deepEqual(reservationSize(opusMedium, 13), { ok: false, code: "run_product_limit" });
-  // US$25 a day: settled cost plus open reservations plus this one.
-  assert.equal(dailyCapAllows(limits, parseUsd8("18.472"), 0n, parseUsd8("6.528")), true);
-  assert.equal(dailyCapAllows(limits, parseUsd8("18.473"), 0n, parseUsd8("6.528")), false);
-  // Three consecutive failed products stop a run.
+  assert.deepEqual(reservationSize(opusMedium3, 13), { ok: false, code: "run_product_limit" });
+  // ADR-0039 item 4: at version 4 the default admits 25 products, 100 credits held up front.
+  const opusMedium4 = catalogueEntry(4, "claude_opus_5_5", "medium");
+  const all = reservationSize(opusMedium4, 25);
+  assert.equal(all.ok && all.reservation.credits, 100n);
+  assert.equal(usd8Text(all.reservation.vendorMaximumUsd8), "13.60000000");
+  assert.deepEqual(reservationSize(opusMedium4, 26), { ok: false, code: "run_product_limit" });
+  // Three consecutive failed products still stop a run.
   let state = { consecutiveFailed: 0, stop: false };
-  for (let i = 0; i < 3; i++) state = failureBreaker(limits, state.consecutiveFailed, "failed");
+  for (let i = 0; i < 3; i++)
+    state = failureBreaker(catalogueLimits(4), state.consecutiveFailed, "failed");
   assert.deepEqual(state, { consecutiveFailed: 3, stop: true });
-  // Loop runs: every entry's hold fits US$7, and the installed default holds US$6.72 over 12
-  // turns; the daily backstop still refuses past US$25.
-  for (const entry of loopEntries(2)) {
-    const hold = runHold({ entry, kind: "routed", creditCapUsd12: null });
-    assert.ok(hold.ok && hold.holdUsd12 <= usd12(7), `${entry.model} ${entry.effort}`);
-  }
+  // Loop runs: no backstop lowers a turn limit; the installed default keeps its 16 turns,
+  // US$8.96 at worst (ADR-0039's Consequences).
+  for (const entry of loopEntries(2)) assert.equal(turnLimit(entry, "routed"), 16);
   const installed = defaultLoopProfile(2, "installed");
   const entry = loopEntry(2, installed.model, installed.effort);
-  assert.equal(turnLimit(entry, "routed"), 12);
   const hold = runHold({ entry, kind: "routed", creditCapUsd12: null });
-  assert.equal(hold.ok && hold.holdUsd12, usd12(6.72));
-  const day = (settled) =>
-    fitsDailyBackstop({
-      catalogueVersion: 2,
-      settledUsd12: usd12(settled),
-      openHoldsUsd12: 0n,
-      holdUsd12: usd12(6.72),
-    });
-  assert.equal(day(18.28), true);
-  assert.equal(day(18.29), false);
+  assert.equal(hold.ok && hold.holdUsd12, usd12(8.96));
 });
 
 test("migration 0051 seeds catalogue version 3 exactly as the generated catalogue holds it", () => {
@@ -434,8 +417,9 @@ test("unrecovered_allows is revised from its pinned 0033 body to compare with no
   assert.match(after, /COALESCE\(\(SELECT true FROM morrow_work\.model_catalogue_versions v/);
   assert.match(after, /v\.version=p_catalogue_version/);
   assert.match(after, /p_period_start IS NOT NULL AND p_worst_case_usd>=0\),false\)/);
-  // Its callers are not redefined: 0038's run_reserve and run_product_begin still refuse at
-  // the run limit and the daily cap, and still stop at the breaker and an exhausted hold.
+  // Its callers are not redefined here: 0038's run_reserve and run_product_begin refuse at the
+  // run limit (and, until migration 0056 removed it under ADR-0039, the daily cap), and stop
+  // at the breaker and an exhausted hold.
   for (const name of ["run_reserve", "run_product_begin", "cmd_run_admit"])
     assert.doesNotMatch(sql, new RegExp(`FUNCTION [a-z_]+\\.${name}\\(`), name);
   const reserve = body(runs, "CREATE OR REPLACE FUNCTION morrow_billing.run_reserve(");

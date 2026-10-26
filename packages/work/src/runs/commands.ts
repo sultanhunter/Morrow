@@ -36,8 +36,9 @@ import { runFieldsValid, type ListingField } from "./drafting.js";
 //   * the selection resolved against the active catalogue within the member's ceiling
 //     (governance.model_default.revise exempts; a provider model string, an unknown or
 //     retired key and xhigh are refused, a missing selection is the workspace default);
-//   * the products: 1..the entry's run limit distinct product ids; the fields: the run's
-//     listing fields with the SEO pair;
+//   * the products: 1..the entry's run limit distinct product ids (25 for every entry from
+//     catalogue version 4, ADR-0039 item 4); the fields: the run's listing fields with the
+//     SEO pair;
 //   * the parent task is the actor's own; the store's Listings installation is active.
 // The code Coordinator writes CoordinatorRoute@1. Every refusal persists nothing; an unknown
 // outcome is never reported as success or refusal.
@@ -54,6 +55,8 @@ export type RunRefusal =
   | "runs_unavailable"
   | "entitlement"
   | "insufficient_credits"
+  // Never returned since migration 0056 (ADR-0039: credits are the only spend limit, so
+  // run_reserve has no daily cap); kept for the closed set.
   | "daily_cap"
   // Never returned since migration 0051 (ADR-0036 removed the cap); kept for the closed set.
   | "unrecovered_cost_cap"

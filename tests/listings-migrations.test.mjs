@@ -141,7 +141,9 @@ test("every new function has an explicit PUBLIC revoke and only its registered g
       ])
       .filter((m) => m[2].split(",").includes(login))
       .flatMap((m) => m[1].split(/,\s*(?=morrow_)/).map((f) => f.trim().replace(/\s+/g, "")));
-    assert.deepEqual(granted.sort(), [...functions].sort(), login);
+    // A definer a later migration drops and creates again (0056's runtime_operation_begin,
+    // ADR-0039) is granted again to the same login; the set of definers is what is pinned.
+    assert.deepEqual([...new Set(granted)].sort(), [...functions].sort(), login);
   }
   assert.ok(
     executorLogins.morrow_vault_broker.includes("morrow_vault.resolve_call(text,text,text,text)"),
