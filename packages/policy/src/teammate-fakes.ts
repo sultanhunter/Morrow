@@ -20,7 +20,8 @@
 //   result left with unknown outcomes is refused (retry_blocked, item 23). Each fresh call is a
 //   fresh child, the same teammate again included; a follow-up (followUpOf) reopens an idle
 //   child of the same run with a new brief and the next sequence, keeping what it was given
-//   and its taint, and counts no new child; agent.cancel releases an idle child. The brief the
+//   and its taint, and counts no new child; agent.cancel releases an idle child, or stops a
+//   running one, which keeps what it did as partial and is then released. The brief the
 //   teammate receives is built by code (teammateBrief), request included. The called run starts
 //   with the calling run's taint and joins its own (joinRunTaint), so its items and its result
 //   carry both. It builds TeammateResult@1 with buildTeammateResult for every end, so large
@@ -400,8 +401,13 @@ export type TeammateCallOutcome =
   | { readonly ok: false; readonly refusal: TeammateCallRefusal }
   /** Nothing admitted: the job parks on credits (item 9) or checks in at 32 children (item 21). */
   | { readonly ok: false; readonly wait: "credits" | "children_checkin" };
+/**
+ * agent.cancel's outcome: an idle child is released at once; a running one is cancelled, and
+ * its run ends stopped at its next boundary, keeping what it did (ADR-0041 item 21: a step
+ * that began returns its recorded result). A released call is neither running nor idle.
+ */
 export type CancelOutcome =
-  | { readonly ok: true; readonly state: "released" }
+  | { readonly ok: true; readonly state: "released" | "cancelled" }
   | { readonly ok: false; readonly refusal: "call_not_found" | "call_not_idle" };
 export interface FakeTeammateRunner {
   /** agent.ask: one call or one follow-up, admitted and checked alone. */
@@ -415,18 +421,21 @@ export interface FakeTeammateRunner {
     /** The requester's own words, filled by code (null for a mandate episode). */
     readonly request: Current_TeammateRequest | null;
   }): Promise<TeammateCallOutcome>;
-  /** agent.cancel: release an idle call of this run (calls here finish before they return). */
+  /** agent.cancel: cancel a running call of this run, or release an idle one. */
   cancel(parentRunId: string, callId: string): CancelOutcome;
   /** Children admitted under one Morrow run's envelope so far (follow-ups add none). */
   children(parentRunId: string): number;
 }
 
 interface CallState {
+  readonly callId: string;
   readonly parentRunId: string;
   readonly installationId: string;
   readonly runId: string;
   readonly taskId: string;
   state: "idle" | "running" | "released";
+  /** agent.cancel reached the call while it ran: its run ends stopped and it is released. */
+  cancelled: boolean;
   sequence: number;
   given: Current_TeammateRecordRef[];
   taint: Current_RunTaint;
@@ -455,6 +464,10 @@ export function createFakeTeammateRunner(options: {
       const call = calls.get(callId);
       if (!call || call.parentRunId !== parentRunId)
         return { ok: false, refusal: "call_not_found" };
+      if (call.state === "running") {
+        call.cancelled = true;
+        return { ok: true, state: "cancelled" };
+      }
       if (call.state !== "idle") return { ok: false, refusal: "call_not_idle" };
       call.state = "released";
       return { ok: true, state: "released" };
@@ -497,21 +510,23 @@ export function createFakeTeammateRunner(options: {
         children.set(parentRunId, count + 1);
         const n = next++;
         call = {
+          callId: `call_fake_${n}`,
           parentRunId,
           installationId,
           runId: `run_call_${n}`,
           taskId: `task_call_${n}`,
           state: "running",
+          cancelled: false,
           sequence: 1,
           given: [],
           taint: callerTaint,
         };
-        calls.set(`call_fake_${n}`, call);
+        calls.set(call.callId, call);
       } else {
         call.state = "running";
         call.sequence += 1;
       }
-      const callId = [...calls].find(([, c]) => c === call)![0];
+      const callId = call.callId;
       const seen = new Set(call.given.map(refKey));
       for (const r of brief.records)
         if (!seen.has(refKey(r))) {
@@ -546,7 +561,8 @@ export function createFakeTeammateRunner(options: {
         runId: call.runId,
         taskId: call.taskId,
         installationId,
-        endReason: run.endReason,
+        // A cancel that reached the running call stops it: whatever it did is kept as partial.
+        endReason: call.cancelled ? ("stopped" as const) : run.endReason,
         doneCriteria: brief.doneCriteria.length,
         given: [...call.given],
         created: run.created,
@@ -565,7 +581,7 @@ export function createFakeTeammateRunner(options: {
         run.completion,
         options.store.sinkFor({ runId: call.runId, readTags: run.readTags, taint: runTaint }),
       );
-      call.state = "idle";
+      call.state = call.cancelled ? "released" : "idle";
       if ((run.unresolved ?? []).length > 0)
         unresolvedByParent.set(parentRunId, [
           ...(unresolvedByParent.get(parentRunId) ?? []),

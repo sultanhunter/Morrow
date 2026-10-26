@@ -254,7 +254,7 @@
       "contexts": [
         "coordinator"
       ],
-      "description": "Cancel one of this job's running calls by its call id, or release an idle one you will not follow up. Steps it already began keep their results; anything whose outcome is unknown stays blocked from a retry until it is checked. It is not a stop for the job. Refused with call_not_found for a call this job did not make."
+      "description": "Cancel one of this job's running calls by its call id, or release an idle one you will not follow up. Steps it already began keep their results; anything whose outcome is unknown stays blocked from a retry until it is checked. It is not a stop for the job. Refused with call_not_found for a call this job did not make, and call_not_idle for one already released."
     },
     {
       "name": "agent.propose",
@@ -432,7 +432,7 @@
         "look_for_work",
         "call"
       ],
-      "description": "Finish this job: the outcome, each done criterion with the records or items that show it, and the reply to post; a called teammate gives its result instead (summary, counts, findings, the items it wrote, what it needs and, in a review, a verdict per criterion). Code first checks the plan, open calls and questions, unconfirmed store changes and every criterion; verification_failed names what is missing and the work goes on. Use waiting when a promise is still open."
+      "description": "Finish this job: the outcome, each done criterion with the records or items that show it, and the reply to post; a called teammate gives its result instead (summary, counts, findings, the items it wrote, what it needs and, in a review, a verdict per criterion). Code first checks the plan, open calls and questions, unconfirmed store changes and every criterion; verification_failed names what is missing and the work goes on. Use waiting when a promise is still open (never in a called teammate's result)."
     },
     {
       "name": "run.wait",

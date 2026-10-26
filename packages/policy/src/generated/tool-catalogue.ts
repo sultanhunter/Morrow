@@ -817,7 +817,7 @@ export const generatedToolCatalogue = {
       inputDefinition: "ToolInputAgentCancel",
       contexts: ["coordinator"],
       description:
-        "Cancel one of this job's running calls by its call id, or release an idle one you will not follow up. Steps it already began keep their results; anything whose outcome is unknown stays blocked from a retry until it is checked. It is not a stop for the job. Refused with call_not_found for a call this job did not make.",
+        "Cancel one of this job's running calls by its call id, or release an idle one you will not follow up. Steps it already began keep their results; anything whose outcome is unknown stays blocked from a retry until it is checked. It is not a stop for the job. Refused with call_not_found for a call this job did not make, and call_not_idle for one already released.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -2052,7 +2052,7 @@ export const generatedToolCatalogue = {
       inputDefinition: "ToolInputRunComplete",
       contexts: ["coordinator", "routed", "mandate", "look_for_work", "call"],
       description:
-        "Finish this job: the outcome, each done criterion with the records or items that show it, and the reply to post; a called teammate gives its result instead (summary, counts, findings, the items it wrote, what it needs and, in a review, a verdict per criterion). Code first checks the plan, open calls and questions, unconfirmed store changes and every criterion; verification_failed names what is missing and the work goes on. Use waiting when a promise is still open.",
+        "Finish this job: the outcome, each done criterion with the records or items that show it, and the reply to post; a called teammate gives its result instead (summary, counts, findings, the items it wrote, what it needs and, in a review, a verdict per criterion). Code first checks the plan, open calls and questions, unconfirmed store changes and every criterion; verification_failed names what is missing and the work goes on. Use waiting when a promise is still open (never in a called teammate's result).",
       inputSchema: {
         type: "object",
         additionalProperties: false,
@@ -2792,5 +2792,5 @@ export const generatedToolCatalogue = {
       },
     },
   ],
-  digest: "dd4ee83ca974b78639f3fb4db9c8a7297628931fb61482f37870841fe83753a8",
+  digest: "a05452b582d9adee5e80d98672e527872635f4c6888de60f8f2413d4423d0462",
 } as const;

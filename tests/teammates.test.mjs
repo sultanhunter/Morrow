@@ -703,6 +703,18 @@ const world = (options = {}) => {
     created: [{ kind: "task", id: "task_made_1" }],
   }));
   // A teammate whose proposal's apply came back unknown.
+  // A teammate whose run waits until the test lets it finish (a running child).
+  let finishSlow = () => {};
+  const slow = scripted("inst_slow", async () => {
+    await new Promise((resolve) => (finishSlow = resolve));
+    return {
+      completion: complete(),
+      endReason: "completed",
+      readTags: [productTag],
+      taint: cleanTaint(),
+      created: [{ kind: "proposal", id: "proposal_fake_1" }],
+    };
+  });
   const unsure = scripted("inst_unsure", () => ({
     completion: complete((c) => (c.outcome = "partial")),
     endReason: "completed",
@@ -774,12 +786,12 @@ const world = (options = {}) => {
   const runner = createFakeTeammateRunner({
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
-    teammates: [listings, support, paused, clean, stopper, unsure, writer],
+    teammates: [listings, support, paused, clean, stopper, unsure, writer, slow],
     store,
     coversCall: () => balance-- > 0,
     now,
   });
-  return { store, runner, received, writes };
+  return { store, runner, received, writes, finish: () => finishSlow() };
 };
 let nextToolUse = 1;
 const ask = (runner, change = {}) => {
@@ -890,6 +902,28 @@ test("refusals and waits: a paused or unknown teammate, a bad input, the custome
   assert.deepEqual(await ask(poor), { ok: false, wait: "credits" });
   assert.equal(poor.children(fakeIds.runId), 0);
   assert.equal(maximumChildrenPerEnvelope, 32);
+});
+
+test("cancelling a running child stops it: what it did is kept as partial, and it is released", async () => {
+  const { runner, finish } = world();
+  const pending = ask(runner, { installationId: "inst_slow" });
+  // The child is admitted and running; its call id is the runner's first.
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(runner.cancel(fakeIds.runId, "call_fake_1"), { ok: true, state: "cancelled" });
+  finish();
+  const stopped = await pending;
+  assert.ok(stopped.ok);
+  assert.equal(stopped.result.endReason, "stopped");
+  assert.equal(stopped.result.outcome, "partial", "a completion that a stop overtook is kept");
+  assert.deepEqual(stopped.result.created, fakeTeammateResult().created);
+  assert.deepEqual(runner.cancel(fakeIds.runId, stopped.callId), {
+    ok: false,
+    refusal: "call_not_idle",
+  });
+  assert.deepEqual(await ask(runner, { installationId: null, followUpOf: stopped.callId }), {
+    ok: false,
+    refusal: "call_not_idle",
+  });
 });
 
 test("follow-ups reopen an idle child with the next sequence; cancel releases it", async () => {

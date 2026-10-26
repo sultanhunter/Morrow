@@ -62,8 +62,8 @@ Security notes for H5: the new tools grant nothing, and `ToolDefinition` itself 
 H5 checklist:
 
 - [x] `tests/tool-catalogue.test.mjs` (87): version 4's 30 tools, context tools holding no capability, every context's completion and memory reads, the call context's `result.write`, depth 1 for the new `agent.*` tools, the retired tools gone.
-- [x] `tests/agent-platform-contracts.test.mjs` (24): every new fake validates; TeammateResult@1's new fields and outcome rules; the brief's code-filled fields; RunTaint's 256 sources and count; the new codes, records and sources.
-- [x] `tests/teammates.test.mjs` (24): partial work kept, every end, criteria checks, review verdicts, uncapped lists, taint counts; the fake runner's follow-ups, cancel, `result.write`, `retry_blocked`, check-in and parking.
+- [x] `tests/agent-platform-contracts.test.mjs` (22): every new fake validates; TeammateResult@1's new fields and outcome rules; the brief's code-filled fields; RunTaint's 256 sources and count; the new codes, records and sources.
+- [x] `tests/teammates.test.mjs` (25): partial work kept, every end, criteria checks, review verdicts, uncapped lists, taint counts; the fake runner's follow-ups, cancel (an idle child released, a running one stopped with its work kept as partial), `result.write`, `retry_blocked`, check-in and parking.
 - [x] New `tests/harness-tools.test.mjs` (9): the code rules of `run.plan`, `run.complete`, `run.wait`, `result.write`, `memory.read`, `context.checkpoint`, `agent.ask` and `agent.map`.
 - [x] `agent-cards` (9), `agent-package` (45), `plan-draft` (10), `shop-knowledge` (16), `agent-evals` (19) and `edge-config` follow.
 - [ ] Full checks: see PR #79's H5 comment for the commands and results.
@@ -81,4 +81,5 @@ Resolved by ADR-0041 in H5: 1 (`result.submit` became `run.complete`'s child for
 10. `AgentRunEndReason` and the turn bounds of `RunToolCall` and RunTurn@1 are H6's; `codeOutcome` maps today's end reasons and must follow H6's new codes (`envelope_expired`, `person_wait_expired`, `released` and the rest).
 11. The 8 KiB tool-result bound stays until H7d's inline bound (24k tokens); the stored TeammateResult@1 is bounded at 256 KiB in code, and the compact form Morrow's turn sees is H10's renderer.
 12. `TeammateCounts` is now a safety range (at most 1,000,000); `checkup_done` keeps ADR-0034's 1,000, so the code that posts a check-up from a large `agent.map` result (H11a) must say how it shows a larger count.
-13. The fake runner does not batch or merge `agent.map`, and a review call's `view`-only admission is code H10 adds; the contracts carry both.
+13. The fake runner does not batch or merge `agent.map`, deliver `agent.message`, or admit a review call with `view` verbs only; H10 adds that code, and the contracts carry all three.
+14. `agent.ask`'s immediate reply (`{callId, state, code}`, item 21) and what `run.wait` returns when it wakes have no contract yet: H6 (RunWait@1, RunEvent@1) or H10 defines them.
