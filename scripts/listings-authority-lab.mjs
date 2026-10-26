@@ -2524,12 +2524,17 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
     const memberAllowed = models.body.entries
       ?.filter((e) => e.allowedForMember)
       .map((e) => e.creditsPerProduct);
-    // Catalogue version 3 (ADR-0036, migration 0051): Opus 5.5 at medium by default, and the
-    // default member ceiling of 4 that admits it.
+    // Catalogue version 4 (ADR-0039, migration 0056): version 3's Opus 5.5 at medium by
+    // default (ADR-0036), the default member ceiling of 4 that admits it, and 25 products a
+    // run for every entry (no run cost cap). Claude Opus 5.5 at medium and high only (the
+    // owner, 2026-10-26): no Haiku 5.5, Sonnet 5.5 or low effort.
     check(
       "M1:catalogue_default_and_member_ceiling",
       models.status === 200 &&
-        models.body.catalogueVersion === 3 &&
+        models.body.catalogueVersion === 4 &&
+        models.body.entries?.map((e) => e.model + ":" + e.effort).join() ===
+          "claude_opus_5_5:medium,claude_opus_5_5:high" &&
+        models.body.entries?.every((e) => e.runProductLimit === 25) &&
         models.body.ceiling === 4 &&
         models.body.revision === null &&
         models.body.canRevise === false &&
@@ -2571,14 +2576,14 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       key,
     );
     const again = await put(P.A, {
-      model: "claude_sonnet_5_5",
-      effort: "low",
+      model: "claude_opus_5_5",
+      effort: "medium",
       maxCreditsPerProduct: 6,
       expectedRevision: null,
     });
     const second = await put(P.A, {
-      model: "claude_sonnet_5_5",
-      effort: "low",
+      model: "claude_opus_5_5",
+      effort: "medium",
       maxCreditsPerProduct: 6,
       expectedRevision: 1,
     });
@@ -2611,9 +2616,10 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
         raised.body.entries.every((e) => e.allowedForMember),
       raised.body,
     );
-    // SQL refuses a key outside the active catalogue, a ceiling below the default, or the
-    // retired version 1 (ADR-0036).
-    const definer = (model, effort, ceiling, version = "3") =>
+    // SQL refuses a key outside the active catalogue (Haiku 5.5, Sonnet 5.5 and Opus 5.5 at
+    // low among them since version 4), a ceiling below the default, or the retired versions 1
+    // (ADR-0036) and 3 (ADR-0039).
+    const definer = (model, effort, ceiling, version = "4") =>
       last(
         db.sql(
           asApi(
@@ -2628,7 +2634,11 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       definer("claude_opus_9", "low", "6") === "invalid" &&
         definer("claude_opus_5_5", "high", "5") === "invalid" &&
         definer("claude_opus_5_5", "xhigh", "6") === "invalid" &&
-        definer("claude_sonnet_5_5", "low", "6", "1") === "invalid",
+        definer("claude_haiku_5_5", "low", "6") === "invalid" &&
+        definer("claude_sonnet_5_5", "low", "6") === "invalid" &&
+        definer("claude_opus_5_5", "low", "6") === "invalid" &&
+        definer("claude_sonnet_5_5", "low", "6", "1") === "invalid" &&
+        definer("claude_sonnet_5_5", "low", "6", "3") === "invalid",
     );
   }
 

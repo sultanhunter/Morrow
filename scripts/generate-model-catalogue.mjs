@@ -1,6 +1,8 @@
 // The model catalogue generator (ADR-0022 items 10, 11 and 16; M3 PR-1). It reads the
 // reviewed catalogue in docs/decisions/model-policy.json, refuses it unless
-// `inspectModelPolicy` passes (pinned digests, adaptive thinking, margins, caps), and
+// `inspectModelPolicy` passes (pinned digests, adaptive thinking, margins, caps, and Claude
+// Opus 5.5 at medium or high only from version 4 and in every published version but 1 and 3,
+// the owner's choices of 2026-10-26), and
 // writes packages/policy/src/generated/model-catalogue.ts: data only, for the api's
 // checks and, in M3 PR-2, the broker. Keys stay opaque strings; nothing here becomes a
 // contract enum. Every money value is an exact integer count of 10^-8 USD (the
@@ -52,6 +54,8 @@ export function catalogueVersionData(entry) {
     if (!KEY.test(effort.key ?? "")) refuse("KEY_INVALID");
     return { key: effort.key, maxOutputTokens: count(effort.max_output_tokens) };
   });
+  // From version 4 every model is Claude Opus 5.5 and no effort is low (verify refuses either
+  // before this runs; versions 1 and 3 keep theirs as published).
   const models = (entry.models ?? []).map((model) => {
     if (!KEY.test(model.key ?? "")) refuse("KEY_INVALID");
     const rates = model.rates_usd_per_million_tokens ?? {};
@@ -77,6 +81,9 @@ export function catalogueVersionData(entry) {
     if (units > BigInt(Number.MAX_SAFE_INTEGER)) refuse("CAP_TOO_LARGE");
     return Number(units);
   };
+  // Versions 1 and 3 carry their published run and daily caps; from version 4 neither exists
+  // (ADR-0039: credits are the only spend limit), and the generated value is null.
+  const optionalUsd8 = (text) => (text === undefined ? null : usd8(text));
   return {
     version: count(entry.version),
     status: entry.status,
@@ -92,8 +99,8 @@ export function catalogueVersionData(entry) {
       maxAttemptsPerProduct: count(limits.max_attempts_per_product),
       maxProductsPerRun: count(limits.max_products_per_run),
       maxConsecutiveFailedProducts: count(limits.max_consecutive_failed_products),
-      runCostCapUsd8: usd8(limits.run_cost_cap_usd),
-      workspaceDailyCostCapUsd8: usd8(limits.workspace_daily_cost_cap_usd),
+      runCostCapUsd8: optionalUsd8(limits.run_cost_cap_usd),
+      workspaceDailyCostCapUsd8: optionalUsd8(limits.workspace_daily_cost_cap_usd),
       // No unrecovered-cost cap (ADR-0036): version 1's published value is not generated.
     },
     efforts,
@@ -147,15 +154,11 @@ export async function generateModelCatalogue(root = repositoryRoot) {
 }
 
 export const loopCataloguePath = "packages/policy/src/generated/loop-catalogue.ts";
-const usd12 = (text) => {
-  const units = scaled(text, 12);
-  if (units > BigInt(Number.MAX_SAFE_INTEGER)) refuse("CAP_TOO_LARGE");
-  return Number(units);
-};
 /**
  * The generated data of one loop version (ADR-0027 items 6 and 12; PR 10). Money is exact
  * 10^-12 USD: a per-million rate times 10^6 per token (Haiku 5.5's US$0.125 cache write is
- * 0.125 of a 10^-6 USD, so the 10^-8 unit of version 1 cannot hold it).
+ * 0.125 of a 10^-6 USD, so the 10^-8 unit of version 1 cannot hold it). A loop version has no
+ * money cap (ADR-0039); refusing one is verify's (scripts/provider-checks.mjs).
  */
 export function loopCatalogueVersionData(entry) {
   if (entry.run_shape !== "agent_loop") refuse("RUN_SHAPE_INVALID");
@@ -192,11 +195,8 @@ export function loopCatalogueVersionData(entry) {
       specialistDefaultRunMinutes: count(limits.specialist_default_run_minutes),
       specialistMaxRunMinutes: count(limits.specialist_max_run_minutes),
       toolResultMaxBytes: count(limits.tool_result_max_bytes),
-      runCostCapUsd12: usd12(limits.run_cost_cap_usd),
-      workspaceDailyCostCapUsd12: usd12(limits.workspace_daily_cost_cap_usd),
-      // ADR-0036 item 7 (OD-2026-10-25-2): one look-for-work pass a day per agent, held
-      // within this cap in place of ADR-0026 item 4's 1% of the monthly grant.
-      lookForWorkDailyCostCapUsd12: usd12(limits.look_for_work_daily_cost_cap_usd),
+      // No money cap (ADR-0039 item 1): the run and daily backstops and the look-for-work cap
+      // are gone; a loop run's turns hold and draw credits from the wallet.
     },
     expectedTurn: {
       inputTokens: count(entry.expected_turn.input_tokens),

@@ -131,14 +131,15 @@
   "catalogue": {
     "id": "morrow-model-catalogue",
     "active_versions": {
-      "per_product": 3,
+      "per_product": 4,
       "agent_loop": null
     },
     "published_digests": {
       "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660",
-      "3": "f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0"
+      "3": "f1f15d4f3b952234693f15aee1943e937f8c421ab1f4809e73345469c616d6c0",
+      "4": "189ba14bcad6b5cbdf15d7d6e2a51d1b571720615d3688042e17f0777b74c62c"
     },
-    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while a per-product version stays active (ADR-0027 item 4). ADR-0036 removed the unrecovered-cost cap: version 1 keeps its published workspace_period_unrecovered_cost_cap_usd, which nothing enforces, and no later version carries one.",
+    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation). Each run shape (per_product without run_shape, for listings-run@1; agent_loop, for agent-run@1) has its own active pointer in active_versions, so a loop version publishes while a per-product version stays active (ADR-0027 item 4). ADR-0036 removed the unrecovered-cost cap: version 1 keeps its published workspace_period_unrecovered_cost_cap_usd, which nothing enforces, and no later version carries one. ADR-0039 made credits the only spend limit: versions 1 and 3 keep their published run_cost_cap_usd and workspace_daily_cost_cap_usd, which nothing enforces once version 4 is active; version 4 and every later per-product version, and every loop version, carry neither (nor a look-for-work cap). The owner chose the best model for every agent (2026-10-26), and then dropped low effort (owner question 1 on pull request 82, answered 2026-10-26): from version 4, every version of either run shape holds only Claude Opus 5.5 entries, at medium and high effort, and so does every published version other than 1 and 3 (npm run verify refuses any other model, an older or newer Opus included, and low effort; xhigh and max may come in a later version once tests show they help, and a later model needs a reviewed change to that rule). Haiku 5.5, Sonnet 5.5 and low effort stay only in versions 1 and 3 as published, and in the loop's version 2 while it is proposed (pull request 64 rewrites it under ADR-0041).",
     "versions": [
       {
         "version": 1,
@@ -276,7 +277,7 @@
         "status": "proposed",
         "run_shape": "agent_loop",
         "proposed_on": "2026-10-23",
-        "decision": "ADR-0027 items 6 and 12, ADR-0026 item 4, with ADR-0036's installed-agent default, no unrecovered-cost cap and its look-for-work cap of US$1.12 per agent per day (ADR-0036 item 7; the owner set that value, OD-2026-10-25-2) (PR 10 proposes it; it publishes only on the owner's recorded confirmation, ADR-0027 item 11)",
+        "decision": "ADR-0027 items 6 and 12, ADR-0026 item 4, with ADR-0036's installed-agent default and no unrecovered-cost cap, and no money cap: ADR-0039 removed the run backstop, the daily backstop and the look-for-work cap, so credits are the only spend limit (PR 10 proposes it; it publishes only on the owner's recorded confirmation, ADR-0027 item 11)",
         "owner_confirmation": null,
         "effective_from": null,
         "default_profiles": {
@@ -305,9 +306,6 @@
           "specialist_default_run_minutes": 60,
           "specialist_max_run_minutes": 480,
           "tool_result_max_bytes": 8192,
-          "run_cost_cap_usd": "7",
-          "workspace_daily_cost_cap_usd": "25",
-          "look_for_work_daily_cost_cap_usd": "1.12",
           "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
         },
         "expected_turn": {
@@ -405,7 +403,7 @@
       },
       {
         "version": 3,
-        "status": "active",
+        "status": "retired",
         "proposed_on": "2026-10-25",
         "decision": "ADR-0036 items 2 and 3",
         "owner_confirmation": "Owner, 2026-10-25, in chat (OD-2026-10-25-1): \"use opus 5.5 high for the main agent and opus 5.5 medium for all type of subagents/specialists etc. and you can remove the cap on ai cost\". It sets the default selection to Opus 5.5 at medium and removes the unrecovered-cost cap. Owner, 2026-10-25, in chat (OD-2026-10-25-2), asked \"With Listings on Opus 5.5 medium, each product it drafts costs 4 credits instead of 1 (your 300 test credits = about 75 products). Who in a shop may run it at that default?\", answered \"Everyone, up to 4 (Recommended)\": the default member ceiling of 4 (ADR-0036 item 2), the default's own credits, which replaces the ceiling of 1 the owner confirmed on 2026-10-19. Every other value is version 1's, confirmed by the owner on 2026-10-19.",
@@ -532,6 +530,85 @@
           "international_card_fee_rate": "0.015",
           "max_worst_case_share": "0.90",
           "rule": "every selection's worst case per product is at most max_worst_case_share of its credits' share of the plan's net revenue after every fee; no unrecovered-cost cap (ADR-0036)"
+        }
+      },
+      {
+        "version": 4,
+        "status": "active",
+        "proposed_on": "2026-10-25",
+        "decision": "ADR-0039 item 4, and the owner's decisions of 2026-10-26 that every agent runs on Claude Opus 5.5, at medium or high effort",
+        "owner_confirmation": "Owner, 2026-10-25, in chat (OD-2026-10-25-4): \"for budget why we limiting anything? it should be very simple credit based system like suppose we give user 1000credits it will be spend on the agentic work so that creidt will bcome limit itself no need to hardcode all of that bullshit. and for one i want it to be truty multi agent system so the agents can be orchestrated by the main agent in any way no need to limit to a single agent call only. for 2 why we adding limit on characters? it might strip important information i think only needs to be structured. for other option use the recommded one\". Credits are the only spend limit (ADR-0039 items 1 and 4): no run or daily cost cap, so every entry admits up to max_products_per_run, 25 products a run, held up front in credits. Owner, 2026-10-26, in chat: \"one more thing i am seeing we are using haiku for some parts? why is that? we don't want to cheap out on models as we want the best results for users as all the users are going to be paid users\". The lead reads it as every agent on Claude Opus 5.5, with Haiku 5.5 and Sonnet 5.5 leaving the catalogue: version 3's Haiku 5.5 and Sonnet 5.5 entries are not carried into version 4. Owner, 2026-10-26, in chat, answering owner question 1 on pull request 82 (ADR-0041, Q-adr-0040-0041-owner-questions), whose recommendation was \"Yes to both. Drop low effort everywhere, and keep the per-agent picker with Opus 5.5 at medium or high only; extra-high and max come later, once tests show they help.\": \"lets accept the recommended options, also i want to know one thing since we are building a full fledged ai workspace with people and ai agents teammates to run shopify business will the user able to suppose create a agent for suppose a cod order appears then the agent calls the customers to confirm the cod order so the rate of cancellation decreases(ofcourse all the apis access for the external services that will be provided by the user like the calling service etc.)\". Low effort leaves too: version 4 holds only Opus 5.5 at medium and high (4 and 6 credits a product). Every other value is version 3's: Opus 5.5's credits and rates at medium and high, those two efforts and their token limits, the economics, the default selection (Opus 5.5 at medium) and the default member ceiling (4, which admits it), confirmed by the owner on 2026-10-19 and 2026-10-25 (OD-2026-10-25-1, OD-2026-10-25-2).",
+        "effective_from": "2026-10-26",
+        "default_selection": {
+          "model": "claude_opus_5_5",
+          "effort": "medium"
+        },
+        "default_member_credit_ceiling": 4,
+        "limits": {
+          "max_input_tokens_per_call": 8000,
+          "max_attempts_per_product": 2,
+          "max_products_per_run": 25,
+          "max_consecutive_failed_products": 3,
+          "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
+        },
+        "expected_input_tokens": 3000,
+        "efforts": [
+          {
+            "key": "medium",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "medium"
+              }
+            },
+            "max_output_tokens": 12000,
+            "expected_output_tokens": 2500
+          },
+          {
+            "key": "high",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "high"
+              }
+            },
+            "max_output_tokens": 16000,
+            "expected_output_tokens": 5000
+          }
+        ],
+        "models": [
+          {
+            "key": "claude_opus_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-opus-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-22",
+            "rates_usd_per_million_tokens": {
+              "input": "4",
+              "output": "20"
+            },
+            "rate_tier_max_input_tokens": null,
+            "credits_per_product": {
+              "medium": 4,
+              "high": 6
+            }
+          }
+        ],
+        "economics": {
+          "plan_price_usd": "49",
+          "plan_credits": 300,
+          "card_fee_rate": "0.029",
+          "card_fee_fixed_usd": "0.30",
+          "billing_fee_rate": "0.007",
+          "tax_fee_rate": "0.005",
+          "international_card_fee_rate": "0.015",
+          "max_worst_case_share": "0.90",
+          "rule": "every selection's worst case per product is at most max_worst_case_share of its credits' share of the plan's net revenue after every fee; no unrecovered-cost cap (ADR-0036), no run or daily cost cap (ADR-0039), and Claude Opus 5.5 only, at medium and high effort (the owner, 2026-10-26)"
         }
       }
     ]

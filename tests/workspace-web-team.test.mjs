@@ -160,12 +160,12 @@ test("the fixture: Team as the Owner, with Listings on the workspace model defau
     assert.deepEqual([agent.thinking.model, agent.thinking.effort], ["claude_opus_5_5", "medium"]);
     assert.deepEqual(agent.thinking.usual, { model: "claude_opus_5_5", effort: "medium" });
   }
-  // The Listings agent follows catalogue version 3's default, Opus 5.5 at medium.
+  // The Listings agent follows catalogue version 4's default (version 3's), Opus 5.5 at medium.
   assert.deepEqual(
     [listings.model, listings.effort, listings.usual.model, listings.usual.effort],
     ["claude_opus_5_5", "medium", "claude_opus_5_5", "medium"],
   );
-  assert.equal(models.value.catalogueVersion, 3);
+  assert.equal(models.value.catalogueVersion, 4);
   assert.equal(models.value.ceiling, 4);
   // Every agent in Add agents starts on Opus 5.5 at medium.
   const catalogue = (await port.team.catalogue(ws)).value;
@@ -486,11 +486,12 @@ test("the Listings agent's choice (the workspace default) is the Owner's, on Tea
     // Team's "Change" and the agent page's picker follow the same server decision.
     assert.equal(listings.thinking.canChange, may, scenario);
     assert.equal(models.canRevise, may, scenario);
+    // An entry of the sample's catalogue (version 4: Claude Opus 5.5 at medium and high only).
     const saved = await port.models.reviseDefault(
       ws,
       command({
-        model: "claude_haiku_5_5",
-        effort: "low",
+        model: "claude_opus_5_5",
+        effort: "medium",
         maxCreditsPerProduct: models.ceiling,
         expectedRevision: models.revision,
       }),

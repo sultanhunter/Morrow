@@ -1,7 +1,9 @@
 // M3 PR-1: the pure run money rules (P11.T04a minimum; ADR-0022 item 11). The SQL twins
 // (run_reserve, run_book_cost, run_settle, run_release) are proved under concurrency by
 // lab:run-credits. ADR-0036 removed the unrecovered-cost cap: unrecovered_allows (revised by
-// migration 0051) caps nothing, and its TypeScript twin is gone.
+// migration 0051) caps nothing, and its TypeScript twin is gone. ADR-0039 made credits the only
+// spend limit: run_reserve (revised by migration 0056) has no daily cap, its TypeScript twin
+// dailyCapAllows is gone, and from catalogue version 4 every entry admits 25 products.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -11,11 +13,11 @@ import {
   catalogueEntry,
   catalogueLimits,
   createModelCatalogue,
+  findCatalogueEntry,
 } from "../packages/policy/src/model-catalogue.ts";
 import * as runCredits from "../packages/policy/src/run-credits.ts";
 import {
   attemptCostUsd8,
-  dailyCapAllows,
   failureBreaker,
   parseUsd8,
   reservationSize,
@@ -25,30 +27,46 @@ import {
   usd8Text,
 } from "../packages/policy/src/run-credits.ts";
 
-// The active version (3 since ADR-0036); its money values are version 1's.
-const limits = catalogueLimits(3);
-const sonnetLow = catalogueEntry(3, "claude_sonnet_5_5", "low");
-const opusHigh = catalogueEntry(3, "claude_opus_5_5", "high");
+// The active version (4 since ADR-0039): version 3's money values with no run or daily cap,
+// and Claude Opus 5.5 at medium and high only (the owner, 2026-10-26).
+const limits = catalogueLimits(4);
+const opusMedium = catalogueEntry(4, "claude_opus_5_5", "medium");
+const opusHigh = catalogueEntry(4, "claude_opus_5_5", "high");
 
-test("reservation sizing is exact BigInt: Opus high reserves 6 credits per product, at most 9", () => {
-  const nine = reservationSize(opusHigh, 9);
-  assert.equal(nine.ok, true);
-  assert.equal(nine.reservation.credits, 54n);
-  assert.equal(nine.reservation.vendorMaximumUsd8, 9n * 70_400_000n);
-  assert.equal(usd8Text(nine.reservation.vendorMaximumUsd8), "6.33600000");
-  assert.deepEqual(reservationSize(opusHigh, 10), { ok: false, code: "run_product_limit" });
-  assert.deepEqual(reservationSize(sonnetLow, 26), { ok: false, code: "run_product_limit" });
-  assert.deepEqual(reservationSize(sonnetLow, 0), { ok: false, code: "product_count_invalid" });
-  assert.deepEqual(reservationSize(sonnetLow, 1.5), { ok: false, code: "product_count_invalid" });
-  const full = reservationSize(sonnetLow, 25);
-  assert.equal(full.reservation.credits, 25n);
-  // A run never reserves more than US$7 of vendor cost, whatever the selection.
-  for (const model of ["claude_haiku_5_5", "claude_sonnet_5_5", "claude_opus_5_5"])
-    for (const effort of ["low", "medium", "high"]) {
-      const entry = catalogueEntry(3, model, effort);
-      const most = reservationSize(entry, entry.runProductLimit);
-      assert.ok(most.reservation.vendorMaximumUsd8 <= limits.runCostCapUsd8, `${model} ${effort}`);
-    }
+test("reservation sizing is exact BigInt: Opus high reserves 6 credits per product, at most 25", () => {
+  const all = reservationSize(opusHigh, 25);
+  assert.equal(all.ok, true);
+  assert.equal(all.reservation.credits, 150n);
+  assert.equal(all.reservation.vendorMaximumUsd8, 25n * 70_400_000n);
+  assert.equal(usd8Text(all.reservation.vendorMaximumUsd8), "17.60000000");
+  assert.deepEqual(reservationSize(opusHigh, 26), { ok: false, code: "run_product_limit" });
+  assert.deepEqual(reservationSize(opusMedium, 26), { ok: false, code: "run_product_limit" });
+  assert.deepEqual(reservationSize(opusMedium, 0), { ok: false, code: "product_count_invalid" });
+  assert.deepEqual(reservationSize(opusMedium, 1.5), {
+    ok: false,
+    code: "product_count_invalid",
+  });
+  const full = reservationSize(opusMedium, 25);
+  assert.equal(full.reservation.credits, 100n);
+  // ADR-0039 item 4: every entry admits 25 products, held up front in credits; no money value
+  // lowers the limit, and version 4 has no run or daily cap.
+  assert.equal(limits.runCostCapUsd8, null);
+  assert.equal(limits.workspaceDailyCostCapUsd8, null);
+  for (const effort of ["medium", "high"]) {
+    const entry = catalogueEntry(4, "claude_opus_5_5", effort);
+    assert.equal(entry.runProductLimit, 25, effort);
+    const most = reservationSize(entry, 25);
+    assert.equal(most.reservation.credits, 25n * BigInt(entry.creditsPerProduct));
+    assert.equal(most.reservation.vendorMaximumUsd8, 25n * entry.worstCasePerProductUsd8);
+  }
+  // Haiku 5.5, Sonnet 5.5 and Opus 5.5 at low have no version 4 entry, so nothing can be sized
+  // at them.
+  for (const model of ["claude_haiku_5_5", "claude_sonnet_5_5"])
+    for (const effort of ["low", "medium", "high"])
+      assert.equal(findCatalogueEntry(4, model, effort), null, `${model} ${effort}`);
+  assert.equal(findCatalogueEntry(4, "claude_opus_5_5", "low"), null);
+  // A run recorded at version 3 keeps version 3's published limits (9 Opus high products).
+  assert.equal(catalogueEntry(3, "claude_opus_5_5", "high").runProductLimit, 9);
 });
 
 test("settlement never exceeds the reservation and failed products are not charged", () => {
@@ -63,35 +81,43 @@ test("settlement never exceeds the reservation and failed products are not charg
 });
 
 test("attempt cost: usage at the run's rates; an uncertain attempt at its worst case", () => {
-  // 3,000 input and 1,200 output tokens at Sonnet's US$2/US$10 per million: US$0.018.
-  const usage = attemptCostUsd8(sonnetLow, {
+  // 3,000 input and 1,200 output tokens at Opus 5.5's US$4/US$20 per million: US$0.036.
+  const usage = attemptCostUsd8(opusMedium, {
     outcome: "usage",
     usage: { inputTokens: 3000, outputTokens: 1200 },
   });
-  assert.equal(usd8Text(usage), "0.01800000");
-  // 8,000 input and 5,000 output (low max_tokens) at the same rates: US$0.066.
-  assert.equal(usd8Text(attemptCostUsd8(sonnetLow, { outcome: "uncertain" })), "0.06600000");
+  assert.equal(usd8Text(usage), "0.03600000");
+  // 8,000 input and 12,000 output (medium max_tokens) at the same rates: US$0.272.
+  assert.equal(usd8Text(attemptCostUsd8(opusMedium, { outcome: "uncertain" })), "0.27200000");
   assert.equal(
-    attemptCostUsd8(sonnetLow, { outcome: "uncertain" }) * 2n,
-    sonnetLow.worstCasePerProductUsd8,
+    attemptCostUsd8(opusMedium, { outcome: "uncertain" }) * 2n,
+    opusMedium.worstCasePerProductUsd8,
   );
   assert.throws(
     () =>
-      attemptCostUsd8(sonnetLow, { outcome: "usage", usage: { inputTokens: -1, outputTokens: 0 } }),
+      attemptCostUsd8(opusMedium, {
+        outcome: "usage",
+        usage: { inputTokens: -1, outputTokens: 0 },
+      }),
     RunCreditsError,
   );
 });
 
-test("the daily cap counts settled cost plus open reservations at US$25", () => {
-  const usd = (text) => parseUsd8(text);
-  assert.equal(dailyCapAllows(limits, usd("18"), 0n, usd("7")), true);
-  assert.equal(dailyCapAllows(limits, usd("18"), usd("0.00000001"), usd("7")), false);
-  assert.equal(dailyCapAllows(limits, 0n, usd("18"), usd("7")), true);
-  assert.equal(dailyCapAllows(limits, usd("12.5"), usd("12.5"), 1n), false);
+test("ADR-0039: no daily cap in the money rules; credits are the only spend limit", () => {
+  assert.equal(Object.hasOwn(runCredits, "dailyCapAllows"), false);
+  // Versions 1 and 3 keep their published values, which nothing enforces.
+  for (const version of [1, 3]) {
+    assert.equal(catalogueLimits(version).runCostCapUsd8, parseUsd8("7"), `v${version}`);
+    assert.equal(
+      catalogueLimits(version).workspaceDailyCostCapUsd8,
+      parseUsd8("25"),
+      `v${version}`,
+    );
+  }
 });
 
 test("ADR-0036: no unrecovered-cost cap in any version's limits or the money rules", () => {
-  for (const version of [1, 3])
+  for (const version of [1, 3, 4])
     assert.equal(
       Object.hasOwn(catalogueLimits(version), "workspacePeriodUnrecoveredCostCapUsd8"),
       false,
