@@ -12,11 +12,13 @@ BEGIN;
 --     agent_notebook_entries are altered in place, guarded on both being empty (nothing writes
 --     them while docs/decisions/shop-knowledge-staging.json holds agent_tools off). An entry
 --     gains its kind, title, taint (kinds and sources), derived_from (closed over knowledge
---     pages), audience, source subjects, the requester it was written for, renewal (with the
---     call that renewed it) and use counts, and is clocked 90 days after its last write or
---     re-affirmation. Its text is indexed in the same row (a `simple` tsvector and trigram text,
---     both expressions of title and body), so erasing the text erases its index in the same
---     UPDATE.
+--     pages), audience, source subjects, the requester it was written for, renewal and use
+--     counts, and is clocked 90 days after its last write or re-affirmation. Its text is indexed
+--     in the same row (a `simple` tsvector and trigram text, both expressions of title and body),
+--     so erasing the text erases its index in the same UPDATE.
+--   * agent_notebook_renewals: one content-free row per tool call that re-affirmed an entry
+--     instead of adding a duplicate, so the call's replay returns the entry it renewed however
+--     many calls renew it after.
 --   * memory_derivations: the content-free lineage of every derived row (which source it came
 --     from), read by the deletion path ("deletion follows the source") and the view rebase.
 --   * memory_repairs: content-free flags on memory a person or an upkeep run must look at: an
@@ -313,8 +315,6 @@ ALTER TABLE morrow_work.agent_notebook_entries
  ADD COLUMN renewals integer NOT NULL CHECK (renewals BETWEEN 0 AND 1000000),
  ADD COLUMN use_count bigint NOT NULL CHECK (use_count BETWEEN 0 AND 9007199254740991),
  ADD COLUMN last_used_at timestamptz CHECK (last_used_at=date_trunc('milliseconds',last_used_at) AND isfinite(last_used_at)),
- ADD COLUMN renewed_run_id morrow_work.record_id,
- ADD COLUMN renewed_tool_use_id text CHECK (renewed_tool_use_id ~ '^[A-Za-z0-9_-]{1,64}$'),
  ADD COLUMN erased_run_id morrow_work.record_id,
  ADD COLUMN erased_tool_use_id text CHECK (erased_tool_use_id ~ '^[A-Za-z0-9_-]{1,64}$');
 ALTER TABLE morrow_work.agent_notebook_entries
@@ -324,11 +324,10 @@ ALTER TABLE morrow_work.agent_notebook_entries
  ADD FOREIGN KEY (organization_id,requester_membership_id,requester_principal_id)
   REFERENCES morrow_identity.memberships(organization_id,id,principal_id),
  ADD FOREIGN KEY (workspace_id,requester_membership_id) REFERENCES morrow_identity.workspace_memberships(workspace_id,membership_id),
- -- ADR-0041 item 27's clock: 90 days after the last write or re-affirmation. A renewal names
- -- the tool call that made it (its replay returns it instead of renewing again).
+ -- ADR-0041 item 27's clock: 90 days after the last write or re-affirmation (each renewing
+ -- call is recorded in agent_notebook_renewals, below).
  ADD CONSTRAINT agent_notebook_entries_clock CHECK (expires_at=renewed_at+interval '90 days' AND renewed_at>=created_at
-  AND (last_used_at IS NULL OR last_used_at>=created_at) AND (use_count=0)=(last_used_at IS NULL)
-  AND (renewed_run_id IS NULL)=(renewed_tool_use_id IS NULL) AND (renewed_run_id IS NULL OR renewals>0)),
+  AND (last_used_at IS NULL OR last_used_at>=created_at) AND (use_count=0)=(last_used_at IS NULL)),
  -- A live entry has its text and the digest of it; an erased one keeps ids, digests and times.
  ADD CONSTRAINT agent_notebook_entries_erased CHECK ((erased_at IS NULL)=(body IS NOT NULL) AND (erased_at IS NULL)=(title IS NOT NULL)
   AND (erased_at IS NULL)=(erased_reason IS NULL)
@@ -349,9 +348,7 @@ CREATE INDEX agent_notebook_entries_renewal ON morrow_work.agent_notebook_entrie
  (organization_id,workspace_id,agent_principal_id,renewed_at,sequence) WHERE erased_at IS NULL;
 CREATE INDEX agent_notebook_entries_expiry ON morrow_work.agent_notebook_entries (expires_at) WHERE erased_at IS NULL;
 -- A tool call's replay finds what it did: the entry it wrote (0052's unique run and tool_use
--- key), the entry it renewed, or the one entry it retired.
-CREATE INDEX agent_notebook_entries_renewed_call ON morrow_work.agent_notebook_entries
- (organization_id,workspace_id,renewed_run_id,renewed_tool_use_id) WHERE renewed_run_id IS NOT NULL;
+-- key), the one entry it retired (here), or the entry it renewed (agent_notebook_renewals).
 CREATE UNIQUE INDEX agent_notebook_entries_erased_call ON morrow_work.agent_notebook_entries
  (organization_id,workspace_id,erased_run_id,erased_tool_use_id) WHERE erased_run_id IS NOT NULL;
 CREATE INDEX agent_notebook_entries_document ON morrow_work.agent_notebook_entries
@@ -381,6 +378,26 @@ CREATE TABLE morrow_work.memory_derivations (
  CONSTRAINT memory_derivations_not_self CHECK (NOT (derived_kind=source_kind AND derived_id=source_id))
 );
 CREATE INDEX memory_derivations_source ON morrow_work.memory_derivations (organization_id,workspace_id,source_kind,source_id);
+-- Each tool call that re-affirmed a live entry instead of adding a duplicate (ADR-0041 item 27):
+-- one content-free row per call, written in the transaction that renews (`renewal` is the
+-- entry's count after it). A replay of the call finds it here and returns the entry it renewed
+-- (ADR-0027 item 2: an internal write returns its first record), however many calls renew the
+-- entry after it and whether or not the entry is still live. Removed only with its entry, by
+-- the owner's sweep.
+CREATE TABLE morrow_work.agent_notebook_renewals (
+ organization_id morrow_work.record_id NOT NULL,
+ workspace_id morrow_work.record_id NOT NULL,
+ run_id morrow_work.record_id NOT NULL,
+ tool_use_id text NOT NULL CHECK (tool_use_id ~ '^[A-Za-z0-9_-]{1,64}$'),
+ agent_principal_id morrow_work.record_id NOT NULL,
+ sequence integer NOT NULL,
+ renewal integer NOT NULL CHECK (renewal BETWEEN 1 AND 1000000),
+ renewed_at timestamptz NOT NULL CHECK (renewed_at=date_trunc('milliseconds',renewed_at) AND isfinite(renewed_at)),
+ PRIMARY KEY (organization_id,workspace_id,run_id,tool_use_id),
+ UNIQUE (organization_id,workspace_id,agent_principal_id,sequence,renewal),
+ FOREIGN KEY (organization_id,workspace_id,agent_principal_id,sequence)
+  REFERENCES morrow_work.agent_notebook_entries(organization_id,workspace_id,agent_principal_id,sequence)
+);
 -- Flags on memory to look at again. Content-free: ids, codes and times. Open until a person or
 -- an upkeep run resolves or dismisses it; then kept 365 days.
 CREATE TABLE morrow_work.memory_repairs (
@@ -439,7 +456,7 @@ CREATE TABLE morrow_work.memory_settings (
 -- policy, the session template (tenant_command), the api's tenant_read for the readable ones,
 -- and the lease twin (tenant_lease) for the runtime definers.
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['memory_derivations','memory_repairs','memory_settings'] LOOP
+ FOREACH t IN ARRAY ARRAY['memory_derivations','memory_repairs','memory_settings','agent_notebook_renewals'] LOOP
   EXECUTE format('ALTER TABLE morrow_work.%I ENABLE ROW LEVEL SECURITY',t);
   EXECUTE format('ALTER TABLE morrow_work.%I FORCE ROW LEVEL SECURITY',t);
   EXECUTE format('CREATE POLICY work_owner ON morrow_work.%I TO morrow_work_owner USING (true) WITH CHECK (true)',t);
@@ -459,8 +476,8 @@ DO $$ DECLARE t text; BEGIN
 END $$;
 -- The command role's column updates (0052's grants on the re-keyed tables stay; the dropped
 -- installation_id took its own column grants with it).
-GRANT UPDATE (title,use_count,last_used_at,renewed_at,renewals,renewed_run_id,renewed_tool_use_id,expires_at,erased_run_id,
- erased_tool_use_id) ON morrow_work.agent_notebook_entries TO morrow_work_command;
+GRANT UPDATE (title,use_count,last_used_at,renewed_at,renewals,expires_at,erased_run_id,erased_tool_use_id)
+ ON morrow_work.agent_notebook_entries TO morrow_work_command;
 GRANT UPDATE (status,resolved_at,expires_at) ON morrow_work.memory_repairs TO morrow_work_command;
 GRANT UPDATE (revision,personal_memory,default_scope,updated_at) ON morrow_work.memory_settings TO morrow_work_command;
 -- The api role reads column by column; the work API decides every row per viewer (read tags,
@@ -482,10 +499,10 @@ GRANT SELECT (organization_id,workspace_id,principal_id,membership_id,revision,p
 CREATE OR REPLACE FUNCTION morrow_work.agent_notebook_entry_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE v_mutable text[]:=ARRAY['title','body','erased_at','erased_reason','erased_run_id','erased_tool_use_id','use_count',
- 'last_used_at','renewed_at','renewals','renewed_run_id','renewed_tool_use_id','expires_at'];
+ 'last_used_at','renewed_at','renewals','expires_at'];
 BEGIN
  IF TG_OP='INSERT' THEN
-  IF NEW.erased_at IS NOT NULL OR NEW.renewals<>0 OR NEW.renewed_run_id IS NOT NULL OR NEW.use_count<>0
+  IF NEW.erased_at IS NOT NULL OR NEW.renewals<>0 OR NEW.use_count<>0
    OR NEW.last_used_at IS NOT NULL OR NEW.renewed_at<>NEW.created_at THEN
    RAISE EXCEPTION 'AGENT_NOTEBOOK_INVALID';
   END IF;
@@ -496,11 +513,10 @@ BEGIN
   -- Counts and clocks only move forward.
   OR NEW.use_count<OLD.use_count OR NEW.renewals<OLD.renewals OR NEW.renewed_at<OLD.renewed_at
   OR (OLD.last_used_at IS NOT NULL AND (NEW.last_used_at IS NULL OR NEW.last_used_at<OLD.last_used_at))
-  -- A renewal moves its count and time together and names its call; a use moves the count, and
-  -- its time (within the same millisecond, the count alone).
+  -- A renewal moves its count and time together (its call is recorded in
+  -- agent_notebook_renewals); a use moves the count, and its time (within the same millisecond,
+  -- the count alone).
   OR (NEW.renewals<>OLD.renewals)<>(NEW.renewed_at<>OLD.renewed_at)
-  OR (NEW.renewals=OLD.renewals AND (NEW.renewed_run_id IS DISTINCT FROM OLD.renewed_run_id
-   OR NEW.renewed_tool_use_id IS DISTINCT FROM OLD.renewed_tool_use_id))
   OR (NEW.use_count=OLD.use_count AND NEW.last_used_at IS DISTINCT FROM OLD.last_used_at)
   -- Live text never changes; the one erasure takes no use or renewal with it.
   OR (NEW.erased_at IS NULL AND (NEW.body IS DISTINCT FROM OLD.body OR NEW.title IS DISTINCT FROM OLD.title))
@@ -544,9 +560,11 @@ REVOKE ALL ON FUNCTION morrow_work.memory_settings_guard() FROM PUBLIC;
 CREATE TRIGGER memory_repair_guard BEFORE INSERT OR UPDATE ON morrow_work.memory_repairs FOR EACH ROW EXECUTE FUNCTION morrow_work.memory_repair_guard();
 CREATE TRIGGER memory_settings_guard BEFORE INSERT OR UPDATE ON morrow_work.memory_settings FOR EACH ROW EXECUTE FUNCTION morrow_work.memory_settings_guard();
 DO $$ DECLARE t text; BEGIN
- -- Lineage rows never change; no new table is truncated.
- EXECUTE 'CREATE TRIGGER append_only BEFORE UPDATE ON morrow_work.memory_derivations FOR EACH ROW EXECUTE FUNCTION morrow_work.append_only()';
- FOREACH t IN ARRAY ARRAY['memory_derivations','memory_repairs','memory_settings'] LOOP
+ -- Lineage and renewal rows never change; no new table is truncated.
+ FOREACH t IN ARRAY ARRAY['memory_derivations','agent_notebook_renewals'] LOOP
+  EXECUTE format('CREATE TRIGGER append_only BEFORE UPDATE ON morrow_work.%I FOR EACH ROW EXECUTE FUNCTION morrow_work.append_only()',t);
+ END LOOP;
+ FOREACH t IN ARRAY ARRAY['memory_derivations','memory_repairs','memory_settings','agent_notebook_renewals'] LOOP
   EXECUTE format('CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_work.%I FOR EACH STATEMENT EXECUTE FUNCTION morrow_work.append_only()',t);
  END LOOP;
 END $$;
@@ -555,6 +573,12 @@ END $$;
 -- The deletion path. Revisable owner helpers: INVOKER, owned by the owner, EXECUTE for the
 -- command role only; they run inside the definer, command or trigger that calls them, under
 -- its tenant or lease context.
+-- One lock order for everything that erases or writes notebook entries: the knowledge pages
+-- (a deletion's own UPDATE, a write's FOR SHARE in id order), then the notebooks (FOR UPDATE, in
+-- agent principal order), then their entries. Every notebook definer takes its notebook before
+-- its entries, so these helpers lock the notebooks of the entries they erase before touching
+-- any entry: a person's clear or a write racing a page deletion or the sweep waits for it and
+-- never deadlocks with it.
 -- Erase every live entry derived from one source (ADR-0031 item 3, as ADR-0041 items 14 and 25
 -- amend it: "deletion follows the source"), in the caller's transaction: the text goes, the
 -- notebook's count and revision move, and a content-free repair records why. An erased entry is
@@ -564,6 +588,13 @@ RETURNS integer
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE v_erased integer:=0; r record;
 BEGIN
+ PERFORM 1 FROM morrow_work.agent_notebooks y
+  WHERE y.organization_id=p_org AND y.workspace_id=p_ws AND y.agent_principal_id IN (
+   SELECT x.agent_principal_id FROM morrow_work.memory_derivations d JOIN morrow_work.agent_notebook_entries x
+    ON x.organization_id=d.organization_id AND x.workspace_id=d.workspace_id AND x.id=d.derived_id
+   WHERE d.organization_id=p_org AND d.workspace_id=p_ws AND d.source_kind=p_source_kind AND d.source_id=p_source_id
+    AND d.derived_kind='notebook_entry' AND x.erased_at IS NULL)
+  ORDER BY y.agent_principal_id FOR UPDATE;
  FOR r IN
   WITH e AS (
    UPDATE morrow_work.agent_notebook_entries x SET title=NULL,body=NULL,erased_at=greatest(p_at,x.renewed_at),erased_reason='source_erased'
@@ -610,12 +641,19 @@ END $$;
 CREATE FUNCTION morrow_work.memory_erase_expired(p_org text,p_ws text,p_at timestamptz,p_limit integer)
 RETURNS integer
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
-DECLARE v_erased integer:=0; r record;
+DECLARE v_erased integer:=0; r record; v_agents text[];
 BEGIN
  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 10000 OR p_at IS NULL THEN RAISE EXCEPTION 'MEMORY_SWEEP_INVALID'; END IF;
+ -- The notebooks of the batch's entries first (the lock order above), then only their entries.
+ v_agents:=ARRAY(SELECT DISTINCT b.agent FROM (SELECT x.agent_principal_id::text AS agent FROM morrow_work.agent_notebook_entries x
+   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.erased_at IS NULL AND x.expires_at<=p_at
+   ORDER BY x.expires_at,x.agent_principal_id,x.sequence LIMIT p_limit) b ORDER BY 1);
+ PERFORM 1 FROM morrow_work.agent_notebooks y WHERE y.organization_id=p_org AND y.workspace_id=p_ws AND y.agent_principal_id=ANY(v_agents)
+  ORDER BY y.agent_principal_id FOR UPDATE;
  FOR r IN
   WITH due AS (SELECT x.agent_principal_id,x.sequence FROM morrow_work.agent_notebook_entries x
     WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.erased_at IS NULL AND x.expires_at<=p_at
+     AND x.agent_principal_id=ANY(v_agents)
     ORDER BY x.expires_at,x.agent_principal_id,x.sequence LIMIT p_limit FOR UPDATE),
   e AS (UPDATE morrow_work.agent_notebook_entries x SET title=NULL,body=NULL,erased_at=greatest(p_at,x.renewed_at),erased_reason='expired'
     FROM due WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.agent_principal_id=due.agent_principal_id
@@ -801,10 +839,17 @@ GRANT EXECUTE ON FUNCTION morrow_work.memory_lease_agent() TO morrow_work_comman
 -- and its sources' taint, read tags (with the store's artifact tag) and source subjects, the
 -- narrowest of their audiences, and its sources' knowledge pages as its own (lineage is closed
 -- over pages, so deleting a page erases every live entry that came from it however indirectly).
--- A tainted run never retires an untainted entry: it flags it instead ('flagged'; a replace
--- still adds its new, tainted entry). The 1,001st live entry supersedes the least recently
--- renewed. Lock order: the knowledge pages named, directly or through a source's lineage
--- (FOR SHARE, in id order), then the notebook: the order a page deletion takes.
+-- A tainted run never retires, supersedes or re-affirms an untainted entry: it flags a clean
+-- target instead ('flagged'; a replace still adds its new, tainted entry). The 1,001st live entry
+-- supersedes the least recently renewed one, never the call's own target; for a tainted run only
+-- a tainted one, so a tainted run at the cap with no tainted entry to supersede is refused
+-- ('notebook_full') and writes nothing. What the unions carry past an entry's bounds, which
+-- depends on sources the code cannot see, is its own refusal, never 'invalid' (kept for inputs
+-- the code validates): 'too_many_subjects' (32), 'lineage_too_large' (64 references, closed
+-- over pages and with a replace's target), 'tags_overflow' (24 read tags, with the store's
+-- artifact tag); and 'notebook_exhausted' once a notebook's million sequences are used. Lock
+-- order (the deletion path's, above): the knowledge pages named, directly or through a source's
+-- lineage (FOR SHARE, in id order), then the notebook (FOR UPDATE), then its entries.
 CREATE FUNCTION morrow_work.run_notebook_write_v2(p_tool_use_id text,p_op text,p_target_id text,p_kind text,p_title text,p_text text,
  p_read_tags text,p_taint text,p_audience text,p_source_subjects text,p_derived_from text,p_viewable_tags text,p_subject_scope text,
  p_person_memory_loaded text)
@@ -815,7 +860,7 @@ DECLARE
  a record; n record; x record; t record; r jsonb; v_page text; v_pages text[]; v_missing boolean:=false; v_target_clean boolean:=false;
  v_tags jsonb; v_taint jsonb; v_audience jsonb; v_subjects jsonb; v_refs jsonb; v_view jsonb; v_scope jsonb; v_at timestamptz;
  v_id text; v_seq integer; v_live integer; v_digest text; v_tainted boolean; v_flagged boolean:=false; v_superseded integer;
- v_notes text[]; v_direct text[];
+ v_notes text[]; v_direct text[]; v_victim integer; v_renewal integer; v_renewed_at timestamptz;
 BEGIN
  IF p_tool_use_id IS NULL OR p_tool_use_id !~ '^[A-Za-z0-9_-]{1,64}$'
   OR p_op IS NULL OR p_op NOT IN ('add','replace','retire')
@@ -914,9 +959,12 @@ BEGIN
   END IF;
   RETURN QUERY SELECT 'conflict'::text,NULL::text,NULL::text; RETURN;
  END IF;
- SELECT y.id::text AS id,y.sequence::text AS sequence,y.digest::text AS digest INTO x FROM morrow_work.agent_notebook_entries y
-  WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.renewed_run_id=a.run_id
-   AND y.renewed_tool_use_id=p_tool_use_id;
+ -- A renewal's replay: the call's own record (never overwritten by a later renewal), and the
+ -- entry it renewed, live or not.
+ SELECT y.id::text AS id,y.sequence::text AS sequence,y.digest::text AS digest INTO x FROM morrow_work.agent_notebook_renewals w
+  JOIN morrow_work.agent_notebook_entries y ON y.organization_id=w.organization_id AND y.workspace_id=w.workspace_id
+   AND y.agent_principal_id=w.agent_principal_id AND y.sequence=w.sequence
+  WHERE w.organization_id=a.organization_id AND w.workspace_id=a.workspace_id AND w.run_id=a.run_id AND w.tool_use_id=p_tool_use_id;
  IF FOUND THEN
   IF p_op='add' AND x.digest=v_digest THEN RETURN QUERY SELECT 'replay_renewed'::text,x.id,x.sequence; RETURN; END IF;
   RETURN QUERY SELECT 'conflict'::text,NULL::text,NULL::text; RETURN;
@@ -975,44 +1023,44 @@ BEGIN
    v_taint:=morrow_work.memory_taint_union(v_taint,morrow_work.memory_knowledge_taint(a.organization_id,a.workspace_id,r->>'id'));
    v_tags:=morrow_work.knowledge_tags_union(v_tags,x.read_tags);
   END IF;
-  IF v_subjects IS NULL THEN RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN; END IF;
+  IF v_subjects IS NULL THEN RETURN QUERY SELECT 'too_many_subjects'::text,NULL::text,NULL::text; RETURN; END IF;
   IF v_audience IS NULL THEN RETURN QUERY SELECT 'audience_conflict'::text,NULL::text,NULL::text; RETURN; END IF;
  END LOOP;
  -- Every page in the closed lineage was locked above (lineage is immutable; a defect otherwise).
  IF EXISTS(SELECT 1 FROM jsonb_array_elements(v_refs) e WHERE e->>'kind'='knowledge_page' AND NOT (e->>'id')=ANY(v_pages)) THEN
   RETURN QUERY SELECT 'conflict'::text,NULL::text,NULL::text; RETURN;
  END IF;
+ IF jsonb_array_length(v_refs)>64 THEN RETURN QUERY SELECT 'lineage_too_large'::text,NULL::text,NULL::text; RETURN; END IF;
  IF NOT morrow_work.memory_refs_valid(v_refs,64) THEN RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN; END IF;
  IF v_audience->>'kind'='principal' THEN RETURN QUERY SELECT 'ask_bound'::text,NULL::text,NULL::text; RETURN; END IF;
  IF v_audience->>'kind'='subject' THEN
   v_subjects:=morrow_work.memory_subjects_union(v_subjects,jsonb_build_array(v_audience->'subject'));
-  IF v_subjects IS NULL THEN RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN; END IF;
+  IF v_subjects IS NULL THEN RETURN QUERY SELECT 'too_many_subjects'::text,NULL::text,NULL::text; RETURN; END IF;
  END IF;
+ IF jsonb_array_length(v_tags)>24 THEN RETURN QUERY SELECT 'tags_overflow'::text,NULL::text,NULL::text; RETURN; END IF;
  IF NOT morrow_work.knowledge_tags_valid(v_tags) THEN RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN; END IF;
  v_tainted:=jsonb_array_length(v_taint->'kinds')>0;
  -- A tainted run never retires an untainted entry; it may only flag it (ADR-0041 item 27).
- IF p_op<>'add' AND v_tainted AND v_target_clean THEN
-  INSERT INTO morrow_work.memory_repairs(organization_id,workspace_id,id,target_kind,target_id,agent_principal_id,reason,source_kind,
-   source_id,run_id,tool_use_id,status,created_at,resolved_at,expires_at)
-  VALUES (a.organization_id,a.workspace_id,gen_random_uuid()::text,'notebook_entry',p_target_id,a.agent_principal_id,'tainted_flag','run',
-   a.run_id,a.run_id,p_tool_use_id,'open',v_at,NULL,NULL);
-  v_flagged:=true;
-  IF p_op='retire' THEN RETURN QUERY SELECT 'flagged'::text,NULL::text,NULL::text; RETURN; END IF;
-  -- A flagged replace still adds its entry, derived from the target, which stays live.
- ELSIF p_op<>'add' THEN
+ v_flagged:=p_op<>'add' AND v_tainted AND v_target_clean;
+ IF p_op='retire' THEN
+  IF v_flagged THEN
+   INSERT INTO morrow_work.memory_repairs(organization_id,workspace_id,id,target_kind,target_id,agent_principal_id,reason,source_kind,
+    source_id,run_id,tool_use_id,status,created_at,resolved_at,expires_at)
+   VALUES (a.organization_id,a.workspace_id,gen_random_uuid()::text,'notebook_entry',p_target_id,a.agent_principal_id,'tainted_flag','run',
+    a.run_id,a.run_id,p_tool_use_id,'open',v_at,NULL,NULL);
+   RETURN QUERY SELECT 'flagged'::text,NULL::text,NULL::text; RETURN;
+  END IF;
   UPDATE morrow_work.agent_notebook_entries y SET title=NULL,body=NULL,erased_at=greatest(v_at,y.renewed_at),erased_reason='retired',
    erased_run_id=a.run_id,erased_tool_use_id=p_tool_use_id
    WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.agent_principal_id=a.agent_principal_id
     AND y.id=p_target_id AND y.erased_at IS NULL;
-  n.live_entries:=n.live_entries-1;
-  IF p_op='retire' THEN
-   UPDATE morrow_work.agent_notebooks y SET live_entries=n.live_entries,revision=y.revision+1,updated_at=greatest(v_at,y.updated_at)
-    WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.agent_principal_id=a.agent_principal_id;
-   RETURN QUERY SELECT 'applied'::text,NULL::text,NULL::text; RETURN;
-  END IF;
+  UPDATE morrow_work.agent_notebooks y SET live_entries=n.live_entries-1,revision=y.revision+1,updated_at=greatest(v_at,y.updated_at)
+   WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.agent_principal_id=a.agent_principal_id;
+  RETURN QUERY SELECT 'applied'::text,NULL::text,NULL::text; RETURN;
  END IF;
  -- An identical live entry with the same scope and lineage is re-affirmed, not duplicated; a
- -- tainted run never re-affirms an untainted entry.
+ -- tainted run never re-affirms an untainted entry. The call is recorded with the renewal, so
+ -- its replay finds it however many calls renew the entry after it.
  IF p_op='add' THEN
   SELECT y.id::text AS id,y.sequence::text AS sequence INTO x FROM morrow_work.agent_notebook_entries y
    WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.agent_principal_id=a.agent_principal_id
@@ -1021,31 +1069,57 @@ BEGIN
    ORDER BY y.sequence LIMIT 1;
   IF FOUND THEN
    UPDATE morrow_work.agent_notebook_entries y SET renewed_at=greatest(v_at,y.renewed_at+interval '1 millisecond'),
-    renewals=y.renewals+1,expires_at=greatest(v_at,y.renewed_at+interval '1 millisecond')+interval '90 days',
-    renewed_run_id=a.run_id,renewed_tool_use_id=p_tool_use_id
-    WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.id=x.id;
+    renewals=y.renewals+1,expires_at=greatest(v_at,y.renewed_at+interval '1 millisecond')+interval '90 days'
+    WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.id=x.id
+    RETURNING y.renewals,y.renewed_at INTO v_renewal,v_renewed_at;
+   INSERT INTO morrow_work.agent_notebook_renewals(organization_id,workspace_id,run_id,tool_use_id,agent_principal_id,sequence,renewal,
+    renewed_at)
+   VALUES (a.organization_id,a.workspace_id,a.run_id,p_tool_use_id,a.agent_principal_id,x.sequence::integer,v_renewal,v_renewed_at);
    UPDATE morrow_work.agent_notebooks y SET revision=y.revision+1,updated_at=greatest(v_at,y.updated_at)
     WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.agent_principal_id=a.agent_principal_id;
    RETURN QUERY SELECT 'renewed'::text,x.id,x.sequence; RETURN;
   END IF;
  END IF;
- IF n.next_sequence>1000000 THEN RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN; END IF;
- v_seq:=n.next_sequence; v_id:=gen_random_uuid()::text; v_live:=n.live_entries;
+ -- Room for the new entry, decided before anything is written: a notebook's sequences end at a
+ -- million, and its live entries at 1,000 (a replace that retires its target frees one; a
+ -- flagged replace does not). Past the cap the least recently renewed live entry is superseded,
+ -- never the call's own target, and for a tainted run only a tainted entry: a tainted run never
+ -- erases an untainted one, so with none to supersede it is refused and writes nothing.
+ IF n.next_sequence>1000000 THEN RETURN QUERY SELECT 'notebook_exhausted'::text,NULL::text,NULL::text; RETURN; END IF;
+ v_live:=n.live_entries-CASE WHEN p_op='replace' AND NOT v_flagged THEN 1 ELSE 0 END;
  IF v_live>=1000 THEN
+  SELECT z.sequence INTO v_victim FROM morrow_work.agent_notebook_entries z
+   WHERE z.organization_id=a.organization_id AND z.workspace_id=a.workspace_id AND z.agent_principal_id=a.agent_principal_id
+    AND z.erased_at IS NULL AND (p_target_id IS NULL OR z.id::text<>p_target_id)
+    AND (NOT v_tainted OR jsonb_array_length(z.taint->'kinds')>0)
+   ORDER BY z.renewed_at,z.sequence LIMIT 1;
+  IF NOT FOUND THEN RETURN QUERY SELECT 'notebook_full'::text,NULL::text,NULL::text; RETURN; END IF;
+ END IF;
+ IF v_flagged THEN
+  -- A flagged replace still adds its entry, derived from the target, which stays live.
+  INSERT INTO morrow_work.memory_repairs(organization_id,workspace_id,id,target_kind,target_id,agent_principal_id,reason,source_kind,
+   source_id,run_id,tool_use_id,status,created_at,resolved_at,expires_at)
+  VALUES (a.organization_id,a.workspace_id,gen_random_uuid()::text,'notebook_entry',p_target_id,a.agent_principal_id,'tainted_flag','run',
+   a.run_id,a.run_id,p_tool_use_id,'open',v_at,NULL,NULL);
+ ELSIF p_op='replace' THEN
+  UPDATE morrow_work.agent_notebook_entries y SET title=NULL,body=NULL,erased_at=greatest(v_at,y.renewed_at),erased_reason='retired',
+   erased_run_id=a.run_id,erased_tool_use_id=p_tool_use_id
+   WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.agent_principal_id=a.agent_principal_id
+    AND y.id=p_target_id AND y.erased_at IS NULL;
+ END IF;
+ IF v_victim IS NOT NULL THEN
   UPDATE morrow_work.agent_notebook_entries y SET title=NULL,body=NULL,erased_at=greatest(v_at,y.renewed_at),erased_reason='superseded'
    WHERE y.organization_id=a.organization_id AND y.workspace_id=a.workspace_id AND y.agent_principal_id=a.agent_principal_id
-    AND y.sequence=(SELECT z.sequence FROM morrow_work.agent_notebook_entries z WHERE z.organization_id=a.organization_id
-     AND z.workspace_id=a.workspace_id AND z.agent_principal_id=a.agent_principal_id AND z.erased_at IS NULL
-     ORDER BY z.renewed_at,z.sequence LIMIT 1);
+    AND y.sequence=v_victim AND y.erased_at IS NULL;
   GET DIAGNOSTICS v_superseded=ROW_COUNT;
   v_live:=v_live-v_superseded;
  END IF;
+ v_seq:=n.next_sequence; v_id:=gen_random_uuid()::text;
  INSERT INTO morrow_work.agent_notebook_entries(organization_id,workspace_id,agent_principal_id,sequence,id,kind,title,body,read_tags,
   taint,derived_from,audience,source_subjects,requester_principal_id,requester_membership_id,run_id,tool_use_id,digest,created_at,
-  renewed_at,renewals,renewed_run_id,renewed_tool_use_id,use_count,last_used_at,expires_at,erased_at,erased_reason,erased_run_id,
-  erased_tool_use_id)
+  renewed_at,renewals,use_count,last_used_at,expires_at,erased_at,erased_reason,erased_run_id,erased_tool_use_id)
  VALUES (a.organization_id,a.workspace_id,a.agent_principal_id,v_seq,v_id,p_kind,p_title,p_text,v_tags,v_taint,v_refs,v_audience,
-  v_subjects,a.requester_principal_id,a.requester_membership_id,a.run_id,p_tool_use_id,v_digest,v_at,v_at,0,NULL,NULL,0,NULL,
+  v_subjects,a.requester_principal_id,a.requester_membership_id,a.run_id,p_tool_use_id,v_digest,v_at,v_at,0,0,NULL,
   v_at+interval '90 days',NULL,NULL,NULL,NULL);
  INSERT INTO morrow_work.memory_derivations(organization_id,workspace_id,derived_kind,derived_id,source_kind,source_id,created_at)
  SELECT a.organization_id,a.workspace_id,'notebook_entry',v_id,e->>'kind',e->>'id',v_at FROM jsonb_array_elements(v_refs) e;

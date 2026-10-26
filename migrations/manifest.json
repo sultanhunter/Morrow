@@ -434,7 +434,7 @@
     {
       "sequence": 57,
       "file": "0057.memory-foundation.sql",
-      "sha256": "135d703c25f5a055f2d59a4b8edfa7a4130e1d0210bed3137259c7c20360c9e8",
+      "sha256": "96c73d994de1e3d0f4a918c5a5f640d8f54e43ee592ac8d699ca810ab43bb473",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/memory-foundation.md"
     }

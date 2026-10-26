@@ -420,6 +420,14 @@ export const workTables = Object.freeze({
     lease: true,
     content: "none",
   },
+  // Each tool call that re-affirmed a notebook entry (ids, a count and a time), so its replay
+  // returns the entry it renewed however many calls renew it after (wave 5 review, H12A-R2).
+  agent_notebook_renewals: {
+    class: "tenant_internal",
+    parents: ["agent_notebook_entries"],
+    lease: true,
+    content: "none",
+  },
   memory_repairs: {
     class: "tenant_readable",
     parents: ["morrow_identity.agent_principals"],

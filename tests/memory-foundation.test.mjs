@@ -335,10 +335,29 @@ test("the notebook step sends the operation and the run's facts, and decodes eac
     outcome: "refused",
     refusal: "id_out_of_scope",
   });
+  // State the code cannot see is a refusal, never a held step the loop would retry forever
+  // (wave 5 review, H12A-R1 and H12A-R3): no room this run may make, and what the sources'
+  // unions carry past an entry's bounds.
+  for (const outcome of ["notebook_full", "notebook_exhausted"])
+    assert.deepEqual(
+      await call({ outcome, entry_id: null, sequence: null }),
+      { outcome: "refused", refusal: "pending_limit" },
+      outcome,
+    );
+  for (const outcome of ["too_many_subjects", "lineage_too_large", "tags_overflow"])
+    assert.deepEqual(
+      await call({ outcome, entry_id: null, sequence: null }),
+      { outcome: "invalid_input", refusal: "input_invalid" },
+      outcome,
+    );
   // Anything else is a defect the loop retries, never a result the model sees.
   for (const [row, operation] of [
     [{ outcome: "conflict", entry_id: null, sequence: null }],
     [{ outcome: "ask_bound", entry_id: null, sequence: null }],
+    [{ outcome: "invalid", entry_id: null, sequence: null }],
+    [{ outcome: "person_memory_loaded", entry_id: null, sequence: null }],
+    [{ outcome: "notebook_full", entry_id: uuid, sequence: "7" }],
+    [{ outcome: "tags_overflow", entry_id: null, sequence: "7" }],
     [{ outcome: "applied", entry_id: null, sequence: null }],
     [{ outcome: "applied", entry_id: uuid, sequence: "7" }, retire],
     [{ outcome: "applied", entry_id: uuid, sequence: "0" }],
@@ -486,7 +505,12 @@ test("migration 0057: forward only, guarded on empty notebooks, FORCE RLS, no ru
   assert.match(sql, /GRANT USAGE ON SCHEMA extensions TO morrow_work_command;/);
   assert.doesNotMatch(sql, /GRANT[^;]*DELETE/);
   assert.doesNotMatch(sql, /BYPASSRLS/);
-  for (const table of ["memory_derivations", "memory_repairs", "memory_settings"]) {
+  for (const table of [
+    "memory_derivations",
+    "memory_repairs",
+    "memory_settings",
+    "agent_notebook_renewals",
+  ]) {
     assert.ok(sql.includes(`'${table}'`), table);
     assert.ok(workTables[table], table);
   }
@@ -596,6 +620,151 @@ test("the deletion path: a clear, deletion following the source, and the clock, 
     /CREATE TRIGGER memory_entry_follow AFTER UPDATE ON morrow_work\.agent_notebook_entries\s+REFERENCING OLD TABLE AS memory_entry_old NEW TABLE AS memory_entry_new FOR EACH STATEMENT/,
   );
   assert.match(sql, /n\.erased_reason IN \('cleared','source_erased'\)/);
-  for (const table of ["memory_derivations", "memory_repairs", "memory_settings"])
+  for (const table of [
+    "memory_derivations",
+    "memory_repairs",
+    "memory_settings",
+    "agent_notebook_renewals",
+  ])
     assert.equal(workTables[table].content, "none", table);
+});
+
+// The body of one function of 0057, from its CREATE to its closing END $$;.
+const definition = (name) => {
+  const start = sql.indexOf("CREATE FUNCTION morrow_work." + name + "(");
+  assert.ok(start > 0, name);
+  return sql.slice(start, sql.indexOf("END $$;", start));
+};
+
+test("0057's write: a tainted run never supersedes a clean entry, and room is decided before any write (H12A-R1)", () => {
+  const write = definition("run_notebook_write_v2");
+  // The cap's victim: live, never the call's target, and for a tainted run only a tainted entry.
+  const victim = write.slice(write.indexOf("SELECT z.sequence INTO v_victim"));
+  for (const predicate of [
+    "z.erased_at IS NULL",
+    "(p_target_id IS NULL OR z.id::text<>p_target_id)",
+    "(NOT v_tainted OR jsonb_array_length(z.taint->'kinds')>0)",
+  ])
+    assert.ok(victim.slice(0, victim.indexOf("LIMIT 1;")).includes(predicate), predicate);
+  // A flagged replace keeps its target live, so it frees no place.
+  assert.match(
+    write,
+    /v_live:=n\.live_entries-CASE WHEN p_op='replace' AND NOT v_flagged THEN 1 ELSE 0 END;/,
+  );
+  // Nothing is flagged, retired or superseded for an add or a replace before the refusal of a
+  // full notebook: the room check precedes every one of their writes (a retire needs no room).
+  const full = write.indexOf("'notebook_full'");
+  assert.ok(full > write.indexOf("IF n.next_sequence>1000000"));
+  for (const statement of [
+    "'tainted_flag'",
+    "erased_reason='retired'",
+    "erased_reason='superseded'",
+    "INSERT INTO morrow_work.agent_notebook_entries(",
+  ])
+    assert.ok(write.lastIndexOf(statement) > full, statement);
+});
+
+test("0057's write: a renewal's replay reads the call's own record, never an overwritable slot (H12A-R2)", () => {
+  // No entry column names the last renewing call: each call has its own append-only row.
+  assert.doesNotMatch(sql, /renewed_run_id|renewed_tool_use_id/);
+  const table = sql.slice(sql.indexOf("CREATE TABLE morrow_work.agent_notebook_renewals ("));
+  assert.match(table, /PRIMARY KEY \(organization_id,workspace_id,run_id,tool_use_id\)/);
+  assert.match(
+    sql,
+    /FOREACH t IN ARRAY ARRAY\['memory_derivations','agent_notebook_renewals'\] LOOP\s+EXECUTE format\('CREATE TRIGGER append_only BEFORE UPDATE/,
+  );
+  const write = definition("run_notebook_write_v2");
+  const replay = write.indexOf("FROM morrow_work.agent_notebook_renewals w");
+  const renew = write.indexOf("INSERT INTO morrow_work.agent_notebook_renewals(");
+  const renewed = write.indexOf("RETURN QUERY SELECT 'renewed'::text");
+  assert.ok(
+    replay > 0 && renew > replay && renewed > renew,
+    "replayed from, then written with, the renewal",
+  );
+});
+
+test("0057's write: every outcome is an effect, a refusal or a defect the code ruled out (H12A-R3)", async () => {
+  const write = definition("run_notebook_write_v2");
+  const outcomes = new Set([
+    ...[...write.matchAll(/RETURN QUERY SELECT '([a-z_]+)'::text/g)].map((m) => m[1]),
+    ...[...write.matchAll(/THEN '([a-z_]+)' ELSE '([a-z_]+)' END/g)].flatMap((m) => [m[1], m[2]]),
+  ]);
+  for (const outcome of [
+    "applied",
+    "renewed",
+    "flagged",
+    "replay",
+    "replay_renewed",
+    "replay_flagged",
+    "too_many_subjects",
+    "lineage_too_large",
+    "tags_overflow",
+    "notebook_full",
+    "notebook_exhausted",
+  ])
+    assert.ok(outcomes.has(outcome), outcome);
+  // 'invalid' only for what the code validates first: never after the sources' unions.
+  const unions = write.slice(
+    write.indexOf("FOR r IN SELECT e FROM jsonb_array_elements(v_refs) e LOOP"),
+  );
+  assert.deepEqual(
+    [...unions.matchAll(/IF ([^\n]*) THEN RETURN QUERY SELECT 'invalid'/g)].map((m) => m[1]),
+    [
+      "NOT morrow_work.memory_refs_valid(v_refs,64)",
+      "NOT morrow_work.knowledge_tags_valid(v_tags)",
+    ],
+  );
+  assert.ok(
+    unions.indexOf("jsonb_array_length(v_refs)>64") <
+      unions.indexOf("memory_refs_valid(v_refs,64)"),
+  );
+  assert.ok(
+    unions.indexOf("jsonb_array_length(v_tags)>24") <
+      unions.indexOf("knowledge_tags_valid(v_tags)"),
+  );
+  // Each outcome the definer can return is decoded: an effect, a refusal, or (only these) a defect.
+  const defects = ["invalid", "conflict", "ask_bound", "person_memory_loaded"];
+  for (const outcome of outcomes) {
+    const named = [
+      "applied",
+      "renewed",
+      "flagged",
+      "replay",
+      "replay_renewed",
+      "replay_flagged",
+    ].includes(outcome);
+    const step = notebookOperationStep(
+      async () => [{ outcome, entry_id: named ? uuid : null, sequence: named ? "1" : null }],
+      {
+        toolUseId: "toolu_1",
+        operation: { op: "add", kind: "lesson", title: "T", text: "B", derivedFrom: [] },
+        run: run(),
+        viewer: { mayView: () => true },
+      },
+    );
+    if (defects.includes(outcome)) await assert.rejects(step, /RUNTIME_KNOWLEDGE_HELD/, outcome);
+    else assert.notEqual((await step).outcome, undefined, outcome);
+  }
+});
+
+test("0057's deletion path locks the notebooks before their entries, as every notebook definer does (H12A-R5)", () => {
+  for (const name of [
+    "memory_erase_derived",
+    "memory_erase_expired",
+    "run_notebook_write_v2",
+    "cmd_notebook_clear_v2",
+  ]) {
+    const body = definition(name);
+    const notebooks = body.search(/FROM morrow_work\.agent_notebooks [a-z]\b[^;]*FOR UPDATE;/);
+    const entries = body.search(
+      /UPDATE morrow_work\.agent_notebook_entries|FROM morrow_work\.agent_notebook_entries x[^;]*FOR UPDATE\)/,
+    );
+    assert.ok(notebooks > 0 && entries > notebooks, name);
+  }
+  // The sweep erases only the entries of the notebooks it locked.
+  assert.match(
+    definition("memory_erase_expired"),
+    /AND x\.agent_principal_id=ANY\(v_agents\)\s+ORDER BY x\.expires_at,x\.agent_principal_id,x\.sequence LIMIT p_limit FOR UPDATE\)/,
+  );
+  assert.doesNotMatch(sql, /then the notebook: the order a page deletion takes/);
 });

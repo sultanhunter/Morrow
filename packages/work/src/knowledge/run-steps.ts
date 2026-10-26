@@ -182,7 +182,8 @@ export type NotebookWriteResult =
   | { readonly outcome: "refused"; readonly refusal: Current_ToolRefusalCode }
   | { readonly outcome: "invalid_input"; readonly refusal: "input_invalid" };
 // The definer's outcomes past the code checks: each ok effect, its replay, and the refusals of
-// state the code cannot see (the lease, the installation, a source or target out of reach).
+// state the code cannot see (the lease, the installation, a source or target out of reach, the
+// notebook's room, and what the sources' unions carry).
 const notebookEffects: Readonly<
   Record<string, { effect: "applied" | "renewed" | "flagged"; replayed: boolean }>
 > = Object.freeze({
@@ -200,7 +201,22 @@ const notebookRefusals: Readonly<Record<string, Current_ToolRefusalCode>> = Obje
   audience_conflict: "id_out_of_scope",
   lease_ended: "lease_ended",
   stopped: "stopped",
+  // No room the run may make: the notebook holds 1,000 live entries and this tainted run has no
+  // tainted one to supersede (it never erases an untainted entry), or the notebook's million
+  // sequences are used. A capacity limit; H5's contract edit adds precise codes.
+  notebook_full: "pending_limit",
+  notebook_exhausted: "pending_limit",
 });
+// What the write would carry past an entry's bounds once the definer unions the run with every
+// source it names (their subjects, their lineage closed over pages with a replace's target, their
+// read tags with the store's artifact tag): state the code cannot see, so the model's input as
+// composed is refused (input_invalid until H5 adds precise codes), never a held step the loop
+// would retry forever.
+const notebookOverflows: ReadonlySet<string> = new Set([
+  "too_many_subjects",
+  "lineage_too_large",
+  "tags_overflow",
+]);
 async function notebookDispatch(
   query: FixedSqlQuery,
   toolUseIdValue: string,
@@ -248,8 +264,11 @@ async function notebookDispatch(
   if (r.entry_id !== null || r.sequence !== null) throw held();
   const refusal = notebookRefusals[outcome];
   if (refusal) return Object.freeze({ outcome: "refused", refusal });
-  // invalid, conflict, ask_bound or person_memory_loaded: the code checks above passed, so the
-  // definer's own refusal of the same input is a defect, never a result the model sees.
+  if (notebookOverflows.has(outcome))
+    return Object.freeze({ outcome: "invalid_input", refusal: "input_invalid" });
+  // invalid, ask_bound or person_memory_loaded: the code checks above ruled each out (the
+  // input's shape, the private Ask, person memory), and conflict is the same call id sent with
+  // other content: each a defect, never a result the model sees.
   throw held();
 }
 

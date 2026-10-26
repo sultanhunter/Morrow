@@ -486,6 +486,38 @@ test("M3 notebook.write: the lease's own agent, replays, renewal, and never from
   assert.deepEqual(await write(lease, "toolu_m3_b", lesson), { ...renewed, replayed: true });
   assert.equal(entry(a.record.id).renewals, 1);
   assert.equal(entry(a.record.id).clocked, true);
+  // Each renewing call keeps its own record (wave 5 review, H12A-R2): a later renewal never
+  // makes an earlier call's replay renew again, and a replay after the entry is retired returns
+  // the entry it renewed, never a new one.
+  const hem = add("Hems", "Hems are double-stitched.");
+  const h1 = await write(lease, "toolu_m3_h1", hem);
+  const h2 = await write(lease, "toolu_m3_h2", hem);
+  const h3 = await write(lease, "toolu_m3_h3", hem);
+  assert.deepEqual(
+    [h2.effect, h2.record.id, h3.effect, h3.record.id],
+    ["renewed", h1.record.id, "renewed", h1.record.id],
+  );
+  const renewedRevision = notebook().revision;
+  assert.deepEqual(await write(lease, "toolu_m3_h2", hem), { ...h2, replayed: true });
+  assert.equal(entry(h1.record.id).renewals, 2);
+  assert.equal(notebook().revision, renewedRevision);
+  assert.deepEqual(
+    db.rows(
+      `SELECT tool_use_id,renewal FROM morrow_work.agent_notebook_renewals WHERE run_id='run_m3' AND tool_use_id LIKE 'toolu_m3_h%' ORDER BY renewal`,
+    ),
+    [
+      { tool_use_id: "toolu_m3_h2", renewal: 1 },
+      { tool_use_id: "toolu_m3_h3", renewal: 2 },
+    ],
+  );
+  assert.equal(
+    (await write(lease, "toolu_m3_hr", { op: "retire", targetId: h1.record.id })).effect,
+    "applied",
+  );
+  const liveAfterRetire = count("agent_notebook_entries", "erased_at IS NULL");
+  assert.deepEqual(await write(lease, "toolu_m3_h3", hem), { ...h3, replayed: true });
+  assert.equal(count("agent_notebook_entries", "erased_at IS NULL"), liveAfterRetire);
+  assert.equal(entry(h1.record.id).erased_reason, "retired");
   // A tainted run never re-affirms a clean entry: it writes its own, tainted.
   const taintedCopy = await write(lease, "toolu_m3_c", lesson, facts({ taint: untrusted }));
   assert.equal(taintedCopy.effect, "applied");
@@ -954,8 +986,8 @@ test("M9 the 90-day clock: past it an entry is out of reach, and the sweep's han
     W = P.A.workspace;
   db.workOwner(`BEGIN;
 UPDATE morrow_work.agent_notebooks SET next_sequence=next_sequence+1,live_entries=live_entries+1,revision=revision+1 WHERE agent_principal_id=${literal(AGENT)};
-INSERT INTO morrow_work.agent_notebook_entries(organization_id,workspace_id,agent_principal_id,sequence,id,kind,title,body,read_tags,taint,derived_from,audience,source_subjects,requester_principal_id,requester_membership_id,run_id,tool_use_id,digest,created_at,renewed_at,renewals,renewed_run_id,renewed_tool_use_id,use_count,last_used_at,expires_at)
-SELECT ${literal(O)},${literal(W)},${literal(AGENT)},n.next_sequence-1,${literal(id)},'lesson','Old','Gannetberry is old news.','[{"storeId":"${STORE}","capability":"workspace.artifact.read"}]','{"kinds":[],"sources":[],"omitted":0}','[]','{"kind":"workspace"}','[]',${literal(P.A.principal)},${literal(P.A.membership)},'run_m9_old','toolu_old',morrow_work.memory_entry_digest('lesson','Old','Gannetberry is old news.'),t,t,0,NULL,NULL,0,NULL,t+interval '90 days'
+INSERT INTO morrow_work.agent_notebook_entries(organization_id,workspace_id,agent_principal_id,sequence,id,kind,title,body,read_tags,taint,derived_from,audience,source_subjects,requester_principal_id,requester_membership_id,run_id,tool_use_id,digest,created_at,renewed_at,renewals,use_count,last_used_at,expires_at)
+SELECT ${literal(O)},${literal(W)},${literal(AGENT)},n.next_sequence-1,${literal(id)},'lesson','Old','Gannetberry is old news.','[{"storeId":"${STORE}","capability":"workspace.artifact.read"}]','{"kinds":[],"sources":[],"omitted":0}','[]','{"kind":"workspace"}','[]',${literal(P.A.principal)},${literal(P.A.membership)},'run_m9_old','toolu_old',morrow_work.memory_entry_digest('lesson','Old','Gannetberry is old news.'),t,t,0,0,NULL,t+interval '90 days'
 FROM morrow_work.agent_notebooks n,(SELECT date_trunc('milliseconds',clock_timestamp())-interval '91 days' AS t) x WHERE n.agent_principal_id=${literal(AGENT)};
 COMMIT;`);
   const reader = facts({ viewableTags: [artifactTag, knowledgeTag] });
@@ -1054,7 +1086,12 @@ test("M11 no runtime role deletes or rewrites memory; each row changes only as i
     /AGENT_NOTEBOOK_INVALID|permission denied/,
   );
   refusedSql(command(`DELETE FROM morrow_work.agent_notebook_entries;`), /permission denied/);
-  for (const table of ["memory_derivations", "memory_repairs", "memory_settings"]) {
+  for (const table of [
+    "memory_derivations",
+    "memory_repairs",
+    "memory_settings",
+    "agent_notebook_renewals",
+  ]) {
     refusedSql(command(`DELETE FROM morrow_work.${table};`), /permission denied/);
     refusedSql(command(`TRUNCATE morrow_work.${table};`), /permission denied/);
   }
@@ -1064,6 +1101,15 @@ test("M11 no runtime role deletes or rewrites memory; each row changes only as i
   );
   refusedSql(
     `SET ROLE morrow_work_owner; UPDATE morrow_work.memory_derivations SET created_at=created_at;`,
+    /WORK_RECORD_IMMUTABLE/,
+  );
+  // A renewing call's record never changes, so its replay always finds what it renewed.
+  refusedSql(
+    command(`UPDATE morrow_work.agent_notebook_renewals SET renewal=renewal;`),
+    /permission denied/,
+  );
+  refusedSql(
+    `SET ROLE morrow_work_owner; UPDATE morrow_work.agent_notebook_renewals SET renewal=renewal;`,
     /WORK_RECORD_IMMUTABLE/,
   );
   // A repair resolves once; it never reopens.
@@ -1106,4 +1152,209 @@ test("M11 no runtime role deletes or rewrites memory; each row changes only as i
   );
   // The taint union is the oracle's: sticky kinds, distinct sources.
   assert.deepEqual(memoryTaintUnion(untrusted, untrusted), untrusted);
+});
+
+test("M12 the deletion path takes the notebook before its entries: a clear racing a page deletion waits, never deadlocks", async () => {
+  // Wave 5 review, H12A-R5: every notebook definer locks the notebook, then its entries; the
+  // deletion path now does the same, so neither side holds what the other waits for.
+  const page = await send(open, P.A, "POST", "/knowledge/pages", {
+    kind: "decision",
+    title: "Dyes",
+    text: "We dye with plant colours only. Kittiwakeberry.",
+    sources: [],
+  });
+  assert.equal(page.status, 201, JSON.stringify(page.body));
+  const pageId = page.body.pageId;
+  const lease = openRunLease("run_m12");
+  const derived = await write(
+    lease,
+    "toolu_m12",
+    add("Dyes", "Plant dyes only.", { derivedFrom: [{ kind: "knowledge_page", id: pageId }] }),
+  );
+  assert.equal(derived.effect, "applied");
+  // cmd_notebook_clear_v2's own statements, in its order (the notebook FOR UPDATE, then every
+  // live entry), in a session held open between the two.
+  const session = await db.connector({ user: "postgres" }).open({
+    signal: new AbortController().signal,
+    deadlineMs: Date.now() + 120000,
+    waitUntil() {},
+  });
+  const signal = new AbortController().signal;
+  const q = async (text) => (await session.query(text, [], signal)).rows;
+  const at = "date_trunc('milliseconds',clock_timestamp())";
+  try {
+    await q("BEGIN");
+    await q("SET LOCAL ROLE morrow_work_owner");
+    await q(
+      `SELECT revision FROM morrow_work.agent_notebooks WHERE agent_principal_id=${literal(AGENT)} FOR UPDATE`,
+    );
+    // The person's page deletion starts: its trigger reaches the notebook and waits there,
+    // holding none of its entries.
+    const deletion = send(open, P.A, "POST", `/knowledge/pages/${pageId}/delete`, {
+      expectedVersion: 1,
+    });
+    assert.ok(
+      await db.waitForLockWait("usename='morrow_api_worker'"),
+      "the deletion waits on the notebook",
+    );
+    // The clear goes on to the entries: nothing holds them, so it neither waits nor deadlocks.
+    await q(
+      `UPDATE morrow_work.agent_notebook_entries SET title=NULL,body=NULL,erased_at=greatest(${at},renewed_at),erased_reason='cleared' WHERE agent_principal_id=${literal(AGENT)} AND erased_at IS NULL`,
+    );
+    await q(
+      `UPDATE morrow_work.agent_notebooks SET live_entries=0,revision=revision+1,updated_at=greatest(${at},updated_at) WHERE agent_principal_id=${literal(AGENT)}`,
+    );
+    await q("COMMIT");
+    const deleted = await deletion;
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+  } finally {
+    await q("ROLLBACK").catch(() => {});
+    await session.close();
+  }
+  // The clear erased the entry first; the deletion then found nothing of it left to erase.
+  assert.equal(entry(derived.record.id).erased_reason, "cleared");
+  assert.equal(
+    count("memory_repairs", `target_id=${literal(derived.record.id)} AND reason='source_erased'`),
+    0,
+  );
+  assert.equal(notebook().live_entries, 0);
+});
+
+test("M13 the notebook's bounds: a tainted run at the cap never erases a clean entry; an overflow is a refusal, never a held step", async () => {
+  const lease = openRunLease("run_m13");
+  const live = () => count("agent_notebook_entries", "erased_at IS NULL");
+  assert.equal(live(), 0);
+  // 1,000 clean entries, owner-seeded in one statement, renewed oldest first (cap_1 the oldest).
+  db.workOwner(`BEGIN;
+UPDATE morrow_work.agent_notebooks SET next_sequence=next_sequence+1000,live_entries=1000,revision=revision+1 WHERE agent_principal_id=${literal(AGENT)};
+INSERT INTO morrow_work.agent_notebook_entries(organization_id,workspace_id,agent_principal_id,sequence,id,kind,title,body,read_tags,taint,derived_from,audience,source_subjects,requester_principal_id,requester_membership_id,run_id,tool_use_id,digest,created_at,renewed_at,renewals,use_count,expires_at)
+SELECT n.organization_id,n.workspace_id,n.agent_principal_id,n.next_sequence-1001+g,gen_random_uuid()::text,'lesson','Cap '||g,'Cap note '||g,${literal(JSON.stringify([artifactTag]))},'{"kinds":[],"sources":[],"omitted":0}','[]','{"kind":"workspace"}','[]',${literal(P.A.principal)},${literal(P.A.membership)},'run_m13_seed','toolu_cap_'||g,morrow_work.memory_entry_digest('lesson','Cap '||g,'Cap note '||g),t-(1001-g)*interval '1 second',t-(1001-g)*interval '1 second',0,0,t-(1001-g)*interval '1 second'+interval '90 days'
+ FROM morrow_work.agent_notebooks n,generate_series(1,1000) g,(SELECT date_trunc('milliseconds',clock_timestamp()) AS t) x WHERE n.agent_principal_id=${literal(AGENT)};
+COMMIT;`);
+  assert.equal(live(), 1000);
+  const seeded = (g) =>
+    scalar(`SELECT id FROM morrow_work.agent_notebook_entries WHERE tool_use_id='toolu_cap_${g}';`);
+  const oldest = seeded(1),
+    newest = seeded(1000);
+  const tainted = facts({ taint: untrusted });
+  const flags = () => count("memory_repairs", "reason='tainted_flag'");
+  const superseded = () => count("agent_notebook_entries", "erased_reason='superseded'");
+  const unchanged = [1000, flags(), superseded(), notebook().revision];
+  const state = () => [live(), flags(), superseded(), notebook().revision];
+  // Wave 5 review, H12A-R1. With no tainted entry to supersede, a tainted run at the cap is
+  // refused and writes nothing: no flag, no entry, no supersede (before, its replace flagged the
+  // oldest clean entry and then superseded that very entry).
+  const replaceOldest = {
+    op: "replace",
+    targetId: oldest,
+    kind: "correction",
+    title: "Cap",
+    text: "A tainted correction of the oldest note.",
+    derivedFrom: [],
+  };
+  const full = { outcome: "refused", refusal: "pending_limit" };
+  assert.deepEqual(await write(lease, "toolu_m13_r1", replaceOldest, tainted), full);
+  assert.deepEqual(
+    await write(lease, "toolu_m13_a1", add("Rumour", "A tainted rumour."), tainted),
+    full,
+  );
+  assert.deepEqual(state(), unchanged);
+  assert.equal(entry(oldest).erased_reason, null);
+  // A clean retire frees one place, and a tainted add takes it.
+  assert.equal(
+    (await write(lease, "toolu_m13_ret", { op: "retire", targetId: newest })).effect,
+    "applied",
+  );
+  const t1 = await write(lease, "toolu_m13_t1", add("Rumour", "A tainted rumour."), tainted);
+  assert.equal(t1.effect, "applied");
+  assert.equal(live(), 1000);
+  // Now the tainted replace flags the oldest clean entry and supersedes the one tainted entry,
+  // never its own target; its replay returns what it did.
+  const flagged = await write(lease, "toolu_m13_r2", replaceOldest, tainted);
+  assert.equal(flagged.effect, "flagged");
+  assert.equal(entry(oldest).erased_reason, null);
+  assert.equal(entry(t1.record.id).erased_reason, "superseded");
+  assert.deepEqual(entry(flagged.record.id).derived_from, [{ kind: "notebook_entry", id: oldest }]);
+  assert.equal(
+    count(
+      "memory_repairs",
+      `target_id=${literal(oldest)} AND reason='tainted_flag' AND tool_use_id='toolu_m13_r2'`,
+    ),
+    1,
+  );
+  assert.equal(live(), 1000);
+  assert.deepEqual(await write(lease, "toolu_m13_r2", replaceOldest, tainted), {
+    ...flagged,
+    replayed: true,
+  });
+  // A clean run at the cap still supersedes the least recently renewed entry.
+  assert.equal(
+    (await write(lease, "toolu_m13_c1", add("Clean", "A clean lesson at the cap."))).effect,
+    "applied",
+  );
+  assert.equal(entry(oldest).erased_reason, "superseded");
+  assert.equal(live(), 1000);
+
+  // Wave 5 review, H12A-R3. What the definer's unions carry past an entry's bounds is a refusal
+  // of the input as composed, never 'invalid' (which the step holds, and the loop would retry
+  // forever). Subjects: a run on 32 projects names an entry from a 33rd.
+  const overflow = { outcome: "invalid_input", refusal: "input_invalid" };
+  const G33 = { kind: "goal", id: "goal_m13_other" };
+  const source = await write(
+    lease,
+    "toolu_m13_s",
+    add("Other project", "A lesson from another project."),
+    facts({ sourceSubjects: [G33], subjectScope: { kinds: ["goal"], ids: [] } }),
+  );
+  assert.equal(source.effect, "applied");
+  const projects = Array.from({ length: 32 }, (_, i) => ({
+    kind: "goal",
+    id: "goal_m13_" + String(i).padStart(2, "0"),
+  }));
+  const before = state();
+  assert.deepEqual(
+    await write(
+      lease,
+      "toolu_m13_subjects",
+      add("Many", "Derived across projects.", {
+        derivedFrom: [{ kind: "notebook_entry", id: source.record.id }],
+      }),
+      facts({ sourceSubjects: projects, subjectScope: { kinds: ["goal"], ids: [] } }),
+    ),
+    overflow,
+  );
+  // Lineage: a replace naming 64 sources reaches 65 references with its target.
+  const ids65 = db
+    .rows(
+      `SELECT id::text AS id FROM morrow_work.agent_notebook_entries WHERE tool_use_id LIKE 'toolu_cap_%' AND erased_at IS NULL ORDER BY sequence LIMIT 65`,
+    )
+    .map((r) => r.id);
+  assert.equal(ids65.length, 65);
+  assert.deepEqual(
+    await write(lease, "toolu_m13_lineage", {
+      op: "replace",
+      targetId: ids65[64],
+      kind: "lesson",
+      title: "Everything",
+      text: "A summary of 64 notes.",
+      derivedFrom: ids65.slice(0, 64).map((id) => ({ kind: "notebook_entry", id })),
+    }),
+    overflow,
+  );
+  // Read tags: a run holding 24 tags, plus the store's artifact tag on every entry, makes 25.
+  const tags24 = Array.from({ length: 24 }, (_, i) =>
+    tag("catalog.products.read", "store_t" + String(i).padStart(2, "0")),
+  );
+  assert.deepEqual(
+    await write(lease, "toolu_m13_tags", add("Tags", "Across many stores."), facts(), {
+      readTags: tags24,
+    }),
+    overflow,
+  );
+  assert.deepEqual(state(), before);
+  // A notebook whose million sequences are used takes no new entry: a refusal, not a defect.
+  db.workOwner(
+    `UPDATE morrow_work.agent_notebooks SET next_sequence=1000001,revision=revision+1 WHERE agent_principal_id=${literal(AGENT)};`,
+  );
+  assert.deepEqual(await write(lease, "toolu_m13_last", add("Last", "One note too many.")), full);
 });
