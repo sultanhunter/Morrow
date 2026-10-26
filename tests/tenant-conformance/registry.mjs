@@ -1414,6 +1414,9 @@ export const billingFunctions = Object.freeze({
     kind: "operator",
     grantees: [],
   },
+  // Its record's INSERT guard (review R1): a renewal record by hand is the one the
+  // renewal would write.
+  "renewal_guard()": { kind: "trigger", grantees: [] },
   // INVOKER helpers the policies and definers evaluate as the command role.
   "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },
   "receipt_entered(text)": { kind: "check", grantees: ["morrow_work_command"] },

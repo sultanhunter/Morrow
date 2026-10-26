@@ -66,6 +66,7 @@ import {
   testEntitlementInput,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
+import { operatorRaise, raiseRecordPath, raiseRecordProblem } from "./terms-raise.mjs";
 import {
   cloudflareApi,
   createTools,
@@ -912,11 +913,13 @@ command("seed-platform", {
       };
     }
     const configuration = await ctx.loginConfiguration(config);
-    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const { sourceCommit } = await mainPreconditions(ctx, repositoryOf(config.staging));
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const rows = platformSeedRows(configuration, JSON.parse(configuration.verificationProfileJson));
-    // M5 PR-1: the billing terms, checked before any effect.
+    // M5 PR-1: the billing terms, checked before any effect; review R2 of v1 build order
+    // PR 6: a raise of the operator credits only with the owner's committed record.
     const terms = await ctx.billingTerms();
+    await requireTermsRaiseRecords(ctx, sourceCommit, terms);
     const written = await seedPlatform({
       connect: ctx.database({ ownerUrl, binding }).connect,
       binding,
@@ -1098,6 +1101,61 @@ export function requireStandingRecord(text, id) {
   }
   if (named.length !== 1 || named[0] !== id) throw new StagingError("STAGING_EVIDENCE_MISMATCH");
 }
+// Review R2 of v1 build order PR 6 (ADR-0035 item 4: the owner's yes in chat for every
+// raise of the owner's test credits). Before any database effect, each terms revision the
+// seed would write whose operator entry carries credits other than the beta plan's 300
+// must name its owner record (`ownerRecord`) in docs/decisions/billing-terms.json as
+// committed at verified main (`commit`, with the same terms, offers and digest), and that
+// record, committed too, must name the revision and its credits and quote the owner's
+// words naming the amount (scripts/terms-raise.mjs). A seed with no raise reads nothing.
+// The record gates the revision; the credits still come only from the terms (R10).
+export const billingTermsPath = "docs/decisions/billing-terms.json";
+export async function requireTermsRaiseRecords(ctx, commit, rows, environment = "staging") {
+  const raised = [];
+  for (const [index, row] of (Array.isArray(rows) ? rows : []).entries()) {
+    let terms;
+    try {
+      terms = JSON.parse(row[1]);
+    } catch {
+      throw new StagingError("STAGING_TERMS_INVALID");
+    }
+    const raise = operatorRaise({ terms });
+    if (raise !== null) raised.push({ index, row, raise });
+  }
+  if (raised.length === 0) return Object.freeze([]);
+  let committed;
+  try {
+    committed = JSON.parse(
+      await committedBlob(ctx, commit, billingTermsPath, "STAGING_TERMS_RAISE_UNRECORDED"),
+    ).environments?.[environment];
+  } catch (error) {
+    if (error instanceof StagingError) throw error;
+    throw new StagingError("STAGING_TERMS_RAISE_UNRECORDED");
+  }
+  const checked = [];
+  for (const { index, row, raise } of raised) {
+    const termsRevision = index + 1;
+    const revision = Array.isArray(committed) ? committed[index] : null;
+    if (
+      !revision ||
+      typeof revision !== "object" ||
+      JSON.stringify(revision.terms) !== row[1] ||
+      JSON.stringify(revision.offers) !== row[2] ||
+      revision.digest !== row[3] ||
+      typeof revision.ownerRecord !== "string" ||
+      !raiseRecordPath.test(revision.ownerRecord)
+    )
+      throw new StagingError("STAGING_TERMS_RAISE_UNRECORDED", { termsRevision });
+    const text = await committedRecord(ctx, commit, revision.ownerRecord);
+    const problem = raiseRecordProblem(text, { environment, termsRevision, creditUnits: raise });
+    if (problem !== null)
+      throw new StagingError("STAGING_EVIDENCE_MISMATCH", { termsRevision, reason: problem });
+    checked.push(
+      Object.freeze({ termsRevision, creditUnits: raise, record: revision.ownerRecord }),
+    );
+  }
+  return Object.freeze(checked);
+}
 command("test-entitlement", {
   usage:
     "test-entitlement --workspace <id> --approval <adr-0035.e13.YYYY-MM-DD.n> --operator <id> [--record <docs/evidence/live/....md>]",
@@ -1175,7 +1233,9 @@ command("test-entitlement", {
 // It names no amount: each period's credits come only from the current terms' operator
 // entry (P01.T04a R10). Raising them (ADR-0035 item 4) is a new staging BillingTerms
 // revision in docs/decisions/billing-terms.json, published with the owner's per-use
-// approval; this command never takes an amount.
+// approval, which the revision names as its committed owner record (seed-platform and
+// verify:billing refuse it otherwise; review R2); this command never takes an amount and
+// never reads that record.
 // Refused in CI, without the standing approval, on any database but staging's binding, off
 // verified main, and (in the database) for any workspace the live-store app does not
 // invite, under any other grant, or in a database not marked staging. Prints one closed

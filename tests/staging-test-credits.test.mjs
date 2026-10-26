@@ -16,13 +16,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as stagingTools from "../scripts/staging.mjs";
 import {
+  billingTermsPath,
   commands,
   main,
+  requireTermsRaiseRecords,
   testCreditsActivityLine,
   testCreditsRecord,
   testCreditsRecordPath,
 } from "../scripts/staging.mjs";
+import { operatorRaise, raiseRecordPath, raiseRecordProblem } from "../scripts/terms-raise.mjs";
 import {
+  billingTermsSeedRows,
   liveStoreWorkspaceStatement,
   renewTestCredits,
   testCreditsOutcomes,
@@ -216,6 +220,369 @@ test("migration 0053: credits come only from the current terms' operator entry, 
   assert.match(renew, /'termsRevision',v_terms\.terms_revision::text/);
   assert.match(renew, /'termsRevision',COALESCE\(n\.terms_revision,g\.terms_revision\)::text/);
   assert.match(migration, /to_regclass\('morrow_billing\.billing_terms'\) IS NULL/);
+});
+
+test("migration 0053: a renewal record by hand must be the one the renewal would write now (review R1)", () => {
+  // A BEFORE INSERT guard on the record, owned with the table, granted to nobody.
+  assert.match(
+    migration,
+    /CREATE TRIGGER renewal_guard BEFORE INSERT ON morrow_billing\.operator_test_entitlement_renewals\n FOR EACH ROW EXECUTE FUNCTION morrow_billing\.renewal_guard\(\);/,
+  );
+  assert.match(migration, /REVOKE ALL ON FUNCTION morrow_billing\.renewal_guard\(\) FROM PUBLIC;/);
+  assert.match(migration, /to_regprocedure\('morrow_billing\.renewal_guard\(\)'\) IS NOT NULL/);
+  const guard = body(migration, "CREATE FUNCTION morrow_billing.renewal_guard()");
+  const renew = body(migration, "CREATE FUNCTION morrow_billing.operator_test_entitlement_renew(");
+  // Its recorded time is the database's clock, whatever the writer gave.
+  assert.match(
+    guard,
+    /v_now:=date_trunc\('milliseconds',clock_timestamp\(\)\);\n NEW\.recorded_at:=v_now;/,
+  );
+  // Its period is recomputed from the grant's grid, as the renewal computes it.
+  const grid = "1+floor((extract(epoch FROM v_now)-extract(epoch FROM g.period_end))/2592000)";
+  assert.ok(renew.includes("v_k:=" + grid + "::integer;"));
+  assert.ok(guard.includes("v_k:=" + grid + ";"));
+  assert.ok(guard.includes("v_start:=g.period_end+(v_k-1)*interval '720 hours';"));
+  // The current terms' one operator entry, read as the renewal reads it.
+  assert.match(
+    guard,
+    /FROM morrow_billing\.billing_terms x\n  ORDER BY x\.terms_revision DESC LIMIT 1;/,
+  );
+  assert.match(
+    guard,
+    /WHERE e->>'kind'='operator_test_entitlement' AND e->>'route'='morrow_direct' AND e->>'mode'='test';/,
+  );
+  for (const rule of [
+    // The grant's own account, and the function's route_conflict rules.
+    /g\.billing_account_id IS DISTINCT FROM NEW\.billing_account_id::text/,
+    /rt\.fixing_payment_key IS DISTINCT FROM v_key/,
+    /rt\.shopify_bound_at IS NOT NULL/,
+    /a\.status IS DISTINCT FROM 'active'/,
+    /s\.subscription_key IS DISTINCT FROM v_key/,
+    /v_environment IS DISTINCT FROM 'staging'/,
+    // The period that contains the clock, after the latest snapshot's.
+    /NEW\.period_number IS DISTINCT FROM v_k/,
+    /NEW\.period_start IS DISTINCT FROM v_start/,
+    /COALESCE\(v_start<s\.valid_until,true\)/,
+    /NEW\.snapshot_revision IS DISTINCT FROM s\.revision\+1/,
+    // The current terms' credits and revision.
+    /v_count IS DISTINCT FROM 1/,
+    /NEW\.terms_revision IS DISTINCT FROM t\.terms_revision/,
+    /NEW\.credit_units IS DISTINCT FROM v_units/,
+    // Exactly the room below them, funding the wallet's next revision.
+    /v_room:=v_units::numeric-\(w\.available::numeric\+w\.reserved\);/,
+    /NEW\.added_units IS DISTINCT FROM greatest\(0,v_room\)/,
+    /NEW\.funded_wallet_revision IS DISTINCT FROM \(CASE WHEN v_room>0 THEN w\.revision\+1 END\) THEN/,
+  ])
+    assert.match(guard, rule, String(rule));
+  assert.match(guard, /RAISE EXCEPTION 'BILLING_RENEWAL_INVALID'/);
+  // The wallet's renewal funding: the units added are the room below the renewal's
+  // credits, which are the current terms revision's operator entry.
+  const wallet = body(migration, "CREATE OR REPLACE FUNCTION morrow_billing.wallet_guard()");
+  const funding = wallet.slice(wallet.indexOf("operator_test_entitlement_renewals r"));
+  assert.match(
+    funding,
+    /r\.added_units=v_delta AND v_delta=r\.credit_units-\(OLD\.available::numeric\+OLD\.reserved\)/,
+  );
+  assert.match(
+    funding,
+    /FROM morrow_billing\.billing_terms x\n      ORDER BY x\.terms_revision DESC LIMIT 1\) t/,
+  );
+  assert.match(funding, /AND r\.terms_revision=t\.terms_revision/);
+  assert.match(
+    funding,
+    /AND r\.credit_units=\(SELECT CASE WHEN count\(\*\)=1 THEN max\(\(e->>'creditUnits'\)::bigint\) END\n      FROM jsonb_array_elements\(t\.terms->'entries'\) e\n      WHERE e->>'kind'='operator_test_entitlement' AND e->>'route'='morrow_direct' AND e->>'mode'='test'\)\) THEN/,
+  );
+});
+
+test("migration 0053: an operator snapshot's successor needs an active account (review R3)", () => {
+  const snapshot = body(migration, "CREATE OR REPLACE FUNCTION morrow_billing.snapshot_guard()");
+  assert.match(
+    snapshot,
+    /SELECT x\.route,x\.mode,x\.status INTO a FROM morrow_billing\.billing_accounts x/,
+  );
+  const successor = snapshot.slice(snapshot.indexOf("  ELSE\n"));
+  assert.match(
+    successor,
+    /NEW\.verified_at<p\.valid_until\n    OR a\.status IS DISTINCT FROM 'active'\n    OR NOT EXISTS/,
+  );
+  // Revision 1 (the grant's own snapshot) is checked exactly as 0035 checks it.
+  assert.ok(snapshot.indexOf("a.status") > snapshot.indexOf("  ELSE\n"));
+});
+
+// ---------------------------------------------------------------------------
+// Review R2: a raise of the operator credits needs the owner's committed record.
+const raiseRecord = ["docs/evidence/live/2026-11-20-test-credits-raise", "md"].join(".");
+const raiseText = ({
+  revision = "staging.2",
+  credits = "1000",
+  words = '"Yes, raise my test credits to 1,000 a period."',
+  extra = "",
+} = {}) =>
+  `# Raise of the owner's test credits\n\n- Terms revision: \`${revision}\`\n- Credits per period: \`${credits}\`\n- Owner's words: ${words}\n${extra}`;
+const termsFile = JSON.parse(read("docs/decisions/billing-terms.json"));
+const raisedRevision = (creditUnits = "1000", ownerRecord = raiseRecord) => {
+  const revision = structuredClone(termsFile.environments.staging[0]);
+  revision.terms.termsRevision = 2;
+  revision.terms.entries[0].creditUnits = creditUnits;
+  // The digest is not checked by these rules (verify:billing and the seed check it).
+  revision.digest = "e".repeat(64);
+  return ownerRecord === null ? revision : { ...revision, ownerRecord };
+};
+
+test("terms raise: only credits other than 300 are a raise, and its record names the revision, the credits and the owner's words (review R2)", () => {
+  assert.equal(operatorRaise(termsFile.environments.staging[0]), null);
+  assert.equal(operatorRaise(termsFile.environments.development[0]), null);
+  assert.equal(operatorRaise(raisedRevision()), "1000");
+  assert.equal(operatorRaise(raisedRevision("100")), "100");
+  const expected = { environment: "staging", termsRevision: 2, creditUnits: "1000" };
+  for (const text of [
+    raiseText(),
+    raiseText({ words: '"Yes, 1000."' }),
+    raiseText({ words: "\u201cYes, raise it to 1 000 credits.\u201d" }),
+    raiseText().replace("- Terms revision:", "- **Terms revision:**"),
+    raiseText().replace("Owner's words", "Owner\u2019s words"),
+    raiseText({ revision: "staging.2" }).replace("`staging.2`", "staging.2"),
+  ])
+    assert.equal(raiseRecordProblem(text, expected), null, text);
+  for (const [text, reason] of [
+    [null, "missing"],
+    ["", "revision"],
+    [raiseText({ revision: "staging.3" }), "revision"],
+    [raiseText({ revision: "development.2" }), "revision"],
+    [raiseText({ extra: "- Terms revision: `staging.2`\n" }), "revision"],
+    [raiseText({ revision: "`staging.2` and more" }), "revision"],
+    [raiseText({ credits: "1,000" }), "credits"],
+    [raiseText({ credits: "2000" }), "credits"],
+    [raiseText({ extra: "- Credits per period: `1000`\n" }), "credits"],
+    [raiseText({ words: "Yes, 1,000." }), "words"],
+    [raiseText({ words: '"Yes, raise them."' }), "words"],
+    [raiseText({ words: '"Yes to 10000."' }), "words"],
+    [raiseText({ words: '"Yes to 1,0000."' }), "words"],
+    [raiseText({ words: '"Yes, 2,000."' }), "words"],
+    [raiseText({ extra: '- Owner\'s words: "No."\n' }), "words"],
+  ])
+    assert.equal(raiseRecordProblem(text, expected), reason, String(text));
+  assert.equal(raiseRecordProblem(raiseText(), { ...expected, creditUnits: "01" }), "invalid");
+  assert.equal(
+    raiseRecordProblem(raiseText(), { ...expected, environment: "production" }),
+    "invalid",
+  );
+  assert.ok(raiseRecordPath.test(raiseRecord));
+  assert.ok(
+    raiseRecordPath.test(["docs/evidence/live/2026-11-20-test-credits-raise-2", "md"].join(".")),
+  );
+  for (const path of [
+    ["docs/evidence/live/2026-11-20-standing-approval", "md"].join("."),
+    ["docs/evidence/live/test-credits-raise", "md"].join("."),
+    ["docs/evidence/other/2026-11-20-test-credits-raise", "md"].join("."),
+    "docs/evidence/live/2026-11-20-test-credits-raise.txt",
+  ])
+    assert.ok(!raiseRecordPath.test(path), path);
+});
+
+test("billing terms seed: a revision may name its owner record, outside its row and digest (review R2)", () => {
+  const first = termsFile.environments.staging[0];
+  assert.deepEqual(
+    billingTermsSeedRows([first, raisedRevision()]),
+    billingTermsSeedRows([first, raisedRevision("1000", null)]),
+  );
+  for (const ownerRecord of [["docs/evidence/live/2026-11-20-other", "md"].join("."), 7, null])
+    assert.equal(
+      codeOf(() => billingTermsSeedRows([first, { ...raisedRevision("1000", null), ownerRecord }])),
+      "STAGING_TERMS_INVALID",
+      String(ownerRecord),
+    );
+});
+
+// The committed billing-terms.json with staging's revision 1 and a raise to 1,000 as
+// revision 2 (naming `ownerRecord` unless null), and its seed rows.
+const raisedTerms = (revision = raisedRevision()) => {
+  const document = structuredClone(termsFile);
+  document.environments.staging = [termsFile.environments.staging[0], revision];
+  return JSON.stringify(document, null, 2);
+};
+const raisedRows = (revision = raisedRevision()) =>
+  billingTermsSeedRows([termsFile.environments.staging[0], revision]);
+
+test("seed-platform: a raise of the operator credits needs the owner's record, committed at verified main (review R2)", async () => {
+  const commit = fakeSha("main");
+  const gate = async (files, rows = raisedRows()) => {
+    const fake = fakeTools({ git: { files } });
+    const outcome = await requireTermsRaiseRecords({ tools: fake.tools }, commit, rows).then(
+      (checked) => checked,
+      (error) => error.code,
+    );
+    return { outcome, fake };
+  };
+  // No raise: nothing is read.
+  const plain = await gate({}, billingTermsSeedRows([termsFile.environments.staging[0]]));
+  assert.deepEqual(plain.outcome, []);
+  assert.deepEqual(plain.fake.calls, []);
+  // The owner's record of revision 2 and its 1,000 credits.
+  const recorded = await gate({
+    [billingTermsPath]: { text: raisedTerms() },
+    [raiseRecord]: { text: raiseText() },
+  });
+  assert.deepEqual(recorded.outcome, [
+    { termsRevision: 2, creditUnits: "1000", record: raiseRecord },
+  ]);
+  for (const [label, files, rows, code] of [
+    [
+      "no committed terms",
+      { [raiseRecord]: { text: raiseText() } },
+      undefined,
+      "STAGING_TERMS_RAISE_UNRECORDED",
+    ],
+    [
+      "no owner record named",
+      { [billingTermsPath]: { text: raisedTerms(raisedRevision("1000", null)) } },
+      undefined,
+      "STAGING_TERMS_RAISE_UNRECORDED",
+    ],
+    [
+      "a committed revision that is not the one seeded",
+      {
+        [billingTermsPath]: { text: raisedTerms(raisedRevision("2000")) },
+        [raiseRecord]: { text: raiseText() },
+      },
+      undefined,
+      "STAGING_TERMS_RAISE_UNRECORDED",
+    ],
+    [
+      "a malformed record path",
+      {
+        [billingTermsPath]: {
+          text: raisedTerms(
+            raisedRevision("1000", ["docs/evidence/live/2026-11-20-yes", "md"].join(".")),
+          ),
+        },
+      },
+      undefined,
+      "STAGING_TERMS_RAISE_UNRECORDED",
+    ],
+    [
+      "the record not committed",
+      { [billingTermsPath]: { text: raisedTerms() } },
+      undefined,
+      "STAGING_EVIDENCE_MISSING",
+    ],
+    [
+      "a record of another amount",
+      {
+        [billingTermsPath]: { text: raisedTerms() },
+        [raiseRecord]: { text: raiseText({ credits: "2000", words: '"Yes, 2,000."' }) },
+      },
+      undefined,
+      "STAGING_EVIDENCE_MISMATCH",
+    ],
+    [
+      "a record of another revision",
+      {
+        [billingTermsPath]: { text: raisedTerms() },
+        [raiseRecord]: { text: raiseText({ revision: "staging.3" }) },
+      },
+      undefined,
+      "STAGING_EVIDENCE_MISMATCH",
+    ],
+    [
+      "the owner's words without the amount",
+      {
+        [billingTermsPath]: { text: raisedTerms() },
+        [raiseRecord]: { text: raiseText({ words: '"Sure."' }) },
+      },
+      undefined,
+      "STAGING_EVIDENCE_MISMATCH",
+    ],
+    [
+      "a symbolic link for the record",
+      {
+        [billingTermsPath]: { text: raisedTerms() },
+        [raiseRecord]: { text: raiseText(), mode: "120000" },
+      },
+      undefined,
+      "STAGING_EVIDENCE_MISSING",
+    ],
+  ]) {
+    const { outcome } = await gate(files, rows);
+    assert.equal(outcome, code, label);
+  }
+});
+
+test("cli: seed-platform refuses a raise without the owner's committed record before any database statement (review R2)", async () => {
+  const planted = plantedHome({ "neon-owner-url": ownerUrl });
+  const client = "client_" + "C".repeat(26);
+  const profile = {
+    schemaVersion: 1,
+    providerId: "workos",
+    environmentId: "environment_" + "E".repeat(26),
+    applicationId: "app_" + "A".repeat(26),
+    clientId: client,
+    issuer: "https://api.workos.com/user_management/" + client,
+    revision: 3,
+    audiencePolicy: "absent",
+  };
+  const configuration = {
+    origin: "https://morrow-staging-api.lab.workers.dev",
+    retentionTier: "staging",
+    verificationProfileJson: JSON.stringify(profile),
+    profileId: "profile_staging",
+    profileRecordRevision: 2,
+    configurationDigest: "d".repeat(64),
+    binding: {
+      bindingId: "binding_staging",
+      bindingRevision: 1,
+      environmentId: profile.environmentId,
+      applicationId: profile.applicationId,
+      clientId: client,
+      redirectUri: "https://morrow-staging-api.lab.workers.dev/auth/workos/callback",
+      returnPath: "/",
+    },
+  };
+  const world = async (files) => {
+    const fake = fakeTools({ git: { files } });
+    const { ctx, err } = await fakeContext({
+      home: planted.home,
+      tools: fake.tools,
+      card: standingApproval(),
+      now: Date.parse("2026-11-25T12:00:00Z"),
+      overrides: {
+        loginConfiguration: async () => configuration,
+        billingTerms: async () => raisedRows(),
+      },
+    });
+    const db = fakeDatabase();
+    ctx.database = db.connector;
+    return { ctx, err, db, fake };
+  };
+  try {
+    const unrecorded = await world({
+      [billingTermsPath]: { text: raisedTerms(raisedRevision("1000", null)) },
+    });
+    assert.equal(await main(["seed-platform"], unrecorded.ctx), 1);
+    assert.deepEqual(JSON.parse(unrecorded.err.at(-1)), {
+      command: "seed-platform",
+      code: "STAGING_TERMS_RAISE_UNRECORDED",
+      termsRevision: 2,
+    });
+    assert.deepEqual(unrecorded.db.statements, []);
+    const mismatched = await world({
+      [billingTermsPath]: { text: raisedTerms() },
+      [raiseRecord]: { text: raiseText({ words: '"Sure."' }) },
+    });
+    assert.equal(await main(["seed-platform"], mismatched.ctx), 1);
+    assert.equal(JSON.parse(mismatched.err.at(-1)).code, "STAGING_EVIDENCE_MISMATCH");
+    assert.deepEqual(mismatched.db.statements, []);
+    // With the owner's record the seed goes on to the database.
+    const recorded = await world({
+      [billingTermsPath]: { text: raisedTerms() },
+      [raiseRecord]: { text: raiseText() },
+    });
+    await main(["seed-platform"], recorded.ctx);
+    assert.ok(recorded.db.statements.length > 0, recorded.err.join("\n"));
+    assert.ok(recorded.fake.calls.some((c) => c.tool === "git" && c.args.at(-1) === raiseRecord));
+  } finally {
+    planted.cleanup();
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { StagingError, fixedServerMessage, sqlState } from "./staging-common.mjs";
 import { ledgerRecord } from "./migration-chain.mjs";
+import { raiseRecordPath } from "./terms-raise.mjs";
 
 const identifier = /^[a-z_][a-z0-9_]{0,62}$/;
 const morrowRole = /^morrow_[a-z][a-z0-9_]{0,47}$/;
@@ -1171,16 +1172,25 @@ const termsStatements = Object.freeze({
   insert:
     "INSERT INTO morrow_billing.billing_terms(terms_revision, terms, offers, digest, recorded_at) VALUES ($1::bigint, $2::jsonb, $3::jsonb, $4::text, date_trunc('milliseconds', clock_timestamp()))",
 });
-/** One row per revision, in order: [revision, terms JSON, offers JSON, digest], all text. */
+/**
+ * One row per revision, in order: [revision, terms JSON, offers JSON, digest], all text. A
+ * revision may also name `ownerRecord` (review R2 of v1 build order PR 6: the owner's record
+ * of a raise of the operator credits), which seed-platform checks against the committed
+ * record and which is not part of the row or the digest.
+ */
 export function billingTermsSeedRows(revisions) {
   if (!Array.isArray(revisions) || revisions.length > 1000)
     throw new StagingError("STAGING_TERMS_INVALID");
   return Object.freeze(
     revisions.map((r, index) => {
+      const keys = r && typeof r === "object" ? Object.keys(r).sort().join() : null;
       if (
         !r ||
         typeof r !== "object" ||
-        Object.keys(r).sort().join() !== "digest,offers,terms" ||
+        (keys !== "digest,offers,terms" &&
+          (keys !== "digest,offers,ownerRecord,terms" ||
+            typeof r.ownerRecord !== "string" ||
+            !raiseRecordPath.test(r.ownerRecord))) ||
         !/^[a-f0-9]{64}$/.test(r.digest ?? "") ||
         r.terms?.termsRevision !== index + 1
       )

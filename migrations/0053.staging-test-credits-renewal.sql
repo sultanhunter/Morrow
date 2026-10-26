@@ -10,11 +10,19 @@ BEGIN;
 --     the renewal added to the wallet, the snapshot and wallet revisions it wrote, the
 --     standing approval, the operator, the live record and a digest); append-only, owner
 --     only, one per grant and period; no runtime role holds anything.
+--   * renewal_guard (review R1): a renewal record, even one the owner writes by hand, names
+--     exactly what the renewal would write at that moment: the grant of its own account, a
+--     route, account, wallet and latest snapshot that are that grant's, the period on the
+--     grant's grid that contains the database's clock (its recorded time), the next
+--     snapshot revision, the current terms' credits and revision, and units added that are
+--     exactly the room the wallet's unspent credits leave below those credits.
 --   * wallet_guard and snapshot_guard (0035), replaced with the same signatures: the owner
---     may fund the wallet revision a renewal names with exactly the units it added, and an
---     operator snapshot takes a successor only of the same grant, from the owner, naming
---     the renewal of that revision, its digest and its period, which starts no earlier than
---     the previous period ended. Everything 0035 refused is still refused.
+--     may fund the wallet revision a renewal names with exactly the units it added, which
+--     must be the room below the current terms' credits (review R1), and an operator
+--     snapshot takes a successor only of the same grant, from the owner, for an active
+--     account (review R3), naming the renewal of that revision, its digest and its period,
+--     which starts no earlier than the previous period ended. Everything 0035 refused is
+--     still refused.
 --   * operator_test_entitlement_renew: the operator function (0035's idiom: owned by the
 --     owner, INVOKER, granted to nobody; only staging:test-credits runs it, as
 --     morrow_work_owner inside the administrator's own transaction under the D4 SET-row
@@ -44,6 +52,7 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_work.append_only()') IS NULL
  OR to_regclass('morrow_billing.operator_test_entitlement_renewals') IS NOT NULL
  OR to_regprocedure('morrow_billing.operator_test_entitlement_renew(text,text,text,text,text)') IS NOT NULL
+ OR to_regprocedure('morrow_billing.renewal_guard()') IS NOT NULL
  -- The two guards this file replaces, exactly as 0035 wrote them (a later revision is
  -- never overwritten blind).
  OR (SELECT md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid=to_regprocedure('morrow_billing.wallet_guard()'))
@@ -98,19 +107,81 @@ CREATE TRIGGER append_only BEFORE UPDATE OR DELETE ON morrow_billing.operator_te
 CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_billing.operator_test_entitlement_renewals
  FOR EACH STATEMENT EXECUTE FUNCTION morrow_work.append_only();
 
+-- A renewal record names exactly what the renewal would write now (review R1 of the PR 6
+-- security review): the operator function is not the owner role's only way to insert, so
+-- an INSERT by hand is held to the function's own reads. The grant is of the same tenant
+-- and account; the route, account, wallet and latest snapshot are that grant's (the
+-- function's route_conflict rules: Morrow-direct test route fixed by the grant's key,
+-- never Shopify-bound, an active account); the period is the one on the grant's grid that
+-- contains the database's clock and starts no earlier than the latest snapshot's period
+-- ended; the snapshot revision is the next one; the credits and terms revision are the
+-- current terms' one operator entry; and the units added are exactly the room the
+-- wallet's unspent credits (available plus reserved) leave below those credits, funding
+-- the wallet's next revision, or nothing. The recorded time is the database's clock, not
+-- the writer's value.
+CREATE FUNCTION morrow_billing.renewal_guard() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
+DECLARE g record; rt record; a record; w record; s record; t record; v_environment text; v_count integer; v_units bigint;
+ v_key text; v_now timestamptz; v_k bigint; v_start timestamptz; v_room numeric;
+BEGIN
+ IF TG_OP<>'INSERT' OR current_user<>'morrow_work_owner' THEN RAISE EXCEPTION 'BILLING_RENEWAL_INVALID'; END IF;
+ v_now:=date_trunc('milliseconds',clock_timestamp());
+ NEW.recorded_at:=v_now;
+ v_key:='morrow:operator_entitlement:'||NEW.entitlement_id::text;
+ SELECT x.environment INTO v_environment FROM morrow_billing.platform_environment x;
+ SELECT x.billing_account_id::text AS billing_account_id,x.period_end INTO g FROM morrow_billing.operator_test_entitlements x
+  WHERE x.organization_id=NEW.organization_id AND x.workspace_id=NEW.workspace_id AND x.id=NEW.entitlement_id;
+ SELECT x.route,x.mode,x.fixing_payment_key,x.shopify_bound_at INTO rt FROM morrow_billing.workspace_billing_routes x
+  WHERE x.organization_id=NEW.organization_id AND x.workspace_id=NEW.workspace_id;
+ SELECT x.route,x.mode,x.status INTO a FROM morrow_billing.billing_accounts x
+  WHERE x.organization_id=NEW.organization_id AND x.workspace_id=NEW.workspace_id AND x.id=NEW.billing_account_id;
+ SELECT x.available,x.reserved,x.revision::bigint AS revision INTO w FROM morrow_billing.credit_wallets x
+  WHERE x.organization_id=NEW.organization_id AND x.workspace_id=NEW.workspace_id AND x.billing_account_id=NEW.billing_account_id;
+ SELECT x.revision::bigint AS revision,x.subscription_key,x.valid_until INTO s FROM morrow_billing.entitlement_snapshots x
+  WHERE x.organization_id=NEW.organization_id AND x.workspace_id=NEW.workspace_id AND x.billing_account_id=NEW.billing_account_id
+  ORDER BY x.revision DESC LIMIT 1;
+ -- The current terms' one operator entry, as the renewal reads it (R10).
+ SELECT x.terms_revision::bigint AS terms_revision,x.terms INTO t FROM morrow_billing.billing_terms x
+  ORDER BY x.terms_revision DESC LIMIT 1;
+ SELECT count(*)::integer,max((e->>'creditUnits')::bigint) INTO v_count,v_units FROM jsonb_array_elements(t.terms->'entries') e
+  WHERE e->>'kind'='operator_test_entitlement' AND e->>'route'='morrow_direct' AND e->>'mode'='test';
+ -- The period on the grant's grid that contains the clock.
+ v_k:=1+floor((extract(epoch FROM v_now)-extract(epoch FROM g.period_end))/2592000);
+ v_start:=g.period_end+(v_k-1)*interval '720 hours';
+ v_room:=v_units::numeric-(w.available::numeric+w.reserved);
+ IF v_environment IS DISTINCT FROM 'staging' OR g.billing_account_id IS DISTINCT FROM NEW.billing_account_id::text
+  OR rt.route IS DISTINCT FROM 'morrow_direct' OR rt.mode IS DISTINCT FROM 'test' OR rt.fixing_payment_key IS DISTINCT FROM v_key
+  OR rt.shopify_bound_at IS NOT NULL
+  OR a.route IS DISTINCT FROM 'morrow_direct' OR a.mode IS DISTINCT FROM 'test' OR a.status IS DISTINCT FROM 'active'
+  OR w.revision IS NULL OR s.subscription_key IS DISTINCT FROM v_key
+  OR NEW.period_number IS DISTINCT FROM v_k OR NEW.period_start IS DISTINCT FROM v_start
+  OR COALESCE(v_start<s.valid_until,true) OR NEW.snapshot_revision IS DISTINCT FROM s.revision+1
+  OR v_count IS DISTINCT FROM 1 OR NEW.terms_revision IS DISTINCT FROM t.terms_revision
+  OR NEW.credit_units IS DISTINCT FROM v_units OR v_room IS NULL
+  OR NEW.added_units IS DISTINCT FROM greatest(0,v_room)
+  OR NEW.funded_wallet_revision IS DISTINCT FROM (CASE WHEN v_room>0 THEN w.revision+1 END) THEN
+  RAISE EXCEPTION 'BILLING_RENEWAL_INVALID';
+ END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION morrow_billing.renewal_guard() FROM PUBLIC;
+CREATE TRIGGER renewal_guard BEFORE INSERT ON morrow_billing.operator_test_entitlement_renewals
+ FOR EACH ROW EXECUTE FUNCTION morrow_billing.renewal_guard();
+
 -- ---------------------------------------------------------------------------
 -- Snapshots (0035), plus: an operator snapshot's successor is the same grant's renewal.
 -- Revision 1 is still the grant's own snapshot, exactly as 0035 checks it. A later
 -- revision of an operator snapshot must keep its key, be active, come from the owner,
--- start no earlier than the previous period ended, and match the renewal record that
--- names this revision (the grant's key, the renewal's digest and its period). Any other
--- successor of an operator snapshot, a Stripe one included, is still refused.
+-- be of an active account (review R3: the renewal refuses any other), start no earlier
+-- than the previous period ended, and match the renewal record that names this revision
+-- (the grant's key, the renewal's digest and its period). Any other successor of an
+-- operator snapshot, a Stripe one included, is still refused.
 CREATE OR REPLACE FUNCTION morrow_billing.snapshot_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
 DECLARE a record; p record;
 BEGIN
  IF TG_OP<>'INSERT' THEN RAISE EXCEPTION 'BILLING_SNAPSHOT_IMMUTABLE'; END IF;
- SELECT x.route,x.mode INTO a FROM morrow_billing.billing_accounts x
+ SELECT x.route,x.mode,x.status INTO a FROM morrow_billing.billing_accounts x
   WHERE x.organization_id=NEW.organization_id AND x.workspace_id=NEW.workspace_id AND x.id=NEW.billing_account_id;
  SELECT x.revision::bigint AS revision,x.subscription_key,x.status,x.valid_until INTO p FROM morrow_billing.entitlement_snapshots x
   WHERE x.organization_id=NEW.organization_id AND x.workspace_id=NEW.workspace_id AND x.billing_account_id=NEW.billing_account_id
@@ -132,6 +203,7 @@ BEGIN
    END IF;
   ELSE
    IF p.subscription_key IS DISTINCT FROM NEW.subscription_key OR NEW.verified_at<p.valid_until
+    OR a.status IS DISTINCT FROM 'active'
     OR NOT EXISTS(SELECT 1 FROM morrow_billing.operator_test_entitlement_renewals r
      JOIN morrow_billing.operator_test_entitlements g ON g.organization_id=r.organization_id AND g.workspace_id=r.workspace_id
       AND g.id=r.entitlement_id AND g.billing_account_id=r.billing_account_id
@@ -145,8 +217,11 @@ BEGIN
  RETURN NEW;
 END $$;
 -- Wallets (0035), plus: the owner's renewal funds the wallet revision its record names
--- with exactly the units it added. Every other rule is 0035's: a payment's grant, the
--- operator grant's first funding, and moves that keep the sum.
+-- with exactly the units it added, and only when those are the room the wallet's unspent
+-- credits leave below the renewal's credits, which are the current terms' one operator
+-- entry of the current terms revision (review R1: a record alone never bounds a funding).
+-- Every other rule is 0035's: a payment's grant, the operator grant's first funding, and
+-- moves that keep the sum.
 CREATE OR REPLACE FUNCTION morrow_billing.wallet_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
 DECLARE v_mutable text[]:=ARRAY['available','reserved','consumed','revision','updated_at']; v_delta numeric;
@@ -174,9 +249,16 @@ BEGIN
      AND g.credit_units=v_delta) THEN
     RETURN NEW;
    END IF;
-   IF EXISTS(SELECT 1 FROM morrow_billing.operator_test_entitlement_renewals r WHERE r.organization_id=NEW.organization_id
+   IF EXISTS(SELECT 1 FROM morrow_billing.operator_test_entitlement_renewals r
+     CROSS JOIN LATERAL (SELECT x.terms_revision::bigint AS terms_revision,x.terms FROM morrow_billing.billing_terms x
+      ORDER BY x.terms_revision DESC LIMIT 1) t
+     WHERE r.organization_id=NEW.organization_id
      AND r.workspace_id=NEW.workspace_id AND r.billing_account_id=NEW.billing_account_id AND r.funded_wallet_revision=NEW.revision
-     AND r.added_units=v_delta) THEN
+     AND r.added_units=v_delta AND v_delta=r.credit_units-(OLD.available::numeric+OLD.reserved)
+     AND r.terms_revision=t.terms_revision
+     AND r.credit_units=(SELECT CASE WHEN count(*)=1 THEN max((e->>'creditUnits')::bigint) END
+      FROM jsonb_array_elements(t.terms->'entries') e
+      WHERE e->>'kind'='operator_test_entitlement' AND e->>'route'='morrow_direct' AND e->>'mode'='test')) THEN
     RETURN NEW;
    END IF;
   END IF;
