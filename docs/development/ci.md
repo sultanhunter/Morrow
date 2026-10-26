@@ -110,6 +110,7 @@ For a pull request with two full runs and its merge of an up-to-date head: about
 - Every spawn passes an explicit file list. An empty set or shard is never spawned, because `node --test` without files falls back to default discovery.
 - A file goes in `tests/serial-tests.json` (`{"file", "reason"}`, with a reason of 20–300 characters that names its wall-clock dependency) only when it fails under parallel files and passes 5 of 5 runs alone. The runner rejects an entry that is missing, duplicated or not a top-level test file.
 - Test servers listen with `.listen(0, "127.0.0.1"` only, and temporary roots come from `mkdtemp` or a random UUID. `tests/run-tests.test.mjs` enforces the listen form, which also stops a test from starting the fixed-port 4110 operator listeners.
+- The agent evals' CI replay (ADR-0037 item 10; `docs/briefs/adr0037-evals.md`) runs here, in `tests/agent-evals.test.mjs`: the golden set in `docs/evals` against its recorded model outputs in the eval world, each design once, in well under a second, with no network, model, store or credential. `npm run evals -- replay` runs the same replay and writes its reports under `agent-evals/` in the artifacts directory. A live round (`npm run evals -- live`) never runs in CI: it refuses there, and while its switch (`docs/decisions/agent-evals-live.json`, checked by `edge:check`) is off.
 
 ## Heavy faults
 
