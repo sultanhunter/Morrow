@@ -4,8 +4,9 @@
 // form-encoded parameters), answers the authorization-code exchange (a non-expiring
 // offline token, the granted scope), the ShopIdentity Admin GraphQL document and (M2 PR-3)
 // the catalogue reads by operation name (CollectionsPage, ProductsPage,
-// CollectionProductsPage, ProductContent) from a synthetic catalogue, and signs webhook
-// bodies (base64 HMAC of the raw bytes). The shop-specific webhook subscriptions
+// CollectionProductsPage, ProductContent) from a synthetic catalogue, (v1 PR 5) the
+// installation's granted scopes (AccessScopes; a token it no longer holds is 401), and signs
+// webhook bodies (base64 HMAC of the raw bytes). The shop-specific webhook subscriptions
 // (docs/briefs/shopify-shop-specific-webhooks.md): WebhookSubscriptions lists the shop's
 // subscriptions of the queried topics (id, topic, uri) and WebhookSubscriptionCreate adds
 // one, refusing a second of the same topic and address with userErrors, as Shopify does;
@@ -37,6 +38,8 @@ export function createShopifyOracle({
   const state = {
     development: true,
     scope: "write_products",
+    // v1 PR 5: the scopes AccessScopes answers; null derives them from `scope`.
+    accessScopes: null,
     fault: null,
     codes: new Map(),
     tokens: [],
@@ -197,6 +200,23 @@ export function createShopifyOracle({
                 seo: { title: null, description: null },
               }
             : null,
+        };
+      }
+      // v1 PR 5: the installation's granted scopes (state.accessScopes, or the exchange's
+      // granted scope expanded: write_X implies read_X).
+      case "AccessScopes": {
+        const granted =
+          state.accessScopes ??
+          [
+            ...new Set(
+              state.scope
+                .split(",")
+                .filter(Boolean)
+                .flatMap((s) => [s, s.replace(/^write_/, "read_")]),
+            ),
+          ].sort();
+        return {
+          currentAppInstallation: { accessScopes: granted.map((handle) => ({ handle })) },
         };
       }
       default:

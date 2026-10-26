@@ -1,7 +1,7 @@
 # v1 PR 6: Credits for your own workspace (renew the test credits)
 
 - Status: brief, 2026-10-25. Build order PR 6 ([v1-build-order.md](../plan/v1-build-order.md)), under [ADR-0035](../decisions/adr/ADR-0035-build-v1-live.md) items 3 and 4 (the owner's workspace keeps getting test credits under the standing approval; more than 300 credits in 30 days is raising a limit) and [billing-entitlements R10](../contracts/billing-entitlements.md) (credits come only from the versioned `BillingTerms`). Branch `claude/v1-renew-test-credits`, from `main` `66689751`.
-- Migration `0053.staging-test-credits-renewal.sql` (work owner): the next free number on `main` once PR 20's `0052.shop-knowledge.sql` merged (renumbered from 0052 when this branch took `main` `fd45f7cc` on 2026-10-26). It is still the next free number on `main` (`da8570ae`, last migration 0052), but the agent loop's open PR #64 also holds 0053, so the lead renumbers at merge time (the file, its manifest row, the unit test's path and the docs that name 0053).
+- Migration `0055.staging-test-credits-renewal.sql` (work owner): the next free number on `main` after v1 PR 5's connection health (#66) took 0053 and 0054 (renumbered from 0053 when this branch took `main` `c41b79ee` on 2026-10-26; earlier 0052, then 0053, when PR 20's `0052.shop-knowledge.sql` merged). If another PR lands a migration first (the agent loop's open PR #64 also holds one), the lead renumbers again at merge time: the file, its manifest row (`sequence`, `file` and `sha256`; `executeAs` and `reviewRef` stay), the unit test's path and sequence, and the docs that name 0055.
 
 ## Goal
 
@@ -13,7 +13,7 @@ npm run staging:test-credits -- renew --operator <id>
 
 ## Scope
 
-- **Migration 0053:**
+- **Migration 0055:**
   - `morrow_billing.operator_test_entitlement_renewals`: one row per renewed period of a grant, with the terms revision its credits came from. It is append-only, owner only, FORCE RLS, and holds one row per grant and period.
   - `renewal_guard`, a BEFORE INSERT trigger on that table (review R1): a renewal record, even one the owner writes by hand, must be the one the renewal would write at that moment. Its grant is of its own account; the route, account, wallet and latest snapshot are that grant's (the function's `route_conflict` rules); its period number and start are recomputed from the grant's grid at the database's clock and start no earlier than the latest snapshot's period ended; its snapshot revision is the next one; its credits and terms revision are the current terms' one operator entry; and the units it adds are exactly the room the wallet's unspent credits leave below those credits, funding the wallet's next revision. Its recorded time is set to the database's clock. Anything else is `BILLING_RENEWAL_INVALID`.
   - `wallet_guard` and `snapshot_guard` are replaced, and only when they still have 0035's exact bodies (md5 pins). The owner may fund the wallet revision a renewal names with exactly the units it added, and only when those units are the room below the renewal's credits and those credits are the current terms revision's operator entry (review R1, so the wallet's rule bounds a funding even without the record's guard). An operator snapshot's successor must be the same grant's renewal for that revision, from the owner, for an active account (review R3), and must start no earlier than the previous period ended. Everything 0035 refused is still refused.
@@ -34,7 +34,7 @@ Non-goals: ADR-0026 item 7's `TestEntitlementSeed`, Shopify billing, any change 
 
 ## Interfaces touched
 
-- `migrations/0053*` and the manifest.
+- `migrations/0055*` and the manifest.
 - `scripts/staging.mjs` (`test-credits`; shared `requireE13`, `labelledValues` and `committedBlob`; review R2: `requireTermsRaiseRecords` in `seed-platform`).
 - `scripts/staging-runner.mjs` (`renewTestCredits`; the shared live-store check; `billingTermsSeedRows` admits a revision's `ownerRecord`, outside its row and digest).
 - `scripts/terms-raise.mjs` (review R2: what counts as a raise, the record's path and its reader) and `scripts/verify-billing.mjs` (the 300 pin becomes "300, or the owner's committed record").
@@ -57,7 +57,7 @@ Non-goals: ADR-0026 item 7's `TestEntitlementSeed`, Shopify billing, any change 
 
 ## Lead steps after merge
 
-1. Run `staging:migrate` to apply 0053.
+1. Run `staging:migrate` to apply 0055.
 2. Run the grant (`staging:test-entitlement`) if it has not run yet.
 3. Commit the record with the workspace id and the grant's approval reference.
 4. After the grant's period ends, run `staging:test-credits -- renew --operator <id>`.

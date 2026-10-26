@@ -51,7 +51,10 @@
 //      (AES-256-GCM; the additional data binds environment, tenant, credential, subject =
 //      installation, version and KEK version), then store the vault row and the identity
 //      install record together. A lost COMMIT acknowledgement is outcome_unknown; the
-//      merchant relaunches and the database reconciles.
+//      merchant relaunches and the database reconciles. v1 PR 5: a reinstall after an
+//      uninstall is a fresh install (new ids, born unlinked: a person links it again), and
+//      the prepare (shopify_install_prepare_v2) destroys the earlier installations' leftover
+//      tokens in this same transaction, so a new token is never stored beside an old one.
 // The offline token never leaves the broker. A launch or install that does not succeed
 // logs one stage line of closed values (shopify-stage.ts: the step it stopped at, a closed
 // reason, where its last vault transaction ended and how long it took); nothing else here
@@ -81,6 +84,7 @@ import {
   shopifyCredentialOutcomes,
   shopifyCredentialReasons,
   shopifyInstallationIdPattern,
+  shopifyInstallationStates,
   shopifyAppKeyPattern,
   shopifyDigestPattern,
   shopifyLimits,
@@ -150,13 +154,8 @@ export interface ShopifyBrokerDependencies {
 
 const exact = (pattern: RegExp, value: unknown): value is string =>
   typeof value === "string" && pattern.exec(value)?.[0] === value;
-const installationStates: readonly string[] = [
-  "none",
-  "unlinked",
-  "linked",
-  "suspended",
-  "uninstalled",
-];
+// v1 PR 5: the launch states, "reconnect" included (the protocol's own list).
+const installationStates: readonly string[] = shopifyInstallationStates;
 // The Shopify vault transactions' budgets (fix-shopify-install-live). The first live
 // launch and callback failed at exactly the old 3 s: the connector, and so this broker
 // behind its RPC, ran at the edge nearest the merchant, where each of a transaction's

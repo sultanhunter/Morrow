@@ -6,7 +6,7 @@
 // the staging binding, prints one closed JSON line and the activity-log line, and never the
 // owner database URL. No input names an amount: the credits are the current terms'
 // operator entry (P01.T04a R10), read as 0035's grant reads it, and a raise is a new
-// staging BillingTerms revision (review F1). PostgreSQL behaviour of migration 0053 is
+// staging BillingTerms revision (review F1). PostgreSQL behaviour of migration 0055 is
 // qualified by lab:test-entitlement (N cases); this file also pins the migration's shape.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -99,9 +99,9 @@ const current = Object.freeze({
 });
 
 // ---------------------------------------------------------------------------
-// The migration (0053): its manifest row, the replaced guards' pinned 0035 bodies, the
+// The migration (0055): its manifest row, the replaced guards' pinned 0035 bodies, the
 // table's shape and the operator function's grants.
-const migrationFile = "0053.staging-test-credits-renewal.sql";
+const migrationFile = "0055.staging-test-credits-renewal.sql";
 const migration = read("migrations/" + migrationFile);
 const body = (text, header) => {
   const at = text.indexOf(header);
@@ -109,10 +109,10 @@ const body = (text, header) => {
   const open = text.indexOf("$$", at) + 2;
   return text.slice(open, text.indexOf("$$", open));
 };
-test("migration 0053: a forward work-owner migration that replaces 0035's guards only from their pinned bodies", () => {
+test("migration 0055: a forward work-owner migration that replaces 0035's guards only from their pinned bodies", () => {
   const manifest = JSON.parse(read("migrations/manifest.json"));
   const row = manifest.migrations.find((m) => m.file === migrationFile);
-  assert.equal(row.sequence, 53);
+  assert.equal(row.sequence, 55);
   assert.equal(row.executeAs, "morrow_work_owner");
   assert.equal(row.reviewRef, "docs/briefs/v1-renew-test-credits.md");
   assert.equal(row.sha256, createHash("sha256").update(migration).digest("hex"));
@@ -183,7 +183,7 @@ test("migration 0053: a forward work-owner migration that replaces 0035's guards
   assert.match(renew, /v_added:=greatest\(0,v_units-\(w\.available\+w\.reserved\)\)/);
 });
 
-test("migration 0053: credits come only from the current terms' operator entry, read as 0035's grant reads it (R10; review F1)", () => {
+test("migration 0055: credits come only from the current terms' operator entry, read as 0035's grant reads it (R10; review F1)", () => {
   const renew = body(migration, "CREATE FUNCTION morrow_billing.operator_test_entitlement_renew(");
   const grant = body(
     read("migrations/0035.staging-test-entitlement.sql"),
@@ -222,7 +222,7 @@ test("migration 0053: credits come only from the current terms' operator entry, 
   assert.match(migration, /to_regclass\('morrow_billing\.billing_terms'\) IS NULL/);
 });
 
-test("migration 0053: a renewal record by hand must be the one the renewal would write now (review R1)", () => {
+test("migration 0055: a renewal record by hand must be the one the renewal would write now (review R1)", () => {
   // A BEFORE INSERT guard on the record, owned with the table, granted to nobody.
   assert.match(
     migration,
@@ -294,7 +294,7 @@ test("migration 0053: a renewal record by hand must be the one the renewal would
   );
 });
 
-test("migration 0053: an operator snapshot's successor needs an active account (review R3)", () => {
+test("migration 0055: an operator snapshot's successor needs an active account (review R3)", () => {
   const snapshot = body(migration, "CREATE OR REPLACE FUNCTION morrow_billing.snapshot_guard()");
   assert.match(
     snapshot,

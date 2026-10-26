@@ -42,6 +42,7 @@ function select(env: unknown): Selected {
           broker,
           database: createConnectorDatabase(mapped.binding, broker),
           limiters: mapped.limiters,
+          cleanup: mapped.cleanup,
         }),
         health: () => broker.health(),
       });

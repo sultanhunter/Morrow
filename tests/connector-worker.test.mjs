@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import test, { mock } from "node:test";
 import {
+  encodeShopifyConnectionCheck,
   encodeShopifyCredentialResult,
   encodeShopifyInstallResult,
   encodeShopifyLaunchVerdict,
@@ -309,6 +310,13 @@ function harness(answers = {}, limiters = undefined) {
         })
       );
     },
+    // v1 PR 5: the read-back of an installation's granted scopes.
+    async shopifyConnectionCheck(installationId, budget) {
+      calls.push(["check", installationId, budget]);
+      const next = answers.check?.shift?.() ?? "observed";
+      if (next === "throw") throw new Error("BROKER_HELD");
+      return encodeShopifyConnectionCheck(next);
+    },
   };
   const database = {
     async stateOpen(appKey, shop, digest, budget) {
@@ -341,12 +349,44 @@ function harness(answers = {}, limiters = undefined) {
       if (answers.overdueThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
       return answers.privacyOverdue ?? { targetMissed: 0, dueMissed: 0 };
     },
+    // v1 PR 5 (connection-health-work).
+    async healthReconcile(installationId, budget) {
+      calls.push(["reconcile", installationId, budget]);
+      const next = answers.reconcile?.shift?.();
+      if (next === "throw") throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return next ?? { outcome: "reconciled", notice: "unchanged", stopped: 0, newly: 0 };
+    },
+    async noticesDue(budget) {
+      calls.push(["noticesDue", budget]);
+      if (answers.noticesThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return answers.noticesDue ?? [];
+    },
+    async checksDue(budget) {
+      calls.push(["checksDue", budget]);
+      return answers.checksDue ?? [];
+    },
+    async deletionsDue(budget) {
+      calls.push(["deletionsDue", budget]);
+      return answers.deletionsDue ?? [];
+    },
+    async deletionApply(installationId, budget) {
+      calls.push(["deletion", installationId, budget]);
+      const next = answers.deletion?.shift?.();
+      if (next === "throw" || next === undefined) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return next;
+    },
+    async inboxStuck(budget) {
+      calls.push(["inboxStuck", budget]);
+      if (answers.stuckThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return answers.inboxStuck ?? { closed: 0, stuck: 0 };
+    },
   };
   const handler = createConnectorHandler({
     configuration: { origin, apiOrigin },
     broker,
     database,
     ...(limiters === undefined ? {} : { limiters }),
+    ...(answers.cleanup === undefined ? {} : { cleanup: answers.cleanup }),
   });
   return { calls, handler };
 }
@@ -943,6 +983,8 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
         // Then the shop-specific webhook subscriptions of every active installation that
         // lacks them, with the cron's budget.
         "subscriptions:" + connectorBudgets.subscriptionsCronMs,
+        // v1 PR 5: the open Reconnect items, always; nothing else with the clean-up switch off.
+        "noticesDue:3000",
       ],
     );
     assert.deepEqual(
@@ -957,6 +999,15 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
         subscriptionsChecked: 0,
         subscriptionsRegistered: 0,
         unavailable: 0,
+        notices: 0,
+        reconciled: 0,
+        checks: 0,
+        observed: 0,
+        refused: 0,
+        deletions: 0,
+        deleted: 0,
+        stuckClosed: 0,
+        stuck: 0,
       },
     );
     // An unavailable id read still runs the credential re-drive, the deadline check and the
@@ -965,7 +1016,7 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
     assert.equal((await down.handler.redrive()).unavailable, 1);
     assert.deepEqual(
       down.calls.map((c) => c[0]),
-      ["inboxPending", "credentialsPending", "privacyOverdue", "subscriptions"],
+      ["inboxPending", "credentialsPending", "privacyOverdue", "subscriptions", "noticesDue"],
     );
   } finally {
     console.log = saved;
@@ -1015,6 +1066,220 @@ test("cron: open privacy requests past their target or due time log fixed codes 
   );
 });
 
+// v1 PR 5 ("Keep the store connection healthy"; ADR-0025 item 10; ADR-0031 item 3).
+test("v1 PR 5 webhooks: a scope change keeps the token; the read-back runs only with the clean-up switch on", async () => {
+  const scopes = applied({ topic: "app/scopes_update", credential: "none", reason: null });
+  const run = async (answers) => {
+    const c = context();
+    const h = harness({
+      webhook: encodeShopifyWebhookVerdict({ verdict: "recorded", inboxId, settled: false }),
+      apply: [scopes],
+      ...answers,
+    });
+    const r = await h.handler.fetch(
+      new Request(origin + "/shopify/a/dev-app/webhooks", {
+        method: "POST",
+        body: '{"id":1,"previous":["write_products"],"current":["read_products"]}',
+        headers: {
+          "x-shopify-api-version": "2026-10",
+          "x-shopify-hmac-sha256": "x".repeat(43) + "=",
+          "x-shopify-shop-domain": "dev-1.myshopify.com",
+          "x-shopify-topic": "app/scopes_update",
+          "x-shopify-webhook-id": "id-scopes",
+        },
+      }),
+      c.ctx,
+    );
+    assert.equal(r.status, 200);
+    await c.settle();
+    return h.calls.slice(1).map((x) => x.slice(0, 3).join(":"));
+  };
+  // Off (the committed default): the applier alone; no token is destroyed, nothing is read.
+  assert.deepEqual(await run({}), ["apply:" + inboxId + ":6000"]);
+  assert.deepEqual(await run({ cleanup: false }), ["apply:" + inboxId + ":6000"]);
+  // On: the broker reads the scopes back, then the reconcile runs from what it recorded.
+  assert.deepEqual(await run({ cleanup: true }), [
+    "apply:" + inboxId + ":6000",
+    "check:installation_1:" + connectorBudgets.checkMs,
+    "reconcile:installation_1:" + connectorBudgets.reconcileMs,
+  ]);
+  // An unclear answer (or a stale token, or none) records nothing and reconciles nothing.
+  for (const outcome of ["unavailable", "stale", "not_applicable", "throw"])
+    assert.deepEqual(await run({ cleanup: true, check: [outcome] }), [
+      "apply:" + inboxId + ":6000",
+      "check:installation_1:" + connectorBudgets.checkMs,
+    ]);
+  // Another topic never asks for a read-back.
+  assert.deepEqual(await run({ cleanup: true, apply: [applied({ credential: "destroyed" })] }), [
+    "apply:" + inboxId + ":6000",
+  ]);
+});
+
+test("v1 PR 5 cron: open Reconnect items are reconciled; the switch off runs no read-back, deletion or stuck close", async () => {
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  let counts, h;
+  try {
+    h = harness({
+      noticesDue: ["installation_a", "installation_b"],
+      reconcile: [undefined, "throw"],
+      checksDue: ["installation_c"],
+      deletionsDue: ["installation_d"],
+    });
+    counts = await h.handler.redrive();
+  } finally {
+    console.log = saved;
+  }
+  assert.deepEqual(
+    h.calls.map((c) => c.slice(0, 2).join(":")),
+    [
+      "inboxPending:3000",
+      "credentialsPending:3000",
+      "privacyOverdue:3000",
+      "subscriptions:" + connectorBudgets.subscriptionsCronMs,
+      "noticesDue:3000",
+      "reconcile:installation_a",
+      "reconcile:installation_b",
+    ],
+  );
+  assert.deepEqual(
+    [counts.notices, counts.reconciled, counts.checks, counts.deletions],
+    [2, 1, 0, 0],
+  );
+  assert.deepEqual(
+    logged.filter((row) => row.event === "morrow_connector_health"),
+    // fix-connector-cron-latency: the stage fields; this fake's plain error has none.
+    [
+      {
+        event: "morrow_connector_health",
+        code: "RECONCILE_UNAVAILABLE",
+        phase: "unknown",
+        cause: "unknown",
+        statements: null,
+        connectMs: null,
+        txMs: null,
+      },
+    ],
+  );
+  // The item list unavailable is counted; nothing else changes.
+  const down = harness({ noticesThrows: true });
+  console.log = () => {};
+  try {
+    assert.equal((await down.handler.redrive()).unavailable, 1);
+  } finally {
+    console.log = saved;
+  }
+  assert.ok(!JSON.stringify(logged).includes("installation_"));
+});
+
+test("v1 PR 5 cron (switch on): read-backs, then 48-hour deletions that wait for the token, then stuck deliveries", async () => {
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  const deletion = (outcome, credential) => ({
+    outcome,
+    installationId: ["applied", "pending", "settled"].includes(outcome) ? "installation_d" : null,
+    credential: ["applied", "pending", "settled"].includes(outcome) ? credential : null,
+    reason: ["applied", "pending", "settled"].includes(outcome) ? "uninstalled" : null,
+  });
+  let counts, h;
+  try {
+    h = harness({
+      cleanup: true,
+      checksDue: ["installation_c1", "installation_c2", "installation_c3"],
+      check: ["observed", "token_refused", "unavailable"],
+      deletionsDue: ["installation_d", "installation_e", "installation_f"],
+      deletion: [
+        // d: its token still to destroy, then complete.
+        deletion("pending", "pending"),
+        deletion("applied", "destroyed"),
+        // e: not yet 48 hours (raced), logged with a fixed code.
+        deletion("ineligible", null),
+        // f: unavailable.
+        "throw",
+      ],
+      inboxStuck: { closed: 1, stuck: 2 },
+    });
+    counts = await h.handler.redrive();
+  } finally {
+    console.log = saved;
+  }
+  // After the re-drives, the deadline check, the subscription sync and the item list.
+  assert.deepEqual(
+    h.calls.slice(5).map((c) => c.slice(0, 2).join(":")),
+    [
+      "checksDue:3000",
+      "check:installation_c1",
+      "reconcile:installation_c1",
+      "check:installation_c2",
+      "reconcile:installation_c2",
+      "check:installation_c3",
+      "deletionsDue:3000",
+      "deletion:installation_d",
+      "destroy:installation_d",
+      "deletion:installation_d",
+      "deletion:installation_e",
+      "deletion:installation_f",
+      "inboxStuck:3000",
+    ],
+  );
+  assert.equal(h.calls.find((c) => c[0] === "destroy")[2], "uninstalled");
+  assert.deepEqual(
+    [counts.checks, counts.observed, counts.refused, counts.deletions, counts.deleted],
+    [3, 1, 1, 3, 1],
+  );
+  assert.deepEqual([counts.stuckClosed, counts.stuck], [1, 2]);
+  assert.deepEqual(
+    logged.filter((row) => row.event !== "morrow_connector_redrive").map((row) => row.code),
+    [
+      "SUBSCRIPTIONS_SYNCED",
+      "TOKEN_REFUSED",
+      "CHECK_UNAVAILABLE",
+      "DELETION_INELIGIBLE",
+      "DELETION_UNAVAILABLE",
+      "INBOX_STUCK",
+    ],
+  );
+  assert.equal(logged.find((row) => row.code === "INBOX_STUCK").deliveries, 2);
+  // Ids never reach a log line.
+  assert.ok(!JSON.stringify(logged).includes("installation_"));
+  // A deletion whose token cannot be destroyed now stays pending for the next run.
+  const waiting = harness({
+    cleanup: true,
+    deletionsDue: ["installation_d"],
+    deletion: [deletion("pending", "pending")],
+    destroyThrows: true,
+  });
+  console.log = () => {};
+  try {
+    const run = await waiting.handler.redrive();
+    assert.deepEqual([run.deletions, run.deleted], [1, 0]);
+  } finally {
+    console.log = saved;
+  }
+  assert.deepEqual(
+    waiting.calls.filter((c) => c[0] === "deletion" || c[0] === "destroy").map((c) => c[0]),
+    ["deletion", "destroy"],
+  );
+});
+
+test("v1 PR 5 environment: the clean-up switch is on only for the exact value", () => {
+  for (const [value, on] of [
+    [undefined, false],
+    ["off", false],
+    ["ON", false],
+    ["on ", false],
+    [true, false],
+    ["on", true],
+  ]) {
+    const env = goodEnv(value === undefined ? {} : { MORROW_CONNECTION_CLEANUP: value });
+    const mapped = mapConnectorEnvironment(env);
+    assert.equal(mapped.ok, true, String(value));
+    assert.equal(mapped.cleanup, on, String(value));
+  }
+});
+
 test("cron: the subscription sync's counts, an unavailable sync, and no sync without its whole budget", async () => {
   const logged = [];
   const saved = console.log;
@@ -1060,9 +1325,11 @@ test("cron: the subscription sync's counts, an unavailable sync, and no sync wit
     const counts = await run;
     assert.equal(counts.subscriptionsChecked, 0);
     assert.equal(counts.unavailable, 0);
+    // v1 PR 5's open Reconnect items are still listed after it (its loops stop at the run's
+    // deadline, not at the sync's budget).
     assert.deepEqual(
       h.calls.map((c) => c[0]),
-      ["inboxPending", "credentialsPending", "privacyOverdue"],
+      ["inboxPending", "credentialsPending", "privacyOverdue", "noticesDue"],
     );
   } finally {
     console.log = quiet;

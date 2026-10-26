@@ -103,8 +103,12 @@ export const workTables = Object.freeze({
     parents: ["morrow_identity.workspaces"],
     // M3 PR-1: lease_broker_resolve (the broker's resolve_call reads the one lease it names).
     // M2 PR-3 (0037): connector_lease_read and connector_lease_revoke (a system connection
-    // stop set by the connector's applier revokes that connection's leases).
+    // stop set by the connector's applier revokes that connection's leases). v1 PR 5
+    // (connection-health-work): connector_health_lease_read and _revoke (a system
+    // installation stop of a scope change revokes that agent's run and operation leases).
     policies: [
+      "connector_health_lease_read",
+      "connector_health_lease_revoke",
       "connector_lease_read",
       "connector_lease_revoke",
       "lease_broker_resolve",
@@ -122,14 +126,21 @@ export const workTables = Object.freeze({
     parents: ["morrow_identity.workspaces"],
     // M3 PR-1: stop_broker_resolve (resolve_call reads its lease's tenant and platform stops).
     // M2 PR-3 (0037): the connector's system connection stop (read, and set; never lifted).
-    policies: ["connector_stop_read", "connector_stop_set", "stop_broker_resolve"],
+    // v1 PR 5 (connection-health-work): the system installation stop of a scope change.
+    policies: [
+      "connector_health_stop_read",
+      "connector_health_stop_set",
+      "connector_stop_read",
+      "connector_stop_set",
+      "stop_broker_resolve",
+    ],
     content: "workspace",
   },
   stop_records: {
     class: "tenant_or_platform",
     parents: ["stop_controls"],
-    // M2 PR-3 (0037): the system stop's StopRecord@1 (set only).
-    policies: ["connector_stop_record"],
+    // M2 PR-3 (0037): the system stop's StopRecord@1 (set only). v1 PR 5: the installation's.
+    policies: ["connector_health_stop_record", "connector_stop_record"],
     content: "none",
   },
   operations: {
@@ -196,7 +207,8 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces", "morrow_identity.agent_principals"],
     lease: true,
-    policies: ["installation_broker_resolve"],
+    // v1 PR 5: connector_health_agents (the reconcile reads one store's agents, read only).
+    policies: ["connector_health_agents", "installation_broker_resolve"],
     content: "none",
   },
   agent_enable_documents: {
@@ -395,6 +407,23 @@ export const workTables = Object.freeze({
     parents: ["agent_notebooks"],
     lease: true,
     content: "workspace",
+  },
+  // v1 PR 5 (connection-health-work; ADR-0025 item 10): a store connection's Reconnect item:
+  // ids, scope names, codes and times. The session template is read-only (`commandRead`:
+  // the api's connection_notices_open), and only the connector's health context raises,
+  // revises and clears one (connector_health_read, _raise, _revise), with the cron's
+  // open-item list under its own setting (connector_health_sweep).
+  connection_notices: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    commandRead: true,
+    policies: [
+      "connector_health_raise",
+      "connector_health_read",
+      "connector_health_revise",
+      "connector_health_sweep",
+    ],
+    content: "none",
   },
 });
 
@@ -636,6 +665,54 @@ export const workFunctions = Object.freeze({
     crossTenant: true,
     columns: ["target_missed", "due_missed"],
   },
+  // v1 PR 5 (connection-health-work): the connector login's applier (a scope change keeps the
+  // connection; every other topic is 0037's applier), the reconcile of one installation, the
+  // clean-up jobs' ids-only lists, the 48-hour deletion of one installation and the
+  // stuck-delivery close (counts only).
+  "connector_inbox_apply_v2(text)": { kind: "connector", grantees: ["morrow_connector_ingress"] },
+  "connector_health_reconcile(text)": {
+    kind: "connector",
+    grantees: ["morrow_connector_ingress"],
+  },
+  "connector_checks_due()": {
+    kind: "connector",
+    grantees: ["morrow_connector_ingress"],
+    crossTenant: true,
+    columns: ["installation_id"],
+  },
+  "connector_notices_due()": {
+    kind: "connector",
+    grantees: ["morrow_connector_ingress"],
+    crossTenant: true,
+    columns: ["installation_id"],
+  },
+  "connector_deletions_due()": {
+    kind: "connector",
+    grantees: ["morrow_connector_ingress"],
+    crossTenant: true,
+    columns: ["installation_id"],
+  },
+  "connector_deletion_apply(text)": { kind: "connector", grantees: ["morrow_connector_ingress"] },
+  "connector_inbox_stuck()": {
+    kind: "connector",
+    grantees: ["morrow_connector_ingress"],
+    crossTenant: true,
+    columns: ["closed", "stuck"],
+  },
+  // The reconcile itself (a revisable owner helper), the scopes each release needs and the
+  // notice's row checks, the notice guard, and the api's read of the viewer's open items.
+  "connection_health_reconcile(text,text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "release_shopify_scopes(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "notice_scopes_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "notice_ids_valid(jsonb,integer)": { kind: "check", grantees: ["morrow_work_command"] },
+  "connection_notice_guard()": { kind: "trigger", grantees: [] },
+  "connection_notices_open()": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  // PR 5 review finding F3 (after integration with main): the store a reinstall linked in
+  // place of an ended one, for the Inbox (session only, ids only).
+  "store_reinstalled(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
   // M2 PR-3 (0037): the catalogue routes' read lease (session only).
   "catalog_read_lease(text,text)": { kind: "api", grantees: ["morrow_work_api"] },
   // The agent commands and their read definer.
@@ -936,6 +1013,24 @@ export const bridgeFunctions = Object.freeze([
   "work_shopify_webhook_target(text)",
   "work_shopify_webhook_registration_record(text,text,text,text,text)",
   "work_shopify_webhook_registrations_pending()",
+  // v1 PR 5 (connection-health-identity): the health target, the scope record, the read-back
+  // target, the ids-only due lists (read-backs and reconnects), the reinstall leftovers, the
+  // 48-hour deletion's open and completion, and the stuck-delivery close, called only by
+  // connection-health-work's connector and vault definers. The 48-hour deletion's identity
+  // handlers are shop/redact's work_shopify_redact_identity above, which 0053 revises.
+  "work_shopify_health_target(text)",
+  "work_shopify_scopes_record(text,text,text,text,text,text,text)",
+  "work_shopify_check_target(text)",
+  "work_shopify_checks_due()",
+  "work_shopify_reconnect_due()",
+  "work_shopify_reinstall_leftovers(text,text)",
+  "work_shopify_deletions_due()",
+  "work_shopify_deletion_open(text)",
+  "work_shopify_deletion_complete(text,text,text,jsonb)",
+  "work_shopify_inbox_stuck()",
+  // PR 5 review finding F3 (after integration with main): the store a reinstall linked in
+  // place of an ended one, called only by connection-health-work's store_reinstalled.
+  "work_shopify_store_successor(text,text,text)",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
@@ -1527,6 +1622,17 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // v1 PR 5 (connection-health-work): the install's prepare with a reinstall's leftover tokens
+  // destroyed first, and the read-back's resolution and record.
+  "shopify_install_prepare_v2(text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "shopify_check_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_check_record(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
   // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
   // and counts only; the broker's login).
   "model_call_begin(text,text,text,text,text,text,text,text)": {
@@ -1646,6 +1752,9 @@ export const identityTables = Object.freeze({
   shopify_webhook_registrations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   store_installations: { content: "store" },
+  // v1 PR 5 (connection-health-identity): the 48-hour deletion's record (ADR-0031 item 3):
+  // ids, codes, counts and times (365 days).
+  store_data_deletions: { content: "none" },
   workspace_link_results: { content: "none" },
   workspace_memberships: { content: "none" },
   workspace_revocation_receipts: { content: "none" },
@@ -1665,6 +1774,14 @@ export const executorLogins = Object.freeze({
     "morrow_work.connector_inbox_apply(text)",
     "morrow_work.connector_inbox_pending()",
     "morrow_work.connector_privacy_overdue()",
+    // v1 PR 5 (connection-health-work).
+    "morrow_work.connector_checks_due()",
+    "morrow_work.connector_deletion_apply(text)",
+    "morrow_work.connector_deletions_due()",
+    "morrow_work.connector_health_reconcile(text)",
+    "morrow_work.connector_inbox_apply_v2(text)",
+    "morrow_work.connector_inbox_stuck()",
+    "morrow_work.connector_notices_due()",
   ],
   morrow_runtime_executor: [
     "morrow_work.delegation_facts(text,text,text)",
@@ -1712,6 +1829,10 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_webhook_registration_record(text,text,text,text,text)",
     "morrow_vault.shopify_webhook_registrations_pending()",
     "morrow_vault.shopify_webhook_target(text)",
+    // v1 PR 5 (connection-health-work).
+    "morrow_vault.shopify_check_record(text,text,text,text,text)",
+    "morrow_vault.shopify_check_resolve(text)",
+    "morrow_vault.shopify_install_prepare_v2(text,text,text,text)",
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",
