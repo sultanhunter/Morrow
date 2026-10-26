@@ -216,12 +216,13 @@ test("--repeat spawns a fresh child per repetition and --junit adds a report per
       "unit-parallel-shard1of1-run2.xml",
       "unit-serial-shard1of1-run2.xml",
     ].entries())
-      assert.deepEqual(spawned[index].args.slice(3, 8), [
+      assert.deepEqual(spawned[index].args.slice(3, 9), [
         index % 2 === 0 ? "--test-concurrency=4" : "--test-concurrency=1",
         "--test-reporter=spec",
         "--test-reporter-destination=stdout",
         "--test-reporter=junit",
         "--test-reporter-destination=" + join(directory, name),
+        "--test-timeout=300000",
       ]);
   } finally {
     if (saved === undefined) delete process.env.MORROW_ARTIFACTS_DIR;
