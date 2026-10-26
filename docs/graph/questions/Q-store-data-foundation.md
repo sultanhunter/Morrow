@@ -262,12 +262,19 @@ Answered 2026-10-26 (OD-2026-10-26-11): "recommended, and yes to the paid Neon p
 
 Questions 6 to 10 above are as the owner answered them. An editing slip dropped them from this sheet when the answer was recorded; they were restored, unchanged, on 2026-10-27.
 
-The records' review (an AI review, separate context, same model family) ran on this sheet before the answer, and its fixes were made after it. Besides question 5's corrections above, each narrows or makes exact what was answered, except that question 10's can resume one agent as more than one run:
+The records' review (an AI review, separate context, same model family) ran on this sheet before the answer, and its fixes were made after it; a second review of 2026-10-27 corrected them (below). Besides question 5's corrections above, each narrows or makes exact what was answered:
 
 - Question 6: "anything that cannot be undone" includes customer contact outside an approved call plan; ADR 0042's call plans are the one exception, under their own approval.
 - Question 9: lifting any stop turns no rule back on by itself, as ADR 0042 says of call plans; each rule needs its own reviewed resume. Including the earlier ones means code writes them again from the store data, within 24 hours, for orders that still qualify.
-- Question 10: waiting runs combine per agent and trigger, not across an agent's different triggers, so an agent with two waiting triggers resumes as two runs, still within its hourly rate.
+- Question 10: waiting runs are still combined into one run per agent, as answered; each waiting row is re-checked as it merges, and one whose trigger, mandate or stops fail ends instead of riding on another's run. A job's own follow-through for later resumes on its own, as a paused job does.
 - Question 12: switching the two abilities off is its own stop control, `agents.installation.collaboration.disable`, with a reason, an audit record and a notice.
 - Question 13: the agent's question tool has no field for who answers; code works it out from the kind of work.
 - Question 15: in trigger rows, deadline and monitor records and the action log, order ids are blanked 90 days after the order's date instead of kept for 365 days; the rows without them stay 365 days.
 - Not asked (the schedule items): a `once` schedule, the follow-through a job writes for later, is not routine after all. It starts at least 15 minutes ahead, counts toward the agent's 6 runs an hour, inherits what the job had read, and cannot write another, and it is recorded as an amendment of ADR-0041.
+
+A second review (an AI review, separate context, same model family) of 2026-10-27 found that the first round's question 10 fix, which combined waiting runs per agent and trigger, widened the answer, since an agent with two waiting triggers would have resumed as two runs; the rule above replaced it. Its other fixes make exact what was answered and widen nothing:
+
+- Question 9: "Stop customer contact" stops every contact capability that calls or messages someone and every action of a call plan, its order tags included, as ADR 0042 approved; it never blocks the contact controls or reading results, and a tag rule that is not a call plan keeps running. The one stop check works out the workspace and connections itself and treats an unknown or mismatched id as stopped.
+- Question 5: removing a tag is its own rule, paired with the rule that adds the tag and approved with it on one card; it removes only a tag its pair added, with no removal since.
+- Question 13: a person asking a question still names who answers, as today; only an agent's questions get their answerer from code.
+- Not asked (the schedule items): a job's follow-through for later ends with the job when a stop, a revoke, a kill switch, an authority failure or the mandate's end ends it, and runs only under the mandate it was written under; one over the hourly rate waits for the next slot. How late an event may arrive and still start work is a catalogue value: 24 hours by default, from 5 minutes to 24 hours.
