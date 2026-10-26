@@ -145,7 +145,7 @@ These are repository records, read on `main` at the time of the research. Each i
 - ADR-0030 items 1 to 10. Supports: the email pattern as a template for any outbound channel: untrusted inbound content, code-set recipients, three recipient kinds, one key per send, reconciliation, the system mail stop, and merchant-linked credentials each by their own record. ADR-0042: items 3, 6, 11 and 13.
 - ADR-0031 items 1 to 4, 6 and 7. Supports: customer data only on 90-day clocks in registered tables; `customers/redact` by customer id, keyed digest and listed orders; one deletion registry and its S8 check; per-viewer read tags; `data-regions.json`. ADR-0042: item 24.
 - ADR-0039 items 2 and 3. Supports: credits are the only spend limit, and a new paid step needs a rate-card price. ADR-0042: item 23.
-- ADR 0040 and ADR 0041 (pull request 82). Supports: calls and text messages not taken in ADR 0040; the customer-identifier screen; Morrow's own harness with no third-party agent framework. ADR-0042: Context, Does not change.
+- ADR-0040 and ADR-0041 (accepted 2026-10-26, OD-2026-10-26-7). Supports: calls and text messages not taken in ADR-0040; the customer-identifier screen; Morrow's own harness with no third-party agent framework. ADR-0042: Context, Does not change.
 
 ## Claims in ADR-0042 without a source in these reports
 

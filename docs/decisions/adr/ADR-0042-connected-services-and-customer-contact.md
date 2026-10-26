@@ -20,7 +20,7 @@
   - **ADR-0027** item 3: two tools, `contact.rule.draft` and `contact.results.read`. Neither has an external effect (item 21).
   - **ADR-0030** item 9: two recipient kinds, for contact only: the phone on the order, for `contact.attempt.send` (item 11), and the Owner's test numbers once proven, for `contact.test_call.place`, with the fixed verification call that proves them (item 26).
   - **ADR-0031** items 1 to 4, 6 and 7: new classes and clocks, among them the posted exceptions lists and follow-up tasks; redaction by listed orders and keyed phone digest; suppression kept after a customer's redaction request (owner question 13); a customer-class read tag `contact.results.read`; and a "Services you connect" section in `data-regions.json` (items 16 and 24).
-  - **ADR 0040** item 10 (pull request 82): its workspace stop also stops code-only contact, and lifting it resumes no call plan (item 14).
+  - **ADR-0040** item 10: its workspace stop also stops code-only contact, and lifting it resumes no call plan (item 14).
   - **Contracts:** `capabilities.json` gains a domain "Customer contact" with nine `contact.*` capabilities, `orders.tags.add`, and service connections under `governance.connection.connect` and `governance.connection.disconnect`; generated contracts `ServiceIntegration@1`, `ServiceConnection@1`, `CredentialEntryDocument@1`, `ContactRule@1`, `ContactTemplate@1`, `ContactAttempt@1`, `RegionContactPolicy@1` and `OrderEventFilter@1`; `Operation@2` (ADR-0022 item 2): a `contact.attempt.send` operation, and an `orders.tags.add` operation driven by a plan, have no task and no proposal of their own, and bind the plan revision, its activation approval and the sequence instead, which a forward migration admits for these two capabilities only (items 12 and 19); public routes on the connector host (item 7).
   - **Build plan:** lettered children only (`docs/plan/connected-services-implementation.md`).
 - Conditional: two more amendments follow only from a non-recommended answer. ADR-0037 item 5 (contact capabilities on agent cards) if owner question 7 is answered (b); ADR-0039 items 2(a) and 3 (contact attempts as paid steps) if owner question 16 is answered (b).
@@ -33,16 +33,16 @@
   - ADR-0023 decision 6: no package holds both customer data and the computer. The rule extends to contact capabilities.
   - ADR-0029: the sandbox has no internet and no credentials.
   - ADR-0039: credits are the only spend limit. The counts in this record are safety bounds, not money.
-  - ADR 0041 (harness foundations, pull request 82): Morrow's own harness, and Opus 5.5 for every agent.
+  - ADR-0041 (harness foundations): Morrow's own harness, and Opus 5.5 for every agent.
   - ADR-0035 items 1 and 2: one environment, and the owner's store is the only real store until launch.
-- Implements: the answer to the owner's question of 2026-10-26 (OD-2026-10-26-8), under the owner's production-grade rule of the same day (recorded on pull request 82).
+- Implements: the answer to the owner's question of 2026-10-26 (OD-2026-10-26-8), under the owner's production-grade rule of the same day (OD-2026-10-26-6).
 - Relies on:
   - the gateway (v1 build order PR 3), and holds and stops (G10, P11.T05);
   - mandates (build order PR 21);
   - `read_orders` and the order data's deletion path (build order PR 22);
   - the P09.T05 customer path (G9); build order PR 25 brings the first customer classes;
   - webhook ingress (P09.T04) and ADR-0038's cron object;
-  - the agent loop (ADR 0041), for the agent's own runs only. The contact path runs no model.
+  - the agent loop (ADR-0041), for the agent's own runs only. The contact path runs no model.
 - Plan: `docs/plan/connected-services-implementation.md`.
 - Terms:
   - **Connected service:** a merchant's own account at an outside provider, linked to one workspace and store through a catalogue entry.
@@ -90,11 +90,11 @@ When: if you approve, it would be built beside the rest, with its switches off. 
 
 > lets accept the recommended options, also i want to know one thing since we are building a full fledged ai workspace with people and ai agents teammates to run shopify business will the user able to suppose create a agent for suppose a cod order appears then the agent calls the customers to confirm the cod order so the rate of cancellation decreases(ofcourse all the apis access for the external services that will be provided by the user like the calling service etc.)
 
-Its first part accepted ADR 0040 and ADR 0041 as recommended; that decision is recorded on pull request 82. This record answers its question. It approves nothing.
+Its first part accepted ADR-0040 and ADR-0041 as recommended; that decision is OD-2026-10-26-7, which also quotes the message in full. This record answers its question. It approves nothing.
 
 **What the records say today.** The launch plan does not allow this yet, and nothing in it rules the feature out:
 
-- Outbound customer messages are approved email replies to someone who wrote in (ADR-0023 decision 8; ADR-0030 items 3 and 9). ADR 0040 says "Not taken from dots: calls and text messages".
+- Outbound customer messages are approved email replies to someone who wrote in (ADR-0023 decision 8; ADR-0030 items 3 and 9). ADR-0040 says "Not taken from dots: calls and text messages".
 - Level 2 data is name and email, for Support only. The orders webhook drops the phone (ADR-0025 items 6 and 8). Customer data comes "last, with Support" (ADR-0035 item 7) and lives only on 90-day clocks (ADR-0031 item 2).
 - Agent cards never hold Level 2 data or `support.*` (ADR-0037 item 5).
 - No tool takes a URL, a recipient or a credential (ADR-0027 item 3).
@@ -311,10 +311,10 @@ Its first part accepted ADR 0040 and ADR 0041 as recommended; that decision is r
 14. **Stops** (owner question 19).
     - `agents.installation.disable` ("Stop AI work") on an installation stops its plans, attempts and contact-driven tag writes, though no model runs in them.
     - **"Stop customer contact"** (`contact.stop`) is a new workspace kill switch: `human_only`, no second approver, usable by any Owner or Admin, proposed only by agents. It is a tenant-wide stop on `contact.attempt.send`, `contact.test_call.place` and contact-driven `orders.tags.add`.
-    - The platform stop (ADR-0022 item 15) covers contact too, and so does the workspace stop of ADR 0040 item 10 once it lands. That stop ends runs and blocks admissions; this record extends it to the contact path, which runs no model (amends ADR 0040 item 10).
+    - The platform stop (ADR-0022 item 15) covers contact too, and so does the workspace stop of ADR-0040 item 10 once it lands. That stop ends runs and blocks admissions; this record extends it to the contact path, which runs no model (amends ADR-0040 item 10).
     - All of them are checked in `admit_contact_attempt`, at the broker's mark-started step and in the call-instruction route.
     - **In-flight calls.** On any contact stop, plan revoke or disconnect, the broker makes a ledgered, best-effort hang-up of queued and ringing calls. A call answered after the stop hears the plan's approved stopped closing ("Sorry, we can't take your answer now. Goodbye.") and is hung up; on disconnect, item 8 keeps the in-flight calls' tokens alive for this. Outcomes already given are still recorded, but while stopped no tag write is dispatched; cancellation proposals are only drafted for a person.
-    - **No burst on resume.** Attempts whose time comes during a stop end `stopped` and are never retried. Lifting a stop resumes no plan by itself, ADR 0040's workspace stop included: each plan it stopped needs its own reviewed resume through `contact.rule.activate`, which covers only orders received after the resume unless the Owner opts older ones in.
+    - **No burst on resume.** Attempts whose time comes during a stop end `stopped` and are never retried. Lifting a stop resumes no plan by itself, ADR-0040's workspace stop included: each plan it stopped needs its own reviewed resume through `contact.rule.activate`, which covers only orders received after the resume unless the Owner opts older ones in.
 15. **Customer data: the phone is used, never kept or shown** (amends ADR-0025 item 8; owner question 8).
     - **One more Level 2 field.** Morrow requests **Phone**, and no name, email or address for this purpose. On the public app it goes into the protected-data request with its purpose, order confirmation calls. On the owner's custom app it is requested in the developer dashboard. If Shopify requires the Address field to read a shipping address's phone (unconfirmed; CS8 checks it on a development store), the broker's fixed document still selects only the phone subfield, and the owner is asked again.
     - **Only the broker reads it**, from Shopify, at dispatch, under the attempt's operation, and sends it only to the connected provider. It is never stored in plaintext, and never in an event, a log, a Workflow, a Queue, a run, a model context, the sandbox, a notification or a screen. Provider callbacks carry it through the connector unread (item 7). Morrow keeps only a keyed digest (HMAC-SHA-256, with the workspace's key in the broker vault), used only for caps, suppression and redaction, never for profiling across orders. People who need the number open the order in Shopify.
@@ -380,7 +380,7 @@ Its first part accepted ADR 0040 and ADR 0041 as recommended; that decision is r
       - `contact.results.read` returns counts only: by day and outcome, the confirmed rate, and item 25's comparison.
 
       No tool places a contact, names a recipient, a number, a template text, a connection or a provider, or returns an order's outcome.
-    - **Lists are posted by code.** The daily exceptions list (wants to cancel, asked for a call back, unconfirmed, wrong numbers, uncertain attempts) is built and posted by code in the teammate's Everyday work area, tagged `contact.results.read`, in its own class `contact_exception_lists` (item 24). Callback requests become follow-up tasks for a person, in the class `contact_follow_ups`. Neither is an ordinary post or task: both expire on the contact log's clock and go at `customers/redact` by the listed orders. The model never receives per-order outcomes.
+    - **Lists are posted by code.** The daily exceptions list (wants to cancel, asked for a call back, unconfirmed, wrong numbers, uncertain attempts) is built and posted by code in the teammate's Everyday work area, tagged `contact.results.read`, in its own class `contact_exception_lists` (item 24). Callback requests become follow-up tasks for a person, in the class `contact_follow_ups`. Neither is an ordinary post or task: both expire on the contact log's clock and go at `customers/redact` by the listed orders. Their lines carry order numbers and closed outcome codes only, never a phone or a name, so ADR-0041 item 31's customer identifier screen passes them, and their own class, not a message, holds them. The model never receives per-order outcomes.
     - **The agent's runs** draft and revise plans, explain the weekly numbers and suggest revisions. A run that read untrusted text, such as a product title or another member's post, is tainted as usual, and its plan drafts still need the Owner's exact approval.
     - **Everyday work** (ADR-0033 item 6). `EverydayAreaTemplate@1` "Cash on delivery": the goal "Confirm COD orders before they ship", measured in code, with a default threshold of 85% the Owner can change; the repeating task "Check unconfirmed COD orders", off until a person turns it on. Home's "Today" shows the counts ("41 confirmed, 3 want to cancel, 5 unconfirmed").
 22. **The worked example, end to end.**
@@ -430,7 +430,7 @@ Its first part accepted ADR 0040 and ADR 0041 as recommended; that decision is r
       - `lab:contact-rules`: the review, with the Owner as requester or approver, in a solo workspace and in a team where another member holds the store grants; the setup document's two digests; an edited, expired, revoked or paused plan admits nothing; an edited plan's old revision runs until the new one is active, and pauses if the editor chose that; overlapping plans; person-only fields, and a holdout share that cannot change before about 300 settled held-out orders.
       - `lab:contact-dispatch`: every refusal code of item 12's list, and no other; every admission check re-run at mark-started, the Owner's lost authority, a lost scope or Phone grant and each stop among them; the mark committed before the provider request, with no lock held across it, and a failed commit placing no call; a signed answer fetch served while the call request is still open; an unsettled earlier attempt; a lost response stays uncertain and nothing more is sent; a signed answer fetch on an uncertain attempt; an order cancelled between attempts; variable escaping and charset refusals; the render matches the digest; `stopped` after a stop, and no plan resumed when a stop is lifted; a held-out order gets no sequence; a test number is dialled only once its code is typed back; an old order refused; no phone anywhere but as a digest, in no table, log or event.
       - Rows in `lab:approval-records`, `lab:shopify-privacy`, `lab:retention`, `lab:tenant-conformance` and `stops.test.mjs` (`contact.stop`, the platform stop, the connection stop).
-    - **Agent evals** (ADR 0041's eval programme): drafting a plan from the owner's words picks the purpose, languages, presets and holdout and nothing promotional; injection in product titles or posts never moves a plan outside its presets or sets a person-only field; report numbers equal SQL.
+    - **Agent evals** (ADR-0041's eval programme): drafting a plan from the owner's words picks the purpose, languages, presets and holdout and nothing promotional; injection in product titles or posts never moves a plan outside its presets or sets a person-only field; report numbers equal SQL.
     - **Provider qualification**, on the owner's own accounts and phones only (item 26): every key and outcome path; signature and nonce checks; a forced lost response; rate limits; the opening within 2 seconds; no inbound routing set; free-text features off; and each provider-side limit the entry record names that the provider lets the broker read (item 4).
     - **The effect is measured, not assumed.**
       - Each plan holds out a random 10% of eligible orders, picked by a keyed hash of the order id before any sequence is created (item 12), recorded in Morrow only as a `contact_holdouts` row and never tagged.

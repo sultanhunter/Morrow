@@ -234,7 +234,7 @@ records until you answer. The sources are in `docs/references/connected-services
     - Recommended: yes. Any Owner or Admin can stop all customer calls in the workspace at once,
       with no second approver. Calls already ringing are hung up; a call answered just after hears a
       short approved goodbye. Restarting is reviewed for each call plan and covers only new orders
-      unless you choose otherwise; lifting any stop, the workspace stop of ADR 0040 included,
+      unless you choose otherwise; lifting any stop, the workspace stop of ADR-0040 included,
       restarts no plan by itself.
     - Why: "Stop AI work" stops one agent; this stops every call, the way the existing stops work.
 
