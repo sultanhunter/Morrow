@@ -1352,8 +1352,17 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
   };
   const memberView = await read(ownerGrants(owner, { revise: false }));
   // Catalogue version 4 (ADR-0039): version 3's Opus 5.5 at medium by default (ADR-0036), the
-  // default ceiling 4, and 25 products a run for every entry (no run cost cap).
+  // default ceiling 4, and 25 products a run for every entry (no run cost cap). Claude Opus
+  // 5.5 only (the owner, 2026-10-26): low, medium and high.
   assert.equal(memberView.catalogueVersion, 4);
+  assert.deepEqual(
+    memberView.entries.map((e) => [e.model, e.effort, e.creditsPerProduct]),
+    [
+      ["claude_opus_5_5", "low", 2],
+      ["claude_opus_5_5", "medium", 4],
+      ["claude_opus_5_5", "high", 6],
+    ],
+  );
   assert.ok(memberView.entries.every((e) => e.runProductLimit === 25));
   assert.equal(memberView.ceiling, 4);
   assert.equal(memberView.canRevise, false);
@@ -1362,7 +1371,9 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
     .filter((e) => e.allowedForMember)
     .map((e) => e.creditsPerProduct);
   assert.ok(allowed.includes(4) && allowed.every((c) => c <= 4));
-  // A default stored at version 1 that version 4 also lists is kept, with its ceiling.
+  // A default stored at version 1 that version 4 no longer lists (Sonnet 5.5 at low) reads as
+  // the catalogue's default; its ceiling is kept (with a ceiling of 1, no entry of version 4
+  // is open to members until the Owner raises it).
   const stored = await read(ownerGrants(owner, { revise: false }), [
     {
       catalogue_version: "1",
@@ -1373,8 +1384,25 @@ test("GET /models: the active catalogue, the member ceiling, no provider strings
       updated_at: "2026-10-20T11:00:00.000Z",
     },
   ]);
-  assert.deepEqual(stored.workspaceDefault, { model: "claude_sonnet_5_5", effort: "low" });
+  assert.deepEqual(stored.workspaceDefault, { model: "claude_opus_5_5", effort: "medium" });
   assert.equal(stored.ceiling, 1);
+  assert.ok(stored.entries.every((e) => !e.allowedForMember));
+  // A default stored at version 3 that version 4 also lists (Opus 5.5 at low) is kept.
+  const opusLow = await read(ownerGrants(owner, { revise: false }), [
+    {
+      catalogue_version: "3",
+      model_key: "claude_opus_5_5",
+      effort_key: "low",
+      max_credits_per_product: "2",
+      revision: "1",
+      updated_at: "2026-10-25T11:00:00.000Z",
+    },
+  ]);
+  assert.deepEqual(opusLow.workspaceDefault, { model: "claude_opus_5_5", effort: "low" });
+  assert.deepEqual(
+    opusLow.entries.map((e) => e.allowedForMember),
+    [true, false, false],
+  );
   const text = JSON.stringify(memberView);
   assert.doesNotMatch(text, /claude-|anthropic|usd|price|cost|token/i);
   // The owner may pick every entry; after the ceiling is raised to 6 so may the member.

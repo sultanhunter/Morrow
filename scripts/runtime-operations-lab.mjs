@@ -339,7 +339,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       storeId: S,
       products,
       fields: ["descriptionHtml", "title"],
-      selection: { model: "claude_sonnet_5_5", effort: "low" },
+      selection: { model: "claude_opus_5_5", effort: "low" },
     });
   const leaseOf = (runId) => {
     const r = one(
@@ -354,7 +354,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     const started = await lease(leaseOf(runId), (step) => step.run.start());
     return { runId, ref: leaseOf(runId), admitted, started };
   }
-  // Five products: the vendor reservation (five times Sonnet low's worst case) holds every
+  // Five products: the vendor reservation (five times Opus low's worst case) holds every
   // sandbox this lab books.
   const main = await runningRun(["product:1", "product:2", "product:3", "product:4", "product:5"]);
   // A second run left queued (admitted, never started) for the lease phase.

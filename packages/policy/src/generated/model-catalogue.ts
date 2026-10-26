@@ -151,8 +151,8 @@ export const generatedModelCatalogue = {
     {
       version: 4,
       status: "active",
-      digest: "013de2e441ad4d30db5acb75a9a40d953e34d0e973e06f47b7c2dc8766ff1d42",
-      effectiveFrom: "2026-10-25",
+      digest: "fce5fabf387c932b79d2fc48bba0cef97b807a528374912deb413592c9e05a45",
+      effectiveFrom: "2026-10-26",
       defaultSelection: {
         model: "claude_opus_5_5",
         effort: "medium",
@@ -181,30 +181,6 @@ export const generatedModelCatalogue = {
         },
       ],
       models: [
-        {
-          key: "claude_haiku_5_5",
-          provider: "anthropic",
-          providerModelId: "claude-haiku-5-5",
-          inputUsd8PerToken: 10,
-          outputUsd8PerToken: 50,
-          creditsPerProduct: {
-            low: 1,
-            medium: 1,
-            high: 1,
-          },
-        },
-        {
-          key: "claude_sonnet_5_5",
-          provider: "anthropic",
-          providerModelId: "claude-sonnet-5-5",
-          inputUsd8PerToken: 200,
-          outputUsd8PerToken: 1000,
-          creditsPerProduct: {
-            low: 1,
-            medium: 2,
-            high: 3,
-          },
-        },
         {
           key: "claude_opus_5_5",
           provider: "anthropic",

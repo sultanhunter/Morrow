@@ -23,7 +23,9 @@
 //   M  the selection: none is the workspace default (catalogue version 4: version 3's Opus 5.5
 //      at medium, ADR-0036 and ADR-0039); a member picks Opus high once the owner raises the
 //      ceiling; xhigh is refused; 25 Opus 5.5 high products are admitted for 150 credits and
-//      drafted (no US$7 run cap, ADR-0039 item 4);
+//      drafted (no US$7 run cap, ADR-0039 item 4). Version 4 lists Claude Opus 5.5 only (the
+//      owner, 2026-10-26), so the lab's runs are Opus 5.5 at low, 2 credits a product, and
+//      Haiku 5.5 or Sonnet 5.5 is refused as an unknown selection (B5);
 //   O  item 10's outcomes in one run: a refusal then a draft, a throttle resent within the
 //      attempt, an input over the cap never sent, invalid output twice (failed, accrued as
 //      unrecovered), an uncertain send booked at its worst case, a draft steered to another
@@ -595,7 +597,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     storeId: S,
     products,
     fields: ["descriptionHtml", "title"],
-    selection: { model: "claude_sonnet_5_5", effort: "low" },
+    selection: { model: "claude_opus_5_5", effort: "low" },
     ...over,
   });
   const admit = (p, task, body, options) =>
@@ -623,10 +625,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       `SELECT product_index::int AS i,status,attempts::int AS attempts,failure_code FROM morrow_work.run_products WHERE run_id=${literal(runId)} ORDER BY product_index`,
     );
   const rates = one(
-    "SELECT input_usd8_per_token::int AS input,output_usd8_per_token::int AS output FROM morrow_work.model_catalogue_rates WHERE version=4 AND model_key='claude_sonnet_5_5'",
+    "SELECT input_usd8_per_token::int AS input,output_usd8_per_token::int AS output FROM morrow_work.model_catalogue_rates WHERE version=4 AND model_key='claude_opus_5_5'",
   );
   const worst = one(
-    "SELECT worst_case_per_attempt_usd::text AS attempt,worst_case_per_product_usd::text AS product,credits_per_product::int AS credits FROM morrow_work.model_catalogue_entries WHERE version=4 AND model_key='claude_sonnet_5_5' AND effort_key='low'",
+    "SELECT worst_case_per_attempt_usd::text AS attempt,worst_case_per_product_usd::text AS product,credits_per_product::int AS credits FROM morrow_work.model_catalogue_entries WHERE version=4 AND model_key='claude_opus_5_5' AND effort_key='low'",
   );
   const completedUnits = 900 * rates.input + 300 * rates.output;
   const completedCost = usd8(completedUnits);
@@ -676,12 +678,12 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       "A2:admission_creates_the_run_and_its_records",
       admitted.status === 201 &&
         admitted.body.status === "queued" &&
-        String(admitted.body.creditsReserved) === "3" &&
+        String(admitted.body.creditsReserved) === "6" &&
         run?.status === "queued" &&
         run.status_actor === "work_service" &&
-        run.model_key === "claude_sonnet_5_5" &&
+        run.model_key === "claude_opus_5_5" &&
         run.effort_key === "low" &&
-        run.cpp === 1 &&
+        run.cpp === 2 &&
         run.n === 3 &&
         run.fields === '["descriptionHtml", "title"]' &&
         run.installation === installation.id &&
@@ -697,12 +699,12 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
           `SELECT count(*) FROM morrow_work.run_products WHERE run_id=${literal(happyRun)} AND status='pending'`,
         ) === 3 &&
         manifest?.provider === "anthropic" &&
-        manifest.provider_model_id === "claude-sonnet-5-5" &&
+        manifest.provider_model_id === "claude-opus-5-5" &&
         manifest.unbound === true &&
         credit(happyRun)?.status === "reserved" &&
-        credit(happyRun).reserved === 3 &&
-        wallet().available === 297 &&
-        wallet().reserved === 3 &&
+        credit(happyRun).reserved === 6 &&
+        wallet().available === 294 &&
+        wallet().reserved === 6 &&
         child?.status === "ready" &&
         child.owner === P.A.principal &&
         child.initiator === P.A.principal &&
@@ -773,12 +775,13 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
     const before2 = footprint();
     // Not enough credits (the wallet drained; sim), then restored.
+    const kept = wallet().available;
     replica(
-      `UPDATE morrow_billing.credit_wallets SET available=1 WHERE billing_account_id=${literal(account)};`,
+      `UPDATE morrow_billing.credit_wallets SET available=3 WHERE billing_account_id=${literal(account)};`,
     );
     const poor = await admit(P.A, T, admitBody(["product:1", "product:2"]));
     replica(
-      `UPDATE morrow_billing.credit_wallets SET available=297 WHERE billing_account_id=${literal(account)};`,
+      `UPDATE morrow_billing.credit_wallets SET available=${kept} WHERE billing_account_id=${literal(account)};`,
     );
     check(
       "B2:insufficient_credits_409",
@@ -840,10 +843,23 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       T,
       admitBody(["product:1"], { selection: { model: "claude_unknown", effort: "low" } }),
     );
+    // Version 4 lists Claude Opus 5.5 only (the owner, 2026-10-26): Haiku 5.5 and Sonnet 5.5,
+    // entries of versions 1 and 3, are unknown selections now.
+    const haiku = await admit(
+      P.A,
+      T,
+      admitBody(["product:1"], { selection: { model: "claude_haiku_5_5", effort: "low" } }),
+    );
+    const sonnet = await admit(
+      P.A,
+      T,
+      admitBody(["product:1"], { selection: { model: "claude_sonnet_5_5", effort: "high" } }),
+    );
     check(
       "B5:unknown_selection_400",
-      unknown.status === 400 && unknown.body.code === "missing_input" && footprint() === before3,
-      unknown.body,
+      [unknown, haiku, sonnet].every((r) => r.status === 400 && r.body.code === "missing_input") &&
+        footprint() === before3,
+      { unknown: unknown.body, haiku: haiku.body, sonnet: sonnet.body },
     );
     // Another workspace's task is not found; a store without the Listings agent is refused.
     const foreign = await admit(P.A, "task_" + randomUUID(), admitBody(["product:1"]));
@@ -944,8 +960,8 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     check(
       "W2:credits_settle_at_the_products_proposed_and_cost_is_booked_from_the_rates",
       credit(happyRun)?.status === "settled" &&
-        credit(happyRun).settled === 3 &&
-        wallet().consumed === 3 &&
+        credit(happyRun).settled === 6 &&
+        wallet().consumed === 6 &&
         wallet().reserved === 0 &&
         calls(happyRun).length === 3 &&
         calls(happyRun).every(
@@ -974,7 +990,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       oracle.violations.length === 0 &&
         oracle.requests.filter((r) => r.path === "/v1/messages/count_tokens").length === 3 &&
         oracle.requests.filter((r) => r.path === "/v1/messages").length === 3 &&
-        oracle.requests.every((r) => r.model === "claude-sonnet-5-5"),
+        oracle.requests.every((r) => r.model === "claude-opus-5-5"),
       { violations: oracle.violations, requests: oracle.requests.length },
     );
     const events = db.rows(
@@ -994,7 +1010,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
       "W5:the_run_reads_with_its_products_proposals_and_credits",
       finishedRead.status === 200 &&
         finishedRead.body.run.status === "succeeded" &&
-        finishedRead.body.credits.settled === 3 &&
+        finishedRead.body.credits.settled === 6 &&
         finishedRead.body.usage.attempts === 3 &&
         finishedRead.body.products.length === 3 &&
         finishedRead.body.products.every(
@@ -1030,7 +1046,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
     // M2: the owner raises the ceiling to 6; the member may then pick Opus high.
     const raised = await agentsCall(P.A, "PUT", "/settings/model-default", {
-      model: "claude_sonnet_5_5",
+      model: "claude_opus_5_5",
       effort: "low",
       maxCreditsPerProduct: 6,
       expectedRevision: null,
@@ -1188,7 +1204,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     );
     check(
       "O4:credits_settle_at_the_three_products_proposed",
-      credit(runId)?.status === "settled" && credit(runId).settled === 3,
+      credit(runId)?.status === "settled" && credit(runId).settled === 6,
       credit(runId),
     );
   }
@@ -1223,7 +1239,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         count(
           `SELECT count(*) FROM morrow_work.run_drafts WHERE run_id=${literal(runId)} AND status='packed'`,
         ) === 1 &&
-        credit(runId)?.settled === 1,
+        credit(runId)?.settled === 2,
       { result, run: runRow(runId), products: productsOf(runId), credit: credit(runId) },
     );
     // The breaker: three consecutive failed products end the run; the rest are skipped.
@@ -1286,7 +1302,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
         nextResult.status === "succeeded",
       { result, run: runRow(runId), next: next.body, nextResult },
     );
-    // The cap stopped these runs before ADR-0036, so they spent no credits; the 3 they now
+    // The cap stopped these runs before ADR-0036, so they spent no credits; the 6 they now
     // spend are returned to W's wallet (sim), so the later phases keep their budget.
     const spent = walletBefore.available - wallet().available;
     if (spent > 0)
@@ -1481,7 +1497,7 @@ COMMIT;`,
       `DELETE FROM morrow_billing.run_cost_bookings WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND id='sim_overflow_daily';`,
     );
     replica(
-      `UPDATE morrow_billing.credit_wallets SET available=available+1 WHERE billing_account_id=${literal(account)};`,
+      `UPDATE morrow_billing.credit_wallets SET available=available+2 WHERE billing_account_id=${literal(account)};`,
     );
     check(
       "C1:an_overflow_is_still_booked_with_no_daily_refusal",
@@ -1491,7 +1507,7 @@ COMMIT;`,
         admitted.status === 201 &&
         result?.kind === "ended" &&
         result.status === "succeeded" &&
-        credit(admitted.body.runId)?.settled === 1,
+        credit(admitted.body.runId)?.settled === 2,
       { spent, overflow, admitted: admitted.body, result },
     );
   }
@@ -1516,7 +1532,7 @@ COMMIT;`,
       broker(
         `SELECT outcome||'|'||coalesce(call_id,'')||'|'||coalesce(recorded_outcome,'') FROM morrow_vault.model_call_begin(${literal(over.lease ?? ref.leaseId)},${literal(String(over.generation ?? ref.generation))},'${index}','${attempt}','${sequence}','90000',${literal(over.prompt ?? prompt)},${literal(over.schema ?? listingDraftSchemaDigest)});`,
       ).split("|");
-    const end = (callId, outcome, usage, model = "claude-sonnet-5-5") =>
+    const end = (callId, outcome, usage, model = "claude-opus-5-5") =>
       broker(
         `SELECT outcome||'|'||coalesce(recorded_outcome,'')||'|'||coalesce(booked_usd,'')||'|'||coalesce(overflow::text,'') FROM morrow_vault.model_call_end(${literal(callId)},${literal(outcome)},${usage ? "'end_turn'" : "NULL"},'req_fence',${literal(model)},'900',${usage ? `'${usage[0]}','${usage[1]}','0','0'` : "NULL,NULL,NULL,NULL"});`,
       ).split("|");
@@ -1854,7 +1870,7 @@ COMMIT;`,
     const fence = calls(run2);
     const late = last(
       db.sql(
-        `SELECT outcome||'|'||coalesce(recorded_outcome,'') FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn','req_late','claude-sonnet-5-5','900','900','300','0','0');`,
+        `SELECT outcome||'|'||coalesce(recorded_outcome,'') FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn','req_late','claude-opus-5-5','900','900','300','0','0');`,
         { user: "morrow_vault_broker" },
       ),
     );
@@ -1882,7 +1898,7 @@ COMMIT;`,
   phase("leakage");
   {
     const forbidden = [
-      "claude-sonnet-5-5",
+      "claude-opus-5-5",
       "claude-other-model",
       "req_lab",
       "req_fence",
@@ -2017,7 +2033,7 @@ COMMIT;`,
         open[0],
         last(
           db.sql(
-            `SELECT outcome FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn','req_redact','claude-sonnet-5-5','900','900','300','0','0');`,
+            `SELECT outcome FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn','req_redact','claude-opus-5-5','900','900','300','0','0');`,
             { user: "morrow_vault_broker" },
           ),
         ),
@@ -2581,7 +2597,7 @@ COMMIT;`,
         `SELECT envelope_id::text AS envelope FROM morrow_work.runs WHERE id=${literal(runId)}`,
       ).envelope,
       fields: ["descriptionHtml", "title"],
-      modelBudgetMs: runModelBudgetMs(1, "claude_sonnet_5_5", "low"),
+      modelBudgetMs: runModelBudgetMs(4, "claude_opus_5_5", "low"),
     });
     // The agent submit's own outcome (review: proposeDrafts refuses every non-applied outcome
     // alike, so only `denied` shows the lease re-read after the stop key refused it; without
@@ -2768,7 +2784,7 @@ COMMIT;`,
       ).split("|");
       const closed = last(
         db.sql(
-          `SELECT outcome FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn',${literal("req_close" + index)},'claude-sonnet-5-5','900','900','300','0','0');`,
+          `SELECT outcome FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn',${literal("req_close" + index)},'claude-opus-5-5','900','900','300','0','0');`,
           { user: "morrow_vault_broker" },
         ),
       );
@@ -2912,9 +2928,9 @@ COMMIT;`,
     replica(`DELETE FROM morrow_billing.verified_payment_events WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};
 UPDATE morrow_billing.workspace_billing_routes SET fixing_payment_key=${literal(grantKey)} WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)};
 INSERT INTO morrow_billing.entitlement_snapshots VALUES(${literal(O)},${literal(W)},${literal(account)},${revision + 1},'morrow_direct','test',${literal(grantKey)},'active',${literal("f".repeat(64))},${ms}-interval '2 hours',${ms}+interval '29 days',NULL,${ms});`);
-    if (wallet().available < 1)
+    if (wallet().available < 2)
       replica(
-        `UPDATE morrow_billing.credit_wallets SET available=available+1 WHERE billing_account_id=${literal(account)};`,
+        `UPDATE morrow_billing.credit_wallets SET available=available+2 WHERE billing_account_id=${literal(account)};`,
       );
     const payments = count(
       `SELECT count(*) FROM morrow_billing.verified_payment_events WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)}`,
@@ -2956,7 +2972,7 @@ INSERT INTO morrow_billing.entitlement_snapshots VALUES(${literal(O)},${literal(
         result.status === "succeeded" &&
         runRow(runId)?.status === "succeeded" &&
         credit(runId)?.status === "settled" &&
-        credit(runId).settled === 1,
+        credit(runId).settled === 2,
       { facts: facts?.value ? period : facts, snapshot, result, row: runRow(runId) },
     );
   }

@@ -15,6 +15,9 @@
 //   which nothing enforces once version 4 is active; their entries' run limits stay as
 //   published (the lower of 25 and US$7 over the worst case). From version 4 every entry's
 //   run limit is the version's max_products_per_run, 25.
+// - From version 4 every entry is Claude Opus 5.5 (the owner, 2026-10-26: Haiku 5.5 and Sonnet
+//   5.5 leave the catalogue; verify refuses another model). A Haiku or Sonnet selection is an
+//   unknown key, and a stored workspace default naming one falls back to the catalogue default.
 // - A run is booked at its own recorded catalogue version, even after a newer one is active.
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { generatedModelCatalogue } from "./generated/model-catalogue";

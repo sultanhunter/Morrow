@@ -1,16 +1,23 @@
 // ADR-0039 (OD-2026-10-25-4): credits are the only spend limit. Implementation plan PR 1 (the
 // listings and the catalogue, credits only) with PR 4's removal of the runtime budget:
-// catalogue version 4 with no run or daily cap and 25 products a run for every entry,
+// catalogue version 4 with no run or daily cap and 25 products a run for every entry, and
+// Claude Opus 5.5 only (the owner, 2026-10-26: Haiku 5.5 and Sonnet 5.5 leave the catalogue),
 // version 3 retired, run_reserve without the daily cap, runtime_caps() and
 // runtime_operation_begin without the monthly budget (migration 0053), and verify refusing a
-// money cap on any later per-product version and on any loop version. Pure: no I/O beyond
+// money cap on any later per-product version and on any loop version, and any model but
+// Claude Opus from version 4. Pure: no I/O beyond
 // reading the repository files. lab:run-credits (C3, C12, C13), lab:listings-runs (B4, C1) and
 // lab:runtime-operations (K2) prove migration 0053 on PostgreSQL 17.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { catalogueVersionDigest, inspectModelPolicy } from "../scripts/provider-checks.mjs";
+import {
+  OPUS_ONLY_FROM_VERSION,
+  catalogueVersionDigest,
+  inspectModelPolicy,
+  isOpusModel,
+} from "../scripts/provider-checks.mjs";
 import { generatedModelCatalogue } from "../packages/policy/src/generated/model-catalogue.ts";
 import { generatedLoopCatalogue } from "../packages/policy/src/generated/loop-catalogue.ts";
 import {
@@ -20,6 +27,7 @@ import {
   catalogueListing,
   defaultMemberCreditCeiling,
   defaultSelection,
+  findCatalogueEntry,
 } from "../packages/policy/src/model-catalogue.ts";
 import { reservationSize, usd8Text } from "../packages/policy/src/run-credits.ts";
 import { computerProfile, runtimeCaps } from "../packages/policy/src/runtime-computer.ts";
@@ -38,6 +46,9 @@ const runtime = read("migrations/0043.runtime-operations.sql");
 // The owner's words, verbatim (OD-2026-10-25-4).
 const quote =
   "for budget why we limiting anything? it should be very simple credit based system like suppose we give user 1000credits it will be spend on the agentic work so that creidt will bcome limit itself no need to hardcode all of that bullshit. and for one i want it to be truty multi agent system so the agents can be orchestrated by the main agent in any way no need to limit to a single agent call only. for 2 why we adding limit on characters? it might strip important information i think only needs to be structured. for other option use the recommded one";
+// The owner's words of 2026-10-26, verbatim, on the models.
+const opusQuote =
+  "one more thing i am seeing we are using haiku for some parts? why is that? we don't want to cheap out on models as we want the best results for users as all the users are going to be paid users";
 const v3 = policy.catalogue.versions[2];
 const v4 = policy.catalogue.versions[3];
 const loop = policy.catalogue.versions[1];
@@ -73,8 +84,26 @@ test("OD-2026-10-25-4 is recorded verbatim in its node and in version 4's owner 
   assert.match(decision, /^channel: chat$/m);
   assert.ok(decision.includes("> " + quote + "\n"));
   assert.ok(v4.owner_confirmation.includes('(OD-2026-10-25-4): "' + quote + '"'));
-  assert.equal(v4.decision, "ADR-0039 item 4");
-  assert.equal(v4.effective_from, "2026-10-25");
+  assert.equal(
+    v4.decision,
+    "ADR-0039 item 4, and the owner's decision of 2026-10-26 that every agent runs on Claude Opus 5.5",
+  );
+  assert.equal(v4.effective_from, "2026-10-26");
+});
+
+test("the owner's model decision of 2026-10-26 is quoted verbatim in version 4's confirmation", () => {
+  assert.ok(v4.owner_confirmation.includes('Owner, 2026-10-26, in chat: "' + opusQuote + '"'));
+  assert.ok(
+    v4.owner_confirmation.includes(
+      "The lead reads it as every agent on Claude Opus 5.5, with Haiku 5.5 and Sonnet 5.5 leaving the catalogue",
+    ),
+  );
+  // Both decisions, in order: credits first (2026-10-25), then the models (2026-10-26).
+  assert.ok(v4.owner_confirmation.indexOf(quote) < v4.owner_confirmation.indexOf(opusQuote));
+  assert.match(
+    policy.catalogue.change_policy,
+    /from version 4, every version of either run shape holds only Claude Opus 5\.5 entries/,
+  );
 });
 
 // ADR-0039 merged with pull request 75. The code carries out the record, so the record's
@@ -89,19 +118,27 @@ test("ADR-0039's Approval quotes OD-2026-10-25-4 verbatim and item 4 publishes v
   assert.ok(adr.includes("catalogue version 4 publishes on this decision"));
 });
 
-test("catalogue version 4: version 3's entries, rates, default and ceiling, no caps, 25 products", () => {
+test("catalogue version 4: version 3's Opus entries, rates, default and ceiling, no caps, 25 products", () => {
   assert.equal(v4.version, 4);
   assert.equal(v4.status, "active");
   assert.equal(policy.catalogue.active_versions.per_product, 4);
   assert.equal(v3.status, "retired");
   assert.equal(
     policy.catalogue.published_digests["4"],
-    "013de2e441ad4d30db5acb75a9a40d953e34d0e973e06f47b7c2dc8766ff1d42",
+    "fce5fabf387c932b79d2fc48bba0cef97b807a528374912deb413592c9e05a45",
   );
   assert.equal(catalogueVersionDigest(v4), policy.catalogue.published_digests["4"]);
   // Version 3's digest is unchanged by its retirement (status is outside the digest).
   assert.equal(catalogueVersionDigest(v3), policy.catalogue.published_digests["3"]);
-  assert.deepEqual(v4.models, v3.models);
+  // Claude Opus 5.5 only: version 3's Opus entry exactly, and neither Haiku nor Sonnet.
+  assert.deepEqual(
+    v4.models,
+    v3.models.filter((m) => m.key === "claude_opus_5_5"),
+  );
+  assert.deepEqual(
+    v4.models.map((m) => [m.key, m.provider_model_id]),
+    [["claude_opus_5_5", "claude-opus-5-5"]],
+  );
   assert.deepEqual(v4.efforts, v3.efforts);
   assert.deepEqual(v4.default_selection, v3.default_selection);
   assert.equal(v4.default_member_credit_ceiling, v3.default_member_credit_ceiling);
@@ -120,17 +157,32 @@ test("catalogue version 4: version 3's entries, rates, default and ceiling, no c
     [catalogueLimits(4).runCostCapUsd8, catalogueLimits(4).workspaceDailyCostCapUsd8],
     [null, null],
   );
-  for (const model of ["claude_haiku_5_5", "claude_sonnet_5_5", "claude_opus_5_5"])
+  for (const effort of ["low", "medium", "high"]) {
+    const at = catalogueEntry(4, "claude_opus_5_5", effort);
+    const before = catalogueEntry(3, "claude_opus_5_5", effort);
+    assert.equal(at.runProductLimit, 25, `opus ${effort}`);
+    assert.equal(at.creditsPerProduct, before.creditsPerProduct);
+    assert.equal(at.worstCasePerProductUsd8, before.worstCasePerProductUsd8);
+    assert.equal(at.worstCasePerAttemptUsd8, before.worstCasePerAttemptUsd8);
+  }
+  // Haiku 5.5 and Sonnet 5.5 are not entries of version 4; version 3 keeps them as published,
+  // so a run recorded at version 3 is still booked at its entry.
+  for (const model of ["claude_haiku_5_5", "claude_sonnet_5_5"])
     for (const effort of ["low", "medium", "high"]) {
-      const at = catalogueEntry(4, model, effort);
-      const before = catalogueEntry(3, model, effort);
-      assert.equal(at.runProductLimit, 25, `${model} ${effort}`);
-      assert.equal(at.creditsPerProduct, before.creditsPerProduct);
-      assert.equal(at.worstCasePerProductUsd8, before.worstCasePerProductUsd8);
-      assert.equal(at.worstCasePerAttemptUsd8, before.worstCasePerAttemptUsd8);
+      assert.equal(findCatalogueEntry(4, model, effort), null, `${model} ${effort}`);
+      assert.ok(findCatalogueEntry(3, model, effort), `${model} ${effort} at version 3`);
     }
+  assert.deepEqual(
+    catalogueListing().entries.map((e) => [e.model, e.effort, e.creditsPerProduct]),
+    [
+      ["claude_opus_5_5", "low", 2],
+      ["claude_opus_5_5", "medium", 4],
+      ["claude_opus_5_5", "high", 6],
+    ],
+  );
   // ADR-0039's Consequences: 25 Opus 5.5 high products hold 150 credits and US$17.60 of worst
-  // case (was 9 products, US$6.34), at medium 100 credits (was 12), Sonnet 5.5 high 75 (was 19).
+  // case (was 9 products, US$6.34), at medium 100 credits (was 12). Version 3's limits stay as
+  // published (Sonnet 5.5 high's 19 among them).
   const opusHigh = reservationSize(catalogueEntry(4, "claude_opus_5_5", "high"), 25);
   assert.equal(opusHigh.reservation.credits, 150n);
   assert.equal(usd8Text(opusHigh.reservation.vendorMaximumUsd8), "17.60000000");
@@ -182,12 +234,65 @@ test("no money cap after version 3: per-product versions, the loop version and t
     /model catalogue v3: missing USD caps/,
   );
   refused(
-    (p) => (p.catalogue.versions[3].models[2].credits_per_product.high = 1),
+    (p) => (p.catalogue.versions[3].models[0].credits_per_product.high = 1),
     /claude_opus_5_5 at high worst case exceeds 0\.90 of its credits' net revenue/,
   );
   // The report: every version 4 entry runs 25 products.
   const report = inspectModelPolicy(policy, registry).versions.find((v) => v.version === 4);
   assert.ok(report.selections.every((s) => s.products_per_run === 25));
+});
+
+test("Claude Opus only from version 4: verify refuses any other model, either run shape", () => {
+  assert.equal(OPUS_ONLY_FROM_VERSION, 4);
+  for (const entry of policy.catalogue.versions)
+    if (entry.version >= 4) assert.ok(entry.models.every(isOpusModel), `v${entry.version}`);
+  // Versions 1 to 3 keep their Haiku and Sonnet as published (1 and 3) or proposed (the loop's 2).
+  for (const index of [0, 1, 2])
+    assert.deepEqual(
+      policy.catalogue.versions[index].models.map((m) => m.key),
+      ["claude_haiku_5_5", "claude_sonnet_5_5", "claude_opus_5_5"],
+    );
+  assert.ok(
+    generatedModelCatalogue.versions
+      .filter((v) => v.version >= 4)
+      .every((v) =>
+        v.models.every(
+          (m) => m.key === "claude_opus_5_5" && m.providerModelId === "claude-opus-5-5",
+        ),
+      ),
+  );
+  const refused = (change, pattern) => {
+    const p = structuredClone(policy);
+    change(p);
+    assert.match(inspectModelPolicy(p, registry).errors.join("\n"), pattern);
+  };
+  // Version 3's Haiku and Sonnet entries carried into version 4 are refused, each.
+  for (const index of [0, 1])
+    refused(
+      (p) => p.catalogue.versions[3].models.unshift(structuredClone(v3.models[index])),
+      new RegExp(
+        `model catalogue v4: ${v3.models[index].key} is not a Claude Opus model; from version 4 every entry is Opus`,
+      ),
+    );
+  // An Opus key that calls another model, and another provider's model, are not Opus.
+  refused(
+    (p) => (p.catalogue.versions[3].models[0].provider_model_id = "claude-sonnet-5-5"),
+    /model catalogue v4: claude_opus_5_5 is not a Claude Opus model/,
+  );
+  // A later loop version (a sim version 5 of the agent-loop shape) is held to the same rule.
+  refused((p) => {
+    const next = structuredClone(loop);
+    next.version = 5;
+    p.catalogue.versions.push(next);
+  }, /model catalogue v5: claude_haiku_5_5 is not a Claude Opus model[\s\S]*model catalogue v5: claude_sonnet_5_5 is not a Claude Opus model/);
+  // The rule itself: an Anthropic Opus key whose provider model ID spells the same name.
+  const opus = v4.models[0];
+  assert.equal(isOpusModel(opus), true);
+  assert.equal(isOpusModel({ ...opus, provider: "openai" }), false);
+  assert.equal(isOpusModel({ ...opus, key: "claude_opus_latest" }), false);
+  assert.equal(isOpusModel({ ...opus, provider_model_id: "claude-opus-5-5-latest" }), false);
+  assert.equal(isOpusModel({ ...v3.models[0] }), false);
+  assert.equal(isOpusModel({ ...v3.models[1] }), false);
 });
 
 test("the Sunrise sample's catalogue listing is version 4's", () => {
@@ -291,7 +396,12 @@ test("migration 0053 seeds catalogue version 4 exactly as the generated catalogu
   ]);
   assert.equal(generated.digest, policy.catalogue.published_digests["4"]);
   const entries = rows("INSERT INTO morrow_work.model_catalogue_entries(");
-  assert.equal(entries.length, 9);
+  // Claude Opus 5.5 at low, medium and high only.
+  assert.deepEqual(
+    entries.map(([, model, effort]) => model + ":" + effort),
+    ["claude_opus_5_5:low", "claude_opus_5_5:medium", "claude_opus_5_5:high"],
+  );
+  assert.doesNotMatch(sql, /\(4,'claude_(haiku|sonnet)_5_5'/);
   for (const [v, model, effort, perProduct, worst, attempt, limit] of entries) {
     const e = catalogueEntry(4, model, effort);
     assert.deepEqual(

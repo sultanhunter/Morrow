@@ -6,15 +6,17 @@ BEGIN;
 --   * model_catalogue_versions.run_cost_cap_usd and workspace_daily_cost_cap_usd become
 --     nullable: versions 1 and 3 keep their published US$7 and US$25, which nothing enforces
 --     once version 4 is active, and no later version may carry either (CHECK).
---   * Catalogue version 4 (per product, listings-run@1), published on OD-2026-10-25-4
---     (docs/decisions/model-policy.json; the generated catalogue's version 4, drift-tested by
---     tests/credits-only.test.mjs): version 3's entries, credits, rates, default selection
---     and default member ceiling, with no run or daily cost cap, so every entry's run product
---     limit is the version's 25 (Opus 5.5 at high goes from 9 to 25 products, at medium from
---     12, Sonnet 5.5 at high from 19). A run still holds its products times the entry's
---     credits up front, so it never runs out mid-run. Version 3 is retired, not removed: a run
---     recorded at version 1 or 3 is still booked at its version. The append-only trigger is
---     lifted for that one status change only, inside this transaction.
+--   * Catalogue version 4 (per product, listings-run@1), published on OD-2026-10-25-4 and
+--     the owner's model decision of 2026-10-26 (docs/decisions/model-policy.json; the
+--     generated catalogue's version 4, drift-tested by tests/credits-only.test.mjs): Claude
+--     Opus 5.5 only, at low, medium and high, with version 3's Opus credits and rates, default
+--     selection (Opus 5.5 at medium) and default member ceiling (4); Haiku 5.5 and Sonnet 5.5
+--     are not carried into it. No run or daily cost cap, so every entry's run product limit is
+--     the version's 25 (Opus 5.5 at high goes from 9 to 25 products, at medium from 12). A run
+--     still holds its products times the entry's credits up front, so it never runs out
+--     mid-run. Version 3 is retired, not removed: a run recorded at version 1 or 3 is still
+--     booked at its version, Haiku and Sonnet included. The append-only trigger is lifted for
+--     that one status change only, inside this transaction.
 --   * morrow_billing.run_reserve (0038's revision), revised: no daily cap, so it never returns
 --     daily_cap. Every other check is unchanged: the active version's entry, 1 to the entry's
 --     run product limit, the workspace's reservation interlock and the wallet's row lock,
@@ -89,21 +91,13 @@ ALTER TABLE morrow_work.model_catalogue_versions ENABLE TRIGGER append_only;
 -- Version 4, active: exactly as scripts/generate-model-catalogue.mjs computes it.
 INSERT INTO morrow_work.model_catalogue_versions(version,status,digest,default_model,default_effort,default_member_credit_ceiling,
  max_products_per_run,run_cost_cap_usd,workspace_daily_cost_cap_usd,workspace_period_unrecovered_cost_cap_usd)
-VALUES (4,'active','013de2e441ad4d30db5acb75a9a40d953e34d0e973e06f47b7c2dc8766ff1d42','claude_opus_5_5','medium',4,25,NULL,NULL,NULL);
+VALUES (4,'active','fce5fabf387c932b79d2fc48bba0cef97b807a528374912deb413592c9e05a45','claude_opus_5_5','medium',4,25,NULL,NULL,NULL);
 INSERT INTO morrow_work.model_catalogue_entries(version,model_key,effort_key,credits_per_product,worst_case_per_product_usd,
  worst_case_per_attempt_usd,run_product_limit) VALUES
- (4,'claude_haiku_5_5','low',1,0.00660000,0.00330000,25),
- (4,'claude_haiku_5_5','medium',1,0.01360000,0.00680000,25),
- (4,'claude_haiku_5_5','high',1,0.01760000,0.00880000,25),
- (4,'claude_sonnet_5_5','low',1,0.13200000,0.06600000,25),
- (4,'claude_sonnet_5_5','medium',2,0.27200000,0.13600000,25),
- (4,'claude_sonnet_5_5','high',3,0.35200000,0.17600000,25),
  (4,'claude_opus_5_5','low',2,0.26400000,0.13200000,25),
  (4,'claude_opus_5_5','medium',4,0.54400000,0.27200000,25),
  (4,'claude_opus_5_5','high',6,0.70400000,0.35200000,25);
 INSERT INTO morrow_work.model_catalogue_rates(version,model_key,provider,provider_model_id,input_usd8_per_token,output_usd8_per_token,max_input_tokens) VALUES
- (4,'claude_haiku_5_5','anthropic','claude-haiku-5-5',10,50,8000),
- (4,'claude_sonnet_5_5','anthropic','claude-sonnet-5-5',200,1000,8000),
  (4,'claude_opus_5_5','anthropic','claude-opus-5-5',400,2000,8000);
 
 -- ---------------------------------------------------------------------------

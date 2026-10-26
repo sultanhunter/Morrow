@@ -104,8 +104,30 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
 // carry `run_cost_cap_usd` and `workspace_daily_cost_cap_usd` (pinned, checked as published,
 // and enforced nowhere once version 4 is active). A per-product version after 3 that carries
 // either, and a loop version that carries any money cap, is refused; the margin rules stay.
+// The owner chose the best model for every agent (2026-10-26, in chat: "we don't want to cheap
+// out on models"): from version 4, a version of either run shape holds only Claude Opus
+// entries, and a Haiku or Sonnet entry is refused. Versions 1 to 3 keep theirs as published
+// (1 and 3) or proposed (the loop's 2).
+export const OPUS_ONLY_FROM_VERSION = 4;
 export const UNRECOVERED_CAP_VERSIONS = Object.freeze([1]);
 export const COST_CAP_VERSIONS = Object.freeze([1, 3]);
+/**
+ * A Claude Opus model: Anthropic's, an opus key and the provider model ID that spells the same
+ * name (claude_opus_5_5 is claude-opus-5-5), so a key never names one model and calls another.
+ */
+export const isOpusModel = (model) =>
+  model?.provider === "anthropic" &&
+  typeof model.key === "string" &&
+  /^claude_opus_[0-9]+(_[0-9]+)*$/.test(model.key) &&
+  model.provider_model_id === model.key.replaceAll("_", "-");
+const refuseNonOpus = (entry, model, fail) => {
+  if (
+    Number.isInteger(entry.version) &&
+    entry.version >= OPUS_ONLY_FROM_VERSION &&
+    !isOpusModel(model)
+  )
+    fail(`${model.key} is not a Claude Opus model; from version 4 every entry is Opus`);
+};
 const unrecoveredCapField = "workspace_period_unrecovered_cost_cap_usd";
 const costCapFields = Object.freeze(["run_cost_cap_usd", "workspace_daily_cost_cap_usd"]);
 const loopMoneyCapFields = Object.freeze([
@@ -240,6 +262,7 @@ function inspectLoopCatalogueVersion(entry, adapters) {
       /latest/.test(model.provider_model_id)
     )
       fail(`${model.key} has an unpinned provider model`);
+    refuseNonOpus(entry, model, fail);
     const kinds = ["input", "output", "cache_write_5m", "cache_read"];
     const priced =
       JSON.stringify(Object.keys(price).sort()) === JSON.stringify([...kinds].sort()) &&
@@ -405,6 +428,7 @@ function inspectCatalogueVersion(entry, adapters) {
       /latest/.test(model.provider_model_id)
     )
       fail(`${model.key} has an unpinned provider model`);
+    refuseNonOpus(entry, model, fail);
     const priced = isDecimal(price.input) && isDecimal(price.output);
     if (!priced) fail(`${model.key} has no rates`);
     // The catalogue prices one tier; null means one price for the whole context.
