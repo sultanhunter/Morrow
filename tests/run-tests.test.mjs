@@ -115,16 +115,40 @@ test("the parallel set runs at --test-concurrency=k and the serial set at 1, bot
         "tsx",
         "--test",
         "--test-concurrency=3",
+        "--test-timeout=300000",
         "tests/a.test.mjs",
         "tests/c.test.mjs",
       ],
       cwd: repositoryRoot,
     },
     {
-      args: ["--import", "tsx", "--test", "--test-concurrency=1", "tests/b.test.mjs"],
+      args: [
+        "--import",
+        "tsx",
+        "--test",
+        "--test-concurrency=1",
+        "--test-timeout=300000",
+        "tests/b.test.mjs",
+      ],
       cwd: repositoryRoot,
     },
   ]);
+});
+
+test("every spawn limits each test to five minutes, once, before its file list", async () => {
+  const names = ["tests/a.test.mjs", "tests/b.test.mjs"];
+  const text = json({
+    schemaVersion: 1,
+    serial: [{ file: "tests/b.test.mjs", reason: "a fixed wall-clock deadline window" }],
+  });
+  const { spawned } = await recordRun([], { names, text });
+  assert.equal(spawned.length, 2);
+  for (const { args } of spawned) {
+    const limits = args.filter((a) => a.startsWith("--test-timeout="));
+    assert.deepEqual(limits, ["--test-timeout=300000"]);
+    const firstFile = args.findIndex((a) => a.startsWith("tests/"));
+    assert.ok(args.indexOf("--test-timeout=300000") < firstFile, "the limit precedes the files");
+  }
 });
 
 test("a failing set fails the run, and the other set still runs", async () => {
@@ -149,7 +173,7 @@ test("an empty set or shard is never spawned", async () => {
   const empty = json({ schemaVersion: 1, serial: [] });
   const parallelOnly = await recordRun([], { names, text: empty });
   assert.equal(parallelOnly.spawned.length, 1, "an empty serial list spawns only the parallel set");
-  assert.deepEqual(parallelOnly.spawned[0].args.slice(4), names);
+  assert.deepEqual(parallelOnly.spawned[0].args.slice(5), names);
   const nothing = await recordRun(["--shard=4/4"], { names, text: empty });
   assert.equal(nothing.code, 0);
   assert.equal(nothing.spawned.length, 0, "shard 4/4 over 3 files spawns nothing");
