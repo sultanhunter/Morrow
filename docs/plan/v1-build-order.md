@@ -281,7 +281,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
     - **Work is never cut short by a limit.** A job that trips a safety check, needs your answer or runs out of credits pauses, keeps its place and asks you; Continue picks it up (ADR-0041 item 3).
     - **Agents never run out of room.** When a job's working memory fills, older parts are summarised, and the facts that matter (your words, approvals, changes made, ids) are rewritten by code from the records (ADR-0041 items 11 and 13).
   - **Listings moves onto it.**
-  - **The model list:** Opus 5.5 only, at medium and high (catalogue version 2, rewritten Opus-only; ADR-0041 item 2). Haiku, Sonnet and low effort are gone, as you decided on 2026-10-26. Listings' own catalogue already is (version 4, merged in #83).
+  - **The model list:** Opus 5.5 only, at medium and high (catalogue version 2, rewritten Opus-only; ADR-0041 item 2). Haiku, Sonnet and low effort are gone, as you decided on 2026-10-26. Listings' own catalogue is already Opus 5.5 only (version 4, merged in #83).
 - **Needs from you:** one yes to the catalogue version 2 values (its safety check-in values and prices).
 - **Size:** several L PRs (harness plan H4 to H8), each behind the agent-loop switch.
 - **Safety tests:**

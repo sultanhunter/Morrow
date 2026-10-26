@@ -30,6 +30,7 @@ Documentation and two tests that read it. Nothing in `apps/`, `packages/`, `migr
 
 - [x] `node --import tsx --test tests/plan-docs-harness.test.mjs tests/claude-md-wording.test.mjs tests/graph.test.mjs tests/plan-check.test.mjs`: pass. Mutants checked by hand: a cited row that does not exist (`H21`), a restored "Haiku, Sonnet or Opus" offer, a Before no longer in CLAUDE.md, and an After naming a missing record each fail.
 - [x] `npm run -s verify` (plan:check, graph:check and the rest), `npm run -s graph -- check` (0 errors; the warning count unchanged from `main`), `npm run -s format:check`, `typecheck`, `typecheck:edge`, `edge:check`, `npm test`.
+- [x] After merging `main` at `2107859d`: the two tests above (12 cases; mutants of the merged-PR-83 row, D1's running revision and the COD foundation line each fail), `npm run -s verify` (plan check PASS; graph check 0 errors), the graph check's warning list identical to `main`'s at `2107859d` (185 against 185, both from an exported tree), `npm run -s format:check` and `npm test` (4,767 pass, 0 fail).
 - [ ] Lab: none applies (documentation only); `lab:group:pg-core` run once as a regression check of the unchanged tree.
 - [ ] AI review (separate context, same model family).
 - [ ] The owner's confirmation of the CLAUDE.md text (A, B, C; D1 to D4 against ADR 0042's final record; E optional), then the lead's commit that applies it.
