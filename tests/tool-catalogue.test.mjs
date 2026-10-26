@@ -629,13 +629,14 @@ test("the old formats stay: ModelCall@1, ModelResult@1 and the per-product catal
   const { generatedModelCatalogue } = await import(
     "../packages/policy/src/generated/model-catalogue.ts"
   );
-  // The per-product shape holds version 1 (retired) and version 3 (ADR-0036), never a loop
-  // version.
+  // The per-product shape holds versions 1 and 3 (retired) and version 4 (ADR-0039), never a
+  // loop version.
   assert.deepEqual(
     generatedModelCatalogue.versions.map((v) => [v.version, v.status]),
     [
       [1, "retired"],
-      [3, "active"],
+      [3, "retired"],
+      [4, "active"],
     ],
   );
   const core = schemas[1].$defs;
