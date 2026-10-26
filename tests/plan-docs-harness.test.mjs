@@ -275,6 +275,13 @@ test("credits are the only budget (OD-2026-10-26-12): no plan doc keeps a remove
   const pr11 = section("PR 11.");
   assert.match(pr11, /there is no cost check-in/);
   assert.match(pr11, /code alerts you, as Morrow's operator, and nothing pauses/);
+  // ADR-0039's restated item 1 keeps one exception: the Owner's optional per-agent credit limit,
+  // which parks only that agent's run (ADR-0041 item 9; OD-2026-10-26-12 item 8).
+  assert.match(
+    pr11,
+    /Apart from your balance and an optional per-agent credit limit you may set, which pauses only that agent, no amount of spend pauses a job/,
+  );
+  assert.doesNotMatch(pr11, /(?:^|[.:] )No amount of spend/m, "an unqualified spend rule");
   assert.match(section("PR 21."), /no limit on how many you have[^\n]*\(OD-2026-10-26-12\)/);
   // ADR-0039's row 3 (H8): the alert in place of the platform breaker; the cost check-in gone.
   const [kept, gone] = row(docs.adr0039, "3").split(" Gone: ");

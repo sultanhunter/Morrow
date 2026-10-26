@@ -6,7 +6,7 @@
 
 ## A. The "MVP" line names the launch scope only
 
-Why: ADR-0041 (Consequences) says CLAUDE.md's "MVP" line should name the launch scope, not the harness; the owner's rule (OD-2026-10-26-6) is that the foundation is production grade and state of the art, never an MVP build. The same line still says "on-demand specialists", which ADR-0037 retired in favour of teammates under the Coordinator, so the draft fixes that too.
+Why: ADR-0041 (Consequences) says CLAUDE.md's "MVP" line should name the launch scope, not the harness; the owner's rule (OD-2026-10-26-6) is that the foundation is production grade and state of the art, never an MVP build. The draft keeps the line's "The architecture stays production-grade so it scales without rewrites" word for word: that is ADR-0021 item 2, which ADR-0023 keeps (the Worker boundaries; Neon with FORCE RLS and restricted roles; versioned contracts and generated validators; one gateway; digest-bound approvals; the credit ledger; reconcile-before-retry), and ADR-0041 extends the rule to the harness and the multi-agent design without narrowing it. The same line still says "on-demand specialists", which ADR-0037 retired in favour of teammates under the Coordinator, so the draft fixes that too.
 
 **Before** (Settled product constraints):
 
@@ -17,7 +17,7 @@ Why: ADR-0041 (Consequences) says CLAUDE.md's "MVP" line should name the launch 
 **After:**
 
 ```claude-md-after
-- MVP (ADR-0023): "MVP" names the launch scope only. Launch the lean, full-featured MVP in `docs/plan/mvp.md` first: a workspace where a shop's people and AI agents run the business together, with proactive installable Morrow agents, teammates under the Coordinator (ADR-0037), and one public Shopify app (unlisted first, then listed). "MVP" never names the foundation: the agent harness and the multi-agent design are built production grade and state of the art, with no shortcuts (ADR-0041), and the architecture scales without rewrites. The full plan is the post-launch roadmap.
+- MVP (ADR-0023): "MVP" names the launch scope only. Launch the lean, full-featured MVP in `docs/plan/mvp.md` first: a workspace where a shop's people and AI agents run the business together, with proactive installable Morrow agents, teammates under the Coordinator (ADR-0037), and one public Shopify app (unlisted first, then listed). The architecture stays production-grade so it scales without rewrites, and "MVP" never names the foundation: the agent harness and the multi-agent design are built production grade and state of the art, with no shortcuts (ADR-0041). The full plan is the post-launch roadmap.
 ```
 
 ## B. The stack line gains Durable Objects

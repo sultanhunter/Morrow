@@ -104,6 +104,12 @@ test("the drafts say what the accepted records say", () => {
   assert.match(after(/^A\. /), /names the launch scope only/);
   assert.match(after(/^A\. /), /never names the foundation/);
   assert.doesNotMatch(after(/^A\. /), /specialist/);
+  // ADR-0023 keeps ADR-0021 item 2's production-grade architecture; ADR-0041 extends the rule to
+  // the harness, so the After keeps CLAUDE.md's clause word for word.
+  assert.match(
+    after(/^A\. /),
+    /The architecture stays production-grade so it scales without rewrites/,
+  );
   // ADR-0041 item 2: Opus 5.5 only, medium or high; no Haiku, Sonnet or low effort.
   const models = after(/^C\. /);
   assert.match(models, /Claude Opus 5\.5 only/);
