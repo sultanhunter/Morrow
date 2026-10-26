@@ -73,3 +73,10 @@ The owner's decision of 2026-10-25 (OD-2026-10-25-4, recorded in ADR-0039) chang
 - **Item 4.** The per-run US$7 and per-day US$25 backstops, which OD-2026-10-25-2 kept, go: credits are the only spend limit. Credit holds and reservations, the breaker, the member ceiling, the Anthropic Console monthly limit and every authority rule stand. ADR-0027's turn limits are the version's, and `cap_below_turn` gives way to `insufficient_credits` and a final-turn reserve (the reserve confirmed by the owner, OD-2026-10-26-1).
 - **Item 5.** A loop version no longer carries a per-run, per-day or look-for-work cap, and a per-product version after version 3 carries no run or daily cap. Catalogue version 4 is version 3 without them, with 25 products a run for every entry.
 - **Item 7.** The look-for-work pass's US$1.12 per agent per day goes. The pass stays read-only and once per agent a day, keeps the installed default and draws credits like any run; RateCard@1 loses `caps.lookForWorkDailyUsd` with the rest of its caps.
+
+### 2026-10-26: item 1, no Haiku or Sonnet (the owner, OD-2026-10-26-5); item 1's effort and item 6 (ADR-0041, proposed)
+
+The owner's message of 2026-10-26 (OD-2026-10-26-5) changes item 1, and the text above is kept as approved. ADR-0041 (Proposed 2026-10-26) would change the rest below; for that the text above stands until the owner approves it (Q-adr-0040-0041-owner-questions).
+
+- **Item 1, decided.** No Haiku, and no model cheaper than Opus 5.5, for paid users: the Owner (an Admin, for installed agents) no longer picks Haiku 5.5 or Sonnet 5.5 for any agent, and every catalogue, Listings' per-product catalogue (item 2) included, drops them in a new version. The defaults stand.
+- **Proposed** (ADR-0041 items 2 and 38, owner question 1): `low` effort leaves the offer too, so the choice is Opus 5.5 at `medium` or `high`, and the Owner may still raise a teammate to `high`. Item 6's catalogue version 2 is rewritten in place as Opus 5.5 only, with `AgentRunSafety@1` values in place of its turn and tool limits and a ContextPolicy reference, and still publishes only with the owner's confirmation.

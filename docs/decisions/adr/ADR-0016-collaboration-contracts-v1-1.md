@@ -89,3 +89,12 @@ Owner approval, 2026-10-18, in chat. Asked to accept the recommended answers to 
 "Same" refers to the recommended answers to Q1-Q6. The owner's answer replaces only Q5's "no administrator override".
 
 The answer did not define "workspace admin" or say how admin reads are recorded. Item 5 defines the admin condition with the existing ADR-0010 ownership rule and the human-only capability of item 1 that creates Asks, so that no role title, ownership record or other grant confers the read, and it makes every admin read audited and fail-closed. Both narrow the owner's choice and add no authority beyond it.
+
+## Amendments
+
+### 2026-10-26: items 3 and 5, harness writes in an Ask and what viewers learn of requests (ADR-0041 and ADR-0040, proposed)
+
+Proposed, not decided: ADR-0041 item 33 and ADR-0040 item 1 (both Proposed 2026-10-26) would change these items as below. The text above stands until the owner approves them (Q-adr-0040-0041-owner-questions).
+
+- **Item 3** (ADR-0041 item 33). In a private Ask, the Ask-bound envelope would allow named harness writes, each touching only the run's own state, with the Ask's owner as audience: `run.plan`, `run.complete`, `run.wait`, `agent.message` and `agent.cancel` on the run's own calls, `result.write` by teammates it calls, `memory.suggest`, `context.checkpoint` and the fork of ADR-0041 item 5. Teammate calls stay read-only, and `notebook.write`, `knowledge.propose`, `agent.propose` and `agent.route` stay refused in an Ask. `ask_admin_read` would omit memory suggestions, checkpoints, compaction summaries, plans' notes and epochs, and `AskPrivacyNotice` would say exactly what an admin read covers.
+- **Item 5** (ADR-0040 item 1, owner question 33). The accepted disclosure would become: a viewer of a shared conversation may learn that a request started there, and its state, teammates and times; a viewer never learns content, or a step, that they cannot see; a private Ask shows none of this to anyone but its owner, except through the audited admin read.

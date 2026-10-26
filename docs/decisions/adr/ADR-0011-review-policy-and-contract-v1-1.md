@@ -127,3 +127,11 @@ This accepts the recommended answers to P01.T02a Q0–Q9. The question's summary
 - 2026-10-18: ADR-0015 supersedes ADR-0006. Q8's "never paid work under ADR-0006" now reads as ADR-0015's pre-payment state; the rule is unchanged.
 - 2026-10-18: ADR-0018 refines Q1. A human-made governance proposal may have no task, and its `requestedBy` is then the proposer. Agents always need a task.
 - 2026-10-18: ADR-0015 (items 2 and 6) adds a billing layer to Q0's composition of v1.1: `schemas/v1.1/billing.schema.json`, applied by P01.T04a while v1.1 is a candidate, or in v1.2 if v1.1 is frozen first. Billing no longer stays at v1.
+
+## Amendments
+
+### 2026-10-26: Q1, whoever's words shaped a proposal (ADR-0041, proposed)
+
+Proposed, not decided: ADR-0041 item 32 (Proposed 2026-10-26; owner question 17 in Q-adr-0040-0041-owner-questions) would change Q1 as below. The text above stands until the owner approves it.
+
+A proposal's conflict set, checked when it is decided and again at dispatch, would gain every principal whose words or memory reached the drafting run: the authors of its `other_member` sources (ADR-0040 item 13), the requester of each notebook entry it read, and the authors cited by summaries or checkpoints it loaded. The review card names them. When every other eligible approver in a team is conflicted, the Owner may approve with the solo-owner confirmation phrase and cool-down, unless the Owner is one of them.

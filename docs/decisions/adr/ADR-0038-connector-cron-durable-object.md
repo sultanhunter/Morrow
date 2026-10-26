@@ -70,3 +70,12 @@ The owner then approved this record in so many words, in chat on 2026-10-25 (OD-
 > approve ADR-0038 to use durable objects
 
 What it approves: this record as written, items 1 to 5. The longer time limits (the routine stopgap) are not taken. The CLAUDE.md and `docs/plan/build-plan.md` stack-line wording above is applied in its own follow-up; a change to CLAUDE.md's standing rules has needed the owner's own confirmation of the text before (OD-2026-10-23-10).
+
+## Amendments
+
+### 2026-10-26: item 1, a second class and a conditional third (ADR-0040 and ADR-0041, proposed)
+
+Proposed, not decided: ADR-0040 item 15 and ADR-0041 item 35 (both Proposed 2026-10-26; owner questions 27 and 21 in Q-adr-0040-0041-owner-questions) would change item 1's "exactly one" class as below. The text above stands until the owner approves them.
+
+- **`LiveChannel`** (ADR-0040 item 15). A SQLite-backed class in the api Worker, one object per (workspace, principal), named on the server from the session's ids, with hibernatable WebSockets, empty storage, one alarm that closes sockets at session expiry, and ids-only publisher bindings by `script_name` from the orchestrator and the connector. It carries content-free hints only.
+- **A runtime SQL object, only if staging needs it** (ADR-0041 item 35). If T17's step-latency measurement misses its budget, the runtime's definers run through a location-hinted object near Neon: one class in the orchestrator Worker, ids-only RPC, no storage, no alarms, no route.

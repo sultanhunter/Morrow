@@ -105,3 +105,14 @@ The owner's answer in chat, verbatim, on 2026-10-26 (OD-2026-10-26-1), to the le
 What it decides: a loop run that fails draws nothing (item 2(g); which endings count as failed is the lead's proposal, put to the owner in Q-adr-0039-run-endings); the final-turn reserve stands (item 2(d) and (e)); the platform ceiling on buying credits stays; an optional per-agent credit limit that the Owner sets is built, none by default (item 7).
 
 The owner's answer on 2026-10-26 to Q-adr-0039-run-endings (OD-2026-10-26-2), in full: "recommended". It accepts the lead's recommendation as put in chat: a run that ends because of an error on Morrow's side or the AI provider's is free; a run that still gives an answer, or that a person stops, is charged; and a breaker pauses an agent after three failed runs in a row (item 2(g); Consequences).
+
+## Amendments
+
+### 2026-10-26: items 2(c) to 2(g), 5 and 9 (ADR-0041, proposed)
+
+Proposed, not decided: ADR-0041 items 3, 9, 18 and 34 (Proposed 2026-10-26; owner questions 3, 4, 6, 7 and 8 in Q-adr-0040-0041-owner-questions) would change these items as below. The text above, with the final-turn reserve the owner confirmed on 2026-10-26 (OD-2026-10-26-1), stands until the owner approves them. The owner's later rule of the same day, no finishing a job near a limit with an answer (OD-2026-10-26-6), is why owner question 6 asks.
+
+- **Items 2(c) to 2(f).** The final-turn reserve and `credits_exhausted` give way to parking: when a step's hold cannot be covered, the whole job pauses ("Paused: out of credits", with Add credits and Stop), draws nothing while paused, resumes oldest first once the wallet covers the next hold, and closes after 7 days paused, keeping its context. Holds follow the cache (the cached prefix at the cache-read rate). Compaction, checkpoints, reviews, summaries, consolidation and resends are ordinary paid steps; a failed ending stays free, as a refund at settlement (OD-2026-10-26-2).
+- **Item 2(g).** The limit endings it lists no longer exist; the free and charged endings and the three-failure breaker stand (OD-2026-10-26-2).
+- **Item 5.** The turn limit, 4 tool calls a turn and 40 a run, 2 questions, 30 minutes of wall time and the 64,000-token input cap give way to safety detectors and check-ins that pause a job and ask a person: 1,000 turns, 10,000 tool calls, 24 hours of active time, 7 days since the requester's last act, 32 children, and a cost check-in. None of them ends a job.
+- **Item 9.** End reasons drop `turn_limit`, `tool_call_limit`, `wall_time`, `deadline` and, with owner question 6, `credits_exhausted`, kept in the enums for old records; they add `person_wait_expired`, `checkin_unanswered`, `envelope_expired`, `lease_lapsed`, `internal_error` and `released`.

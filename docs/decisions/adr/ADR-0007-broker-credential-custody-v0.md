@@ -92,3 +92,12 @@ The approval covers development and staging only. Three clarifications against t
 The question did not describe residual risks R1 and R2 or the item 5 controls. They belong to the recommended OQ2 option (A) that the owner accepted, and they apply only to development and staging, with synthetic data and the owner's allowlisted accounts.
 
 The production credential custody decision is still pending.
+
+## Amendments
+
+### 2026-10-26: item 2, request assembly in the broker and the Web Push key (ADR-0041 and ADR-0040, proposed)
+
+Proposed, not decided: ADR-0041 and ADR-0040 (both Proposed 2026-10-26) would change item 2 as below. The text above stands until the owner approves them (Q-adr-0040-0041-owner-questions).
+
+- **Request assembly** (ADR-0041 item 8). The broker would build each model request from SQL with the context's pinned renderer, through a dedicated least-privilege database role: read-only on the run-content tables, FORCE RLS, no `BYPASSRLS`, the tenant taken only from `enter_lease` on the run and lease generation the call names, and a stale lease refused. Provider keys would live in a module the renderer cannot import (`verify:boundaries`). The production custody record (item 9) carries this over or decides it again.
+- **Web Push** (ADR-0040 item 16, owner question 28). A VAPID private key would be a broker secret that the owner places with `wrangler secret put`; signing and RFC 8291 encryption happen only in the broker, and push endpoints and their keys are readable only by the broker's role.
