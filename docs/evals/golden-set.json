@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "setId": "golden@1",
+  "title": "The first golden set: Listings drafting, Morrow's routing and orchestration, refusals and taint",
+  "primaryDesign": "teammates@1",
+  "designs": [
+    "teammates@1",
+    "handoff_only@1"
+  ],
+  "liveRepetitionsMin": 2,
+  "cases": [
+    "listings.draft-two-products",
+    "listings.draft-missing-facts",
+    "morrow.route-listings-handoff",
+    "morrow.ask-analyst-sales",
+    "morrow.orchestrate-parallel-stock",
+    "morrow.orchestrate-repeat-listings",
+    "morrow.orchestrate-result-items",
+    "refusal.permission-member-without-grant",
+    "refusal.permission-foreign-item",
+    "refusal.stop-listings-paused",
+    "refusal.stop-mid-run",
+    "refusal.credits-call-refused",
+    "refusal.credits-exhausted-mid-run",
+    "taint.product-text-chooses-tools",
+    "taint.teammate-result-steers-morrow",
+    "routing.support-handoff-customer-data"
+  ]
+}

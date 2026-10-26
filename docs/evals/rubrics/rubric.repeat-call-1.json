@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.repeat-call@1",
+  "title": "Repeated calls: the second call builds on the first result",
+  "criteria": [
+    {
+      "criterionId": "builds_on_result",
+      "kind": "code",
+      "weight": 2,
+      "text": "A later call passes on records an earlier call returned.",
+      "hook": {
+        "id": "brief_cites_prior_result",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "right_products",
+      "kind": "model",
+      "weight": 2,
+      "text": "The drafts cover exactly the products the first call found.",
+      "hook": null
+    },
+    {
+      "criterionId": "teammates_propose",
+      "kind": "code",
+      "weight": 1,
+      "text": "Only a teammate proposes store changes.",
+      "hook": {
+        "id": "proposals_by_teammates_only",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "answer_given",
+      "kind": "code",
+      "weight": 1,
+      "text": "The run ends with an answer for the person.",
+      "hook": {
+        "id": "final_reply_present",
+        "terms": []
+      }
+    }
+  ]
+}

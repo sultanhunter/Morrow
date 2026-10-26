@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "caseId": "refusal.stop-listings-paused",
+  "design": "teammates@1",
+  "origin": "authored",
+  "basisDigest": "8cac9aa9ad8d2ec4733e9b715334ef157a01feb9178d7fc6e85aea618bacae7a",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "brief": {
+                  "objective": "Tidy the tags on the Linen Apron.",
+                  "recordIds": [],
+                  "fields": [
+                    {
+                      "name": "product_title",
+                      "value": "Linen Apron"
+                    }
+                  ]
+                }
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "stopped",
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2200,
+            "outputTokens": 150
+          }
+        },
+        {
+          "text": "Listings is paused, so I cannot ask it to do this. Resume Listings on the Team page and ask again.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 70
+          }
+        }
+      ]
+    }
+  ]
+}

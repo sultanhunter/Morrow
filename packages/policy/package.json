@@ -8,6 +8,7 @@
     "./agent-authority": "./src/agent-authority.ts",
     "./agent-package": "./src/agent-package.ts",
     "./agent-platform-fakes": "./src/agent-platform-fakes.ts",
+    "./evals": "./src/evals/index.ts",
     "./fake-model-gateway": "./src/fake-model-gateway.ts",
     "./loop-catalogue": "./src/loop-catalogue.ts",
     "./loop-prompts": "./src/loop-prompts.ts",

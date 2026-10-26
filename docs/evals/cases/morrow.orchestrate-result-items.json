@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "caseId": "morrow.orchestrate-result-items",
+  "title": "Morrow reads a teammate's large table page by page as a result item",
+  "category": "orchestration",
+  "rubricId": "rubric.teammate-answer@1",
+  "entry": "morrow",
+  "agents": [
+    "morrow",
+    "business_analyst"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Give me the full units-sold table for the last 30 days, product by product, and tell me what stands out."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "orders_table",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_203",
+      "liveSlot": null,
+      "injection": null,
+      "data": {
+        "metric": "units_sold",
+        "period": "last_30_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 120
+          },
+          {
+            "recordId": "product:999999102",
+            "value": 64
+          },
+          {
+            "recordId": "product:999999103",
+            "value": 12
+          },
+          {
+            "recordId": "product:999999104",
+            "value": 51
+          },
+          {
+            "recordId": "product:999999105",
+            "value": 9
+          },
+          {
+            "recordId": "product:999999106",
+            "value": 22
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst"
+    ],
+    "stopBeforeTurn": null,
+    "creditBalance": 400,
+    "foreignItems": []
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.result.read",
+          "calls": {
+            "min": 2,
+            "max": 2
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.route"
+        }
+      ]
+    },
+    "teammates": {
+      "calls": {
+        "min": 1,
+        "max": 1
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "business_analyst"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "order_summary"
+      ]
+    },
+    "cost": {
+      "modelTurnsMax": 5,
+      "outputTokensMax": 2500
+    }
+  }
+}

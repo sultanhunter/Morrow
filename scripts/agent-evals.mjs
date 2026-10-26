@@ -1,0 +1,183 @@
+// The agent evals command (ADR-0037 item 10; its implementation plan's PR 9). Run it with
+// `npm run evals -- <command>` (node --import tsx):
+//   replay [--design=<design>]  Replays the golden set (docs/evals) in the eval world against
+//                               its recordings, for one design or, by default, every design
+//                               of the set; writes each EvalReport@1 and the comparison of
+//                               each design with the primary one (JSON and Markdown) under
+//                               agent-evals/ in the artifacts directory. Exits 1 unless every
+//                               case passes under the primary design. No network, model or
+//                               store: tests/agent-evals.test.mjs runs the same replay in
+//                               `npm test`.
+//   pin                         Rewrites each recording's basisDigest from its case's inputs,
+//                               after a deliberate change to a fixture or the world.
+//   compare <a.json> <b.json>   Prints the task-by-task comparison of two EvalReport@1 files.
+//   live --design=<design> --repetitions=<n> --bindings=<absolute path>
+//        --confirm-draws-workspace-credits
+//                               A live round in the deployed environment. It refuses, before
+//                               it reads the bindings or sends anything: in CI, without the
+//                               confirmation flag, while docs/decisions/agent-evals-live.json
+//                               is off (committed off; edge:check refuses it on before the
+//                               agent loop and a driver exist), with a bindings file inside
+//                               the repository, and without a deployed driver (none exists
+//                               yet). A round draws on the workspace's credits, within the
+//                               owner's Anthropic monthly limit.
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
+import { reviewedLiveEvalsRecord } from "./edge.mjs";
+
+const evals = await import("../packages/policy/src/evals/index.ts");
+
+export const evalsDirectory = "docs/evals";
+export const liveSwitchPath = "docs/decisions/agent-evals-live.json";
+const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+const jsonFiles = (directory) =>
+  readdirSync(directory)
+    .filter((name) => name.endsWith(".json"))
+    .sort()
+    .map((name) => join(directory, name));
+
+/** Every file of the golden set, as parsed JSON with its repository-relative path. */
+export function readEvalFiles(root = repositoryRoot) {
+  const base = join(root, evalsDirectory);
+  const read = (sub) =>
+    jsonFiles(join(base, sub)).map((path) => ({
+      path: path.slice(root.length + 1),
+      value: readJson(path),
+    }));
+  return {
+    set: readJson(join(base, "golden-set.json")),
+    cases: read("cases"),
+    rubrics: read("rubrics"),
+    recordings: read("recordings"),
+  };
+}
+/** The parsed, cross-checked library; each file's name must match its id. */
+export function loadEvalLibrary(root = repositoryRoot) {
+  const files = readEvalFiles(root);
+  for (const { path, value } of files.cases)
+    if (path !== `${evalsDirectory}/cases/${value?.caseId}.json`)
+      throw Error("EVAL_FILE_NAME:" + path);
+  for (const { path, value } of files.rubrics)
+    if (path !== `${evalsDirectory}/rubrics/${String(value?.rubricId).replace("@", "-")}.json`)
+      throw Error("EVAL_FILE_NAME:" + path);
+  for (const { path, value } of files.recordings)
+    if (
+      path !==
+      `${evalsDirectory}/recordings/${evals.recordingFileName(value?.caseId, value?.design)}`
+    )
+      throw Error("EVAL_FILE_NAME:" + path);
+  return evals.evalLibrary({
+    set: files.set,
+    cases: files.cases.map((f) => f.value),
+    rubrics: files.rubrics.map((f) => f.value),
+    recordings: files.recordings.map((f) => f.value),
+  });
+}
+
+/** Replays each design and compares every other design with the primary one. */
+export async function replayAll(library, designs = library.set.designs) {
+  const reports = new Map();
+  for (const design of designs)
+    reports.set(design, (await evals.replayRound(library, design)).report);
+  const primary = reports.get(library.set.primaryDesign);
+  const comparisons = primary
+    ? designs
+        .filter((design) => design !== library.set.primaryDesign)
+        .map((design) => evals.compareDesigns(reports.get(design), primary))
+    : [];
+  return { reports, comparisons };
+}
+
+async function pin(root = repositoryRoot) {
+  const library = loadEvalLibrary(root);
+  let changed = 0;
+  for (const { path, value } of readEvalFiles(root).recordings) {
+    const digest = await evals.recordingBasisDigest(library.cases.get(value.caseId));
+    if (value.basisDigest === digest) continue;
+    writeFileSync(
+      join(root, path),
+      JSON.stringify({ ...value, basisDigest: digest }, null, 2) + "\n",
+    );
+    changed += 1;
+  }
+  return changed;
+}
+
+function options(argv, allowed) {
+  const out = {};
+  for (const argument of argv) {
+    const match = /^--([a-z-]+)(?:=(.*))?$/s.exec(argument);
+    if (!match || !allowed.includes(match[1]) || match[1] in out)
+      throw Error("EVALS_USAGE: " + argument);
+    out[match[1]] = match[2] ?? true;
+  }
+  return out;
+}
+
+async function live(argv) {
+  const flags = options(argv, [
+    "design",
+    "repetitions",
+    "bindings",
+    "confirm-draws-workspace-credits",
+  ]);
+  let switchState = "off";
+  try {
+    switchState = reviewedLiveEvalsRecord(readJson(join(repositoryRoot, liveSwitchPath))).switch;
+  } catch {
+    switchState = "off";
+  }
+  const gate = evals.liveRoundGate({
+    environment: process.env,
+    confirmed: flags["confirm-draws-workspace-credits"] === true,
+    switchState,
+    bindingsPath: typeof flags.bindings === "string" ? resolve(flags.bindings) : null,
+    repositoryRoot,
+    // No deployed driver exists until the agent loop (PR #64) and teammate calls (ADR-0037
+    // plan PRs 4 and 5) land; the PR that adds one wires it here.
+    driverAvailable: false,
+  });
+  if (!gate.ok) throw Error(gate.code);
+  throw Error("EVAL_LIVE_DRIVER_UNAVAILABLE");
+}
+
+async function main([command, ...rest]) {
+  if (command === "replay") {
+    const flags = options(rest, ["design"]);
+    const library = loadEvalLibrary();
+    const designs = flags.design ? [flags.design] : library.set.designs;
+    if (designs.some((d) => !library.set.designs.includes(d))) throw Error("EVALS_DESIGN");
+    const { reports, comparisons } = await replayAll(library, designs);
+    for (const [design, report] of reports)
+      writeArtifact(`agent-evals/replay-${design.replace("@", "-")}.json`, report);
+    for (const comparison of comparisons) {
+      const name = `agent-evals/compare-${comparison.baseline.replace("@", "-")}-${comparison.candidate.replace("@", "-")}`;
+      writeArtifact(name + ".json", comparison);
+      writeArtifact(name + ".md", evals.renderComparison(comparison));
+    }
+    for (const [design, report] of reports) {
+      const t = report.totals;
+      console.log(
+        `${design}: ${t.pass} pass, ${t.fail} fail, ${t.error} error, ${t.skipped} skipped of ${t.cases}`,
+      );
+    }
+    const primary = reports.get(library.set.primaryDesign);
+    if (primary && primary.totals.pass !== primary.totals.cases)
+      throw Error("EVALS_PRIMARY_DESIGN_FAILED");
+  } else if (command === "pin" && !rest.length) {
+    console.log(`pinned ${await pin()} recording(s)`);
+  } else if (command === "compare" && rest.length === 2) {
+    const [a, b] = rest.map((path) => readJson(resolve(path)));
+    console.log(evals.renderComparison(evals.compareDesigns(a, b)));
+  } else if (command === "live") {
+    await live(rest);
+  } else throw Error("EVALS_USAGE: replay [--design=<d>] | pin | compare <a> <b> | live ...");
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  await main(process.argv.slice(2)).catch((error) => {
+    console.error(error?.message ?? String(error));
+    process.exit(1);
+  });

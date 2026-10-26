@@ -46,6 +46,8 @@ import {
   edgeAgentLoopPrerequisites,
   edgeAgentLoopVarNames,
   reviewedAgentLoopRecord,
+  edgeLiveEvalsPrerequisites,
+  reviewedLiveEvalsRecord,
   edgeShopKnowledgePrerequisites,
   reviewedModelRecord,
   reviewedPlanDraftsRecord,
@@ -2430,6 +2432,7 @@ test("model-provider-on: switched on, the full model set is required and every m
     ["off", "off", "off"],
   );
   for (const name of [
+    "agent-evals-live.json",
     "agent-loop-staging.json",
     "plan-drafts-staging.json",
     "shopify-write-staging.json",
@@ -2707,6 +2710,63 @@ test("the shop-knowledge switch: committed off; on is refused before its grants,
   }
 });
 
+// ADR-0037 plan PR 9 (ADR-0037 item 10): the live-evals switch is committed off, and edge:check
+// refuses it on until the agent loop is on and a deployed driver for teammate calls exists
+// (the loop's state is its reviewed record's, build order PR 11; the driver has no record yet,
+// so it counts as missing).
+test("the live-evals switch: committed off; on is refused before the loop and a driver", async () => {
+  const committed = JSON.parse(readFileSync("docs/decisions/agent-evals-live.json", "utf8"));
+  assert.deepEqual(
+    { ...reviewedLiveEvalsRecord(committed) },
+    { switch: "off", set_id: "golden@1" },
+  );
+  assert.deepEqual({ ...edgeLiveEvalsPrerequisites }, { agentLoop: "off", liveDriver: false });
+  const on = { ...committed, switch: "on" };
+  for (const prerequisites of [
+    undefined,
+    { agentLoop: "on", liveDriver: false },
+    { agentLoop: "off", liveDriver: true },
+  ])
+    assert.throws(() => reviewedLiveEvalsRecord(on, prerequisites), /EDGE_LIVE_EVALS_BEFORE_LOOP/);
+  assert.deepEqual(
+    { ...reviewedLiveEvalsRecord(on, { agentLoop: "on", liveDriver: true }) },
+    { switch: "on", set_id: "golden@1" },
+  );
+  for (const edit of [
+    (r) => (r.switch = true),
+    (r) => (r.set_id = "golden"),
+    (r) => delete r.set_id,
+    (r) => (r.extra = 1),
+    (r) => (r.environment_kind = "production"),
+    (r) => (r.schema_version = 2),
+    (r) => (r.scope = null),
+  ]) {
+    const record = structuredClone(committed);
+    edit(record);
+    assert.throws(() => reviewedLiveEvalsRecord(record), /EDGE_STAGING_LIVE_EVALS_RECORD/);
+  }
+  // Through verifyEdgeConfig: the committed record passes; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "live-evals-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [value, expected] of [
+    [on, "EDGE_LIVE_EVALS_BEFORE_LOOP"],
+    [{ ...committed, switch: "yes" }, "EDGE_STAGING_LIVE_EVALS_RECORD"],
+    [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+  ]) {
+    const found = codes(
+      await verify(resolve("."), undefined, {
+        liveEvalsPath: write("agent-evals-live.json", value),
+      }),
+    );
+    assert.deepEqual(found, [expected]);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Build order PR 11 (ADR-0027 item 11): the agent-loop switch, committed off. Its runtime
 // image is MORROW_AGENT_LOOP ("on") on the staging api, broker and orchestrator, beside the
@@ -2884,6 +2944,20 @@ test("PR 11: switched off, the loop var anywhere is a mixed state; on needs its 
   // On, every prerequisite recorded, the model switch on (committed) and the three vars: clean.
   const on = loopRecords((r) => ((r.switch = "on"), loopRecorded(r)));
   assert.deepEqual((await verify(tree(loopTurnedOn()), undefined, on)).problems, []);
+  // The live-evals switch reads the loop's record: with the loop on it is still refused on,
+  // because no deployed driver for teammate calls is recorded (ADR-0037 plan PR 9).
+  const evalsOn = join(on.evidenceRoot, "agent-evals-live.json");
+  writeFileSync(
+    evalsOn,
+    JSON.stringify({
+      ...JSON.parse(readFileSync("docs/decisions/agent-evals-live.json", "utf8")),
+      switch: "on",
+    }),
+  );
+  assert.deepEqual(
+    codes(await verify(tree(loopTurnedOn()), undefined, { ...on, liveEvalsPath: evalsOn })),
+    ["EDGE_LIVE_EVALS_BEFORE_LOOP"],
+  );
   // On with a Worker missing its var, or the var with another value: mixed or EDGE_VARS.
   const found = codes(
     await verify(

@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "caseId": "morrow.route-listings-handoff",
+  "design": "handoff_only@1",
+  "origin": "authored",
+  "basisDigest": "f0322af5f35837ebf7df16146518697835c8cb5f8a627e32f912483bdfa8cb9e",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": "Listings will walk you through it.",
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "agent.route",
+              "input": {
+                "installationId": "inst_listings",
+                "brief": "Walk the person through improving the Linen Apron's product page and draft the changes they agree to."
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": "listings-1"
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 250
+          }
+        },
+        {
+          "text": "Listings has the conversation now and will take you through each change.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 2800,
+            "outputTokens": 80
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "l1",
+              "tool": "products.read",
+              "input": {
+                "productIds": null,
+                "titleContains": "Linen Apron",
+                "limit": 1
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 1700,
+            "outputTokens": 100
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "l2",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999101",
+                    "title": null,
+                    "descriptionHtml": "<p>An apron in washed linen with an adjustable neck strap and two front pockets. One size. Machine wash cold.</p>",
+                    "seo": {
+                      "title": "Washed Linen Apron with Two Pockets",
+                      "description": "A washed linen apron with an adjustable neck strap and two front pockets. One size, machine washable."
+                    },
+                    "tags": [
+                      "apron",
+                      "linen",
+                      "kitchen"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 600
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "l3",
+              "tool": "message.post",
+              "input": {
+                "body": "I drafted a new description, SEO title and tags for the Linen Apron. Open the review to see each change, and tell me what to adjust."
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 3000,
+            "outputTokens": 150
+          }
+        },
+        {
+          "text": "The draft is ready for your review.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 3200,
+            "outputTokens": 40
+          }
+        }
+      ]
+    }
+  ]
+}
