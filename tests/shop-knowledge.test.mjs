@@ -32,6 +32,7 @@ import {
   toolEntry,
   toolsForContext,
 } from "../packages/policy/src/tool-catalogue.ts";
+import { fakeModelCall } from "../packages/policy/src/harness-fakes.ts";
 import { checkDraft } from "../packages/work/src/runs/drafting.ts";
 import {
   createKnowledgeApiHandler,
@@ -195,28 +196,22 @@ test("Listings gets the brand voice only as one marked data block: it chooses no
   // No accepted page, or a page the run may not view: nothing enters.
   assert.deepEqual(brandVoiceBlocks(null, all), []);
   assert.deepEqual(brandVoiceBlocks(page, none), []);
-  // One ModelCall@2 turn carrying it validates, and what the run may do does not depend on it:
-  // the tools come from the release and context, the fields and the product are checked in
-  // code against the run (a draft naming another product is product_mismatch).
-  const call = {
-    schemaVersion: 2,
-    purpose: "agent_turn",
-    turn: 1,
-    attempt: 1,
-    sequence: 1,
-    final: false,
-    prefixDigest: null,
-    messages: [
-      {
-        role: "user",
-        content: [
-          ...blocks,
-          { type: "data", source: "product", sourceId: null, text: '{"productId":"product:1"}' },
-        ],
-      },
+  // One user turn carrying it validates, and what the run may do does not depend on it: the
+  // tools come from the release and context, the fields and the product are checked in code
+  // against the run (a draft naming another product is product_mismatch). ModelCall@2 names
+  // ids only; the broker reads the turn from run_turns (ADR-0041 item 8).
+  const turn = {
+    role: "user",
+    content: [
+      ...blocks,
+      { type: "data", source: "product", sourceId: null, text: '{"productId":"product:1"}' },
     ],
   };
-  assert.ok(validateCurrentDefinition("ModelCallV2", call));
+  assert.ok(validateCurrentDefinition("UserModelMessage", turn));
+  assert.equal(
+    validateCurrentDefinition("ModelCallV2", { ...fakeModelCall(), messages: [turn] }),
+    false,
+  );
   const listingsTools = ["knowledge.search", "products.read", "report.write", "proposal.listing"];
   const offered = offeredTools("routed", listingsTools);
   assert.deepEqual(offered, offeredTools("routed", listingsTools));

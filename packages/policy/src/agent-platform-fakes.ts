@@ -562,10 +562,8 @@ export function fakeRunTurn(): Current_RunTurn {
     epoch: 1,
     purpose: "turn",
     notices: [],
-    input: {
-      role: "user",
-      content: [{ type: "text", text: "Improve the titles of my summer dresses." }],
-    },
+    // The epoch's first row: the opening carries the request (ADR-0041 item 10).
+    input: null,
     output: {
       role: "assistant",
       content: [

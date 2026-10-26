@@ -3,7 +3,9 @@
 // ADR-0026 (the rate card's shape, holds), ADR-0027 (agent-run@1, ModelCall@2 and
 // ModelResult@2, run_turns and run_tool_calls, model profiles), ADR-0028 (SpecialistSpec@1,
 // the Start document), ADR-0030 item 10 (sending addresses) and ADR-0031 (read tags), their
-// two new capabilities, and the fakes the loop and the screens build against. Pure: the
+// two new capabilities, and the fakes the loop and the screens build against. ADR-0041 edits
+// agent-run@1, ModelCall@2, ModelResult@2 and run_turns while v1.1 is unfrozen (harness
+// contracts, H6); tests/harness-contracts.test.mjs covers its new contracts. Pure: the
 // ahead-of-time validators only.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -16,7 +18,7 @@ import {
 } from "../packages/contracts/src/validation.ts";
 import * as fakes from "../packages/policy/src/agent-platform-fakes.ts";
 import {
-  conversationDigest,
+  createFakeContextStore,
   createFakeModelGateway,
   FakeModelGatewayError,
 } from "../packages/policy/src/fake-model-gateway.ts";
@@ -57,10 +59,9 @@ test("every fake validates against its contract", () => {
       ["ModelProfileTarget", p.target],
       ["ModelProfile", p.profile],
     ]),
-    ...["coordinator", "routed", "mandate", "specialist"].map((kind) => [
-      "AgentRunManifest",
-      fakes.fakeAgentRunManifest(kind),
-    ]),
+    ...["coordinator", "routed", "mandate", "specialist", "call", "review", "upkeep"].map(
+      (kind) => ["AgentRunManifest", fakes.fakeAgentRunManifest(kind)],
+    ),
   ];
   for (const [name, value] of cases) assert.ok(valid(name, value), name);
   assert.ok(validateCurrentBillingDefinition("RateCard", fakes.fakeRateCard()));
@@ -152,32 +153,35 @@ test("ADR-0024 items 1, 2, 6 and 9: mandate, trigger and batch documents are clo
 });
 
 test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds each kind's shape", () => {
-  assert.ok(
-    valid("AgentRunParams", {
-      schemaVersion: 1,
-      workflow: "agent-run@1",
-      organizationId: "org_a",
-      workspaceId: "ws_a",
-      runId: "run_a",
-    }),
-  );
-  for (const extra of ["model", "tools", "request", "storeId"])
+  // ADR-0041 item 6: each Workflow instance is one segment and incarnation of the run.
+  const params = {
+    schemaVersion: 1,
+    workflow: "agent-run@1",
+    organizationId: "org_a",
+    workspaceId: "ws_a",
+    runId: "run_a",
+    segment: 1,
+    incarnation: 1,
+  };
+  assert.ok(valid("AgentRunParams", params));
+  for (const extra of ["model", "tools", "request", "storeId", "contextId", "leaseGeneration"])
+    assert.equal(valid("AgentRunParams", { ...params, [extra]: "x" }), false, extra);
+  for (const missing of ["segment", "incarnation"])
     assert.equal(
-      valid("AgentRunParams", {
-        schemaVersion: 1,
-        workflow: "agent-run@1",
-        organizationId: "org_a",
-        workspaceId: "ws_a",
-        runId: "run_a",
-        [extra]: "x",
-      }),
+      valid(
+        "AgentRunParams",
+        edit(params, (p) => delete p[missing]),
+      ),
       false,
-      extra,
+      missing,
     );
   const coordinator = fakes.fakeAgentRunManifest("coordinator");
   const routed = fakes.fakeAgentRunManifest("routed");
   const mandate = fakes.fakeAgentRunManifest("mandate");
   const specialist = fakes.fakeAgentRunManifest("specialist");
+  const call = fakes.fakeAgentRunManifest("call");
+  const review = fakes.fakeAgentRunManifest("review");
+  const upkeep = fakes.fakeAgentRunManifest("upkeep");
   for (const [name, value] of [
     ["a coordinator with an installation", edit(coordinator, (m) => (m.installationId = "inst"))],
     [
@@ -192,26 +196,72 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
     ["a routed run with a mandate", edit(routed, (m) => (m.mandateId = "mandate_x"))],
     ["a specialist without its spec digest", edit(specialist, (m) => (m.specDigest = null))],
     ["a specialist without data classes", edit(specialist, (m) => (m.dataClasses = null))],
+    // ADR-0041 items 4 and 5: Morrow's runs name their purpose; a job's runs run under its
+    // envelope; a fork is only ever Morrow's background job.
+    ["a coordinator without a purpose", edit(coordinator, (m) => (m.purpose = null))],
+    ["a coordinator without an envelope", edit(coordinator, (m) => (m.envelopeId = null))],
+    ["a job run without its job", edit(coordinator, (m) => (m.jobId = null))],
     [
-      "a specialist on wall time",
-      edit(specialist, (m) => {
-        m.caps.wallTimeSeconds = 1800;
-        m.caps.deadline = null;
+      "a conversation run without its conversation",
+      edit(coordinator, (m) => {
+        m.purpose = "conversation";
+        m.conversationId = null;
+        m.lineage.forkedFromRunId = null;
+        m.lineage.forkedAtSequence = null;
       }),
     ],
-    // ADR-0027 item 6: the Coordinator, routed and mandate runs keep the 30-minute wall time;
-    // only a specialist runs on a deadline (ADR-0028 item 6).
-    ...[
-      ["a coordinator", coordinator],
-      ["a routed run", routed],
-      ["a mandate run", mandate],
-    ].map(([label, manifest]) => [
-      `${label} on a deadline`,
-      edit(manifest, (m) => {
-        m.caps.wallTimeSeconds = null;
-        m.caps.deadline = "2026-10-26T10:00:00.000Z";
+    [
+      "a fork of a conversation run",
+      edit(coordinator, (m) => {
+        m.purpose = "conversation";
       }),
-    ]),
+    ],
+    [
+      "a routed run that forks",
+      edit(routed, (m) => {
+        m.lineage.forkedFromRunId = "run_x";
+        m.lineage.forkedAtSequence = 3;
+      }),
+    ],
+    ["a routed run with a purpose", edit(routed, (m) => (m.purpose = "job"))],
+    ["a routed run without an envelope", edit(routed, (m) => (m.envelopeId = null))],
+    // ADR-0041 item 21: a teammate call is depth 1, keyed by its parent's tool use.
+    ["a call at depth 0", edit(call, (m) => (m.lineage.depth = 0))],
+    ["a call without its call id", edit(call, (m) => (m.lineage.callId = null))],
+    ["a call without its tool use", edit(call, (m) => (m.lineage.parentToolUseId = null))],
+    ["a call without an installation", edit(call, (m) => (m.installationId = null))],
+    ["a call outside an envelope", edit(call, (m) => (m.envelopeId = null))],
+    ["a depth-1 run without its parent", edit(call, (m) => (m.lineage.parentRunId = null))],
+    ["a depth-2 run", edit(call, (m) => (m.lineage.depth = 2))],
+    // ADR-0041 item 19: a review run is admitted by code at depth 1 under the root's envelope.
+    ["a review at depth 0", edit(review, (m) => (m.lineage.depth = 0))],
+    ["a review outside an envelope", edit(review, (m) => (m.envelopeId = null))],
+    // ADR-0041 items 26 and 27: an upkeep run holds no job, task or envelope, and a person
+    // requested it.
+    ["an upkeep run in a job", edit(upkeep, (m) => (m.jobId = "job_x"))],
+    ["an upkeep run on a task", edit(upkeep, (m) => (m.taskId = "task_x"))],
+    ["an upkeep run under an envelope", edit(upkeep, (m) => (m.envelopeId = "env_x"))],
+    [
+      "an upkeep run requested by an installation",
+      edit(upkeep, (m) => (m.requester = fakes.fakeMandateRequester())),
+    ],
+    [
+      "a fork point without the run it forks",
+      edit(coordinator, (m) => (m.lineage.forkedFromRunId = null)),
+    ],
+    // AgentRunSafety@1 replaces AgentRunCaps: no turn, tool-call, wall-time or money cap.
+    [
+      "the retired caps",
+      edit(routed, (m) => {
+        m.caps = { maxTurns: 12 };
+      }),
+    ],
+    ["a manifest without its safety profile", edit(routed, (m) => delete m.safety)],
+    ["a manifest without its pinned versions", edit(routed, (m) => delete m.pins)],
+    [
+      "max_tokens above the safety range",
+      edit(routed, (m) => (m.safety.turn.maxOutputTokens = 128001)),
+    ],
     // A routed run runs an installed agent, one per store (ADR-0028 item 1), and its tools act
     // on "this job's store"; a mandate run's trigger and a specialist's spec name one too.
     ["a routed run without a store", edit(routed, (m) => (m.storeId = null))],
@@ -227,34 +277,48 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
     ["a mandate run without a connection", edit(mandate, (m) => (m.connectionId = null))],
     ["a specialist without a store", edit(specialist, (m) => (m.storeId = null))],
     ["a specialist without a connection", edit(specialist, (m) => (m.connectionId = null))],
-    ["caps with neither clock", edit(routed, (m) => (m.caps.wallTimeSeconds = null))],
-    ["caps with both clocks", edit(routed, (m) => (m.caps.deadline = "2026-10-26T10:00:00.000Z"))],
-    ["more than 16 turns", edit(routed, (m) => (m.caps.maxTurns = 17))],
-    ["more than 4 tool calls a turn", edit(routed, (m) => (m.caps.maxToolCallsPerTurn = 5))],
     ["an unknown tool", edit(routed, (m) => m.tools.push("sql.query"))],
     ["a provider model id", edit(routed, (m) => (m.modelProfile.model = "claude-sonnet-5-5"))],
     ["a field the manifest does not have", edit(routed, (m) => (m.provider = "anthropic"))],
   ])
     assert.equal(valid("AgentRunManifest", value), false, name);
+  // A conversation turn of Morrow's main thread, and a Continue that attaches to a context.
+  const conversation = edit(coordinator, (m) => {
+    m.purpose = "conversation";
+    m.jobId = null;
+    m.lineage.forkedFromRunId = null;
+    m.lineage.forkedAtSequence = null;
+  });
+  assert.ok(valid("AgentRunManifest", conversation));
+  assert.ok(
+    valid(
+      "AgentRunManifest",
+      edit(routed, (m) => (m.lineage.continuesRunId = "run_before")),
+    ),
+  );
 });
 
 const userTurn = { role: "user", content: [{ type: "text", text: "Improve my titles." }] };
 const toolUse = (name, input, id = "toolu_1") => ({ type: "tool_use", id, name, input });
 const reply = (...content) => ({ role: "assistant", content });
-test("ADR-0027 item 4: ModelCall@2 is closed and provider-neutral; content blocks are typed by role and tool", () => {
+test("ADR-0027 item 4 as ADR-0041 item 8 edits it: ModelCall@2 is ids and digests only; content blocks are typed by role and tool", () => {
   const call = {
     schemaVersion: 2,
-    purpose: "agent_turn",
+    runId: "run_1",
+    leaseGeneration: 1,
+    contextId: "ctx_1",
+    epoch: 1,
+    throughSequence: 1,
+    expectedPrefixDigest: digest,
+    purpose: "turn",
     turn: 1,
     attempt: 1,
-    sequence: 1,
-    final: false,
-    prefixDigest: null,
-    messages: [userTurn],
   };
   assert.ok(valid("ModelCallV2", call));
-  // A call that names a selection, tool list, limit or provider fails before any request.
+  // A call that names a conversation, a selection, tool list, limit or provider fails before
+  // any request: the broker builds the request from SQL with the context's pinned renderer.
   for (const field of [
+    "messages",
     "model",
     "effort",
     "catalogueVersion",
@@ -263,11 +327,27 @@ test("ADR-0027 item 4: ModelCall@2 is closed and provider-neutral; content block
     "maxTokens",
     "provider",
     "system",
+    "final",
+    "prefixDigest",
   ])
     assert.equal(valid("ModelCallV2", { ...call, [field]: "x" }), false, field);
+  assert.equal(valid("ModelCallV2", { ...call, messages: [userTurn] }), false, "no messages");
   assert.equal(valid("ModelCallV2", { ...call, schemaVersion: 1 }), false);
-  assert.equal(valid("ModelCallV2", { ...call, turn: 17 }), false);
-  assert.equal(valid("ModelCallV2", { ...call, attempt: 3 }), false, "resent at most once");
+  for (const missing of ["runId", "leaseGeneration", "contextId", "expectedPrefixDigest"])
+    assert.equal(
+      valid(
+        "ModelCallV2",
+        edit(call, (c) => delete c[missing]),
+      ),
+      false,
+      missing,
+    );
+  // No turn limit and no final turn (ADR-0041 item 3): only the safety ranges.
+  assert.ok(valid("ModelCallV2", { ...call, turn: 1000, attempt: 3 }));
+  assert.equal(valid("ModelCallV2", { ...call, turn: 100001 }), false);
+  for (const purpose of ["turn", "compaction", "checkpoint", "review", "summary"])
+    assert.ok(valid("ModelCallV2", { ...call, purpose }), purpose);
+  assert.equal(valid("ModelCallV2", { ...call, purpose: "agent_turn" }), false);
   // A tool call's input is the input of the tool it names.
   const search = toolUse("knowledge.search", { searchText: "returns policy", limit: 5 });
   assert.ok(valid("AssistantModelMessage", reply(search)));
@@ -336,13 +416,33 @@ test("ADR-0027 item 4: ModelCall@2 is closed and provider-neutral; content block
     false,
     "untrusted data names a closed source",
   );
+  // A result carries its code label; above the inline bound it is an item's preview, and the
+  // block's own bound holds a full turn's budget (ADR-0041 items 10 and 11).
   const result = {
     type: "tool_result",
     toolUseId: "toolu_1",
+    label: "c1",
     outcome: "ok",
     content: "x".repeat(8193),
+    itemId: null,
   };
-  assert.equal(valid("ModelToolResultBlock", result), false, "8 KiB result bound");
+  assert.ok(valid("ModelToolResultBlock", result));
+  assert.ok(valid("ModelToolResultBlock", { ...result, itemId: "item_1" }));
+  assert.equal(
+    valid("ModelToolResultBlock", { ...result, content: "x".repeat(262145) }),
+    false,
+    "256 KiB block bound",
+  );
+  assert.equal(
+    valid(
+      "ModelToolResultBlock",
+      edit(result, (r) => delete r.label),
+    ),
+    false,
+    "every result is labelled",
+  );
+  for (const label of ["c0", "t1", "C1", "c1a", "c"])
+    assert.equal(valid("ModelToolResultBlock", { ...result, label }), false, label);
 });
 
 test("ADR-0027 item 4: ModelResult@2 carries a reply only with end_turn or tool_use", () => {
@@ -354,6 +454,9 @@ test("ADR-0027 item 4: ModelResult@2 carries a reply only with end_turn or tool_
     prefixDigest: digest,
     traceRef: { kind: "model_call", id: "call_1" },
     retryAfterMs: null,
+    compacted: null,
+    cleared: null,
+    sectionTokens: { tools: 1, system: 1, workspace: 1, opening: 1, conversation: 6 },
   };
   assert.ok(valid("ModelResultV2", ok));
   assert.equal(valid("ModelResultV2", { ...ok, message: null }), false);
@@ -362,6 +465,7 @@ test("ADR-0027 item 4: ModelResult@2 carries a reply only with end_turn or tool_
   assert.ok(
     valid("ModelResultV2", { ...ok, outcome: "uncertain", message: null, prefixDigest: null }),
   );
+  assert.equal(valid("ModelResultV2", { ...ok, sectionTokens: null }), false, "tokens by section");
   for (const field of ["providerRequestId", "stopReason", "model"])
     assert.equal(valid("ModelResultV2", { ...ok, [field]: "x" }), false, field);
   // A tool_use reply whose input breaks only a limit is still a reply (review F1).
@@ -402,23 +506,43 @@ test("ADR-0027 item 7: run_tool_calls rows hold ids, codes and digests only; a r
     "in flight",
   );
   assert.equal(valid("RunToolCall", { ...row, outcome: null }), false, "in flight has no result");
-  assert.equal(valid("RunToolCall", { ...row, resultBytes: 8193 }), false);
-  // Turns keep content with read tags and an expiry (ADR-0031 item 1).
+  // A result above the inline bound is a result item, never cut (ADR-0041 item 11).
+  assert.ok(valid("RunToolCall", { ...row, resultBytes: 1_048_576, itemId: "item_1" }));
+  assert.equal(valid("RunToolCall", { ...row, resultBytes: 67_108_865 }), false);
+  for (const label of ["c0", "x1", "c01"])
+    assert.equal(valid("RunToolCall", { ...row, label }), false, label);
+  for (const code of [
+    "parallel_limit",
+    "fork_first",
+    "retry_blocked",
+    "recall_out_of_scope",
+    "call_not_found",
+    "call_not_idle",
+    "milestone_too_soon",
+    "checkpoint_not_requested",
+  ])
+    assert.ok(valid("RunToolCall", { ...row, outcome: "refused", refusal: code }), code);
+  // Turns keep content with read tags, an audience, taint and an expiry (ADR-0031 item 1,
+  // ADR-0041 items 14 and 25), keyed by context and sequence.
   const turn = fakes.fakeRunTurn();
+  for (const field of ["expiresAt", "audience", "taint", "contextId", "sequence", "epoch"])
+    assert.equal(
+      valid(
+        "RunTurn",
+        edit(turn, (t) => delete t[field]),
+      ),
+      false,
+      field,
+    );
   assert.equal(
     valid(
       "RunTurn",
-      edit(turn, (t) => delete t.expiresAt),
+      edit(turn, (t) => (t.output.role = "user")),
     ),
     false,
   );
-  assert.equal(
-    valid(
-      "RunTurn",
-      edit(turn, (t) => (t.input.role = "assistant")),
-    ),
-    false,
-  );
+  assert.equal(valid("RunTurn", { ...turn, input: reply({ type: "text", text: "x" }) }), false);
+  assert.equal(valid("RunTurn", { ...turn, final: false }), false, "no final turn");
 });
 
 test("ADR-0027 items 9 and 12: a profile is keys and a catalogue version; its revision names a target", () => {
@@ -614,20 +738,44 @@ test("ADR-0026 item 5: the rate card's shape keeps the free list whole and the c
   assert.equal(valid("RunHold", { ...hold, holdUsd: "3.840000001" }), false);
 });
 
-// --- The fake model gateway (ModelCall@2 and ModelResult@2) ----------------------------
-const call = (turn, messages, prefixDigest, extra = {}) => ({
-  runId: "run_1",
-  call: {
-    schemaVersion: 2,
-    purpose: "agent_turn",
-    turn,
-    attempt: 1,
-    sequence: 1,
-    final: false,
-    prefixDigest,
-    messages,
-    ...extra,
-  },
+// --- The fake model gateway (ModelCall@2 and ModelResult@2; ADR-0041 item 8) -------------
+// The broker builds each request from the context store, never from the call: the call names
+// the run, its lease, the context, the epoch, how far to read and the prefix it expects.
+const opening = { role: "user", content: [{ type: "text", text: "Improve my titles." }] };
+function harness(script, runs = ["run_1"]) {
+  const store = createFakeContextStore();
+  for (const runId of runs) store.grantLease(runId, 1);
+  for (const [i, runId] of runs.entries()) {
+    store.openEpoch(`ctx_${i + 1}`, 1, opening);
+    store.attachRun(`ctx_${i + 1}`, runId);
+  }
+  return { store, gateway: createFakeModelGateway(script, { store }) };
+}
+// Appends a row to a context and names it in a call, as the orchestrator does.
+function next(store, input, extra = {}, contextId = "ctx_1", runId = "run_1") {
+  const sequence = store.append(contextId, { epoch: 1, purpose: "turn", input });
+  return {
+    sequence,
+    request: {
+      call: {
+        schemaVersion: 2,
+        runId,
+        leaseGeneration: 1,
+        contextId,
+        epoch: 1,
+        throughSequence: sequence,
+        expectedPrefixDigest: store.expectedPrefixDigest(contextId, 1, sequence),
+        purpose: "turn",
+        turn: sequence,
+        attempt: 1,
+        ...extra,
+      },
+    },
+  };
+}
+const toolResults = (id, outcome = "ok", content = "[]") => ({
+  role: "user",
+  content: [{ type: "tool_result", toolUseId: id, label: "c1", outcome, content, itemId: null }],
 });
 test("the fake gateway keeps the conversation append-only and binds each reply's prefix", async () => {
   const first = reply(
@@ -635,68 +783,68 @@ test("the fake gateway keeps the conversation append-only and binds each reply's
     toolUse("products.read", { productIds: null, titleContains: "dress", limit: 5 }),
   );
   const second = reply({ type: "text", text: "Proposed three new titles." });
-  const gateway = createFakeModelGateway([{ reply: first }, { reply: second }], {
-    tools: ["products.read", "proposal.listing"],
-  });
-  const one = await gateway.modelTurn(call(1, [userTurn], null));
+  const { store, gateway } = harness([{ reply: first }, { reply: second }]);
+  // The epoch's first row adds nothing: the opening carries the request.
+  const a = next(store, null);
+  const one = await gateway.modelTurn(a.request);
   assert.equal(one.outcome, "tool_use");
-  assert.equal(one.prefixDigest, conversationDigest([userTurn, first]));
-  const results = {
-    role: "user",
-    content: [{ type: "tool_result", toolUseId: "toolu_1", outcome: "ok", content: "[]" }],
-  };
-  // An edited history is refused before anything is sent.
-  const edited = { role: "user", content: [{ type: "text", text: "Improve my prices." }] };
-  const mismatch = await gateway.modelTurn(call(2, [edited, first, results], one.prefixDigest));
+  store.recordOutput("ctx_1", a.sequence, one.message);
+  const b = next(store, toolResults("toolu_1"));
+  // The reply's prefix digest is exactly what the next call must name.
+  assert.equal(one.prefixDigest, b.request.call.expectedPrefixDigest);
+  // A call naming any other prefix (an edited history) is refused before anything is sent.
+  const mismatch = await gateway.modelTurn({
+    call: { ...b.request.call, expectedPrefixDigest: digest },
+  });
   assert.equal(mismatch.outcome, "prefix_mismatch");
+  assert.equal(mismatch.usage, null);
   assert.equal(gateway.remaining(), 1, "nothing consumed");
-  const two = await gateway.modelTurn(call(2, [userTurn, first, results], one.prefixDigest));
+  const two = await gateway.modelTurn(b.request);
   assert.equal(two.outcome, "end_turn");
-  assert.equal(two.prefixDigest, conversationDigest([userTurn, first, results, second]));
+  assert.deepEqual(two.message, second);
+  assert.ok(valid("ModelResultV2", two));
+  // A recorded reply is never edited: the log is append-only.
+  store.recordOutput("ctx_1", b.sequence, two.message);
+  assert.throws(() => store.recordOutput("ctx_1", b.sequence, first), /OUTPUT_ALREADY_RECORDED/);
 });
 
-test("the fake gateway refuses a call naming a model and ends on an invalid tool use", async () => {
-  const gateway = createFakeModelGateway(
-    [
-      {
-        reply: reply(
-          toolUse("orders.summary", { metric: "refunds", period: "last_7_days", groupBy: "total" }),
-        ),
-      },
-      {
-        reply: reply(toolUse("products.read", { productIds: null, titleContains: null, limit: 1 })),
-      },
-      { outcome: "uncertain" },
-      { reply: reply({ type: "text", text: "ok" }) },
-    ],
-    { tools: ["products.read"] },
-  );
+test("the fake gateway refuses a call naming a model, and only a protocol break is invalid output", async () => {
+  const { store, gateway } = harness([
+    // A tool the run was not offered is still a reply: the tool step refuses it not_offered
+    // and the model corrects it (ADR-0041 item 8). There is no final turn.
+    {
+      reply: reply(
+        toolUse("orders.summary", { metric: "refunds", period: "last_7_days", groupBy: "total" }),
+      ),
+    },
+    { outcome: "uncertain" },
+    { reply: reply({ type: "text", text: "ok" }) },
+    // A tool outside the catalogue cannot be recorded: a protocol break.
+    { reply: reply(toolUse("sql.run", { sql: "select 1" })) },
+  ]);
+  const a = next(store, null);
   await assert.rejects(
-    gateway.modelTurn(call(1, [userTurn], null, { model: "claude_opus_5_5" })),
+    gateway.modelTurn({ call: { ...a.request.call, model: "claude_opus_5_5" } }),
     (error) => error instanceof FakeModelGatewayError && error.code === "MODEL_CALL_INVALID",
   );
-  // A tool the run was not offered is an invalid tool use.
-  assert.equal((await gateway.modelTurn(call(1, [userTurn], null))).outcome, "invalid_output");
-  // Any tool on the final turn is too (tool_choice none).
-  assert.equal(
-    (
-      await gateway.modelTurn({
-        runId: "run_2",
-        call: call(1, [userTurn], null, { final: true }).call,
-      })
-    ).outcome,
-    "invalid_output",
+  await assert.rejects(
+    gateway.modelTurn({ call: { ...a.request.call, messages: [userTurn] } }),
+    (error) => error instanceof FakeModelGatewayError && error.code === "MODEL_CALL_INVALID",
   );
-  // An uncertain turn records no prefix, so its one resend (attempt 2) is accepted.
-  assert.equal(
-    (await gateway.modelTurn({ runId: "run_3", call: call(1, [userTurn], null).call })).outcome,
-    "uncertain",
-  );
-  const resend = await gateway.modelTurn({
-    runId: "run_3",
-    call: call(1, [userTurn], null, { attempt: 2 }).call,
-  });
-  assert.equal(resend.outcome, "end_turn");
+  const unoffered = await gateway.modelTurn(a.request);
+  assert.equal(unoffered.outcome, "tool_use");
+  store.recordOutput("ctx_1", a.sequence, unoffered.message);
+  // An uncertain turn records no history, so its resend names the same prefix.
+  const b = next(store, toolResults("toolu_1", "refused", "not_offered"));
+  assert.equal((await gateway.modelTurn(b.request)).outcome, "uncertain");
+  store.recordOutcome("ctx_1", b.sequence, "uncertain");
+  const resend = next(store, toolResults("toolu_1", "refused", "not_offered"), { attempt: 2 });
+  assert.equal(resend.request.call.expectedPrefixDigest, b.request.call.expectedPrefixDigest);
+  const answered = await gateway.modelTurn(resend.request);
+  assert.equal(answered.outcome, "end_turn");
+  store.recordOutput("ctx_1", resend.sequence, answered.message);
+  const c = next(store, { role: "user", content: [{ type: "text", text: "Go on." }] });
+  assert.equal((await gateway.modelTurn(c.request)).outcome, "invalid_output");
 });
 
 test("review F1: a limit breach is the call's invalid_input and the run goes on; a shape breach ends it", async () => {
@@ -706,7 +854,7 @@ test("review F1: a limit breach is the call's invalid_input and the run goes on;
     toolUse("knowledge.search", { searchText: "returns policy", limit: 10 }, "toolu_2"),
   );
   const third = reply({ type: "text", text: "Found it." });
-  const gateway = createFakeModelGateway(
+  const { store, gateway } = harness(
     [
       { reply: first },
       { reply: second },
@@ -715,10 +863,12 @@ test("review F1: a limit breach is the call's invalid_input and the run goes on;
       { reply: reply(toolUse("knowledge.search", { searchText: "x", limit: "20" })) },
       { reply: reply(toolUse("knowledge.search", { searchText: "x", limit: 5, storeId: "s" })) },
     ],
-    { tools: ["knowledge.search"] },
+    ["run_1", "run_type", "run_extra"],
   );
-  const one = await gateway.modelTurn(call(1, [userTurn], null));
+  const a = next(store, null);
+  const one = await gateway.modelTurn(a.request);
   assert.equal(one.outcome, "tool_use", "the reply is valid; the limit is the tool's");
+  store.recordOutput("ctx_1", a.sequence, one.message);
   // The tool-call step validates the input with the full definition before dispatch.
   const check = checkToolInput(breach.name, breach.input);
   assert.deepEqual(check, { ok: false, outcome: "invalid_input", refusal: "input_invalid" });
@@ -735,36 +885,22 @@ test("review F1: a limit breach is the call's invalid_input and the run goes on;
       resultBytes: null,
     }),
   );
-  const results = {
-    role: "user",
-    content: [
-      {
-        type: "tool_result",
-        toolUseId: breach.id,
-        outcome: check.outcome,
-        content: "limit must be between 1 and 10",
-      },
-    ],
-  };
+  const results = toolResults(breach.id, check.outcome, "limit must be between 1 and 10");
   assert.ok(valid("UserModelMessage", results));
-  // The model calls again within the run's caps, and the run goes on.
-  const two = await gateway.modelTurn(call(2, [userTurn, first, results], one.prefixDigest));
+  // The model calls again and the run goes on.
+  const b = next(store, results);
+  const two = await gateway.modelTurn(b.request);
   assert.equal(two.outcome, "tool_use");
+  store.recordOutput("ctx_1", b.sequence, two.message);
   const fixed = second.content[0];
   assert.deepEqual(checkToolInput(fixed.name, fixed.input), { ok: true });
-  const okResults = {
-    role: "user",
-    content: [{ type: "tool_result", toolUseId: fixed.id, outcome: "ok", content: "[]" }],
-  };
-  const three = await gateway.modelTurn(
-    call(3, [userTurn, first, results, second, okResults], two.prefixDigest),
-  );
+  const c = next(store, toolResults(fixed.id));
+  const three = await gateway.modelTurn(c.request);
   assert.equal(three.outcome, "end_turn");
-  for (const runId of ["run_type", "run_extra"])
-    assert.equal(
-      (await gateway.modelTurn({ runId, call: call(1, [userTurn], null).call })).outcome,
-      "invalid_output",
-      runId,
-    );
+  for (const [index, runId] of ["run_type", "run_extra"].entries()) {
+    const contextId = `ctx_${index + 2}`;
+    const row = next(store, null, {}, contextId, runId);
+    assert.equal((await gateway.modelTurn(row.request)).outcome, "invalid_output", runId);
+  }
   assert.equal(gateway.remaining(), 0);
 });

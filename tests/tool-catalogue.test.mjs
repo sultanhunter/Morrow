@@ -254,6 +254,10 @@ test("ADR-0024 item 6: look-for-work is reads and suggestions only", () => {
   assert.equal(runContext("mandate", true), "look_for_work");
   assert.throws(() => runContext("routed", true), ToolCatalogueError);
   assert.throws(() => runContext("operator", false), ToolCatalogueError);
+  // ADR-0041 item 4's call, review and upkeep kinds get their tool contexts with tool
+  // catalogue version 4 (H5); until then admission cannot give them tools.
+  for (const kind of ["call", "review", "upkeep"])
+    assert.throws(() => runContext(kind, false), ToolCatalogueError, kind);
 });
 
 test("a run is offered its release's declared tools inside its context, in catalogue order", () => {

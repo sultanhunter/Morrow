@@ -4,8 +4,9 @@
 // broker will keep:
 //   - a call is a ModelCall@2 of ids and digests only: it names no message, provider, model,
 //     effort, tool list or limit, so the conversation can only come from the context store;
-//   - the lease: the call's run and lease generation must be the current lease, or the result
-//     is lease_refused and nothing is assembled or sent;
+//   - the lease: the call's run and lease generation must be the current lease, and the run must
+//     be the one attached to the call's context, or the result is lease_refused and nothing is
+//     assembled or sent;
 //   - assembly from the store, never from the caller: the epoch's opening, then every row of
 //     the epoch through throughSequence, in sequence order. The newest row is the one this call
 //     answers (its output still empty, its purpose the call's); every earlier row has its output;
@@ -71,7 +72,9 @@ export class FakeContextStoreError extends Error {
       | "EPOCH_INVALID"
       | "ROW_INVALID"
       | "OUTPUT_ALREADY_RECORDED"
-      | "LEASE_INVALID",
+      | "LEASE_INVALID"
+      | "CONTEXT_ATTACHED"
+      | "NOT_ATTACHED",
   ) {
     super(code);
     this.name = "FakeContextStoreError";
@@ -93,8 +96,9 @@ const rowEntry = (row: FakeContextRow, output = row.output): Entry => ({
 
 /**
  * An in-memory stand-in for the context tables and run leases the broker reads (run_turns,
- * context_epochs and agent_runs' lease generation). The orchestrator's writes are methods; the
- * broker's reads are `lease` and `assemble`.
+ * context_epochs, agent_runs' lease generation and the one run attached to each context). The
+ * orchestrator's writes are methods; the broker's reads are `lease`, `attachedRun` and
+ * `assemble`.
  */
 export function createFakeContextStore() {
   const contexts = new Map<
@@ -102,6 +106,8 @@ export function createFakeContextStore() {
     { readonly openings: Map<number, Current_UserModelMessage>; readonly rows: FakeContextRow[] }
   >();
   const leases = new Map<string, number>();
+  // One writer per context (ADR-0041 item 5; agent_contexts' partial unique index).
+  const writers = new Map<string, string>();
   const context = (contextId: string) => {
     const found = contexts.get(contextId);
     if (!found) throw new FakeContextStoreError("CONTEXT_UNKNOWN");
@@ -149,6 +155,19 @@ export function createFakeContextStore() {
         throw new FakeContextStoreError("LEASE_INVALID");
       leases.set(runId, generation);
     },
+    /** Attaches a run to a context as its one writer; another attached run refuses it. */
+    attachRun(contextId: string, runId: string): void {
+      context(contextId);
+      const writer = writers.get(contextId);
+      if (writer !== undefined && writer !== runId)
+        throw new FakeContextStoreError("CONTEXT_ATTACHED");
+      writers.set(contextId, runId);
+    },
+    /** Detaches a run when it ends or parks without a lease; the context keeps its log. */
+    detachRun(contextId: string, runId: string): void {
+      if (writers.get(contextId) !== runId) throw new FakeContextStoreError("NOT_ATTACHED");
+      writers.delete(contextId);
+    },
     /** Opens an epoch with its code-rendered opening; returns the epoch's prefix digest. */
     openEpoch(contextId: string, epoch: number, opening: Current_UserModelMessage): string {
       if (!validateCurrentDefinition("UserModelMessage", opening))
@@ -180,7 +199,12 @@ export function createFakeContextStore() {
         (row.input !== null && !validateCurrentDefinition("UserModelMessage", row.input)) ||
         notices.length > 8 ||
         notices.some((n) => !validateCurrentDefinition("ModelNotice", n)) ||
-        (row.purpose === "turn" && row.input === null && notices.length === 0) ||
+        // A turn adds content: its input, or notices (a resume). Only a turn with no answered
+        // row before it in its epoch may add nothing, since the opening carries the request.
+        (row.purpose === "turn" &&
+          row.input === null &&
+          notices.length === 0 &&
+          found.rows.some((r) => r.epoch === row.epoch && r.output !== null)) ||
         (row.purpose === "compaction" && row.input !== null)
       )
         throw new FakeContextStoreError("ROW_INVALID");
@@ -228,6 +252,9 @@ export function createFakeContextStore() {
     // --- the broker's reads ---
     lease(runId: string): number | null {
       return leases.get(runId) ?? null;
+    },
+    attachedRun(contextId: string): string | null {
+      return writers.get(contextId) ?? null;
     },
     assemble,
     /** The digest once a reply is recorded at the newest row: the next call's prefix. */
@@ -316,7 +343,13 @@ export function createFakeModelGateway(
     if (!validateCurrentDefinition("ModelCallV2", request.call))
       throw new FakeModelGatewayError("MODEL_CALL_INVALID");
     const call = request.call as Current_ModelCallV2;
-    if (options.store.lease(call.runId) !== call.leaseGeneration) return empty("lease_refused");
+    // The lease names the tenant and the run; the run must be the context's one writer, so a
+    // call cannot borrow another run's (or another person's) conversation.
+    if (
+      options.store.lease(call.runId) !== call.leaseGeneration ||
+      options.store.attachedRun(call.contextId) !== call.runId
+    )
+      return empty("lease_refused");
     const assembled = options.store.assemble(call.contextId, call.epoch, call.throughSequence);
     if (
       !assembled ||
