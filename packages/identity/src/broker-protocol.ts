@@ -105,8 +105,14 @@ export const brokerModelSecrets: readonly string[] = Object.freeze(["ANTHROPIC_A
 export type BrokerModelSwitch = "off" | "on";
 export const modelProviderVar = "MORROW_MODEL_PROVIDER";
 export const modelProviderAnthropic = "anthropic";
-/** An Anthropic Console API key (sk-ant-api03-…); never logged, never returned. */
-export const anthropicKeyPattern = /^sk-ant-api03-[A-Za-z0-9_-]{80,200}$/;
+/**
+ * An Anthropic Console API key; never logged, never returned. Two shapes: a legacy workspace
+ * key (sk-ant-api03-…) and an identity-backed personal or service-account key, whose type
+ * label is three lowercase letters (sk-ant-<label>-…; fix-anthropic-key-format). Admin keys
+ * (sk-ant-admin01-…), OAuth tokens (sk-ant-oat01-…) and session keys carry digits in their
+ * label and never match.
+ */
+export const anthropicKeyPattern = /^sk-ant-(?:api03|[a-z]{3})-[A-Za-z0-9_-]{80,200}$/;
 // Build order PR 7 (ADR-0029 items 3 and 10): the E2B API key, bound only to the broker and
 // required only while the reviewed runtime switch is not off. The switch is
 // docs/decisions/runtime-staging.json `switch` ("off", "cleanup_only" or "on"), committed

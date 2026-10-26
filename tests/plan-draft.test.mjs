@@ -184,7 +184,9 @@ test("plan.draft is ToolCatalogue@1's: grants nothing, on workspace.conversation
   assert.ok(Object.isFrozen(planDraftTool));
   // A catalogue entry names no grant: a tool is one capability and verb, checked per call.
   assert.equal(Object.hasOwn(planDraftTool, "grants"), false);
-  assert.equal(toolCatalogueVersion, 3, "a new tool is a new catalogue version (ADR-0037: 3)");
+  // Version 2 added plan.draft; version 3 (PR 20) knowledge.propose and notebook.write;
+  // version 4 (ADR-0037) the teammate tools.
+  assert.equal(toolCatalogueVersion, 4, "a new tool is a new catalogue version (ADR-0037: 4)");
   const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
   const post = catalogue.capabilities.find((c) => c.id === planDraftTool.capabilityId);
   assert.equal(post.executor, "agent_direct_write");

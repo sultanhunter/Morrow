@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "caseId": "morrow.ask-analyst-sales",
+  "design": "handoff_only@1",
+  "origin": "authored",
+  "basisDigest": "d4a59c2b6e349d87c9ee6f9e93201e75224ad37b46a31d074db7c42b5eb07eff",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "agent.route",
+              "input": {
+                "installationId": "inst_business_analyst",
+                "brief": "Answer the person: units sold over the last 7 days and the best seller."
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": "analyst-1"
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 200
+          }
+        },
+        {
+          "text": "Business Analyst will answer you in this thread.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 60
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "analyst-1",
+      "agent": "business_analyst",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "a1",
+              "tool": "orders.summary",
+              "input": {
+                "metric": "units_sold",
+                "period": "last_7_days",
+                "groupBy": "product"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 1600,
+            "outputTokens": 90
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "a2",
+              "tool": "message.post",
+              "input": {
+                "body": "Over the last 7 days you sold 64 units across three products. The Linen Apron sold the most (42)."
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2000,
+            "outputTokens": 120
+          }
+        },
+        {
+          "text": "Answered in the thread.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 2200,
+            "outputTokens": 30
+          }
+        }
+      ]
+    }
+  ]
+}

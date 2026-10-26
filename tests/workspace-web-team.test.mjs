@@ -50,8 +50,10 @@ const h = React.createElement;
 const ws = fixtureWorkspace.id;
 const command = (body) => ({ key: randomUUID(), body });
 
-test("the port: twelve methods (Activity moved to the inbox group), none composed over HTTP, and none sends a request", async () => {
-  assert.equal(teamPortMethods.length, 12);
+test("the port: eighteen methods (Activity moved to the inbox group), none composed over HTTP, and none sends a request", async () => {
+  // T7 PR 16's thirteen less Activity (v1 PR 15), and PR 20's five Shop knowledge methods and
+  // the agent's notebook (the shop-knowledge switch).
+  assert.equal(teamPortMethods.length, 18);
   for (const method of teamPortMethods) {
     assert.ok(portMethods.includes(method), method);
     assert.equal(composed[method], false, method);
@@ -84,9 +86,30 @@ test("the port: twelve methods (Activity moved to the inbox group), none compose
       "release-marketing",
       command({ documentDigest: "a".repeat(64), nonce: "b".repeat(64) }),
     ),
+    await port.team.notebook(ws, "agent-listings"),
     await port.settings.plan(ws),
     await port.settings.emailAddresses(ws),
     await port.library.knowledge(ws),
+    await port.library.knowledgePage(ws, "11111111-1111-4111-8111-111111111111"),
+    await port.library.addKnowledge(
+      ws,
+      command({ pageKind: "policy", title: "Returns", text: "30 days.", note: "" }),
+    ),
+    await port.library.editKnowledge(
+      ws,
+      "11111111-1111-4111-8111-111111111111",
+      command({ title: "Returns", text: "30 days.", note: "", expectedVersion: 1 }),
+    ),
+    await port.library.deleteKnowledge(
+      ws,
+      "11111111-1111-4111-8111-111111111111",
+      command({ expectedVersion: 1 }),
+    ),
+    await port.library.decideSuggestion(
+      ws,
+      "22222222-2222-4222-8222-222222222222",
+      command({ decision: "accept", digest: "c".repeat(64) }),
+    ),
     await port.library.files(ws),
     await port.settings.notifications(ws),
     await port.settings.reviseNotifications(
@@ -102,7 +125,7 @@ test("the port: twelve methods (Activity moved to the inbox group), none compose
   ];
   assert.deepEqual(
     outcomes.map((o) => o.kind),
-    Array(12).fill("not_in_build"),
+    Array(18).fill("not_in_build"),
   );
   assert.equal(recorded.calls.length, 0);
 });

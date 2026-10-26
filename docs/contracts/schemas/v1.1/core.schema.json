@@ -7133,7 +7133,7 @@
       "additionalProperties": false
     },
     "ToolName": {
-      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 added plan.draft (ADR-0034 item 2; PR 18). Version 3 (ADR-0037 items 1 to 3) replaces specialist.draft with agent.propose and adds agent.ask, agent.result.read and the called teammate's result.submit. A new tool is a new catalogue version and a deliberate schema change.",
+      "description": "ADR-0027 item 3 (PR 10): the closed tool names of ToolCatalogue@1, in catalogue order. Version 2 added plan.draft (ADR-0034 item 2; PR 18); version 3 added knowledge.propose and notebook.write (PR 20). Version 4 (ADR-0037 items 1 to 3) replaces specialist.draft with agent.propose and adds agent.ask, agent.result.read and the called teammate's result.submit. A new tool is a new catalogue version and a deliberate schema change.",
       "type": "string",
       "enum": [
         "knowledge.search",
@@ -7154,11 +7154,13 @@
         "proposal.listing",
         "proposal.reply",
         "plan.draft",
+        "knowledge.propose",
+        "notebook.write",
         "result.submit"
       ]
     },
     "ToolFamily": {
-      "description": "read: reads Morrow or store data, or one page of a teammate's result item; internal: writes internal work records (a called teammate's result included); coordination: Morrow's teammate calls, hand-offs, agent cards and plan cards; proposal: a digest-bound proposal for the gateway (ADR-0027's proposal.create family); computer: E2B tools under the runtime switch (none in version 3).",
+      "description": "read: reads Morrow or store data, or one page of a teammate's result item; internal: writes internal work records (a called teammate's result included); coordination: Morrow's teammate calls, hand-offs, agent cards and plan cards; proposal: a digest-bound proposal for the gateway (ADR-0027's proposal.create family); computer: E2B tools under the runtime switch (none in version 4).",
       "type": "string",
       "enum": [
         "read",
@@ -7178,7 +7180,7 @@
       ]
     },
     "ToolContext": {
-      "description": "Where a tool may be offered: the Coordinator (Morrow), a person's routed run (a hand-off), a mandate run, a look-for-work pass (reads and suggestions only, ADR-0024 item 6) or a called teammate's run (ADR-0037 item 3(a): no inbox.ask or message.post, so it cannot talk to the person; it ends with result.submit). Version 3 retires the specialist context with the specialist kind.",
+      "description": "Where a tool may be offered: the Coordinator (Morrow), a person's routed run (a hand-off), a mandate run, a look-for-work pass (reads and suggestions only, ADR-0024 item 6) or a called teammate's run (ADR-0037 item 3(a): no inbox.ask or message.post, so it cannot talk to the person; it ends with result.submit). Version 4 retires the specialist context with the specialist kind.",
       "type": "string",
       "enum": [
         "coordinator",
@@ -7609,7 +7611,7 @@
       "additionalProperties": false
     },
     "ToolInputAgentRoute": {
-      "description": "agent.route (catalogue version 3): Morrow hands work to one active teammate that must own the conversation with the person, on its own child task, with a structured brief and no character cap. Any number per run (ADR-0037 item 3(b)); it returns nothing to Morrow's run. Never in a private Ask.",
+      "description": "agent.route (catalogue version 4): Morrow hands work to one active teammate that must own the conversation with the person, on its own child task, with a structured brief and no character cap. Any number per run (ADR-0037 item 3(b)); it returns nothing to Morrow's run. Never in a private Ask.",
       "type": "object",
       "properties": {
         "installationId": {
@@ -9404,6 +9406,54 @@
               "$ref": "#/$defs/ToolUseId"
             },
             "name": {
+              "const": "knowledge.propose"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputKnowledgePropose"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
+              "const": "notebook.write"
+            },
+            "input": {
+              "$ref": "#/$defs/ToolModelInputNotebookWrite"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "name",
+            "input"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tool_use"
+            },
+            "id": {
+              "$ref": "#/$defs/ToolUseId"
+            },
+            "name": {
               "const": "result.submit"
             },
             "input": {
@@ -9822,7 +9872,7 @@
       ]
     },
     "ToolRefusalCode": {
-      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. Catalogue version 3 (ADR-0037 item 3) drops route_used (no limit of one hand-off per run) and adds the teammate codes: teammate_unavailable (not active, not on the code-built list, or the Coordinator), children_limit (the kernel's 32 children per envelope), insufficient_credits (the balance cannot cover the call's hold at once, or it would wait), result_customer_tagged, item_not_received (an item from a result this run did not receive), page_out_of_range, hand_off_in_ask, card_tool_excluded and card_limit (10 active workspace-created agents).",
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20 (catalogue version 3): customer_data (a run that read customer data proposes no shop knowledge) and pending_limit (a workspace holds at most 50 pending knowledge proposals). Catalogue version 4 (ADR-0037 item 3) drops route_used (no limit of one hand-off per run) and adds the teammate codes: teammate_unavailable (not active, not on the code-built list, or the Coordinator), children_limit (the kernel's 32 children per envelope), insufficient_credits (the balance cannot cover the call's hold at once, or it would wait), result_customer_tagged, item_not_received (an item from a result this run did not receive), page_out_of_range, hand_off_in_ask, card_tool_excluded and card_limit (10 active workspace-created agents).",
       "type": "string",
       "enum": [
         "not_offered",
@@ -9843,6 +9893,8 @@
         "result_too_large",
         "sender_inactive",
         "sender_not_usable",
+        "customer_data",
+        "pending_limit",
         "teammate_unavailable",
         "children_limit",
         "insufficient_credits",
@@ -9855,7 +9907,7 @@
       ]
     },
     "RunToolCallRecordRef": {
-      "description": "The first record an internal write made, returned again on replay. Catalogue version 3: agent.propose records an agent_card, agent.ask the teammate_run it started, result.submit the teammate_result.",
+      "description": "The first record an internal write made, returned again on replay. PR 20 (catalogue version 3) adds the knowledge proposal and the notebook entry. Catalogue version 4: agent.propose records an agent_card, agent.ask the teammate_run it started, result.submit the teammate_result.",
       "type": "object",
       "properties": {
         "kind": {
@@ -9867,6 +9919,8 @@
             "suggestion",
             "artifact",
             "proposal",
+            "knowledge_proposal",
+            "notebook_entry",
             "agent_card",
             "teammate_run",
             "teammate_result"
@@ -13605,6 +13659,474 @@
         "target"
       ]
     },
+    "KnowledgePageKind": {
+      "description": "PR 20 (shop knowledge; ADR-0031): the closed kinds of a shop knowledge page. A workspace holds at most one brand_voice page; its accepted version is the only page Listings reads, and only as marked data.",
+      "type": "string",
+      "enum": [
+        "brand_voice",
+        "policy",
+        "product_fact",
+        "supplier",
+        "decision"
+      ]
+    },
+    "KnowledgeTitle": {
+      "description": "A knowledge page's title: typed text, 1 to 120 characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "\\S"
+    },
+    "KnowledgeText": {
+      "description": "One version's text: typed text only, 1 to 8,000 characters (no uploads: they wait for their deletion path, P09.T05). Never customer data (ADR-0031 item 2): a page carries no customer tag.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000,
+      "pattern": "\\S"
+    },
+    "KnowledgeSourceKind": {
+      "description": "Where a version's text came from: a store product, a Morrow task, or a short note a person or agent wrote (for example 'Supplier price list, October').",
+      "type": "string",
+      "enum": [
+        "product",
+        "task",
+        "note"
+      ]
+    },
+    "KnowledgeSource": {
+      "description": "One source of a version: a product (value product:<id>), a task (value its Id) or a note (value 1 to 200 characters). Code checks the value against its kind (packages/policy/src/knowledge).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/KnowledgeSourceKind"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeSources": {
+      "description": "A version's sources: at most 5, distinct.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/KnowledgeSource"
+      },
+      "minItems": 0,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+    "KnowledgeAuthor": {
+      "description": "Who wrote a version: a person (installationId null), or an installed agent (its own principal and installation) whose proposal a person accepted.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "person",
+            "agent"
+          ]
+        },
+        "principalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "principalId",
+        "installationId"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeVersion": {
+      "description": "KnowledgeVersion@1 (PR 20): one version of a page, as a viewer may read it. Every version is a person's act: written by them, or an agent's proposal they accepted (acceptedByPrincipalId). Versions are append-only; deleting the page erases every version's text.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "pageId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "text": {
+          "$ref": "#/$defs/KnowledgeText"
+        },
+        "sources": {
+          "$ref": "#/$defs/KnowledgeSources"
+        },
+        "author": {
+          "$ref": "#/$defs/KnowledgeAuthor"
+        },
+        "acceptedByPrincipalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "proposalId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "pageId",
+        "version",
+        "title",
+        "text",
+        "sources",
+        "author",
+        "acceptedByPrincipalId",
+        "proposalId",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgePageSummary": {
+      "description": "One page in the viewer's list: the api lists a page only when the viewer holds view on every one of its read tags (ADR-0031 item 6); the tags never leave the server. It carries the current version's first 280 characters; the full text is read by its page.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "excerpt": {
+          "description": "The first 280 characters of the current version's text.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "version",
+        "updatedAt",
+        "excerpt"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgePage": {
+      "description": "KnowledgePage@1 (PR 20): one page and its current version, as a viewer may read it, with its version count. Page text is data, never instructions.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "current": {
+          "$ref": "#/$defs/KnowledgeVersion"
+        },
+        "versionCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "kind",
+        "current",
+        "versionCount",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "KnowledgeProposal": {
+      "description": "KnowledgeProposal@1 (PR 20): an installed agent's pending addition (knowledge.propose): a new page (pageId and baseVersion null) or a new version of a page made against its baseVersion. It grants nothing and changes no page; a person accepts or rejects this exact digest, and an accept of a page that changed since is stale. Only a pending proposal keeps its text. contextTaint says the run had consumed untrusted content (product text, mail, uploads or tool output), so the screen says so before a person accepts (ADR-0027 item 5).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "pageId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseVersion": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "text": {
+          "$ref": "#/$defs/KnowledgeText"
+        },
+        "sources": {
+          "$ref": "#/$defs/KnowledgeSources"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "contextTaint": {
+          "$ref": "#/$defs/ContextTaint"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "pageId",
+        "baseVersion",
+        "kind",
+        "title",
+        "text",
+        "sources",
+        "installationId",
+        "contextTaint",
+        "digest",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "NotebookText": {
+      "description": "One notebook entry: an agent's working note, 1 to 2,000 characters. Never customer data.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S"
+    },
+    "NotebookEntry": {
+      "description": "NotebookEntry@1 (PR 20): one entry of an installed agent's own notebook. People who can see the agent read it, each entry under its read tags (ADR-0031 item 6). The notebook is kept 90 days after its last write (ADR-0031 item 1) and goes with the installation.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "text": {
+          "$ref": "#/$defs/NotebookText"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "installationId",
+        "sequence",
+        "text",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputKnowledgePropose": {
+      "description": "knowledge.propose (PR 20): propose a new shop knowledge page (pageId null) or a new version of a page the run may see. It grants nothing and changes no page: a person accepts or rejects it. The server sets the read tags, the taint, the author and the page's version; a run that read customer data cannot propose.",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/KnowledgePageKind"
+        },
+        "title": {
+          "$ref": "#/$defs/KnowledgeTitle"
+        },
+        "text": {
+          "$ref": "#/$defs/KnowledgeText"
+        },
+        "sources": {
+          "$ref": "#/$defs/KnowledgeSources"
+        }
+      },
+      "required": [
+        "pageId",
+        "kind",
+        "title",
+        "text",
+        "sources"
+      ],
+      "additionalProperties": false
+    },
+    "ToolInputNotebookWrite": {
+      "description": "notebook.write (PR 20): one entry in the run's own installation's notebook. The server sets the installation, read tags and clock.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/NotebookText"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "ToolModelInputKnowledgePropose": {
+      "description": "knowledge.propose as the model is given it: ToolInputKnowledgePropose's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputKnowledgePropose before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pageId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "brand_voice",
+            "policy",
+            "product_fact",
+            "supplier",
+            "decision"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "product",
+                  "task",
+                  "note"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "pageId",
+        "kind",
+        "title",
+        "text",
+        "sources"
+      ]
+    },
+    "ToolModelInputNotebookWrite": {
+      "description": "notebook.write as the model is given it: ToolInputNotebookWrite's strict shape (types, enums, required keys, closed objects) without its length, range or pattern limits. The tool-call step validates the input again with ToolInputNotebookWrite before dispatch; a breach is the call's invalid_input, not an invalid output.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
     "TeammateRecordKind": {
       "description": "The kinds of record a teammate brief or finding names by id (ADR-0037 item 3(a)). A model-written id is never authority to read: code opens a result item only when it belongs to a result the calling Morrow run received, and any other record only as the teammate's own grants, the record's read tags and the requester's visibility allow.",
       "type": "string",
@@ -13690,7 +14212,7 @@
       "additionalProperties": false
     },
     "ToolInputAgentAsk": {
-      "description": "agent.ask (catalogue version 3; ADR-0037 item 3(a)): Morrow calls one active teammate from the code-built list in its opening context and waits for its TeammateResult@1. Any number per run, in sequence or in parallel, the same teammate again included; each call is one child at depth 1, admitted and checked alone.",
+      "description": "agent.ask (catalogue version 4; ADR-0037 item 3(a)): Morrow calls one active teammate from the code-built list in its opening context and waits for its TeammateResult@1. Any number per run, in sequence or in parallel, the same teammate again included; each call is one child at depth 1, admitted and checked alone.",
       "type": "object",
       "properties": {
         "installationId": {
@@ -13707,7 +14229,7 @@
       "additionalProperties": false
     },
     "ToolInputAgentResultRead": {
-      "description": "agent.result.read (catalogue version 3; ADR-0037 items 1 and 3(a)): one page of a result item that a teammate's result in this run listed. Pages start at 1. Code opens it only when the item belongs to a result Morrow's own run received and carries no customer read tag.",
+      "description": "agent.result.read (catalogue version 4; ADR-0037 items 1 and 3(a)): one page of a result item that a teammate's result in this run listed. Pages start at 1. Code opens it only when the item belongs to a result Morrow's own run received and carries no customer read tag.",
       "type": "object",
       "properties": {
         "itemId": {
@@ -13749,7 +14271,7 @@
       "additionalProperties": false
     },
     "ToolInputAgentPropose": {
-      "description": "agent.propose (catalogue version 3; ADR-0037 item 4): Morrow drafts one agent card. The model writes the name, purpose, instructions and any skill text, picks first-party skills by id and tools from the catalogue, and names any trigger kinds; code derives and writes the rest (capabilities and verbs, Shopify scopes, data classes, the store, run limits, the model profile and the taint). It grants nothing: only a person's approval of the exact card does. tools is the one reviewed exception to the rule that no tool input names tools (ADR-0037 item 4: tools from the fixed catalogue); code refuses agent.*, support.*, delegation and every excluded tool.",
+      "description": "agent.propose (catalogue version 4; ADR-0037 item 4): Morrow drafts one agent card. The model writes the name, purpose, instructions and any skill text, picks first-party skills by id and tools from the catalogue, and names any trigger kinds; code derives and writes the rest (capabilities and verbs, Shopify scopes, data classes, the store, run limits, the model profile and the taint). It grants nothing: only a person's approval of the exact card does. tools is the one reviewed exception to the rule that no tool input names tools (ADR-0037 item 4: tools from the fixed catalogue); code refuses agent.*, support.*, delegation and every excluded tool.",
       "type": "object",
       "properties": {
         "name": {
@@ -13968,7 +14490,7 @@
       "additionalProperties": false
     },
     "ToolInputResultSubmit": {
-      "description": "result.submit (catalogue version 3; ADR-0037 item 3(a)): a called teammate ends its run by returning its result to Morrow: an outcome, counts, closed next-step codes, a summary and typed findings, with no character cap. Code adds the run's ids, the records it created, its read tags and taint, and stores anything too large for one 8 KiB tool result as a result item (nothing is cut).",
+      "description": "result.submit (catalogue version 4; ADR-0037 item 3(a)): a called teammate ends its run by returning its result to Morrow: an outcome, counts, closed next-step codes, a summary and typed findings, with no character cap. Code adds the run's ids, the records it created, its read tags and taint, and stores anything too large for one 8 KiB tool result as a result item (nothing is cut).",
       "type": "object",
       "properties": {
         "outcome": {
@@ -15351,6 +15873,8 @@
               "proposal.listing",
               "proposal.reply",
               "plan.draft",
+              "knowledge.propose",
+              "notebook.write",
               "result.submit"
             ]
           }

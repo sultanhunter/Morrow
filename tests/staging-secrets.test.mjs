@@ -1022,9 +1022,19 @@ test("model-provider-on: the model switch sets the broker's Anthropic name and o
   const spec = specs(on)["anthropic-api-key"];
   assert.deepEqual([spec.required, spec.secret], [true, "ANTHROPIC_API_KEY"]);
   assert.ok(spec.format("sk-ant-api03-" + "A".repeat(80)));
+  // fix-anthropic-key-format: identity-backed personal and service-account keys carry a
+  // three-letter type label; their secret may hold "-" and "_".
+  assert.ok(spec.format("sk-ant-abc-" + "A1_-".repeat(23) + "xyz"));
   for (const bad of [
     "sk-ant-api03-short",
     "sk-ant-admin01-" + "A".repeat(90),
+    "sk-ant-oat01-" + "A".repeat(90),
+    "sk-ant-sid01-" + "A".repeat(90),
+    "sk-ant-ab-" + "A".repeat(90),
+    "sk-ant-abcd-" + "A".repeat(90),
+    "sk-ant-ABC-" + "A".repeat(90),
+    "sk-ant-abc-" + "A".repeat(79),
+    "sk-ant-abc-" + "A".repeat(90) + "\n",
     "sk-ant-api03-" + "A".repeat(90) + "\n",
     "sk-ant-api03-" + "A".repeat(201),
   ])

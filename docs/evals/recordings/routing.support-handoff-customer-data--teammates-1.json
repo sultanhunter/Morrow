@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "caseId": "routing.support-handoff-customer-data",
+  "design": "teammates@1",
+  "origin": "authored",
+  "basisDigest": "06e393e03d4e7d76d39cfd6e8fddcfcfdbd8e7c48891f8e407463f0735d8fc43",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": "Support handles customer messages; I am handing this to it.",
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "agent.route",
+              "input": {
+                "installationId": "inst_support",
+                "brief": {
+                  "objective": "Handle the customer's message about a late delivery.",
+                  "recordIds": [
+                    "thread_fake_501"
+                  ],
+                  "fields": [
+                    {
+                      "name": "topic",
+                      "value": "late delivery"
+                    }
+                  ]
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": "support-1"
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2300,
+            "outputTokens": 200
+          }
+        },
+        {
+          "text": "Support has this now: it will draft a reply for you to approve before anything is sent.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 60
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "support-1",
+      "agent": "support",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "s1",
+              "tool": "support.thread.read",
+              "input": {
+                "threadId": "thread_fake_501"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 1700,
+            "outputTokens": 80
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "s2",
+              "tool": "proposal.reply",
+              "input": {
+                "threadId": "thread_fake_501",
+                "body": "Hello, thank you for your message, and sorry your order has not arrived yet. We are checking with the carrier now and will write again within one working day with an update."
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2300,
+            "outputTokens": 260
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "s3",
+              "tool": "message.post",
+              "input": {
+                "body": "I drafted a reply to the customer about their late delivery. It waits for your approval before it is sent."
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 90
+          }
+        },
+        {
+          "text": "Reply drafted for approval.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 20
+          }
+        }
+      ]
+    }
+  ]
+}

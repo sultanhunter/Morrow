@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.listings-missing-facts@1",
+  "title": "Listings with missing material: asks instead of inventing",
+  "criteria": [
+    {
+      "criterionId": "no_invented_facts",
+      "kind": "model",
+      "weight": 3,
+      "text": "No description is written where the product data has no material for one.",
+      "hook": null
+    },
+    {
+      "criterionId": "asks_for_material",
+      "kind": "code",
+      "weight": 2,
+      "text": "The answer asks the person for the missing facts.",
+      "hook": {
+        "id": "reply_mentions_any",
+        "terms": [
+          "size",
+          "capacity",
+          "material",
+          "care"
+        ]
+      }
+    },
+    {
+      "criterionId": "answer_given",
+      "kind": "code",
+      "weight": 1,
+      "text": "The run ends with an answer for the person.",
+      "hook": {
+        "id": "final_reply_present",
+        "terms": []
+      }
+    }
+  ]
+}

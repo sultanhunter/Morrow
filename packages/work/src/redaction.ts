@@ -141,3 +141,82 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
     },
   ].map((handler) => Object.freeze(handler as StoreContentHandler)),
 );
+
+// The deletion path of the workspace-content classes that people and agents write (PR 20;
+// ADR-0031 items 1, 3 and 4; G9: a class has its path before real data of that class). Shop
+// knowledge pages "stay until a person deletes them, the store is redacted or the workspace is
+// erased"; notebooks are clocked 90 days and go with their installation. No runtime role holds
+// DELETE (tenant conformance S4), so each handler erases the content in place and keeps only
+// ids, digests and times; the owner's retention sweep removes clocked rows past their clock.
+// Built here: a person's page deletion (one transaction over every knowledge table below,
+// recorded in knowledge_deletions and the command log) and a person's notebook clear. Not yet
+// built, each with the work that brings its trigger: knowledge erased at shop/redact for a
+// store-tagged page (with lab:shopify-privacy) and at workspace erasure
+// (governance.privacy.erase), notebooks at agent uninstall, and the daily sweep of expired
+// notebook entries.
+export type WorkspaceContentTrigger = "person_delete" | "notebook_clear";
+export interface WorkspaceContentHandler {
+  /** schema.table, as the tenant-conformance registry names it. */
+  readonly table: string;
+  /** The class of ADR-0031 item 1. */
+  readonly dataClass: "knowledge_pages" | "notebooks";
+  readonly trigger: WorkspaceContentTrigger;
+  /** Erase the text in place, keeping ids, digests and times. */
+  readonly action: "erase_keep_digest";
+  /** How the handler finds one target's rows. */
+  readonly key: string;
+  /** The definer that runs it. */
+  readonly executor: string;
+  readonly executable: "PR 20";
+}
+export const workspaceContentHandlers: readonly WorkspaceContentHandler[] = Object.freeze(
+  (
+    [
+      {
+        table: "morrow_work.knowledge_pages",
+        dataClass: "knowledge_pages",
+        trigger: "person_delete",
+        action: "erase_keep_digest",
+        key: "id: the page (its title; deleted_at and deleted_by record the act)",
+        executor: "morrow_work.cmd_knowledge_delete",
+        executable: "PR 20",
+      },
+      {
+        table: "morrow_work.knowledge_versions",
+        dataClass: "knowledge_pages",
+        trigger: "person_delete",
+        action: "erase_keep_digest",
+        key: "page_id: every version of the page (title, text and sources)",
+        executor: "morrow_work.cmd_knowledge_delete",
+        executable: "PR 20",
+      },
+      {
+        table: "morrow_work.knowledge_search_entries",
+        dataClass: "knowledge_pages",
+        trigger: "person_delete",
+        action: "erase_keep_digest",
+        key: "page_id: the page's full-text entry (its document)",
+        executor: "morrow_work.cmd_knowledge_delete",
+        executable: "PR 20",
+      },
+      {
+        table: "morrow_work.knowledge_proposals",
+        dataClass: "knowledge_pages",
+        trigger: "person_delete",
+        action: "erase_keep_digest",
+        key: "page_id: the page's pending proposals, closed (a decision erases each one's text too)",
+        executor: "morrow_work.cmd_knowledge_delete",
+        executable: "PR 20",
+      },
+      {
+        table: "morrow_work.agent_notebook_entries",
+        dataClass: "notebooks",
+        trigger: "notebook_clear",
+        action: "erase_keep_digest",
+        key: "installation_id: every live entry of the installation's notebook",
+        executor: "morrow_work.cmd_notebook_clear",
+        executable: "PR 20",
+      },
+    ] as const
+  ).map((handler) => Object.freeze(handler as WorkspaceContentHandler)),
+);

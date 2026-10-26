@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "caseId": "refusal.permission-member-without-grant",
+  "design": "teammates@1",
+  "origin": "authored",
+  "basisDigest": "1f5adc7ac89f07d97a91e27cc6c545297037dd64902fc8f0730e1da98e79399b",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "c1",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "brief": {
+                  "objective": "Draft a new description for the Oak Serving Board that says it is hand finished.",
+                  "recordIds": [],
+                  "fields": [
+                    {
+                      "name": "product_title",
+                      "value": "Oak Serving Board"
+                    },
+                    {
+                      "name": "detail_from_person",
+                      "value": "hand finished"
+                    }
+                  ]
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": "listings-1"
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2300,
+            "outputTokens": 230
+          }
+        },
+        {
+          "text": "Listings could not draft that change: your account does not have permission to propose product page changes. Ask the Owner to make the request, or to give you that access.",
+          "calls": [],
+          "result": null,
+          "usage": {
+            "inputTokens": 3100,
+            "outputTokens": 140
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "l1",
+              "tool": "products.read",
+              "input": {
+                "productIds": null,
+                "titleContains": "Oak Serving Board",
+                "limit": 1
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 1600,
+            "outputTokens": 90
+          }
+        },
+        {
+          "text": null,
+          "calls": [
+            {
+              "id": "l2",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999102",
+                    "title": null,
+                    "descriptionHtml": "<p>A solid oak serving board, hand finished, 40 x 25 cm, with an oiled finish. Hand wash only.</p>",
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "authority_denied",
+                "child": null
+              }
+            }
+          ],
+          "result": null,
+          "usage": {
+            "inputTokens": 2200,
+            "outputTokens": 200
+          }
+        },
+        {
+          "text": null,
+          "calls": [],
+          "result": {
+            "outcome": "blocked",
+            "nextSteps": [
+              "needs_owner"
+            ],
+            "summary": "I could not propose the change: the person who asked cannot propose listing changes. The Owner, or someone with that right, needs to ask.",
+            "findings": [],
+            "items": []
+          },
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 150
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -77,7 +77,9 @@ export {
   PlanCreditsScreen,
   SettingsHomeScreen,
 } from "./screens/settings-pages";
-export { FilesScreen, ShopKnowledgeScreen } from "./screens/library";
+// PR 20: Shop knowledge (with Files, the same module) loads as its own chunk
+// (screens/lazy.tsx); nothing here re-exports screens/library.
+export { FilesScreen, ShopKnowledgeScreen } from "./screens/lazy";
 export { NotificationsScreen } from "./screens/notifications";
 export { ActivityScreen } from "./screens/activity";
 export { StopAllCard } from "./screens/stop-all";
