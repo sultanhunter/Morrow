@@ -8,7 +8,7 @@
 
 ## Progress
 
-At `main` `4b7063b1`, 2026-10-26.
+At `main` `2107859d`, 2026-10-26. ADR-0039's first code PR (#83: Listings' catalogue version 4, Opus 5.5 at medium and high, with no run or daily cap; migration 0056) merged that day too; it is not one of the PRs below.
 
 | State | PRs |
 | --- | --- |
@@ -281,7 +281,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
     - **Work is never cut short by a limit.** A job that trips a safety check, needs your answer or runs out of credits pauses, keeps its place and asks you; Continue picks it up (ADR-0041 item 3).
     - **Agents never run out of room.** When a job's working memory fills, older parts are summarised, and the facts that matter (your words, approvals, changes made, ids) are rewritten by code from the records (ADR-0041 items 11 and 13).
   - **Listings moves onto it.**
-  - **The model list:** Opus 5.5 only, at medium and high (catalogue version 2, rewritten Opus-only; ADR-0041 item 2). Haiku, Sonnet and low effort are gone, as you decided on 2026-10-26.
+  - **The model list:** Opus 5.5 only, at medium and high (catalogue version 2, rewritten Opus-only; ADR-0041 item 2). Haiku, Sonnet and low effort are gone, as you decided on 2026-10-26. Listings' own catalogue already is (version 4, merged in #83).
 - **Needs from you:** one yes to the catalogue version 2 values (its safety check-in values and prices).
 - **Size:** several L PRs (harness plan H4 to H8), each behind the agent-loop switch.
 - **Safety tests:**
@@ -438,7 +438,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
 
 Each new Shopify permission needs one "Reconnect" approval in your Shopify admin, which works after PR 5. Order and customer data each need their own deletion path first; the customer-data path (P09.T05) is now built first, as part of the foundation (your choice of 2026-10-26).
 
-COD Confirmation (ADR 0042: calls to cash-on-delivery customers through your own calling service, under a call plan you approve) is an installable agent and is not built now (2026-10-26). It is not one of these PRs.
+COD Confirmation (ADR 0042: calls to cash-on-delivery customers through your own calling service, under a call plan you approve) is an installable agent and is not built now (2026-10-26). It is not one of these PRs. You asked instead that the foundation be ready for agents like it: agents that read your store's live data, orders and customers included once their deletion paths exist, and act on store events and on schedules.
 
 ### PR 22. Business Analyst
 - **Delivers:**
