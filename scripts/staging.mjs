@@ -377,6 +377,24 @@ export async function stagingBillingTermsRows(root, environment = "staging") {
   } catch {
     throw new StagingError("STAGING_TERMS_INVALID");
   }
+  return checkedTermsRows(revisions);
+}
+// Review T1 of v1 build order PR 6: the same rows from the file as committed at `commit`
+// (the origin/main head mainPreconditions verified), never the working tree. `test-credits
+// renew` compares the database's terms with them before it renews.
+export async function committedBillingTermsRows(ctx, commit, environment = "staging") {
+  const text = await committedBlob(ctx, commit, billingTermsPath, "STAGING_TERMS_INVALID");
+  let revisions;
+  try {
+    revisions = JSON.parse(text).environments[environment];
+  } catch {
+    throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  return checkedTermsRows(revisions);
+}
+// Each published revision parsed with the billing module and its digest recomputed, then
+// the seed rows.
+async function checkedTermsRows(revisions) {
   const { tsImport } = await import("tsx/esm/api");
   const { parseTermsDocument, termsDocumentDigest } = await tsImport(
     "../packages/work/src/billing/terms.ts",
@@ -1234,8 +1252,12 @@ command("test-entitlement", {
 // entry (P01.T04a R10). Raising them (ADR-0035 item 4) is a new staging BillingTerms
 // revision in docs/decisions/billing-terms.json, published with the owner's per-use
 // approval, which the revision names as its committed owner record (seed-platform and
-// verify:billing refuse it otherwise; review R2); this command never takes an amount and
-// never reads that record.
+// verify:billing refuse it otherwise; review R2); this command never takes an amount.
+// Review T1: the database's terms are trusted only as far as they are the committed ones.
+// It reads billing-terms.json as committed at verified main, checks each
+// raise's owner record as seed-platform does (requireTermsRaiseRecords), and the runner
+// refuses with STAGING_SEED_DRIFT, before the renewal, a database holding a revision that
+// file lacks or one that differs from it (a revision written by hand outside the seed).
 // Refused in CI, without the standing approval, on any database but staging's binding, off
 // verified main, and (in the database) for any workspace the live-store app does not
 // invite, under any other grant, or in a database not marked staging. Prints one closed
@@ -1349,12 +1371,18 @@ command("test-credits", {
       evidenceRef: config.card.evidence,
     };
     testCreditsRenewInput(input);
+    // The staging terms committed at verified main, each raise with its owner's committed
+    // record (review R2), before any database statement; the runner holds the database's
+    // terms to them (review T1).
+    const terms = await committedBillingTermsRows(ctx, sourceCommit);
+    await requireTermsRaiseRecords(ctx, sourceCommit, terms);
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const renewed = await renewTestCredits({
       connect: ctx.database({ ownerUrl, binding }).connect,
       binding,
       administrator: ctx.administrator,
       input,
+      terms,
     });
     ctx.notice(
       testCreditsActivityLine({

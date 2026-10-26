@@ -1204,10 +1204,12 @@ export function billingTermsSeedRows(revisions) {
     }),
   );
 }
-export async function seedBillingTerms({ connect, binding, administrator, rows }) {
-  checkAdministrator(administrator);
+// Seed rows as billingTermsSeedRows builds them: [revision, terms, offers, digest], all
+// text, revisions 1, 2, ... in order.
+function checkTermsRows(rows) {
   if (
     !Array.isArray(rows) ||
+    rows.length > 1000 ||
     !rows.every(
       (row, index) =>
         Array.isArray(row) &&
@@ -1217,6 +1219,27 @@ export async function seedBillingTerms({ connect, binding, administrator, rows }
     )
   )
     throw new StagingError("STAGING_TERMS_INVALID");
+}
+// The stored BillingTerms revisions must be the first revisions of `rows`, exactly: none
+// that `rows` lack (more stored than `rows` hold) and none that differs in its terms,
+// offers or digest. Read under the table's SHARE ROW EXCLUSIVE lock, which conflicts with
+// any insert until the transaction ends, so no revision lands between this read and what
+// the transaction does next. Run as morrow_work_owner. Returns the number stored.
+async function requireStoredTermsPrefix(connection, rows) {
+  await connection.exec(termsStatements.lock);
+  const [{ n } = {}] = await connection.query(termsStatements.count);
+  if (!Number.isSafeInteger(n) || n < 0 || n > rows.length)
+    throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+  for (const row of rows.slice(0, n)) {
+    const [same] = await connection.query(termsStatements.same, row);
+    if (same?.same !== "true")
+      throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+  }
+  return n;
+}
+export async function seedBillingTerms({ connect, binding, administrator, rows }) {
+  checkAdministrator(administrator);
+  checkTermsRows(rows);
   const connection = await connectChecked(connect, binding, administrator);
   const admin = administrator.name;
   const written = {
@@ -1233,16 +1256,7 @@ export async function seedBillingTerms({ connect, binding, administrator, rows }
           `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
         );
       await connection.exec("SET LOCAL ROLE morrow_work_owner");
-      await connection.exec(termsStatements.lock);
-      const [{ n } = {}] = await connection.query(termsStatements.count);
-      const stored = Number.isSafeInteger(n) ? n : 0;
-      if (stored > rows.length)
-        throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
-      for (const row of rows.slice(0, stored)) {
-        const [same] = await connection.query(termsStatements.same, row);
-        if (same?.same !== "true")
-          throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
-      }
+      const stored = await requireStoredTermsPrefix(connection, rows);
       const [before] = await connection.query(platformStatements.read);
       if (before === undefined) {
         await connection.query(platformStatements.insert, [platformEnvironment]);
@@ -1513,6 +1527,13 @@ export async function grantTestEntitlement({
 // snapshot and never a payment row. Only `renewed` or `current` commits, after the closed result is
 // read; anything else commits nothing. A COMMIT that fails after `renewed` is an unknown
 // outcome: the rerun reads it back (`current` when it committed), never a blind retry.
+// Review T1 of PR 6 (the third review, of R1 to R3): the database's terms are trusted only
+// as far as they are the committed ones. `terms` are the staging revisions committed at
+// verified main (seed rows, each raise with its owner's record checked by the caller);
+// before the function runs, as morrow_work_owner under the terms table's lock, the stored
+// revisions must be exactly the first of them (the seed's own count and comparison), so a
+// revision written by hand outside the seed (0035's terms_guard admits one from the owner
+// role) is STAGING_SEED_DRIFT and is never funded.
 export const testCreditsOutcomes = Object.freeze([
   "renewed",
   "current",
@@ -1611,9 +1632,10 @@ export function testCreditsReport(outcome, result, workspaceId) {
     walletRevision: value.walletRevision,
   });
 }
-export async function renewTestCredits({ connect, binding, administrator, input }) {
+export async function renewTestCredits({ connect, binding, administrator, input, terms }) {
   checkAdministrator(administrator);
   const values = testCreditsRenewInput(input ?? {});
+  checkTermsRows(terms);
   const connection = await connectChecked(connect, binding, administrator);
   const admin = administrator.name;
   try {
@@ -1631,6 +1653,7 @@ export async function renewTestCredits({ connect, binding, administrator, input 
           `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
         );
       await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      await requireStoredTermsPrefix(connection, terms);
       const [row] = await connection.query(testCreditsRenewStatement, [...values]);
       outcome = testCreditsOutcomes.includes(row?.outcome) ? row.outcome : "unknown";
       if (outcome !== "renewed" && outcome !== "current")

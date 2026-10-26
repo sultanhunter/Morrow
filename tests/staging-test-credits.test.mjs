@@ -18,6 +18,7 @@ import * as stagingTools from "../scripts/staging.mjs";
 import {
   billingTermsPath,
   commands,
+  committedBillingTermsRows,
   main,
   requireTermsRaiseRecords,
   testCreditsActivityLine,
@@ -25,6 +26,7 @@ import {
   testCreditsRecordPath,
 } from "../scripts/staging.mjs";
 import { operatorRaise, raiseRecordPath, raiseRecordProblem } from "../scripts/terms-raise.mjs";
+import { termsDocumentDigest } from "../packages/work/src/billing/terms.ts";
 import {
   billingTermsSeedRows,
   liveStoreWorkspaceStatement,
@@ -327,6 +329,11 @@ const raisedRevision = (creditUnits = "1000", ownerRecord = raiseRecord) => {
   // The digest is not checked by these rules (verify:billing and the seed check it).
   revision.digest = "e".repeat(64);
   return ownerRecord === null ? revision : { ...revision, ownerRecord };
+};
+// The same raise with its own digest, as main's file would publish it.
+const signedRaise = async (creditUnits = "1000", ownerRecord = raiseRecord) => {
+  const revision = raisedRevision(creditUnits, ownerRecord);
+  return { ...revision, digest: await termsDocumentDigest(revision.terms, revision.offers) };
 };
 
 test("terms raise: only credits other than 300 are a raise, and its record names the revision, the credits and the owner's words (review R2)", () => {
@@ -655,10 +662,24 @@ test("test-credits: the definer's result is closed, period 0 only as current, a 
   );
 });
 
-const renewWorld = ({ n = 1, outcome = "renewed", result = renewed, commitError = null } = {}) =>
+// The staging terms as committed (revision 1), as seed rows; the fake database holds
+// `stored` revisions, each the same as the committed one unless `same` says otherwise.
+const stagingRows = billingTermsSeedRows(termsFile.environments.staging);
+const termsCount = /^SELECT count\(\*\)::int AS n FROM morrow_billing\.billing_terms$/;
+const termsSame = /AS same FROM morrow_billing\.billing_terms WHERE terms_revision/;
+const renewWorld = ({
+  n = 1,
+  stored = 1,
+  same = "true",
+  outcome = "renewed",
+  result = renewed,
+  commitError = null,
+} = {}) =>
   fakeDatabase({
     rules: [
       [/FROM morrow_identity\.shopify_apps WHERE live_store/, [{ n }]],
+      [termsCount, [{ n: stored }]],
+      [termsSame, [{ same }]],
       [
         /operator_test_entitlement_renew/,
         [{ outcome, result: result === null ? null : JSON.stringify(result) }],
@@ -666,12 +687,13 @@ const renewWorld = ({ n = 1, outcome = "renewed", result = renewed, commitError 
     ],
     execError: commitError ? { pattern: /^COMMIT$/, error: commitError } : undefined,
   });
-const runRenew = (db, given = input) =>
+const runRenew = (db, given = input, terms = stagingRows) =>
   renewTestCredits({
     connect: db.connector().connect,
     binding: labBinding,
     administrator,
     input: given,
+    terms,
   }).then(
     (done) => done,
     (error) => error,
@@ -680,7 +702,7 @@ const runRenew = (db, given = input) =>
 test("test-credits: the live-store app's workspace first, then the renewal as the work owner under D4; commits only renewed or current", async () => {
   const db = renewWorld();
   assert.deepEqual(await runRenew(db), { outcome: "renewed", ...renewed });
-  assert.deepEqual(afterBegin(db).slice(0, 12), [
+  assert.deepEqual(afterBegin(db).slice(0, 15), [
     "BEGIN",
     "GRANT morrow_identity_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE",
     "SET LOCAL ROLE morrow_identity_owner",
@@ -689,6 +711,9 @@ test("test-credits: the live-store app's workspace first, then the renewal as th
     "REVOKE morrow_identity_owner FROM neondb_owner GRANTED BY neondb_owner",
     "GRANT morrow_work_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE",
     "SET LOCAL ROLE morrow_work_owner",
+    "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
+    "SELECT count(*)::int AS n FROM morrow_billing.billing_terms",
+    "SELECT (terms = $2::jsonb AND offers = $3::jsonb AND digest = $4::text)::text AS same FROM morrow_billing.billing_terms WHERE terms_revision = $1::bigint",
     testCreditsRenewStatement,
     "RESET ROLE",
     "REVOKE morrow_work_owner FROM neondb_owner GRANTED BY neondb_owner",
@@ -746,6 +771,58 @@ test("test-credits: a COMMIT that fails after renewed is an unknown outcome, nev
   );
   assert.equal(quiet.code, "STAGING_TEST_CREDITS_FAILED");
   assert.equal(quiet.details.sqlstate, "08006");
+});
+
+test("test-credits: the database's terms must be the committed staging revisions, or nothing is renewed (review T1)", async () => {
+  // The stored revision is compared with the committed row, under the terms table's lock,
+  // before the renewal statement.
+  const db = renewWorld();
+  assert.deepEqual(await runRenew(db), { outcome: "renewed", ...renewed });
+  assert.deepEqual(db.statements.find((s) => termsSame.test(s.text)).params, [...stagingRows[0]]);
+  // Fewer stored than committed (a committed revision not yet seeded): the stored ones are
+  // compared, and the function reads the latest of them.
+  const raised = billingTermsSeedRows([termsFile.environments.staging[0], raisedRevision()]);
+  const behind = renewWorld();
+  assert.equal((await runRenew(behind, input, raised)).outcome, "renewed");
+  assert.equal(behind.statements.filter((s) => termsSame.test(s.text)).length, 1);
+  // A revision the committed file lacks (one written by hand outside the seed), a stored
+  // revision that differs, or a count that is not one: drift, before the renewal statement,
+  // with nothing committed.
+  for (const [label, world, terms] of [
+    ["a revision the committed file lacks", { stored: 2 }, stagingRows],
+    ["a revision stored with no committed revision at all", { stored: 1 }, []],
+    ["a stored revision that differs", { same: "false" }, stagingRows],
+    ["a second stored revision that differs", { stored: 2, same: "false" }, raised],
+    ["a count that is not a number", { stored: "1" }, stagingRows],
+    ["a negative count", { stored: -1 }, stagingRows],
+  ]) {
+    const drifted = renewWorld(world);
+    const error = await runRenew(drifted, input, terms);
+    assert.equal(error.code, "STAGING_SEED_DRIFT", label);
+    assert.deepEqual(error.details, { table: "billing_terms" }, label);
+    assert.ok(!sent(drifted).includes("operator_test_entitlement_renew"), label);
+    assert.ok(!afterBegin(drifted).includes("COMMIT"), label);
+  }
+  // No database at all without terms, or for terms that are not seed rows.
+  for (const terms of [
+    undefined,
+    null,
+    "[]",
+    [["1", "{}", "[]"]],
+    [["2", "{}", "[]", "d".repeat(64)]],
+    [[1, "{}", "[]", "d".repeat(64)]],
+  ]) {
+    const unused = renewWorld();
+    const error = await renewTestCredits({
+      connect: unused.connector().connect,
+      binding: labBinding,
+      administrator,
+      input,
+      ...(terms === undefined ? {} : { terms }),
+    }).catch((caught) => caught);
+    assert.equal(error.code, "STAGING_TERMS_INVALID", JSON.stringify(terms));
+    assert.equal(unused.statements.length, 0);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -890,12 +967,17 @@ async function cliWorld({
   environment = {},
   binding,
   at = now,
+  extraFiles = {},
+  stored = 1,
+  same = "true",
 } = {}) {
   const planted = plantedHome({ "neon-owner-url": ownerUrl });
   const root = mkdtempSync(join(tmpdir(), "morrow-test-credits-root-"));
   const committed = files ?? {
     [standingEvidence]: { text: standingText },
     ...(record === null ? {} : { [testCreditsRecordPath]: { text: record } }),
+    [billingTermsPath]: { text: read(billingTermsPath) },
+    ...extraFiles,
   };
   const fake = fakeTools({ git: { files: committed, ...git } });
   const { ctx, out, err, notices } = await fakeContext({
@@ -906,10 +988,18 @@ async function cliWorld({
     now: at,
     environment,
     ...(binding === undefined ? {} : { binding }),
+    // renew reads the terms committed at verified main, never the working tree's.
+    overrides: {
+      billingTerms: async () => {
+        throw new Error("the working tree's terms were read");
+      },
+    },
   });
   const db = fakeDatabase({
     rules: [
       [/FROM morrow_identity\.shopify_apps WHERE live_store/, [{ n }]],
+      [termsCount, [{ n: stored }]],
+      [termsSame, [{ same }]],
       [/operator_test_entitlement_renew/, [{ outcome, result: JSON.stringify(result) }]],
     ],
   });
@@ -952,13 +1042,17 @@ test("cli: test-credits renew takes the workspace and grant from the committed r
       w.notices[0],
       /^\| 2026-11-25 \| `staging:test-credits -- renew` .* \| renewed period 1: 300 test credits/,
     );
-    // The record, the standing record and nothing else were read from main's tree by blob
-    // id; the owner URL and its password never reach any output.
+    // The record, the standing record and the billing terms and nothing else were read
+    // from main's tree by blob id; the database's terms were compared with main's revision
+    // 1; the owner URL and its password never reach any output.
     const lsTree = w.fake.calls.filter((c) => c.tool === "git" && c.args[0] === "ls-tree");
     assert.deepEqual(
       lsTree.map((c) => c.args.at(-1)),
-      [standingEvidence, testCreditsRecordPath],
+      [standingEvidence, testCreditsRecordPath, billingTermsPath],
     );
+    assert.deepEqual(w.db.statements.find((s) => termsSame.test(s.text)).params, [
+      ...stagingRows[0],
+    ]);
     const printed = [...w.out, ...w.err, ...w.notices].join("\n");
     assert.ok(!printed.includes("p".repeat(24)) && !printed.includes("postgresql://"));
   } finally {
@@ -1090,5 +1184,109 @@ test("cli: the database refuses another workspace and every refusal outcome, pri
     );
   } finally {
     again.cleanup();
+  }
+});
+
+test("cli: test-credits renew holds the database's terms to the ones committed at verified main (review T1)", async () => {
+  // main's terms with a raise to 1,000 as revision 2, with or without its owner's record.
+  const committedRaise = (revision) => ({
+    [billingTermsPath]: { text: raisedTerms(revision) },
+  });
+  // The rows renew builds from main's file: parsed by the billing module with its digest.
+  const fake = fakeTools({
+    git: { files: { [billingTermsPath]: { text: read(billingTermsPath) } } },
+  });
+  assert.deepEqual(
+    await committedBillingTermsRows({ tools: fake.tools }, fakeSha("main")),
+    stagingRows,
+  );
+  for (const [label, options, code] of [
+    // The owner role's hand-written revision 2 in the database, which main's file lacks.
+    ["a revision main's terms lack", { stored: 2 }, "STAGING_SEED_DRIFT"],
+    ["a stored revision that differs from main's", { same: "false" }, "STAGING_SEED_DRIFT"],
+  ]) {
+    const w = await cliWorld(options);
+    try {
+      assert.equal(await main(argv, w.ctx), 1, label);
+      assert.deepEqual(JSON.parse(w.err.at(-1)), {
+        command: "test-credits",
+        code,
+        table: "billing_terms",
+      });
+      assert.ok(!sent(w.db).includes("operator_test_entitlement_renew"), label);
+      assert.ok(!afterBegin(w.db).includes("COMMIT"), label);
+      assert.equal(w.notices.length, 0, label);
+    } finally {
+      w.cleanup();
+    }
+  }
+  // Before any database statement: main's terms missing or malformed, a revision whose
+  // digest is not its own, and a raise without the owner's committed record (review R2).
+  const forgedDigest = JSON.parse(read(billingTermsPath));
+  forgedDigest.environments.staging[0].digest = "e".repeat(64);
+  for (const [label, extraFiles, code] of [
+    ["no committed terms", { [billingTermsPath]: undefined }, "STAGING_TERMS_INVALID"],
+    ["malformed terms", { [billingTermsPath]: { text: "{" } }, "STAGING_TERMS_INVALID"],
+    [
+      "a digest that is not the revision's",
+      { [billingTermsPath]: { text: JSON.stringify(forgedDigest) } },
+      "STAGING_TERMS_INVALID",
+    ],
+    [
+      "a raise without its owner's record",
+      committedRaise(await signedRaise("1000", null)),
+      "STAGING_TERMS_RAISE_UNRECORDED",
+    ],
+    [
+      "a raise whose record is not committed",
+      committedRaise(await signedRaise()),
+      "STAGING_EVIDENCE_MISSING",
+    ],
+  ]) {
+    const files = {
+      [standingEvidence]: { text: standingText },
+      [testCreditsRecordPath]: { text: recordText() },
+      [billingTermsPath]: { text: read(billingTermsPath) },
+      ...extraFiles,
+    };
+    if (files[billingTermsPath] === undefined) delete files[billingTermsPath];
+    const w = await cliWorld({ files });
+    try {
+      assert.equal(await main(argv, w.ctx), 1, label);
+      assert.equal(JSON.parse(w.err.at(-1)).code, code, label);
+      assert.equal(w.db.statements.length, 0, label);
+    } finally {
+      w.cleanup();
+    }
+  }
+  // With the owner's committed record, main's revision 2 is the one compared, and the
+  // renewal runs.
+  const w = await cliWorld({
+    files: {
+      [standingEvidence]: { text: standingText },
+      [testCreditsRecordPath]: { text: recordText() },
+      ...committedRaise(await signedRaise()),
+      [raiseRecord]: { text: raiseText() },
+    },
+    stored: 2,
+    result: {
+      ...renewed,
+      creditUnits: "1000",
+      termsRevision: "2",
+      addedUnits: "820",
+      available: "1000",
+    },
+  });
+  try {
+    assert.equal(await main(argv, w.ctx), 0, w.err.join("\n"));
+    const compared = w.db.statements.filter((s) => termsSame.test(s.text));
+    assert.deepEqual(
+      compared.map((s) => s.params[0]),
+      ["1", "2"],
+    );
+    assert.equal(JSON.parse(compared[1].params[1]).entries[0].creditUnits, "1000");
+    assert.equal(JSON.parse(w.out[0]).creditUnits, "1000");
+  } finally {
+    w.cleanup();
   }
 });

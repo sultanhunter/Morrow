@@ -37,7 +37,10 @@
 //      value names the credits: they are the current terms' (R10), so a new staging terms
 //      revision, published by the seed, changes the next renewal's credits and not the
 //      current period's, and terms without the operator entry refuse (terms_missing);
-//      forged successors, fundings and edits fail. The PR 6 security review's cases: each
+//      forged successors, fundings and edits fail; renew holds the database's terms to the
+//      committed ones, so a revision written by hand outside the seed, or a committed file
+//      that lacks or differs from a stored revision, is STAGING_SEED_DRIFT and nothing is
+//      funded (review T1). The PR 6 security review's cases: each
 //      context setting alone is denied and each malformed value is invalid in the function
 //      itself (R3 c, d); an account that is not active and a Shopify-bound route are
 //      route conflicts while a period is due, and an operator snapshot's successor needs
@@ -45,7 +48,9 @@
 //      one the renewal would write now, so the reviewer's forged record and its funding
 //      are refused (BILLING_RENEWAL_INVALID), and with that record guard switched off a
 //      funding still needs the room below the current terms' credits
-//      (BILLING_WALLET_INVALID) (R1).
+//      (BILLING_WALLET_INVALID) (R1); the record's terms-revision and credits rules and the
+//      wallet's terms-revision rule each have a forged case that only that rule refuses
+//      (review T2).
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
@@ -730,12 +735,17 @@ INSERT INTO morrow_billing.stripe_event_receipts(organization_id,workspace_id,id
     // -------------------------------------------------------------------------------
     // N. Renewing the owner's test credits (v1 build order PR 6).
     const ownerGrant = "adr-0035.e13.2026-10-23.3";
-    const renew = (p, grantApprovalRef) =>
+    // The staging terms as committed, which `test-credits renew` reads at verified main and
+    // holds the database's terms to (review T1); revision 2 joins them when
+    // the raise below is published.
+    let committedTerms = await stagingBillingTermsRows(repositoryRoot, "staging");
+    const renew = (p, grantApprovalRef, terms = committedTerms) =>
       renewTestCredits({
         connect: runner().connect,
         binding: labBinding,
         administrator,
         input: renewInput(p, grantApprovalRef),
+        terms,
       });
     const renewals = () =>
       db.rows(
@@ -1002,6 +1012,7 @@ SET session_replication_role = origin;`);
         binding: labBinding,
         administrator,
         input: { ...renewInput(V, ownerGrant), creditUnits: "1000", raiseEvidenceRef: raiseRecord },
+        terms: committedTerms,
       }),
     );
     check(
@@ -1050,6 +1061,7 @@ SET session_replication_role = origin;`);
       administrator,
       rows: billingTermsSeedRows([published, raisedRevision]),
     });
+    committedTerms = billingTermsSeedRows([published, raisedRevision]);
     const walletBeforeRaise = walletOf(V);
     const sameRaisedPeriod = await renew(V, ownerGrant);
     const walletInSamePeriod = walletOf(V);
@@ -1168,6 +1180,16 @@ SELECT g.organization_id,g.workspace_id,gen_random_uuid()::text,g.id,g.billing_a
       spend900 + forgeRenewal({ added: "50", funded: "w.revision+1" }),
       spend900 + forgeRenewal({ funded: "w.revision+2" }),
       accountStatus("suspended") + forgeRenewal(),
+      // Review T2: each audit rule alone. Today's credits under the earlier
+      // terms revision (only the terms-revision rule refuses it), and false credits with
+      // the true room below the current ones added (only the credits rule refuses it).
+      forgeRenewal({ terms: "1" }),
+      spend900 +
+        forgeRenewal({
+          units: huge,
+          added: "greatest(0,t.units-(w.available+w.reserved))",
+          funded: "CASE WHEN t.units>(w.available+w.reserved) THEN w.revision+1 END",
+        }),
     ].map((sql) => db.tryRun(`SET ROLE morrow_work_owner; BEGIN; ${sql} ROLLBACK;`));
     // The control: the row the renewal would write is accepted, its recorded time is the
     // database's clock, and with room its funding passes.
@@ -1201,6 +1223,9 @@ ROLLBACK;`);
       forgeRenewal({ period: "98", added: "1000", funded: "w.revision+1" }) + fundRenewal,
       // An earlier terms revision's credits (300 of revision 1) with room below them.
       spend900 + forgeRenewal({ period: "97", terms: "1", units: "300" }) + fundRenewal,
+      // Review T2: today's credits and the true room, under the earlier
+      // terms revision (only the wallet's terms-revision rule refuses it).
+      spend900 + forgeRenewal({ period: "95", terms: "1" }) + fundRenewal,
     ].map(withoutRecordGuard);
     const walletControl = withoutRecordGuard(
       `${spend900} ${forgeRenewal({ period: "96" })} ${fundRenewal} ${walletSum}`,
@@ -1268,6 +1293,60 @@ ROLLBACK;`);
         renewals().length === 4 &&
         latestSnapshot(V).revision === "5" &&
         walletOf(V).available === "980",
+    );
+    // Review T1: renew funds only the terms committed at verified main. While
+    // a period is due, the owner role writes staging revision 3 by hand, outside the seed:
+    // an operator entry of 1,000,000 credits with its own digest, which 0035's terms_guard
+    // admits and no owner record names. The function alone would fund it (the control, in a
+    // transaction that rolls back); the runner, holding the database's terms to the
+    // committed revisions 1 and 2, refuses with STAGING_SEED_DRIFT before the function and
+    // writes nothing. A committed file that lacks revision 2, or whose revision 2 differs
+    // from the stored one, is refused the same way.
+    const offeredTerms = (termsRevision, creditUnits) => {
+      const terms = {
+        ...raisedTerms,
+        termsRevision,
+        entries: raisedTerms.entries.map((e) =>
+          e.kind === "operator_test_entitlement" ? { ...e, creditUnits } : e,
+        ),
+      };
+      parseTermsDocument(terms, published.offers);
+      return terms;
+    };
+    const handTerms = offeredTerms(3, "1000000");
+    const otherRaiseTerms = offeredTerms(2, "2000");
+    const otherRaise = {
+      terms: otherRaiseTerms,
+      offers: published.offers,
+      digest: await termsDocumentDigest(otherRaiseTerms, published.offers),
+    };
+    const staleFile = await rejection(renew(V, ownerGrant, billingTermsSeedRows([published])));
+    const differingFile = await rejection(
+      renew(V, ownerGrant, billingTermsSeedRows([published, otherRaise])),
+    );
+    const handInserted = db.tryRun(
+      `SET ROLE morrow_work_owner; INSERT INTO morrow_billing.billing_terms VALUES(3,${lit(JSON.stringify(handTerms))}::jsonb,${lit(JSON.stringify(published.offers))}::jsonb,${lit(await termsDocumentDigest(handTerms, published.offers))},date_trunc('milliseconds',clock_timestamp()));`,
+    );
+    const fundedAlone = ownerTxn(
+      `${renewSql(renewInput(V, ownerGrant))} SELECT credit_units||'|'||terms_revision FROM morrow_billing.operator_test_entitlement_renewals WHERE workspace_id=${lit(V.workspace)} ORDER BY period_number DESC LIMIT 1;`,
+    );
+    const outsideSeed = await rejection(renew(V, ownerGrant));
+    check(
+      "N_renew_funds_only_the_terms_committed_at_main_and_refuses_a_revision_written_outside_the_seed",
+      staleFile?.code === "STAGING_SEED_DRIFT" &&
+        staleFile.details.table === "billing_terms" &&
+        differingFile?.code === "STAGING_SEED_DRIFT" &&
+        differingFile.details.table === "billing_terms" &&
+        handInserted.ok &&
+        scalar("SELECT count(*) FROM morrow_billing.billing_terms;") === "3" &&
+        fundedAlone === "1000000|3" &&
+        outsideSeed?.code === "STAGING_SEED_DRIFT" &&
+        outsideSeed.details.table === "billing_terms" &&
+        renewals().length === 4 &&
+        latestSnapshot(V).revision === "5" &&
+        walletOf(V).available === "980" &&
+        paymentRows() === paymentsBefore &&
+        morrowSetRows(db.id) === 0,
     );
   },
   { administrator: "createrole" },
