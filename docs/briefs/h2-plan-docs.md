@@ -1,0 +1,41 @@
+# H2: the plan docs follow ADR-0040 and ADR-0041, and CLAUDE.md's wording drafts
+
+- Status: brief, 2026-10-26. Branch `claude/h2-plan-docs`, from `main` at `4b7063b1` (PR #82 merged: ADR-0040 and ADR-0041 Accepted, OD-2026-10-26-7). Row H2 of `docs/plan/harness-foundations-implementation.md`. Change class: routine (plan wording that carries out accepted records), with CLAUDE.md's text left for the owner's own confirmation (OD-2026-10-23-10). No migration, no code under `apps/` or `packages/`, no contract, no switch, no lab.
+
+## Goal
+
+Bring the launch plan, the v1 build order and the ADR-0037 and ADR-0039 plans in line with ADR-0040 (messaging with agents) and ADR-0041 (harness foundations) as accepted, and with the owner's rule that the foundation is production grade, never an MVP build (OD-2026-10-26-6), so that what the owner and the agents read says what the records say. Draft CLAUDE.md's changed lines for the owner to confirm, without editing CLAUDE.md.
+
+## Scope
+
+- **`docs/plan/mvp.md`**: a "Since 2026-10-26" note ("MVP" names the launch scope only; the foundation is production grade; the harness plan's rows; ADR 0042 approved as recommended, its COD Confirmation agent installable and not built now); the messaging and never-cut-short sentences in "What Morrow is"; scope rows for the Morrow conversation, a new "agent harness (the foundation)" row, asynchronous teammate calls, standing requests, check-ins and parking, knowledge and memory, and the P09.T05 path first; the Coordinator's row and the teammates paragraph (asynchronous calls, follow-ups, guidance, fan-out, review runs, `fork_first`, parking on credits); "Models: Opus 5.5 only"; a COD Confirmation note; tracks T2, T4, T6, T7, T9, T12, T14, T17 and T18 with their harness rows; G1, G9 and G10; a dates note (not yet re-planned); a "foundation is not cut" cut rule; "Not at launch" (per-person memory, embeddings and standing requests move out of it).
+- **`docs/plan/v1-build-order.md`**: a dated header line; the progress table at `4b7063b1` (verified from merged PR titles); the P09.T05 note under "How we work"; PR 11 as the harness foundation (Opus 5.5 only; no limit ends work; summaries can't lose approvals); PR 12 split into 12a and 12b, with ADR-0040's safety tests (only the requester steers or stops, the customer identifier screen, Stop on a request, hints only); notes on merged PRs 15, 16 and 20; standing requests in PR 21; COD Confirmation not built now; PR 26's calls pausing on credits; the speed risk.
+- **`docs/plan/adr-0037-implementation.md`**: rows 2, 4 and 5 replaced by pointers to H5 and H6, H10 and H11a, each with what changed and what carries over; rows 1 and 9 marked merged (#76, #81) with H18 as row 9's follow-up; row 10's teammate-calls switch in H20's order; notes on rows 3, 6 and 7; "Not in these PRs" loses what ADR-0041 settled.
+- **`docs/plan/adr-0039-implementation.md`**: a dated header line and the migration numbers (0001 to 0055 applied, 0056 held by pull request 83); row 1 as H3 (Opus 5.5 at `medium` and `high` only); row 2 split between this plan, H6 and H8, with the final-turn reserve gone; row 3 replaced by H8; rows 5 to 8 (the paused state, the parked per-agent limit, the amended ADR-0037 check, the breaker over Morrow's runs); the owner's answers note what OD-2026-10-26-7 replaced.
+- **`docs/briefs/claude-md-wording-2026-10.md`**: CLAUDE.md drafts as Before and After: A, the "MVP" line names launch scope only; B, the stack line gains "Durable Objects (ADR-0038, ADR-0040)" (ADR-0040 item 15's words); C, a new model line, Opus 5.5 only; D1 to D4, the lines ADR 0042 changes, provisional until its record lands; E, an optional fix of "specialist agents".
+- **Tests**: `tests/plan-docs-harness.test.mjs` and `tests/claude-md-wording.test.mjs`.
+
+## Interfaces touched
+
+Documentation and two tests that read it. Nothing in `apps/`, `packages/`, `migrations/`, `docs/contracts/` or `docs/decisions/*.json` changes. CLAUDE.md, STATUS.md and the ADR texts are not edited. The graph is unchanged; the docs avoid ids that do not resolve on `main` (ADR 0042 is written without a hyphen, as pull request 86 does, and its OD number is not cited), so `graph check` adds no warning.
+
+## Security notes
+
+- No rule is loosened. Where the plan docs changed a rule, they follow the accepted records: parking in place of a final turn and in place of refusing a call the wallet cannot cover (ADR-0041 item 9); safety check-ins in place of limits that end work (item 18); Opus 5.5 only (item 2). Every security invariant and its owning tests are unchanged.
+- The customer-data rule is stated more strictly, not less: the P09.T05 path is built first, and the `async-conversations` switch stays off until it exists and until the owner decides the customer-names gap (ADR-0041 item 31). Whether the owner's choice of 2026-10-26 already decides that gap is left as an open question.
+- The ADR 0042 drafts (D1 to D4) change approval granularity for customer contact only, as that record's owner question 6 approved; they are drafts, not applied, and are marked provisional until the record merges. The COD Confirmation agent is not built now, so they change nothing in practice yet.
+- No secret, store data, customer data or shop domain appears in any file.
+
+## Test checklist
+
+- [x] `node --import tsx --test tests/plan-docs-harness.test.mjs tests/claude-md-wording.test.mjs tests/graph.test.mjs tests/plan-check.test.mjs`: pass. Mutants checked by hand: a cited row that does not exist (`H21`), a restored "Haiku, Sonnet or Opus" offer, a Before no longer in CLAUDE.md, and an After naming a missing record each fail.
+- [x] `npm run -s verify` (plan:check, graph:check and the rest), `npm run -s graph -- check` (0 errors; the warning count unchanged from `main`), `npm run -s format:check`, `typecheck`, `typecheck:edge`, `edge:check`, `npm test`.
+- [ ] Lab: none applies (documentation only); `lab:group:pg-core` run once as a regression check of the unchanged tree.
+- [ ] AI review (separate context, same model family).
+- [ ] The owner's confirmation of the CLAUDE.md text (A, B, C; D1 to D4 against ADR 0042's final record; E optional), then the lead's commit that applies it.
+
+## Open points for the lead
+
+- H3 lists `mvp.md`'s model paragraph and the build order PR 11's model list among its changes; this branch has rewritten both, so H3 carries only the code, and pull request 83 may conflict on PR 11's lines when both merge.
+- The owner's choice to build P09.T05 first and the statement that COD Confirmation is not built now have no OD number yet; both are cited here as "the owner, 2026-10-26".
+- The dates in `mvp.md` are not re-planned for the larger foundation; the note says the lead brings any change to the owner.
