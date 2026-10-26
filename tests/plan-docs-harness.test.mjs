@@ -111,6 +111,10 @@ test("ADR-0039's rows park instead of a final turn from a reserve (ADR-0041 item
     assert.doesNotMatch(row(docs.adr0039, number), /takes its final turn from the reserve/);
   assert.match(row(docs.adr0039, "7"), /parks on an `agent_credit_limit` wait/);
   assert.doesNotMatch(docs.adr0039, /\*\*The final-turn reserve stands\.\*\*/);
+  // PR 1 merged as pull request 83 with migration 0056, which is applied and immutable.
+  assert.match(row(docs.adr0039, "1"), /Merged 2026-10-26 as pull request 83/);
+  assert.match(docs.adr0039, /migrations 0001 to 0056 are applied and immutable/);
+  assert.doesNotMatch(docs.adr0039, /pull request 83 holds 0056/);
 });
 
 test("the v1 build order's PR 12 splits in two, and teammate calls pause on credits", () => {
@@ -128,4 +132,10 @@ test("the owner's choices of 2026-10-26: the P09.T05 path first; COD Confirmatio
   assert.match(docs.mvp, /\*\*COD Confirmation\*\*[^\n]*installable agent[^\n]*not built now/);
   assert.match(docs.order, /P09\.T05\) first, as part of the foundation/);
   assert.match(docs.order, /COD Confirmation[^\n]*installable agent and is not built now/);
+  // The owner's direction instead: a foundation ready for agents of that kind.
+  assert.match(
+    docs.mvp,
+    /\*\*COD Confirmation\*\*[^\n]*foundation be solid enough for agents of its kind/,
+  );
+  assert.match(docs.order, /COD Confirmation[^\n]*foundation be ready for agents like it/);
 });

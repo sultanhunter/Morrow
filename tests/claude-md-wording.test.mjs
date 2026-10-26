@@ -111,4 +111,14 @@ test("the drafts say what the accepted records say", () => {
   assert.match(models, /`medium`/);
   assert.match(models, /No Haiku, no Sonnet and no `low` effort/);
   assert.match(models, /no agent SDK/);
+  // ADR 0042's owner question 6 shows four CLAUDE.md edits word for word; D1 to D4 copy them,
+  // each naming the record, and D1 keeps "Any edit invalidates them" for every other approval.
+  const contact = pairs.filter((p) => /^D\d\. /.test(p.section));
+  assert.deepEqual(
+    contact.map((p) => p.section.slice(0, 2)),
+    ["D1", "D2", "D3", "D4"],
+  );
+  for (const { section, after } of contact) assert.match(after, /\(ADR-0042\)/, section);
+  assert.match(contact[0].after, /Any edit invalidates them\./);
+  assert.match(contact[0].after, /the approved revision keeps running until then/);
 });

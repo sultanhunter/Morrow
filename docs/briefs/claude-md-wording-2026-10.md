@@ -1,7 +1,7 @@
 # CLAUDE.md wording, October 2026: drafts for the owner to confirm
 
-- Status: draft, 2026-10-26, for the owner's own confirmation of the text, as CLAUDE.md's standing rules require (OD-2026-10-23-10). Written on branch `claude/h2-plan-docs` from `main` at `4b7063b1`, as harness plan row H2 (`docs/plan/harness-foundations-implementation.md`). CLAUDE.md itself is not edited here: once the owner confirms a change, the lead applies its "After" text in its own commit, word for word.
-- Sources: ADR-0040 item 15 (the stack line) and ADR-0041's Consequences and Approval (the "MVP" line, the model line), both Accepted 2026-10-26 (OD-2026-10-26-7); the owner's rule that the foundation is production grade, never an MVP build (OD-2026-10-26-6); the owner's messages on models (OD-2026-10-26-5; OD-2026-10-26-7, question 1); and, provisionally, ADR 0042 (connected services and customer contact), approved as recommended on 2026-10-26, whose record is still being finalised in pull request 86.
+- Status: draft, 2026-10-26, for the owner's own confirmation of the text, as CLAUDE.md's standing rules require (OD-2026-10-23-10). Written on branch `claude/h2-plan-docs` from `main` at `4b7063b1` and brought up to `main` at `2107859d`, as harness plan row H2 (`docs/plan/harness-foundations-implementation.md`). CLAUDE.md itself is not edited here: once the owner confirms a change, the lead applies its "After" text in its own commit, word for word.
+- Sources: ADR-0040 item 15 (the stack line) and ADR-0041's Consequences and Approval (the "MVP" line, the model line), both Accepted 2026-10-26 (OD-2026-10-26-7); the owner's rule that the foundation is production grade, never an MVP build (OD-2026-10-26-6); the owner's messages on models (OD-2026-10-26-5; OD-2026-10-26-7, question 1); and, provisionally, ADR 0042 (connected services and customer contact), approved as recommended on 2026-10-26, whose record is still being finalised in pull request 86 (read at its head `6f272fbc`, where owner question 6 shows its four CLAUDE.md edits word for word).
 - How to read it: each change shows the line as it is in CLAUDE.md today ("Before") and the proposed line ("After"), verbatim. A new line is shown as an insertion after the line that stays above it. `tests/claude-md-wording.test.mjs` checks that every "Before" is still in CLAUDE.md until its "After" replaces it, so this page cannot drift from the file it changes.
 
 ## A. The "MVP" line names the launch scope only
@@ -55,9 +55,15 @@ Why: CLAUDE.md has no model line today. ADR-0041 items 1 and 2 set Morrow's own 
 
 ## D. Lines ADR 0042 changes (provisional until its record lands)
 
-Why: ADR 0042's owner question 6 (standing call plans), approved as recommended on 2026-10-26, changes the granularity of exact approvals for customer contact, and its record names three CLAUDE.md lines: "Approvals are bound to a digest of the exact proposal", "Ask the owner first, every time: … sending anything to the owner's customers" and "Agents change it only through an approved exact proposal" (its items 10, 19 and 26 and its "Security invariants touched"). The drafts below follow the record as it stands at pull request 86's head (`5ed2e8ac`, still marked Proposed). **The lead re-checks each one against the final record when pull request 86 merges, and corrects this page before the owner confirms it.** The owner also said on 2026-10-26 that the COD Confirmation agent is installable and not built now, and in ADR 0042 only that agent holds contact capabilities (its owner question 7, answer (a)), so these lines change nothing in practice until the contact path is built.
+Why: ADR 0042's owner question 6 (standing call plans) changes the granularity of exact approvals for customer contact. At pull request 86's head `6f272fbc` the record lists four CLAUDE.md lines in its Amends list (its items 10, 19 and 26), and question 6 on its decision sheet shows each line's current and proposed text word for word: a "yes" to question 6 approves that text as written, as the owner approved ADR-0035's lines (OD-2026-10-23-10), and ADR 0042's plan commits it unchanged in its CS2. So this page no longer drafts its own wording for these four lines. Each "After" below is question 6's proposed text, copied verbatim, so that the owner reads one text, not two, and each "Before" is question 6's "Now", which is CLAUDE.md's line today.
+
+What changed from this page's earlier drafts, written against the record at `5ed2e8ac`: D1 said that any edit to a plan needs a new approval, where the record now keeps the approved revision running until the edited one is approved, unless the editor pauses it; D2 to D4 say the same as before in the record's own words; and D4, which the record did not name then, is now its fourth edit.
+
+**Still open, for the lead:** the owner approved ADR 0042 as recommended on 2026-10-26, but question 6 then said only that its approval "would also approve those edits", without their text; the word-for-word text came with pull request 86's review fixes (`be0ca8bf`), and the sheet now asks for an approval that names the CLAUDE.md change. Whether the owner's approval covers this exact text is the lead's to settle when it records ADR 0042's acceptance; until then D1 to D4 stay provisional, and the lead re-checks them against the record as merged. The owner also said that day that the COD Confirmation agent is installable and not built now, and in ADR 0042 only that agent holds contact capabilities (its owner question 7, answer (a)), so these lines change nothing in practice until the contact path is built.
 
 ### D1. Exact approvals (Security invariants)
+
+Question 6's first edit.
 
 **Before:**
 
@@ -68,10 +74,12 @@ Why: ADR 0042's owner question 6 (standing call plans), approved as recommended 
 **After:**
 
 ```claude-md-after
-- Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The gateway re-checks authority before execution. One owner-approved change of granularity (ADR-0042 item 10): the Owner's approval of an exact call plan covers each contact and each order-tag write inside it; every contact is rendered exactly from the plan's approved templates and checked at dispatch, any edit to the plan needs a new approval, and a cancellation still needs a person's own approval.
+- Approvals are bound to a digest of the exact proposal. Any edit invalidates them. The gateway re-checks authority before execution. One exception (ADR-0042): an approved customer-contact call plan is one exact proposal whose approval covers each contact and order tag it names; an edit to a plan makes a new revision that needs its own approval, and the approved revision keeps running until then unless the editor pauses it.
 ```
 
 ### D2. The owner's store (Security invariants)
+
+Question 6's second edit.
 
 **Before:**
 
@@ -82,10 +90,12 @@ Why: ADR 0042's owner question 6 (standing call plans), approved as recommended 
 **After:**
 
 ```claude-md-after
-- The owner's own store is the only real store until the public launch, and Morrow is built and tested on it (ADR-0035). Agents change it only through an approved exact proposal, or through the order tags an approved call plan names (ADR-0042 item 19). Local and CI tests use fakes; only the deployed environment reaches the store.
+- The owner's own store is the only real store until the public launch, and Morrow is built and tested on it (ADR-0035). Agents change it only through an approved exact proposal, or by adding an order tag that an approved call plan names (ADR-0042). Local and CI tests use fakes; only the deployed environment reaches the store.
 ```
 
 ### D3. Asking the owner first (Provider and live effects)
+
+Question 6's third edit.
 
 **Before:**
 
@@ -96,12 +106,12 @@ Why: ADR 0042's owner question 6 (standing call plans), approved as recommended 
 **After:**
 
 ```claude-md-after
-- Ask the owner first, every time: purchases, plan upgrades and ad spend; raising a cap; deleting data; sending anything to the owner's customers (under an approved call plan, the owner's in-product approval of its exact content and bounds stands for each send, and the owner's OK in chat is still needed before the live-recipients switch goes on and again on the first live day, ADR-0042 items 10 and 26); the App Store submission; any store other than the owner's. Accepting a provider's terms and anything that needs the owner's own login stay the owner's.
+- Ask the owner first, every time: purchases, plan upgrades and ad spend; raising a cap; deleting data; sending anything to the owner's customers, except that under an approved call plan the owner's OK in chat is asked once, before the first live day, and the plan's approval then covers each contact (ADR-0042); the App Store submission; any store other than the owner's. Accepting a provider's terms and anything that needs the owner's own login stay the owner's.
 ```
 
-### D4. Changing the store through Morrow's flow (Provider and live effects; not named by the record)
+### D4. Changing the store through Morrow's flow (Provider and live effects)
 
-ADR 0042 does not name this line, but it says the same thing as D2's line in other words, so leaving it unchanged would contradict D2 once tag writes under a plan exist. The lead recommends changing it with D2; the owner may instead leave it for the final record to decide.
+Question 6's fourth edit. The record did not name this line at `5ed2e8ac`, when this page drafted it on its own; it does now.
 
 **Before:**
 
@@ -112,7 +122,7 @@ ADR 0042 does not name this line, but it says the same thing as D2's line in oth
 **After:**
 
 ```claude-md-after
-- Change the owner's store only through Morrow's own flow: the owner approves the exact change in the workspace, or the exact call plan whose order tags it writes (ADR-0042 item 19), and the gateway applies, reads back and audits it. Never write to the store any other way.
+- Change the owner's store only through Morrow's own flow: the owner approves the exact change, or the call plan that names it (ADR-0042), in the workspace, and the gateway applies, reads back and audits it. Never write to the store any other way.
 ```
 
 ## E. Optional: the opening paragraph's "specialist agents"
@@ -141,4 +151,4 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 
 ## What the owner is asked
 
-Confirm A, B and C as written (or say what to change); confirm D1 to D4 once ADR 0042's final record lands, or now on the understanding that the lead corrects them to that record; and say whether to take E. The owner's words are recorded verbatim with a new OD number, and the lead applies the confirmed text to CLAUDE.md in one commit, after which `tests/claude-md-wording.test.mjs` sees each "After" in place.
+Confirm A, B and C as written (or say what to change); confirm D1 to D4, which are ADR 0042 question 6's own text, by a "yes" to that question that names the CLAUDE.md change (unless the lead finds the approval of 2026-10-26 already covers it), and once more only if the merged record changes them; and say whether to take E. The owner's words are recorded verbatim with a new OD number. The lead applies the confirmed A, B, C (and E, if taken) to CLAUDE.md in one commit; D1 to D4 land with ADR 0042's CS2, as that record says. After each, `tests/claude-md-wording.test.mjs` sees the "After" in place.
