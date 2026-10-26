@@ -13,7 +13,7 @@ At `main` `2107859d`, 2026-10-26. ADR-0039's first code PR (#83: Listings' catal
 | State | PRs |
 | --- | --- |
 | Merged | 1 (#50; its decision record ADR-0035 in #48), 2 (#53, "Disconnect store"; the Claude switch on with the owner's key in #73), 3 (#54), 4 (#67), 5 (#66), 6 (#80), 7 (#51), 8 (#63, switch off), 10 (#52), 14 (#55), 15 (#65), 16 (#56), 17 (#49, ADR-0033 and ADR-0034), 18 (#58), 19 (#57), 20 (#68) |
-| Building now | 11 (#64, held and rebuilt to ADR-0041 as harness plan rows H4 to H8) |
+| Building now | 11 (#64, held and rebuilt to ADR-0041 as rows H4 and H7a to H8 of the harness plan (on PR #64), after the contracts of H5 (PR #79) and H6) |
 | Not started | 9, 12, 13, 21 to 25 |
 | Reshaped (2026-10-26) | 11, 12, 15, 16, 20 and 21, by ADR-0040 and ADR-0041 ([harness-foundations-implementation.md](harness-foundations-implementation.md)); merged PRs keep what they built and gain the changes as new rows |
 | Replaced (2026-10-25) | 26, by ADR-0037's follow-up PRs 1 to 10 ([adr-0037-implementation.md](adr-0037-implementation.md)), of which 2, 4, 5, 9 and 10 continue as harness plan rows since 2026-10-26 |
@@ -272,7 +272,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
 - **Runs in parallel with:** everything. It starts now.
 
 ### PR 11. The agent loop
-*2026-10-26: ADR-0041 makes this PR the harness foundation, built production grade with no shortcuts, as you asked that day. It is now rows H4 to H8 of [the harness plan](harness-foundations-implementation.md), on PR #64, as several PRs.*
+*2026-10-26: ADR-0041 makes this PR the harness foundation, built production grade with no shortcuts, as you asked that day. It is now rows H4 and H7a to H8 of [the harness plan](harness-foundations-implementation.md) (on PR #64), after the contracts of H5 (PR #79) and H6, as several PRs.*
 - **Delivers:**
   - **One durable job runner for every agent** (AgentRunWorkflow):
     - the model can call Morrow's tools;
@@ -283,7 +283,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - **Listings moves onto it.**
   - **The model list:** Opus 5.5 only, at medium and high (catalogue version 2, rewritten Opus-only; ADR-0041 item 2). Haiku, Sonnet and low effort are gone, as you decided on 2026-10-26. Listings' own catalogue is already Opus 5.5 only (version 4, merged in #83).
 - **Needs from you:** one yes to the catalogue version 2 values (its safety check-in values and prices).
-- **Size:** several L PRs (harness plan H4 to H8), each behind the agent-loop switch.
+- **Size:** several PRs (harness plan H4 and H7a to H8), the runner's behind the agent-loop switch.
 - **Safety tests:**
   - Every tool call re-checks the requester, the agent, the store connection, the rules, the stops and the owner's current rights. It is refused if any one of them fails.
   - Text from products, email or uploads enters only as marked data. It can never choose tools, recipients or limits, and a change built from it needs your approval of the exact change.

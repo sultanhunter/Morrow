@@ -26,6 +26,40 @@ const harnessRows = new Set(
   [...harnessPlan.matchAll(/^\| (H\d{1,2}[a-z]?) \|/gm)].map((m) => m[1]),
 );
 
+// The same rows in plan order, with their Size and Changes cells
+// ("| # | PR | Size | Starts after | Changes | What it does | Gated by |").
+const harnessTable = [...harnessPlan.matchAll(/^\| (H\d{1,2}[a-z]?) \| ([^\n]*)$/gm)].map((m) => {
+  const cells = m[2].split(" | ");
+  return { id: m[1], size: cells[1], changes: cells[3] };
+});
+const harnessOrder = harnessTable.map((entry) => entry.id);
+const harnessEntry = new Map(harnessTable.map((entry) => [entry.id, entry]));
+
+// "H4 and H7a to H8" -> H4, H7a, H7b, H7c, H7d, H7e, H8, in the harness plan's order.
+function harnessIds(list) {
+  const ids = [];
+  for (const part of list.split(/, (?:and )?| and /)) {
+    const m = part.trim().match(/^(H\d{1,2}[a-z]?)(?: to (H\d{1,2}[a-z]?))?$/);
+    assert.ok(m, `a harness row or range: "${part}"`);
+    const from = harnessOrder.indexOf(m[1]);
+    const to = harnessOrder.indexOf(m[2] ?? m[1]);
+    assert.ok(from >= 0 && to >= from, `a range of existing rows: "${part}"`);
+    ids.push(...harnessOrder.slice(from, to + 1));
+  }
+  return ids;
+}
+
+// "1 to 3 and 5 to 8" or "11, 12, 15, 16, 20 and 21" -> the sorted PR numbers.
+function prNumbers(list) {
+  const numbers = new Set();
+  for (const part of list.split(/, (?:and )?| and /)) {
+    const m = part.trim().match(/^(\d+)(?: to (\d+))?$/);
+    assert.ok(m, `a PR number or range: "${part}"`);
+    for (let n = Number(m[1]); n <= Number(m[2] ?? m[1]); n += 1) numbers.add(n);
+  }
+  return [...numbers].sort((a, b) => a - b);
+}
+
 // A table row of a plan doc, by its first cell.
 function row(text, number) {
   const lines = text.split("\n").filter((line) => line.startsWith(`| ${number} | `));
@@ -138,4 +172,71 @@ test("the owner's choices of 2026-10-26: the P09.T05 path first; COD Confirmatio
     /\*\*COD Confirmation\*\*[^\n]*foundation be solid enough for agents of its kind/,
   );
   assert.match(docs.order, /COD Confirmation[^\n]*foundation be ready for agents like it/);
+});
+
+test("PR 11 calls on PR #64 only the harness rows that change PR #64, after H5's and H6's contracts", () => {
+  // The harness plan's "What each open PR becomes": PR #64 is H7a to H7e and H8 (H4 renumbers
+  // its migration); H5 is PR #79's teammate contracts and H6 is a new T2 contracts PR, neither
+  // on PR #64 and neither behind the agent-loop switch.
+  assert.match(harnessEntry.get("H5").changes, /^PR #79\b/);
+  assert.match(harnessEntry.get("H6").changes, /^new\b/);
+  const pr11 = section("PR 11.");
+  const cited = [];
+  for (const [where, text] of [
+    ["the progress table", row(docs.order, "Building now")],
+    ["PR 11's note", pr11],
+  ]) {
+    const m = text.match(
+      /rows (H[\w ]+?) of (?:the harness plan|\[the harness plan\]\([^)]*\)) \(on PR #64\)/,
+    );
+    assert.ok(m, `${where} names the harness rows on PR #64`);
+    const ids = harnessIds(m[1]);
+    for (const id of ids)
+      assert.match(harnessEntry.get(id).changes, /PR #64\b/, `${where}: ${id} changes PR #64`);
+    assert.match(text, /after the contracts of H5 \(PR #79\) and H6\b/, where);
+    cited.push(ids);
+  }
+  assert.deepEqual(cited[0], cited[1], "the progress table and PR 11's note cite the same rows");
+  // Only the runner sits behind the agent-loop switch, and H4 is no L PR.
+  const size = pr11.match(
+    /\*\*Size:\*\* several PRs \(harness plan (H[\w ]+?)\), the runner's behind the agent-loop switch\./,
+  );
+  assert.ok(size, "PR 11's size line");
+  assert.deepEqual(harnessIds(size[1]), cited[0]);
+  assert.doesNotMatch(pr11, /each behind the agent-loop switch/);
+  if (cited[0].some((id) => !/^L\b/.test(harnessEntry.get(id).size)))
+    assert.doesNotMatch(pr11, /several L PRs/);
+});
+
+test("mvp.md lists the same reshaped PRs as the plans it summarises", () => {
+  const m = docs.mvp.match(
+    /reshape ADR-0037's follow-up PRs ([\d, a-z]+?), ADR-0039's PRs ([\d, a-z]+?), and v1 build order PRs ([\d, a-z]+?)\./,
+  );
+  assert.ok(m, "mvp.md's reshaped-PR sentence");
+  // ADR-0037: the build order's "Replaced (2026-10-25)" row.
+  const replaced = row(docs.order, "Replaced (2026-10-25)").match(
+    /of which ([\d, a-z]+?) continue as harness plan rows/,
+  );
+  assert.ok(replaced, "the build order's ADR-0037 rows");
+  assert.deepEqual(prNumbers(m[1]), prNumbers(replaced[1]), "ADR-0037's follow-up PRs");
+  // ADR-0039: the rows its plan's "Changed 2026-10-26" line names (row 4 only merged with PR 1).
+  const changed = docs.adr0039.split("\n").find((line) => line.startsWith("- Changed 2026-10-26"));
+  assert.ok(changed, "ADR-0039's dated change line");
+  const adr0039Rows = new Set();
+  for (const r of changed.matchAll(/\b[Rr]ows? (\d+)(?: to (\d+))?\b/g))
+    for (let n = Number(r[1]); n <= Number(r[2] ?? r[1]); n += 1) adr0039Rows.add(n);
+  assert.deepEqual(
+    prNumbers(m[2]),
+    [...adr0039Rows].sort((a, b) => a - b),
+    "ADR-0039's PRs",
+  );
+  // The v1 build order: its "Reshaped (2026-10-26)" row.
+  const reshaped = row(docs.order, "Reshaped (2026-10-26)").match(
+    /^\| Reshaped \(2026-10-26\) \| ([\d, a-z]+?), by ADR-0040/,
+  );
+  assert.ok(reshaped, "the build order's reshaped row");
+  assert.deepEqual(prNumbers(m[3]), prNumbers(reshaped[1]), "the v1 build order's PRs");
+  // Every reshaped build order PR cites its harness plan rows.
+  for (const number of prNumbers(reshaped[1]))
+    assert.match(section(`PR ${number}.`), /(?<![\w-])H\d{1,2}[a-z]?(?![\w-])/, `PR ${number}`);
 });
