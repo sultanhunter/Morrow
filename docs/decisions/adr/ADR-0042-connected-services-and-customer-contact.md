@@ -30,7 +30,7 @@
   - ADR-0031 item 2: customer data reaches Claude only in Support's runs. No phone, name, address or customer message reaches any model because of this record, and agent runs see contact results only as counts (item 21).
   - ADR-0023 decision 6: no package holds both customer data and the computer. The rule extends to contact capabilities.
   - ADR-0029: the sandbox has no internet and no credentials.
-  - ADR-0039: credits are the only spend limit. The counts in this record are safety bounds, not money.
+  - ADR-0039: credits are the only spend limit. The counts in this record are safety bounds, not money. (Note of 2026-10-27: checked against OD-2026-10-26-12, the owner's decision that credits are the only budget, which keeps this record's per-number caps and daily limit per plan as safety bounds. This record sets no spend limit per run, per day or per person, no cost check-in and no pause on spend. The spend limit that item 4's screen advises the merchant to set at the provider is the merchant's own setting on the merchant's own account, which the merchant pays directly (item 23), as the owner's Anthropic monthly limit is the owner's; Morrow does not set it or count spend against it, and it is not a Morrow budget.)
   - ADR-0041 (harness foundations): Morrow's own harness, and Opus 5.5 for every agent.
   - ADR-0035 items 1 and 2: one environment, and the owner's store is the only real store until launch.
 - Implements: the answer to the owner's question of 2026-10-26 (OD-2026-10-26-8), under the owner's production-grade rule of the same day (OD-2026-10-26-6), with the scope the owner set when approving it (OD-2026-10-26-9; item 27).

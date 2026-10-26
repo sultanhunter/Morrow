@@ -144,7 +144,7 @@ These are repository records, read on `main` at the time of the research. Each i
 - ADR-0029. Supports: the sandbox has no internet and no credentials. ADR-0042: Does not change.
 - ADR-0030 items 1 to 10. Supports: the email pattern as a template for any outbound channel: untrusted inbound content, code-set recipients, three recipient kinds, one key per send, reconciliation, the system mail stop, and merchant-linked credentials each by their own record. ADR-0042: items 3, 6, 11 and 13.
 - ADR-0031 items 1 to 4, 6 and 7. Supports: customer data only on 90-day clocks in registered tables; `customers/redact` by customer id, keyed digest and listed orders; one deletion registry and its S8 check; per-viewer read tags; `data-regions.json`. ADR-0042: item 24.
-- ADR-0039 items 2 and 3. Supports: credits are the only spend limit, and a new paid step needs a rate-card price. ADR-0042: item 23.
+- ADR-0039 items 2 and 3. Supports: credits are the only spend limit, and a new paid step needs a rate-card price. ADR-0042: item 23. (Note of 2026-10-27: ADR-0039's Amendments restate item 1 under OD-2026-10-26-12: credits are the only budget, with no cost check-in and no pause at 80% of the Anthropic limit, and ADR-0042's per-number caps and daily limit per plan kept as safety bounds, not money. ADR-0042: Does not change.)
 - ADR-0040 and ADR-0041 (accepted 2026-10-26, OD-2026-10-26-7). Supports: ADR-0040 did not take "voice calls and text messages between a person and an agent" and "decides nothing about agents calling customers", so it neither allows nor rules out this feature; the customer-identifier screen; Morrow's own harness with no third-party agent framework. ADR-0042: Context, Does not change.
 
 ## Claims in ADR-0042 without a source in these reports

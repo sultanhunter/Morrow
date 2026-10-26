@@ -93,7 +93,7 @@ When you ask for the COD Confirmation agent:
 2. Approve the calling service's entry record (question 3).
 3. For Plivo:
    - an account with the India data region and KYC (certificate of incorporation, GST);
-   - a sub-account for Morrow, and a spend limit at Plivo;
+   - a sub-account for Morrow, and a spend limit at Plivo (note of 2026-10-27: your own setting on your own Plivo account, which you pay directly; Morrow does not set it or count spend against it, so it is not one of the money caps that OD-2026-10-26-12 removed);
    - the limits Plivo offers that the entry record names: outbound calls to India only, and call transfer and recording off;
    - a number, declared with your operator for automated calls, with any DLT or principal-entity registration the operator or Plivo requires;
    - the KYC name that caller ID shows, matching the shop name the call speaks.
