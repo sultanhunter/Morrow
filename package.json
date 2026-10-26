@@ -152,6 +152,7 @@
     "staging:seed-platform": "node scripts/staging.mjs seed-platform",
     "staging:billing-customer-resolve": "node scripts/staging.mjs billing-customer-resolve",
     "staging:test-entitlement": "node scripts/staging.mjs test-entitlement",
+    "staging:test-credits": "node scripts/staging.mjs test-credits",
     "staging:shopify-app-register": "node scripts/staging.mjs shopify-app-register",
     "staging:census": "node scripts/staging.mjs census",
     "staging:connections": "node scripts/staging.mjs connections",

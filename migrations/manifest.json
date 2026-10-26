@@ -416,6 +416,13 @@
       "sha256": "68d1577340cfed2d961c9aeb72b2d24cec4d18edc64b4befe58b0bd5d5a014b9",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/v1-connection-health.md"
+    },
+    {
+      "sequence": 55,
+      "file": "0055.staging-test-credits-renewal.sql",
+      "sha256": "2b260a7706852787488924e042d5b9e5a5f0450ef477d86a6eb2db7497823e18",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-renew-test-credits.md"
     }
   ]
 }

@@ -550,6 +550,9 @@ export function fakeDatabase(options = {}) {
       /FROM morrow_billing\.platform_environment$/,
       () => (platformEnvironment === null ? [] : [{ environment: platformEnvironment }]),
     ],
+    // The billing terms seed's (and the renewal's) count of stored revisions: none, unless a
+    // test says otherwise.
+    [/^SELECT count\(\*\)::int AS n FROM morrow_billing\.billing_terms$/, () => [{ n: 0 }]],
     [/^SELECT session_user::text AS session_role/, (text, params, db) => [identityFor(db)]],
     [
       /FROM pg_catalog\.pg_roles WHERE rolname IN/,
