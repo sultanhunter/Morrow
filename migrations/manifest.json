@@ -419,8 +419,15 @@
     },
     {
       "sequence": 55,
-      "file": "0055.credits-only-catalogue.sql",
-      "sha256": "845ade56d9d8f3f19350ab9355101c826bb9849230e2a191acf21b9accb7fc84",
+      "file": "0055.staging-test-credits-renewal.sql",
+      "sha256": "2b260a7706852787488924e042d5b9e5a5f0450ef477d86a6eb2db7497823e18",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-renew-test-credits.md"
+    },
+    {
+      "sequence": 56,
+      "file": "0056.credits-only-catalogue.sql",
+      "sha256": "5e4b51e1ee200481ee5274a5fc70327839baad4099d868f56b50e1e6a53044b4",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
     }

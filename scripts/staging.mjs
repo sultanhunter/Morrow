@@ -51,6 +51,7 @@ import {
   checkPlatformStopInput,
   provisionRoles,
   registerShopifyApp,
+  renewTestCredits,
   resolveHeldCustomerOperation,
   roleControlFacts,
   runMigrations,
@@ -60,10 +61,12 @@ import {
   checkIdentity,
   liveEvidenceRef,
   statementStatsScratchDatabase,
+  testCreditsRenewInput,
   testEntitlementApproval,
   testEntitlementInput,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
+import { operatorRaise, raiseRecordPath, raiseRecordProblem } from "./terms-raise.mjs";
 import {
   cloudflareApi,
   createTools,
@@ -374,6 +377,24 @@ export async function stagingBillingTermsRows(root, environment = "staging") {
   } catch {
     throw new StagingError("STAGING_TERMS_INVALID");
   }
+  return checkedTermsRows(revisions);
+}
+// Review T1 of v1 build order PR 6: the same rows from the file as committed at `commit`
+// (the origin/main head mainPreconditions verified), never the working tree. `test-credits
+// renew` compares the database's terms with them before it renews.
+export async function committedBillingTermsRows(ctx, commit, environment = "staging") {
+  const text = await committedBlob(ctx, commit, billingTermsPath, "STAGING_TERMS_INVALID");
+  let revisions;
+  try {
+    revisions = JSON.parse(text).environments[environment];
+  } catch {
+    throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  return checkedTermsRows(revisions);
+}
+// Each published revision parsed with the billing module and its digest recomputed, then
+// the seed rows.
+async function checkedTermsRows(revisions) {
   const { tsImport } = await import("tsx/esm/api");
   const { parseTermsDocument, termsDocumentDigest } = await tsImport(
     "../packages/work/src/billing/terms.ts",
@@ -910,11 +931,13 @@ command("seed-platform", {
       };
     }
     const configuration = await ctx.loginConfiguration(config);
-    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const { sourceCommit } = await mainPreconditions(ctx, repositoryOf(config.staging));
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const rows = platformSeedRows(configuration, JSON.parse(configuration.verificationProfileJson));
-    // M5 PR-1: the billing terms, checked before any effect.
+    // M5 PR-1: the billing terms, checked before any effect; review R2 of v1 build order
+    // PR 6: a raise of the operator credits only with the owner's committed record.
     const terms = await ctx.billingTerms();
+    await requireTermsRaiseRecords(ctx, sourceCommit, terms);
     const written = await seedPlatform({
       connect: ctx.database({ ownerUrl, binding }).connect,
       binding,
@@ -993,9 +1016,9 @@ command("billing-customer-resolve", {
 // chat: the approval reference is `adr-0035.e13.<date>.<n>` (one per use; the definer
 // refuses a reused one), from e13's date to today, and the run is logged as one line of
 // docs/evidence/activity-log.md.
-export function requireTestEntitlementApproval(card, approvalRef, now) {
+// The approval record's E13: one closed member, the date from which it runs.
+function requireE13(card) {
   const e13 = card?.e13;
-  const day = /^\d{4}-\d{2}-\d{2}$/;
   const standing = card?.kind === "standing";
   if (
     !e13 ||
@@ -1005,6 +1028,10 @@ export function requireTestEntitlementApproval(card, approvalRef, now) {
     !(e13.amendedOn >= card.approvedOn && (standing || e13.amendedOn <= card.expiresOn))
   )
     throw new StagingError("STAGING_CARD_EFFECT_MISSING", { effect: "E13" });
+  return e13;
+}
+export function requireTestEntitlementApproval(card, approvalRef, now) {
+  const e13 = requireE13(card);
   const match = testEntitlementApproval.exec(approvalRef);
   const today = new Date(now).toISOString().slice(0, 10);
   if (
@@ -1060,6 +1087,13 @@ export async function committedRecord(ctx, commit, path) {
     throw new StagingError("STAGING_GIT_OUTPUT_INVALID");
   if (typeof path !== "string" || !liveEvidenceRef.test(path))
     throw new StagingError("STAGING_USAGE");
+  return committedBlob(ctx, commit, path);
+}
+// One regular blob at exactly `path` in `commit`, by its object id (committedRecord's
+// rule), for a path the caller has already fixed; `missing` is the code when there is none.
+async function committedBlob(ctx, commit, path, missing = "STAGING_EVIDENCE_MISSING") {
+  if (typeof commit !== "string" || !/^[0-9a-f]{40}$/.test(commit))
+    throw new StagingError("STAGING_GIT_OUTPUT_INVALID");
   const listing = await toolOk(ctx.tools, "git", [
     "ls-tree",
     "-z",
@@ -1069,7 +1103,7 @@ export async function committedRecord(ctx, commit, path) {
     path,
   ]);
   const entry = committedEntry.exec(listing);
-  if (!entry || entry[2] !== path) throw new StagingError("STAGING_EVIDENCE_MISSING");
+  if (!entry || entry[2] !== path) throw new StagingError(missing);
   return toolOk(ctx.tools, "git", ["cat-file", "blob", entry[1]]);
 }
 // The standing approval's own live record names it on one labelled line, exactly once:
@@ -1084,6 +1118,61 @@ export function requireStandingRecord(text, id) {
     named.push(value ? (value[1] ?? value[2]) : null);
   }
   if (named.length !== 1 || named[0] !== id) throw new StagingError("STAGING_EVIDENCE_MISMATCH");
+}
+// Review R2 of v1 build order PR 6 (ADR-0035 item 4: the owner's yes in chat for every
+// raise of the owner's test credits). Before any database effect, each terms revision the
+// seed would write whose operator entry carries credits other than the beta plan's 300
+// must name its owner record (`ownerRecord`) in docs/decisions/billing-terms.json as
+// committed at verified main (`commit`, with the same terms, offers and digest), and that
+// record, committed too, must name the revision and its credits and quote the owner's
+// words naming the amount (scripts/terms-raise.mjs). A seed with no raise reads nothing.
+// The record gates the revision; the credits still come only from the terms (R10).
+export const billingTermsPath = "docs/decisions/billing-terms.json";
+export async function requireTermsRaiseRecords(ctx, commit, rows, environment = "staging") {
+  const raised = [];
+  for (const [index, row] of (Array.isArray(rows) ? rows : []).entries()) {
+    let terms;
+    try {
+      terms = JSON.parse(row[1]);
+    } catch {
+      throw new StagingError("STAGING_TERMS_INVALID");
+    }
+    const raise = operatorRaise({ terms });
+    if (raise !== null) raised.push({ index, row, raise });
+  }
+  if (raised.length === 0) return Object.freeze([]);
+  let committed;
+  try {
+    committed = JSON.parse(
+      await committedBlob(ctx, commit, billingTermsPath, "STAGING_TERMS_RAISE_UNRECORDED"),
+    ).environments?.[environment];
+  } catch (error) {
+    if (error instanceof StagingError) throw error;
+    throw new StagingError("STAGING_TERMS_RAISE_UNRECORDED");
+  }
+  const checked = [];
+  for (const { index, row, raise } of raised) {
+    const termsRevision = index + 1;
+    const revision = Array.isArray(committed) ? committed[index] : null;
+    if (
+      !revision ||
+      typeof revision !== "object" ||
+      JSON.stringify(revision.terms) !== row[1] ||
+      JSON.stringify(revision.offers) !== row[2] ||
+      revision.digest !== row[3] ||
+      typeof revision.ownerRecord !== "string" ||
+      !raiseRecordPath.test(revision.ownerRecord)
+    )
+      throw new StagingError("STAGING_TERMS_RAISE_UNRECORDED", { termsRevision });
+    const text = await committedRecord(ctx, commit, revision.ownerRecord);
+    const problem = raiseRecordProblem(text, { environment, termsRevision, creditUnits: raise });
+    if (problem !== null)
+      throw new StagingError("STAGING_EVIDENCE_MISMATCH", { termsRevision, reason: problem });
+    checked.push(
+      Object.freeze({ termsRevision, creditUnits: raise, record: revision.ownerRecord }),
+    );
+  }
+  return Object.freeze(checked);
 }
 command("test-entitlement", {
   usage:
@@ -1145,6 +1234,171 @@ command("test-entitlement", {
       ...granted,
       approvalRef: input.approvalRef,
       record: input.evidenceRef,
+      recordCommit: sourceCommit,
+    };
+  },
+});
+
+// v1 build order PR 6, "Credits for your own workspace" (ADR-0035 items 3 and 4;
+// docs/briefs/v1-renew-test-credits.md): `test-credits renew` renews the operator test
+// entitlement of the owner's own workspace for the 30-day period that contains the
+// database's clock, once per period (a second run in the same period writes nothing).
+// The workspace and its grant come only from this committed record, read at verified main,
+// never from an argument:
+//   - workspace: the owner's workspace id (the one the live-store app invites, linked to
+//     the owner's store), from the grant's printed result;
+//   - grantApproval: the grant's approval reference (`adr-0035.e13.<date>.<n>`).
+// It names no amount: each period's credits come only from the current terms' operator
+// entry (P01.T04a R10). Raising them (ADR-0035 item 4) is a new staging BillingTerms
+// revision in docs/decisions/billing-terms.json, published with the owner's per-use
+// approval, which the revision names as its committed owner record (seed-platform and
+// verify:billing refuse it otherwise; review R2); this command never takes an amount.
+// Review T1: the database's terms are trusted only as far as they are the committed ones.
+// It reads billing-terms.json as committed at verified main, checks each
+// raise's owner record as seed-platform does (requireTermsRaiseRecords), and the runner
+// refuses with STAGING_SEED_DRIFT, before the renewal, a database holding a revision that
+// file lacks or one that differs from it (a revision written by hand outside the seed).
+// Refused in CI, without the standing approval, on any database but staging's binding, off
+// verified main, and (in the database) for any workspace the live-store app does not
+// invite, under any other grant, or in a database not marked staging. Prints one closed
+// JSON line on stdout and, as a notice on stderr, the exact activity-log line to append.
+export const testCreditsRecordPath = "docs/decisions/test-credits-staging.json";
+const testCreditsKeys = [
+  "environment",
+  "grantApproval",
+  "kind",
+  "schemaVersion",
+  "standingApproval",
+  "workspace",
+];
+const workspaceIdText = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+/** The committed record's closed values under `card`, the standing approval, at `now`. */
+export function testCreditsRecord(text, card, now) {
+  let record;
+  try {
+    record = JSON.parse(text);
+  } catch {
+    record = null;
+  }
+  const today = new Date(now).toISOString().slice(0, 10);
+  const e13 = requireE13(card);
+  if (
+    record === null ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== testCreditsKeys.join() ||
+    record.schemaVersion !== 1 ||
+    record.kind !== "test_credits" ||
+    record.environment !== "staging" ||
+    record.standingApproval !== card.id ||
+    (record.workspace !== null &&
+      (typeof record.workspace !== "string" || !workspaceIdText.test(record.workspace))) ||
+    (record.grantApproval !== null && typeof record.grantApproval !== "string")
+  )
+    throw new StagingError("STAGING_TEST_CREDITS_RECORD_INVALID");
+  if (record.workspace === null || record.grantApproval === null)
+    throw new StagingError("STAGING_TEST_CREDITS_UNSET");
+  // The grant this record renews: under this approval and E13, from E13's date to today.
+  const grant = testEntitlementApproval.exec(record.grantApproval);
+  if (
+    !grant ||
+    grant[1] !== card.id ||
+    grant[2] !== "e13" ||
+    !Number.isFinite(Date.parse(grant[3] + "T00:00:00Z")) ||
+    grant[3] < e13.amendedOn ||
+    grant[3] > today
+  )
+    throw new StagingError("STAGING_TEST_CREDITS_RECORD_INVALID");
+  return Object.freeze({ workspaceId: record.workspace, grantApprovalRef: record.grantApproval });
+}
+// The one line to append to docs/evidence/activity-log.md (ADR-0035 item 4): the UTC day,
+// the action, the result, the cost (none: no money changes hands) and no unknown outcome.
+// Built from closed values only: no shop domain, store data, customer data or secret, and
+// not the workspace id.
+const activityLine =
+  /^\| \d{4}-\d{2}-\d{2} \| [A-Za-z0-9 `:().,'/_-]{1,400} \| [A-Za-z0-9 `:().,'/_-]{1,400} \| US\$0 \| none \|$/;
+export function testCreditsActivityLine({ now, report, outcome, standingApproval, commit }) {
+  const dayOf = (iso) => iso.slice(0, 10);
+  const action = `\`staging:test-credits -- renew\` for the owner's workspace under the standing approval \`${standingApproval}\` (main \`${commit.slice(0, 8)}\`)`;
+  const result =
+    outcome === "renewed"
+      ? `renewed period ${report.period}: ${report.creditUnits} test credits (terms revision ${report.termsRevision}) for ${dayOf(report.periodStart)} to ${dayOf(report.periodEnd)}, ${report.addedUnits} added, ${report.available} available`
+      : `current: period ${report.period} (${dayOf(report.periodStart)} to ${dayOf(report.periodEnd)}, terms revision ${report.termsRevision}) already renewed, nothing written`;
+  const line = `| ${new Date(now).toISOString().slice(0, 10)} | ${action} | ${result} | US$0 | none |`;
+  if (!activityLine.test(line)) throw new StagingError("STAGING_TEST_CREDITS_RESULT_INVALID");
+  return line;
+}
+command("test-credits", {
+  usage: "test-credits renew --operator <id>",
+  parse(args) {
+    const [action, ...rest] = args;
+    if (action !== "renew" || rest.length !== 2 || rest[0] !== "--operator")
+      throw new StagingError("STAGING_USAGE");
+    const operatorId = rest[1];
+    if (typeof operatorId !== "string" || !workspaceIdText.test(operatorId))
+      throw new StagingError("STAGING_USAGE");
+    return { action, operatorId };
+  },
+  async run(ctx, { action, operatorId }) {
+    // An operator's run on the owner's terminal only: never from a CI job.
+    if (ctx.environment.ci) throw new StagingError("STAGING_TEST_CREDITS_CI_REFUSED");
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    // Only under the owner's standing approval (ADR-0035 items 3 and 4), with its E13.
+    if (config.card.kind !== "standing") throw new StagingError("STAGING_APPROVAL_INVALID");
+    requireE13(config.card);
+    const binding = await stagingBinding(ctx, config);
+    const { sourceCommit } = await mainPreconditions(ctx, repositoryOf(config.staging));
+    requireStandingRecord(
+      await committedRecord(ctx, sourceCommit, config.card.evidence),
+      config.card.id,
+    );
+    const record = testCreditsRecord(
+      await committedBlob(
+        ctx,
+        sourceCommit,
+        testCreditsRecordPath,
+        "STAGING_TEST_CREDITS_RECORD_MISSING",
+      ),
+      config.card,
+      ctx.now(),
+    );
+    const input = {
+      operatorId,
+      workspaceId: record.workspaceId,
+      grantApprovalRef: record.grantApprovalRef,
+      standingApproval: config.card.id,
+      evidenceRef: config.card.evidence,
+    };
+    testCreditsRenewInput(input);
+    // The staging terms committed at verified main, each raise with its owner's committed
+    // record (review R2), before any database statement; the runner holds the database's
+    // terms to them (review T1).
+    const terms = await committedBillingTermsRows(ctx, sourceCommit);
+    await requireTermsRaiseRecords(ctx, sourceCommit, terms);
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    const renewed = await renewTestCredits({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input,
+      terms,
+    });
+    ctx.notice(
+      testCreditsActivityLine({
+        now: ctx.now(),
+        report: renewed,
+        outcome: renewed.outcome,
+        standingApproval: config.card.id,
+        commit: sourceCommit,
+      }),
+    );
+    return {
+      action,
+      ...renewed,
+      grantApprovalRef: record.grantApprovalRef,
+      standingApproval: config.card.id,
+      record: testCreditsRecordPath,
       recordCommit: sourceCommit,
     };
   },

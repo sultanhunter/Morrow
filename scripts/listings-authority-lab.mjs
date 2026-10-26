@@ -2524,7 +2524,7 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
     const memberAllowed = models.body.entries
       ?.filter((e) => e.allowedForMember)
       .map((e) => e.creditsPerProduct);
-    // Catalogue version 4 (ADR-0039, migration 0055): version 3's Opus 5.5 at medium by
+    // Catalogue version 4 (ADR-0039, migration 0056): version 3's Opus 5.5 at medium by
     // default (ADR-0036), the default member ceiling of 4 that admits it, and 25 products a
     // run for every entry (no run cost cap). Claude Opus 5.5 only (the owner, 2026-10-26):
     // its low, medium and high, no Haiku 5.5 or Sonnet 5.5.

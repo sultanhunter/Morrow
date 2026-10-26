@@ -61,7 +61,7 @@ export function sandboxWorstCaseUsd(): string {
 
 /**
  * The runtime caps (ADR-0029 item 8), checked in SQL under one platform row lock before
- * every create (migration 0043's morrow_vault.runtime_operation_begin, revised by 0055):
+ * every create (migration 0043's morrow_vault.runtime_operation_begin, revised by 0056):
  * half of Hobby's 20 concurrent sandboxes and three open sandboxes per workspace, both
  * counts, not money. At a cap the caller's TypeScript fallback runs; cleanup is never
  * blocked. ADR-0039 item 6 removed the US$10 monthly budget: credits are the only spend

@@ -1446,6 +1446,19 @@ export const billingTables = Object.freeze({
     content: "none",
     ...aclSpec([]),
   },
+  // v1 build order PR 6 (staging-test-credits-renewal): one renewed period of an operator
+  // grant (the owner's operator function only). No runtime role holds anything.
+  operator_test_entitlement_renewals: {
+    class: "operator_record",
+    parents: [
+      "morrow_billing.billing_accounts",
+      "morrow_billing.operator_test_entitlements",
+      "morrow_identity.workspaces",
+    ],
+    policies: [],
+    content: "none",
+    ...aclSpec([]),
+  },
 });
 export const billingFunctions = Object.freeze({
   // The signup bridge: the identity owner calls it from 0021's trigger and backfill,
@@ -1490,6 +1503,15 @@ export const billingFunctions = Object.freeze({
   },
   // The staging test entitlement (0035): INVOKER, owned by the owner, granted to nobody.
   "operator_test_entitlement_grant(text,text,text,text)": { kind: "operator", grantees: [] },
+  // v1 build order PR 6: the renewal of that grant, INVOKER, owned by the owner, granted to
+  // nobody.
+  "operator_test_entitlement_renew(text,text,text,text,text)": {
+    kind: "operator",
+    grantees: [],
+  },
+  // Its record's INSERT guard (review R1): a renewal record by hand is the one the
+  // renewal would write.
+  "renewal_guard()": { kind: "trigger", grantees: [] },
   // INVOKER helpers the policies and definers evaluate as the command role.
   "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },
   "receipt_entered(text)": { kind: "check", grantees: ["morrow_work_command"] },
