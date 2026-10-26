@@ -100,3 +100,9 @@ The owner's statements in chat, verbatim, on 2026-10-23 (IST).
   > approve all as recommended and user should be able to select model and thinking effor for each agent with the main agent set to opus 5.5 high by default and specialist at opus 5.5 medium for email the shop owner should be able to link there emails which will be used for any particual email job like suppose user linked multiple emails(our morrow email will be linked by defualt with user shop name, something like usershopname@morrow.com and selected by default unless user link there emails) and then whenever any email sending related prompt comes user should be able to select which email to choose for that, for now no need to develop the actual capability to link the email but architecture wise it should be like how i explained so we can just add the feature to link users email and it will show in the emails available to use list.
 
 What they approve: Sunrise as Morrow's visual direction, this record, and the CLAUDE.md line that replaces "Visual option 1".
+
+## Amendments
+
+### 2026-10-26: item 1, your own messages on the right in the Morrow conversation (ADR-0040)
+
+The owner's decision of 2026-10-26 (OD-2026-10-26-7, accepting ADR-0040 as recommended) answers its owner question 34 with the recommendation, "approve, after seeing the conversation drawn both ways"; the text above is kept as approved. In the Morrow conversation only, a person's own messages sit on the right on a light warm-grey surface, with no coloured bubble and no emoji, while agents stay on the left with their character; project conversations keep left-aligned rows (ADR-0040 item 11). The lead reads the recommendation's condition as a check before ADR-0040's screens merge: the owner sees the conversation drawn both ways, and this layout stands unless the owner then says otherwise.
