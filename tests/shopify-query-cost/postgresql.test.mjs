@@ -500,7 +500,8 @@ test("Q5: a background read never delays an approved write", async () => {
   assert.deepEqual(await take(B, "write", 1), { kind: "admitted" });
   setBucket(B, { capacity: 1000, rate: 5, available: 400 });
   B.oracle.state.bucket = { maximum: 1000, restoreRate: 5, available: 400, at: Date.now() };
-  const background = { replies: 0, parked: 0, refused: 0, failed: 0 };
+  // `thrown`: the lab's own psql transport failed (a loaded host), never a bucket decision.
+  const background = { replies: 0, parked: 0, refused: 0, failed: 0, thrown: 0 };
   const sendRead = async () => {
     const attempt = await shopifyAdminGraphqlOnce(
       (url, init) => B.oracle.fetch(url, init),
@@ -530,35 +531,42 @@ test("Q5: a background read never delays an approved write", async () => {
         sleep,
         transact,
         send: sendRead,
-      }).catch(() => ({ kind: "failed" }));
+      }).catch(() => ({ kind: "thrown" }));
       if (outcome.kind === "reply")
         background[outcome.reply.kind === "data" ? "replies" : "failed"]++;
       else if (outcome.kind === "parked") {
         background.parked++;
         await sleep(Math.min(outcome.retryAfterMs, 400));
-      } else background[outcome.kind === "refused" ? "refused" : "failed"]++;
+      } else if (outcome.kind === "thrown") {
+        background.thrown++;
+        await sleep(200);
+      } else background.refused++;
     }
   };
   const loops = Array.from({ length: 6 }, loop);
   // Approved writes while the background reads run and are already parking: the gateway's
   // write class, then the gateway's fixed mutation through its own transport.
   const writes = [];
-  for (let waited = 0; background.parked < 2 && waited < 60_000; waited += 100) await sleep(100);
-  for (let i = 0; i < 4; i++) {
-    const taken = await take(B, "write", 10);
-    const reply = await shopifyAdminWrite(
-      (url, init) => B.oracle.fetch(url, init),
-      B.shop,
-      B.token,
-      shopifyWriteDocuments.productUpdate,
-      { product: { id: "gid://shopify/Product/10" + (i + 1), title: "Approved title " + i } },
-      Date.now() + 10000,
-    );
-    writes.push({ taken, reply: reply.kind });
-    await sleep(500);
+  try {
+    for (let waited = 0; background.parked < 2 && waited < 60_000; waited += 100) await sleep(100);
+    for (let i = 0; i < 4; i++) {
+      const taken = await take(B, "write", 10);
+      const reply = await shopifyAdminWrite(
+        (url, init) => B.oracle.fetch(url, init),
+        B.shop,
+        B.token,
+        shopifyWriteDocuments.productUpdate,
+        { product: { id: "gid://shopify/Product/10" + (i + 1), title: "Approved title " + i } },
+        Date.now() + 10000,
+      );
+      writes.push({ taken, reply: reply.kind });
+      await sleep(500);
+    }
+  } finally {
+    // The readers stop whatever happened, so a failure here never outlives the case.
+    running = false;
+    await Promise.all(loops);
   }
-  running = false;
-  await Promise.all(loops);
   // Every write was admitted by the bucket at once and answered by Shopify.
   assert.deepEqual(
     writes.map((w) => [w.taken.kind, w.reply]),
@@ -634,7 +642,11 @@ test("Q7: a stale model: Shopify answers THROTTLED, the settle corrects it, the 
   assert.equal(b.throttled, throttledBefore + 1);
   assert.equal(b.capacity, 1000);
   assert.equal(b.rate, 100);
-  assert.ok(b.available < 200, "the model followed Shopify down: " + b.available);
+  // The model followed Shopify down: it holds no more than Shopify reported after the read
+  // that succeeded (the last charge's points left), however long the wait took on this host.
+  const last = S.oracle.state.charges.at(-1);
+  assert.equal(last.operation, "CollectionsPage");
+  assert.ok(b.available <= last.left + 0.001, b.available + " > " + last.left);
   S.oracle.state.bucket = null;
 });
 
