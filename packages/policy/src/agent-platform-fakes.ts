@@ -13,6 +13,8 @@ import type {
   Current_SkillManifest,
   Current_AgentRunKind,
   Current_AgentRunManifest,
+  Current_AgentRunPins,
+  Current_AgentRunSafety,
   Current_AgentTriggerSet,
   Current_BatchConfirmationDocument,
   Current_HumanActorRef,
@@ -477,7 +479,11 @@ export function fakeRunPlanInput(): Current_ToolInputRunPlan {
       ],
       followThrough: [],
       understood: "You want shorter SEO titles on the summer dresses, in the brand voice.",
-      steps: ["Check every title", "Draft shorter ones", "Send them for your review"],
+      steps: [
+        { title: "Check every title", by: fakeIds.listingsInstallationId },
+        { title: "Draft shorter ones", by: fakeIds.listingsInstallationId },
+        { title: "Send them for your review", by: "morrow" },
+      ],
     },
     changes: null,
   });
@@ -677,11 +683,122 @@ export function fakeReportArtifact(): Current_ReportArtifact {
   });
 }
 
-// --- Agent runs (ADR-0027) ---------------------------------------------------------------
+// --- Agent runs (ADR-0027, ADR-0041) -----------------------------------------------------
 /**
- * A manifest of each run kind, at the version 2 defaults. Morrow's shows its version 4 launch
- * tools with both team switches on; every kind's list ends with its context's memory and
- * harness tools (ADR-0041 item 24); a called teammate's run is a routed run (ADR-0037 item 2).
+ * The safety values admission pins (AgentRunSafety@1, ADR-0041 items 3, 7, 8, 9, 17 and 18) at
+ * the record's seeds: Morrow at high effort (max_tokens 64,000), every other kind at medium
+ * (32,000). No cost check-in: credits are the only budget (OD-2026-10-26-12). Catalogue data in
+ * production; the model never sees any of it.
+ */
+export function fakeAgentRunSafety(effort: "high" | "medium" = "medium"): Current_AgentRunSafety {
+  const hour = 3_600_000;
+  const day = 24 * hour;
+  return freeze({
+    schemaVersion: 1,
+    profileVersion: 1,
+    turn: { maxOutputTokens: effort === "high" ? 64000 : 32000, callBudgetMs: 28 * 60_000 },
+    checkIns: {
+      modelTurns: 1000,
+      toolCalls: 10000,
+      activeMs: day,
+      sinceRequesterActMs: 7 * day,
+      children: 32,
+    },
+    detectors: {
+      signatureRing: 32,
+      repetition: { nudgeAt: 3, tripAt: 4 },
+      errorStreak: { nudgeAt: 3, tripAt: 5 },
+      alternation: { nudgeAfterSteps: 6, tripAfterSteps: 8 },
+      idleTurns: { tripAt: 3 },
+      stall: { replanAt: 12, tripAfterReplans: 2 },
+      costWithoutProgress: { medianMultiple: 4, expectedTurns: 25 },
+      renewalThrash: { keptBasisPoints: 7000, keptTimes: 2, compactions: 3, withinTurns: 20 },
+      outputCut: { tripAt: 3 },
+    },
+    envelope: { activeMs: day, wallMs: 7 * day },
+    lease: { ms: 30 * 60_000, renewBelowMs: 20 * 60_000 },
+    personWait: { ms: 7 * day, remindersMs: [day, 3 * day] },
+    creditsPark: { closeAfterMs: 7 * day },
+    providerBackoff: {
+      scheduleMs: [60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000, hour],
+      thenEveryMs: hour,
+      checkInAfterMs: day,
+    },
+    segments: { rollSteps: 1000, rollBeforeWaitMs: 5 * 60_000 },
+  });
+}
+/** The versions an open run pins (ADR-0041 items 4 and 6); no rate card is published yet. */
+export function fakeAgentRunPins(): Current_AgentRunPins {
+  return freeze({
+    harnessVersion: 1,
+    runnerVersion: 1,
+    rendererVersion: 1,
+    loopCatalogueVersion: 2,
+    contextPolicyVersion: 1,
+    contextPolicyDigest: fakeDigest("context policy v1"),
+    rateCardVersion: null,
+  });
+}
+/** The synthetic ids the harness fakes share (contexts, jobs, calls and envelopes). */
+export const fakeHarnessIds = Object.freeze({
+  jobId: "job_fake_1",
+  conversationId: "conv_ask_fake_1",
+  projectConversationId: "conv_project_fake_1",
+  inboxId: "inbox_fake_1",
+  envelopeId: "env_fake_1",
+  upkeepEnvelopeId: "env_upkeep_fake_1",
+  mainThreadContextId: "ctx_main_fake_1",
+  mainThreadRunId: "run_main_fake_1",
+  forkContextId: "ctx_fork_fake_1",
+  forkRunId: "run_fork_fake_1",
+  callContextId: "ctx_call_fake_1",
+  callRunId: "run_call_fake_1",
+  callId: "call_fake_1",
+  reviewContextId: "ctx_review_fake_1",
+  reviewRunId: "run_review_fake_1",
+  upkeepContextId: "ctx_upkeep_fake_1",
+  upkeepRunId: "run_upkeep_fake_1",
+  routedContextId: "ctx_routed_fake_1",
+  mandateContextId: "ctx_mandate_fake_1",
+  planId: "plan_fake_1",
+  proposalId: "proposal_fake_1",
+  operationId: "op_fake_1",
+  questionId: "question_fake_1",
+  messageId: "msg_fake_1",
+  followUpMessageId: "msg_fake_2",
+  otherMemberMessageId: "msg_fake_3",
+  resultMessageId: "msg_fake_4",
+  itemId: "item_fake_1",
+  checkpointId: "checkpoint_fake_1",
+  summaryId: "summary_fake_1",
+  personMemoryId: "pmem_fake_1",
+  suggestionId: "pmem_suggestion_fake_1",
+  notebookEntryId: "nb_fake_1",
+  waitId: "wait_fake_1",
+  verdictId: "verdict_fake_1",
+  pageId: "page_voice",
+  toolUseId: "toolu_fake_1",
+  agentToolUseId: "toolu_fake_ask_1",
+});
+const lineage = (
+  rootRunId: string,
+  more: Partial<Current_AgentRunManifest["lineage"]> = {},
+): Current_AgentRunManifest["lineage"] => ({
+  rootRunId,
+  parentRunId: null,
+  parentToolUseId: null,
+  callId: null,
+  depth: 0,
+  forkedFromRunId: null,
+  forkedAtSequence: null,
+  continuesRunId: null,
+  ...more,
+});
+/**
+ * A manifest of each run kind (ADR-0041 item 4's six), at the record's defaults. Morrow's shows
+ * its version 4 launch tools with both team switches on; the routed, mandate and call lists end
+ * with their context's memory and harness tools (ADR-0041 item 24). A called teammate's run is
+ * kind call, offered the call context's tools; review and upkeep have no tool context yet.
  */
 export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentRunManifest {
   const base = {
@@ -691,28 +808,59 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
     taskId: fakeIds.taskId,
+    jobId: fakeHarnessIds.jobId,
+    conversationId: null,
+    sourceInboxId: null,
+    envelopeId: fakeHarnessIds.envelopeId,
     systemTextDigest: fakeDigest("system text"),
     toolCatalogueVersion: 4,
     toolCatalogueDigest: fakeDigest("tool catalogue"),
+    pins: fakeAgentRunPins(),
+    specDigest: null,
+    dataClasses: null,
     admittedAt: at,
   };
-  const caps = (turns: number, holdUsd: string) => ({
-    maxTurns: turns,
-    maxToolCallsPerTurn: 4,
-    maxToolCallsPerRun: 40,
-    maxQuestions: 2,
-    maxInputTokensPerTurn: 64000,
-    // The kind's default effort (ADR-0036): high for Morrow, medium for every other kind.
-    maxOutputTokensPerTurn: kind === "coordinator" ? 16000 : 12000,
-    wallTimeSeconds: 1800,
-    deadline: null,
-    holdUsd,
-  });
+  const listingsTools: Current_AgentRunManifest["tools"] = [
+    "knowledge.search",
+    "work.read",
+    "products.read",
+    "message.post",
+    "inbox.ask",
+    "suggestion.create",
+    "proposal.listing",
+    "memory.search",
+    "memory.read",
+    ...(kind === "routed" ? (["memory.suggest"] as const) : []),
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "context.checkpoint",
+  ];
+  // The installed default, Opus 5.5 at medium.
+  const listings = {
+    storeId: fakeIds.storeId,
+    connectionId: fakeIds.connectionId,
+    installationId: fakeIds.listingsInstallationId,
+    release: { id: "morrow.listings", revision: 2, digest: fakeDigest("listings") },
+    modelProfile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
+    safety: fakeAgentRunSafety("medium"),
+  };
   switch (kind) {
     case "coordinator":
+      // A background job's fork of Morrow's main thread (ADR-0041 item 5).
       return freeze({
         ...base,
         kind,
+        runId: fakeHarnessIds.forkRunId,
+        purpose: "job",
+        taskId: null,
+        contextId: fakeHarnessIds.forkContextId,
+        conversationId: fakeHarnessIds.conversationId,
+        sourceInboxId: fakeHarnessIds.inboxId,
+        lineage: lineage(fakeHarnessIds.forkRunId, {
+          forkedFromRunId: fakeHarnessIds.mainThreadRunId,
+          forkedAtSequence: 12,
+        }),
         storeId: fakeIds.storeId,
         connectionId: fakeIds.connectionId,
         installationId: null,
@@ -739,59 +887,121 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
           "context.checkpoint",
         ],
         modelProfile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
-        caps: caps(6, "3.84000000"),
-        specDigest: null,
-        dataClasses: null,
+        safety: fakeAgentRunSafety("high"),
       });
     case "routed":
     case "mandate":
       return freeze({
         ...base,
+        ...listings,
         kind,
-        storeId: fakeIds.storeId,
-        connectionId: fakeIds.connectionId,
-        installationId: fakeIds.listingsInstallationId,
+        purpose: null,
+        contextId:
+          kind === "mandate" ? fakeHarnessIds.mandateContextId : fakeHarnessIds.routedContextId,
+        lineage: lineage(fakeIds.runId),
         mandateId: kind === "mandate" ? fakeIds.mandateId : null,
         triggerId: kind === "mandate" ? fakeIds.triggerId : null,
         requester: kind === "mandate" ? fakeMandateRequester() : fakeOwner(),
-        release: { id: "morrow.listings", revision: 2, digest: fakeDigest("listings") },
+        tools: listingsTools,
+      });
+    case "call":
+      // One teammate call from the fork, at depth 1 under the job's envelope (ADR-0041 item 21).
+      return freeze({
+        ...base,
+        ...listings,
+        kind,
+        runId: fakeHarnessIds.callRunId,
+        purpose: null,
+        taskId: null,
+        contextId: fakeHarnessIds.callContextId,
+        lineage: lineage(fakeHarnessIds.forkRunId, {
+          parentRunId: fakeHarnessIds.forkRunId,
+          parentToolUseId: fakeHarnessIds.agentToolUseId,
+          callId: fakeHarnessIds.callId,
+          depth: 1,
+        }),
+        mandateId: null,
+        triggerId: null,
+        requester: fakeOwner(),
+        // The call context's offer for Listings' package (ADR-0037 item 3(a), ADR-0041 item 24):
+        // no question, post or memory suggestion to the person; result items and run.complete.
         tools: [
           "knowledge.search",
           "work.read",
           "products.read",
-          "message.post",
-          "inbox.ask",
           "suggestion.create",
+          "report.write",
           "proposal.listing",
           "memory.search",
           "memory.read",
-          ...(kind === "routed" ? (["memory.suggest"] as const) : []),
           "run.plan",
           "run.complete",
-          "run.wait",
+          "result.write",
           "context.checkpoint",
         ],
-        // The installed default, Opus 5.5 at medium: 12 turns and US$6.72 under US$7.
-        modelProfile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
-        caps: caps(12, "6.72000000"),
-        specDigest: null,
-        dataClasses: null,
+      });
+    case "review":
+      // A fresh-context reviewer of Morrow's deliverable, at Morrow's effort (ADR-0041 item 19).
+      return freeze({
+        ...base,
+        kind,
+        runId: fakeHarnessIds.reviewRunId,
+        purpose: null,
+        taskId: null,
+        contextId: fakeHarnessIds.reviewContextId,
+        lineage: lineage(fakeHarnessIds.forkRunId, {
+          parentRunId: fakeHarnessIds.forkRunId,
+          depth: 1,
+        }),
+        storeId: fakeIds.storeId,
+        connectionId: fakeIds.connectionId,
+        installationId: null,
+        mandateId: null,
+        triggerId: null,
+        requester: fakeOwner(),
+        release: { id: "morrow.reviewer", revision: 1, digest: fakeDigest("reviewer") },
+        tools: ["knowledge.search", "work.read"],
+        modelProfile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
+        safety: fakeAgentRunSafety("high"),
+      });
+    case "upkeep":
+      // Consolidation of Listings' notebook, requested by the person whose write crossed the
+      // threshold (ADR-0041 item 27): no job and nothing posted, inside the short absolute
+      // envelope admit_upkeep_run issues, which no act renews (item 7).
+      return freeze({
+        ...base,
+        ...listings,
+        kind,
+        runId: fakeHarnessIds.upkeepRunId,
+        purpose: null,
+        taskId: null,
+        jobId: null,
+        envelopeId: fakeHarnessIds.upkeepEnvelopeId,
+        contextId: fakeHarnessIds.upkeepContextId,
+        lineage: lineage(fakeHarnessIds.upkeepRunId),
+        mandateId: null,
+        triggerId: null,
+        requester: fakeOwner(),
+        tools: ["notebook.write"],
       });
   }
 }
-/** One turn of a routed Listings run that called products.read. */
+/** One turn of a routed Listings run that called products.read, in an open epoch. */
 export function fakeRunTurn(): Current_RunTurn {
   return freeze({
     schemaVersion: 1,
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
+    contextId: fakeHarnessIds.routedContextId,
+    sequence: 1,
     runId: fakeIds.runId,
     turn: 1,
     attempt: 1,
-    input: {
-      role: "user",
-      content: [{ type: "text", text: "Improve the titles of my summer dresses." }],
-    },
+    epoch: 1,
+    purpose: "turn",
+    notices: [],
+    // The epoch's first row: the opening carries the request (ADR-0041 item 10).
+    input: null,
     output: {
       role: "assistant",
       content: [
@@ -805,12 +1015,16 @@ export function fakeRunTurn(): Current_RunTurn {
       ],
     },
     outcome: "tool_use",
-    prefixDigestBefore: null,
+    prefixDigestBefore: fakeDigest("epoch 1 opening"),
     prefixDigestAfter: fakeDigest("after turn 1"),
     usage: { inputTokens: 8000, cacheWriteTokens: 12000, cacheReadTokens: 0, outputTokens: 900 },
+    sectionTokens: { tools: 3000, system: 9000, workspace: 40, opening: 6000, conversation: 1860 },
     readTags: [],
+    audience: { kind: "subject", subject: { kind: "task", id: fakeIds.taskId } },
+    // The epoch's first turn: nothing untrusted has been read yet.
+    taint: { kinds: [], sourceCount: 0 },
     createdAt: at,
-    expiresAt: "2027-01-24T09:00:00.000Z",
+    expiresAt: null,
   });
 }
 export function fakeRunToolCall(): Current_RunToolCall {
@@ -819,8 +1033,10 @@ export function fakeRunToolCall(): Current_RunToolCall {
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
     runId: fakeIds.runId,
+    contextId: fakeHarnessIds.routedContextId,
     turn: 1,
     toolUseId: "toolu_fake_1",
+    label: "c1",
     tool: "products.read",
     capabilityId: "catalog.products.read",
     verb: "view",
@@ -830,6 +1046,7 @@ export function fakeRunToolCall(): Current_RunToolCall {
     refusal: null,
     resultDigest: fakeDigest("tool result"),
     resultBytes: 2048,
+    itemId: null,
     record: null,
     startedAt: at,
     finishedAt: later(1),
