@@ -425,6 +425,18 @@ export const workTables = Object.freeze({
     ],
     content: "none",
   },
+  // Plan row SD5 (shopify-query-cost): one bucket of Shopify's API query cost per store
+  // installation (one shop and app), in Shopify's points, never money: ids, numbers, times
+  // and counts. The session template is read-only (`commandRead`); only the broker's own login
+  // reads and writes a bucket, through its two vault definers, under the one subject they name
+  // (broker_rate_bucket: morrow.vault_rate_bucket, written only by those definers).
+  rate_buckets: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    commandRead: true,
+    policies: ["broker_rate_bucket"],
+    content: "none",
+  },
 });
 
 // API functions: SECURITY DEFINER, owned by the command role, EXECUTE for the api
@@ -710,6 +722,18 @@ export const workFunctions = Object.freeze({
   "notice_ids_valid(jsonb,integer)": { kind: "check", grantees: ["morrow_work_command"] },
   "connection_notice_guard()": { kind: "trigger", grantees: [] },
   "connection_notices_open()": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  // Plan row SD5 (shopify-query-cost): the bucket's policy, its take and settle (revisable
+  // owner helpers the broker's two vault definers call) and its guard.
+  "rate_bucket_policy()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "rate_bucket_take(text,text,text,text,text,integer)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "rate_bucket_settle(text,text,text,text,integer,integer,numeric,numeric,numeric,boolean)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "rate_bucket_guard()": { kind: "trigger", grantees: [] },
   // PR 5 review finding F3 (after integration with main): the store a reinstall linked in
   // place of an ended one, for the Inbox (session only, ids only).
   "store_reinstalled(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
@@ -1687,6 +1711,13 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // Plan row SD5 (shopify-query-cost): the per-shop bucket's take and settle, keyed by one
+  // store installation (ids, a closed class and numbers; the broker's login).
+  "shopify_query_cost_take(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_query_cost_settle(text,text,text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -1854,6 +1885,9 @@ export const executorLogins = Object.freeze({
     // v1 PR 4 (catalog-undo).
     "morrow_vault.catalog_undo_record(text,text,text,text,text)",
     "morrow_vault.catalog_undo_resolve(text)",
+    // Plan row SD5 (shopify-query-cost).
+    "morrow_vault.shopify_query_cost_settle(text,text,text,text,text,text,text)",
+    "morrow_vault.shopify_query_cost_take(text,text,text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

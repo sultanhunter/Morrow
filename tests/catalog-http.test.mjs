@@ -516,6 +516,54 @@ test("denials send no lease and no read; a broker failure or a malformed reply i
   assert.ok(validateCurrentDefinition("Grant", view));
 });
 
+// Plan row SD5: a read the store's query-cost bucket could not yet cover was not sent; the
+// route answers 429 rate_limited (the read class) with Retry-After in whole seconds, never a
+// 503, and a parked value outside the protocol is still 503.
+test("a parked read (the store's query-cost bucket) is 429 with Retry-After", async (t) => {
+  const view = storeGrant("catalog.products.read", ["view"]);
+  for (const [name, retryAfterMs, seconds] of [
+    ["sub_second", 340, "1"],
+    ["seconds", 2500, "3"],
+    ["an_hour", 3_600_000, "3600"],
+  ]) {
+    const db = scripted({ grants: [view] });
+    const handler = createCatalogApiHandler({
+      origin: workGuardOrigin,
+      connector: db.connector,
+      now: Date.now,
+      reader: readAll(JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs }))
+        .reader,
+    });
+    const { result, lines } = await quiet(t, () =>
+      handler.fetch(request("GET", products), undefined, ctx),
+    );
+    const body = await expectEnvelope(result, 429, name);
+    assert.equal(body.code, "rate_limited", name);
+    assert.equal(body.retryClass, "safe_read_retry", name);
+    assert.equal(body.retryAfterSeconds, Number(seconds), name);
+    assert.equal(result.headers.get("retry-after"), seconds, name);
+    assert.equal(JSON.parse(lines[0]).outcome, "read_parked", name);
+  }
+  for (const [name, retryAfterMs] of [
+    ["zero", 0],
+    ["past_the_cap", 3_600_001],
+    ["fraction", 1.5],
+  ]) {
+    const db = scripted({ grants: [view] });
+    const handler = createCatalogApiHandler({
+      origin: workGuardOrigin,
+      connector: db.connector,
+      now: Date.now,
+      reader: readAll(JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs }))
+        .reader,
+    });
+    const { result } = await quiet(t, () =>
+      handler.fetch(request("GET", products), undefined, ctx),
+    );
+    await expectEnvelope(result, 503, name);
+  }
+});
+
 test("the api's broker reader: closed inputs, the budget plus 250 ms, a bounded result, never retried", async () => {
   const calls = [];
   const broker = (reply) => ({

@@ -384,7 +384,7 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   );
   assert.equal(
     pkg.scripts["lab:group:pg-http"],
-    "npm run lab:standalone-workspace-http && npm run lab:standalone-store-linking-http && npm run lab:standalone-login-https && npm run lab:standalone-logout-https && npm run lab:fixed-workos-login-https && npm run lab:standalone-rotate-https && npm run lab:staging-runner && npm run lab:billing && npm run lab:test-entitlement && npm run lab:shop-knowledge",
+    "npm run lab:standalone-workspace-http && npm run lab:standalone-store-linking-http && npm run lab:standalone-login-https && npm run lab:standalone-logout-https && npm run lab:fixed-workos-login-https && npm run lab:standalone-rotate-https && npm run lab:staging-runner && npm run lab:billing && npm run lab:test-entitlement && npm run lab:shopify-query-cost && npm run lab:shop-knowledge",
   );
   assert.equal(
     pkg.scripts["lab:shopify-privacy"],

@@ -154,6 +154,14 @@ const extraPolicies = {
     "(SESSION_USER = 'morrow_vault_broker'::name)",
     "(SESSION_USER = 'morrow_vault_broker'::name)",
   ],
+  // Plan row SD5 (shopify-query-cost): the broker's own login and exactly the one bucket its
+  // take or settle definer names (org|ws|provider|subject, written only by those definers).
+  broker_rate_bucket: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || provider) || '|'::text) || (subject_id)::text) = current_setting('morrow.vault_rate_bucket'::text, true)))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || provider) || '|'::text) || (subject_id)::text) = current_setting('morrow.vault_rate_bucket'::text, true)))",
+  ],
   broker_stripe: [
     "ALL",
     "{morrow_work_command}",

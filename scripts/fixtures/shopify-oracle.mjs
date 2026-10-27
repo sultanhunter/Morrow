@@ -21,7 +21,29 @@
 // non-expiring token 403 (public apps created on or after 2026-04-01; the reply's body is
 // not documented, only its status is relied on); `launchQuery` and `callbackQuery` take
 // Shopify's other app-open keys (embedded, id_token, locale, session) as overrides.
+// Plan row SD5 (lab:shopify-query-cost): `bucket` (opt-in, null by default) is Shopify's
+// leaky bucket of query-cost points for this app and shop ({maximum, restoreRate, available,
+// at}): each GraphQL call's requested cost (shopifyOracleCosts, by operation) is taken from it
+// after a refill by time; a call it cannot cover is THROTTLED with the bucket's throttleStatus
+// and nothing runs; every answered call carries extensions.cost with that throttleStatus, and
+// `charges` records each charge with the points left after it. ProductUpdate (the gateway's
+// fixed mutation) updates a synthetic product's title, tags or description.
 import { createHmac, randomBytes } from "node:crypto";
+
+// The requested cost of each fixed document as Shopify's calculator prices it (a connection
+// is 2 plus its page size, each object 1, a mutation 10).
+export const shopifyOracleCosts = Object.freeze({
+  ShopIdentity: 2,
+  CollectionsPage: 27,
+  ProductsPage: 27,
+  CollectionProductsPage: 28,
+  ProductContent: 2,
+  ProductWriteState: 2,
+  ProductUpdate: 10,
+  AccessScopes: 2,
+  WebhookSubscriptions: 27,
+  WebhookSubscriptionCreate: 10,
+});
 
 export const shopifyOracleIdentityDocument =
   "query ShopIdentity { shop { id myshopifyDomain plan { partnerDevelopment } } }";
@@ -51,6 +73,11 @@ export function createShopifyOracle({
     tokenKind: "non_expiring",
     publicApp: false,
     expiringTokens: [],
+    // SD5: Shopify's bucket ({maximum, restoreRate, available, at}), null while off; the
+    // charges it took ({operation, cost, left}) and the calls it throttled.
+    bucket: null,
+    charges: [],
+    throttled: [],
     // The synthetic catalogue: two collections, thirty products (the first five in Summer).
     catalog: {
       collections: [
@@ -202,6 +229,29 @@ export function createShopifyOracle({
             : null,
         };
       }
+      // SD5: the gateway's fixed mutation, on a synthetic product's title, tags or
+      // description (the fields this oracle keeps).
+      case "ProductUpdate": {
+        const input = v.product ?? {};
+        const id = /^gid:\/\/shopify\/Product\/([0-9]+)$/.exec(input.id ?? "")?.[1];
+        const p = products.find((x) => x.id === id);
+        if (!p)
+          return {
+            productUpdate: {
+              product: null,
+              userErrors: [{ field: ["id"], message: "Product does not exist" }],
+            },
+          };
+        if (typeof input.title === "string") p.title = input.title;
+        if (typeof input.descriptionHtml === "string") p.descriptionHtml = input.descriptionHtml;
+        if (Array.isArray(input.tags)) p.tags = [...input.tags];
+        return {
+          productUpdate: {
+            product: { id: "gid://shopify/Product/" + p.id, updatedAt: new Date(now()).toISOString() },
+            userErrors: [],
+          },
+        };
+      }
       // v1 PR 5: the installation's granted scopes (state.accessScopes, or the exchange's
       // granted scope expanded: write_X implies read_X).
       case "AccessScopes": {
@@ -303,9 +353,54 @@ export function createShopifyOracle({
         call.operation = /^(?:query|mutation) ([A-Za-z]+)/.exec(request.query ?? "")?.[1] ?? null;
         call.variables = request.variables ?? null;
         const identity = request.query === shopifyOracleIdentityDocument;
+        // SD5: the bucket, refilled by time, then charged the call's requested cost before it
+        // runs; a call it cannot cover runs nothing and is THROTTLED.
+        let costExtension = null;
+        if (state.bucket) {
+          const b = state.bucket;
+          const at = now();
+          b.available = Math.min(b.maximum, b.available + (b.restoreRate * (at - b.at)) / 1000);
+          b.at = at;
+          const requestedQueryCost = shopifyOracleCosts[identity ? "ShopIdentity" : call.operation] ?? 2;
+          const throttleStatus = () => ({
+            maximumAvailable: b.maximum,
+            currentlyAvailable: Math.floor(b.available),
+            restoreRate: b.restoreRate,
+          });
+          if (b.available < requestedQueryCost) {
+            state.throttled.push({ operation: call.operation, cost: requestedQueryCost });
+            return json({
+              errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
+              extensions: { cost: { requestedQueryCost, throttleStatus: throttleStatus() } },
+            });
+          }
+          b.available -= requestedQueryCost;
+          state.charges.push({
+            operation: call.operation,
+            cost: requestedQueryCost,
+            left: b.available,
+          });
+          costExtension = {
+            requestedQueryCost,
+            actualQueryCost: requestedQueryCost,
+            throttleStatus: throttleStatus(),
+          };
+        }
         const data = identity ? null : readData(call.operation, request.variables ?? {});
         if (!identity && data === null)
           return json({ errors: [{ message: "unexpected document" }] }, 200);
+        if (costExtension) {
+          const shopData = identity
+            ? {
+                shop: {
+                  id: `gid://shopify/Shop/${shopId}`,
+                  myshopifyDomain: shop,
+                  plan: { partnerDevelopment: state.development },
+                },
+              }
+            : data;
+          return json({ data: shopData, extensions: { cost: costExtension } });
+        }
         if (state.fault === "throttled_once") {
           state.fault = null;
           // Shopify's THROTTLED reply names the query's requested cost (a page of 25 costs
