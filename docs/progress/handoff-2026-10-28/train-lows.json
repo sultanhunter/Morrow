@@ -1,0 +1,158 @@
+{
+ "pr90_lows": [
+  {
+   "id": "L1",
+   "file": "docs/plan/v1-build-order.md:294",
+   "severity": "low",
+   "claim": "PR 11's safety line says only two things limit spend: \"Apart from your balance and an optional per-agent credit limit you may set ... no amount of spend pauses a job or makes it check in\". It leaves out the member credit ceiling. OD-2026-10-26-12 names that ceiling as one of the only two budgets beside the balance, and ADR-0041 item 9 and H8 apply it to every run the member started. This branch's own mvp.md:41 and adr-0039-implementation.md:7 both name the ceiling, so the build order disagrees with them.",
+   "evidence": "OD-2026-10-26-12, last part: 'the Owner's settings counted in credits, the optional per-agent credit limit ... and the member credit ceiling, are the only budgets beside the balance'. ADR-0041 item 9, 'Who pays'. Harness plan H8: 'the member ceiling summed over the root requester's runs'.",
+   "fix": "Change the line to \"Apart from your balance, the member credit ceiling and an optional per-agent credit limit you may set (which pauses only that agent), no amount of spend pauses a job ...\", and update the PR 11 case in plan-docs-harness to match."
+  },
+  {
+   "id": "L2",
+   "file": "docs/plan/adr-0039-implementation.md:15",
+   "severity": "low",
+   "claim": "Row 2 says \"the codes of ADR-0041 item 34: AgentRunRefusal gains `insufficient_credits` and `entry_unpriced`\". Those two codes come from ADR-0039 item 9. ADR-0041 item 34 covers end-reason changes and its own new refusals (parallel_limit, fork_first, retry_blocked, ...), not these two.",
+   "evidence": "ADR-0039 line 37, item 9: 'New: `insufficient_credits` for loop admission ..., `credits_exhausted` ..., and `entry_unpriced`'. ADR-0041 line 351, item 34 'Codes', which does not list either code.",
+   "fix": "Cite \"the codes of ADR-0039 item 9 and ADR-0041 item 34: AgentRunRefusal gains `insufficient_credits` and `entry_unpriced` (ADR-0039 item 9) and item 34's refusals; ...\"."
+  },
+  {
+   "id": "L3",
+   "file": "docs/plan/mvp.md:138",
+   "severity": "low",
+   "claim": "The dates note says ADR-0041's foundation adds work to T2, T4, T6, T7, T9, T12 and T14, which is incomplete. This branch also gives harness row H19 to T17 (line 93) and to T4 (line 80). No track names rows H9b (influence conflicts on approvals, size M, a security packet) or H9c (audience on derived rows, size M). They are covered only by the scope row's 'H1 to H20'. The owner therefore reads too short a list of where the foundation's extra work lands.",
+   "evidence": "mvp.md lines 80, 93 and 138. The harness plan's H19 row is labelled '(T17)'. H9b and H9c each appear in mvp.md only inside the 'H1 to H20' range lines.",
+   "fix": "Put H9b in T3 (or T4) and H9c in T4 (or T9). Keep H19 in T17 only, with H19b in T4 if that was meant. Add T17 (and T3, if used) to the dates note."
+  }
+ ],
+ "pr94_nits": [
+  {
+   "id": "nit-1",
+   "file": "docs/plan/connected-services-implementation.md",
+   "severity": "low",
+   "claim": "CS10c's short list of the WhatsApp connection stop leaves out \"a reported spam flag, complaint or barring notice\". The ADR-0042 Amendments include it in the connection stop. The row cites the Amendments, so its meaning holds.",
+   "evidence": "In CS10c's What-it-does column, the parenthetical after \"the plan and connection stops for WhatsApp of ADR-0042's Amendments\" lists only Meta's quality rating or number status, a messaging-limit downgrade, an account restriction, and a template paused or disabled. The ADR-0042 Amendments bullet \"Stops for WhatsApp\" adds \"and, as item 13 already says, on a reported spam flag, complaint or barring notice\".",
+   "fix": "Optional: add \"a reported spam flag, complaint or barring notice\" to CS10c's parenthetical."
+  },
+  {
+   "id": "nit-2",
+   "file": "docs/plan/connected-services-implementation.md",
+   "severity": "low",
+   "claim": "CS10c's inbound clause runs two rules together with a comma, so it can be read as if profile.name, button text, free text and media were further items of \"no row, log or task\".",
+   "evidence": "CS10c reads: \"is dropped with no row, log or task, `profile.name`, button text, free text and media are dropped, the fixed stop list ...\"",
+   "fix": "Optional: put a semicolon after \"no row, log or task\"."
+  }
+ ],
+ "pr93_lows": [
+  {
+   "id": "H9A-2R1",
+   "file": "packages/policy/src/customer-screen.ts",
+   "severity": "low",
+   "claim": "A phone written right after another number is still missed. This is what remains of R2. First, gluedPhoneRun (line 508) skips a run when a digit comes before ','. So a CSV row whose phone column follows a numeric column passes decideNotebookWrite and is stored. Second, phoneRun (line 501) merges a number of three or more digits, one space or tab, and the phone into a single run of more than 13 digits, which is not phone-shaped.",
+   "evidence": "screenCustomerText and decideNotebookWrite let each of these through: \"order_number,phone\\n1042,03001234567\", \"#1042,+923001234567\", \"Order 1042,+14155552671\", \"1042 03001234567\" and \"1042\\t03001234567\". The earlier module also let them through.",
+   "fix": "In the glued pass, allow a digit before ',' or a tab when the run is strongly phone-shaped: it starts with '+', or it has 10 or 11 digits with a trunk 0. When a run of several groups fails phoneShaped, test its suffix again from each group boundary that follows a space or tab (at most 16 boundaries). Pin both CSV rows in the phones test."
+  },
+  {
+   "id": "H9A-2R2",
+   "file": "packages/policy/src/customer-screen.ts",
+   "severity": "low",
+   "claim": "Reading link contents (lines 1194-1199, linkContent at line 468) adds a deterministic false positive. A bare query value or path segment of 10 or 11 digits that is shaped like a North American number is read as a phone. Google Sheets tab links and legacy-id admin links are therefore refused; the earlier module passed them.",
+   "evidence": "11,018 of 200,000 random 'https://docs.google.com/spreadsheets/d/1AbC/edit#gid=N' links (5.5%) are refused as phone. So is 'https://admin.shopify.com/store/my-shop/collections/2612345678'. A knowledge.propose of kind supplier whose text cites a #gid=2063456789 sheet link returns refused customer_data. The screen fails closed, so nothing leaks.",
+   "fix": "Inside a link's content, read a value glued to '=' as a phone only after a phone key (phone, tel, mobile, whatsapp) or when it is strongly phone-shaped ('+', '00' or a trunk 0). Treat a bare path segment or any other query value as an id. Pin a sheet link and a collection link in the pass list."
+  },
+  {
+   "id": "H9A-2R3",
+   "file": "packages/policy/src/customer-screen.ts",
+   "severity": "low",
+   "claim": "Double percent-encoding is not decoded: percentEscapes and percentEscape (lines 164-175) have no %25. linkContent decodes it, but only the phone and address scans read its output. Links without a scheme are not read either: linkPattern (line 431) needs https:// or www.",
+   "evidence": "These pass: \"jane%2540example.com\", a login link whose return_url holds \"email%3Djane%2540example.com\", \"gid%253A%252F%252Fshopify%252FCustomer%252F7234567890123\", \"maps.google.com/?q=221B+Baker+Street\" and \"maps.apple.com/?q=12+Main+St\". \"jane&amp;#64;example.com\" is caught, and the brief says escapes are decoded up to three times.",
+   "fix": "Add '25' -> '%' to percentEscapes and percentEscape; the three-pass loop already decodes again. Alternatively, run scanEmails and scanCustomerIds on each decoded link content. Extend linkPattern to a bare host with a top-level domain followed by '/' or '?'. Pin these forms in the tests."
+  },
+  {
+   "id": "H9A-2R4",
+   "file": "packages/policy/src/customer-screen.ts",
+   "severity": "low",
+   "claim": "The textChars and totalChars bounds (lines 1181-1184) are checked on the raw length. Every scan reads the NFKC fold, which can be up to 18 times longer (U+FDFA), so the stated time bound per mebibyte does not hold.",
+   "evidence": "'1 ' followed by 1 MiB of U+FDFA folds to 18.9M characters and took 17.7 s at load about 200. The brief says one to ten seconds. The linear-time test has no shape that expands under NFKC. Today's callers keep texts at 8,192 characters or fewer, which is about 0.3 s.",
+   "fix": "Check the folded length against textChars and totalChars and throw CUSTOMER_SCREEN_TEXT_TOO_LONG when it is over. Add a U+FDFA shape to the linear-time test."
+  },
+  {
+   "id": "H9A-2R5",
+   "file": "packages/policy/src/customer-screen.ts",
+   "severity": "low",
+   "claim": "The module header (lines 22-24) and tests/customer-screen.test.mjs:264 still say 'the owner decides the rest' about customer names. This is stale against main's H9a note and H9d row: OD-2026-10-26-10 decided it, and H9d owns name matching.",
+   "evidence": "The brief, the H9a plan row note and the H9d row on main record the decision and its owner row. The code comment and the test comment were not updated.",
+   "fix": "Reword both comments to name OD-2026-10-26-10 and H9d, as the brief now does."
+  }
+ ],
+ "pr92_lows": [
+  {
+   "id": "L1",
+   "file": "migrations/0057.memory-foundation.sql:683; packages/policy/src/memory/index.ts:356; packages/policy/src/knowledge/tools.ts:206",
+   "severity": "low",
+   "claim": "The comments in both files say H9a's customer identifier screen 'runs in code first', but neither decideNotebookWrite nor decideNotebookOperation calls any screen. Tested: memoryTextRefused returns false for a phone number, a street address and an sk_live_ key, and true only for an email address and a customer GID. The SQL backstop memory_text_refused behaves the same way. ADR-0041 item 27 requires 'credential and identifier patterns refused'. Nothing is exposed today: agent_tools is committed off, edge:check keeps it off until the shop-knowledge and agent-loop switches are on, and nothing calls these steps. The merge order puts H9a before H12a, and this PR rewrites decideNotebookWrite and adds decideNotebookOperation.",
+   "evidence": "git grep finds no screen call in packages/policy/src/knowledge/tools.ts (memoryRefusal checks the audience, person memory and memoryTextRefused only). A tsx probe of @morrow/policy/memory gave false for '+1 415 555 0134', '221B Baker Street, London NW1 6XE' and 'sk_live_51H8x2...'.",
+   "fix": "Now: change both comments to say the screen will run first, and name notebook.write (both decide functions) in H9a's brief. When merging after H9a: call H9a's screen from memoryRefusal, which covers both decide functions, before memoryTextRefused. Widen memory_text_refused, keeping it equal to the oracle test, where H9a's patterns can be expressed in SQL. Add a test that refuses an add and a replace carrying a phone number or an address, and that fails if the call is removed. Alternatively, add an edge:check rule that refuses agent_tools on until that screen is wired in."
+  }
+ ],
+ "pr91_lows_657bf91c": [
+  {
+   "id": "L1",
+   "file": "docs/contracts/schemas/v1.1/core.schema.json:20334",
+   "severity": "low",
+   "claim": "PlanItem's only reason field is droppedReason, which is required only for dropped. H5's run.plan code requires a reason for blocked and accepts one with done (packages/policy/src/harness-tools.ts:97-100). A stored plan revision therefore loses the reason the model gave for a blocked or done item.",
+   "evidence": "runPlanInputValid accepts item_status blocked with reason 'Sizes missing.' and refuses it without a reason. PlanItem has no field for that reason, and a blocked item with droppedReason null validates as RunPlan.",
+   "fix": "Add a reason field to PlanItem, in place of or beside droppedReason. Make it a required string for blocked and dropped, matching runPlanChangeValid, and allow it with done. Add a test that every item_status change runPlanInputValid accepts maps to a valid stored item that keeps its reason. That test must fail against the current PlanItem."
+  },
+  {
+   "id": "L2",
+   "file": "docs/contracts/schemas/v1.1/core.schema.json:20584",
+   "severity": "low",
+   "claim": "RunPlan@1's change.logged_reason.reason has maxLength 1000, but run.plan's RunPlanChange.reason (core.schema.json:18684) has no length bound. run.plan accepts criterion-change reasons that the record refuses. This breaks the brief's rule that records keep no bound on model-written text beyond ADR-0040 item 4(c).",
+   "evidence": "A change_criterion with a 1,001-character reason passes ToolInputRunPlan. A RunPlan revision carrying it fails validation, and the same revision with 1,000 characters passes.",
+   "fix": "Choose one: drop maxLength from RunPlan.change.reason, keeping minLength 1 and the pattern; or put the same 1,000-character bound on RunPlanChange.reason as a ToolInput limit. Either way, add the pair to the review R1 'hold as much as their tools accept' test."
+  },
+  {
+   "id": "L3",
+   "file": "docs/contracts/schemas/v1.1/core.schema.json:20529",
+   "severity": "low",
+   "claim": "RunPlan@1 caps notes at 500 in total and items at 256 per phase. run.plan's update adds notes and items without counting what the plan already holds: runPlanChangeValid is stateless and no ToolRefusalCode names a full plan. The 501st note, or the 257th item in a phase, therefore passes the tool and then fails when stored.",
+   "evidence": "An update with 64 add_note changes passes runPlanInputValid. A RunPlan with 500 notes validates and one with 501 does not. No refusal code such as plan_full exists in core v1.1.",
+   "fix": "Choose one: state the rule while v1.1 is unfrozen, that code refuses an update which would pass a record bound (input_invalid or a new plan_full code), in ToolInputRunPlan's and RunPlan@1's descriptions, and carry it to H7 with a test as N3 was; or raise these bounds to safety ranges the tool cannot reach."
+  },
+  {
+   "id": "N1-nit",
+   "file": "docs/briefs/h6-harness-contracts.md:118",
+   "severity": "low",
+   "claim": "Nit: the brief says the validator bundle grows by '112 KB gzipped'. By contract-versions.md's numbers (610,036 - 492,721) it grows by about 117 KB, which is what the PR body says.",
+   "evidence": "contract-versions.md gives 610,036 gzipped against main's 492,721, a growth of 117,315 bytes.",
+   "fix": "Change the brief's figure to about 117 KB gzipped."
+  }
+ ],
+ "pr94_lows_4761a48b": [
+  {
+   "id": "L1",
+   "file": "docs/decisions/adr/README.md",
+   "severity": "low",
+   "claim": "Several summary lines state the lead's reading as the owner's decision without the label the records carry. The reading is \"no design partner before Morrow gives results on the owner's own store\" and \"nothing dropshipping-specific now\". The unlabelled lines: README.md:32 (the 0026 row), README.md:41 (the 0035 row), mvp.md:89 (T13), mvp.md:140 and connected-services-implementation.md:95 (\"The owner asked the lead to ... build nothing specific to the owner's planned dropshipping store now\"), OD-2026-10-27-2.md:101-103 (\"this answers one\") and the OD title at line 4. The OD's reading section, ADR-0026:110 and ADR-0035:140 do label it.",
+   "evidence": "The owner wrote \"don't worry about the dropshipping store just build the best harness ...\" and \"then we will make it purchasable and ready for everyone else when it starts giving results\". The OD files \"nothing dropshipping-specific is built now\" and \"No design partner and no other store before ...\" under \"The lead's reading\". tests/gtm-decisions-records.test.mjs:590 and :598 pin the unlabelled README and T13 wording.",
+   "fix": "Add \"(the lead's reading, open to the owner's correction)\" after the clause in the two README rows and in T13. In the two plan notes, quote the owner's \"don't worry about the dropshipping store just build the best harness\", then say \"in the lead's reading, nothing dropshipping-specific is built now\". At OD line 101, write \"in the lead's reading, this answers one\". Optionally mark the title as the lead's reading. Update the test assertions at lines 590 and 598."
+  },
+  {
+   "id": "L2",
+   "file": "docs/decisions/adr/ADR-0035-build-v1-live.md",
+   "severity": "low",
+   "claim": "Line 140 gives the owner's design-partner answer in indirect speech, not verbatim: the owner \"answered that Morrow is made to work on the owner's own store first, and made purchasable for everyone else when it gives results there\". The paraphrase reads as a statement of fact and drops \"lets quickly make it work for our own store\" and \"ready\".",
+   "evidence": "ADR-0026's note quotes the grant answer exactly, and the OD-2026-10-27-1 notes quote the decision text. OD-2026-10-27-2 line 13 holds the verbatim line.",
+   "fix": "Quote the owner's line exactly, as OD-2026-10-27-2 line 13 does, or write \"answered, in words OD-2026-10-27-2 quotes in full, that ...\"."
+  },
+  {
+   "id": "N1",
+   "file": "docs/graph/decisions/OD-2026-10-27-2.md",
+   "severity": "low",
+   "claim": "Nit at lines 19-21: the opening says both question cards answered open points that OD-2026-10-27-1 and PR 94 left. Card 2 was the lead's follow-up about the owner's dropshipping store, and the third quoted answer replies to it.",
+   "evidence": "The transcript calls card 2 the \"follow-up the lead asked\". The record itself says so further down (\"Card 2, the lead's follow-up\").",
+   "fix": "Write \"on two question cards: card 1 on two open points that OD-2026-10-27-1 and pull request 94 left (...), and card 2, the lead's follow-up on the owner's store\"."
+  }
+ ]
+}
