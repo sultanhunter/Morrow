@@ -154,9 +154,39 @@ test("run.plan: set takes a plan, update changes, read neither; understood and s
       ),
       "coordinator",
     ],
-    ["seven steps", plan((p) => p.plan.steps.push("4", "5", "6", "7")), "coordinator"],
+    [
+      "seven steps",
+      plan((p) =>
+        p.plan.steps.push(...["4", "5", "6", "7"].map((title) => ({ title, by: "morrow" }))),
+      ),
+      "coordinator",
+    ],
+    // ADR-0040 item 4(c)'s person-facing bounds, as run.plan's own limits (the H6 merge): a
+    // longer input is this call's invalid_input, never a record the store refuses.
+    [
+      "an understood line over 280 characters",
+      plan((p) => (p.plan.understood = "x".repeat(281))),
+      "coordinator",
+    ],
+    [
+      "a step over 80 characters",
+      plan((p) => (p.plan.steps[0].title = "x".repeat(81))),
+      "coordinator",
+    ],
+    ["a step without its owner", plan((p) => delete p.plan.steps[0].by), "coordinator"],
+    ["a step as plain text", plan((p) => (p.plan.steps[0] = "Check every title")), "coordinator"],
   ])
     assert.equal(runPlanInputValid(input, context), false, name);
+  // The bounds themselves pass: 280 characters understood, a step of 80.
+  assert.ok(
+    runPlanInputValid(
+      plan((p) => {
+        p.plan.understood = "x".repeat(280);
+        p.plan.steps[0].title = "x".repeat(80);
+      }),
+      "coordinator",
+    ),
+  );
   // A teammate's own plan, and a time follow-through, pass.
   const teammate = plan((p) => {
     p.plan.understood = null;
