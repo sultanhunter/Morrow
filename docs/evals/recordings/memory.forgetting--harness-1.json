@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 2,
+  "caseId": "memory.forgetting",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "f7a1c0a5c0cf2628c1966f61cd36b16ac86fb550da925e1c191a1918a2aae2d3",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "memory.search",
+              "input": {
+                "queries": [
+                  "courier express"
+                ],
+                "layers": [
+                  "person_memory"
+                ],
+                "limit": 5
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4200,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "I have no courier preference saved for you. Tell me which one you'd like and I'll remember it.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4400,
+            "outputTokens": 50
+          }
+        }
+      ]
+    }
+  ]
+}

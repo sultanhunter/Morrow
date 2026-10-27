@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 2,
+  "caseId": "stop.before-a-child-runs",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "6a4fc9a2469444f61f30d1cc9f496c04a39daf38d9ca1da5c066a14e6f91eb85",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Rewrite kitchen descriptions",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "draft",
+                          "title": "draft",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want every kitchen description rewritten.",
+                  "steps": [
+                    "draft",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Rewrite the kitchen descriptions.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Propose changes only; a person approves each one."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999102"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999103"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999105"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1"
+                ]
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 240
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": []
+    }
+  ]
+}

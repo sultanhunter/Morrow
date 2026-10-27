@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.provider-strategy-needle",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "c2072e33ea6a3f9f9c0b8b1af6385a76d6d73c090db83688b1f78531074bac33",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_002",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "SEO for three products",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "seo",
+                          "title": "seo",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "report_sku",
+                          "title": "report sku",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": null,
+                  "steps": null
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999101",
+                  "product:999999102",
+                  "product:999999103"
+                ],
+                "titleContains": null,
+                "limit": 3
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 12000,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999101",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": {
+                      "title": "SEO title 1",
+                      "description": "A short SEO description 1."
+                    },
+                    "tags": null
+                  },
+                  {
+                    "productId": "product:999999102",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": {
+                      "title": "SEO title 2",
+                      "description": "A short SEO description 2."
+                    },
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 23400,
+            "outputTokens": 700
+          }
+        },
+        {
+          "kind": "checkpoint",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "context.checkpoint",
+              "input": {
+                "objective": {
+                  "text": "SEO text for three products, then report the apron's SKU.",
+                  "refs": []
+                },
+                "status": "in_progress",
+                "statusNote": null,
+                "done": [
+                  {
+                    "text": "SEO proposed for product:999999101, product:999999102.",
+                    "refs": []
+                  }
+                ],
+                "inProgress": [],
+                "decisions": [],
+                "setAside": [],
+                "facts": [
+                  {
+                    "fact": "The apron product:999999101 has SKU LN-4471.",
+                    "exact": true,
+                    "refs": []
+                  }
+                ],
+                "difficulties": [],
+                "promised": [],
+                "nextSteps": [
+                  {
+                    "text": "Propose SEO for product:999999103.",
+                    "refs": []
+                  }
+                ],
+                "reopen": []
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 24100,
+            "outputTokens": 800
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999103",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": {
+                      "title": "SEO title 3",
+                      "description": "A short SEO description 3."
+                    },
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 9000,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "seo",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "report_sku",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_1"
+                      },
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_2"
+                      }
+                    ]
+                  }
+                ],
+                "reply": "SEO text is proposed for all three. The apron's SKU is LN-4471.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 10500,
+            "outputTokens": 160
+          }
+        }
+      ]
+    }
+  ]
+}

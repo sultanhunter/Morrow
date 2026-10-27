@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 2,
+  "caseId": "park.detector-idle-continue",
+  "title": "Three idle turns trip the detector; the requester's Continue resumes the job, which finishes",
+  "category": "park_and_resume",
+  "class": "quality",
+  "rubricId": "rubric.stuck-loop@1",
+  "requires": [
+    "H7b"
+  ],
+  "gates": [
+    "agent-loop",
+    "agent-run-safety-v1"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Plan the wording for a summer sale banner."
+  },
+  "fixtures": [],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "continue",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": false,
+      "sources": []
+    },
+    "events": {
+      "required": [
+        "detector_trip:idle",
+        "park:detector",
+        "resume:detector",
+        "run:ended"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 8,
+      "outputTokensMax": 400000
+    }
+  }
+}

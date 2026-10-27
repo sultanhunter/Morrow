@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 2,
+  "caseId": "batch.completion-gate-holds",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "76e6d0ea51cd76b3ce94541daad1657ce7ebd08cdd4d98b776327fb02af31662",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "New titles for the board and the mug",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "draft_titles",
+                          "title": "draft titles",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "tell_owner",
+                          "title": "tell owner",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want new titles drafted for the board and the mug.",
+                  "steps": [
+                    "draft titles",
+                    "tell owner"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Draft clearer titles for the board and the mug.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Titles only."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999102"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999103"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4400,
+            "outputTokens": 280
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "draft_titles",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_005",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "New titles are ready for your approval.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "verification_failed",
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5200,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "tell_owner",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "New titles for the Oak Serving Board and the Stoneware Mug are ready for your approval, in one proposal.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5600,
+            "outputTokens": 120
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999102",
+                  "product:999999103"
+                ],
+                "titleContains": null,
+                "limit": 2
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999102",
+                    "title": "Oak Serving Board, 40 x 25 cm",
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": null
+                  },
+                  {
+                    "productId": "product:999999103",
+                    "title": "Stoneware Mug, 350 ml",
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3000,
+            "outputTokens": 140
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_010",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_listings-1_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed two new titles.",
+                  "counts": {
+                    "checked": 2,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3300,
+            "outputTokens": 80
+          }
+        }
+      ]
+    }
+  ]
+}

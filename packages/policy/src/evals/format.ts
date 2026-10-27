@@ -8,8 +8,8 @@
 //                    live round needs, the rounds it gates, where the person asks (Morrow's
 //                    conversation, a project job, or a teammate directly), the request and
 //                    synthetic input fixtures (store rows and memory), the world it runs in
-//                    (credits and top-ups, stops, posts, answers, the check-in answer, the
-//                    context strategy), the probes (needles, constraints, tool selection,
+//                    (credits and top-ups, stops, posts, answers, the check-in answer, a
+//                    forced compaction threshold), the probes (needles, constraints, tool selection,
 //                    compactions, exact ids), the code checks it expects and the rubric id;
 //   EvalRubric@1     one rubric: criteria graded by code hooks, by a judge model or by the owner;
 //   EvalRecording@2  the model outputs one arm produced for one case, run by run and turn by
@@ -618,11 +618,12 @@ export interface EvalWorld {
   readonly answers: readonly string[];
   /** What the requester does at a check-in or a detector trip (ADR-0041 item 18). */
   readonly atCheckIn: "continue" | "none";
-  /** The context strategy and, for forced-early compaction, the threshold (item 11). */
-  readonly context: {
-    readonly strategy: "fallback" | "provider";
-    readonly compactAt: number | null;
-  };
+  /**
+   * For forced-early compaction, the threshold (item 11); null is the policy's 0.80W. The arm,
+   * not the case, picks the strategy: provider_context@1 the provider's, every other arm the
+   * fallback.
+   */
+  readonly context: { readonly compactAt: number | null };
   /** Result items that exist in the workspace but belong to another run or a private Ask. */
   readonly foreignItems: readonly EvalForeignItem[];
 }
@@ -899,7 +900,7 @@ function world(value: unknown, path: string): EvalWorld {
     "foreignItems",
   ]);
   const credits = record(r.credits, path + ".credits", ["balance", "topUps"]);
-  const context = record(r.context, path + ".context", ["strategy", "compactAt"]);
+  const context = record(r.context, path + ".context", ["compactAt"]);
   const turnRef = (v: unknown, p: string) => {
     const s = record(v, p, ["run", "beforeTurn"]);
     return {
@@ -953,10 +954,6 @@ function world(value: unknown, path: string): EvalWorld {
     answers: list(r.answers, path + ".answers", 8, (v, p) => text(v, p, { max: 2000 })),
     atCheckIn: oneOf(r.atCheckIn, path + ".atCheckIn", ["continue", "none"] as const),
     context: {
-      strategy: oneOf(context.strategy, path + ".context.strategy", [
-        "fallback",
-        "provider",
-      ] as const),
       // Forced-early compaction runs at 20k to 40k (ADR-0041 item 37); null is the policy's.
       compactAt: nullable(context.compactAt, path + ".context.compactAt", (v, p) =>
         integer(v, p, 20000, 40000),
@@ -982,15 +979,28 @@ const toolExpectation = (value: unknown, path: string): EvalToolExpectation => {
 function probes(value: unknown, path: string, fixtureIds: readonly string[], postIds: string[]) {
   const r = record(value, path, ["constraints", "toolSelection", "compactionsMin", "exactIds"]);
   const constraints = list(r.constraints, path + ".constraints", 16, (v, p) => {
-    const c = record(v, p, ["constraintId", "kind", "fromPost", "fixtureIds", "fields", "tool", "terms"]);
+    const c = record(v, p, [
+      "constraintId",
+      "kind",
+      "fromPost",
+      "fixtureIds",
+      "fields",
+      "tool",
+      "terms",
+    ]);
     const kind = oneOf(c.kind, p + ".kind", evalConstraintKinds);
     const fromPost = nullable(c.fromPost, p + ".fromPost", (x, q) =>
       text(x, q, { pattern: postIdPattern }),
     );
-    if (fromPost !== null && !postIds.includes(fromPost)) fail("EVAL_POST_UNKNOWN", p + ".fromPost");
-    const ids = list(c.fixtureIds, p + ".fixtureIds", 16, (x, q) =>
-      text(x, q, { pattern: fixtureIdPattern }),
-    { unique: true });
+    if (fromPost !== null && !postIds.includes(fromPost))
+      fail("EVAL_POST_UNKNOWN", p + ".fromPost");
+    const ids = list(
+      c.fixtureIds,
+      p + ".fixtureIds",
+      16,
+      (x, q) => text(x, q, { pattern: fixtureIdPattern }),
+      { unique: true },
+    );
     if (ids.some((id) => !fixtureIds.includes(id))) fail("EVAL_FIXTURE_UNKNOWN", p + ".fixtureIds");
     const fields = list(c.fields, p + ".fields", 4, (x, q) => oneOf(x, q, listingFields), {
       unique: true,
@@ -1070,7 +1080,9 @@ function expectation(value: unknown, path: string, fixtureIds: readonly string[]
     const y = record(v, p, ["agent", "tool", "code"]);
     return {
       agent: oneOf(y.agent, p + ".agent", evalAgentRefs),
-      tool: nullable(y.tool, p + ".tool", (t, q) => text(t, q, { max: 64, pattern: toolNamePattern })),
+      tool: nullable(y.tool, p + ".tool", (t, q) =>
+        text(t, q, { max: 64, pattern: toolNamePattern }),
+      ),
       code: oneOf(y.code, p + ".code", evalRefusalCodes),
     };
   };
@@ -1197,9 +1209,13 @@ export function parseEvalCase(value: unknown): EvalCase {
   // The main thread lives in the person's Ask only; a teammate asked directly runs a job.
   if (entry.purpose === "conversation" && (entry.agent !== "morrow" || entry.surface !== "ask"))
     fail("EVAL_ENTRY_PURPOSE", "case.entry");
-  const agents = list(r.agents, "case.agents", evalAgentRefs.length, (v, p) =>
-    oneOf(v, p, evalAgentRefs),
-  { min: 1, unique: true });
+  const agents = list(
+    r.agents,
+    "case.agents",
+    evalAgentRefs.length,
+    (v, p) => oneOf(v, p, evalAgentRefs),
+    { min: 1, unique: true },
+  );
   if (!agents.includes(entry.agent)) fail("EVAL_ENTRY_NOT_AGENT", "case.agents");
   const request = record(r.request, "case.request", ["marking", "text"]);
   const fixtures = list(r.fixtures, "case.fixtures", 64, fixture);
@@ -1225,9 +1241,13 @@ export function parseEvalCase(value: unknown): EvalCase {
     category,
     class: caseClass,
     rubricId: text(r.rubricId, "case.rubricId", { pattern: evalRubricIdPattern }),
-    requires: list(r.requires, "case.requires", evalHarnessRows.length, (v, p) =>
-      oneOf(v, p, evalHarnessRows),
-    { min: 1, unique: true }),
+    requires: list(
+      r.requires,
+      "case.requires",
+      evalHarnessRows.length,
+      (v, p) => oneOf(v, p, evalHarnessRows),
+      { min: 1, unique: true },
+    ),
     gates: list(r.gates, "case.gates", evalGates.length, (v, p) => oneOf(v, p, evalGates), {
       min: 1,
       unique: true,
@@ -1486,7 +1506,9 @@ export function parseEvalRecording(value: unknown): EvalRecording {
     for (const turn of run.turns)
       for (const call of turn.calls) {
         const followUp =
-          isRecord(call.input) && typeof call.input.followUpOf === "string" && call.input.followUpOf;
+          isRecord(call.input) &&
+          typeof call.input.followUpOf === "string" &&
+          call.input.followUpOf;
         if (!followUp) started.push(...call.expect.children);
       }
   if (new Set(started).size !== started.length)

@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 2,
+  "caseId": "steer.requester-adds-constraint",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "1e4d4fbd3aef93a856b0e080e8724fb42ea4d2084419f31e1b74994b5a862993",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Tidy two listings",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "tidy",
+                          "title": "tidy",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want the board and mug listings tidied.",
+                  "steps": [
+                    "tidy",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Tidy up the listings for these two products.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Propose changes only."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999102"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999103"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1"
+                ]
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 240
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_003",
+              "tool": "agent.message",
+              "input": {
+                "callId": "call_1",
+                "text": "The owner asks: leave the titles alone; change descriptions only."
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_004",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4800,
+            "outputTokens": 100
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "tidy",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_006",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "Done: new descriptions for the board and the mug, titles left as they are. One proposal is waiting for you.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5500,
+            "outputTokens": 110
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_007",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999102",
+                  "product:999999103"
+                ],
+                "titleContains": null,
+                "limit": 2
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999102",
+                    "title": null,
+                    "descriptionHtml": "<p>Solid oak, 40 x 25 cm, oiled to show the grain. Hand wash only.</p>",
+                    "seo": null,
+                    "tags": null
+                  },
+                  {
+                    "productId": "product:999999103",
+                    "title": null,
+                    "descriptionHtml": "<p>Glazed stoneware that holds 350 ml and goes in the dishwasher.</p>",
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3100,
+            "outputTokens": 240
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_listings-1_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Drafted new descriptions; titles unchanged.",
+                  "counts": {
+                    "checked": 2,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3400,
+            "outputTokens": 80
+          }
+        }
+      ]
+    }
+  ]
+}

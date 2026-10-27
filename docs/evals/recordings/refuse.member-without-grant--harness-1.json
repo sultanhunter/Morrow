@@ -1,0 +1,308 @@
+{
+  "schemaVersion": 2,
+  "caseId": "refuse.member-without-grant",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "ca6af1c76f269777f835bc529f3aacf77d9e845a6ac4404147e948ef99e165db",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Retitle the mug",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "draft",
+                          "title": "draft",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want the mug retitled 'Big Mug'.",
+                  "steps": [
+                    "draft",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Propose the title 'Big Mug' for the mug.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Title only."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999103"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 240
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "draft",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_005",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "blocked",
+                "criteria": [],
+                "reply": "I couldn't propose that: your role can't change product listings. An owner or admin can make the change, or give you that permission.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5100,
+            "outputTokens": 130
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999103"
+                ],
+                "titleContains": null,
+                "limit": 1
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_007",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999103",
+                    "title": "Big Mug",
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "authority_denied",
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2900,
+            "outputTokens": 90
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "blocked",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "not_met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Could not propose: the requester lacks the listing permission.",
+                  "counts": {
+                    "checked": 0,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": {
+                    "kind": "grant",
+                    "question": null
+                  },
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3200,
+            "outputTokens": 110
+          }
+        }
+      ]
+    }
+  ]
+}

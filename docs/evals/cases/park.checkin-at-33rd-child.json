@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 2,
+  "caseId": "park.checkin-at-33rd-child",
+  "title": "The 33rd child checks the job in; the requester's Continue admits it and the job finishes",
+  "category": "park_and_resume",
+  "class": "quality",
+  "rubricId": "rubric.park-resume@1",
+  "requires": [
+    "H7b",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "agent-run-safety-v1",
+    "agent-map"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "inventory",
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Tag all 32 low-stock products 'back soon'."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "stock_many",
+      "kind": "inventory",
+      "marking": "synthetic",
+      "recordId": "stock_fake_443",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "rows": [
+          {
+            "recordId": "product:999999201",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999202",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999203",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999204",
+            "available": 3
+          },
+          {
+            "recordId": "product:999999205",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999206",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999207",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999208",
+            "available": 3
+          },
+          {
+            "recordId": "product:999999209",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999210",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999211",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999212",
+            "available": 3
+          },
+          {
+            "recordId": "product:999999213",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999214",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999215",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999216",
+            "available": 3
+          },
+          {
+            "recordId": "product:999999217",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999218",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999219",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999220",
+            "available": 3
+          },
+          {
+            "recordId": "product:999999221",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999222",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999223",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999224",
+            "available": 3
+          },
+          {
+            "recordId": "product:999999225",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999226",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999227",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999228",
+            "available": 3
+          },
+          {
+            "recordId": "product:999999229",
+            "available": 0
+          },
+          {
+            "recordId": "product:999999230",
+            "available": 1
+          },
+          {
+            "recordId": "product:999999231",
+            "available": 2
+          },
+          {
+            "recordId": "product:999999232",
+            "available": 3
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "inventory",
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "continue",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.map",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 32,
+            "max": 32
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": {
+      "calls": {
+        "min": 1,
+        "max": 1
+      },
+      "followUps": {
+        "min": 0,
+        "max": 0
+      },
+      "maps": {
+        "min": 1,
+        "max": 1
+      },
+      "reviews": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "inventory",
+        "listings"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 32,
+      "byAgent": "listings",
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "teammate_result"
+      ]
+    },
+    "events": {
+      "required": [
+        "checkin:children",
+        "park:children",
+        "resume:children",
+        "map:merged",
+        "run:ended"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 80,
+      "outputTokensMax": 400000
+    }
+  }
+}

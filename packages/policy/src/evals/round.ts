@@ -45,7 +45,13 @@ import {
   type EvalToolSelection,
 } from "./programme";
 import { replayCase, type EvalReplayOptions, type EvalTrace } from "./replay";
-import { caseReport, repetitionReport, roundReport, type EvalCaseMeta, type EvalReport } from "./report";
+import {
+  caseReport,
+  repetitionReport,
+  roundReport,
+  type EvalCaseMeta,
+  type EvalReport,
+} from "./report";
 import { scoreTrace } from "./score";
 import { evalRoundStart, parseEvalThresholds, type EvalThresholds } from "./thresholds";
 
@@ -124,7 +130,8 @@ export function evalLibrary(files: {
     if (![...cases.values()].some((c) => c.rubricId === rubricId))
       throw new EvalFormatError("EVAL_RUBRIC_UNUSED", rubricId);
   const thresholds = parseEvalThresholds(files.thresholds);
-  if (thresholds.setId !== set.setId) throw new EvalFormatError("EVAL_THRESHOLDS_SET", "thresholds.setId");
+  if (thresholds.setId !== set.setId)
+    throw new EvalFormatError("EVAL_THRESHOLDS_SET", "thresholds.setId");
   if (set.liveRepetitionsMin < thresholds.k)
     throw new EvalFormatError("EVAL_THRESHOLDS_K", "set.liveRepetitionsMin");
   for (const round of thresholds.rounds) {
@@ -277,7 +284,10 @@ export async function liveRound(
   const side =
     input.side === "candidate"
       ? { arm: round.arm, variant: round.variant }
-      : (round.baseline ?? (() => { throw Error("EVAL_LIVE_NO_BASELINE"); })());
+      : (round.baseline ??
+        (() => {
+          throw Error("EVAL_LIVE_NO_BASELINE");
+        })());
   if (
     !Number.isInteger(input.repetitions) ||
     input.repetitions < Math.max(library.set.liveRepetitionsMin, library.thresholds.k) ||
@@ -301,11 +311,7 @@ export async function liveRound(
     }
     const evalCase =
       side.variant === "forced_compaction"
-        ? forcedCompactionVariant(
-            written,
-            library.programme.compaction.compactAt.min,
-            side.arm === "provider_context@1" ? "provider" : "fallback",
-          )
+        ? forcedCompactionVariant(written, library.programme.compaction.compactAt.min)
         : written;
     const repetitions = [];
     for (let repetition = 1; repetition <= input.repetitions; repetition += 1) {

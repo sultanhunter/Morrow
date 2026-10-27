@@ -1,0 +1,488 @@
+{
+  "schemaVersion": 2,
+  "caseId": "data.figure-reviewed",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "43c5738d5605ceb469e0a8befe0c0a5ef1586a6491c210cfc7385d4682cf42c4",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Find last week's best sales day",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "find_day",
+                          "title": "find day",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "check_figure",
+                          "title": "check figure",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want last week's best sales day, to plan a promotion.",
+                  "steps": [
+                    "find day",
+                    "check figure",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_business_analyst",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Find the day with the highest gross sales in the last 7 days.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Read only."
+                  ],
+                  "records": [],
+                  "outputFormat": {
+                    "findingKinds": [
+                      "metric"
+                    ],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "analyst-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_business_analyst",
+                "mode": "review",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Check the best-day figure against the orders.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The day and amount match the orders."
+                  ],
+                  "boundaries": [
+                    "Propose changes only; a person approves each one."
+                  ],
+                  "records": [
+                    {
+                      "kind": "artifact",
+                      "id": "report_analyst-1_1"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "review-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_005",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5200,
+            "outputTokens": 200
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "find_day",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "check_figure",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "Your best day last week was Saturday, with 310 EUR in sales. A review run checked the figure against the orders.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5900,
+            "outputTokens": 110
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "analyst-1",
+      "agent": "business_analyst",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "orders.summary",
+              "input": {
+                "metric": "gross_sales",
+                "period": "last_7_days",
+                "groupBy": "day"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2200,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "report.write",
+              "input": {
+                "title": "Best day",
+                "summary": "Saturday: 310 EUR.",
+                "sections": [
+                  {
+                    "heading": "Daily sales",
+                    "body": "Saturday was the highest day at 310 EUR."
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 150
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_010",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "artifact",
+                        "id": "report_analyst-1_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Saturday was the best day: 310 EUR.",
+                  "counts": {
+                    "checked": 0,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [
+                    {
+                      "kind": "metric",
+                      "title": "Best day gross sales",
+                      "detail": "Saturday",
+                      "records": [
+                        {
+                          "kind": "artifact",
+                          "id": "report_analyst-1_1"
+                        }
+                      ],
+                      "value": 310,
+                      "unit": "EUR",
+                      "table": null
+                    }
+                  ],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3000,
+            "outputTokens": 160
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "review-1",
+      "agent": "business_analyst",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_011",
+              "tool": "orders.summary",
+              "input": {
+                "metric": "gross_sales",
+                "period": "last_7_days",
+                "groupBy": "day"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2300,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_012",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "The figure matches the orders: Saturday, 310 EUR.",
+                  "counts": {
+                    "checked": 0,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": [
+                    {
+                      "index": 0,
+                      "verdict": "pass",
+                      "evidence": [],
+                      "note": null
+                    }
+                  ]
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 140
+          }
+        }
+      ]
+    }
+  ]
+}

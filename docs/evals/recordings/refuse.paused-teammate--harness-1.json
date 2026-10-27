@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 2,
+  "caseId": "refuse.paused-teammate",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "e870ebb5040beaf6566a75edca8d3f18929ab1cd012522424d0ed53a3254eb29",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Refresh the towel description",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "draft",
+                          "title": "draft",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want Listings to refresh the towel description.",
+                  "steps": [
+                    "draft",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Refresh the towel description.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Propose changes only; a person approves each one."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999105"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "teammate_unavailable",
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4200,
+            "outputTokens": 220
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_003",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "draft",
+                    "status": "blocked",
+                    "reason": "Listings is paused.",
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_004",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "blocked",
+                "criteria": [],
+                "reply": "Listings is paused right now, so it can't take this. Turn it back on in Team, and I'll pass the request on.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4700,
+            "outputTokens": 120
+          }
+        }
+      ]
+    }
+  ]
+}

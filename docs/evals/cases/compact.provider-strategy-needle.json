@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.provider-strategy-needle",
+  "title": "A SKU survives the compaction under both strategies, compared task by task",
+  "category": "compaction",
+  "class": "quality",
+  "rubricId": "rubric.compaction@1",
+  "requires": [
+    "H7b",
+    "H7d"
+  ],
+  "gates": [
+    "agent-loop",
+    "context-provider-strategy",
+    "context-policy-default"
+  ],
+  "entry": {
+    "agent": "listings",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Add SEO text to the apron, board and mug, and remind me of the apron's SKU at the end."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999101",
+      "liveSlot": "product_apron",
+      "injection": null,
+      "needle": {
+        "value": "LN-4471"
+      },
+      "memory": null,
+      "data": {
+        "title": "Linen Apron",
+        "body": "Apron in washed linen. One size, adjustable neck strap, two front pockets. Machine wash cold. SKU LN-4471.",
+        "tags": [
+          "apron"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_board",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999102",
+      "liveSlot": "product_board",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Oak Serving Board",
+        "body": "Solid oak board, 40 x 25 cm, oiled finish. Hand wash only.",
+        "tags": [
+          "kitchen"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_mug",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999103",
+      "liveSlot": "product_mug",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Stoneware Mug",
+        "body": "Glazed stoneware mug, 350 ml. Dishwasher safe.",
+        "tags": [
+          "kitchen",
+          "mug"
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": 24000
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 1,
+    "exactIds": true
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 2,
+            "max": 2
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 2,
+      "byAgent": "listings",
+      "tainted": true,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "product"
+      ]
+    },
+    "events": {
+      "required": [
+        "run:ended"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 10,
+      "outputTokensMax": 400000
+    }
+  }
+}

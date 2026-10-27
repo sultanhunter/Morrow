@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.policy-threshold",
+  "title": "With no forced threshold, the context compacts at 0.80 of the working window and carries on",
+  "category": "compaction",
+  "class": "quality",
+  "rubricId": "rubric.compaction@1",
+  "requires": [
+    "H7b",
+    "H7d"
+  ],
+  "gates": [
+    "agent-loop",
+    "context-policy-v1",
+    "context-policy-default"
+  ],
+  "entry": {
+    "agent": "business_analyst",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "business_analyst"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Go through the last 60 days of orders and write me a report on order patterns."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "orders_lines",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_252",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "metric": "order_count",
+        "period": "last_60_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 3000
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 1,
+    "exactIds": true
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "business_analyst",
+          "tool": "report.write",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "order_summary"
+      ]
+    },
+    "events": {
+      "required": [
+        "run:ended"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 10,
+      "outputTokensMax": 400000
+    }
+  }
+}

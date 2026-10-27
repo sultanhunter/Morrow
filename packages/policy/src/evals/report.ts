@@ -75,7 +75,14 @@ export interface EvalReport {
  * case ran fewer than k times. Safety cases need 1.0: every repetition passes.
  */
 export function evalPassK(c: number, n: number, k: number): number | null {
-  if (!Number.isInteger(c) || !Number.isInteger(n) || !Number.isInteger(k) || k < 1 || c < 0 || c > n)
+  if (
+    !Number.isInteger(c) ||
+    !Number.isInteger(n) ||
+    !Number.isInteger(k) ||
+    k < 1 ||
+    c < 0 ||
+    c > n
+  )
     throw Error("EVAL_PASS_K");
   if (n < k) return null;
   let value = 1;
@@ -139,7 +146,15 @@ export function roundReport(
     (sum, c) => sum + c.repetitions.reduce((n, r) => n + r.metrics.creditsDrawn, 0),
     0,
   );
-  const totals = { cases: cases.length, creditsDrawn, pass: 0, fail: 0, mixed: 0, error: 0, skipped: 0 };
+  const totals = {
+    cases: cases.length,
+    creditsDrawn,
+    pass: 0,
+    fail: 0,
+    mixed: 0,
+    error: 0,
+    skipped: 0,
+  };
   for (const c of cases) totals[c.status] += 1;
   const categories = evalCategories.map((category): EvalCategoryReport => {
     const own = cases.filter((c) => c.category === category);
@@ -238,9 +253,18 @@ export function compareArms(baseline: EvalReport, candidate: EvalReport): EvalCo
       baseline: sa,
       candidate: sb,
       flip,
-      modelTurnsDelta: delta(mean(a, (m) => m.modelTurns), mean(b, (m) => m.modelTurns)),
-      inputTokensDelta: delta(mean(a, (m) => m.inputTokens), mean(b, (m) => m.inputTokens)),
-      creditsDelta: delta(mean(a, (m) => m.creditsDrawn), mean(b, (m) => m.creditsDrawn)),
+      modelTurnsDelta: delta(
+        mean(a, (m) => m.modelTurns),
+        mean(b, (m) => m.modelTurns),
+      ),
+      inputTokensDelta: delta(
+        mean(a, (m) => m.inputTokens),
+        mean(b, (m) => m.inputTokens),
+      ),
+      creditsDelta: delta(
+        mean(a, (m) => m.creditsDrawn),
+        mean(b, (m) => m.creditsDrawn),
+      ),
     };
   });
   return {
@@ -265,7 +289,13 @@ const signed = (value: number | null) =>
   value === null ? "-" : value > 0 ? "+" + value : String(value);
 /** The comparison as a Markdown table for a person: one row per task, flips first. */
 export function renderComparison(comparison: EvalComparison): string {
-  const order: Record<EvalFlip, number> = { broke: 0, fixed: 1, changed: 2, same: 3, not_compared: 4 };
+  const order: Record<EvalFlip, number> = {
+    broke: 0,
+    fixed: 1,
+    changed: 2,
+    same: 3,
+    not_compared: 4,
+  };
   const rows = [...comparison.rows].sort(
     (a, b) => order[a.flip] - order[b.flip] || (a.caseId < b.caseId ? -1 : 1),
   );
@@ -282,7 +312,9 @@ export function renderComparison(comparison: EvalComparison): string {
     "",
     `| Category | ${comparison.baseline} pass^k | ${comparison.candidate} pass^k |`,
     "| --- | --- | --- |",
-    ...comparison.categories.map((c) => `| ${c.category} | ${passK(c.baseline)} | ${passK(c.candidate)} |`),
+    ...comparison.categories.map(
+      (c) => `| ${c.category} | ${passK(c.baseline)} | ${passK(c.candidate)} |`,
+    ),
     "",
     `| Task | ${comparison.baseline} | ${comparison.candidate} | Flip | Model turns | Input tokens | Credits |`,
     "| --- | --- | --- | --- | --- | --- | --- |",

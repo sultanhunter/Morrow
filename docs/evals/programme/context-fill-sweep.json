@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "sweepId": "sweep.context-fill@1",
+  "setId": "golden@2",
+  "gate": "context-policy-v1",
+  "efforts": ["high", "medium"],
+  "fills": [64000, 128000, 200000, 256000, 300000],
+  "baselineFill": 64000,
+  "windowMax": 300000,
+  "distractors": {
+    "source": "deployed_store_data",
+    "kinds": ["product", "order_summary", "inventory", "knowledge_page"],
+    "placement": "interleaved"
+  },
+  "cases": [
+    "quick.shipping-policy",
+    "quick.standing-preference",
+    "data.sales-last-30",
+    "data.stock-of-named-products",
+    "multi.parallel-sales-and-stock",
+    "multi.three-teammates-back-soon",
+    "batch.long-teammate-run",
+    "steer.requester-adds-constraint",
+    "memory.standing-instruction-needle",
+    "compact.needle-survives-two",
+    "compact.goal-survives-three",
+    "compact.exact-ids-after-reset"
+  ],
+  "repetitions": 3,
+  "noiseBand": 0.05
+}

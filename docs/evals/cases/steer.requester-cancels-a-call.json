@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 2,
+  "caseId": "steer.requester-cancels-a-call",
+  "title": "The requester drops part of the job; Morrow cancels the call that never began",
+  "category": "steering",
+  "class": "quality",
+  "rubricId": "rubric.steering@1",
+  "requires": [
+    "H7b",
+    "H10",
+    "H11b"
+  ],
+  "gates": [
+    "agent-loop",
+    "async-conversations"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "inventory",
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Check stock on the candle and refresh its description."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_candle",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999104",
+      "liveSlot": "product_candle",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Beeswax Candle",
+        "body": "Hand-poured beeswax pillar candle, 7 x 10 cm. Burns for about 40 hours.",
+        "tags": [
+          "candle"
+        ]
+      }
+    },
+    {
+      "fixtureId": "stock_candle",
+      "kind": "inventory",
+      "marking": "synthetic",
+      "recordId": "stock_fake_431",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "rows": [
+          {
+            "recordId": "product:999999104",
+            "available": 6
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "inventory",
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [
+      {
+        "postId": "post_1",
+        "run": "root",
+        "beforeTurn": 2,
+        "from": "requester",
+        "text": "Skip the stock check, I already know it's low. Just the description.",
+        "injection": null
+      }
+    ],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 2,
+        "accept": [
+          "agent.cancel"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.cancel",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "inventory",
+          "tool": "inventory.read"
+        }
+      ]
+    },
+    "teammates": {
+      "calls": {
+        "min": 2,
+        "max": 2
+      },
+      "followUps": {
+        "min": 0,
+        "max": 0
+      },
+      "maps": {
+        "min": 0,
+        "max": 0
+      },
+      "reviews": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "inventory",
+        "listings"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 1,
+      "byAgent": "listings",
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "teammate_result"
+      ]
+    },
+    "events": {
+      "required": [
+        "post:requester",
+        "cancel:not_run",
+        "result:delivered"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 10,
+      "outputTokensMax": 400000
+    }
+  }
+}

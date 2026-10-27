@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 2,
+  "caseId": "park.credits-no-top-up",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "ba5396bf8b0e4fc9afddd1d1f5bf7e20b6df02714ac7bdc8ccaf615ea45de7e0",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "New vase title",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "draft",
+                          "title": "draft",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want a new title for the Glass Bud Vase.",
+                  "steps": [
+                    "draft",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Draft a clearer title for the vase.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Title only."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999109"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 260
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999109"
+                ],
+                "titleContains": null,
+                "limit": 1
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999109",
+                    "title": "Glass Bud Vase, 12 cm",
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3100,
+            "outputTokens": 180
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_listings-1_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed a new vase title.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3400,
+            "outputTokens": 760
+          }
+        }
+      ]
+    }
+  ]
+}

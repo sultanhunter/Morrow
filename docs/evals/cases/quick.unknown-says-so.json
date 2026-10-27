@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.unknown-says-so",
+  "title": "Morrow says it has no policy rather than inventing one",
+  "category": "quick_answer",
+  "class": "quality",
+  "rubricId": "rubric.quick-answer@1",
+  "requires": [
+    "H7b",
+    "H11a"
+  ],
+  "gates": [
+    "agent-loop",
+    "async-conversations",
+    "tool-catalogue-v4"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "conversation",
+    "surface": "ask"
+  },
+  "agents": [
+    "morrow"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "What's our policy on gift wrapping?"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "page_shipping",
+      "kind": "knowledge_page",
+      "marking": "synthetic",
+      "recordId": "page_fake_301",
+      "liveSlot": "page_shipping",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Shipping policy",
+        "body": "Orders over 50 ship free within the country. Standard delivery takes 3 to 5 working days. Express delivery costs 9.50 and arrives the next working day when ordered before 2 pm."
+      }
+    },
+    {
+      "fixtureId": "page_returns",
+      "kind": "knowledge_page",
+      "marking": "synthetic",
+      "recordId": "page_fake_302",
+      "liveSlot": "page_returns",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Returns policy",
+        "body": "Customers may return unused items within 30 days of delivery for a full refund. Candles and soap cannot be returned once opened."
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [
+      {
+        "constraintId": "says_unknown",
+        "kind": "reply_mentions",
+        "fromPost": null,
+        "fixtureIds": [],
+        "fields": [],
+        "tool": null,
+        "terms": [
+          "don't have",
+          "no policy"
+        ]
+      }
+    ],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 1,
+        "accept": [
+          "knowledge.search",
+          "memory.search"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "knowledge.search",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask"
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.map"
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.route"
+        }
+      ]
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": false,
+      "sources": []
+    },
+    "events": {
+      "required": [],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 3,
+      "outputTokensMax": 400000
+    }
+  }
+}

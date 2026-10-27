@@ -1,0 +1,475 @@
+{
+  "schemaVersion": 2,
+  "caseId": "multi.follow-up-same-listings",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "0c913f16a9b52a105ebb79c496851f93a2f69b2be1e7b76ed8532fd5bf15d765",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Fix thin kitchen descriptions",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "find_thin",
+                          "title": "find thin",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "fix_thin",
+                          "title": "fix thin",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want thin kitchen descriptions found and rewritten.",
+                  "steps": [
+                    "find thin",
+                    "fix thin",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_listings",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "Find kitchen products whose descriptions are under 12 words.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Read only for now."
+                  ],
+                  "records": [],
+                  "outputFormat": {
+                    "findingKinds": [
+                      "issue"
+                    ],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 280
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": null,
+                "mode": "ask",
+                "followUpOf": "call_1",
+                "brief": {
+                  "objective": "Rewrite the two thin descriptions you found.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Descriptions only."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999103"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999105"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_005",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5200,
+            "outputTokens": 200
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "find_thin",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "fix_thin",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "The Stoneware Mug and the Waffle Tea Towel had thin descriptions; Listings rewrote both in one proposal for you to approve. The Oak Serving Board was fine.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 6000,
+            "outputTokens": 130
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "products.read",
+              "input": {
+                "productIds": null,
+                "titleContains": null,
+                "limit": 10
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "product",
+                        "id": "product:999999103"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999105"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Two kitchen products have thin descriptions: the mug and the tea towel.",
+                  "counts": {
+                    "checked": 0,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [
+                    {
+                      "kind": "issue",
+                      "title": "Thin description",
+                      "detail": "Under 12 words.",
+                      "records": [
+                        {
+                          "kind": "product",
+                          "id": "product:999999103"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999105"
+                        }
+                      ],
+                      "value": null,
+                      "unit": null,
+                      "table": null
+                    }
+                  ],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3000,
+            "outputTokens": 160
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_010",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999103",
+                    "title": null,
+                    "descriptionHtml": "<p>A glazed stoneware mug that holds 350 ml and keeps its colour through the dishwasher.</p>",
+                    "seo": null,
+                    "tags": null
+                  },
+                  {
+                    "productId": "product:999999105",
+                    "title": null,
+                    "descriptionHtml": "<p>A pre-washed cotton waffle tea towel, 50 x 70 cm, that dries fast and gets softer with use.</p>",
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3600,
+            "outputTokens": 320
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_011",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_listings-1_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Rewrote both thin descriptions in one proposal.",
+                  "counts": {
+                    "checked": 2,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3900,
+            "outputTokens": 90
+          }
+        }
+      ]
+    }
+  ]
+}

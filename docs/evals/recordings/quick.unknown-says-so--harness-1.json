@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.unknown-says-so",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "62f91938c109ac372287e8a1aaccb38f15c56d3546f087f9db2538ccef6da160",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "knowledge.search",
+              "input": {
+                "searchText": "gift wrapping",
+                "limit": 3
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4100,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "I don't have a gift wrapping policy in your shop knowledge. If you tell me what you offer, I can propose a page for it.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4400,
+            "outputTokens": 60
+          }
+        }
+      ]
+    }
+  ]
+}

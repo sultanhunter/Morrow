@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.shipping-policy",
+  "arm": "no_plan@1",
+  "origin": "authored",
+  "basisDigest": "064e47c90537941dccbdd002035cac8921528c40aa4c619d05267bb9da41594e",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "knowledge.search",
+              "input": {
+                "searchText": "shipping",
+                "limit": 3
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4200,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Yes, when the order is over 50: those ship free within the country. Standard delivery takes 3 to 5 working days.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    }
+  ]
+}

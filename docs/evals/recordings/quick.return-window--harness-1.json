@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.return-window",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "3256d06244e9313f1057790c0a2b337c7612278aceba5bb83c67cfd33098b232",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "memory.search",
+              "input": {
+                "queries": [
+                  "return policy"
+                ],
+                "layers": [
+                  "knowledge"
+                ],
+                "limit": 3
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4100,
+            "outputTokens": 70
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Customers have 30 days from delivery to return unused items for a full refund. Opened candles and soap can't come back.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4600,
+            "outputTokens": 80
+          }
+        }
+      ]
+    }
+  ]
+}

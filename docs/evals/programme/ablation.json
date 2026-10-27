@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "planId": "ablation.harness-parts@1",
+  "setId": "golden@2",
+  "baseline": "harness@1",
+  "parts": [
+    { "part": "plan", "arm": "no_plan@1" },
+    { "part": "recitation", "arm": "no_recitation@1" },
+    { "part": "review", "arm": "no_review@1" },
+    { "part": "clearing", "arm": "no_clearing@1" }
+  ],
+  "repetitions": 3,
+  "pays": { "passKDropMax": 0, "creditsRiseMin": 0.1 }
+}

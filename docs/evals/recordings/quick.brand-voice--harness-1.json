@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.brand-voice",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "20ddf6aea06afd94b6e09e37e0ab05273b4d8cbe9051907d3c22a87282de2074",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "knowledge.search",
+              "input": {
+                "searchText": "brand voice",
+                "limit": 3
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4100,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Warm, plain and short: say what a thing is made of and how it feels to use, with no exclamation marks and no superlatives.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4500,
+            "outputTokens": 70
+          }
+        }
+      ]
+    }
+  ]
+}

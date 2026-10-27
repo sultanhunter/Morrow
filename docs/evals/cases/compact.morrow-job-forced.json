@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.morrow-job-forced",
+  "title": "Morrow's own context compacts mid-job between two rounds of teammate calls",
+  "category": "compaction",
+  "class": "quality",
+  "rubricId": "rubric.compaction@1",
+  "requires": [
+    "H7b",
+    "H7d",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "context-provider-strategy",
+    "context-policy-default"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "business_analyst",
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Find my two best sellers and get Listings to sharpen their descriptions."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999101",
+      "liveSlot": "product_apron",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Linen Apron",
+        "body": "Apron in washed linen. One size, adjustable neck strap, two front pockets. Machine wash cold.",
+        "tags": [
+          "apron"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_candle",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999104",
+      "liveSlot": "product_candle",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Beeswax Candle",
+        "body": "Hand-poured beeswax pillar candle, 7 x 10 cm. Burns for about 40 hours.",
+        "tags": [
+          "candle"
+        ]
+      }
+    },
+    {
+      "fixtureId": "orders_units",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_251",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "metric": "units_sold",
+        "period": "last_30_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 120
+          },
+          {
+            "recordId": "product:999999104",
+            "value": 95
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst",
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": 24000
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 1,
+    "exactIds": true
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask",
+          "calls": {
+            "min": 2,
+            "max": 2
+          }
+        },
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": {
+      "calls": {
+        "min": 2,
+        "max": 2
+      },
+      "followUps": {
+        "min": 0,
+        "max": 0
+      },
+      "maps": {
+        "min": 0,
+        "max": 0
+      },
+      "reviews": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "business_analyst",
+        "listings"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 1,
+      "byAgent": "listings",
+      "tainted": true,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "teammate_result"
+      ]
+    },
+    "events": {
+      "required": [
+        "result:delivered",
+        "result:delivered"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 14,
+      "outputTokensMax": 400000
+    }
+  }
+}

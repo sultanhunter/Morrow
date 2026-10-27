@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "caseId": "memory.standing-instruction-needle",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "50f0d6cd5bf9c641f1e86ff6fe44f36c4a91c090b6ebed89d1cf30a727d3d72e",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": "Your wholesale minimum is 24 units per product.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4200,
+            "outputTokens": 40
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.goal-survives-three",
+  "title": "The goal and its constraints survive three compactions: kitchen products only, titles untouched",
+  "category": "compaction",
+  "class": "quality",
+  "rubricId": "rubric.compaction@1",
+  "requires": [
+    "H7b",
+    "H7d"
+  ],
+  "gates": [
+    "agent-loop",
+    "context-provider-strategy",
+    "context-policy-default"
+  ],
+  "entry": {
+    "agent": "listings",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Improve the descriptions of the kitchen products only, and don't touch any titles."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_board",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999102",
+      "liveSlot": "product_board",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Oak Serving Board",
+        "body": "Solid oak board, 40 x 25 cm, oiled finish. Hand wash only.",
+        "tags": [
+          "kitchen"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_mug",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999103",
+      "liveSlot": "product_mug",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Stoneware Mug",
+        "body": "Glazed stoneware mug, 350 ml. Dishwasher safe.",
+        "tags": [
+          "kitchen",
+          "mug"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_towel",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999105",
+      "liveSlot": "product_towel",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Waffle Tea Towel",
+        "body": "Cotton waffle-weave tea towel, 50 x 70 cm. Pre-washed.",
+        "tags": [
+          "kitchen",
+          "towel"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_candle",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999104",
+      "liveSlot": "product_candle",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Beeswax Candle",
+        "body": "Hand-poured beeswax pillar candle, 7 x 10 cm. Burns for about 40 hours.",
+        "tags": [
+          "candle"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_throw",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999108",
+      "liveSlot": "product_throw",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Wool Throw",
+        "body": "Lambswool throw, 130 x 170 cm, fringed edges. Dry clean.",
+        "tags": [
+          "home"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_vase",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999109",
+      "liveSlot": "product_vase",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Glass Bud Vase",
+        "body": "Recycled glass bud vase, 12 cm tall.",
+        "tags": [
+          "home",
+          "vase"
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": 22000
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [
+      {
+        "constraintId": "kitchen_only",
+        "kind": "proposals_only_for",
+        "fromPost": null,
+        "fixtureIds": [
+          "product_board",
+          "product_mug",
+          "product_towel"
+        ],
+        "fields": [],
+        "tool": null,
+        "terms": []
+      },
+      {
+        "constraintId": "titles_untouched",
+        "kind": "proposal_fields_unset",
+        "fromPost": null,
+        "fixtureIds": [],
+        "fields": [
+          "title"
+        ],
+        "tool": null,
+        "terms": []
+      }
+    ],
+    "toolSelection": [],
+    "compactionsMin": 3,
+    "exactIds": true
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 3,
+            "max": 3
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 3,
+      "byAgent": "listings",
+      "tainted": true,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "product"
+      ]
+    },
+    "events": {
+      "required": [],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 16,
+      "outputTokensMax": 400000
+    }
+  }
+}

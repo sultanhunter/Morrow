@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 2,
+  "caseId": "data.analyst-direct",
+  "title": "A person asks Business Analyst directly; it plans, reads and reports",
+  "category": "data_question",
+  "class": "quality",
+  "rubricId": "rubric.data-answer@2",
+  "requires": [
+    "H7b",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "teammate-calls",
+    "tool-catalogue-v4"
+  ],
+  "entry": {
+    "agent": "business_analyst",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "business_analyst"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Write me a short report on last week's sales."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "orders_gross_sales",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_201",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "metric": "gross_sales",
+        "period": "last_7_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 420
+          },
+          {
+            "recordId": "product:999999104",
+            "value": 380
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 1,
+        "accept": [
+          "run.plan",
+          "orders.summary"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "business_analyst",
+          "tool": "orders.summary",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "business_analyst",
+          "tool": "report.write",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "order_summary"
+      ]
+    },
+    "events": {
+      "required": [
+        "plan:set",
+        "plan:update",
+        "run:ended"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 6,
+      "outputTokensMax": 400000
+    }
+  }
+}

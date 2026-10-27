@@ -1,0 +1,701 @@
+{
+  "schemaVersion": 2,
+  "caseId": "batch.map-back-soon-tags",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "cd58f63d7db457ba283e0309a441b22bd5ed9c399d88e52dbc89d8c4779e276b",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Tag low-stock products 'back soon'",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "find_low",
+                          "title": "find low",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "tag",
+                          "title": "tag",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want products under 5 in stock tagged 'back soon'.",
+                  "steps": [
+                    "find low",
+                    "tag",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_inventory",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "List the products with fewer than 5 units available.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Propose changes only; a person approves each one."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999101"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999102"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999103"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999104"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999105"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999106"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [
+                      "fact"
+                    ],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "inventory-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4500,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "agent.map",
+              "input": {
+                "installationId": "inst_listings",
+                "briefTemplate": {
+                  "objective": "Add the tag 'back soon' to each product in your batch, keeping its other tags.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Tags only."
+                  ],
+                  "records": [],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                },
+                "source": {
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999101"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999103"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999104"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999106"
+                    }
+                  ],
+                  "itemId": null
+                },
+                "batchSize": 2
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1",
+                  "listings-2"
+                ]
+              }
+            },
+            {
+              "id": "tu_005",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5400,
+            "outputTokens": 240
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "find_low",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "tag",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "Four products are under 5 in stock: the Linen Apron, Stoneware Mug, Beeswax Candle and Seagrass Basket. Listings proposed the 'back soon' tag for each, in two proposals.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 6100,
+            "outputTokens": 150
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "inventory-1",
+      "agent": "inventory",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999101",
+                  "product:999999102",
+                  "product:999999103",
+                  "product:999999104",
+                  "product:999999105",
+                  "product:999999106"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2300,
+            "outputTokens": 70
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "product",
+                        "id": "product:999999101"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999103"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999104"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999106"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Four products are under 5 units.",
+                  "counts": {
+                    "checked": 0,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [
+                    {
+                      "kind": "fact",
+                      "title": "Under 5 in stock",
+                      "detail": "Apron 2, mug 4, candle 1, basket 3.",
+                      "records": [
+                        {
+                          "kind": "product",
+                          "id": "product:999999101"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999103"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999104"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999106"
+                        }
+                      ],
+                      "value": null,
+                      "unit": null,
+                      "table": null
+                    }
+                  ],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2800,
+            "outputTokens": 200
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_010",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999101",
+                  "product:999999103"
+                ],
+                "titleContains": null,
+                "limit": 2
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_011",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999101",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "apron",
+                      "back soon"
+                    ]
+                  },
+                  {
+                    "productId": "product:999999103",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "kitchen",
+                      "mug",
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3000,
+            "outputTokens": 170
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_012",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_listings-1_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on two products.",
+                  "counts": {
+                    "checked": 2,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3300,
+            "outputTokens": 80
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-2",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_013",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999104",
+                  "product:999999106"
+                ],
+                "titleContains": null,
+                "limit": 2
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2500,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_014",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999104",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "candle",
+                      "back soon"
+                    ]
+                  },
+                  {
+                    "productId": "product:999999106",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "storage",
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3000,
+            "outputTokens": 170
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_015",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_listings-2_2"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on two products.",
+                  "counts": {
+                    "checked": 2,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3300,
+            "outputTokens": 80
+          }
+        }
+      ]
+    }
+  ]
+}

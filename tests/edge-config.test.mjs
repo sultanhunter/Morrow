@@ -2752,7 +2752,7 @@ test("the live-evals switch: committed off; on is refused before the loop and a 
   const committed = JSON.parse(readFileSync("docs/decisions/agent-evals-live.json", "utf8"));
   assert.deepEqual(
     { ...reviewedLiveEvalsRecord(committed) },
-    { switch: "off", set_id: "golden@1" },
+    { switch: "off", set_id: "golden@2" },
   );
   assert.deepEqual({ ...edgeLiveEvalsPrerequisites }, { agentLoop: "off", liveDriver: false });
   const on = { ...committed, switch: "on" };
@@ -2764,7 +2764,7 @@ test("the live-evals switch: committed off; on is refused before the loop and a 
     assert.throws(() => reviewedLiveEvalsRecord(on, prerequisites), /EDGE_LIVE_EVALS_BEFORE_LOOP/);
   assert.deepEqual(
     { ...reviewedLiveEvalsRecord(on, { agentLoop: "on", liveDriver: true }) },
-    { switch: "on", set_id: "golden@1" },
+    { switch: "on", set_id: "golden@2" },
   );
   for (const edit of [
     (r) => (r.switch = true),

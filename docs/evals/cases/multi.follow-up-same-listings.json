@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 2,
+  "caseId": "multi.follow-up-same-listings",
+  "title": "Morrow follows up the same Listings call with the records its first result returned",
+  "category": "multi_teammate_job",
+  "class": "quality",
+  "rubricId": "rubric.follow-up@1",
+  "requires": [
+    "H7b",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "teammate-calls",
+    "follow-up-default"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Check which of my kitchen products have thin descriptions, then fix them."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_board",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999102",
+      "liveSlot": "product_board",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Oak Serving Board",
+        "body": "Solid oak board, 40 x 25 cm, oiled finish. Hand wash only.",
+        "tags": [
+          "kitchen"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_mug",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999103",
+      "liveSlot": "product_mug",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Stoneware Mug",
+        "body": "Glazed stoneware mug, 350 ml. Dishwasher safe.",
+        "tags": [
+          "kitchen",
+          "mug"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_towel",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999105",
+      "liveSlot": "product_towel",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Waffle Tea Towel",
+        "body": "Cotton waffle-weave tea towel, 50 x 70 cm. Pre-washed.",
+        "tags": [
+          "kitchen",
+          "towel"
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 2,
+        "accept": [
+          "agent.ask"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "listings",
+          "tool": "products.read",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": {
+      "calls": {
+        "min": 1,
+        "max": 1
+      },
+      "followUps": {
+        "min": 1,
+        "max": 1
+      },
+      "maps": {
+        "min": 0,
+        "max": 0
+      },
+      "reviews": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "listings"
+      ],
+      "sameTeammateMin": {
+        "agent": "listings",
+        "calls": 2
+      }
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 1,
+      "byAgent": "listings",
+      "tainted": true,
+      "changes": [
+        {
+          "fixtureId": "product_mug",
+          "set": [
+            "descriptionHtml"
+          ],
+          "unset": [
+            "title"
+          ]
+        },
+        {
+          "fixtureId": "product_towel",
+          "set": [
+            "descriptionHtml"
+          ],
+          "unset": [
+            "title"
+          ]
+        }
+      ]
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "teammate_result"
+      ]
+    },
+    "events": {
+      "required": [],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 10,
+      "outputTokensMax": 400000
+    }
+  }
+}

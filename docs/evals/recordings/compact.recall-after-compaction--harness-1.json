@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.recall-after-compaction",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "d8b548c42e6db8ae20744278c17bae89f081c93463f5aaaa97aa15e01f09529c",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Unify kitchen description style",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "compare",
+                          "title": "compare",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "propose",
+                          "title": "propose",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": null,
+                  "steps": null
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999102",
+                  "product:999999103",
+                  "product:999999105"
+                ],
+                "titleContains": null,
+                "limit": 3
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 12000,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "The board's description is the clearest: material, size, care.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 23500,
+            "outputTokens": 600
+          }
+        },
+        {
+          "kind": "checkpoint",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_003",
+              "tool": "context.checkpoint",
+              "input": {
+                "objective": {
+                  "text": "Use the clearest kitchen description's style for the other two.",
+                  "refs": []
+                },
+                "status": "in_progress",
+                "statusNote": null,
+                "done": [],
+                "inProgress": [],
+                "decisions": [
+                  {
+                    "decision": "Model the others on the board (product:999999102).",
+                    "reason": "It names material, size and care.",
+                    "refs": []
+                  }
+                ],
+                "setAside": [],
+                "facts": [
+                  {
+                    "fact": "Kitchen products: product:999999102, product:999999103, product:999999105; their texts are in result c2.",
+                    "exact": true,
+                    "refs": []
+                  }
+                ],
+                "difficulties": [],
+                "promised": [],
+                "nextSteps": [
+                  {
+                    "text": "Reopen c2 for the exact texts, then propose for product:999999103, product:999999105.",
+                    "refs": []
+                  }
+                ],
+                "reopen": []
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 24100,
+            "outputTokens": 700
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "memory.read",
+              "input": {
+                "target": {
+                  "kind": "label",
+                  "id": null,
+                  "label": "c2",
+                  "sequence": null,
+                  "fromPosition": null,
+                  "toPosition": null
+                },
+                "page": 1
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 8000,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999103",
+                    "title": null,
+                    "descriptionHtml": "<p>Glazed stoneware, 350 ml. Dishwasher safe.</p>",
+                    "seo": null,
+                    "tags": null
+                  },
+                  {
+                    "productId": "product:999999105",
+                    "title": null,
+                    "descriptionHtml": "<p>Cotton waffle, 50 x 70 cm. Pre-washed; machine wash.</p>",
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 11000,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "compare",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "propose",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": "I modelled the mug and towel descriptions on the board's: material, size, care. One proposal waits for you.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 12000,
+            "outputTokens": 140
+          }
+        }
+      ]
+    }
+  ]
+}

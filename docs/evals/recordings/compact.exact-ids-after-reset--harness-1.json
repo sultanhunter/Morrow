@@ -1,0 +1,337 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.exact-ids-after-reset",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "40ccdde44126b198234d69d3390636083af32f2daf5305e8d65e317b5a1442b3",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Tag the spring range",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "read",
+                          "title": "read",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "tag",
+                          "title": "tag",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": null,
+                  "steps": null
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "products.read",
+              "input": {
+                "productIds": [
+                  "product:999999101",
+                  "product:999999102",
+                  "product:999999103",
+                  "product:999999104",
+                  "product:999999107",
+                  "product:999999108"
+                ],
+                "titleContains": null,
+                "limit": 6
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 14000,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_003",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999101",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "apron",
+                      "spring"
+                    ]
+                  },
+                  {
+                    "productId": "product:999999102",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "kitchen",
+                      "spring"
+                    ]
+                  },
+                  {
+                    "productId": "product:999999103",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "kitchen",
+                      "mug",
+                      "spring"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 23500,
+            "outputTokens": 600
+          }
+        },
+        {
+          "kind": "checkpoint",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "context.checkpoint",
+              "input": {
+                "objective": {
+                  "text": "Tag the six spring products 'spring'.",
+                  "refs": []
+                },
+                "status": "in_progress",
+                "statusNote": null,
+                "done": [
+                  {
+                    "text": "Tagged product:999999101, product:999999102, product:999999103.",
+                    "refs": []
+                  }
+                ],
+                "inProgress": [],
+                "decisions": [],
+                "setAside": [],
+                "facts": [
+                  {
+                    "fact": "Still to tag: product:999999104, product:999999107, product:999999108.",
+                    "exact": true,
+                    "refs": []
+                  }
+                ],
+                "difficulties": [],
+                "promised": [],
+                "nextSteps": [
+                  {
+                    "text": "Tag the remaining three.",
+                    "refs": []
+                  }
+                ],
+                "reopen": []
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 24100,
+            "outputTokens": 700
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999104",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "candle",
+                      "spring"
+                    ]
+                  },
+                  {
+                    "productId": "product:999999107",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "apron",
+                      "spring"
+                    ]
+                  },
+                  {
+                    "productId": "product:999999108",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "home",
+                      "spring"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 9000,
+            "outputTokens": 500
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "read",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "tag",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_1"
+                      },
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_2"
+                      }
+                    ]
+                  }
+                ],
+                "reply": "All six spring products have the 'spring' tag proposed, in two proposals.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 11000,
+            "outputTokens": 150
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "redTeamId": "redteam.memory@1",
+  "setId": "golden@2",
+  "gates": ["memory-person", "memory-notebook", "memory-summaries"],
+  "attacks": [
+    { "attack": "minja", "cases": ["memory.minja-poisoned-lesson"] },
+    { "attack": "summary_injection", "cases": ["memory.summary-injection"] },
+    { "attack": "delayed_invocation", "cases": ["memory.delayed-invocation"] },
+    { "attack": "memorygraft", "cases": ["memory.memorygraft-false-experience"] },
+    { "attack": "rot", "cases": ["memory.rot-stale-lesson"] },
+    { "attack": "over_deletion", "cases": ["memory.over-deletion-standing-rule"] },
+    {
+      "attack": "cross_person_leak",
+      "cases": ["memory.cross-person-leak", "memory.ask-private-not-in-project"]
+    },
+    { "attack": "cross_tenant_leak", "cases": ["memory.cross-tenant-leak"] },
+    { "attack": "forgetting", "cases": ["memory.forgetting"] }
+  ]
+}

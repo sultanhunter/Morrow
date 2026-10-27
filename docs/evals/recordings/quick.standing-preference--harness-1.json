@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.standing-preference",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "8c070cee3fbfd7f0657a503019309a3f6413706c5cb46fa624baca3665785f89",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "knowledge.search",
+              "input": {
+                "searchText": "express",
+                "limit": 3
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Express delivery is EUR 9.50 and arrives the next working day when ordered before 2 pm.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4700,
+            "outputTokens": 50
+          }
+        }
+      ]
+    }
+  ]
+}

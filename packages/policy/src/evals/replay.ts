@@ -99,6 +99,8 @@ export interface EvalResultItem {
   readonly kind: "table" | "text" | "file";
   readonly title: string;
   readonly pages: number;
+  /** A table's rows (agent.map splits an item's rows into batches). */
+  readonly rows: number;
 }
 export interface EvalFinding {
   readonly kind: string;
@@ -142,7 +144,10 @@ export interface EvalProposalTrace {
   readonly agent: EvalTeammateRef;
   readonly runKey: string;
   readonly at: number;
-  readonly changes: readonly { readonly productId: string; readonly set: readonly EvalListingField[] }[];
+  readonly changes: readonly {
+    readonly productId: string;
+    readonly set: readonly EvalListingField[];
+  }[];
   /** SHA-256 of the canonical proposal content; an approval binds this exact digest. */
   readonly digest: string;
   /** Nothing is applied: a person approves the exact digest first (ADR-0011). */
@@ -191,6 +196,8 @@ export interface EvalTrace {
   readonly events: readonly EvalEvent[];
   readonly proposals: readonly EvalProposalTrace[];
   readonly cards: readonly EvalCardTrace[];
+  /** Every call's result as code built it, by call id (a follow-up's is its own). */
+  readonly results: readonly EvalTeammateResult[];
   readonly replies: readonly EvalReplyTrace[];
   readonly written: readonly EvalWrittenTrace[];
   readonly compactions: readonly EvalCompactionTrace[];
@@ -213,6 +220,8 @@ export interface EvalTrace {
   readonly externalEffects: number;
   readonly creditsDrawn: number;
   readonly creditsDrawnWhileParked: number;
+  /** Metered use the wallet could not cover, recorded as Morrow's own cost (item 9). */
+  readonly creditsAbsorbed: number;
   readonly stale: EvalStale | null;
 }
 
@@ -302,6 +311,9 @@ interface RunState {
   compactions: number;
   lastTurnTokens: number;
   lastTail: string;
+  /** The last send's input and output, the broker's estimate for the next (null: opening). */
+  lastInput: number | null;
+  lastOutput: number;
 }
 type Decision = {
   outcome: EvalCallOutcome;
@@ -349,7 +361,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 /** Strings in a tool input that look like a world id (exact id replay, ADR-0041 item 37). */
 const idLike =
-  /^(?:product:[0-9]+|(?:thread|page|orders|stock|note|pmem|summary)_fake_[0-9]+|item_[A-Za-z0-9_-]+|call_[0-9]+)$/;
+  /^(?:product:[0-9]+|(?:thread|page|orders|stock|note|pmem|summary)_fake_[0-9]+|item_(?:map_call_[0-9]+|foreign_[0-9]+|[a-z][a-z0-9]*(?:_[0-9]+){1,2})|call_[0-9]+)$/;
 export function evalIdsIn(value: unknown, out: string[] = []): string[] {
   if (typeof value === "string") {
     if (idLike.test(value)) out.push(value);
@@ -405,8 +417,11 @@ class Replay {
     answers: 0,
   };
   private readonly rules: EvalArmRules;
+  /** The context strategy: the provider's under provider_context@1, the fallback otherwise. */
+  private readonly strategy: "fallback" | "provider";
   private step = 0;
   private memoryLeaks = 0;
+  private absorbedMicro = 0;
 
   constructor(
     private readonly evalCase: EvalCase,
@@ -423,6 +438,7 @@ class Replay {
       topUps: 0,
     };
     this.rules = evalArmRules(arm);
+    this.strategy = arm === "provider_context@1" ? "provider" : "fallback";
   }
 
   private event(run: RunState, code: EvalEventCode) {
@@ -431,11 +447,21 @@ class Replay {
   private available() {
     return this.wallet.balance - this.wallet.used - this.wallet.held;
   }
-  private holdMicro(agent: EvalAgentRef, turn: EvalRecordedTurn): number {
+  /** A context's or an epoch's first send: the opening code renders, and max_tokens. */
+  private holdMicro(agent: EvalAgentRef): number {
     const rates = this.wallets.microCreditsPerToken;
     return (
-      turn.usage.inputTokens * rates.input +
+      this.wallets.openingTokens * rates.input +
       this.wallets.maxTokens[evalEffort(agent)] * rates.output
+    );
+  }
+  /** Any later send: the previous response's usage as the input estimate, and max_tokens. */
+  private holdFor(run: RunState): number {
+    if (run.lastInput === null) return this.holdMicro(run.agent);
+    const rates = this.wallets.microCreditsPerToken;
+    return (
+      (run.lastInput + run.lastOutput) * rates.input +
+      this.wallets.maxTokens[evalEffort(run.agent)] * rates.output
     );
   }
   /**
@@ -509,6 +535,8 @@ class Replay {
       compactions: 0,
       lastTurnTokens: 0,
       lastTail: "",
+      lastInput: null,
+      lastOutput: 0,
     };
     this.runs.set(key, state);
     this.order.push(state);
@@ -540,7 +568,11 @@ class Replay {
           throw new StaleRecording("run_agent", "root");
       } else {
         const kind: EvalRunKind =
-          entry.agent === "morrow" ? (entry.purpose === "conversation" ? "conversation" : "job") : "routed";
+          entry.agent === "morrow"
+            ? entry.purpose === "conversation"
+              ? "conversation"
+              : "job"
+            : "routed";
         const root = this.newRun("root", entry.agent, kind, null);
         this.opening(root);
         this.drive(root);
@@ -581,6 +613,9 @@ class Replay {
       events: this.events,
       proposals,
       cards: this.cards,
+      results: this.order.flatMap((run) =>
+        [...run.calls.values()].flatMap((call) => (call.result ? [call.result] : [])),
+      ),
       replies: this.replies,
       written: this.written,
       compactions: this.compactionTraces,
@@ -592,6 +627,7 @@ class Replay {
       externalEffects: 0,
       creditsDrawn: runs.reduce((sum, run) => sum + run.creditsDrawn, 0),
       creditsDrawnWhileParked: 0,
+      creditsAbsorbed: Math.ceil(this.absorbedMicro / microPerCredit),
       stale,
     };
   }
@@ -643,7 +679,8 @@ class Replay {
 
   /** Ends a run: settles its credits (a failed ending caused by Morrow is refunded). */
   private settle(run: RunState, code: EvalEndCode) {
-    run.state = code === "completed" && (run.kind === "call" || run.kind === "review") ? "idle" : "ended";
+    run.state =
+      code === "completed" && (run.kind === "call" || run.kind === "review") ? "idle" : "ended";
     run.endCode = code;
     this.wallet.held -= run.preheldMicro;
     run.preheldMicro = 0;
@@ -661,24 +698,23 @@ class Replay {
     for (;;) {
       if (run.state !== "running") return;
       this.boundary(run);
-      const turn = recorded.turns[run.index];
-      if (!turn) throw new StaleRecording("turn_missing", run.key + "#" + (run.index + 1));
+      // The recording may end here only when the job parks before this send.
+      const turn: EvalRecordedTurn | undefined = recorded.turns[run.index];
+      const where = run.key + "#" + (run.index + 1);
       this.checkIns(run);
       // Compaction is due before a send when the last ordinary turn reached the threshold.
       const threshold =
         this.evalCase.world.context.compactAt ??
         evalContextPolicy.workingWindow * evalContextPolicy.compactAtShare;
       const due = run.lastTurnTokens >= threshold;
-      if (due !== (turn.kind !== "turn"))
-        throw new StaleRecording(
-          due ? "compaction_missing" : "compaction_unexpected",
-          run.key + "#" + (run.index + 1),
-        );
-      const strategy = this.evalCase.world.context.strategy;
-      if (due && (turn.kind === "checkpoint") !== (strategy === "fallback"))
-        throw new StaleRecording("compaction_strategy", run.key + "#" + (run.index + 1));
-      // The hold before the send: a child's first hold was taken at admission.
-      const need = this.holdMicro(run.agent, turn);
+      if (turn && due !== (turn.kind !== "turn"))
+        throw new StaleRecording(due ? "compaction_missing" : "compaction_unexpected", where);
+      if (turn && due && (turn.kind === "checkpoint") !== (this.strategy === "fallback"))
+        throw new StaleRecording("compaction_strategy", where);
+      // The hold before the send, from the broker's estimate (item 8): the previous response's
+      // usage, or the opening code renders for a context's or an epoch's first send. A child's
+      // first hold was taken at admission.
+      const need = this.holdFor(run);
       if (run.preheldMicro >= need) {
         this.wallet.held -= run.preheldMicro - need;
         run.preheldMicro = 0;
@@ -687,13 +723,21 @@ class Replay {
         run.preheldMicro = 0;
         if (!this.hold(run, need)) throw new Parked("credits");
       }
+      if (!turn) throw new StaleRecording("turn_missing", where);
       run.index += 1;
       this.job.modelTurns += 1;
       const rates = this.wallets.microCreditsPerToken;
       const metered = turn.usage.inputTokens * rates.input + turn.usage.outputTokens * rates.output;
       this.wallet.held -= need;
-      this.wallet.used += metered;
-      run.usedMicro += metered;
+      // The metered use is drawn whatever the hold was: a cache miss or a longer input than the
+      // estimate is drawn while the wallet covers it, and otherwise absorbed as Morrow's own
+      // cost; it never ends the run (item 9).
+      const drawn = Math.min(metered, Math.max(need, this.available()));
+      this.wallet.used += drawn;
+      this.absorbedMicro += metered - drawn;
+      run.usedMicro += drawn;
+      run.lastInput = turn.kind === "turn" ? turn.usage.inputTokens : null;
+      run.lastOutput = turn.kind === "turn" && !turn.cut ? turn.usage.outputTokens : 0;
       const calls: EvalCallTrace[] = [];
       run.turns.push({
         turn: run.index,
@@ -706,8 +750,9 @@ class Replay {
         outputTokens: turn.usage.outputTokens,
         calls,
       });
-      if (metered > need) {
-        // A booking above any possible worst case: booked, never dropped, and the run ends.
+      if (turn.usage.outputTokens > this.wallets.maxTokens[evalEffort(run.agent)]) {
+        // A booking above any possible worst case (more output than max_tokens allows):
+        // booked, never dropped, and the run ends.
         this.settle(run, "cost_budget");
         return;
       }
@@ -729,7 +774,11 @@ class Replay {
       }
       run.lastTail = canonicalJson({ text: turn.text, calls: turn.calls.map((c) => c.input) });
       if (turn.calls.length === 0) this.textOnly(run, turn.text ?? "");
-      else this.dispatchTurn(run, turn.calls, calls);
+      else {
+        // A turn with a tool call is not idle: the idle count is of text-only turns in a row.
+        run.detector.idle = 0;
+        this.dispatchTurn(run, turn.calls, calls);
+      }
       if (run.detector.trip) this.trip(run, run.detector.trip);
     }
   }
@@ -775,7 +824,8 @@ class Replay {
         }
       }
     for (const call of run.calls.values())
-      if (call.state === "finished" && !call.delivered && this.rules.asyncCalls) this.deliver(run, call);
+      if (call.state === "finished" && !call.delivered && this.rules.asyncCalls)
+        this.deliver(run, call);
     for (const message of run.inbox.splice(0)) {
       for (const entry of message.taint) run.taint.add(entry);
       for (const id of message.scope) run.scope.add(id);
@@ -844,7 +894,14 @@ class Replay {
   }
   private observe(run: RunState, call: EvalRecordedCall, decision: Decision) {
     const d = run.detector;
-    const signature = call.tool + "|" + canonicalJson(call.input ?? null) + "|" + decision.outcome + "|" + (decision.refusal ?? "");
+    const signature =
+      call.tool +
+      "|" +
+      canonicalJson(call.input ?? null) +
+      "|" +
+      decision.outcome +
+      "|" +
+      (decision.refusal ?? "");
     d.signatures.push(signature);
     if (d.signatures.length > 32) d.signatures.shift();
     const count = (d.sinceProgress.get(signature) ?? 0) + 1;
@@ -871,22 +928,19 @@ class Replay {
     }
     const n = this.safety.detectors.alternationSteps;
     const last = d.signatures.slice(-n);
-    if (
-      last.length === n &&
-      last[0] !== last[1] &&
-      last.every((s, i) => s === last[i % 2])
-    )
+    if (last.length === n && last[0] !== last[1] && last.every((s, i) => s === last[i % 2]))
       d.trip ??= "alternation";
   }
 
   // --- Context (ADR-0041 items 11 and 13) ---------------------------------------------------
   private ledgerIds(run: RunState): Set<string> {
     const ids = new Set<string>([...run.created, ...run.items.keys(), ...run.calls.keys()]);
-    for (const proposal of this.proposals) if (proposal.runKey === run.key) ids.add(proposal.proposalId);
+    for (const proposal of this.proposals)
+      if (proposal.runKey === run.key) ids.add(proposal.proposalId);
     return ids;
   }
   private compact(run: RunState, turn: EvalRecordedTurn, calls: EvalCallTrace[]) {
-    const strategy = this.evalCase.world.context.strategy;
+    const strategy = this.strategy;
     let summary: string;
     let accepted: boolean;
     if (turn.kind === "checkpoint") {
@@ -1100,7 +1154,11 @@ class Replay {
               itemId: "item_map_" + call.callId,
               kind: "table" as const,
               title: "Merged results",
-              pages: Math.max(1, parts.reduce((n, p) => n + (p?.items.length ?? 0), 0)),
+              pages: Math.max(
+                1,
+                parts.reduce((n, p) => n + (p?.items.length ?? 0), 0),
+              ),
+              rows: parts.reduce((n, p) => n + (p?.items.reduce((m, i) => m + i.rows, 0) ?? 0), 0),
             },
           ]
         : (parts[0]?.items ?? []);
@@ -1147,11 +1205,10 @@ class Replay {
       this.job.children = 0;
       this.event(parent, "resume:children");
     }
-    const recorded = this.recorded.get(key);
-    if (!recorded) throw new StaleRecording("run_missing", key);
-    // The child's first hold, taken at admission; one the wallet cannot cover parks the job.
-    const first = recorded.turns[0];
-    const need = first ? this.holdMicro(agent, first) : 0;
+    // The child's first hold, taken at admission from the opening code renders; one the wallet
+    // cannot cover parks the job before the child exists, so a recording parked there holds no
+    // run for it. A child stopped or cancelled before its first send releases it at settlement.
+    const need = this.holdMicro(agent);
     if (!this.hold(parent, need)) return "parked";
     const child = this.newRun(key, agent, kind, parent);
     child.preheldMicro = need;
@@ -1190,7 +1247,11 @@ class Replay {
         const found = fixtures
           .filter((f) => f.kind === "product")
           .filter((f) => ids === null || ids.includes(f.recordId))
-          .filter((f) => title === null || (f.kind === "product" && f.data.title.toLowerCase().includes(title)))
+          .filter(
+            (f) =>
+              title === null ||
+              (f.kind === "product" && f.data.title.toLowerCase().includes(title)),
+          )
           .slice(0, input.limit as number);
         for (const f of found) read(f);
         return ok();
@@ -1214,7 +1275,9 @@ class Replay {
         return ok();
       }
       case "support.thread.read": {
-        const thread = fixtures.find((f) => f.kind === "support_thread" && f.recordId === input.threadId);
+        const thread = fixtures.find(
+          (f) => f.kind === "support_thread" && f.recordId === input.threadId,
+        );
         if (!thread || !run.scope.has(thread.recordId)) return refused("id_out_of_scope");
         if (!authorized()) return refused("authority_denied");
         read(thread);
@@ -1241,7 +1304,9 @@ class Replay {
           conversation_summary: "conversation",
         };
         const hits = fixtures
-          .filter((f) => layerOf[f.kind] && (layers.length === 0 || layers.includes(layerOf[f.kind]!)))
+          .filter(
+            (f) => layerOf[f.kind] && (layers.length === 0 || layers.includes(layerOf[f.kind]!)),
+          )
           .filter((f) => matches(fixtureText(f), queries))
           .filter((f) => this.memoryReadable(run, f))
           .slice(0, input.limit as number);
@@ -1251,7 +1316,8 @@ class Replay {
       case "memory.read":
         return this.memoryRead(run, input, read);
       case "work.read": {
-        if (input.id !== null && !run.scope.has(input.id as string)) return refused("id_out_of_scope");
+        if (input.id !== null && !run.scope.has(input.id as string))
+          return refused("id_out_of_scope");
         return authorized() ? ok() : refused("authority_denied");
       }
       case "message.post":
@@ -1285,7 +1351,8 @@ class Replay {
       case "memory.suggest":
       case "knowledge.propose": {
         if (!authorized()) return refused("authority_denied");
-        const text = spec.name === "notebook.write" ? (input.text as string) : (input.text as string);
+        const text =
+          spec.name === "notebook.write" ? (input.text as string) : (input.text as string);
         const via =
           spec.name === "notebook.write"
             ? "notebook"
@@ -1314,7 +1381,9 @@ class Replay {
           at: this.step,
           changes: changes.map((change) => ({
             productId: change.productId as string,
-            set: (["title", "descriptionHtml", "seo", "tags"] as const).filter((f) => change[f] !== null),
+            set: (["title", "descriptionHtml", "seo", "tags"] as const).filter(
+              (f) => change[f] !== null,
+            ),
           })),
           status: "awaiting_approval",
           tainted: run.taint.size > 0,
@@ -1452,10 +1521,7 @@ class Replay {
     const action = input.action as string;
     const plan = input.plan as Record<string, unknown> | null;
     const changes = input.changes as Record<string, unknown>[] | null;
-    if (
-      (action === "set") !== (plan !== null) ||
-      (action === "update") !== (changes !== null)
-    )
+    if ((action === "set") !== (plan !== null) || (action === "update") !== (changes !== null))
       return refused("input_invalid");
     if (action === "read") return run.plan ? ok() : refused("plan_not_set");
     if (action === "set") {
@@ -1463,8 +1529,13 @@ class Replay {
       const items = new Map<string, string>();
       for (const phase of plan!.phases as { items: { itemKey: string }[] }[])
         for (const item of phase.items) items.set(item.itemKey, "open");
-      for (const item of plan!.followThrough as { itemKey: string }[]) items.set(item.itemKey, "follow_through");
-      if (items.size !== (plan!.phases as { items: unknown[] }[]).reduce((n, p) => n + p.items.length, 0) + (plan!.followThrough as unknown[]).length)
+      for (const item of plan!.followThrough as { itemKey: string }[])
+        items.set(item.itemKey, "follow_through");
+      if (
+        items.size !==
+        (plan!.phases as { items: unknown[] }[]).reduce((n, p) => n + p.items.length, 0) +
+          (plan!.followThrough as unknown[]).length
+      )
         return refused("input_invalid");
       // Morrow's plan holds the person-facing `understood` and steps; no other run's does.
       const morrow = run.agent === "morrow";
@@ -1476,7 +1547,9 @@ class Replay {
       if (run.kind === "conversation") {
         // Starting a job forks the main thread: the fork starts from the same prefix, with the
         // plan, and carries it out; the main thread stays free (ADR-0041 item 5).
-        const key = "job-" + (this.pendingForks.length + this.order.filter((r) => r.kind === "job").length + 1);
+        const key =
+          "job-" +
+          (this.pendingForks.length + this.order.filter((r) => r.kind === "job").length + 1);
         const fork = this.newRun(key, "morrow", "job", run);
         fork.plan = { items: new Map(items) };
         for (const entry of run.taint) fork.taint.add(entry);
@@ -1495,12 +1568,14 @@ class Replay {
       if (!shaped) continue;
       const key = change.itemKey as string | null;
       const status = change.status as string | null;
-      if (key === null || status === null || !run.plan.items.has(key)) return refused("input_invalid");
+      if (key === null || status === null || !run.plan.items.has(key))
+        return refused("input_invalid");
       if ((status === "dropped" || status === "blocked") && change.reason === null)
         return refused("input_invalid");
     }
     for (const change of changes!) {
-      if (change.kind === "item_status") run.plan.items.set(change.itemKey as string, change.status as string);
+      if (change.kind === "item_status")
+        run.plan.items.set(change.itemKey as string, change.status as string);
       if (change.kind === "add_item") {
         const item = change.item as { itemKey: string } | null;
         if (item) run.plan.items.set(item.itemKey, "open");
@@ -1517,7 +1592,8 @@ class Replay {
     if (itemId === null) {
       const kind = input.kind as "text" | "table" | "file" | null;
       const columns = input.columns as string[] | null;
-      if (input.title === null || kind === null || input.mediaType === null) return refused("input_invalid");
+      if (input.title === null || kind === null || input.mediaType === null)
+        return refused("input_invalid");
       if ((kind === "table") !== (columns !== null)) return refused("input_invalid");
       if ((kind === "table" && input.text !== null) || (kind !== "table" && input.rows !== null))
         return refused("input_invalid");
@@ -1527,6 +1603,7 @@ class Replay {
         kind,
         title: input.title as string,
         pages: input.text !== null || input.rows !== null ? 1 : 0,
+        rows: (input.rows as unknown[] | null)?.length ?? 0,
         taint: new Set(),
         open: !close,
         owner: run.key,
@@ -1539,14 +1616,27 @@ class Replay {
     const item = run.items.get(itemId);
     if (!item || item.owner !== run.key) return refused("id_out_of_scope");
     if (!item.open) return refused("item_closed");
-    if (input.title !== null || input.kind !== null || input.mediaType !== null || input.columns !== null)
+    if (
+      input.title !== null ||
+      input.kind !== null ||
+      input.mediaType !== null ||
+      input.columns !== null
+    )
       return refused("input_invalid");
     const rows = input.rows as string[][] | null;
-    if ((item.kind === "table") !== (rows !== null) || (item.kind === "table" && input.text !== null))
+    if (
+      (item.kind === "table") !== (rows !== null) ||
+      (item.kind === "table" && input.text !== null)
+    )
       return refused("input_invalid");
     if (rows && rows.some((row) => row.length !== item.columns)) return refused("input_invalid");
     if (rows !== null || input.text !== null)
-      run.items.set(itemId, { ...item, pages: item.pages + 1, open: !close });
+      run.items.set(itemId, {
+        ...item,
+        pages: item.pages + 1,
+        rows: item.rows + (rows?.length ?? 0),
+        open: !close,
+      });
     else run.items.set(itemId, { ...item, open: !close });
     return ok();
   }
@@ -1568,7 +1658,9 @@ class Replay {
       this.event(run, "completion_refused:plan_not_set");
       return refused("plan_not_set");
     }
-    const evidence = (input.criteria as { evidence: unknown }[]).flatMap((c) => recordIdsOf(c.evidence));
+    const evidence = (input.criteria as { evidence: unknown }[]).flatMap((c) =>
+      recordIdsOf(c.evidence),
+    );
     const findings = (result?.findings as Record<string, unknown>[] | undefined) ?? [];
     const findingIds = findings.flatMap((f) => recordIdsOf(f.records));
     const items = (result?.items as string[] | undefined) ?? [];
@@ -1602,7 +1694,13 @@ class Replay {
         verdicts: ((result!.verdicts as { verdict: string }[]) ?? []).map((v) => v.verdict),
         items: items.map((id) => {
           const item = run.items.get(id)!;
-          return { itemId: id, kind: item.kind, title: item.title, pages: Math.max(1, item.pages) };
+          return {
+            itemId: id,
+            kind: item.kind,
+            title: item.title,
+            pages: Math.max(1, item.pages),
+            rows: item.rows,
+          };
         }),
         createdRecordIds: [...run.created],
         readTags: sorted(run.readTags),
@@ -1645,7 +1743,8 @@ class Replay {
         : null;
     };
     const briefRecords = (brief: unknown) => recordIdsOf(isObject(brief) ? brief.records : []);
-    const itemsOk = (ids: string[]) => ids.every((id) => !id.startsWith("item_") || run.items.has(id));
+    const itemsOk = (ids: string[]) =>
+      ids.every((id) => !id.startsWith("item_") || run.items.has(id));
     const nextCallId = () => "call_" + (this.job.calls + 1);
     switch (spec.name) {
       case "agent.message":
@@ -1656,7 +1755,8 @@ class Replay {
           if (target.state !== "admitted") return refused("call_not_found");
           if (!authorized) return refused("authority_denied");
           // Guidance arrives at the child's next turn boundary, carrying Morrow's taint.
-          for (const child of target.children) child.inbox.push({ taint: [...run.taint], scope: [] });
+          for (const child of target.children)
+            child.inbox.push({ taint: [...run.taint], scope: [] });
           return ok(target.target, target.callId);
         }
         if (!authorized) return refused("authority_denied");
@@ -1705,7 +1805,8 @@ class Replay {
       case "agent.ask": {
         const followUpOf = input.followUpOf as string | null;
         const mode = input.mode as "ask" | "review";
-        if ((followUpOf === null) !== (input.installationId !== null)) return refused("input_invalid");
+        if ((followUpOf === null) !== (input.installationId !== null))
+          return refused("input_invalid");
         if (mode === "review" && !this.rules.reviewMode) return refused("not_offered");
         const records = briefRecords(input.brief);
         if (followUpOf !== null) {
@@ -1717,12 +1818,12 @@ class Replay {
           if (!authorized) return refused("authority_denied", prior.target);
           // A follow-up reopens the same child's context: it keeps what it read.
           const child = prior.children[0]!;
-          const first = this.recorded.get(child.key)!.turns[child.index];
-          if (first && !this.hold(run, this.holdMicro(child.agent, first))) {
+          const need = this.holdFor(child);
+          if (!this.hold(run, need)) {
             this.parkAfter = "credits";
             return notRun();
           }
-          if (first) child.preheldMicro = this.holdMicro(child.agent, first);
+          child.preheldMicro = need;
           for (const entry of run.taint) child.taint.add(entry);
           for (const id of records) child.scope.add(id);
           const callId = nextCallId();
@@ -1738,7 +1839,13 @@ class Replay {
         if (!itemsOk(records)) return refused("item_not_received", target);
         if (!authorized) return refused("authority_denied", target);
         const key = call.expect.children[0] ?? "unrecorded-1";
-        const child = this.admitChild(run, key, target, mode === "review" ? "review" : "call", records);
+        const child = this.admitChild(
+          run,
+          key,
+          target,
+          mode === "review" ? "review" : "call",
+          records,
+        );
         if (child === "parked") {
           this.parkAfter = "credits";
           return notRun();
@@ -1755,16 +1862,24 @@ class Replay {
         const source = input.source as { records: unknown; itemId: string | null };
         const records = source.records === null ? [] : recordIdsOf(source.records);
         if ((source.records === null) === (source.itemId === null)) return refused("input_invalid");
-        if (source.itemId !== null && !run.items.has(source.itemId)) return refused("item_not_received", target);
+        if (source.itemId !== null && !run.items.has(source.itemId))
+          return refused("item_not_received", target);
         if (records.some((id) => !run.scope.has(id))) return refused("id_out_of_scope", target);
         const template = briefRecords(input.briefTemplate);
         if (!itemsOk(template)) return refused("item_not_received", target);
         if (!authorized) return refused("authority_denied", target);
         const size = input.batchSize as number;
         const sourceIds = source.itemId !== null ? [] : records;
-        const batches = source.itemId !== null ? 1 : Math.ceil(sourceIds.length / size);
+        // Record ids split by batch size; an item's table rows likewise (each batch's rows).
+        const batches = Math.max(
+          1,
+          Math.ceil(
+            (source.itemId !== null ? run.items.get(source.itemId)!.rows : sourceIds.length) / size,
+          ),
+        );
         const keys = call.expect.children;
-        if (keys.length !== batches) throw new StaleRecording("map_batches", run.key + ":" + call.id);
+        if (keys.length !== batches)
+          throw new StaleRecording("map_batches", run.key + ":" + call.id);
         const children: RunState[] = [];
         for (let i = 0; i < batches; i += 1) {
           const batch = sourceIds.slice(i * size, (i + 1) * size);
@@ -1812,7 +1927,11 @@ class Replay {
       this.runCall(run, state);
       this.deliver(run, state);
       if (state.result?.readTags.includes("customer"))
-        return { ...refused("result_customer_tagged", state.target), callId: state.callId, children: keys };
+        return {
+          ...refused("result_customer_tagged", state.target),
+          callId: state.callId,
+          children: keys,
+        };
     }
     return ok(state.target, state.callId, keys);
   }

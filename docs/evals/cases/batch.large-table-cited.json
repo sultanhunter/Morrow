@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 2,
+  "caseId": "batch.large-table-cited",
+  "title": "A teammate builds a 3,000-row table across turns; Morrow cites it without reading it all",
+  "category": "long_batch",
+  "class": "quality",
+  "rubricId": "rubric.long-batch@1",
+  "requires": [
+    "H7b",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "agent-run-safety-v1",
+    "catalogue-max-tokens"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "business_analyst"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Export every order line from the last 60 days with product and amount."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "orders_lines",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_215",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "metric": "order_count",
+        "period": "last_60_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 3000
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "business_analyst",
+          "tool": "result.write",
+          "calls": {
+            "min": 3,
+            "max": 3
+          }
+        },
+        {
+          "agent": "morrow",
+          "tool": "memory.read",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": {
+      "calls": {
+        "min": 1,
+        "max": 1
+      },
+      "followUps": {
+        "min": 0,
+        "max": 0
+      },
+      "maps": {
+        "min": 0,
+        "max": 0
+      },
+      "reviews": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "business_analyst"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "teammate_result",
+        "result_item"
+      ]
+    },
+    "events": {
+      "required": [],
+      "forbidden": [
+        "checkin:model_turns",
+        "checkin:tool_calls",
+        "checkin:children",
+        "detector_trip:repeat",
+        "detector_trip:error_streak",
+        "detector_trip:idle",
+        "park:credits"
+      ]
+    },
+    "cost": {
+      "modelTurnsMax": 12,
+      "outputTokensMax": 400000
+    }
+  }
+}

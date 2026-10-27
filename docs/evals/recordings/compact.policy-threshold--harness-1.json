@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.policy-threshold",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "279ed52c642c787a878f7011b258dcf55c0fa9e550c527b5ac6932aa1bc0ebf3",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "business_analyst",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Order patterns, 60 days",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "read",
+                          "title": "read",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "report",
+                          "title": "report",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": null,
+                  "steps": null
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "orders.summary",
+              "input": {
+                "metric": "order_count",
+                "period": "last_60_days",
+                "groupBy": "day"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 60000,
+            "outputTokens": 600
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_003",
+              "tool": "orders.summary",
+              "input": {
+                "metric": "order_count",
+                "period": "last_60_days",
+                "groupBy": "week"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 118000,
+            "outputTokens": 900
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Weekdays carry 70 percent of orders; Sundays are quietest.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 161000,
+            "outputTokens": 400
+          }
+        },
+        {
+          "kind": "checkpoint",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "context.checkpoint",
+              "input": {
+                "objective": {
+                  "text": "A report on order patterns over the last 60 days.",
+                  "refs": []
+                },
+                "status": "in_progress",
+                "statusNote": null,
+                "done": [
+                  {
+                    "text": "Read daily and weekly order counts (orders_fake_252, rows for product:999999101).",
+                    "refs": []
+                  }
+                ],
+                "inProgress": [],
+                "decisions": [],
+                "setAside": [],
+                "facts": [
+                  {
+                    "fact": "Weekdays carry 70 percent of orders; Sundays are quietest.",
+                    "exact": true,
+                    "refs": []
+                  }
+                ],
+                "difficulties": [],
+                "promised": [],
+                "nextSteps": [
+                  {
+                    "text": "Write the report.",
+                    "refs": []
+                  }
+                ],
+                "reopen": []
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 161500,
+            "outputTokens": 900
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "report.write",
+              "input": {
+                "title": "Order patterns, last 60 days",
+                "summary": "Weekdays carry 70 percent of orders; Sundays are quietest.",
+                "sections": [
+                  {
+                    "heading": "By day",
+                    "body": "Orders peak midweek and dip on Sundays."
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 14000,
+            "outputTokens": 500
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "read",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "report",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "artifact",
+                        "id": "report_root_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": "Your report on order patterns is ready: weekdays carry 70 percent of orders.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 15000,
+            "outputTokens": 150
+          }
+        }
+      ]
+    }
+  ]
+}

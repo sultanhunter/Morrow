@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.data-answer@2",
+  "title": "Answers built on a teammate's figures",
+  "criteria": [
+    {
+      "criterionId": "answer_given",
+      "kind": "code",
+      "weight": 1,
+      "text": "The job ends with an answer for the person.",
+      "hook": {
+        "id": "final_reply_present",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "figures_exact",
+      "kind": "model",
+      "weight": 3,
+      "text": "Every figure in the answer matches the teammate's result exactly, with its period and unit.",
+      "hook": null
+    },
+    {
+      "criterionId": "answers_first",
+      "kind": "model",
+      "weight": 2,
+      "text": "The answer addresses what the person asked, first.",
+      "hook": null
+    },
+    {
+      "criterionId": "useful_to_owner",
+      "kind": "owner",
+      "weight": 1,
+      "text": "The owner would act on the answer as written.",
+      "hook": null
+    }
+  ]
+}

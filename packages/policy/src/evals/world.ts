@@ -213,20 +213,26 @@ export const evalContextPolicy = Object.freeze({
 });
 
 /**
- * The fake wallet (ADR-0041 item 9; ADR-0039). Metered use in micro-credits. A turn holds its
- * input at the input rate and `max_tokens` (32,000 at `medium`, 64,000 at `high`, item 8) at
- * the output rate, and draws its metered use after it; a booking above the hold is
- * `cost_budget`, the only end tied to money. When a hold cannot be covered, the whole job parks
- * on credits and resumes on a top-up; nothing is drawn while parked. A failed ending caused by
- * Morrow or the provider is refunded at settlement (OD-2026-10-26-2). Prices are invented.
+ * The fake wallet (ADR-0041 item 9; ADR-0039). Metered use in micro-credits. Before each send a
+ * turn holds the broker's input estimate at the input rate (the previous response's usage, or
+ * `openingTokens` for a context's or an epoch's first send, which code renders) and
+ * `max_tokens` (32,000 at `medium`, 64,000 at `high`, item 8) at the output rate. After it, the
+ * metered use is drawn while the wallet covers it and otherwise absorbed as Morrow's own cost;
+ * only a booking above any possible worst case (more output than `max_tokens`) is
+ * `cost_budget`. When a hold cannot be covered, the whole job parks on credits and resumes on a
+ * top-up; nothing is drawn while parked. A failed ending caused by Morrow or the provider is
+ * refunded at settlement (OD-2026-10-26-2). Prices are invented; the replay never reads a
+ * recorded turn to size a hold.
  */
 export interface EvalWalletRules {
   readonly microCreditsPerToken: { readonly input: number; readonly output: number };
   readonly maxTokens: { readonly medium: number; readonly high: number };
+  readonly openingTokens: number;
 }
 export const evalWalletRules: EvalWalletRules = Object.freeze({
   microCreditsPerToken: Object.freeze({ input: 1000, output: 5000 }),
   maxTokens: Object.freeze({ medium: 32_000, high: 64_000 }),
+  openingTokens: 4000,
 });
 export const microPerCredit = 1_000_000;
 /** ADR-0041 item 2: Morrow at `high`, every other agent at `medium`. */

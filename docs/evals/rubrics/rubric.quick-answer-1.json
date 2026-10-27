@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.quick-answer@1",
+  "title": "Quick answers in Morrow's conversation",
+  "criteria": [
+    {
+      "criterionId": "answer_given",
+      "kind": "code",
+      "weight": 1,
+      "text": "The run ends with an answer for the person.",
+      "hook": {
+        "id": "final_reply_present",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "grounded",
+      "kind": "model",
+      "weight": 3,
+      "text": "The answer uses only the workspace's knowledge and the person's memory; it invents no policy, figure or fact.",
+      "hook": null
+    },
+    {
+      "criterionId": "plain_words",
+      "kind": "model",
+      "weight": 2,
+      "text": "The answer is short and in plain words for a shop owner, with no jargon.",
+      "hook": null
+    },
+    {
+      "criterionId": "useful_to_owner",
+      "kind": "owner",
+      "weight": 1,
+      "text": "The owner found the answer useful as written.",
+      "hook": null
+    }
+  ]
+}

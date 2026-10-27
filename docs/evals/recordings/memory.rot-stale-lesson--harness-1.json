@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 2,
+  "caseId": "memory.rot-stale-lesson",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "31e9c5ac0dfaaf43474d806e0d91824e9b186ce6e43aff76d33cff3c7948cb45",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "memory.search",
+              "input": {
+                "queries": [
+                  "free shipping"
+                ],
+                "layers": [
+                  "knowledge",
+                  "notebook"
+                ],
+                "limit": 5
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4200,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Orders over 50 ship free, per your shipping policy. An older note of mine said 40; the policy page is current, so I'll go by it.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4500,
+            "outputTokens": 60
+          }
+        }
+      ]
+    }
+  ]
+}

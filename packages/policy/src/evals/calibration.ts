@@ -78,12 +78,21 @@ export function parseCalibrationSet(
     "calibration.examples",
     1000,
     (v, p) => {
-      const x = evalRecord(v, p, ["exampleId", "caseId", "rubricId", "criterionId", "resultSlot", "ownerLabel"]);
+      const x = evalRecord(v, p, [
+        "exampleId",
+        "caseId",
+        "rubricId",
+        "criterionId",
+        "resultSlot",
+        "ownerLabel",
+      ]);
       const example = {
         exampleId: evalText(x.exampleId, p + ".exampleId", { pattern: exampleIdPattern }),
         caseId: evalText(x.caseId, p + ".caseId", { pattern: evalCaseIdPattern }),
         rubricId: evalText(x.rubricId, p + ".rubricId", { pattern: evalRubricIdPattern }),
-        criterionId: evalText(x.criterionId, p + ".criterionId", { pattern: /^[a-z][a-z0-9_]{0,47}$/ }),
+        criterionId: evalText(x.criterionId, p + ".criterionId", {
+          pattern: /^[a-z][a-z0-9_]{0,47}$/,
+        }),
         resultSlot: evalText(x.resultSlot, p + ".resultSlot", { pattern: slotPattern }),
         ownerLabel: evalNullable(x.ownerLabel, p + ".ownerLabel", (l, q) =>
           evalOneOf(l, q, ["pass", "fail"] as const),
@@ -161,7 +170,8 @@ export function calibrateJudge(
       : [],
   );
   for (const id of Object.keys(judged))
-    if (!set.examples.some((e) => e.exampleId === id)) throw Error("EVAL_CALIBRATION_UNKNOWN_EXAMPLE");
+    if (!set.examples.some((e) => e.exampleId === id))
+      throw Error("EVAL_CALIBRATION_UNKNOWN_EXAMPLE");
   const n = pairs.length;
   const count = (owner: EvalLabel, judge: EvalLabel) =>
     pairs.filter((p) => p.owner === owner && p.judge === judge).length;
@@ -173,7 +183,14 @@ export function calibrateJudge(
   const ownerPass = (pp + pf) / (n || 1);
   const judgePass = (pp + fp) / (n || 1);
   const chance = ownerPass * judgePass + (1 - ownerPass) * (1 - judgePass);
-  const kappa = agreement === null ? null : chance >= 1 ? (agreement === 1 ? 1 : 0) : (agreement - chance) / (1 - chance);
+  const kappa =
+    agreement === null
+      ? null
+      : chance >= 1
+        ? agreement === 1
+          ? 1
+          : 0
+        : (agreement - chance) / (1 - chance);
   const round = (v: number | null) => (v === null ? null : Math.round(v * 10000) / 10000);
   const result = {
     calibrationId: set.calibrationId,

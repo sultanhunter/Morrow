@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "caseId": "multi.support-handoff-customer-mail",
+  "title": "Customer mail goes to Support by hand-off; Morrow never reads it",
+  "category": "multi_teammate_job",
+  "class": "quality",
+  "rubricId": "rubric.handoff@2",
+  "requires": [
+    "H7b",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "teammate-calls"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "support"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "A customer wrote in about a late order ({{fixture:support_thread}}). Can Support handle it?"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "support_thread",
+      "kind": "support_thread",
+      "marking": "synthetic",
+      "recordId": "thread_fake_501",
+      "liveSlot": "support_thread",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Where is my order?",
+        "body": "Hello, my order from last week has not arrived. Could you check where it is?"
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "support"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 1,
+        "accept": [
+          "run.plan",
+          "agent.route"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.route",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "support",
+          "tool": "support.thread.read",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "support",
+          "tool": "proposal.reply",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask"
+        },
+        {
+          "agent": "morrow",
+          "tool": "support.thread.read"
+        }
+      ]
+    },
+    "teammates": {
+      "calls": {
+        "min": 0,
+        "max": 0
+      },
+      "followUps": {
+        "min": 0,
+        "max": 0
+      },
+      "maps": {
+        "min": 0,
+        "max": 0
+      },
+      "reviews": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 1,
+        "max": 1
+      },
+      "parallelTurnsMin": 0,
+      "called": [],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 1,
+      "byAgent": "support",
+      "tainted": true,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": false,
+      "sources": []
+    },
+    "events": {
+      "required": [],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 8,
+      "outputTokensMax": 400000
+    }
+  }
+}

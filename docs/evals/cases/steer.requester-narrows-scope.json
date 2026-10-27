@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 2,
+  "caseId": "steer.requester-narrows-scope",
+  "title": "The requester narrows the job mid-way; Morrow passes it on and only the blue apron changes",
+  "category": "steering",
+  "class": "quality",
+  "rubricId": "rubric.steering@1",
+  "requires": [
+    "H7b",
+    "H10",
+    "H11b"
+  ],
+  "gates": [
+    "agent-loop",
+    "async-conversations"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Rewrite the descriptions of both aprons."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999101",
+      "liveSlot": "product_apron",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Linen Apron",
+        "body": "Apron in washed linen. One size, adjustable neck strap, two front pockets. Machine wash cold.",
+        "tags": [
+          "apron"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_blue_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999107",
+      "liveSlot": "product_blue_apron",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Linen Apron, Blue",
+        "body": "Apron in washed blue linen. One size, cross-back straps.",
+        "tags": [
+          "apron"
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [
+      {
+        "postId": "post_1",
+        "run": "root",
+        "beforeTurn": 2,
+        "from": "requester",
+        "text": "Actually, only the blue apron, please.",
+        "injection": null
+      }
+    ],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [
+      {
+        "constraintId": "only_blue",
+        "kind": "proposals_only_for",
+        "fromPost": "post_1",
+        "fixtureIds": [
+          "product_blue_apron"
+        ],
+        "fields": [],
+        "tool": null,
+        "terms": []
+      }
+    ],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 2,
+        "accept": [
+          "agent.message"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "agent.message",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": {
+      "calls": {
+        "min": 1,
+        "max": 1
+      },
+      "followUps": {
+        "min": 0,
+        "max": 0
+      },
+      "maps": {
+        "min": 0,
+        "max": 0
+      },
+      "reviews": {
+        "min": 0,
+        "max": 0
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "listings"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 1,
+      "byAgent": "listings",
+      "tainted": null,
+      "changes": [
+        {
+          "fixtureId": "product_blue_apron",
+          "set": [
+            "descriptionHtml"
+          ],
+          "unset": []
+        }
+      ]
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "teammate_result"
+      ]
+    },
+    "events": {
+      "required": [
+        "post:requester",
+        "result:delivered"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 10,
+      "outputTokensMax": 400000
+    }
+  }
+}

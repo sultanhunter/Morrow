@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 2,
+  "caseId": "park.question-unanswered",
+  "title": "A question left unanswered parks the job; nothing ends it early",
+  "category": "park_and_resume",
+  "class": "quality",
+  "rubricId": "rubric.park-resume@1",
+  "requires": [
+    "H7b",
+    "H11b"
+  ],
+  "gates": [
+    "agent-loop",
+    "async-conversations"
+  ],
+  "entry": {
+    "agent": "listings",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Update the tags on the bestselling mug."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_mug",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999103",
+      "liveSlot": "product_mug",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Stoneware Mug",
+        "body": "Glazed stoneware mug, 350 ml. Dishwasher safe.",
+        "tags": [
+          "kitchen",
+          "mug"
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "parked",
+    "tools": {
+      "required": [
+        {
+          "agent": "listings",
+          "tool": "inbox.ask",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "listings",
+          "tool": "proposal.listing"
+        }
+      ]
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "product"
+      ]
+    },
+    "events": {
+      "required": [
+        "park:question"
+      ],
+      "forbidden": [
+        "resume:question",
+        "run:ended"
+      ]
+    },
+    "cost": {
+      "modelTurnsMax": 4,
+      "outputTokensMax": 400000
+    }
+  }
+}

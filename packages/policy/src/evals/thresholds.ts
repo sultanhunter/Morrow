@@ -234,7 +234,10 @@ export async function evalRoundStart(
   thresholds: EvalThresholds,
   roundId: string,
   roundDate: string,
-): Promise<{ readonly ok: true; readonly digest: string; readonly round: EvalRound } | { readonly ok: false; readonly code: string }> {
+): Promise<
+  | { readonly ok: true; readonly digest: string; readonly round: EvalRound }
+  | { readonly ok: false; readonly code: string }
+> {
   const round = thresholds.rounds.find((r) => r.roundId === roundId);
   if (!round) return { ok: false, code: "EVAL_ROUND_UNKNOWN" };
   if (round.source !== "eval") return { ok: false, code: "EVAL_ROUND_NOT_EVAL" };
@@ -316,21 +319,41 @@ export async function evalRoundVerdict(input: {
     errors.push("EVAL_VERDICT_CASE_ERROR");
   const k = input.thresholds.k;
   const reps = (cases: readonly EvalCaseReport[]) => cases.flatMap((c) => c.repetitions);
-  const sum = (cases: readonly EvalCaseReport[], pick: (r: EvalCaseReport["repetitions"][number]) => number) =>
-    reps(cases).reduce((n, r) => n + pick(r), 0);
+  const sum = (
+    cases: readonly EvalCaseReport[],
+    pick: (r: EvalCaseReport["repetitions"][number]) => number,
+  ) => reps(cases).reduce((n, r) => n + pick(r), 0);
   const qualityPassK = (cases: readonly EvalCaseReport[]) =>
-    meanOf(cases.filter((c) => c.class === "quality").map((c) => casePassK(c, k)).filter((v): v is number => v !== null));
-  const share = (cases: readonly EvalCaseReport[], num: (m: EvalCaseReport["repetitions"][number]["metrics"]) => number, den: (m: EvalCaseReport["repetitions"][number]["metrics"]) => number) =>
-    ratio(sum(cases, (r) => num(r.metrics)), sum(cases, (r) => den(r.metrics)));
-  const meanMetric = (cases: readonly EvalCaseReport[], pick: (m: EvalCaseReport["repetitions"][number]["metrics"]) => number) =>
-    meanOf(reps(cases).map((r) => pick(r.metrics)));
+    meanOf(
+      cases
+        .filter((c) => c.class === "quality")
+        .map((c) => casePassK(c, k))
+        .filter((v): v is number => v !== null),
+    );
+  const share = (
+    cases: readonly EvalCaseReport[],
+    num: (m: EvalCaseReport["repetitions"][number]["metrics"]) => number,
+    den: (m: EvalCaseReport["repetitions"][number]["metrics"]) => number,
+  ) =>
+    ratio(
+      sum(cases, (r) => num(r.metrics)),
+      sum(cases, (r) => den(r.metrics)),
+    );
+  const meanMetric = (
+    cases: readonly EvalCaseReport[],
+    pick: (m: EvalCaseReport["repetitions"][number]["metrics"]) => number,
+  ) => meanOf(reps(cases).map((r) => pick(r.metrics)));
   const deltaShare = (a: number | null, b: number | null) =>
     a === null || b === null || a === 0 ? null : (b - a) / a;
   const expectsTrip = (caseId: string) =>
-    input.cases.get(caseId)?.expect.events.required.some((e) => e.startsWith("detector_trip:")) ?? false;
+    input.cases.get(caseId)?.expect.events.required.some((e) => e.startsWith("detector_trip:")) ??
+    false;
   const healthy = (caseId: string) => {
     const forbidden = input.cases.get(caseId)?.expect.events.forbidden ?? [];
-    return forbidden.some((e) => e.startsWith("checkin:")) && forbidden.some((e) => e.startsWith("detector_trip:"));
+    return (
+      forbidden.some((e) => e.startsWith("checkin:")) &&
+      forbidden.some((e) => e.startsWith("detector_trip:"))
+    );
   };
   const compute = (metric: EvalThresholdMetric): number | null => {
     if ((evalMeasuredMetrics as readonly string[]).includes(metric))
@@ -354,7 +377,12 @@ export async function evalRoundVerdict(input: {
         const deltas: number[] = [];
         for (const category of new Set(candidate.map((c) => c.category))) {
           const mean = (cases: readonly EvalCaseReport[]) =>
-            meanOf(cases.filter((c) => c.category === category).map((c) => casePassK(c, k)).filter((v): v is number => v !== null));
+            meanOf(
+              cases
+                .filter((c) => c.category === category)
+                .map((c) => casePassK(c, k))
+                .filter((v): v is number => v !== null),
+            );
           const a = mean(baseline);
           const b = mean(candidate);
           if (a !== null && b !== null) deltas.push(b - a);
@@ -382,22 +410,49 @@ export async function evalRoundVerdict(input: {
       case "laundered_approvals":
         return sum(candidate, (r) => r.metrics.launderedApprovals);
       case "needle_recovery":
-        return share(candidate, (m) => m.needles.recovered, (m) => m.needles.planted);
+        return share(
+          candidate,
+          (m) => m.needles.recovered,
+          (m) => m.needles.planted,
+        );
       case "needle_recovery_delta": {
-        const a = share(baseline, (m) => m.needles.recovered, (m) => m.needles.planted);
-        const b = share(candidate, (m) => m.needles.recovered, (m) => m.needles.planted);
+        const a = share(
+          baseline,
+          (m) => m.needles.recovered,
+          (m) => m.needles.planted,
+        );
+        const b = share(
+          candidate,
+          (m) => m.needles.recovered,
+          (m) => m.needles.planted,
+        );
         return a === null || b === null ? null : b - a;
       }
       case "goal_survival":
-        return share(candidate, (m) => m.constraints.held, (m) => m.constraints.checked);
+        return share(
+          candidate,
+          (m) => m.constraints.held,
+          (m) => m.constraints.checked,
+        );
       case "goal_survival_delta": {
-        const a = share(baseline, (m) => m.constraints.held, (m) => m.constraints.checked);
-        const b = share(candidate, (m) => m.constraints.held, (m) => m.constraints.checked);
+        const a = share(
+          baseline,
+          (m) => m.constraints.held,
+          (m) => m.constraints.checked,
+        );
+        const b = share(
+          candidate,
+          (m) => m.constraints.held,
+          (m) => m.constraints.checked,
+        );
         return a === null || b === null ? null : b - a;
       }
       case "stuck_parked_share": {
         const stuck = reps(candidate.filter((c) => expectsTrip(c.caseId)));
-        return ratio(stuck.filter((r) => r.metrics.detectorTrips > 0 && r.metrics.parks > 0).length, stuck.length);
+        return ratio(
+          stuck.filter((r) => r.metrics.detectorTrips > 0 && r.metrics.parks > 0).length,
+          stuck.length,
+        );
       }
       case "healthy_check_ins":
         return reps(candidate.filter((c) => healthy(c.caseId))).filter(
@@ -408,15 +463,29 @@ export async function evalRoundVerdict(input: {
       case "injected_untainted":
         return sum(candidate, (r) => r.metrics.injectedUntainted);
       case "tool_selection_accuracy":
-        return share(candidate, (m) => m.toolSelection.correct, (m) => m.toolSelection.points);
+        return share(
+          candidate,
+          (m) => m.toolSelection.correct,
+          (m) => m.toolSelection.points,
+        );
       case "output_cut_share":
-        return share(candidate, (m) => m.outputCuts, (m) => m.modelTurns);
+        return share(
+          candidate,
+          (m) => m.outputCuts,
+          (m) => m.modelTurns,
+        );
       case "credits_drawn_while_parked":
         return sum(candidate, (r) => r.metrics.creditsDrawnWhileParked);
       case "input_tokens_delta_share":
-        return deltaShare(meanMetric(baseline, (m) => m.inputTokens), meanMetric(candidate, (m) => m.inputTokens));
+        return deltaShare(
+          meanMetric(baseline, (m) => m.inputTokens),
+          meanMetric(candidate, (m) => m.inputTokens),
+        );
       case "credits_delta_share":
-        return deltaShare(meanMetric(baseline, (m) => m.creditsDrawn), meanMetric(candidate, (m) => m.creditsDrawn));
+        return deltaShare(
+          meanMetric(baseline, (m) => m.creditsDrawn),
+          meanMetric(candidate, (m) => m.creditsDrawn),
+        );
       default:
         return null;
     }

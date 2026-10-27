@@ -1,0 +1,3589 @@
+{
+  "schemaVersion": 2,
+  "caseId": "park.checkin-at-33rd-child",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "63f4c2ca55dc6b74e5192ffb816ce4f3893014b47cc703a2b2154a4ce19461a5",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Tag 32 low-stock products",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "find",
+                          "title": "find",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "tag",
+                          "title": "tag",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want every low-stock product tagged 'back soon'.",
+                  "steps": [
+                    "find",
+                    "tag",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_inventory",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "List the low-stock products.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Propose changes only; a person approves each one."
+                  ],
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999201"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999202"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999203"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999204"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999205"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999206"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999207"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999208"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999209"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999210"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999211"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999212"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999213"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999214"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999215"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999216"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999217"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999218"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999219"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999220"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999221"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999222"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999223"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999224"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999225"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999226"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999227"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999228"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999229"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999230"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999231"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999232"
+                    }
+                  ],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "inventory-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4600,
+            "outputTokens": 260
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "agent.map",
+              "input": {
+                "installationId": "inst_listings",
+                "briefTemplate": {
+                  "objective": "Add the tag 'back soon' to the product in your batch.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Tags only."
+                  ],
+                  "records": [],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [],
+                    "itemsExpected": false,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                },
+                "source": {
+                  "records": [
+                    {
+                      "kind": "product",
+                      "id": "product:999999201"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999202"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999203"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999204"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999205"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999206"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999207"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999208"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999209"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999210"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999211"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999212"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999213"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999214"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999215"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999216"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999217"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999218"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999219"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999220"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999221"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999222"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999223"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999224"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999225"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999226"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999227"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999228"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999229"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999230"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999231"
+                    },
+                    {
+                      "kind": "product",
+                      "id": "product:999999232"
+                    }
+                  ],
+                  "itemId": null
+                },
+                "batchSize": 1
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "listings-1",
+                  "listings-2",
+                  "listings-3",
+                  "listings-4",
+                  "listings-5",
+                  "listings-6",
+                  "listings-7",
+                  "listings-8",
+                  "listings-9",
+                  "listings-10",
+                  "listings-11",
+                  "listings-12",
+                  "listings-13",
+                  "listings-14",
+                  "listings-15",
+                  "listings-16",
+                  "listings-17",
+                  "listings-18",
+                  "listings-19",
+                  "listings-20",
+                  "listings-21",
+                  "listings-22",
+                  "listings-23",
+                  "listings-24",
+                  "listings-25",
+                  "listings-26",
+                  "listings-27",
+                  "listings-28",
+                  "listings-29",
+                  "listings-30",
+                  "listings-31",
+                  "listings-32"
+                ]
+              }
+            },
+            {
+              "id": "tu_005",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5800,
+            "outputTokens": 260
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "find",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "tag",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "All 32 low-stock products have a 'back soon' tag proposed. The job checked in with you once, at 32 teammate runs, and continued when you said so.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 7400,
+            "outputTokens": 150
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "inventory-1",
+      "agent": "inventory",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999201",
+                  "product:999999202",
+                  "product:999999203",
+                  "product:999999204",
+                  "product:999999205",
+                  "product:999999206",
+                  "product:999999207",
+                  "product:999999208",
+                  "product:999999209",
+                  "product:999999210",
+                  "product:999999211",
+                  "product:999999212",
+                  "product:999999213",
+                  "product:999999214",
+                  "product:999999215",
+                  "product:999999216",
+                  "product:999999217",
+                  "product:999999218",
+                  "product:999999219",
+                  "product:999999220",
+                  "product:999999221",
+                  "product:999999222",
+                  "product:999999223",
+                  "product:999999224",
+                  "product:999999225"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2300,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "product",
+                        "id": "product:999999201"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999202"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999203"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999204"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999205"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999206"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999207"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999208"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999209"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999210"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999211"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999212"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999213"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999214"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999215"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999216"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999217"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999218"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999219"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999220"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999221"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999222"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999223"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999224"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999225"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999226"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999227"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999228"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999229"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999230"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999231"
+                      },
+                      {
+                        "kind": "product",
+                        "id": "product:999999232"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "32 products are low in stock.",
+                  "counts": {
+                    "checked": 0,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [
+                    {
+                      "kind": "fact",
+                      "title": "Low stock",
+                      "detail": "",
+                      "records": [
+                        {
+                          "kind": "product",
+                          "id": "product:999999201"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999202"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999203"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999204"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999205"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999206"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999207"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999208"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999209"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999210"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999211"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999212"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999213"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999214"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999215"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999216"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999217"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999218"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999219"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999220"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999221"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999222"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999223"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999224"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999225"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999226"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999227"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999228"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999229"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999230"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999231"
+                        },
+                        {
+                          "kind": "product",
+                          "id": "product:999999232"
+                        }
+                      ],
+                      "value": null,
+                      "unit": null,
+                      "table": null
+                    }
+                  ],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2900,
+            "outputTokens": 200
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-1",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_010",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999201",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_011",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-2",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_012",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999202",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_013",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-3",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_014",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999203",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_015",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-4",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_016",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999204",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_017",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-5",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_018",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999205",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_019",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-6",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_020",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999206",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_021",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-7",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_022",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999207",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_023",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-8",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_024",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999208",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_025",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-9",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_026",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999209",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_027",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-10",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_028",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999210",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_029",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-11",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_030",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999211",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_031",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-12",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_032",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999212",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_033",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-13",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_034",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999213",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_035",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-14",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_036",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999214",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_037",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-15",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_038",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999215",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_039",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-16",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_040",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999216",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_041",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-17",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_042",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999217",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_043",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-18",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_044",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999218",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_045",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-19",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_046",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999219",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_047",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-20",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_048",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999220",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_049",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-21",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_050",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999221",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_051",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-22",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_052",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999222",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_053",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-23",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_054",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999223",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_055",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-24",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_056",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999224",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_057",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-25",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_058",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999225",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_059",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-26",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_060",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999226",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_061",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-27",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_062",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999227",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_063",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-28",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_064",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999228",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_065",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-29",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_066",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999229",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_067",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-30",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_068",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999230",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_069",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-31",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_070",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999231",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_071",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "listings-32",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_072",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999232",
+                    "title": null,
+                    "descriptionHtml": null,
+                    "seo": null,
+                    "tags": [
+                      "back soon"
+                    ]
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 120
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_073",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": []
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "Proposed 'back soon' on one product.",
+                  "counts": {
+                    "checked": 1,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2700,
+            "outputTokens": 70
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.greeting-no-tools",
+  "title": "A greeting gets a short answer and no tool call",
+  "category": "quick_answer",
+  "class": "quality",
+  "rubricId": "rubric.quick-answer@1",
+  "requires": [
+    "H7b",
+    "H11a"
+  ],
+  "gates": [
+    "agent-loop",
+    "async-conversations",
+    "tool-catalogue-v4"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "conversation",
+    "surface": "ask"
+  },
+  "agents": [
+    "morrow"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Hi Morrow, what can you help me with?"
+  },
+  "fixtures": [],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 1,
+        "accept": [
+          "none"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask"
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.map"
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.route"
+        },
+        {
+          "agent": "morrow",
+          "tool": "run.plan"
+        },
+        {
+          "agent": "morrow",
+          "tool": "knowledge.search"
+        }
+      ]
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": false,
+      "sources": []
+    },
+    "events": {
+      "required": [],
+      "forbidden": [
+        "plan:set"
+      ]
+    },
+    "cost": {
+      "modelTurnsMax": 1,
+      "outputTokensMax": 400000
+    }
+  }
+}

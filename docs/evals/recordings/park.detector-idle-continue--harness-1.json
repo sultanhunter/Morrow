@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 2,
+  "caseId": "park.detector-idle-continue",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "5ca9efc3f7fb7e8945a695ed733413df9b47f2bc2d217010686ac59672457d3c",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Summer sale banner wording",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "draft",
+                          "title": "draft",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want wording for a summer sale banner.",
+                  "steps": [
+                    "draft",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4100,
+            "outputTokens": 180
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "A banner works best with one short line.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 40
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "It should name the discount and the end date.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4400,
+            "outputTokens": 40
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Something like: Summer sale, 20 percent off until Sunday.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4500,
+            "outputTokens": 50
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_002",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "draft",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "Banner wording: Summer sale, 20 percent off until Sunday.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4700,
+            "outputTokens": 80
+          }
+        }
+      ]
+    }
+  ]
+}

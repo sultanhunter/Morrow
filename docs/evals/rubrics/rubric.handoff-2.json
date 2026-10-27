@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.handoff@2",
+  "title": "Hand-offs to the teammate who owns the work",
+  "criteria": [
+    {
+      "criterionId": "teammates_propose",
+      "kind": "code",
+      "weight": 2,
+      "text": "Only teammates propose store changes.",
+      "hook": {
+        "id": "proposals_by_teammates_only",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "right_teammate",
+      "kind": "model",
+      "weight": 3,
+      "text": "The work goes to the teammate whose job it is, with a complete brief.",
+      "hook": null
+    },
+    {
+      "criterionId": "person_told",
+      "kind": "owner",
+      "weight": 1,
+      "text": "The owner knew who took the work over.",
+      "hook": null
+    }
+  ]
+}

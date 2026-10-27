@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.brand-voice",
+  "title": "Morrow recalls the brand voice page without calling a teammate",
+  "category": "quick_answer",
+  "class": "quality",
+  "rubricId": "rubric.quick-answer@1",
+  "requires": [
+    "H7b",
+    "H11a"
+  ],
+  "gates": [
+    "agent-loop",
+    "async-conversations",
+    "tool-catalogue-v4"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "conversation",
+    "surface": "ask"
+  },
+  "agents": [
+    "morrow"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Remind me how we describe our brand voice."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "page_voice",
+      "kind": "knowledge_page",
+      "marking": "synthetic",
+      "recordId": "page_fake_303",
+      "liveSlot": "page_voice",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Brand voice",
+        "body": "Warm, plain and short. We describe what a thing is made of and how it feels to use. No exclamation marks, no superlatives."
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [
+      {
+        "constraintId": "no_superlatives",
+        "kind": "reply_mentions",
+        "fromPost": null,
+        "fixtureIds": [],
+        "fields": [],
+        "tool": null,
+        "terms": [
+          "no superlatives",
+          "superlatives"
+        ]
+      }
+    ],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 1,
+        "accept": [
+          "knowledge.search",
+          "memory.search"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "morrow",
+          "tool": "knowledge.search",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": [
+        {
+          "agent": "morrow",
+          "tool": "agent.ask"
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.map"
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.route"
+        }
+      ]
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "knowledge_page"
+      ]
+    },
+    "events": {
+      "required": [],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 3,
+      "outputTokensMax": 400000
+    }
+  }
+}

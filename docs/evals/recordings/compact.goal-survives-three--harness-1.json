@@ -1,0 +1,500 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.goal-survives-three",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "f71766eba317a5cd6fa1f368de2ddd9e551287c9f39f1334d7a0f9863135aad3",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "listings",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Kitchen descriptions only",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "read",
+                          "title": "read",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "board",
+                          "title": "board",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "mug",
+                          "title": "mug",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "towel",
+                          "title": "towel",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": null,
+                  "steps": null
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "products.read",
+              "input": {
+                "productIds": null,
+                "titleContains": null,
+                "limit": 10
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 12000,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_003",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999102",
+                    "title": null,
+                    "descriptionHtml": "<p>Solid oak, 40 x 25 cm, oiled to show the grain.</p>",
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 21500,
+            "outputTokens": 600
+          }
+        },
+        {
+          "kind": "checkpoint",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "context.checkpoint",
+              "input": {
+                "objective": {
+                  "text": "Improve kitchen product descriptions only; never change a title.",
+                  "refs": []
+                },
+                "status": "in_progress",
+                "statusNote": null,
+                "done": [
+                  {
+                    "text": "Read all six products; proposed the board.",
+                    "refs": []
+                  }
+                ],
+                "inProgress": [],
+                "decisions": [],
+                "setAside": [],
+                "facts": [
+                  {
+                    "fact": "Kitchen products: product:999999102, product:999999103, product:999999105. Not kitchen: product:999999104, product:999999108, product:999999109.",
+                    "exact": true,
+                    "refs": []
+                  }
+                ],
+                "difficulties": [],
+                "promised": [],
+                "nextSteps": [
+                  {
+                    "text": "Propose the mug.",
+                    "refs": []
+                  }
+                ],
+                "reopen": []
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 22500,
+            "outputTokens": 800
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999103",
+                    "title": null,
+                    "descriptionHtml": "<p>Glazed stoneware, 350 ml, dishwasher safe.</p>",
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 9500,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "read",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "board",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "mug",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 21500,
+            "outputTokens": 600
+          }
+        },
+        {
+          "kind": "checkpoint",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_007",
+              "tool": "context.checkpoint",
+              "input": {
+                "objective": {
+                  "text": "Improve kitchen product descriptions only; never change a title.",
+                  "refs": []
+                },
+                "status": "in_progress",
+                "statusNote": null,
+                "done": [
+                  {
+                    "text": "Proposed the board and the mug.",
+                    "refs": []
+                  }
+                ],
+                "inProgress": [],
+                "decisions": [],
+                "setAside": [],
+                "facts": [
+                  {
+                    "fact": "Kitchen products: product:999999102, product:999999103, product:999999105. Not kitchen: product:999999104, product:999999108, product:999999109.",
+                    "exact": true,
+                    "refs": []
+                  }
+                ],
+                "difficulties": [],
+                "promised": [],
+                "nextSteps": [
+                  {
+                    "text": "Propose the towel.",
+                    "refs": []
+                  }
+                ],
+                "reopen": []
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 22500,
+            "outputTokens": 800
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "proposal.listing",
+              "input": {
+                "changes": [
+                  {
+                    "productId": "product:999999105",
+                    "title": null,
+                    "descriptionHtml": "<p>Pre-washed cotton waffle, 50 x 70 cm, quick to dry.</p>",
+                    "seo": null,
+                    "tags": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 9800,
+            "outputTokens": 300
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "All three kitchen products are proposed; the candle, throw and vase are not kitchen products and stay as they are.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 21600,
+            "outputTokens": 500
+          }
+        },
+        {
+          "kind": "checkpoint",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "context.checkpoint",
+              "input": {
+                "objective": {
+                  "text": "Improve kitchen product descriptions only; never change a title.",
+                  "refs": []
+                },
+                "status": "in_progress",
+                "statusNote": null,
+                "done": [
+                  {
+                    "text": "Proposed all three kitchen products.",
+                    "refs": []
+                  }
+                ],
+                "inProgress": [],
+                "decisions": [],
+                "setAside": [],
+                "facts": [
+                  {
+                    "fact": "Kitchen products: product:999999102, product:999999103, product:999999105. Not kitchen: product:999999104, product:999999108, product:999999109.",
+                    "exact": true,
+                    "refs": []
+                  }
+                ],
+                "difficulties": [],
+                "promised": [],
+                "nextSteps": [
+                  {
+                    "text": "Mark the towel done and finish.",
+                    "refs": []
+                  }
+                ],
+                "reopen": []
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 22500,
+            "outputTokens": 800
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_010",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "towel",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_011",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_1"
+                      },
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_2"
+                      },
+                      {
+                        "kind": "proposal",
+                        "id": "proposal_root_3"
+                      }
+                    ]
+                  }
+                ],
+                "reply": "New descriptions are proposed for the board, the mug and the tea towel; no titles changed, and non-kitchen products were left alone.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 10500,
+            "outputTokens": 200
+          }
+        }
+      ]
+    }
+  ]
+}

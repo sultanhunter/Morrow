@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 2,
+  "caseId": "memory.standing-instruction-needle",
+  "title": "A standing fact in the person's memory answers the question exactly, with no tool call",
+  "category": "memory",
+  "class": "quality",
+  "rubricId": "rubric.memory-recall@1",
+  "requires": [
+    "H7b",
+    "H11a",
+    "H12b"
+  ],
+  "gates": [
+    "agent-loop",
+    "memory-person"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "conversation",
+    "surface": "ask"
+  },
+  "agents": [
+    "morrow"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "What's our wholesale minimum again?"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "pmem_minimum",
+      "kind": "person_memory",
+      "marking": "synthetic",
+      "recordId": "pmem_fake_511",
+      "liveSlot": null,
+      "injection": null,
+      "needle": {
+        "value": "24 units"
+      },
+      "memory": {
+        "agent": null,
+        "audience": "requester",
+        "tenant": "this",
+        "deleted": false,
+        "tainted": false,
+        "standing": true
+      },
+      "data": {
+        "title": "Wholesale minimum",
+        "body": "Our wholesale minimum is 24 units per product."
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 1,
+        "accept": [
+          "none"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": false,
+      "sources": []
+    },
+    "events": {
+      "required": [],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 1,
+      "outputTokensMax": 400000
+    }
+  }
+}

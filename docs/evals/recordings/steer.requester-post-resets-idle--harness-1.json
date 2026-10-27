@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 2,
+  "caseId": "steer.requester-post-resets-idle",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "7a91dfa3cef4263dd99d643e6b57d0aaf5a885d3063e8b14d78d5585c4f88f00",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Pick spring newsletter products",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "shortlist",
+                          "title": "shortlist",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want help choosing products for the spring newsletter.",
+                  "steps": [
+                    "shortlist",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4200,
+            "outputTokens": 200
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Spring suggests fresh, light products; the kitchen and home ranges both fit.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4500,
+            "outputTokens": 80
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "The newsletter has room for three features.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4700,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "With the kitchen range: the Stoneware Mug, the Waffle Tea Towel and the Oak Serving Board.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5000,
+            "outputTokens": 80
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_002",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "shortlist",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "For a kitchen-led spring newsletter, feature the Stoneware Mug, the Waffle Tea Towel and the Oak Serving Board.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5300,
+            "outputTokens": 110
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 2,
+  "caseId": "data.figure-reviewed",
+  "title": "A figure the person will act on is checked by a review run before Morrow answers",
+  "category": "data_question",
+  "class": "quality",
+  "rubricId": "rubric.data-answer@2",
+  "requires": [
+    "H7b",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "teammate-calls",
+    "review-runs"
+  ],
+  "entry": {
+    "agent": "morrow",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "morrow",
+    "business_analyst"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "What was our best day for sales last week? I want to plan a promotion around it."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "orders_daily",
+      "kind": "order_summary",
+      "marking": "synthetic",
+      "recordId": "orders_fake_202",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "metric": "gross_sales",
+        "period": "last_7_days",
+        "rows": [
+          {
+            "recordId": "product:999999101",
+            "value": 310
+          },
+          {
+            "recordId": "product:999999104",
+            "value": 120
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "business_analyst"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 2,
+        "accept": [
+          "agent.ask"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "business_analyst",
+          "tool": "orders.summary",
+          "calls": {
+            "min": 2,
+            "max": 2
+          }
+        },
+        {
+          "agent": "morrow",
+          "tool": "agent.ask",
+          "calls": {
+            "min": 2,
+            "max": 2
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": {
+      "calls": {
+        "min": 1,
+        "max": 1
+      },
+      "followUps": {
+        "min": 0,
+        "max": 0
+      },
+      "maps": {
+        "min": 0,
+        "max": 0
+      },
+      "reviews": {
+        "min": 1,
+        "max": 1
+      },
+      "handoffs": {
+        "min": 0,
+        "max": 0
+      },
+      "parallelTurnsMin": 0,
+      "called": [
+        "business_analyst"
+      ],
+      "sameTeammateMin": null
+    },
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "teammate_result"
+      ]
+    },
+    "events": {
+      "required": [
+        "plan:set",
+        "result:delivered",
+        "result:delivered"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 10,
+      "outputTokensMax": 400000
+    }
+  }
+}

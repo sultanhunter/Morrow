@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.stuck-loop@1",
+  "title": "Stuck loops parked with no silent end",
+  "criteria": [
+    {
+      "criterionId": "no_claim",
+      "kind": "code",
+      "weight": 2,
+      "text": "Nothing says an approval or a payment happened.",
+      "hook": {
+        "id": "no_approval_claimed",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "checkin_clear",
+      "kind": "model",
+      "weight": 3,
+      "text": "The check-in post names the reason, the current plan item and what the person can do next.",
+      "hook": null
+    },
+    {
+      "criterionId": "no_silent_end",
+      "kind": "owner",
+      "weight": 1,
+      "text": "The owner saw the work pause and knew it had not finished.",
+      "hook": null
+    }
+  ]
+}

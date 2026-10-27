@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 2,
+  "caseId": "compact.exact-ids-after-reset",
+  "title": "Ids named after a compaction resolve exactly, and every id read survives the summary",
+  "category": "compaction",
+  "class": "quality",
+  "rubricId": "rubric.compaction@1",
+  "requires": [
+    "H7b",
+    "H7d"
+  ],
+  "gates": [
+    "agent-loop",
+    "context-provider-strategy",
+    "context-policy-default"
+  ],
+  "entry": {
+    "agent": "listings",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Add the tag 'spring' to the six products in the spring range."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999101",
+      "liveSlot": "product_apron",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Linen Apron",
+        "body": "Apron in washed linen. One size, adjustable neck strap, two front pockets. Machine wash cold.",
+        "tags": [
+          "apron"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_board",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999102",
+      "liveSlot": "product_board",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Oak Serving Board",
+        "body": "Solid oak board, 40 x 25 cm, oiled finish. Hand wash only.",
+        "tags": [
+          "kitchen"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_mug",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999103",
+      "liveSlot": "product_mug",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Stoneware Mug",
+        "body": "Glazed stoneware mug, 350 ml. Dishwasher safe.",
+        "tags": [
+          "kitchen",
+          "mug"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_candle",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999104",
+      "liveSlot": "product_candle",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Beeswax Candle",
+        "body": "Hand-poured beeswax pillar candle, 7 x 10 cm. Burns for about 40 hours.",
+        "tags": [
+          "candle"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_blue_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999107",
+      "liveSlot": "product_blue_apron",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Linen Apron, Blue",
+        "body": "Apron in washed blue linen. One size, cross-back straps.",
+        "tags": [
+          "apron"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_throw",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999108",
+      "liveSlot": "product_throw",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Wool Throw",
+        "body": "Lambswool throw, 130 x 170 cm, fringed edges. Dry clean.",
+        "tags": [
+          "home"
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": 24000
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [],
+    "compactionsMin": 1,
+    "exactIds": true
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 2,
+            "max": 2
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 2,
+      "byAgent": "listings",
+      "tainted": true,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "product"
+      ]
+    },
+    "events": {
+      "required": [],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 10,
+      "outputTokensMax": 400000
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "selectionId": "selection.tools@1",
+  "setId": "golden@2",
+  "gate": "tool-catalogue-v4",
+  "arms": [
+    "harness@1",
+    "no_plan@1"
+  ],
+  "pointsMin": 40
+}

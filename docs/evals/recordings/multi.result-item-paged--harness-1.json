@@ -1,0 +1,496 @@
+{
+  "schemaVersion": 2,
+  "caseId": "multi.result-item-paged",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "f6ff6d608a12beeb7dfd303b4de4a7b7cc80e315c8d48c2342b18b0edc01eb9f",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "List last week's orders",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "get_orders",
+                          "title": "get orders",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "answer",
+                          "title": "answer",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": "You want every order from last week with its total.",
+                  "steps": [
+                    "get orders",
+                    "answer"
+                  ]
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_002",
+              "tool": "agent.ask",
+              "input": {
+                "installationId": "inst_business_analyst",
+                "mode": "ask",
+                "followUpOf": null,
+                "brief": {
+                  "objective": "List every order from the last 7 days with its total, as a table.",
+                  "details": "",
+                  "doneCriteria": [
+                    "The work is done and reported."
+                  ],
+                  "boundaries": [
+                    "Propose changes only; a person approves each one."
+                  ],
+                  "records": [],
+                  "outputFormat": {
+                    "findingKinds": [],
+                    "tableColumns": [
+                      "order",
+                      "total",
+                      "status"
+                    ],
+                    "itemsExpected": true,
+                    "summaryDepth": "standard"
+                  },
+                  "approach": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": [
+                  "analyst-1"
+                ]
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "run.wait",
+              "input": {
+                "kind": "children",
+                "match": "all",
+                "callIds": null,
+                "proposalIds": null,
+                "until": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 280
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_004",
+              "tool": "memory.read",
+              "input": {
+                "target": {
+                  "kind": "result_item",
+                  "id": "item_analyst_1_1",
+                  "label": null,
+                  "sequence": null,
+                  "fromPosition": null,
+                  "toPosition": null
+                },
+                "page": 1
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5100,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_005",
+              "tool": "memory.read",
+              "input": {
+                "target": {
+                  "kind": "result_item",
+                  "id": "item_analyst_1_1",
+                  "label": null,
+                  "sequence": null,
+                  "fromPosition": null,
+                  "toPosition": null
+                },
+                "page": 2
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 7400,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_006",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "get_orders",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "answer",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "There were 18 orders last week, all paid. The full list with totals is in the table attached to this message.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 9200,
+            "outputTokens": 140
+          }
+        }
+      ]
+    },
+    {
+      "runKey": "analyst-1",
+      "agent": "business_analyst",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_008",
+              "tool": "orders.summary",
+              "input": {
+                "metric": "order_count",
+                "period": "last_7_days",
+                "groupBy": "day"
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2200,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_009",
+              "tool": "result.write",
+              "input": {
+                "itemId": null,
+                "title": "Orders, last 7 days",
+                "kind": "table",
+                "mediaType": "text/csv",
+                "columns": [
+                  "order",
+                  "total",
+                  "status"
+                ],
+                "text": null,
+                "rows": [
+                  [
+                    "Order 1",
+                    "21",
+                    "paid"
+                  ],
+                  [
+                    "Order 2",
+                    "22",
+                    "paid"
+                  ],
+                  [
+                    "Order 3",
+                    "23",
+                    "paid"
+                  ],
+                  [
+                    "Order 4",
+                    "24",
+                    "paid"
+                  ],
+                  [
+                    "Order 5",
+                    "25",
+                    "paid"
+                  ],
+                  [
+                    "Order 6",
+                    "26",
+                    "paid"
+                  ],
+                  [
+                    "Order 7",
+                    "20",
+                    "paid"
+                  ],
+                  [
+                    "Order 8",
+                    "21",
+                    "paid"
+                  ],
+                  [
+                    "Order 9",
+                    "22",
+                    "paid"
+                  ],
+                  [
+                    "Order 10",
+                    "23",
+                    "paid"
+                  ]
+                ],
+                "close": false
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2600,
+            "outputTokens": 400
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_010",
+              "tool": "result.write",
+              "input": {
+                "itemId": "item_analyst_1_1",
+                "title": null,
+                "kind": null,
+                "mediaType": null,
+                "columns": null,
+                "text": null,
+                "rows": [
+                  [
+                    "Order 11",
+                    "24",
+                    "paid"
+                  ],
+                  [
+                    "Order 12",
+                    "25",
+                    "paid"
+                  ],
+                  [
+                    "Order 13",
+                    "26",
+                    "paid"
+                  ],
+                  [
+                    "Order 14",
+                    "20",
+                    "paid"
+                  ],
+                  [
+                    "Order 15",
+                    "21",
+                    "paid"
+                  ],
+                  [
+                    "Order 16",
+                    "22",
+                    "paid"
+                  ],
+                  [
+                    "Order 17",
+                    "23",
+                    "paid"
+                  ],
+                  [
+                    "Order 18",
+                    "24",
+                    "paid"
+                  ]
+                ],
+                "close": true
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3100,
+            "outputTokens": 330
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_011",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [
+                  {
+                    "index": 0,
+                    "status": "met",
+                    "evidence": [
+                      {
+                        "kind": "result_item",
+                        "id": "item_analyst_1_1"
+                      }
+                    ]
+                  }
+                ],
+                "reply": null,
+                "result": {
+                  "summary": "18 orders last week; the table lists each with its total.",
+                  "counts": {
+                    "checked": 0,
+                    "missing": 0,
+                    "questions": 0
+                  },
+                  "nextSteps": [],
+                  "findings": [],
+                  "needs": null,
+                  "items": [
+                    "item_analyst_1_1"
+                  ],
+                  "verdicts": []
+                }
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 3400,
+            "outputTokens": 120
+          }
+        }
+      ]
+    }
+  ]
+}

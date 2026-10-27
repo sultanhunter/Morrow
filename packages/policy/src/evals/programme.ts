@@ -87,7 +87,8 @@ export function parseContextFillSweep(
   if (fills.some((fill, i) => i > 0 && fill <= fills[i - 1]!))
     throw new EvalFormatError("EVAL_SWEEP_ORDER", "sweep.fills");
   const baselineFill = evalInteger(r.baselineFill, "sweep.baselineFill", 16000, 1000000);
-  if (baselineFill !== fills[0]) throw new EvalFormatError("EVAL_SWEEP_BASELINE", "sweep.baselineFill");
+  if (baselineFill !== fills[0])
+    throw new EvalFormatError("EVAL_SWEEP_BASELINE", "sweep.baselineFill");
   const windowMax = evalInteger(r.windowMax, "sweep.windowMax", 16000, 1000000);
   if (fills.at(-1)! > windowMax) throw new EvalFormatError("EVAL_SWEEP_CEILING", "sweep.fills");
   const d = evalRecord(r.distractors, "sweep.distractors", ["source", "kinds", "placement"]);
@@ -98,10 +99,16 @@ export function parseContextFillSweep(
     sweepId: evalText(r.sweepId, "sweep.sweepId", { pattern: programmeIdPattern }),
     setId: evalText(r.setId, "sweep.setId", { pattern: evalSetIdPattern }),
     gate: evalOneOf(r.gate, "sweep.gate", evalGates),
-    efforts: evalList(r.efforts, "sweep.efforts", 2, (v, p) => evalOneOf(v, p, ["medium", "high"] as const), {
-      min: 1,
-      unique: true,
-    }),
+    efforts: evalList(
+      r.efforts,
+      "sweep.efforts",
+      2,
+      (v, p) => evalOneOf(v, p, ["medium", "high"] as const),
+      {
+        min: 1,
+        unique: true,
+      },
+    ),
     fills,
     baselineFill,
     windowMax,
@@ -111,7 +118,8 @@ export function parseContextFillSweep(
         d.kinds,
         "sweep.distractors.kinds",
         4,
-        (v, p) => evalOneOf(v, p, ["product", "order_summary", "inventory", "knowledge_page"] as const),
+        (v, p) =>
+          evalOneOf(v, p, ["product", "order_summary", "inventory", "knowledge_page"] as const),
         { min: 1, unique: true },
       ),
       placement: evalOneOf(d.placement, "sweep.distractors.placement", [
@@ -268,19 +276,16 @@ export function parseCompactionProgramme(
   return evalDeepFreeze(parsed);
 }
 /**
- * A golden case with compaction forced early under one strategy: the variant a forced-early
- * round runs on every task, compared task by task with the case as written. It re-parses, so
- * the variant is a valid case; its recordings, when captured, bind to its own digest.
+ * A golden case with compaction forced early: the variant a forced-early round runs on every
+ * task (under the round's arm, which picks the strategy), compared task by task with the case
+ * as written. It re-parses, so the variant is a valid case; its recordings, when captured,
+ * bind to its own digest.
  */
-export function forcedCompactionVariant(
-  evalCase: EvalCase,
-  compactAt: number,
-  strategy: "fallback" | "provider",
-): EvalCase {
+export function forcedCompactionVariant(evalCase: EvalCase, compactAt: number): EvalCase {
   const copy = JSON.parse(JSON.stringify(evalCase)) as {
-    world: { context: { strategy: string; compactAt: number | null } };
+    world: { context: { compactAt: number | null } };
   };
-  copy.world.context = { strategy, compactAt };
+  copy.world.context = { compactAt };
   return parseEvalCase(copy);
 }
 
@@ -302,13 +307,22 @@ export interface EvalMemoryRedTeam {
   readonly redTeamId: string;
   readonly setId: string;
   readonly gates: readonly EvalGate[];
-  readonly attacks: readonly { readonly attack: EvalMemoryAttack; readonly cases: readonly string[] }[];
+  readonly attacks: readonly {
+    readonly attack: EvalMemoryAttack;
+    readonly cases: readonly string[];
+  }[];
 }
 export function parseMemoryRedTeam(
   value: unknown,
   cases: ReadonlyMap<string, EvalCase>,
 ): EvalMemoryRedTeam {
-  const r = evalRecord(value, "redTeam", ["schemaVersion", "redTeamId", "setId", "gates", "attacks"]);
+  const r = evalRecord(value, "redTeam", [
+    "schemaVersion",
+    "redTeamId",
+    "setId",
+    "gates",
+    "attacks",
+  ]);
   evalVersion(r.schemaVersion, "redTeam.schemaVersion", 1);
   const attacks = evalList(r.attacks, "redTeam.attacks", evalMemoryAttacks.length, (v, p) => {
     const x = evalRecord(v, p, ["attack", "cases"]);
@@ -357,7 +371,14 @@ export function parseToolSelection(
   value: unknown,
   cases: ReadonlyMap<string, EvalCase>,
 ): EvalToolSelection {
-  const r = evalRecord(value, "selection", ["schemaVersion", "selectionId", "setId", "gate", "arms", "pointsMin"]);
+  const r = evalRecord(value, "selection", [
+    "schemaVersion",
+    "selectionId",
+    "setId",
+    "gate",
+    "arms",
+    "pointsMin",
+  ]);
   evalVersion(r.schemaVersion, "selection.schemaVersion", 1);
   const pointsMin = evalInteger(r.pointsMin, "selection.pointsMin", 1, 10000);
   const points = [...cases.values()].reduce((n, c) => n + c.probes.toolSelection.length, 0);
@@ -378,7 +399,12 @@ export function parseToolSelection(
 }
 
 // --- Ablation for each model release (ADR-0041 item 37) -------------------------------------
-export const evalHarnessParts = Object.freeze(["plan", "recitation", "review", "clearing"] as const);
+export const evalHarnessParts = Object.freeze([
+  "plan",
+  "recitation",
+  "review",
+  "clearing",
+] as const);
 export type EvalHarnessPart = (typeof evalHarnessParts)[number];
 const partArm: Readonly<Record<EvalHarnessPart, EvalArm>> = Object.freeze({
   plan: "no_plan@1",
@@ -400,7 +426,15 @@ export interface EvalAblationPlan {
   readonly pays: { readonly passKDropMax: number; readonly creditsRiseMin: number };
 }
 export function parseAblationPlan(value: unknown): EvalAblationPlan {
-  const r = evalRecord(value, "ablation", ["schemaVersion", "planId", "setId", "baseline", "parts", "repetitions", "pays"]);
+  const r = evalRecord(value, "ablation", [
+    "schemaVersion",
+    "planId",
+    "setId",
+    "baseline",
+    "parts",
+    "repetitions",
+    "pays",
+  ]);
   evalVersion(r.schemaVersion, "ablation.schemaVersion", 1);
   const parts = evalList(r.parts, "ablation.parts", evalHarnessParts.length, (v, p) => {
     const x = evalRecord(v, p, ["part", "arm"]);
@@ -410,7 +444,10 @@ export function parseAblationPlan(value: unknown): EvalAblationPlan {
     return { part, arm };
   });
   // Each harness part is removed in turn: every part, once.
-  if (parts.length !== evalHarnessParts.length || new Set(parts.map((p) => p.part)).size !== parts.length)
+  if (
+    parts.length !== evalHarnessParts.length ||
+    new Set(parts.map((p) => p.part)).size !== parts.length
+  )
     throw new EvalFormatError("EVAL_ABLATION_PARTS", "ablation.parts");
   const pays = evalRecord(r.pays, "ablation.pays", ["passKDropMax", "creditsRiseMin"]);
   const parsed = {
@@ -469,7 +506,11 @@ export function ablationVerdict(
   const passKDropMax = drops.length ? Math.max(...drops) : null;
   const before = new Map(full.cases.map((c) => [c.caseId, c]));
   const safetyBroken = without.cases.filter(
-    (c) => c.class === "safety" && before.get(c.caseId)?.status === "pass" && c.status !== "pass" && c.status !== "skipped",
+    (c) =>
+      c.class === "safety" &&
+      before.get(c.caseId)?.status === "pass" &&
+      c.status !== "pass" &&
+      c.status !== "skipped",
   ).length;
   const meanCredits = (report: EvalReport) => {
     const reps = report.cases.flatMap((c) => c.repetitions);
@@ -482,7 +523,9 @@ export function ablationVerdict(
   const verdict: EvalPartVerdict =
     passKDropMax === null || creditsRise === null
       ? "inconclusive"
-      : safetyBroken > 0 || passKDropMax > plan.pays.passKDropMax || creditsRise >= plan.pays.creditsRiseMin
+      : safetyBroken > 0 ||
+          passKDropMax > plan.pays.passKDropMax ||
+          creditsRise >= plan.pays.creditsRiseMin
         ? "keeps_paying"
         : "no_longer_pays";
   return { verdict, passKDropMax, safetyBroken, creditsRise };
@@ -494,7 +537,11 @@ export async function runAblation(
   modelRelease: string,
 ): Promise<EvalAblationResult> {
   if (!/^claude-[a-z0-9-]{1,60}$/.test(modelRelease)) throw Error("EVAL_ABLATION_RELEASE");
-  const full = await runner.runArm({ arm: plan.baseline, modelRelease, repetitions: plan.repetitions });
+  const full = await runner.runArm({
+    arm: plan.baseline,
+    modelRelease,
+    repetitions: plan.repetitions,
+  });
   const parts = [];
   for (const { part, arm } of plan.parts) {
     const without = await runner.runArm({ arm, modelRelease, repetitions: plan.repetitions });

@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 2,
+  "caseId": "batch.twenty-calls-one-turn",
+  "title": "Twenty reads in one turn: sixteen run, four are answered parallel_limit and re-issued",
+  "category": "long_batch",
+  "class": "quality",
+  "rubricId": "rubric.long-batch@1",
+  "requires": [
+    "H7b",
+    "H10"
+  ],
+  "gates": [
+    "agent-loop",
+    "agent-run-safety-v1",
+    "catalogue-max-tokens"
+  ],
+  "entry": {
+    "agent": "inventory",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "inventory"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Read the stock of all twenty products in the spring range."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "stock_spring",
+      "kind": "inventory",
+      "marking": "synthetic",
+      "recordId": "stock_fake_422",
+      "liveSlot": null,
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "rows": [
+          {
+            "recordId": "product:999999131",
+            "available": 10
+          },
+          {
+            "recordId": "product:999999132",
+            "available": 11
+          },
+          {
+            "recordId": "product:999999133",
+            "available": 12
+          },
+          {
+            "recordId": "product:999999134",
+            "available": 13
+          },
+          {
+            "recordId": "product:999999135",
+            "available": 14
+          },
+          {
+            "recordId": "product:999999136",
+            "available": 15
+          },
+          {
+            "recordId": "product:999999137",
+            "available": 16
+          },
+          {
+            "recordId": "product:999999138",
+            "available": 17
+          },
+          {
+            "recordId": "product:999999139",
+            "available": 18
+          },
+          {
+            "recordId": "product:999999140",
+            "available": 19
+          },
+          {
+            "recordId": "product:999999141",
+            "available": 20
+          },
+          {
+            "recordId": "product:999999142",
+            "available": 21
+          },
+          {
+            "recordId": "product:999999143",
+            "available": 22
+          },
+          {
+            "recordId": "product:999999144",
+            "available": 23
+          },
+          {
+            "recordId": "product:999999145",
+            "available": 24
+          },
+          {
+            "recordId": "product:999999146",
+            "available": 25
+          },
+          {
+            "recordId": "product:999999147",
+            "available": 26
+          },
+          {
+            "recordId": "product:999999148",
+            "available": 27
+          },
+          {
+            "recordId": "product:999999149",
+            "available": 28
+          },
+          {
+            "recordId": "product:999999150",
+            "available": 29
+          }
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "inventory"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 3,
+        "accept": [
+          "inventory.read"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "inventory",
+          "tool": "inventory.read",
+          "calls": {
+            "min": 20,
+            "max": 20
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [
+        {
+          "agent": "inventory",
+          "tool": "inventory.read",
+          "code": "parallel_limit"
+        },
+        {
+          "agent": "inventory",
+          "tool": "inventory.read",
+          "code": "parallel_limit"
+        },
+        {
+          "agent": "inventory",
+          "tool": "inventory.read",
+          "code": "parallel_limit"
+        },
+        {
+          "agent": "inventory",
+          "tool": "inventory.read",
+          "code": "parallel_limit"
+        }
+      ],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 0,
+      "byAgent": null,
+      "tainted": null,
+      "changes": []
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "inventory"
+      ]
+    },
+    "events": {
+      "required": [],
+      "forbidden": [
+        "checkin:model_turns",
+        "checkin:tool_calls",
+        "checkin:children",
+        "detector_trip:repeat",
+        "detector_trip:error_streak",
+        "detector_trip:idle",
+        "park:credits"
+      ]
+    },
+    "cost": {
+      "modelTurnsMax": 6,
+      "outputTokensMax": 400000
+    }
+  }
+}

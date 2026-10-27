@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.follow-up@1",
+  "title": "Follow-ups that build on an earlier result",
+  "criteria": [
+    {
+      "criterionId": "cites_prior",
+      "kind": "code",
+      "weight": 2,
+      "text": "A later call passes on records an earlier result returned.",
+      "hook": {
+        "id": "brief_cites_prior_result",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "answer_given",
+      "kind": "code",
+      "weight": 1,
+      "text": "The job ends with an answer for the person.",
+      "hook": {
+        "id": "final_reply_present",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "builds_on_prior",
+      "kind": "model",
+      "weight": 3,
+      "text": "The second step uses what the first one found instead of starting over.",
+      "hook": null
+    }
+  ]
+}

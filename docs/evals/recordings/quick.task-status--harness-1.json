@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.task-status",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "2559877745941f943750b625d81edc3f059bf57a71391eeee7f4b5833bb30e7f",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "work.read",
+              "input": {
+                "target": "task",
+                "id": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4000,
+            "outputTokens": 50
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "Not yet: the photo shoot task is still open, with nobody assigned. Want me to assign it?",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4300,
+            "outputTokens": 50
+          }
+        }
+      ]
+    }
+  ]
+}

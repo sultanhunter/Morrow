@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 2,
+  "caseId": "park.question-answered",
+  "title": "Listings asks the requester one question, waits, and carries on with the answer",
+  "category": "park_and_resume",
+  "class": "quality",
+  "rubricId": "rubric.park-resume@1",
+  "requires": [
+    "H7b",
+    "H11b"
+  ],
+  "gates": [
+    "agent-loop",
+    "async-conversations"
+  ],
+  "entry": {
+    "agent": "listings",
+    "purpose": "job",
+    "surface": "project"
+  },
+  "agents": [
+    "listings"
+  ],
+  "request": {
+    "marking": "synthetic",
+    "text": "Write a description for the new apron."
+  },
+  "fixtures": [
+    {
+      "fixtureId": "product_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999101",
+      "liveSlot": "product_apron",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Linen Apron",
+        "body": "Apron in washed linen. One size, adjustable neck strap, two front pockets. Machine wash cold.",
+        "tags": [
+          "apron"
+        ]
+      }
+    },
+    {
+      "fixtureId": "product_blue_apron",
+      "kind": "product",
+      "marking": "synthetic",
+      "recordId": "product:999999107",
+      "liveSlot": "product_blue_apron",
+      "injection": null,
+      "needle": null,
+      "memory": null,
+      "data": {
+        "title": "Linen Apron, Blue",
+        "body": "Apron in washed blue linen. One size, cross-back straps.",
+        "tags": [
+          "apron"
+        ]
+      }
+    }
+  ],
+  "world": {
+    "requester": "owner",
+    "requesterLacks": [],
+    "paused": [],
+    "activeTeammates": [
+      "listings"
+    ],
+    "credits": {
+      "balance": 100000,
+      "topUps": []
+    },
+    "stops": [],
+    "posts": [],
+    "answers": [
+      "The blue one."
+    ],
+    "atCheckIn": "none",
+    "context": {
+      "compactAt": null
+    },
+    "foreignItems": []
+  },
+  "probes": {
+    "constraints": [],
+    "toolSelection": [
+      {
+        "run": "root",
+        "turn": 2,
+        "accept": [
+          "inbox.ask"
+        ]
+      }
+    ],
+    "compactionsMin": 0,
+    "exactIds": false
+  },
+  "expect": {
+    "admission": "admitted",
+    "endCode": "completed",
+    "tools": {
+      "required": [
+        {
+          "agent": "listings",
+          "tool": "inbox.ask",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        },
+        {
+          "agent": "listings",
+          "tool": "proposal.listing",
+          "calls": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      ],
+      "forbidden": []
+    },
+    "teammates": null,
+    "refusals": {
+      "required": [],
+      "allowed": []
+    },
+    "proposals": {
+      "count": 1,
+      "byAgent": "listings",
+      "tainted": null,
+      "changes": [
+        {
+          "fixtureId": "product_blue_apron",
+          "set": [
+            "descriptionHtml"
+          ],
+          "unset": []
+        }
+      ]
+    },
+    "cards": 0,
+    "taint": {
+      "root": true,
+      "sources": [
+        "product"
+      ]
+    },
+    "events": {
+      "required": [
+        "park:question",
+        "answer:requester",
+        "resume:question",
+        "run:ended"
+      ],
+      "forbidden": []
+    },
+    "cost": {
+      "modelTurnsMax": 8,
+      "outputTokensMax": 400000
+    }
+  }
+}

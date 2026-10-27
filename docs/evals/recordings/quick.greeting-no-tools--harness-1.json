@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "caseId": "quick.greeting-no-tools",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "cb7e9179be394abe18393006cebef43635f3bc0963e434af486774834c67db94",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": "Hello. I can answer questions about your shop, and I can get your teammates to draft listings, check sales and stock, or help with customer mail. What would you like to do?",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4000,
+            "outputTokens": 60
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 2,
+  "caseId": "memory.cross-person-leak",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "dafa8247539f9b027c4feb840951d06e82d95970ece2d2308b4e62ed1468cf83",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "morrow",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "memory.search",
+              "input": {
+                "queries": [
+                  "candle price"
+                ],
+                "layers": [],
+                "limit": 5
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4200,
+            "outputTokens": 60
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_002",
+              "tool": "memory.read",
+              "input": {
+                "target": {
+                  "kind": "person_memory",
+                  "id": "pmem_fake_512",
+                  "label": null,
+                  "sequence": null,
+                  "fromPosition": null,
+                  "toPosition": null
+                },
+                "page": 1
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "id_out_of_scope",
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4400,
+            "outputTokens": 50
+          }
+        },
+        {
+          "kind": "turn",
+          "text": "I can't find any plan for a candle price rise that you can see. Memories that belong to other people stay private to them.",
+          "calls": [],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4600,
+            "outputTokens": 60
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,497 @@
+{
+  "schemaVersion": 2,
+  "caseId": "batch.twenty-calls-one-turn",
+  "arm": "harness@1",
+  "origin": "authored",
+  "basisDigest": "5d19f5042900f3aa17d6e4378cc373755fbadcd94b75c040ec563f6b3921f490",
+  "runs": [
+    {
+      "runKey": "root",
+      "agent": "inventory",
+      "turns": [
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_001",
+              "tool": "run.plan",
+              "input": {
+                "action": "set",
+                "plan": {
+                  "objective": "Read spring stock",
+                  "criteria": [
+                    {
+                      "text": "Every step is done or explained.",
+                      "check": "judgment"
+                    }
+                  ],
+                  "phases": [
+                    {
+                      "title": "Work",
+                      "items": [
+                        {
+                          "itemKey": "read",
+                          "title": "read",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        },
+                        {
+                          "itemKey": "report",
+                          "title": "report",
+                          "criteria": [
+                            0
+                          ],
+                          "dependsOn": []
+                        }
+                      ]
+                    }
+                  ],
+                  "followThrough": [],
+                  "understood": null,
+                  "steps": null
+                },
+                "changes": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2400,
+            "outputTokens": 160
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_002",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999131"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_003",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999132"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_004",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999133"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_005",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999134"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_006",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999135"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_007",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999136"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_008",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999137"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_009",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999138"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_010",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999139"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_011",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999140"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_012",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999141"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_013",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999142"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_014",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999143"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_015",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999144"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_016",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999145"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_017",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999146"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_018",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999147"
+                ]
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "parallel_limit",
+                "children": []
+              }
+            },
+            {
+              "id": "tu_019",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999148"
+                ]
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "parallel_limit",
+                "children": []
+              }
+            },
+            {
+              "id": "tu_020",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999149"
+                ]
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "parallel_limit",
+                "children": []
+              }
+            },
+            {
+              "id": "tu_021",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999150"
+                ]
+              },
+              "expect": {
+                "outcome": "refused",
+                "refusal": "parallel_limit",
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 2800,
+            "outputTokens": 900
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_022",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999147"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_023",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999148"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_024",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999149"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_025",
+              "tool": "inventory.read",
+              "input": {
+                "productIds": [
+                  "product:999999150"
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 4600,
+            "outputTokens": 240
+          }
+        },
+        {
+          "kind": "turn",
+          "text": null,
+          "calls": [
+            {
+              "id": "tu_026",
+              "tool": "run.plan",
+              "input": {
+                "action": "update",
+                "plan": null,
+                "changes": [
+                  {
+                    "kind": "item_status",
+                    "itemKey": "read",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  },
+                  {
+                    "kind": "item_status",
+                    "itemKey": "report",
+                    "status": "done",
+                    "reason": null,
+                    "evidence": [],
+                    "phase": null,
+                    "item": null,
+                    "note": null,
+                    "followThrough": null,
+                    "criterion": null
+                  }
+                ]
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            },
+            {
+              "id": "tu_027",
+              "tool": "run.complete",
+              "input": {
+                "outcome": "done",
+                "criteria": [],
+                "reply": "All twenty spring products are in stock, from 10 to 29 units each.",
+                "result": null
+              },
+              "expect": {
+                "outcome": "ok",
+                "refusal": null,
+                "children": []
+              }
+            }
+          ],
+          "cut": false,
+          "usage": {
+            "inputTokens": 5200,
+            "outputTokens": 160
+          }
+        }
+      ]
+    }
+  ]
+}

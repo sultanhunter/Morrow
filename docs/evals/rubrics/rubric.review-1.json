@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "rubricId": "rubric.review@1",
+  "title": "Review runs that check a deliverable",
+  "criteria": [
+    {
+      "criterionId": "answer_given",
+      "kind": "code",
+      "weight": 1,
+      "text": "The job ends with an answer for the person.",
+      "hook": {
+        "id": "final_reply_present",
+        "terms": []
+      }
+    },
+    {
+      "criterionId": "catches_wrong",
+      "kind": "model",
+      "weight": 3,
+      "text": "A wrong figure or proposal is caught before the person sees it; correct work is not blocked.",
+      "hook": null
+    },
+    {
+      "criterionId": "explains_check",
+      "kind": "model",
+      "weight": 1,
+      "text": "The answer says what was checked.",
+      "hook": null
+    }
+  ]
+}
