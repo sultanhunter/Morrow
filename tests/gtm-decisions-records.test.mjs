@@ -9,8 +9,8 @@
 // 2a29987c (AI review, separate context, same model family) added the checks marked with its
 // finding ids. The owner's later answers of 2026-10-27 (OD-2026-10-27-2) choose the private plan's
 // grant, put design partners after results on the owner's own store and make the harness the
-// priority; the last test keeps that record and its dated notes in step. Pure: reads repository
-// files only.
+// priority; the two last tests keep that record and its dated notes in step, the second with the
+// checks the review of head 4761a48b added (L1, L2, N1). Pure: reads repository files only.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -587,26 +587,31 @@ test("OD-2026-10-27-2: the owner's later answers, quoted exactly, with the lead'
     const line = readme.split("\n").find((l) => l.startsWith(`| [${id}](`));
     assert.ok(
       line.includes(
-        "no design partner before Morrow gives results on the owner's own store (OD-2026-10-27-2, 2026-10-27)",
+        "; no design partner before Morrow gives results on the owner's own store (the lead's reading of OD-2026-10-27-2, open to the owner's correction) |",
       ),
       id,
     );
   }
+  assert.ok(
+    readme.includes("; that grant chosen by the owner (OD-2026-10-27-2, 2026-10-27);"),
+    "0026: the grant is the owner's choice",
+  );
+  assert.ok(readme.includes("; items 2 and 3 unchanged (OD-2026-10-27-2, 2026-10-27);"), "0035");
   const mvp = read(mvpPath);
   assert.ok(
     row(mvp, "T13 Shopify billing")[1].includes(
-      "the plan is offered only after Morrow gives results on the owner's own store (note of 2026-10-27, OD-2026-10-27-2)",
+      "its grant at the default plan's price per credit is the owner's choice (OD-2026-10-27-2); in the lead's reading, open to the owner's correction, the plan is offered only after Morrow gives results on the owner's own store (note of 2026-10-27)",
     ),
   );
   const priority = flat(
     between(mvp, "**Note of 2026-10-27: the priority (OD-2026-10-27-2).**", "## Cut rules"),
   );
   for (const text of [
-    '"just build the best harness"',
-    "Outreach to Indian brands and to design partners (OD-2026-10-27-1) waits for results on the owner's store",
+    `with "${od2Answers[2]}".`,
+    "In the lead's reading, open to the owner's correction: nothing specific to that store is built now",
+    "and outreach to Indian brands and to design partners (OD-2026-10-27-1) waits for results on the owner's store, with no design partner and no other store before then.",
     "No supplier connector, supplier-order placement or other money path is decided; each would need its own record.",
     "This note moves no date above",
-    "The reading of the owner's free-text answers is the lead's, open to the owner's correction.",
   ])
     assert.ok(priority.includes(text), text);
   const actions = flat(
@@ -618,8 +623,8 @@ test("OD-2026-10-27-2: the owner's later answers, quoted exactly, with the lead'
     "When you ask for the COD Confirmation agent:",
   );
   for (const text of [
-    '"just build the best harness"',
-    "In the lead's reading, open to your correction",
+    `you answered "${od2Answers[2]}".`,
+    "In the lead's reading, open to your correction: nothing for your dropshipping store is built now;",
     "outreach to Indian brands and to design partners waits for results on your own store",
     "the 2027-01-31 date stands as recorded unless you move it",
     "No supplier connector and no supplier-order money path is decided; each would need its own record",
@@ -629,4 +634,132 @@ test("OD-2026-10-27-2: the owner's later answers, quoted exactly, with the lead'
   // No record turns the dropshipping answers into a built feature or a decided provider.
   for (const path of [adr26Path, adr35Path, planPath, mvpPath, readmePath])
     assert.doesNotMatch(read(path), /supplier connector (is|was) (decided|approved|chosen)/i, path);
+});
+
+// The review of pull request 94's head 4761a48b (AI review, separate context, same model family):
+// L1, L2 and N1. A claim of the lead's reading, wherever OD-2026-10-27-2 is summed up, carries the
+// label in the same clause or sentence; the owner's free text is quoted, never paraphrased; and the
+// record's opening tells card 1's open points from card 2's follow-up.
+const readingClaim =
+  /no design partner|no design-partner|offered only after|wait(s|ing)? for results|build nothing|is built now|nothing dropshipping-specific/;
+const readingLabel = /the lead's reading|the lead reads/i;
+/** Prose split into sentences. Each paragraph, list item and heading is split on its own, so one
+ * item's label never covers the next; a sentence ends at a full stop (after any closing bold or
+ * quote) followed by a space and a capital, quote, bold or bracket. */
+const sentences = (text) =>
+  text.split(/\n(?=\s*- |#|\n)/).flatMap((block) =>
+    flat(block)
+      .trim()
+      .split(/(?<=[.!?]\**"?) (?=[A-Z"*(])/),
+  );
+/** Every double-quoted span in prose with its line breaks folded. */
+const quotations = (text) => [...flat(text).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+/** What the exchange of OD-2026-10-27-2 put in writing besides the three quoted answers: the owner's
+ * earlier words, the two cards' questions, the options offered and the offered answers chosen. */
+const od2Exchange = [
+  "yes ok from my side and can you explain these 3 points better?",
+  "When should named design partners start using Morrow on the private US$99 plan?",
+  "On launch day (Recommended)",
+  "Pilot before launch",
+  "How many credits should the private US$99 plan include?",
+  "Which customers will your dropshipping store sell to?",
+  "Several markets",
+  "Where will the products come from?",
+  "Not decided yet",
+  "Which jobs should Morrow take on first for the store?",
+  "When an order comes in, should Morrow place the order with the supplier (spending money)?",
+];
+/** A quotation is the owner's or a card's words exactly; an option named mid-sentence may start
+ * lower-case. `mvp.md`'s own heading "Dates" is the one other thing quoted. */
+const quotesOwnerOrCard = (quote) =>
+  quote === "Dates" ||
+  [...od2Answers, ...od2Exchange].some((text) => text.includes(quote)) ||
+  od2Exchange.some((text) => text.toLowerCase() === quote.toLowerCase());
+
+test("OD-2026-10-27-2's reading carries its label wherever it is summed up, and the owner is quoted exactly (L1, L2, N1)", () => {
+  // L1: the README rows and T13. A clause (a cell's part between semicolons) that states the reading
+  // carries the label; a clause that states the owner's choice of the grant never does.
+  const readme = read(readmePath);
+  const cells = {
+    "README 0026": readme
+      .split("\n")
+      .find((l) => l.startsWith("| [0026]("))
+      .split(" | ")[2],
+    "README 0035": readme
+      .split("\n")
+      .find((l) => l.startsWith("| [0035]("))
+      .split(" | ")[2],
+    "mvp.md T13": row(read(mvpPath), "T13 Shopify billing")[1],
+  };
+  for (const [where, cell] of Object.entries(cells)) {
+    const clauses = cell.split("; ");
+    const claims = clauses.filter((c) => readingClaim.test(c));
+    assert.ok(claims.length > 0, `${where} states the reading`);
+    for (const c of claims) assert.match(c, readingLabel, `${where}: ${c}`);
+    for (const c of clauses.filter((c) => /chosen by the owner|is the owner's choice/.test(c)))
+      assert.doesNotMatch(c, /lead's reading/, `${where}: the grant is the owner's choice: ${c}`);
+  }
+
+  // L1 and L2: the dated notes and the record itself, outside its labelled reading section. A
+  // sentence that states the reading carries the label, and no sentence says the owner asked for it.
+  const mvp = read(mvpPath);
+  const od = read(od2Path);
+  const notes = {
+    "mvp.md priority note": between(
+      mvp,
+      "**Note of 2026-10-27: the priority (OD-2026-10-27-2).**",
+      "## Cut rules",
+    ),
+    "plan note": between(
+      read(planPath),
+      "Note of 2026-10-27, later the same day (OD-2026-10-27-2):",
+      "When you ask for the COD Confirmation agent:",
+    ),
+    "ADR-0035 note": between(
+      read(adr35Path),
+      "Note of 2026-10-27, later the same day (OD-2026-10-27-2):",
+      null,
+    ),
+    "OD-2026-10-27-2 title": od
+      .split("\n")
+      .find((l) => l.startsWith("title: "))
+      .replace(/^title: "(.*)"$/, "$1"),
+    "OD-2026-10-27-2 body": [
+      between(od, "\n---\n", "## The lead's reading"),
+      between(od, "## What this changes", "## Not decided here"),
+    ].join("\n\n"),
+  };
+  for (const [where, text] of Object.entries(notes)) {
+    for (const s of sentences(text).filter((s) => readingClaim.test(s)))
+      assert.match(s, readingLabel, `${where}: ${s.slice(0, 120)}`);
+    assert.doesNotMatch(flat(text), /asked the lead to/, where);
+    // Every quotation is the owner's or a card's words, exactly.
+    for (const q of quotations(text))
+      assert.ok(quotesOwnerOrCard(q), `${where} quotes ${JSON.stringify(q)}`);
+  }
+
+  // L1: the two plan notes quote the third answer in full.
+  for (const where of ["mvp.md priority note", "plan note"])
+    assert.ok(flat(notes[where]).includes(`"${od2Answers[2]}"`), where);
+
+  // L2: ADR-0035's note quotes the first answer in full, not in indirect speech.
+  assert.ok(
+    flat(notes["ADR-0035 note"]).includes(`"${od2Answers[0]}"`),
+    "L2: ADR-0035 quotes the first answer",
+  );
+  assert.doesNotMatch(flat(notes["ADR-0035 note"]), /answered that Morrow is made to work/);
+
+  // N1: card 1 answered the open points; card 2 was the lead's follow-up on the owner's store.
+  const opening = flat(between(od, "\n---\n", "How it came about."));
+  assert.ok(
+    opening.includes(
+      "on two question cards: card 1, on two open points that OD-2026-10-27-1 and its pull request (94) left",
+    ),
+    "N1: card 1 answered the open points",
+  );
+  assert.ok(
+    opening.includes("card 2, the lead's follow-up on the owner's planned dropshipping store"),
+    "N1: card 2 was the lead's follow-up",
+  );
+  assert.doesNotMatch(opening, /on two question cards, to open points/);
 });
