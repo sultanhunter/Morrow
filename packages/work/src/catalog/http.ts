@@ -21,7 +21,11 @@ import {
   type WorkspaceRouteSpec,
 } from "../http-guard.js";
 import { workBodyLimits } from "../http-bodies.js";
-import { workErrorResponse, type WorkApiDependencies } from "../http.js";
+import {
+  workErrorResponse,
+  workRateLimitedResponse,
+  type WorkApiDependencies,
+} from "../http.js";
 
 // The catalogue routes of the workspace API (M2 PR-3; the M2 brief's api routes; spine §4):
 // the collections and products of a linked store, for the Ask screen's picker. An internal
@@ -36,7 +40,10 @@ import { workErrorResponse, type WorkApiDependencies } from "../http.js";
 //      selects the tenant of the one broker read; it grants nothing.
 //   3. After COMMIT, one ApiBroker.shopifyRead under that lease (the broker resolves the
 //      lease, its stops, the store connection and the credential itself), decoded by the
-//      protocol's closed decoder, and answered with ids, titles and page cursors only.
+//      protocol's closed decoder, and answered with ids, titles and page cursors only. A
+//      read the store's query-cost bucket could not yet cover within the budget (plan row
+//      SD5: Shopify's rate limit, never money) was not sent and is parked: 429 rate_limited
+//      with Retry-After, the read class.
 // A denial persists nothing. A lost reply after the lease definer was sent is unavailable
 // (the read lease simply expires). Shopify's reply, the token and any provider text never
 // reach the response or a log.
@@ -263,6 +270,17 @@ export function createCatalogApiHandler(d?: CatalogApiDependencies) {
       if (result.outcome === "not_found") {
         log.outcome = "not_found";
         return { log, response: workErrorResponse("not_found", correlationId) };
+      }
+      if (result.outcome === "parked") {
+        log.outcome = "read_parked";
+        return {
+          log,
+          response: workRateLimitedResponse(
+            true,
+            correlationId,
+            Math.min(86400, Math.max(1, Math.ceil(result.retryAfterMs / 1000))),
+          ),
+        };
       }
       log.outcome = "read";
       return {

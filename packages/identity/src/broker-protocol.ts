@@ -903,6 +903,13 @@ export function decodeShopifyConnectionCheck(text: unknown): ShopifyConnectionCh
 // scope-change, reinstall and token re-drive paths do not depend on it.
 export const connectionCleanupVar = "MORROW_CONNECTION_CLEANUP";
 export const connectionCleanupOn = "on";
+// Plan row SD5: the query-cost switch (docs/decisions/shopify-query-cost-staging.json,
+// committed "off"). The broker takes each fixed read's known Shopify query cost from the
+// installation's bucket (migration shopify-query-cost) only while its var is exactly "on";
+// any other value is off, and reads keep M2 PR-3's one THROTTLED wait. Shopify's rate limit,
+// counted in its cost points, never money.
+export const shopifyQueryCostVar = "MORROW_SHOPIFY_QUERY_COST";
+export const shopifyQueryCostOn = "on";
 
 // ---------------------------------------------------------------------------
 // Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md). One
@@ -1043,6 +1050,12 @@ export const shopifyReadLimits = Object.freeze({
    */
   cursorMaxChars: 1536,
   searchMaxChars: 64,
+  /**
+   * Plan row SD5: the longest wait a parked read names (the bucket's definer never returns
+   * more). A parked read was not sent: the caller tries again after retryAfterMs (an agent
+   * read through H7b's run.wait; the catalogue routes answer 429 with Retry-After).
+   */
+  parkedMaxMs: 3_600_000,
 });
 export type ShopifyReadVariables =
   | Readonly<{ query: "shopIdentity" }>
@@ -1142,7 +1155,10 @@ export type ShopifyReadResult =
       nextCursor: string | null;
     }>
   | Readonly<{ schemaVersion: 1; outcome: "read"; product: ShopifyListingSnapshot }>
-  | Readonly<{ schemaVersion: 1; outcome: "not_found" }>;
+  | Readonly<{ schemaVersion: 1; outcome: "not_found" }>
+  // Plan row SD5: the installation's query-cost bucket could not yet cover the read, which
+  // was not sent; any query.
+  | Readonly<{ schemaVersion: 1; outcome: "parked"; retryAfterMs: number }>;
 const title = (value: unknown): value is string =>
   typeof value === "string" && value.length <= 1024 && brokerWellFormed(value);
 const listingText = (value: unknown, max: number): value is string =>
@@ -1168,6 +1184,19 @@ export function decodeShopifyReadResult(
   } catch {
     throw invalid();
   }
+  if (
+    plain(v, ["schemaVersion", "outcome", "retryAfterMs"]) &&
+    v.schemaVersion === 1 &&
+    v.outcome === "parked" &&
+    Number.isSafeInteger(v.retryAfterMs) &&
+    (v.retryAfterMs as number) >= 1 &&
+    (v.retryAfterMs as number) <= shopifyReadLimits.parkedMaxMs
+  )
+    return Object.freeze({
+      schemaVersion: 1,
+      outcome: "parked",
+      retryAfterMs: v.retryAfterMs as number,
+    });
   const notFound =
     plain(v, ["schemaVersion", "outcome"]) && v.schemaVersion === 1 && v.outcome === "not_found";
   if (notFound && (queryName === "productsPage" || queryName === "productContent"))

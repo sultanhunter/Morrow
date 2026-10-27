@@ -394,6 +394,9 @@ test("P05.T01ab: hosted health needs the challenge capability; development does 
       // v1 PR 3: the apply switch needs the vault and MORROW_SHOPIFY_WRITE "on"; off here
       // (the reviewed record is committed off).
       shopifyWrite: "off",
+      // Plan row SD5: the query-cost switch needs the vault and MORROW_SHOPIFY_QUERY_COST "on";
+      // off here (the reviewed record is committed off).
+      shopifyQueryCost: "off",
       // The shop-specific webhook subscriptions need the vault and the connector's
       // configuration; neither here.
       shopifyWebhooks: false,

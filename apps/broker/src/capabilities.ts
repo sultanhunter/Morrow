@@ -22,6 +22,8 @@ import {
   runtimeSwitchVar,
   parseStripeConfiguration,
   parseTurnstileConfiguration,
+  shopifyQueryCostOn,
+  shopifyQueryCostVar,
   shopifyWriteOn,
   shopifyWriteVar,
   stripeModeTest,
@@ -181,6 +183,13 @@ export interface BrokerCapabilities {
    */
   readonly shopifyWrite: "off" | "on";
   /**
+   * Plan row SD5: the query-cost switch as this broker sees it: "on" only with
+   * MORROW_SHOPIFY_QUERY_COST exactly "on", in development or staging, with the vault (the
+   * bucket's definers run on the broker's own login). Absent (the committed state) or anything
+   * else is off, and reads keep M2 PR-3's one THROTTLED wait.
+   */
+  readonly shopifyQueryCost: "off" | "on";
+  /**
    * Shop-specific webhook subscriptions: the connector's own origin, from
    * CONNECTOR_CONFIGURATION_JSON (byte-equal to the connector's, which edge:check holds), in
    * development or staging and only with the vault (the registration definers run on the
@@ -207,6 +216,7 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   computer: null,
   computerMode: "off",
   shopifyWrite: "off",
+  shopifyQueryCost: "off",
   shopifyWebhookOrigin: null,
   challengeRequired: true,
 });
@@ -456,6 +466,20 @@ function shopifyWrite(
     : "off";
 }
 
+// The query-cost switch (plan row SD5): on only with MORROW_SHOPIFY_QUERY_COST exactly "on",
+// in development or staging, and only with the vault. Production holds it with the vault.
+function shopifyQueryCost(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): "off" | "on" {
+  return environment !== "production" &&
+    vaultCapability !== null &&
+    own(env, shopifyQueryCostVar) === shopifyQueryCostOn
+    ? "on"
+    : "off";
+}
+
 // Shop-specific webhook subscriptions: the connector's origin from its own reviewed
 // configuration, parsed as the connector parses it; development or staging, and only with
 // the vault. Production holds it with the vault.
@@ -495,6 +519,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         computer: computer(env, environment, vaultCapability),
         computerMode: computerMode(env, environment),
         shopifyWrite: shopifyWrite(env, environment, vaultCapability),
+        shopifyQueryCost: shopifyQueryCost(env, environment, vaultCapability),
         shopifyWebhookOrigin: shopifyWebhookOrigin(env, environment, vaultCapability),
         challengeRequired: environment !== "development",
       });
@@ -518,6 +543,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       computer: result.computer !== null,
       computerMode: result.computerMode,
       shopifyWrite: result.shopifyWrite,
+      shopifyQueryCost: result.shopifyQueryCost,
       shopifyWebhooks: result.shopifyWebhookOrigin !== null,
     }),
   );

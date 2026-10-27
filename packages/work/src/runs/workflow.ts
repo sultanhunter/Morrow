@@ -69,13 +69,18 @@ export type ProductRead =
   | { readonly outcome: "not_found" | "unavailable" | "invalid" };
 /**
  * One shopifyRead(productContent) reply as the product step takes it, decoded with the
- * protocol's own closed decoder (M2 PR-3): a product's listing fields, not_found, or invalid
- * for anything else. createProductReader maps a thrown read to unavailable itself.
+ * protocol's own closed decoder (M2 PR-3): a product's listing fields, not_found, unavailable
+ * for a parked read (plan row SD5), or invalid for anything else. createProductReader maps a
+ * thrown read to unavailable itself.
  */
 export function productReadOf(text: unknown): ProductRead {
   try {
     const result = decodeShopifyReadResult("productContent", text);
     if (result.outcome === "not_found") return Object.freeze({ outcome: "not_found" });
+    // Plan row SD5: the store's query-cost bucket could not yet cover the read, which was not
+    // sent. The product step tries it again like any unavailable read; H7b's run.wait parks a
+    // loop run for its retryAfterMs instead.
+    if (result.outcome === "parked") return Object.freeze({ outcome: "unavailable" });
     if ("product" in result) return Object.freeze({ outcome: "read", product: result.product });
   } catch {
     // The reply was not the protocol's closed result.

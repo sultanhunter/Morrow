@@ -371,6 +371,101 @@ export type ShopifyAdminReply =
   | Readonly<{ kind: "refused"; reason: ShopifyAdminReason }>
   | Readonly<{ kind: "unauthorized"; reason: "http_401" }>;
 /**
+ * Shopify's report of one call's query cost (extensions.cost; plan row SD5): the requested and
+ * actual cost in points and the bucket's throttleStatus. Each value is a finite number as
+ * Shopify sent it, or null when absent or not a finite number; ranges are the caller's.
+ */
+export interface ShopifyCostReport {
+  readonly requested: number | null;
+  readonly actual: number | null;
+  readonly available: number | null;
+  readonly maximum: number | null;
+  readonly restoreRate: number | null;
+}
+const finite = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+/** The cost report of one parsed reply, or null when the reply carries no extensions.cost. */
+export function shopifyCostReport(reply: unknown): ShopifyCostReport | null {
+  const cost = own(own(reply, "extensions"), "cost");
+  if (!cost || typeof cost !== "object" || Array.isArray(cost)) return null;
+  const status = own(cost, "throttleStatus");
+  return Object.freeze({
+    requested: finite(own(cost, "requestedQueryCost")),
+    actual: finite(own(cost, "actualQueryCost")),
+    available: finite(own(status, "currentlyAvailable")),
+    maximum: finite(own(status, "maximumAvailable")),
+    restoreRate: finite(own(status, "restoreRate")),
+  });
+}
+/**
+ * One attempt of one fixed Admin GraphQL document (plan row SD5's bucketed path, and the loop
+ * of shopifyAdminGraphql below): the reply's data with its cost report, `throttled` (every
+ * error THROTTLED: nothing ran) with its cost report, `unauthorized` (401) or a closed
+ * refusal. No time left before the request is `deadline`, and nothing was sent. It never
+ * waits. The reply is bounded by `limit` bytes.
+ */
+export type ShopifyAdminAttempt =
+  | Readonly<{ kind: "data"; data: unknown; cost: ShopifyCostReport | null }>
+  | Readonly<{ kind: "throttled"; cost: ShopifyCostReport | null }>
+  | Readonly<{ kind: "refused"; reason: ShopifyAdminReason }>
+  | Readonly<{ kind: "unauthorized"; reason: "http_401" }>;
+export async function shopifyAdminGraphqlOnce(
+  fetcher: ShopifyFetch,
+  shop: string,
+  token: string,
+  document: string,
+  variables: Readonly<Record<string, unknown>>,
+  deadlineMs: number,
+  now: () => number = Date.now,
+  limit: number = shopifyReplyMaxBytes,
+): Promise<ShopifyAdminAttempt> {
+  const refused = (reason: ShopifyAdminReason) =>
+    Object.freeze({ kind: "refused" as const, reason });
+  if (!shopPattern.test(shop)) return refused("input_shape");
+  const remaining = deadlineMs - now();
+  if (remaining <= 0) return refused("deadline");
+  let response: Response;
+  try {
+    response = await fetcher(`https://${shop}/admin/api/${shopifyApiVersion}/graphql.json`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        "x-shopify-access-token": token,
+      },
+      // The install's ShopIdentity takes no variables and sends none (M2 PR-2's body).
+      body: JSON.stringify(
+        Object.keys(variables).length === 0 ? { query: document } : { query: document, variables },
+      ),
+      signal: AbortSignal.timeout(remaining),
+    });
+  } catch (error) {
+    return refused(thrownReason(error));
+  }
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => {});
+    return response.status === 401
+      ? Object.freeze({ kind: "unauthorized" as const, reason: "http_401" as const })
+      : refused(statusReason(response.status));
+  }
+  const reply = await boundedJson(response, limit);
+  if (reply === null) return refused("reply_json");
+  const errors = own(reply, "errors");
+  if (errors !== undefined) {
+    const throttled =
+      Array.isArray(errors) &&
+      errors.length > 0 &&
+      errors.every((e) => own(own(e, "extensions"), "code") === "THROTTLED");
+    if (!throttled) return refused("graphql_errors");
+    return Object.freeze({ kind: "throttled" as const, cost: shopifyCostReport(reply) });
+  }
+  const data = own(reply, "data");
+  if (data === undefined || data === null || typeof data !== "object")
+    return refused("reply_shape");
+  return Object.freeze({ kind: "data" as const, data, cost: shopifyCostReport(reply) });
+}
+/**
  * One fixed Admin GraphQL document with its variables. A THROTTLED reply waits once, within
  * the deadline, until the bucket holds the query's cost again: Shopify's
  * extensions.cost.requestedQueryCost (or the document's known cost, shopifyReadCosts, when
@@ -393,72 +488,30 @@ export async function shopifyAdminGraphql(
 ): Promise<ShopifyAdminReply> {
   const refused = (reason: ShopifyAdminReason) =>
     Object.freeze({ kind: "refused" as const, reason });
-  if (!shopPattern.test(shop)) return refused("input_shape");
   for (let attempt = 0; attempt < 2; attempt++) {
-    const remaining = deadlineMs - now();
-    if (remaining <= 0) return refused("deadline");
-    let response: Response;
-    try {
-      response = await fetcher(`https://${shop}/admin/api/${shopifyApiVersion}/graphql.json`, {
-        method: "POST",
-        redirect: "manual",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
-          "x-shopify-access-token": token,
-        },
-        // The install's ShopIdentity takes no variables and sends none (M2 PR-2's body).
-        body: JSON.stringify(
-          Object.keys(variables).length === 0
-            ? { query: document }
-            : { query: document, variables },
-        ),
-        signal: AbortSignal.timeout(remaining),
-      });
-    } catch (error) {
-      return refused(thrownReason(error));
-    }
-    if (response.status !== 200) {
-      await response.body?.cancel().catch(() => {});
-      return response.status === 401
-        ? Object.freeze({ kind: "unauthorized" as const, reason: "http_401" as const })
-        : refused(statusReason(response.status));
-    }
-    const reply = await boundedJson(response, limit);
-    if (reply === null) return refused("reply_json");
-    const errors = own(reply, "errors");
-    if (errors !== undefined) {
-      const throttled =
-        Array.isArray(errors) &&
-        errors.length > 0 &&
-        errors.every((e) => own(own(e, "extensions"), "code") === "THROTTLED");
-      if (!throttled) return refused("graphql_errors");
-      if (attempt > 0) return refused("throttled");
-      const cost = own(own(reply, "extensions"), "cost");
-      const status = own(cost, "throttleStatus");
-      const available = own(status, "currentlyAvailable");
-      const rate = own(status, "restoreRate");
-      const reported = own(cost, "requestedQueryCost");
-      const requested =
-        typeof reported === "number" && Number.isFinite(reported) && reported > 0
-          ? reported
-          : shopifyDocumentCost(document);
-      const wait =
-        typeof available === "number" &&
-        Number.isFinite(available) &&
-        typeof rate === "number" &&
-        Number.isFinite(rate) &&
-        rate > 0
-          ? Math.ceil((Math.max(0, requested - Math.max(0, available)) / rate) * 1000)
-          : 1000;
-      if (now() + wait >= deadlineMs) return refused("throttled");
-      await sleep(wait);
-      continue;
-    }
-    const data = own(reply, "data");
-    if (data === undefined || data === null || typeof data !== "object")
-      return refused("reply_shape");
-    return Object.freeze({ kind: "data", data });
+    const reply = await shopifyAdminGraphqlOnce(
+      fetcher,
+      shop,
+      token,
+      document,
+      variables,
+      deadlineMs,
+      now,
+      limit,
+    );
+    if (reply.kind === "data") return Object.freeze({ kind: "data", data: reply.data });
+    if (reply.kind !== "throttled") return reply;
+    if (attempt > 0) return refused("throttled");
+    const reported = reply.cost?.requested ?? null;
+    const requested = reported !== null && reported > 0 ? reported : shopifyDocumentCost(document);
+    const available = reply.cost?.available ?? null;
+    const rate = reply.cost?.restoreRate ?? null;
+    const wait =
+      available !== null && rate !== null && rate > 0
+        ? Math.ceil((Math.max(0, requested - Math.max(0, available)) / rate) * 1000)
+        : 1000;
+    if (now() + wait >= deadlineMs) return refused("throttled");
+    await sleep(wait);
   }
   return refused("throttled");
 }

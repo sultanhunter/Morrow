@@ -24,6 +24,16 @@
 //      app/uninstalled webhook is the state change.
 //   4. The reply is minimised to the protocol's closed JSON (ids, titles, a product's status
 //      and its listing fields) and checked with the protocol's own decoder before it leaves.
+// Plan row SD5 (the query-cost switch, MORROW_SHOPIFY_QUERY_COST, committed off): while it is
+// on, step 2's transaction also takes the document's known query cost from the installation's
+// bucket (morrow_vault.shopify_query_cost_take, after a resolved resolution only), a person
+// read (ApiBroker) in the person_read class and an agent read (RuntimeBroker) in agent_read.
+// A read the bucket cannot yet cover waits in the broker while the wait is short and fits the
+// budget, and otherwise is not sent and answers `parked` with retryAfterMs (an agent read
+// parks; H7b's run.wait consumes it). The document is sent once with no in-call wait, and
+// Shopify's cost report settles the bucket (shopify_query_cost_settle, in its own
+// transaction, within the same slots); a THROTTLED reply refunds the charge and takes again
+// from the corrected bucket. The token is opened only when the document is first sent.
 // Nothing here logs; the token, the envelope and Shopify's reply never cross the binding.
 import {
   decodeShopifyReadResult,
@@ -37,10 +47,18 @@ import {
 import { BrokerHold, brokerCapabilities, invokeBrokerMethod } from "./capabilities.js";
 import type { VaultTransaction } from "./shopify-install.js";
 import {
+  bucketedShopifyCall,
+  takeShopifyQueryCost,
+  type QueryCostTake,
+} from "./shopify-query-cost.js";
+import {
   shopifyAdminGraphql,
+  shopifyAdminGraphqlOnce,
+  shopifyReadCosts,
   shopifyReadDocuments,
   shopifyReadPageSize,
   shopifyReadResult,
+  type ShopifyAdminReply,
   type ShopifyFetch,
 } from "./shopify.js";
 import { runVaultTransaction } from "./vault-database.js";
@@ -50,6 +68,7 @@ import {
   vaultHexBytes,
   vaultLimits,
   vaultStatements,
+  type VaultQuery,
 } from "./vault.js";
 
 export interface ShopifyReadDependencies {
@@ -173,27 +192,45 @@ export function createShopifyReader(deps: Readonly<ShopifyReadDependencies>) {
     const capabilities = await brokerCapabilities(env);
     const vault = capabilities.vault;
     if (!vault) throw new BrokerHold("CAPABILITY_UNAVAILABLE");
-    // 2. The resolution, alone in its transaction, within the isolate's read slots.
+    const document = documentFor(variables);
+    // SD5: the bucket's class and the document's known cost, while the switch is on.
+    const bucket =
+      capabilities.shopifyQueryCost === "on"
+        ? {
+            cls: caller === "api" ? ("person_read" as const) : ("agent_read" as const),
+            cost: shopifyReadCosts[document.name],
+          }
+        : null;
+    // One vault transaction within the isolate's read slots and the read's budget (step 2's
+    // resolution, and SD5's later takes and settles).
+    const transact = <T>(body: (query: VaultQuery) => Promise<T>): Promise<T> =>
+      resolution(() =>
+        deps.transaction(
+          vault,
+          Math.max(1, Math.min(resolveBudgetMs, deadline - deps.now())),
+          body,
+        ),
+      );
+    // 2. The resolution, alone in its transaction, within the isolate's read slots (with
+    // SD5's first take, after a resolved resolution only).
     const productId = variables.query === "productContent" ? variables.productId : "";
-    const r = await resolution(() =>
-      deps.transaction(
-        vault,
-        Math.max(1, Math.min(resolveBudgetMs, deadline - deps.now())),
-        async (query) => {
-          const rows = await query(vaultStatements.shopifyReadResolve, [
-            leaseId,
-            String(generation),
-            subjectId,
-            queryName,
-            productId,
-          ]);
-          const row = rows.length === 1 ? rows[0]! : undefined;
-          if (!row || Object.keys(row).sort().join(",") !== [...resolveColumns].sort().join(","))
-            throw new VaultError("VAULT_RECORD_INVALID");
-          return row;
-        },
-      ),
-    );
+    const { row: r, take } = await transact(async (query) => {
+      const rows = await query(vaultStatements.shopifyReadResolve, [
+        leaseId,
+        String(generation),
+        subjectId,
+        queryName,
+        productId,
+      ]);
+      const row = rows.length === 1 ? rows[0]! : undefined;
+      if (!row || Object.keys(row).sort().join(",") !== [...resolveColumns].sort().join(","))
+        throw new VaultError("VAULT_RECORD_INVALID");
+      const taken: QueryCostTake | null =
+        bucket !== null && row.outcome === "resolved" && exact(idPattern, row.installation_id)
+          ? await takeShopifyQueryCost(query, row.installation_id, bucket.cls, bucket.cost)
+          : null;
+      return { row, take: taken };
+    });
     if (r.outcome !== "resolved") throw refused();
     const { organization_id: org, workspace_id: ws, credential_id: credential } = r;
     const { installation_id: installation, shop_domain: shop } = r;
@@ -207,53 +244,114 @@ export function createShopifyReader(deps: Readonly<ShopifyReadDependencies>) {
       !exact(/^[1-9][0-9]{0,2}$/, r.kek_version)
     )
       throw new VaultError("VAULT_RECORD_INVALID");
-    // 3. The token, for one fixed document.
-    const plaintext = await openVaultRecord(
-      vault.keyring,
-      {
-        kind: "shopify_offline_token",
-        organizationId: org,
-        workspaceId: ws,
-        credentialId: credential,
-        subjectId: installation,
-        provider: "shopify",
-        version: Number(r.credential_version),
-      },
-      {
-        kekVersion: Number(r.kek_version),
-        wrappedKey: vaultHexBytes(
-          r.wrapped_key,
-          vaultLimits.wrappedKeyBytes,
-          vaultLimits.wrappedKeyBytes,
-        ),
-        sealedValue: vaultHexBytes(
-          r.sealed_value,
-          vaultLimits.sealedMinBytes,
-          vaultLimits.sealedMaxBytes,
-        ),
-      },
-    );
-    let token: string;
+    // 3. The token, for one fixed document, opened when the document is first sent.
+    const openToken = async (): Promise<string> => {
+      const plaintext = await openVaultRecord(
+        vault.keyring,
+        {
+          kind: "shopify_offline_token",
+          organizationId: org,
+          workspaceId: ws,
+          credentialId: credential,
+          subjectId: installation,
+          provider: "shopify",
+          version: Number(r.credential_version),
+        },
+        {
+          kekVersion: Number(r.kek_version),
+          wrappedKey: vaultHexBytes(
+            r.wrapped_key,
+            vaultLimits.wrappedKeyBytes,
+            vaultLimits.wrappedKeyBytes,
+          ),
+          sealedValue: vaultHexBytes(
+            r.sealed_value,
+            vaultLimits.sealedMinBytes,
+            vaultLimits.sealedMaxBytes,
+          ),
+        },
+      );
+      try {
+        return new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(plaintext);
+      } catch {
+        throw new VaultError("VAULT_OPEN_FAILED");
+      } finally {
+        plaintext.fill(0);
+      }
+    };
+    let token = "";
+    let reply: ShopifyAdminReply;
     try {
-      token = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(plaintext);
-    } catch {
-      throw new VaultError("VAULT_OPEN_FAILED");
+      if (bucket === null || take === null) {
+        token = await openToken();
+        reply = await shopifyAdminGraphql(
+          deps.fetch,
+          shop,
+          token,
+          shopifyReadDocuments[document.name],
+          document.variables,
+          deadline,
+          deps.now,
+          deps.sleep,
+          shopifyReadLimits.resultMaxBytes,
+        );
+      } else {
+        const outcome = await bucketedShopifyCall({
+          installationId: installation,
+          cls: bucket.cls,
+          cost: bucket.cost,
+          deadlineMs: deadline,
+          now: deps.now,
+          sleep: deps.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms))),
+          transact: (body) => transact(body),
+          first: take,
+          send: async () => {
+            if (token === "") token = await openToken();
+            const attempt = await shopifyAdminGraphqlOnce(
+              deps.fetch,
+              shop,
+              token,
+              shopifyReadDocuments[document.name],
+              document.variables,
+              deadline,
+              deps.now,
+              shopifyReadLimits.resultMaxBytes,
+            );
+            const answered = attempt.kind === "data" || attempt.kind === "throttled";
+            return {
+              reply: attempt,
+              cost: answered ? attempt.cost : null,
+              throttled: attempt.kind === "throttled",
+              answered,
+            };
+          },
+        });
+        if (outcome.kind === "refused") throw refused();
+        if (outcome.kind === "parked") {
+          // Not sent: the protocol's closed parked result.
+          const text = JSON.stringify({
+            schemaVersion: 1,
+            outcome: "parked",
+            retryAfterMs: outcome.retryAfterMs,
+          });
+          try {
+            decodeShopifyReadResult(queryName as ShopifyReadQuery, text);
+          } catch {
+            throw refused();
+          }
+          return text;
+        }
+        const attempt = outcome.reply;
+        reply =
+          attempt.kind === "data"
+            ? Object.freeze({ kind: "data", data: attempt.data })
+            : attempt.kind === "throttled"
+              ? Object.freeze({ kind: "refused", reason: "throttled" })
+              : attempt;
+      }
     } finally {
-      plaintext.fill(0);
+      token = "";
     }
-    const document = documentFor(variables);
-    const reply = await shopifyAdminGraphql(
-      deps.fetch,
-      shop,
-      token,
-      shopifyReadDocuments[document.name],
-      document.variables,
-      deadline,
-      deps.now,
-      deps.sleep,
-      shopifyReadLimits.resultMaxBytes,
-    );
-    token = "";
     if (reply.kind !== "data") throw refused();
     // 4. The minimised, closed result.
     const result = shopifyReadResult(document.name, reply.data, shop);

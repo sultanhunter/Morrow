@@ -676,7 +676,8 @@ export function edgePlacementRegion(regionId) {
 // orchestrator. Build order PR 7: the runtime switch's var (edgeRuntimeVarNames) on the
 // staging broker while it is on or cleanup-only. v1 PR 3: the apply switch's var
 // (edgeApplyVarNames) on the staging api and broker. v1 PR 5: the connection clean-up
-// switch's var (edgeCleanupVarNames) on the staging connector.
+// switch's var (edgeCleanupVarNames) on the staging connector. Plan row SD5: the query-cost
+// switch's var (edgeQueryCostVarNames) on the staging broker.
 export function edgeVarNames(
   worker,
   environment,
@@ -685,6 +686,7 @@ export function edgeVarNames(
   runtime = "off",
   apply = "off",
   cleanup = "off",
+  queryCost = "off",
 ) {
   const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
   if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
@@ -703,6 +705,7 @@ export function edgeVarNames(
     ...(apply === "on" ? edgeApplyVarNames(worker, environment) : []),
   ];
   const runtimeVars = runtime !== "off" ? edgeRuntimeVarNames(worker, environment) : [];
+  const queryCostVars = queryCost === "on" ? edgeQueryCostVarNames(worker, environment) : [];
   return worker === "api"
     ? [
         "MORROW_ENVIRONMENT",
@@ -725,6 +728,7 @@ export function edgeVarNames(
         ...stripeVars,
         ...modelVars,
         ...runtimeVars,
+        ...queryCostVars,
       ];
 }
 // M3 PR-2, the model-provider switch (ADR-0022 items 7 and 10; committed on in staging since
@@ -976,6 +980,32 @@ export function reviewedCleanupRecord(record) {
     typeof record.scope !== "string"
   )
     throw Error("EDGE_STAGING_CLEANUP_RECORD");
+  return Object.freeze({ switch: record.switch });
+}
+// Plan row SD5, the query-cost switch (docs/briefs/sd5-shopify-query-cost.md; committed off):
+// its runtime image is the var MORROW_SHOPIFY_QUERY_COST ("on") on the staging broker; no
+// secret. While it is on the broker's reads take their documents' known Shopify query cost
+// from each store installation's bucket (migration shopify-query-cost; Shopify's rate limit,
+// never money). Development's committed config never carries it, and production has no switch.
+export const edgeQueryCostVar = "MORROW_SHOPIFY_QUERY_COST";
+export const edgeQueryCostValue = "on";
+export function edgeQueryCostVarNames(worker, environment) {
+  return environment === "staging" && worker === "broker" ? [edgeQueryCostVar] : [];
+}
+// The reviewed staging query-cost record (plan row SD5; committed off): `switch` "off" until
+// one reviewed commit turns it "on". Returns the switch, or throws.
+export function reviewedQueryCostRecord(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== "environment_kind,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_QUERY_COST_RECORD");
   return Object.freeze({ switch: record.switch });
 }
 // Build order PR 7, the runtime switch (ADR-0029 item 10; ADR-0035 item 6; committed off):
@@ -1431,6 +1461,7 @@ export async function verifyEdgeConfig({
   teammateCallsPath = join(repositoryRoot, "docs/decisions/teammate-calls-staging.json"),
   agentCardsPath = join(repositoryRoot, "docs/decisions/agent-cards-staging.json"),
   cleanupPath = join(repositoryRoot, "docs/decisions/connection-cleanup-staging.json"),
+  queryCostPath = join(repositoryRoot, "docs/decisions/shopify-query-cost-staging.json"),
   liveEvalsPath = join(repositoryRoot, "docs/decisions/agent-evals-live.json"),
   // fix-connector-cron-latency: the cron object's location hint, read from the connector's
   // source (worker/cron.ts) unless a test names another.
@@ -1450,6 +1481,8 @@ export async function verifyEdgeConfig({
   const {
     connectionCleanupVar,
     connectionCleanupOn,
+    shopifyQueryCostVar,
+    shopifyQueryCostOn,
     brokerRequiredSecretsFor,
     brokerStripeSecrets,
     stripeModeTest,
@@ -1529,6 +1562,21 @@ export async function verifyEdgeConfig({
     environment === "staging" && cleaned?.switch === "on" ? "on" : "off";
   if (connectionCleanupVar !== edgeCleanupVar || connectionCleanupOn !== edgeCleanupValue)
     problem("EDGE_CLEANUP_SWITCH_NAMES", "broker-protocol");
+  // Plan row SD5, the query-cost switch: the same protocol, on the broker alone.
+  const queryCostRecord = readJson(queryCostPath);
+  let queryCosted = null;
+  if (queryCostRecord === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "shopify-query-cost-staging.json");
+  else
+    try {
+      queryCosted = reviewedQueryCostRecord(queryCostRecord);
+    } catch {
+      problem("EDGE_STAGING_QUERY_COST_RECORD", "shopify-query-cost-staging.json");
+    }
+  const queryCostSwitch = (environment) =>
+    environment === "staging" && queryCosted?.switch === "on" ? "on" : "off";
+  if (shopifyQueryCostVar !== edgeQueryCostVar || shopifyQueryCostOn !== edgeQueryCostValue)
+    problem("EDGE_QUERY_COST_SWITCH_NAMES", "broker-protocol");
   // PR 18, the plan-drafts switch: refused on while the agent loop is off (ADR-0034 item 10).
   // PR 20, the shop-knowledge switch: refused on before its grants, the tools before the loop.
   const shopKnowledge = readJson(shopKnowledgePath);
@@ -1705,6 +1753,7 @@ export async function verifyEdgeConfig({
       const runtimeSwitched = runtimeSwitch(environment);
       const applySwitched = applySwitch(environment);
       const cleanupSwitched = cleanupSwitch(environment);
+      const queryCostSwitched = queryCostSwitch(environment);
       const varNames = edgeVarNames(
         worker.key,
         environment,
@@ -1713,6 +1762,7 @@ export async function verifyEdgeConfig({
         runtimeSwitched,
         applySwitched,
         cleanupSwitched,
+        queryCostSwitched,
       );
       if (
         vars === null ||
@@ -1727,9 +1777,18 @@ export async function verifyEdgeConfig({
         (varNames.includes(edgeRuntimeSwitchVar) &&
           vars[edgeRuntimeSwitchVar] !== runtimeSwitched) ||
         (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue) ||
-        (varNames.includes(edgeCleanupVar) && vars[edgeCleanupVar] !== edgeCleanupValue)
+        (varNames.includes(edgeCleanupVar) && vars[edgeCleanupVar] !== edgeCleanupValue) ||
+        (varNames.includes(edgeQueryCostVar) && vars[edgeQueryCostVar] !== edgeQueryCostValue)
       )
         problem("EDGE_VARS", where);
+      // Plan row SD5: no mixed query-cost state: while the switch is off no Worker carries its
+      // var; while it is on, exactly the staging broker does.
+      const queryCostCarried =
+        vars !== null && typeof vars === "object" && Object.hasOwn(vars, edgeQueryCostVar);
+      const queryCostRequired =
+        queryCostSwitched === "on" ? edgeQueryCostVarNames(worker.key, environment) : [];
+      if (queryCostCarried !== queryCostRequired.length > 0)
+        problem("EDGE_QUERY_COST_SWITCH_MIXED", where);
       // Build order PR 7: no mixed runtime state. While off no Worker carries the runtime var
       // or E2B_API_KEY; while on or cleanup-only the staging broker carries both.
       const runtimeCarried = edgeRuntimeNames.filter(
@@ -1961,6 +2020,7 @@ export async function verifyEdgeConfig({
     runtimeSwitch: runtimeSwitch("staging"),
     applySwitch: applySwitch("staging"),
     cleanupSwitch: cleanupSwitch("staging"),
+    queryCostSwitch: queryCostSwitch("staging"),
   };
 }
 
