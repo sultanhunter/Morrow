@@ -366,14 +366,15 @@ export const sunriseCopy = {
     timeZone: "Time zone",
     timeZoneLabel: (shop: string) => `${shop}’s time zone`,
     timeZoneHint: (shop: string) =>
-      `Schedules, summaries and quiet hours use it. It’s the same for everyone at ${shop}, and only the Owner can change it.`,
+      `Schedules, summaries and quiet hours use it. It’s the same for everyone at ${shop}, and only the Owner can change it. Changing it moves no schedule by itself: Morrow asks before each one moves.`,
     timeZoneOwner: (owner: string) => `Only ${owner} (Owner) can change the time zone.`,
-    zones: {
-      toronto: "Eastern Time (Toronto)",
-      winnipeg: "Central Time (Winnipeg)",
-      edmonton: "Mountain Time (Edmonton)",
-      vancouver: "Pacific Time (Vancouver)",
-    } as Readonly<Record<string, string>>,
+    /** An IANA zone as people read it: "America/St_Johns" is "America/St Johns". */
+    zoneName: (zone: string) => zone.replaceAll("_", " "),
+    followShopify: (zone: string | null) =>
+      zone === null
+        ? "Shopify’s time zone (not read yet)"
+        : `Shopify’s time zone (${zone.replaceAll("_", " ")})`,
+    noZoneYet: "your shop’s time zone",
     hour: (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "am" : "pm"}`,
     preview: "Your morning email",
     previewFrom: (time: string) => `From Morrow · ${time}`,

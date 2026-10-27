@@ -20,11 +20,13 @@ import { portMethods } from "../packages/workspace-ui/src/port.ts";
 import { activityCategory, activityFilters } from "../packages/workspace-ui/src/inbox-model.ts";
 import { describeActivity } from "../packages/workspace-ui/src/screens/activity.tsx";
 import {
+  effectiveTimeZone,
   isStopConfirmation,
   monthlyLimitRange,
   optionsFromCatalogue,
   optionsFromEstimates,
   sameNotificationChoices,
+  shopTimeZones,
   stopAllState,
   teamPortMethods,
   thinkingEfforts,
@@ -118,7 +120,7 @@ test("the port: eighteen methods (Activity moved to the inbox group), none compo
         email: { soon: true, summary: true, monday: false, mentions: true },
         summaryHour: 8,
         quiet: { on: true, from: 21, until: 7 },
-        timeZone: "toronto",
+        timeZone: null,
         expectedRevision: 1,
       }),
     ),
@@ -660,6 +662,11 @@ test("notifications: each person's own, closed values; the time zone is the Owne
   const port = createFixtureAdapter("ready");
   const view = (await port.settings.notifications(ws)).value;
   assert.equal(view.canChangeTimeZone, true);
+  // Plan row SD12: Shopify's zone, followed until the Owner overrides it from the IANA list.
+  assert.deepEqual([view.timeZone, view.shopifyTimeZone], [null, "America/Toronto"]);
+  assert.equal(effectiveTimeZone(view), "America/Toronto");
+  assert.ok(shopTimeZones.length > 400 && shopTimeZones.includes("Asia/Kolkata"));
+  assert.ok(!shopTimeZones.includes("toronto"));
   assert.ok(sameNotificationChoices(view, prefsBody(view)));
   const off = { ...view.email, monday: false };
   assert.ok(!sameNotificationChoices(view, prefsBody(view, { email: off })));
@@ -683,7 +690,12 @@ test("notifications: each person's own, closed values; the time zone is the Owne
   for (const change of [
     { summaryHour: 3 },
     { quiet: { on: true, from: 23, until: 7 } },
+    // Plan row SD12: a zone of the closed IANA list or null (follow Shopify's); the four
+    // Canadian codes it replaced, an alias and anything else are refused.
     { timeZone: "utc" },
+    { timeZone: "toronto" },
+    { timeZone: "Asia/Calcutta" },
+    { timeZone: "Mars/Olympus_Mons" },
     { email: { ...now.email, marketing: true } },
     { email: { ...now.email, soon: "yes" } },
   ]) {
@@ -696,7 +708,7 @@ test("notifications: each person's own, closed values; the time zone is the Owne
   assert.equal(theirs.canChangeTimeZone, false);
   const zone = await member.settings.reviseNotifications(
     ws,
-    command(prefsBody(theirs, { timeZone: "vancouver" })),
+    command(prefsBody(theirs, { timeZone: "America/Vancouver" })),
   );
   assert.equal(zone.kind, "denied");
   const own = await member.settings.reviseNotifications(
@@ -704,6 +716,21 @@ test("notifications: each person's own, closed values; the time zone is the Owne
     command(prefsBody(theirs, { quiet: { on: false, from: 21, until: 7 } })),
   );
   assert.equal(own.kind, "ok");
+  // The Owner overrides the zone, then follows Shopify's again.
+  const latest = (await port.settings.notifications(ws)).value;
+  const override = await port.settings.reviseNotifications(
+    ws,
+    command(prefsBody(latest, { timeZone: "Asia/Kolkata" })),
+  );
+  assert.equal(override.kind, "ok");
+  const overridden = (await port.settings.notifications(ws)).value;
+  assert.equal(effectiveTimeZone(overridden), "Asia/Kolkata");
+  const follow = await port.settings.reviseNotifications(
+    ws,
+    command(prefsBody(overridden, { timeZone: null })),
+  );
+  assert.equal(follow.kind, "ok");
+  assert.equal(effectiveTimeZone((await port.settings.notifications(ws)).value), "America/Toronto");
   assert.equal((await member.settings.notifications("ws-other")).kind, "not_found");
 });
 

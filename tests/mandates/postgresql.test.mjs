@@ -800,7 +800,8 @@ test("M8: Schedule@1's SQL check equals the TypeScript check; every listed zone 
   );
   // The resolution of a local minute agrees for one sample of every zone whose rules the two
   // tz databases (PostgreSQL's system tzdata, Node's ICU) agree on around it; a zone whose
-  // predicted rules differ between their releases (Morocco's, for one) is data, not
+  // rules differ between their releases (on 2026-10-27: Morocco's two, and Vancouver, Edmonton
+  // and Yellowknife, between Node's ICU tzdata 2026a and the lab image's 2026c) is data, not
   // arithmetic, and is counted. The database is the authority either way.
   const local = daysFromCivil(2026, 11, 1) * 1440 + 90;
   const wall = local * 60_000;
@@ -819,5 +820,5 @@ test("M8: Schedule@1's SQL check equals the TypeScript check; every listed zone 
     assert.equal(iso(at), resolveLocalMinute(z, local), z);
   }
   assert.equal(rows.length, ianaTimeZones.length);
-  assert.ok(differing.length <= 5, differing.join());
+  assert.ok(differing.length <= 10, differing.join());
 });

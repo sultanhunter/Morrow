@@ -5,6 +5,7 @@
 // into these shapes when the routes exist. ADR-0033 and ADR-0034 (projects, goals; accepted
 // 2026-10-24) have no routes yet, and this PR builds no contract or backend for them: "Works
 // toward" and "Works in" are display text here, never records, until their routes exist.
+import { ianaTimeZones, isIanaTimeZone } from "@morrow/contracts";
 import type { SpecialistProp } from "./components/avatars";
 import type { Command, Outcome } from "./port";
 import type { Id, ListingsAgentView, ModelCatalogueView, StoreConnectionView } from "./model";
@@ -358,7 +359,10 @@ export interface EmailAddressesView {
 /**
  * Notifications (the SettingsNotifications board): the viewer's own choices; everyone
  * chooses their own. Emails hold counts and links only. The shop's time zone is the
- * workspace's, and only the Owner changes it.
+ * workspace's: Shopify's (ShopIdentity's ianaTimezone, read at the install, a reconnect and
+ * the daily health read), unless the Owner overrides it with a zone of the closed IANA list
+ * (plan row SD12; ADR-0043 item 8). Only the Owner changes it, and a change moves no
+ * schedule by itself: Morrow asks before each one moves.
  */
 export const emailTopics = ["soon", "summary", "monday", "mentions"] as const;
 export type EmailTopic = (typeof emailTopics)[number];
@@ -366,13 +370,17 @@ export type EmailTopic = (typeof emailTopics)[number];
 export const summaryHours = [7, 8, 9] as const;
 export const quietFromHours = [20, 21, 22] as const;
 export const quietUntilHours = [6, 7, 8] as const;
-export const shopTimeZones = ["toronto", "winnipeg", "edmonton", "vancouver"] as const;
-export type ShopTimeZone = (typeof shopTimeZones)[number];
+/** The zones the Owner may pick: the closed IANA list (it replaced four Canadian zones). */
+export const shopTimeZones: readonly string[] = ianaTimeZones;
+export type ShopTimeZone = string;
+/** Whether a value is a zone of the closed list, exactly. */
+export const isShopTimeZone = (value: unknown): value is ShopTimeZone => isIanaTimeZone(value);
 export interface NotificationChoices {
   readonly email: Readonly<Record<EmailTopic, boolean>>;
   readonly summaryHour: number;
   readonly quiet: { readonly on: boolean; readonly from: number; readonly until: number };
-  readonly timeZone: ShopTimeZone;
+  /** The Owner's override of the shop's zone, or null to follow Shopify's. */
+  readonly timeZone: ShopTimeZone | null;
 }
 export interface NotificationsView extends NotificationChoices {
   readonly viewerName: string;
@@ -380,6 +388,8 @@ export interface NotificationsView extends NotificationChoices {
   readonly signInEmail: string;
   readonly ownerName: string;
   readonly canChangeTimeZone: boolean;
+  /** The zone Shopify reports for the shop, or null before Morrow has read one. */
+  readonly shopifyTimeZone: ShopTimeZone | null;
   readonly revision: number;
   /** What the next morning email would count (the preview). */
   readonly morning: {
@@ -388,6 +398,13 @@ export interface NotificationsView extends NotificationChoices {
     readonly tasks: number;
     readonly alerts: number;
   };
+}
+/** The zone schedules, summaries and quiet hours use: the Owner's override, else Shopify's. */
+export function effectiveTimeZone(view: {
+  readonly timeZone: ShopTimeZone | null;
+  readonly shopifyTimeZone: ShopTimeZone | null;
+}): ShopTimeZone | null {
+  return view.timeZone ?? view.shopifyTimeZone;
 }
 /** Whether two sets of choices are the same (the save bar shows while they differ). */
 export function sameNotificationChoices(a: NotificationChoices, b: NotificationChoices): boolean {

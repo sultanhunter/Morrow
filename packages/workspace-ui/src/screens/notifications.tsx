@@ -2,8 +2,9 @@
 // the person, what it emails them about, quiet hours and the shop's time zone. These are the
 // viewer's own choices (everyone chooses their own); only the Owner changes the time zone,
 // and the server (here the fixture) refuses it from anyone else. Every choice is a closed
-// value (on or off, or one of the board's hours or zones). Emails hold counts and links
-// only. Fixture data only in this build: the HTTP methods are uncomposed and send nothing.
+// value (on or off, or one of the board's hours, or Shopify's zone or one of the closed IANA
+// list the Owner picks, plan row SD12). Emails hold counts and links only. Fixture data only
+// in this build: the HTTP methods are uncomposed and send nothing.
 import { useEffect, useId, useState } from "react";
 import { Button } from "../components/controls";
 import { outcomeState } from "../components/feedback";
@@ -13,13 +14,14 @@ import {
   emailTopics,
   quietFromHours,
   quietUntilHours,
+  effectiveTimeZone,
+  isShopTimeZone,
   sameNotificationChoices,
   shopTimeZones,
   summaryHours,
   type EmailTopic,
   type NotificationChoices,
   type NotificationsView,
-  type ShopTimeZone,
 } from "../team-model";
 import { sunriseCopy } from "../sunrise/copy";
 import { Card, SrIcon } from "../sunrise/parts";
@@ -27,6 +29,15 @@ import { CommandFeedback } from "./entry";
 import { SettingsPage } from "./settings-pages";
 
 const n = sunriseCopy.notifications;
+// The closed IANA list by region (its first segment), in the list's order.
+const zoneRegions: readonly (readonly [string, readonly string[]])[] = (() => {
+  const regions = new Map<string, string[]>();
+  for (const zone of shopTimeZones) {
+    const region = zone.includes("/") ? zone.slice(0, zone.indexOf("/")) : "UTC";
+    regions.set(region, [...(regions.get(region) ?? []), zone]);
+  }
+  return [...regions.entries()];
+})();
 const choicesOf = (view: NotificationsView): NotificationChoices => ({
   email: view.email,
   summaryHour: view.summaryHour,
@@ -145,7 +156,11 @@ function NotificationsBody({
     change({ email: { ...value.email, [topic]: on } });
   const total =
     view.morning.toReview + view.morning.questions + view.morning.tasks + view.morning.alerts;
-  const zoneName = n.zones[value.timeZone] ?? value.timeZone;
+  const effective = effectiveTimeZone({
+    timeZone: value.timeZone,
+    shopifyTimeZone: view.shopifyTimeZone,
+  });
+  const zoneName = effective === null ? n.noZoneYet : n.zoneName(effective);
   return (
     <>
       <Card title={n.where}>
@@ -266,18 +281,24 @@ function NotificationsBody({
           <select
             id={zoneId}
             className="sr-select"
-            value={value.timeZone}
+            value={value.timeZone ?? ""}
             disabled={busy || !view.canChangeTimeZone}
             aria-describedby={`${zoneId}-hint`}
             onChange={(event) => {
-              const zone = shopTimeZones.find((z) => z === event.target.value);
-              if (zone) change({ timeZone: zone as ShopTimeZone });
+              const picked = event.target.value;
+              if (picked === "") change({ timeZone: null });
+              else if (isShopTimeZone(picked)) change({ timeZone: picked });
             }}
           >
-            {shopTimeZones.map((zone) => (
-              <option key={zone} value={zone}>
-                {n.zones[zone]}
-              </option>
+            <option value="">{n.followShopify(view.shopifyTimeZone)}</option>
+            {zoneRegions.map(([region, zones]) => (
+              <optgroup key={region} label={region}>
+                {zones.map((zone) => (
+                  <option key={zone} value={zone}>
+                    {n.zoneName(zone)}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <small id={`${zoneId}-hint`} className="sr-help">

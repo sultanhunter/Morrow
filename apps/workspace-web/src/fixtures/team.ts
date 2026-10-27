@@ -40,7 +40,7 @@ import {
   monthlyLimitRange,
   quietFromHours,
   quietUntilHours,
-  shopTimeZones,
+  isShopTimeZone,
   summaryHours,
   thinkingEfforts,
   thinkingModels,
@@ -931,7 +931,8 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
       email: { soon: true, summary: true, monday: true, mentions: true },
       summaryHour: 8,
       quiet: { on: true, from: 21, until: 7 },
-      timeZone: "toronto",
+      // Following Shopify's zone (no Owner override).
+      timeZone: null,
     },
     revision: 1,
   };
@@ -942,6 +943,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     signInEmail: viewer === "owner" ? "maya@linenandform.example" : "leo@linenandform.example",
     ownerName: owner,
     canChangeTimeZone: viewer === "owner",
+    shopifyTimeZone: "America/Toronto",
     revision: prefs.revision,
     morning: empty
       ? { toReview: 0, questions: 0, tasks: 0, alerts: 0 }
@@ -961,7 +963,7 @@ export function createTeamFixture(deps: TeamFixtureDeps): {
     typeof c.quiet.on === "boolean" &&
     (quietFromHours as readonly number[]).includes(c.quiet.from) &&
     (quietUntilHours as readonly number[]).includes(c.quiet.until) &&
-    (shopTimeZones as readonly string[]).includes(c.timeZone) &&
+    (c.timeZone === null || isShopTimeZone(c.timeZone)) &&
     Number.isSafeInteger(c.expectedRevision);
   // v1 PR 15: Activity's log moved to the Inbox fixture (fixtures/inbox.ts).
 
