@@ -36,7 +36,7 @@ Every format is closed (unknown keys refused) and versioned (`schemaVersion: 1`)
 
 The wallet follows ADR-0039: credits are the only spend limit. A run holds a final-turn reserve at admission, holds each turn's worst case before it, draws its metered use after it, and takes its final turn from the reserve when the balance cannot cover another; a teammate call the balance cannot cover is refused at once. The reserve and the draw of failed runs are the readings still open with the owner (Q-adr-0039-carried-out-values), built as proposed and switched in `evalWalletRules`. The prices are invented round numbers (rate card v1 is unpublished), so replay credits compare designs, not costs.
 
-Catalogue version 2 has no `agent.ask`, `agent.result.read` or `agent.propose` yet, and its `agent.route` takes a 2,000-character brief once per run. The `teammates@1` design uses ADR-0037's working names and structured briefs, provisional until the contracts PR (ADR-0037 plan PR 2) fixes them; `handoff_only@1` is catalogue version 2 as it stands.
+ADR-0037's contracts PR (plan PR 2) puts `agent.ask`, `agent.result.read`, `agent.propose` and a structured `agent.route` in tool catalogue version 4. The `teammates@1` design still uses the eval world's working shapes for those tools (its own brief and result) until the eval world moves onto the contracts. `handoff_only@1` replays catalogue version 2's one-way `agent.route` (a string brief of at most 2,000 characters, once per run), which the world keeps as a fixed eval-local shape (`catalogue_v2` in `world.ts`) on the catalogue's capability and verb.
 
 ## Running it
 

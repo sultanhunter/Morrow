@@ -5,6 +5,7 @@ title: Decisions
 label: T0
 status: active
 weeks: W0 onward (1)
+docs: [docs/briefs/h2-plan-docs.md, docs/briefs/claude-md-wording-2026-10.md]
 links:
   includes: [P01.T03]
   governed_by: [ADR-0023, ADR-0002]
@@ -17,3 +18,8 @@ production custody record (ADR-0007 item 9), now due before the first outside me
 item 1), and each week's sheet.
 
 The provider decisions of P01.T03 continue here: E2B (ADR-0029) and Resend (ADR-0030).
+
+ADR-0040 (messaging with agents) and ADR-0041 (harness foundations) were accepted on 2026-10-26
+(OD-2026-10-26-7). Row H2 of their implementation plan brings the plan docs in line with them and
+drafts CLAUDE.md's changed lines for the owner's own confirmation (OD-2026-10-23-10), without
+editing CLAUDE.md.

@@ -26,6 +26,12 @@ import { modelCallBudgetMs, modelGatewayLimits } from "../../identity/src/broker
 import { generatedLoopCatalogue } from "./generated/loop-catalogue";
 
 export type LoopProfileKind = "coordinator" | "specialist" | "installed";
+/**
+ * A loop run's kind for holds. "specialist" is no longer an AgentRunKind (ADR-0037 retired the
+ * kind; its contracts PR dropped it from agent-run@1): its hold, the 5% credit cap, stays here
+ * only until ADR-0039's contracts PR removes the money caps with this module's holds.
+ */
+export type LoopRunKind = Current_AgentRunKind | "specialist";
 export type LoopCatalogueStatus = "active" | "retired" | "proposed";
 export interface LoopSelectionKeys {
   readonly model: string;
@@ -163,12 +169,12 @@ function limitsOf(version: number) {
   return v.limits;
 }
 /** A mandate run (look-for-work included) and a specialist must call a tool: two turns. */
-export function toolTurnsRequired(kind: Current_AgentRunKind): 1 | 2 {
+export function toolTurnsRequired(kind: LoopRunKind): 1 | 2 {
   if (!runKinds.includes(kind)) throw invalid();
   return kind === "mandate" || kind === "specialist" ? 2 : 1;
 }
 /** The kind's turn limit: 6 for the Coordinator, 16 otherwise; no money value lowers it. */
-export function turnLimit(entry: LoopEntry, kind: Current_AgentRunKind): number {
+export function turnLimit(entry: LoopEntry, kind: LoopRunKind): number {
   if (!runKinds.includes(kind) || !entry || entry.worstCaseTurnUsd12 <= 0n) throw invalid();
   const limits = limitsOf(entry.catalogueVersion);
   return kind === "coordinator" ? limits.maxTurnsPerCoordinatorRun : limits.maxTurnsPerRun;
@@ -180,7 +186,7 @@ export function turnLimit(entry: LoopEntry, kind: Current_AgentRunKind): number 
  */
 export function runHold(input: {
   readonly entry: LoopEntry;
-  readonly kind: Current_AgentRunKind;
+  readonly kind: LoopRunKind;
   readonly creditCapUsd12: bigint | null;
 }): RunHoldResult {
   const { entry, kind, creditCapUsd12 } = input;
