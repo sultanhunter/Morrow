@@ -3,18 +3,22 @@
 - Record: the owner-facing order of v1's PRs 1 to 26 under [ADR-0035](../decisions/adr/ADR-0035-build-v1-live.md) (build v1 live, accepted 2026-10-23). It runs side by side with the tracks of [mvp.md](mvp.md), which stay the plan from v1 to the public launch.
 - Written 2026-10-23 from `main` at `86cd845`, for the owner; added to the repository on 2026-10-24 with its words unchanged below this header and the progress table.
 - Changed 2026-10-25 for [ADR-0037](../decisions/adr/ADR-0037-main-agent-and-scoped-subagents.md) (Morrow as the main agent with scoped teammates; OD-2026-10-25-3 and OD-2026-10-25-4) and ADR-0039 (credits are the only spend limit, pull request 75), without changing either record: PR 26 ("Specialists") is replaced by ADR-0037's follow-up PRs ([adr-0037-implementation.md](adr-0037-implementation.md)); PR 12's "one active agent, once" becomes Morrow orchestrating teammates in any way at depth 1; PR 11's and PR 21's money caps become credit holds; PRs 2, 7, 10 and 18, already merged, gain notes where the later records change what they built.
+- Changed 2026-10-26 for [ADR-0041](../decisions/adr/ADR-0041-harness-foundations.md) (harness foundations) and [ADR-0040](../decisions/adr/ADR-0040-messaging-with-agents.md) (messaging with agents), both Accepted (OD-2026-10-26-7), and the owner's rule that the foundation is production grade, never an MVP (OD-2026-10-26-6), without changing either record: PR 11 becomes the harness foundation; PR 12 grows from M to L and splits into 12a (the backend) and 12b (the screens); PRs 15, 16, 20 and 21 gain the harness and messaging changes; the model list is Opus 5.5 only; each points to its rows in [harness-foundations-implementation.md](harness-foundations-implementation.md). Also that day the owner chose to build the P09.T05 customer-data deletion path first, with the new Morrow conversation off until it exists (OD-2026-10-26-10), and accepted [ADR-0042](../decisions/adr/ADR-0042-connected-services-and-customer-contact.md) (connected services and customer contact) as recommended, its COD Confirmation agent an installable agent that is not built now (OD-2026-10-26-9).
+- Changed again on 2026-10-26 for OD-2026-10-26-12 (credits are the only budget, pull request 89; the 2026-10-26 Amendments of ADR-0039, ADR-0040 and ADR-0041), without changing any record: PR 11 has no cost check-in and no pause on Morrow's provider spend, only an alert to you at 80% of your Anthropic monthly limit; PRs 12 and 21 have no per-person limit on requests or standing requests.
+- Changed 2026-10-27, after pull requests 86 (ADR-0042 Accepted; OD-2026-10-26-8 to OD-2026-10-26-10) and 79 (harness plan H5, the teammate contracts) merged, without changing any record: the owner's choices of 2026-10-26 cite their records; PR 12's safety tests add that the new conversation stays off until a customer's name typed into a message can be deleted (OD-2026-10-26-10, harness plan H9d); H5 is marked merged. ADR-0042's own lane in this file comes with row CS2 of [connected-services-implementation.md](connected-services-implementation.md).
 - Graph: each PR is a milestone node, `V1-PR01` to `V1-PR26` (`docs/graph/milestones/`), part of its tracks, delivering its features, waiting on its gates; a merged pull request whose title starts "v1 PR <n>:" implements it.
 
 ## Progress
 
-At `main` `2455dc80`, 2026-10-24.
+At `main` `966fed03`, 2026-10-27. ADR-0039's first code PR (#83: Listings' catalogue version 4, Opus 5.5 at medium and high, with no run or daily cap; migration 0056) and #89 (credits are the only budget, OD-2026-10-26-12; documents only) merged on 2026-10-26, and #86 (ADR-0042 and its plan, OD-2026-10-26-8 to OD-2026-10-26-10; documents and tests only) and #79 (harness plan H5: the teammate contracts and tool catalogue version 4, ADR-0037's follow-up PR 2, which replaces part of PR 26) on 2026-10-27; none is one of the PRs below, and no PR below has merged since `2107859d`.
 
 | State | PRs |
 | --- | --- |
-| Merged | 1 (#50; its decision record ADR-0035 in #48), 2 (#53, "Disconnect store"; the Claude switch goes on with the owner's key), 3 (#54), 7 (#51), 10 (#52), 14 (#55), 16 (#56), 17 (#49, ADR-0033 and ADR-0034), 18 (#58), 19 (#57) |
-| Building now | 4, 5, 8, 11, 15, 20 |
-| Not started | 6, 9, 12, 13, 21 to 25 |
-| Replaced (2026-10-25) | 26, by ADR-0037's follow-up PRs 1 to 10 ([adr-0037-implementation.md](adr-0037-implementation.md)) |
+| Merged | 1 (#50; its decision record ADR-0035 in #48), 2 (#53, "Disconnect store"; the Claude switch on with the owner's key in #73), 3 (#54), 4 (#67), 5 (#66), 6 (#80), 7 (#51), 8 (#63, switch off), 10 (#52), 14 (#55), 15 (#65), 16 (#56), 17 (#49, ADR-0033 and ADR-0034), 18 (#58), 19 (#57), 20 (#68) |
+| Building now | 11 (#64, held and rebuilt to ADR-0041 as rows H4 and H7a to H8 of the harness plan (on PR #64), after the contracts of H5 (PR #79, merged) and H6) |
+| Not started | 9, 12, 13, 21 to 25 |
+| Reshaped (2026-10-26) | 11, 12, 15, 16, 20 and 21, by ADR-0040 and ADR-0041 ([harness-foundations-implementation.md](harness-foundations-implementation.md)); merged PRs keep what they built and gain the changes as new rows |
+| Replaced (2026-10-25) | 26, by ADR-0037's follow-up PRs 1 to 10 ([adr-0037-implementation.md](adr-0037-implementation.md)), of which 2, 4, 5, 9 and 10 continue as harness plan rows since 2026-10-26 |
 
 ---
 
@@ -42,6 +46,7 @@ PR 1 records these rules in a one-page decision. Nothing below starts until you 
 - **One environment.** The copy already running on Cloudflare and Neon becomes production v1. It is called "staging" inside the code. We keep that name for now because renaming changes nothing you see.
 - **Your live store** connects through a private Shopify app made for your store only. No development stores.
 - **Product data first:** titles, descriptions, SEO and tags. Customer data comes only after Morrow can delete it on request. That rule stays. Other new kinds of data (order totals, for example) get their delete step in the PR that adds them where possible, and always before outside customers.
+  *2026-10-26: you chose to build that deletion path for customer data (P09.T05) first, as part of the foundation (OD-2026-10-26-10). The new Morrow conversation (ADR-0040) stays off until it exists and can also delete a customer's name typed into a message (harness plan H9d).*
 - **One standing yes** from you replaces asking each time for deploys, database updates, Claude calls and E2B runs within the spend caps, and the usual 300 test credits a month for your own workspace.
 - **Still a yes every time:**
   - every change to your store, which you give inside Morrow on the exact change, because the product works that way;
@@ -71,7 +76,7 @@ PR 1 records these rules in a one-page decision. Nothing below starts until you 
 | --- | --- | --- |
 | A. Store, Listings, apply | 1 to 6 | now |
 | B. E2B computer | 7 to 9 | now |
-| C. Agent platform | 10 to 13 | now with 10, then in order |
+| C. Agent platform | 10 to 13 | now with 10, then in order; since 2026-10-26, 11 and 12 follow the harness plan |
 | D. Sunrise screens | 14 to 16 | now with 14 |
 | E. Projects | 17 to 19 | now with 17 (decision only) |
 | F. Knowledge and proactive work | 20, 21 | after 10 and 11 |
@@ -269,38 +274,49 @@ Target: about a week and a half, early November, if reviews and your steps are q
 - **Runs in parallel with:** everything. It starts now.
 
 ### PR 11. The agent loop
+*2026-10-26: ADR-0041 makes this PR the harness foundation, built production grade with no shortcuts, as you asked that day. It is now rows H4 and H7a to H8 of [the harness plan](harness-foundations-implementation.md) (on PR #64), after the contracts of H5 (PR #79, merged 2026-10-27) and H6, as several PRs.*
 - **Delivers:**
   - **One durable job runner for every agent** (AgentRunWorkflow):
     - the model can call Morrow's tools;
     - each tool call is checked and recorded;
     - a job can wait for your answer.
+    - **Work is never cut short by a limit.** A job that trips a safety check, needs your answer or runs out of credits pauses, keeps its place and asks you; Continue picks it up (ADR-0041 item 3).
+    - **Agents never run out of room.** When a job's working memory fills, older parts are summarised, and the facts that matter (your words, approvals, changes made, ids) are rewritten by code from the records (ADR-0041 items 11 and 13).
   - **Listings moves onto it.**
-  - **A longer model list:** Haiku, Sonnet and Opus 5.5 at low, medium and high (catalogue version 2).
-- **Needs from you:** one yes to the catalogue version 2 values (limits and prices per model).
-- **Size:** L, probably a stack of two PRs.
+  - **The model list:** Opus 5.5 only, at medium and high (catalogue version 2, rewritten Opus-only; ADR-0041 item 2). Haiku, Sonnet and low effort are gone, as you decided on 2026-10-26. Listings' own catalogue is already Opus 5.5 only (version 4, merged in #83).
+- **Needs from you:** one yes to the catalogue version 2 values (its safety check-in values and prices).
+- **Size:** several PRs (harness plan H4 and H7a to H8), the runner's behind the agent-loop switch.
 - **Safety tests:**
   - Every tool call re-checks the requester, the agent, the store connection, the rules, the stops and the owner's current rights. It is refused if any one of them fails.
   - Text from products, email or uploads enters only as marked data. It can never choose tools, recipients or limits, and a change built from it needs your approval of the exact change.
-  - An unknown model turn is booked at its worst-case cost and sent again at most once.
+  - An unknown model turn is booked at its worst-case cost and sent again at most once; a second unknown pauses the job and retries later (ADR-0041 items 8 and 17).
   - Conversation text lives only in a tenant-isolated table. Job records and logs hold ids only.
-  - The limits per turn and per job and on time, and each step's credit hold, are checked in code. Credits are the only spend limit: a job holds and draws credits from the workspace's balance as it works and stops when the balance cannot cover its next step, with no money cap per job or per day (ADR-0039).
-  - The switch stays committed off until all of these pass.
+  - Each step's credit hold, the safety check-ins and the loop detectors are checked in code, never in the prompt, and the model is never shown a countdown. Credits are the only spend limit: a job holds and draws credits from the workspace's balance as it works and pauses when the balance cannot cover its next step, with no money cap per job or per day (ADR-0039; ADR-0041 item 9). Apart from your balance and an optional per-agent credit limit you may set, which pauses only that agent, no amount of spend pauses a job or makes it check in: there is no cost check-in, and when Morrow's provider spend this month reaches 80% of your Anthropic monthly limit, code alerts you, as Morrow's operator, and nothing pauses; a job waits on that limit only when Anthropic actually refuses a call, until you continue (OD-2026-10-26-12).
+  - A summary the model writes can never lose or invent an approval, a change or an id: code renders those from the records, and a summary holding a customer's email address or phone number is refused (ADR-0041 items 13 and 31).
+  - The switch stays committed off until all of these pass, with the harness plan's evals.
 - **Runs in parallel with:** lanes A, B and D. It starts after PR 10.
 
-### PR 12. "Ask Morrow", and model and effort for each agent
+### PR 12. Your Morrow conversation ("Ask Morrow"), and effort for each agent
+*2026-10-26: ADR-0040 changes how you talk with Morrow. This PR grows from M to L and splits in two: 12a, the backend (harness plan H11a and H11b), and 12b, the screens (H14).*
 - **Delivers:**
-  - **Morrow, the main agent, runs on a model.** It answers, asks a clarifying question when it needs one, and keeps the conversation while it uses its teammates in any way the work needs (ADR-0037): it can ask several teammates, one after another or at the same time, ask the same one again, and pass what one found to the next; it hands the work over when a teammate must talk with you itself. Teammates never bring in other agents. Asking teammates for answers comes with ADR-0037's follow-up PRs 4 and 5.
-  - **"Model" and "Thinking effort"** on each agent's page and in Settings.
-  - **Defaults:** Morrow on Opus 5.5 at high; every teammate, the installed agents and those Morrow creates, on Opus 5.5 at medium (ADR-0036). A change applies from the next job.
-- **Needs from you:** nothing.
-- **Size:** M.
+  - **Morrow, the main agent, runs on a model.** It answers, asks a clarifying question when it needs one, and keeps the conversation while it uses its teammates in any way the work needs (ADR-0037): it can ask several teammates, one after another or at the same time, ask the same one again, and pass what one found to the next; it hands the work over when a teammate must talk with you itself. Teammates never bring in other agents. Asking teammates for answers comes with ADR-0037's follow-up PRs 4 and 5, now harness plan H10 and H11a.
+  - **It feels like messaging a team** (ADR-0040): you write at any time and the box never locks; "Seen by Morrow" appears within seconds; Morrow answers, asks one question, or says what it understood and starts the work in the background on a card that shows its progress; the result arrives as one finished message; several requests run at once, with no limit on how many you start, each with its own Stop (OD-2026-10-26-12); a reply to a working request goes into it.
+  - **Morrow remembers your conversation:** one continuing memory, private to you, so every request starts from what you have already talked about (ADR-0041 item 5). Teammates are asked only inside a request's own background work, so you can keep writing.
+  - **"Thinking effort"** on each agent's page and in Settings: Opus 5.5 at medium or high.
+  - **Defaults:** Morrow on Opus 5.5 at high; every teammate, the installed agents and those Morrow creates, on Opus 5.5 at medium (ADR-0036, ADR-0041 item 2). A change applies from the next job.
+- **Needs from you:** before 12b merges, look at your Morrow conversation drawn both ways, your own messages on the left and on the right; the right-hand layout stands unless you then say otherwise (ADR-0040 item 11).
+- **Size:** L, in two parts: 12a (backend) and 12b (screens).
 - **Safety tests:**
   - Morrow's own rights are fixed: no store reads, no change proposals, no computer and no customer data.
-  - Only a person starts Morrow. Morrow may call teammates and hand work off as many times as the work needs, in sequence or in parallel, at depth 1: each call or hand-off is one child job under Morrow's permission envelope, checked in code on its own against your rights, the teammate's grants, its owner's current rights, the store connection, the rules and the stops; a teammate never calls, hands off to or creates an agent. A job's calls are bounded by its turn, tool-call and time limits, the workspace's credits and your stop, never by a money cap.
-  - Only the Owner can change a model, and Admins only for installed agents.
-  - A model change never changes what an agent may do.
+  - Only a person starts Morrow. Morrow may call teammates and hand work off as many times as the work needs, in sequence or in parallel, at depth 1: each call or hand-off is one child job under Morrow's permission envelope, checked in code on its own against your rights, the teammate's grants, its owner's current rights, the store connection, the rules and the stops; a teammate never calls, hands off to or creates an agent. A job's calls are bounded by its safety check-ins (it pauses and asks you, never stops early), the workspace's credits and your stop, never by a money cap.
+  - Only the person who asked can steer or stop a request. Other people's messages never reach or wake it; they enter later work only as marked data that names its author (ADR-0040 items 7, 8 and 13).
+  - A customer's email address, phone number, street address or customer id typed into a message is refused until the customer-data deletion path exists, and the box carries a line asking you not to type customers' names (ADR-0041 item 31). The new conversation stays off until that path exists and its test shows a customer's name typed into a message is deleted with every copy when Shopify asks (OD-2026-10-26-10, harness plan H9d).
+  - Stop on a request needs no second person, and agents can neither hold nor use it; the workspace stop for the Owner and Admins is lifted only by a reviewed step (ADR-0040 item 10).
+  - The browser gets only hints, then pulls what you may see; nothing about another person's private conversation ever reaches you (ADR-0040 items 1 and 15).
+  - Only the Owner can change an agent's effort, and Admins only for installed agents; nobody can pick a lower effort or another model.
+  - An effort change never changes what an agent may do.
   - Each change is recorded.
-- **Runs in parallel with:** lanes D and E. It starts after PR 11.
+- **Runs in parallel with:** lanes D and E. 12a starts after PR 11; 12b is built against fakes now, and its switches go on after 12a and the live channel (harness plan H13).
 
 ### PR 13. Computer tools for agents
 - **Delivers:**
@@ -332,6 +348,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - **One Inbox** for approvals, questions, reconnects and problems.
   - **PR 3's review screen** in the Sunrise look, with batch approval.
   - **The activity log.**
+  - *2026-10-26: ADR-0040 and ADR-0041 add, as harness plan row H15: "Needs you" links from request cards and check-ins; a review card that names whose words or notes shaped a suggested change, and the outside text it read; the activity log and daily summary read from the job event log and leave out other people's private conversations.*
 - **Needs from you:** nothing.
 - **Size:** M.
 - **Safety tests:**
@@ -345,6 +362,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - **The agent catalogue and install,** showing the Shopify permissions each agent needs.
   - **A page for each agent,** with its notebook and its model settings.
   - **Settings.**
+  - *2026-10-26: the model settings become effort only, Opus 5.5 at medium or high (harness plan H3); Settings gains Memory, for your own private memories, and Notifications (H12b and H16).*
 - **Needs from you:** nothing.
 - **Size:** M.
 - **Safety tests:**
@@ -388,6 +406,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - **Agents propose additions,** and you accept them.
   - **A notebook** for each agent.
   - **Listings writes in your brand voice.**
+  - *2026-10-26: ADR-0041 builds on this, as harness plan rows H12a to H12f: notebooks keyed by agent, each lesson marked with who it was learned for and whether outside text shaped it; agents reading their notebooks back, and an upkeep run that tidies them with a diff you can roll back; pages you pin ("Always know this"); your own private memories, saved only when you tap Save; and a search check on your store's data that decides whether embeddings are needed.*
 - **Needs from you:** write or approve your brand voice page.
 - **Size:** M.
 - **Safety tests:**
@@ -405,19 +424,23 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - **Listings' weekly quality sweep.**
   - **A daily read-only look** for useful work.
   - **Quiet hours.**
-- **Needs from you:** confirm each agent's standing permission, every 90 days.
+  - **Standing requests** (ADR-0040 item 12; harness plan H17): you ask Morrow to do something on a schedule ("Every Monday, check which best sellers will run out in the next two weeks"), confirm it once, and Morrow posts what it found in your Morrow conversation. Pause or revoke it at any time.
+- **Needs from you:** confirm each agent's standing permission, every 90 days, and each standing request you want.
 - **Size:** L.
 - **Safety tests:**
   - Jobs start only from Morrow's own trigger records, never from text.
   - Each job checks the permission, the stops, quiet hours and the workspace's credits, and runs once per trigger. There is no money cap per agent, per day or on the daily look: each job holds and draws credits as it works, and a trigger the balance cannot cover waits until it can, never dropped (ADR-0039). One look for work per agent a day stays.
   - Only you can revoke, and revoking voids pending approvals.
   - The daily look cannot propose changes or use the computer.
+  - A standing request runs under your current rights and is skipped, and you are told, if you lost them; it can read and suggest, never change the store; the workspace stop and "Stop AI work" block it; there is no limit on how many you have, and each firing holds credits and waits while the balance cannot cover it (OD-2026-10-26-12).
   - Nothing reaches your store without your approval. The apply step, the credit holds and the stops are already in place from PRs 2 and 3.
 - **Runs in parallel with:** lanes D and E. It starts after PRs 3, 5 and 11.
 
 ## The other launch agents (PRs 22 to 25) and new teammates (PR 26, replaced)
 
-Each new Shopify permission needs one "Reconnect" approval in your Shopify admin, which works after PR 5. Order and customer data each need their own deletion path first.
+Each new Shopify permission needs one "Reconnect" approval in your Shopify admin, which works after PR 5. Order and customer data each need their own deletion path first; the customer-data path (P09.T05) is now built first, as part of the foundation (your choice of 2026-10-26, OD-2026-10-26-10).
+
+COD Confirmation (ADR-0042, accepted 2026-10-26: calls to cash-on-delivery customers through your own calling service, under a call plan you approve) is an installable agent and is not built now (OD-2026-10-26-9). It is not one of these PRs. You asked instead that the foundation be ready for agents like it: agents that read your store's live data and act on store events and on schedules, with orders once their deletion path exists; customer details for any agent other than Support need a further decision record, which comes to you first (OD-2026-10-26-9). Its foundation is built now behind switches that stay off, and the agent only when you ask for it ([connected-services-implementation.md](connected-services-implementation.md)).
 
 ### PR 22. Business Analyst
 - **Delivers:**
@@ -477,9 +500,9 @@ Each new Shopify permission needs one "Reconnect" approval in your Shopify admin
 - **Runs in parallel with:** PRs 22 to 24. It starts after PRs 5 and 21.
 
 ### PR 26. Teammates Morrow creates (replaced by ADR-0037's follow-up PRs)
-Replaced on 2026-10-25. The temporary, weaker "specialist" is gone (ADR-0037): there is one kind of agent, either built by our team and installed in one click, or created by Morrow when you approve it. The work is now ADR-0037's ten follow-up PRs, in [adr-0037-implementation.md](adr-0037-implementation.md): plan and graph; contracts with fakes; the agent-card permission packet; teammate calls in the agent loop; Morrow's new tools; the Team page and the agent card; deleting their data; plan steps that name a teammate; evals; then the switches.
+Replaced on 2026-10-25. The temporary, weaker "specialist" is gone (ADR-0037): there is one kind of agent, either built by our team and installed in one click, or created by Morrow when you approve it. The work is now ADR-0037's ten follow-up PRs, in [adr-0037-implementation.md](adr-0037-implementation.md): plan and graph; contracts with fakes; the agent-card permission packet; teammate calls in the agent loop; Morrow's new tools; the Team page and the agent card; deleting their data; plan steps that name a teammate; evals; then the switches. Since 2026-10-26 the contracts, teammate calls, Morrow's tools, the evals' follow-up and the teammate-calls switch continue as harness plan rows H5, H10, H11a, H18 and H20.
 - **Delivers:**
-  - **Morrow asks its teammates for answers,** and gets a structured answer back with nothing cut: a large table or file comes as an item Morrow opens page by page. It can ask several at once, ask one again, and pass what one found to the next (follow-up PRs 4 and 5).
+  - **Morrow asks its teammates for answers,** and gets a structured answer back with nothing cut: a large table or file comes as an item Morrow opens page by page. It can ask several at once, ask one again, and pass what one found to the next (follow-up PRs 4 and 5, now harness plan H10 and H11a). Since 2026-10-26 it also keeps working while they run, sends them guidance, asks a follow-up that remembers everything the teammate read, spreads the same work over hundreds of products, and has big results checked by a separate reviewer before you see them (ADR-0041).
   - **New teammates on the go:** when no teammate fits, Morrow drafts one as an agent card: its name, job, instructions, the skills it uses and the tools it may use, with the permissions and Shopify access code works out from those tools. You review the exact card and press "Add to team". It then works like any other teammate, with its own permissions, notebook and model, until you remove it.
   - **One Team page:** every teammate under Morrow, marked "Built by the Morrow team" or "Made by Morrow" with the date and who approved it; pause and remove; a setting "Let Morrow suggest new teammates".
 - **Needs from you:** approve each agent card you want; in a team, a second person approves it. Later, the eval round on your store.
@@ -492,12 +515,12 @@ Replaced on 2026-10-25. The temporary, weaker "specialist" is gone (ADR-0037): t
   - Every tool call of every teammate run, the first call and every later or parallel one alike, is checked in code against your rights, the teammate's grants, Morrow's permission envelope, the store connection, the rules and the stops, and the current rights of the person who owns the teammate.
   - A teammate that read outside text marks its answer, and the mark carries into anything Morrow drafts after it; your approval never clears it. An answer that holds customer data never reaches Morrow.
   - Morrow opens only items from answers its own job received. A teammate opens only items named in its brief that came to the same Morrow job, never another person's private Ask.
-  - No money cap: each teammate job holds its own credits from the workspace's balance, and a call the balance cannot cover is refused at once. Your stop ends any job.
+  - No money cap: each teammate job holds its own credits from the workspace's balance, and a call the balance cannot cover pauses the whole request until credits are added, instead of being refused (ADR-0041 item 9). Your stop ends any job.
   - At most 10 teammates Morrow creates per workspace; Morrow may suggest removing one idle for 30 days and never removes one itself.
   - Each new kind of data has its deletion path first. Every new table is isolated per tenant.
   - The switches stay off until the deletion paths, the gateway, reservations and stops, the agent-loop switch and a passing eval round are in place.
 - **If it slips:** if the checkpoint (G11) is missed, or the permission packet is not merged by 2026-12-04 (G18), agent cards move to the first fast follow after launch; asking and handing off to the teammates we build stays.
-- **Runs in parallel with:** lanes D, E and G. Follow-up PRs 2 and 9 start now; teammate calls wait for PR 11 and Morrow's tools for PR 12.
+- **Runs in parallel with:** lanes D, E and G. Follow-up PR 9 merged (#81), and PR 2's teammate contracts merged as H5 (#79, 2026-10-27), with H6's harness contracts still to come; teammate calls (H10) wait for the harness's runner, and Morrow's tools (H11a) come with PR 12a.
 
 ## Later, when you need it
 
@@ -524,6 +547,6 @@ Replaced on 2026-10-25. The temporary, weaker "specialist" is gone (ADR-0037): t
 - **Shopify's token rules.** PR 1 assumes a long-lived token for a private app. If Shopify requires expiring tokens for new apps, PR 1 also needs the token-refresh work, about one more M.
 - **Until PR 5,** uninstalling the app or changing its permissions ends it for good.
 - **Credits:** the 30-day grant runs out about four weeks after PR 1 unless PR 6 lands first.
-- **Speed:** Opus at high effort may be slower than the time limits assume. PR 2's measurements decide, and a slow model gets a lower limit.
+- **Speed:** Morrow answers at high effort, which is slower than a quick model. "Seen by Morrow" and the live status show at once, and staging measures the first reply and each step (harness plan H19), so the targets are set with you. No time limit ends a job (ADR-0041 item 3).
 - **The real store:** a bug in PR 3 could write a wrong value. The safeguards are writing only approved fields, reading every write back, starting with one product, and Undo in PR 4.
 - **The merge lane,** not the coding, sets the pace.

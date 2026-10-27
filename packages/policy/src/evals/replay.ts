@@ -786,7 +786,7 @@ class Replay {
         if (!authorized()) return refused("authority_denied", target);
         const mode = spec.name === "agent.ask" ? "ask" : "route";
         // Catalogue version 2's agent.route: once per run (handoff_only@1).
-        if (mode === "route" && spec.source === "catalogue" && run.routed)
+        if (mode === "route" && spec.source === "catalogue_v2" && run.routed)
           return refused("route_used", target);
         const key = call.expect.child;
         const admitted = this.admit(

@@ -6,7 +6,13 @@
 // item 3). Nothing here is a money cap: the wallet's balance is the only spend limit
 // (ADR-0039 item 1).
 import { fakeIds } from "../agent-platform-fakes";
-import { checkToolInput, offeredTools, toolEntry, toolsForContext } from "../tool-catalogue";
+import {
+  checkToolInput,
+  isContextTool,
+  offeredTools,
+  toolEntry,
+  toolsForContext,
+} from "../tool-catalogue";
 import type { EvalAgentRef, EvalDesign, EvalTeammateRef, EvalToolName } from "./format";
 import { evalCatalogueTools } from "./format";
 
@@ -60,8 +66,13 @@ export const evalTeammateTools: Readonly<Record<EvalTeammateRef, readonly EvalTo
     ] as const),
   });
 
-/** How a tool is served: from catalogue version 2, or a provisional ADR-0037 shape. */
-export type EvalToolSource = "catalogue" | "provisional";
+/**
+ * How a tool is served: from the tool catalogue, a provisional ADR-0037 shape, or
+ * `catalogue_v2`: catalogue version 2's one-way `agent.route` (a string brief of at most
+ * 2,000 characters, once per run), which handoff_only@1 replays. Catalogue version 4 (ADR-0037's
+ * contracts) replaced that input with a structured brief, so the world keeps its shape here.
+ */
+export type EvalToolSource = "catalogue" | "provisional" | "catalogue_v2";
 export interface EvalToolSpec {
   readonly name: EvalToolName;
   readonly source: EvalToolSource;
@@ -71,6 +82,10 @@ export interface EvalToolSpec {
 const catalogueSpec = (name: EvalToolName): EvalToolSpec => {
   const entry = toolEntry(name);
   if (!entry) throw Error("EVAL_WORLD_TOOL_UNKNOWN:" + name);
+  // The world serves grant tools only; a memory or harness tool (catalogue version 4, ADR-0041
+  // item 24) holds no capability and is not in this world's format yet (plan row H18).
+  if (entry.capabilityId === null || entry.verb === null)
+    throw Error("EVAL_WORLD_TOOL_NO_CAPABILITY:" + name);
   return Object.freeze({
     name,
     source: "catalogue",
@@ -109,6 +124,14 @@ const provisionalSpecs: Readonly<Record<string, EvalToolSpec>> = Object.freeze({
   },
 });
 
+// handoff_only@1's hand-off: catalogue version 2's agent.route, on the same capability and verb.
+const handoffOnlyRoute: EvalToolSpec = Object.freeze({
+  name: "agent.route",
+  source: "catalogue_v2",
+  capabilityId: "workspace.task.delegate",
+  verb: "delegate",
+});
+
 const morrowCatalogueTools = [
   "knowledge.search",
   "work.read",
@@ -133,7 +156,7 @@ export function evalOfferedTools(
         provisionalSpecs["agent.result.read"]!,
         provisionalSpecs["agent.propose"]!,
       );
-    else specs.push(catalogueSpec("agent.route"));
+    else specs.push(handoffOnlyRoute);
   } else {
     if (kind === "coordinator") throw Error("EVAL_WORLD_KIND");
     // A called teammate cannot talk to the person (ADR-0037 item 3(a)): no posts or questions.
@@ -144,15 +167,21 @@ export function evalOfferedTools(
   }
   return new Map(specs.map((spec) => [spec.name as string, spec]));
 }
-// Drift guards, run once at load: every catalogue tool the world serves is in catalogue
-// version 2 with the context it is served in, so a catalogue change cannot silently widen
-// what an eval agent is offered.
+// Drift guards, run once at load: every catalogue tool the world serves is in the catalogue
+// with the context it is served in, so a catalogue change cannot silently widen what an eval
+// agent is offered.
 {
   const coordinator = toolsForContext("coordinator") as readonly string[];
   for (const tool of [...morrowCatalogueTools, "agent.route"])
     if (!coordinator.includes(tool)) throw Error("EVAL_WORLD_DRIFT:coordinator:" + tool);
+  // handoff_only@1's fixed hand-off keeps the catalogue's capability and verb for agent.route.
+  const route = toolEntry("agent.route");
+  if (route?.capabilityId !== handoffOnlyRoute.capabilityId || route.verb !== handoffOnlyRoute.verb)
+    throw Error("EVAL_WORLD_DRIFT:agent.route");
   for (const [agent, tools] of Object.entries(evalTeammateTools)) {
-    if (offeredTools("routed", [...tools]).length !== tools.length)
+    // Catalogue version 4 also offers the context's memory and harness tools, which this world
+    // does not serve yet (plan row H18): only the declared grant tools are compared.
+    if (offeredTools("routed", [...tools]).filter((t) => !isContextTool(t)).length !== tools.length)
       throw Error("EVAL_WORLD_DRIFT:routed:" + agent);
     if (tools.some((tool) => !(evalCatalogueTools as readonly string[]).includes(tool)))
       throw Error("EVAL_WORLD_DRIFT:catalogue:" + agent);
@@ -244,6 +273,20 @@ function resultReadCheck(value: unknown): EvalInputCheck {
     return "limits";
   return "ok";
 }
+/** Catalogue version 2's agent.route input: an Id and a string brief of 1 to 2,000 characters. */
+function handoffRouteCheck(value: unknown): EvalInputCheck {
+  if (!isObject(value) || !exactKeys(value, ["installationId", "brief"])) return "shape";
+  if (typeof value.installationId !== "string" || typeof value.brief !== "string") return "shape";
+  const length = [...value.brief].length;
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.installationId) ||
+    length < 1 ||
+    length > 2000 ||
+    !/\S/.test(value.brief)
+  )
+    return "limits";
+  return "ok";
+}
 /** ADR-0037 item 5: never on a card: `agent.*`, `workspace.task.delegate` or human-only. */
 const cardTools: readonly string[] = evalCatalogueTools.filter((tool) => tool !== "agent.route");
 function proposeCheck(value: unknown): EvalInputCheck {
@@ -270,6 +313,7 @@ function proposeCheck(value: unknown): EvalInputCheck {
 }
 export function checkEvalToolInput(spec: EvalToolSpec, input: unknown): EvalInputCheck {
   if (spec.source === "catalogue") return checkToolInput(spec.name, input).ok ? "ok" : "limits";
+  if (spec.source === "catalogue_v2") return handoffRouteCheck(input);
   if (spec.name === "agent.ask" || spec.name === "agent.route") return briefCheck(input);
   if (spec.name === "agent.result.read") return resultReadCheck(input);
   return proposeCheck(input);

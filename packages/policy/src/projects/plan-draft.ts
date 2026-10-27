@@ -13,6 +13,7 @@ import type {
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import planDraftsSwitch from "../../../../docs/decisions/plan-drafts-staging.json";
 import { screenModelWrittenSync } from "../customer-screen";
+import { type TeamSwitchState, teamSwitchState } from "../teammates";
 import { type ToolEntry, toolEntry } from "../tool-catalogue";
 import { canonicalText, sha256Hex } from "./digest";
 
@@ -43,7 +44,7 @@ export function planDraftsSwitchAllowed(state: {
 }
 
 /**
- * plan.draft (ADR-0034 item 2) as ToolCatalogue@1 version 2 lists it: a coordination tool on
+ * plan.draft (ADR-0034 item 2) as ToolCatalogue@1 lists it since version 2: a coordination tool on
  * workspace.conversation.post (execute, internal-write replay, 8 KiB results), offered to the
  * Coordinator only. It posts one card holding a closed, digested PlanDraft@1, creates no
  * other record and grants nothing (a catalogue entry names no grant).
@@ -54,7 +55,14 @@ export const planDraftTool: ToolEntry = (() => {
   return entry;
 })();
 
-/** ADR-0027 item 8's Coordinator grant set with plan.draft; it keeps task.create. */
+/**
+ * ADR-0027 item 8's Coordinator set with plan.draft, ADR-0037 item 1's teammate tools and
+ * ADR-0041 items 24 and 33's orchestration, memory and harness tools (ToolCatalogue@1 version
+ * 4: agent.propose in place of specialist.draft; agent.ask, agent.map, agent.message and
+ * agent.cancel; knowledge.propose; memory.search, memory.read in place of agent.result.read,
+ * and memory.suggest; run.plan, run.complete, run.wait and context.checkpoint); it keeps
+ * task.create.
+ */
 export const coordinatorGrantTools = Object.freeze([
   "knowledge.search",
   "work.read",
@@ -62,26 +70,68 @@ export const coordinatorGrantTools = Object.freeze([
   "inbox.ask",
   "task.create",
   "agent.route",
-  "specialist.draft",
+  "agent.ask",
+  "agent.map",
+  "agent.message",
+  "agent.cancel",
+  "agent.propose",
   "plan.draft",
+  "knowledge.propose",
+  "memory.search",
+  "memory.read",
+  "memory.suggest",
+  "run.plan",
+  "run.complete",
+  "run.wait",
+  "context.checkpoint",
 ] as const);
 export type CoordinatorTool = (typeof coordinatorGrantTools)[number];
 /**
- * The morrow.coordinator release's launch subset (ADR-0034 item 1, a product choice):
- * task.create is left out, so Morrow creates no task at launch. plan.draft is in it only
- * while the switch is on.
+ * Morrow's tools in catalogue version 4 whose path for Morrow a later plan row builds, so no
+ * Morrow context is offered them yet: memory.suggest with person memory and its switch (H12b),
+ * and knowledge.propose with Morrow's own principal-keyed proposals (H12d; PR 20's definer
+ * keys a proposal by the run's installation, which Morrow's run has none of, so it would fail
+ * closed). knowledge/tools.ts refuses Morrow's knowledge.propose too, until then.
  */
-export function coordinatorLaunchTools(switchState: "on" | "off" = planDraftsRecord.switch) {
+export const pendingMorrowTools = Object.freeze(["memory.suggest", "knowledge.propose"] as const);
+/** The teammate-call tools (ADR-0041 items 21 and 22), all behind the teammate-calls switch. */
+const teammateCallTools: readonly CoordinatorTool[] = [
+  "agent.ask",
+  "agent.map",
+  "agent.message",
+  "agent.cancel",
+];
+/**
+ * The morrow.coordinator release's launch subset (ADR-0034 item 1, a product choice), fixed
+ * when a context is admitted (tools never change inside a context, ADR-0041 item 2):
+ * task.create is left out, so Morrow creates no task at launch. plan.draft is in it only
+ * while the plan-drafts switch is on; agent.ask, agent.map, agent.message and agent.cancel
+ * only while the teammate-calls switch is on, and agent.propose only while the agent-cards
+ * switch is on (ADR-0037 item 9; both committed off). Two tools wait for the plan rows that
+ * build their paths for Morrow, and are left out until then (pendingMorrowTools). The memory
+ * reads and the harness tools grant nothing and sit behind the agent-loop switch itself.
+ */
+export function coordinatorLaunchTools(
+  switchState: "on" | "off" = planDraftsRecord.switch,
+  team: TeamSwitchState = teamSwitchState(),
+) {
   return Object.freeze(
     coordinatorGrantTools.filter(
-      (t) => t !== "task.create" && (t !== "plan.draft" || switchState === "on"),
+      (t) =>
+        t !== "task.create" &&
+        !(pendingMorrowTools as readonly string[]).includes(t) &&
+        (t !== "plan.draft" || switchState === "on") &&
+        (!teammateCallTools.includes(t) || team.teammateCalls === "on") &&
+        (t !== "agent.propose" || team.agentCards === "on"),
     ),
   );
 }
 /**
  * Morrow's tools in a private Ask (ADR-0034 item 7), only under P05.T04b's Ask-bound
- * envelope: never task.create, specialist.draft, inbox.ask or a mention. agent.route once
- * per run, for one active added agent's read-only answer.
+ * envelope: never task.create, agent.propose, inbox.ask or a mention. agent.route once per
+ * run, for one active added agent's read-only answer. ADR-0037 item 3 replaces this with
+ * read-only agent.ask calls, as many as the work needs and no hand-off; its implementation
+ * plan's PR 5 (Morrow's tools) carries that change, before any Ask runs an agent (P05.T04b).
  */
 export const askTools = Object.freeze([
   "knowledge.search",
@@ -304,7 +354,7 @@ export const planDraftDigest = (draft: Current_PlanDraft): Promise<string> =>
  * a report (`report_in_context`), in an Ask without its envelope, outside the turn's tool
  * subset; a mention run drafts only task or plan-change cards; a card holding a customer
  * identifier is `customer_data` (H9a). The input is the recorded
- * tool_use input (ToolInputPlanDraft, ToolCatalogue@1 version 2), mapped to the closed
+ * tool_use input (ToolInputPlanDraft, ToolCatalogue@1 since version 2), mapped to the closed
  * PlanDraft@1 by planDraftFromToolInput; nothing a model writes names a capability, scope,
  * grant, cap, model, recipient, sender or store.
  */

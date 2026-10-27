@@ -102,6 +102,11 @@ function common(
     throw Error("KNOWLEDGE_RUN_FACTS_INVALID");
   if (run.agentTools !== "on") return refused("switch_off");
   if (!toolEntry(tool)!.contexts.includes(run.context)) return refused("not_offered");
+  // Catalogue version 4 lists knowledge.propose for Morrow (ADR-0041 item 24, OD-2026-10-26-7
+  // question 15), but its proposals need Morrow's principal-keyed path (plan row H12d): PR 20's
+  // definer keys a proposal by the run's installation, which Morrow's run has none of. No
+  // Morrow context is offered it until then (pendingMorrowTools), and this refuses it too.
+  if (tool === "knowledge.propose" && run.context === "coordinator") return refused("not_offered");
   if (!checkToolInput(tool, input).ok) return invalidInput;
   if (customerTagged(run.readTags)) return refused("customer_data");
   return null;
