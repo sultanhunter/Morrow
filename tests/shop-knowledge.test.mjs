@@ -32,6 +32,7 @@ import {
   toolEntry,
   toolsForContext,
 } from "../packages/policy/src/tool-catalogue.ts";
+import { fakeModelCall } from "../packages/policy/src/harness-fakes.ts";
 import { checkDraft } from "../packages/work/src/runs/drafting.ts";
 import {
   createKnowledgeApiHandler,
@@ -195,35 +196,43 @@ test("Listings gets the brand voice only as one marked data block: it chooses no
   // No accepted page, or a page the run may not view: nothing enters.
   assert.deepEqual(brandVoiceBlocks(null, all), []);
   assert.deepEqual(brandVoiceBlocks(page, none), []);
-  // One ModelCall@2 turn carrying it validates, and what the run may do does not depend on it:
-  // the tools come from the release and context, the fields and the product are checked in
-  // code against the run (a draft naming another product is product_mismatch).
-  const call = {
-    schemaVersion: 2,
-    purpose: "agent_turn",
-    turn: 1,
-    attempt: 1,
-    sequence: 1,
-    final: false,
-    prefixDigest: null,
-    messages: [
-      {
-        role: "user",
-        content: [
-          ...blocks,
-          { type: "data", source: "product", sourceId: null, text: '{"productId":"product:1"}' },
-        ],
-      },
+  // One user turn carrying it validates, and what the run may do does not depend on it: the
+  // tools come from the release and context, the fields and the product are checked in code
+  // against the run (a draft naming another product is product_mismatch). ModelCall@2 names
+  // ids only; the broker reads the turn from run_turns (ADR-0041 item 8).
+  const turn = {
+    role: "user",
+    content: [
+      ...blocks,
+      { type: "data", source: "product", sourceId: null, text: '{"productId":"product:1"}' },
     ],
   };
-  assert.ok(validateCurrentDefinition("ModelCallV2", call));
+  assert.ok(validateCurrentDefinition("UserModelMessage", turn));
+  assert.equal(
+    validateCurrentDefinition("ModelCallV2", { ...fakeModelCall(), messages: [turn] }),
+    false,
+  );
   const listingsTools = ["knowledge.search", "products.read", "report.write", "proposal.listing"];
   const offered = offeredTools("routed", listingsTools);
   assert.deepEqual(offered, offeredTools("routed", listingsTools));
   assert.equal(offered.includes("proposal.reply"), false);
+  // Its declared grant tools, then the routed context's memory and harness tools (catalogue
+  // version 4, ADR-0041 item 24): none of them names a field, product or tool for it.
   assert.deepEqual(
     modelToolDefinitions(offered).map((d) => d.name),
-    ["knowledge_search", "products_read", "report_write", "proposal_listing"],
+    [
+      "knowledge_search",
+      "products_read",
+      "report_write",
+      "proposal_listing",
+      "memory_search",
+      "memory_read",
+      "memory_suggest",
+      "run_plan",
+      "run_complete",
+      "run_wait",
+      "context_checkpoint",
+    ],
   );
   const snapshot = {
     productId: "product:1",
@@ -307,7 +316,9 @@ test("knowledge.propose's checks in code: grants nothing, server-held tags and t
     decideKnowledgePropose(proposeInput(), run({ agentTools: "off" })),
     refused("switch_off"),
   );
-  for (const context of ["coordinator", "look_for_work", "specialist"])
+  // Morrow is listed for it in catalogue version 4 (ADR-0041 item 24), but its principal-keyed
+  // path is plan row H12d's: until then it is refused there too.
+  for (const context of ["coordinator", "look_for_work", "call", "specialist"])
     assert.deepEqual(
       decideKnowledgePropose(proposeInput(), run({ context })),
       refused("not_offered"),
@@ -344,10 +355,16 @@ test("knowledge.propose's checks in code: grants nothing, server-held tags and t
 test("notebook.write's checks in code: its own notebook, never customer data", () => {
   const ok = decideNotebookWrite({ text: "Titles run long." }, run({ readTags: [] }));
   assert.deepEqual(ok, { ok: true, args: { text: "Titles run long.", readTags: [] } });
-  assert.deepEqual(decideNotebookWrite({ text: "x" }, run({ context: "look_for_work" })), {
-    ok: false,
-    outcome: "refused",
-    refusal: "not_offered",
+  for (const context of ["look_for_work", "coordinator"])
+    assert.deepEqual(decideNotebookWrite({ text: "x" }, run({ context })), {
+      ok: false,
+      outcome: "refused",
+      refusal: "not_offered",
+    });
+  // Catalogue version 4: a called teammate's run writes its own installation's notebook.
+  assert.deepEqual(decideNotebookWrite({ text: "x" }, run({ context: "call", readTags: [] })), {
+    ok: true,
+    args: { text: "x", readTags: [] },
   });
   assert.deepEqual(
     decideNotebookWrite({ text: "x" }, run({ readTags: [tag("support.case.read")] })),
@@ -430,13 +447,28 @@ test("a run's reads hand back their content's read tags, and a later write carri
   assert.throws(() => withResultTags(after, many), /KNOWLEDGE_RUN_TAGS_OVERFLOW/);
 });
 
-test("ToolCatalogue@1 version 3: the two tools are internal writes for routed and mandate runs only", () => {
+test("ToolCatalogue@1 version 3: the two tools are internal writes; version 4 offers Morrow knowledge.propose and a called teammate its notebook", () => {
   const capabilities = JSON.parse(
     readFileSync("docs/contracts/capabilities.json", "utf8"),
   ).capabilities;
-  for (const [name, capabilityId, input] of [
-    ["knowledge.propose", "workspace.knowledge.propose", "ToolInputKnowledgePropose"],
-    ["notebook.write", "workspace.notebook.write", "ToolInputNotebookWrite"],
+  // Catalogue version 4 (ADR-0041 items 24 and 27, OD-2026-10-26-7 question 15): Morrow may
+  // propose knowledge, and a called teammate's run (a run of the owning agent) may write its
+  // own notebook; neither is offered in look-for-work.
+  for (const [name, capabilityId, input, contexts, never] of [
+    [
+      "knowledge.propose",
+      "workspace.knowledge.propose",
+      "ToolInputKnowledgePropose",
+      ["coordinator", "routed", "mandate"],
+      ["look_for_work", "call"],
+    ],
+    [
+      "notebook.write",
+      "workspace.notebook.write",
+      "ToolInputNotebookWrite",
+      ["routed", "mandate", "call"],
+      ["coordinator", "look_for_work"],
+    ],
   ]) {
     const { description, inputSchema, ...entry } = toolEntry(name);
     assert.deepEqual(entry, {
@@ -448,7 +480,7 @@ test("ToolCatalogue@1 version 3: the two tools are internal writes for routed an
       replayClass: "internal_write",
       resultMaxBytes: 8192,
       inputDefinition: input,
-      contexts: ["routed", "mandate"],
+      contexts,
     });
     assert.match(description, /customer details/);
     assert.equal(JSON.stringify(inputSchema).includes("storeId"), false);
@@ -456,7 +488,7 @@ test("ToolCatalogue@1 version 3: the two tools are internal writes for routed an
     assert.equal(capability.executor, "agent_direct_write");
     assert.equal(capability.effect, "internal_write");
     assert.equal(capability.review_required, false);
-    for (const context of ["coordinator", "look_for_work", "specialist"])
+    for (const context of never)
       assert.equal(toolsForContext(context).includes(name), false, context);
   }
   // A person's approve, write and delete stay human_only: no tool reaches them.

@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "feature": "agent_cards",
+  "switch": "off",
+  "observed_on": null,
+  "scope": "The reviewed platform switch of agent cards (ADR-0037 items 7 and 9; its implementation plan's PR 2 commits it off, replacing specialists-staging.json): Morrow's agent.propose and the Add to team document and transaction. While off, packages/policy's coordinatorLaunchTools leaves agent.propose out of Morrow's turns, and edge:check refuses an on record; once Add to team exists it answers 503 before any document, lock or grant. It goes on by one reviewed commit only after the agent-card authority packet (G18), G9 and G10, the agent-loop switch and a passing eval round. The workspace setting Let Morrow suggest new teammates is on by default only once this is on. Production has no switch before the production custody ADR."
+}

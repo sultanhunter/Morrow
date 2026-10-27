@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -49,9 +50,12 @@ import {
   edgeLiveEvalsPrerequisites,
   reviewedLiveEvalsRecord,
   edgeShopKnowledgePrerequisites,
+  edgeTeamSwitchFeatures,
+  edgeTeamSwitchPrerequisites,
   reviewedModelRecord,
   reviewedPlanDraftsRecord,
   reviewedShopKnowledgeRecord,
+  reviewedTeamSwitchRecord,
   reviewedRuntimeRecord,
   reviewedStripeRecord,
   runWrangler,
@@ -60,7 +64,10 @@ import {
 } from "../scripts/edge.mjs";
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
-import { planDraftsSwitchAllowed } from "../packages/policy/src/projects/plan-draft.ts";
+import {
+  coordinatorLaunchTools,
+  planDraftsSwitchAllowed,
+} from "../packages/policy/src/projects/plan-draft.ts";
 import {
   agentLoopPrerequisites,
   inspectAgentPlatformSwitches,
@@ -69,6 +76,7 @@ import {
   shopKnowledgeRecord,
   shopKnowledgeSwitchAllowed,
 } from "../packages/policy/src/knowledge/rules.ts";
+import { teamSwitchState } from "../packages/policy/src/teammates.ts";
 
 // P04.T02a AC01, AC04, AC24 and the static half of AC22. Configuration is read
 // with the pinned wrangler (no account, credential or network).
@@ -2426,7 +2434,7 @@ test("model-provider-on: switched on, the full model set is required and every m
           worker.key + ":" + environment,
         );
   // Every other switch stays off: Stripe, the runtime and the Shopify apply (write) switch
-  // here, and the agent loop, plan drafts and specialists in their records.
+  // here, and the agent loop, plan drafts, teammate calls and agent cards in their records.
   assert.deepEqual(
     [verdict.stripeSwitch, verdict.runtimeSwitch, verdict.applySwitch],
     ["off", "off", "off"],
@@ -2436,7 +2444,8 @@ test("model-provider-on: switched on, the full model set is required and every m
     "agent-loop-staging.json",
     "plan-drafts-staging.json",
     "shopify-write-staging.json",
-    "specialists-staging.json",
+    "teammate-calls-staging.json",
+    "agent-cards-staging.json",
   ])
     assert.equal(
       JSON.parse(readFileSync(join("docs/decisions", name), "utf8")).switch,
@@ -2621,6 +2630,104 @@ test("the plan-drafts switch: committed off and held; on is refused while the lo
       }),
     );
     assert.deepEqual(found, [expected]);
+  }
+});
+
+// ADR-0037 item 9 (its implementation plan's PR 2): the teammate-calls and agent-cards
+// switches replace the specialist switch, committed off; edge:check refuses either on before
+// G9, G10, the agent-loop switch and a passing eval round (and, for agent cards, the
+// agent-card authority packet), none of which has a reviewed record yet.
+test("the teammate-calls and agent-cards switches: committed off; on is refused before their prerequisites", async () => {
+  assert.equal(existsSync("docs/decisions/specialists-staging.json"), false);
+  assert.deepEqual(
+    { ...edgeTeamSwitchFeatures },
+    {
+      teammate_calls: "teammate-calls-staging.json",
+      agent_cards: "agent-cards-staging.json",
+    },
+  );
+  assert.deepEqual(
+    { ...edgeTeamSwitchPrerequisites },
+    {
+      agentLoop: "off",
+      g9: false,
+      g10: false,
+      evalRound: false,
+      agentCardPacket: false,
+    },
+  );
+  const done = { agentLoop: "on", g9: true, g10: true, evalRound: true, agentCardPacket: true };
+  for (const [feature, name] of Object.entries(edgeTeamSwitchFeatures)) {
+    const committed = JSON.parse(readFileSync(join("docs/decisions", name), "utf8"));
+    assert.deepEqual({ ...reviewedTeamSwitchRecord(committed, feature) }, { switch: "off" });
+    const on = { ...committed, switch: "on" };
+    assert.throws(
+      () => reviewedTeamSwitchRecord(on, feature),
+      /EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES/,
+    );
+    for (const missing of ["agentLoop", "g9", "g10", "evalRound"])
+      assert.throws(
+        () =>
+          reviewedTeamSwitchRecord(on, feature, {
+            ...done,
+            [missing]: missing === "agentLoop" ? "off" : false,
+          }),
+        /EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES/,
+        feature + " " + missing,
+      );
+    assert.deepEqual({ ...reviewedTeamSwitchRecord(on, feature, done) }, { switch: "on" });
+    for (const edit of [
+      (r) => (r.switch = true),
+      (r) => (r.feature = feature === "agent_cards" ? "teammate_calls" : "agent_cards"),
+      (r) => (r.observed_on = "2026-10-26"),
+      (r) => (r.release = "morrow.specialist"),
+      (r) => (r.environment_kind = "production"),
+      (r) => (r.schema_version = 2),
+      (r) => (r.scope = null),
+    ]) {
+      const record = structuredClone(committed);
+      edit(record);
+      assert.throws(
+        () => reviewedTeamSwitchRecord(record, feature),
+        /EDGE_STAGING_TEAM_SWITCH_RECORD/,
+      );
+    }
+  }
+  // Agent cards also wait for the agent-card authority packet (G18).
+  const cards = JSON.parse(readFileSync("docs/decisions/agent-cards-staging.json", "utf8"));
+  assert.throws(
+    () =>
+      reviewedTeamSwitchRecord({ ...cards, switch: "on" }, "agent_cards", {
+        ...done,
+        agentCardPacket: false,
+      }),
+    /EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES/,
+  );
+  // The policy reads the same records: while off, Morrow's turns offer none of their tools.
+  assert.deepEqual(teamSwitchState(), { teammateCalls: "off", agentCards: "off" });
+  for (const tool of ["agent.ask", "agent.map", "agent.message", "agent.cancel", "agent.propose"])
+    assert.ok(!coordinatorLaunchTools().includes(tool), tool);
+  // Through verifyEdgeConfig: the committed records pass; on, malformed or missing fails.
+  const write = (name, value) => {
+    const path = join(scratch, "team-switch-" + ++copies);
+    mkdirSync(path);
+    const file = join(path, name);
+    if (value !== undefined) writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+  for (const [key, name] of [
+    ["teammateCallsPath", "teammate-calls-staging.json"],
+    ["agentCardsPath", "agent-cards-staging.json"],
+  ]) {
+    const committed = JSON.parse(readFileSync(join("docs/decisions", name), "utf8"));
+    for (const [value, expected] of [
+      [{ ...committed, switch: "on" }, "EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES"],
+      [{ ...committed, switch: "yes" }, "EDGE_STAGING_TEAM_SWITCH_RECORD"],
+      [undefined, "EDGE_STAGING_RECORD_UNREADABLE"],
+    ]) {
+      const found = codes(await verify(resolve("."), undefined, { [key]: write(name, value) }));
+      assert.deepEqual(found, [expected], name);
+    }
   }
 });
 
@@ -2864,7 +2971,10 @@ test("PR 11: the committed agent-loop record is off with no prerequisite recorde
 });
 
 test("PR 11 (review F2 of 2026-10-26): edge:check and verify give one verdict on the agent-loop record", () => {
-  const specialists = JSON.parse(readFileSync("docs/decisions/specialists-staging.json", "utf8"));
+  const teammateCalls = JSON.parse(
+    readFileSync("docs/decisions/teammate-calls-staging.json", "utf8"),
+  );
+  const agentCards = JSON.parse(readFileSync("docs/decisions/agent-cards-staging.json", "utf8"));
   const evidenceRoot = loopRecords(loopRecorded).evidenceRoot;
   // Each check's verdict on one record: accepted (true) or refused (false).
   const edge = (record) => {
@@ -2876,7 +2986,8 @@ test("PR 11 (review F2 of 2026-10-26): edge:check and verify give one verdict on
       return false;
     }
   };
-  const verify = (record) => inspectAgentPlatformSwitches(record, specialists).length === 0;
+  const verify = (record) =>
+    inspectAgentPlatformSwitches(record, teammateCalls, agentCards).length === 0;
   const on = structuredClone(committedLoop);
   on.switch = "on";
   loopRecorded(on);
@@ -3044,7 +3155,6 @@ test("PR 7: the committed runtime record is off, and the record rule", async () 
       profile: "morrow.computer@1",
       switch: "off",
       admission: "synthetic_only",
-      monthly_budget_usd: "10.00",
       provider_usage_limit_usd: "20.00",
       qualified_on: null,
       qualification_record: null,
@@ -3054,9 +3164,10 @@ test("PR 7: the committed runtime record is off, and the record rule", async () 
     { ...reviewedRuntimeRecord(committedRuntime) },
     { switch: "off", admission: "synthetic_only" },
   );
-  // The record's budget is the code's (and migration 0043's), below the provider's limit.
+  // ADR-0039 item 6: no monthly runtime budget in the record or the code; the provider's own
+  // usage limit (E2B enforces it, never Morrow's code) is recorded in both.
   const { runtimeCaps } = await import("../packages/policy/src/runtime-computer.ts");
-  assert.equal(committedRuntime.monthly_budget_usd, runtimeCaps.monthlyBudgetUsd);
+  assert.equal(Object.hasOwn(runtimeCaps, "monthlyBudgetUsd"), false);
   assert.equal(committedRuntime.provider_usage_limit_usd, runtimeCaps.providerUsageLimitUsd);
   // The staging tools' owner-file format is the broker's key shape.
   const { e2bKeyPattern } = await import("../packages/identity/src/broker-protocol.ts");
@@ -3109,10 +3220,11 @@ test("PR 7: the committed runtime record is off, and the record rule", async () 
     (r) => (r.profile = "morrow.computer@2"),
     (r) => delete r.switch,
     (r) => (r.extra = 1),
-    (r) => (r.monthly_budget_usd = "20.00"),
-    (r) => (r.monthly_budget_usd = "25.00"),
-    (r) => (r.monthly_budget_usd = "0.00"),
-    (r) => (r.monthly_budget_usd = 10),
+    // ADR-0039 item 6: a monthly runtime budget in the record is refused, as any other key.
+    (r) => (r.monthly_budget_usd = "10.00"),
+    (r) => (r.provider_usage_limit_usd = "0.00"),
+    (r) => (r.provider_usage_limit_usd = 20),
+    (r) => delete r.provider_usage_limit_usd,
     (r) => (r.qualified_on = "2026-10-30"),
     (r) => (r.qualification_record = "docs/evidence/live/2026-10-30-e2b.md"),
     (r) => (

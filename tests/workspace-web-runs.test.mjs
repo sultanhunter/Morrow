@@ -674,17 +674,27 @@ test("the fixture adapter: a run on an enabled store, refusals, and the task's r
   );
   assert.equal(detail.value.credits.settled, 4);
   assert.deepEqual((await port.runs.reconcile(W, { key: key(), body: {} })).value, { closed: 0 });
-  // Above the product limit of Opus high (nine products).
-  const many = Array.from({ length: 10 }, (_, i) => "product:" + (i + 100));
-  assert.equal(
-    (
-      await port.runs.admit(W, taskId, {
-        key: key(),
-        body: { ...body, products: many, selection: { model: "claude_opus_5_5", effort: "high" } },
-      })
-    ).kind,
-    "conflict",
-  );
+  // More than 25 products is outside the request's bound, as the server's parseAdmitBody:
+  // 400 missing_input (invalid), never the selection's 409. Since catalogue version 4
+  // (ADR-0039) every entry, Opus high included, allows the whole 25.
+  const many = Array.from({ length: 26 }, (_, i) => "product:" + (i + 100));
+  const over = await port.runs.admit(W, taskId, {
+    key: key(),
+    body: { ...body, products: many, selection: { model: "claude_opus_5_5", effort: "high" } },
+  });
+  assert.equal(over.kind, "invalid");
+  assert.equal((await port.runs.listOfTask(W, taskId)).value.length, 1);
+  // Exactly 25 products at Opus high is admitted.
+  const full = await port.runs.admit(W, taskId, {
+    key: key(),
+    body: {
+      ...body,
+      products: many.slice(0, 25),
+      selection: { model: "claude_opus_5_5", effort: "high" },
+    },
+  });
+  assert.equal(full.kind, "ok");
+  assert.equal(full.value.productCount, 25);
 });
 
 test("re-entry markers know the run command", () => {

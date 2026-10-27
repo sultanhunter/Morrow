@@ -690,7 +690,8 @@ export function edgePlacementRegion(regionId) {
 // model-provider switch's vars (edgeModelVarNames) on the staging api, broker and
 // orchestrator. Build order PR 7: the runtime switch's var (edgeRuntimeVarNames) on the
 // staging broker while it is on or cleanup-only. v1 PR 3: the apply switch's var
-// (edgeApplyVarNames) on the staging api and broker.
+// (edgeApplyVarNames) on the staging api and broker. v1 PR 5: the connection clean-up
+// switch's var (edgeCleanupVarNames) on the staging connector.
 export function edgeVarNames(
   worker,
   environment,
@@ -698,6 +699,7 @@ export function edgeVarNames(
   model = "off",
   runtime = "off",
   apply = "off",
+  cleanup = "off",
   loop = "off",
 ) {
   const modelVars = [
@@ -709,7 +711,12 @@ export function edgeVarNames(
   // v1 PR 1: the staging connector's two reviewed identifiers (its own origin and the
   // api's; the database binding byte-equal to the api's).
   if (worker === "connector")
-    return ["MORROW_ENVIRONMENT", "CONNECTOR_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"];
+    return [
+      "MORROW_ENVIRONMENT",
+      "CONNECTOR_CONFIGURATION_JSON",
+      "MORROW_DATABASE_BINDING_JSON",
+      ...(cleanup === "on" ? edgeCleanupVarNames(worker, environment) : []),
+    ];
   const stripeVars = [
     ...(stripe === "on" ? edgeStripeVarNames(worker, environment) : []),
     ...(apply === "on" ? edgeApplyVarNames(worker, environment) : []),
@@ -824,6 +831,56 @@ export function reviewedPlanDraftsRecord(record, prerequisites = edgePlanDraftsP
     throw Error("EDGE_PLAN_DRAFTS_BEFORE_LOOP");
   return Object.freeze({ switch: record.switch, start_routes: record.start_routes });
 }
+// ADR-0037 item 9 (its implementation plan's PR 2): the teammate-calls and agent-cards
+// switches, committed off in place of the specialist switch. No Worker reads them yet:
+// packages/policy's coordinatorLaunchTools keeps agent.ask, agent.map, agent.message,
+// agent.cancel and agent.propose out of Morrow's contexts while they are off (tool catalogue
+// version 4, ADR-0041 item 24). Each may go on only after G9 and
+// G10, the agent-loop switch (ADR-0027 item 11) and a passing eval round (ADR-0037 item 10);
+// agent cards also after the agent-card authority packet (G18). None of these has a reviewed
+// record yet, so all count as not done here, and an "on" record is a problem.
+export const edgeTeamSwitchFeatures = Object.freeze({
+  teammate_calls: "teammate-calls-staging.json",
+  agent_cards: "agent-cards-staging.json",
+});
+export const edgeTeamSwitchPrerequisites = Object.freeze({
+  agentLoop: "off",
+  g9: false,
+  g10: false,
+  evalRound: false,
+  agentCardPacket: false,
+});
+export function reviewedTeamSwitchRecord(
+  record,
+  feature,
+  prerequisites = edgeTeamSwitchPrerequisites,
+) {
+  if (
+    !Object.hasOwn(edgeTeamSwitchFeatures, feature) ||
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "environment_kind,feature,observed_on,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.feature !== feature ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    record.observed_on !== null ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_TEAM_SWITCH_RECORD");
+  if (
+    record.switch === "on" &&
+    (prerequisites.agentLoop !== "on" ||
+      prerequisites.g9 !== true ||
+      prerequisites.g10 !== true ||
+      prerequisites.evalRound !== true ||
+      (feature === "agent_cards" && prerequisites.agentCardPacket !== true))
+  )
+    throw Error("EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES");
+  return Object.freeze({ switch: record.switch });
+}
 // PR 20, the shop-knowledge switch (docs/briefs/shop-knowledge.md; committed off): the api
 // composes it from docs/decisions/shop-knowledge-staging.json (packages/policy's
 // shopKnowledgeRecord), so it carries no var or secret. `switch` (the person routes) may be on
@@ -912,6 +969,33 @@ export function reviewedApplyRecord(record) {
     typeof record.scope !== "string"
   )
     throw Error("EDGE_STAGING_APPLY_RECORD");
+  return Object.freeze({ switch: record.switch });
+}
+// v1 PR 5, the connection clean-up switch (ADR-0025 item 10; ADR-0031 item 3; committed off):
+// its runtime image is the var MORROW_CONNECTION_CLEANUP ("on") on the staging connector; no
+// secret. While it is on the connector's cron reads every live installation's scopes back
+// through the broker, deletes the data of an installation uninstalled 48 hours ago whose
+// shop/redact never completed, and closes stuck scope-change deliveries. Development's
+// committed config never carries it, and production has no switch.
+export const edgeCleanupVar = "MORROW_CONNECTION_CLEANUP";
+export const edgeCleanupValue = "on";
+export function edgeCleanupVarNames(worker, environment) {
+  return environment === "staging" && worker === "connector" ? [edgeCleanupVar] : [];
+}
+// The reviewed staging clean-up record (v1 PR 5; committed off): `switch` "off" until one
+// reviewed commit turns it "on". Returns the switch, or throws.
+export function reviewedCleanupRecord(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== "environment_kind,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_CLEANUP_RECORD");
   return Object.freeze({ switch: record.switch });
 }
 // Build order PR 11, the agent-loop switch (ADR-0027 item 11; committed off): its runtime
@@ -1003,8 +1087,9 @@ export function edgeRuntimeNamesRequired(worker, environment, runtime) {
 const edgeRuntimeNames = Object.freeze([edgeRuntimeSwitchVar, ...edgeRuntimeSecretNames]);
 // The reviewed staging runtime record (build order PR 7; committed off): provider e2b, the
 // profile morrow.computer@1, `switch` off, cleanup_only or on, `admission` synthetic_only or
-// merchant, the code's monthly runtime budget below the provider project's usage limit (both
-// decimal USD strings), and the qualification (ADR-0029 item 11): the date and its
+// merchant, the provider project's usage limit (a decimal USD string: E2B enforces it, never
+// Morrow's code; ADR-0039 item 6 removed the code's monthly runtime budget below it), and the
+// qualification (ADR-0029 item 11): the date and its
 // docs/evidence/live/ record, both or neither, and the record a committed file under
 // `evidenceRoot` (the repository root unless a test names another), so "on" never stands on a
 // name alone. On needs qualification; merchant admission needs on. Returns {switch,
@@ -1018,7 +1103,7 @@ export function reviewedRuntimeRecord(record, evidenceRoot = repositoryRoot) {
     typeof record !== "object" ||
     Array.isArray(record) ||
     Object.keys(record).sort().join() !==
-      "admission,environment_kind,monthly_budget_usd,profile,provider,provider_usage_limit_usd,qualification_record,qualified_on,schema_version,scope,switch" ||
+      "admission,environment_kind,profile,provider,provider_usage_limit_usd,qualification_record,qualified_on,schema_version,scope,switch" ||
     record.schema_version !== 1 ||
     record.environment_kind !== "staging" ||
     record.provider !== "e2b" ||
@@ -1026,12 +1111,9 @@ export function reviewedRuntimeRecord(record, evidenceRoot = repositoryRoot) {
     !["off", "cleanup_only", "on"].includes(record.switch) ||
     !["synthetic_only", "merchant"].includes(record.admission) ||
     typeof record.scope !== "string" ||
-    typeof record.monthly_budget_usd !== "string" ||
-    !usd.test(record.monthly_budget_usd) ||
     typeof record.provider_usage_limit_usd !== "string" ||
     !usd.test(record.provider_usage_limit_usd) ||
-    !(Number(record.monthly_budget_usd) > 0) ||
-    !(Number(record.monthly_budget_usd) < Number(record.provider_usage_limit_usd)) ||
+    !(Number(record.provider_usage_limit_usd) > 0) ||
     (record.qualified_on === null) !== (record.qualification_record === null) ||
     (record.qualified_on !== null &&
       (typeof record.qualified_on !== "string" ||
@@ -1434,6 +1516,9 @@ export async function verifyEdgeConfig({
   evidenceRoot = repositoryRoot,
   applyPath = join(repositoryRoot, "docs/decisions/shopify-write-staging.json"),
   agentLoopPath = join(repositoryRoot, "docs/decisions/agent-loop-staging.json"),
+  teammateCallsPath = join(repositoryRoot, "docs/decisions/teammate-calls-staging.json"),
+  agentCardsPath = join(repositoryRoot, "docs/decisions/agent-cards-staging.json"),
+  cleanupPath = join(repositoryRoot, "docs/decisions/connection-cleanup-staging.json"),
   liveEvalsPath = join(repositoryRoot, "docs/decisions/agent-evals-live.json"),
   // fix-connector-cron-latency: the cron object's location hint, read from the connector's
   // source (worker/cron.ts) unless a test names another.
@@ -1451,6 +1536,8 @@ export async function verifyEdgeConfig({
     here,
   );
   const {
+    connectionCleanupVar,
+    connectionCleanupOn,
     brokerRequiredSecretsFor,
     brokerStripeSecrets,
     stripeModeTest,
@@ -1540,6 +1627,21 @@ export async function verifyEdgeConfig({
     problem("EDGE_AGENT_LOOP_WITHOUT_MODEL", "agent-loop-staging.json");
   if (agentLoopVar !== edgeAgentLoopVar || agentLoopOn !== edgeAgentLoopValue)
     problem("EDGE_AGENT_LOOP_SWITCH_NAMES", "broker-protocol");
+  // v1 PR 5, the connection clean-up switch: the same protocol, on the connector alone.
+  const cleanupRecord = readJson(cleanupPath);
+  let cleaned = null;
+  if (cleanupRecord === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "connection-cleanup-staging.json");
+  else
+    try {
+      cleaned = reviewedCleanupRecord(cleanupRecord);
+    } catch {
+      problem("EDGE_STAGING_CLEANUP_RECORD", "connection-cleanup-staging.json");
+    }
+  const cleanupSwitch = (environment) =>
+    environment === "staging" && cleaned?.switch === "on" ? "on" : "off";
+  if (connectionCleanupVar !== edgeCleanupVar || connectionCleanupOn !== edgeCleanupValue)
+    problem("EDGE_CLEANUP_SWITCH_NAMES", "broker-protocol");
   // PR 18, the plan-drafts switch: refused on while the agent loop is off (ADR-0034 item 10).
   // PR 20, the shop-knowledge switch: refused on before its grants, the tools before the loop.
   const shopKnowledge = readJson(shopKnowledgePath);
@@ -1574,6 +1676,27 @@ export async function verifyEdgeConfig({
         "plan-drafts-staging.json",
       );
     }
+  // ADR-0037 item 9: the teammate-calls and agent-cards switches, refused on before their
+  // prerequisites.
+  for (const [feature, path] of [
+    ["teammate_calls", teammateCallsPath],
+    ["agent_cards", agentCardsPath],
+  ]) {
+    const name = edgeTeamSwitchFeatures[feature];
+    const record = readJson(path);
+    if (record === null) problem("EDGE_STAGING_RECORD_UNREADABLE", name);
+    else
+      try {
+        reviewedTeamSwitchRecord(record, feature);
+      } catch (error) {
+        problem(
+          error instanceof Error && error.message === "EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES"
+            ? "EDGE_TEAM_SWITCH_BEFORE_PREREQUISITES"
+            : "EDGE_STAGING_TEAM_SWITCH_RECORD",
+          name,
+        );
+      }
+  }
   // ADR-0037 plan PR 9, the live-evals switch: refused on before the loop and the driver. The
   // loop's state is its reviewed record's (build order PR 11); no driver is recorded yet.
   const liveEvalsRecord = readJson(liveEvalsPath);
@@ -1701,6 +1824,7 @@ export async function verifyEdgeConfig({
       const modelSwitched = modelSwitch(environment);
       const runtimeSwitched = runtimeSwitch(environment);
       const applySwitched = applySwitch(environment);
+      const cleanupSwitched = cleanupSwitch(environment);
       const loopSwitched = loopSwitch(environment);
       const varNames = edgeVarNames(
         worker.key,
@@ -1709,6 +1833,7 @@ export async function verifyEdgeConfig({
         modelSwitched,
         runtimeSwitched,
         applySwitched,
+        cleanupSwitched,
         loopSwitched,
       );
       if (
@@ -1724,6 +1849,7 @@ export async function verifyEdgeConfig({
         (varNames.includes(edgeRuntimeSwitchVar) &&
           vars[edgeRuntimeSwitchVar] !== runtimeSwitched) ||
         (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue) ||
+        (varNames.includes(edgeCleanupVar) && vars[edgeCleanupVar] !== edgeCleanupValue) ||
         (varNames.includes(edgeAgentLoopVar) && vars[edgeAgentLoopVar] !== edgeAgentLoopValue)
       )
         problem("EDGE_VARS", where);
@@ -1970,6 +2096,7 @@ export async function verifyEdgeConfig({
     modelSwitch: modelSwitch("staging"),
     runtimeSwitch: runtimeSwitch("staging"),
     applySwitch: applySwitch("staging"),
+    cleanupSwitch: cleanupSwitch("staging"),
   };
 }
 

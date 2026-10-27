@@ -1,20 +1,28 @@
-// The tool catalogue rules (PR 10; ADR-0027 items 2, 3 and 8, ADR-0024 item 6, ADR-0028
-// item 2). Pure: no I/O, clock or randomness. The data is generated from
-// docs/contracts/tool-catalogue.json and docs/contracts/specialist-ceiling.json
-// (scripts/generate-agent-platform.mjs), which inspects it first.
+// The tool catalogue rules (PR 10; ADR-0027 items 2, 3 and 8, ADR-0024 item 6, ADR-0037
+// items 1 to 3, ADR-0041 item 24). Pure: no I/O, clock or randomness. The data is generated
+// from docs/contracts/tool-catalogue.json (scripts/generate-agent-platform.mjs), which
+// inspects it first.
 //
 // - Tools are named by the closed ToolName enum and offered by context: the Coordinator's
-//   fixed set, a person's routed run, a mandate run, a look-for-work pass (reads and
-//   suggestions only) or a specialist run. A run is offered its package's declared tools
-//   intersected with its context's; a skill never adds a tool.
-// - A tool is one capability and verb. The agent loop (PR 11) re-checks the intersection at
-//   every call; nothing here grants anything.
+//   fixed set, a person's routed run (a hand-off), a mandate run, a look-for-work pass (reads,
+//   suggestions, memory reads and its own plan and completion) or a called teammate's run (no
+//   question, post or memory suggestion to the person; it builds result items with
+//   result.write and ends with run.complete's child form). agent.* tools are the Coordinator's
+//   only.
+// - Two kinds of tool (ADR-0041 item 24). A grant tool is one capability and verb: a run is
+//   offered its package's declared grant tools intersected with its context's, and the agent
+//   loop re-checks the intersection at every call. A context tool (the memory and harness
+//   families) holds no capability: it grants nothing, writes only its run's own rows or reads
+//   what code decides per target, and every run of a context is offered its context's set;
+//   a package never declares one and a card never picks one. A skill never adds a tool, and
+//   nothing here grants anything.
 // - The model sees wire names and strict input schemas only, in catalogue order, so the
 //   cached prefix of a run stays byte-stable. A recorded tool_use carries the same strict
 //   shape (ToolModelInput*); the tool-call step validates it again with the full ToolInput
 //   definition (checkToolInput), and a limit breach is that call's invalid_input.
-// - The Specialist ceiling is fixed ids; a specialist's capabilities are its tools' pairs
-//   inside it, at most 16.
+// - Catalogue version 4 retired the specialist context and the Specialist ceiling with the
+//   specialist kind (ADR-0037 item 7), and folded agent.result.read into memory.read and
+//   result.submit into run.complete's child form (ADR-0041 item 24).
 import type {
   Current_AgentRunKind,
   Current_CapabilityVerbs,
@@ -25,7 +33,6 @@ import type {
   CurrentDefinitionName,
 } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
-import { generatedSpecialistCeiling } from "./generated/specialist-ceiling";
 import { generatedToolCatalogue } from "./generated/tool-catalogue";
 
 export type ToolName = Current_ToolName;
@@ -37,8 +44,9 @@ export interface ToolEntry {
   readonly name: ToolName;
   readonly wireName: string;
   readonly family: Current_ToolFamily;
-  readonly capabilityId: string;
-  readonly verb: PermissionVerb;
+  /** Null for a context tool (memory and harness families): it holds no capability. */
+  readonly capabilityId: string | null;
+  readonly verb: PermissionVerb | null;
   readonly replayClass: Current_ToolReplayClass;
   readonly resultMaxBytes: number;
   readonly inputDefinition: string;
@@ -55,7 +63,7 @@ export interface ModelToolDefinition {
 }
 
 export class ToolCatalogueError extends Error {
-  constructor(readonly code: "TOOL_CATALOGUE_INPUT_INVALID" | "TOOL_OUTSIDE_CEILING") {
+  constructor(readonly code: "TOOL_CATALOGUE_INPUT_INVALID") {
     super(code);
     this.name = "ToolCatalogueError";
   }
@@ -72,7 +80,7 @@ const contexts: readonly ToolContext[] = [
   "routed",
   "mandate",
   "look_for_work",
-  "specialist",
+  "call",
 ];
 
 /** The catalogue version and digest a run manifest pins. */
@@ -89,25 +97,63 @@ export function toolEntry(name: unknown): ToolEntry | null {
 export function toolByWireName(wireName: unknown): ToolEntry | null {
   return typeof wireName === "string" ? (byWire.get(wireName) ?? null) : null;
 }
-/** The context a run's tools come from. Look-for-work is a mandate run's pass. */
+// The run kinds that have a tool context (ADR-0041 item 4): a teammate call's run is kind call,
+// offered the call context's tools. Review and upkeep runs stay refused until their contexts
+// exist (H7 and H12), so admission cannot give them tools.
+const kindContexts: readonly ToolContext[] = ["coordinator", "routed", "mandate", "call"];
+/**
+ * The context a run's tools come from. Look-for-work is a mandate run's pass. A caller still
+ * passing H5's retired third argument (a called flag) is refused, never given the routed
+ * context's person-facing tools.
+ */
 export function runContext(kind: Current_AgentRunKind, lookForWork: boolean): ToolContext {
+  const context = kindContexts.find((c) => c === kind);
   if (
-    !["coordinator", "routed", "mandate", "specialist"].includes(kind) ||
+    arguments.length !== 2 ||
+    context === undefined ||
     typeof lookForWork !== "boolean" ||
     (lookForWork && kind !== "mandate")
   )
     throw invalid();
-  return lookForWork ? "look_for_work" : kind;
+  return lookForWork ? "look_for_work" : context;
+}
+/**
+ * A called teammate's result item tool (ADR-0041 items 22 and 24): the call context's only. It
+ * returns its result with run.complete's child form, in place of ADR-0037's result.submit.
+ */
+export const teammateItemTool = "result.write";
+/** The tool every job and call finishes with (ADR-0041 items 16 and 24). */
+export const completionTool = "run.complete";
+/** The agent.* tools (ADR-0037 item 2): the Coordinator's only, never a teammate's. */
+export function isAgentTool(name: unknown): boolean {
+  return typeof name === "string" && name.startsWith("agent.") && byName.has(name);
+}
+/**
+ * Whether a tool is a context tool (ADR-0041 item 24: the memory and harness families): it
+ * holds no capability, grants nothing and is offered by its context, never declared.
+ */
+export function isContextTool(name: unknown): boolean {
+  const tool = toolEntry(name);
+  return tool !== null && (tool.family === "memory" || tool.family === "harness");
 }
 /** The tools a context may be offered, in catalogue order. */
 export function toolsForContext(context: ToolContext): readonly ToolName[] {
   if (!contexts.includes(context)) throw invalid();
   return Object.freeze(entries.filter((t) => t.contexts.includes(context)).map((t) => t.name));
 }
+/** A context's grant tools (each one capability and verb), in catalogue order. */
+export function grantToolsForContext(context: ToolContext): readonly ToolName[] {
+  return Object.freeze(toolsForContext(context).filter((name) => !isContextTool(name)));
+}
+/** A context's context tools (memory and harness), in catalogue order: every run gets them. */
+export function contextToolsForContext(context: ToolContext): readonly ToolName[] {
+  return Object.freeze(toolsForContext(context).filter((name) => isContextTool(name)));
+}
 /**
- * The tools one run is offered: the release's declared tools intersected with its context's,
- * in catalogue order. The Coordinator has no package: it gets its fixed set. An unknown or
- * repeated declared name throws (a release that declares one fails its review, never here).
+ * The tools one run is offered, in catalogue order: the release's declared grant tools
+ * intersected with its context's, and the context's context tools (ADR-0041 item 24). The
+ * Coordinator has no package: it gets its fixed set. An unknown or repeated declared name, or
+ * a declared context tool, throws (a release that declares one fails its review, never here).
  */
 export function offeredTools(
   context: ToolContext,
@@ -122,10 +168,10 @@ export function offeredTools(
     !Array.isArray(declared) ||
     declared.length > 32 ||
     new Set(declared).size !== declared.length ||
-    declared.some((name) => !byName.has(name))
+    declared.some((name) => !byName.has(name) || isContextTool(name))
   )
     throw invalid();
-  return Object.freeze(allowed.filter((name) => declared.includes(name)));
+  return Object.freeze(allowed.filter((name) => declared.includes(name) || isContextTool(name)));
 }
 /** The broker's tool definitions for offered tools, in catalogue order (a stable prefix). */
 export function modelToolDefinitions(names: readonly string[]): readonly ModelToolDefinition[] {
@@ -174,46 +220,4 @@ export function checkToolInput(name: unknown, input: unknown): ToolInputCheck {
   return validateCurrentDefinition(tool.inputDefinition as CurrentDefinitionName, input)
     ? inputValid
     : inputInvalid;
-}
-
-/** The Specialist ceiling (ADR-0028 item 2): fixed ids, at most 16. */
-export const specialistCeiling: readonly Current_CapabilityVerbs[] = Object.freeze(
-  generatedSpecialistCeiling.capabilities.map((row) =>
-    Object.freeze({
-      capabilityId: row.capabilityId,
-      verbs: Object.freeze([...row.verbs]) as unknown as PermissionVerb[],
-    }),
-  ),
-);
-export const specialistCeilingDigest: string = generatedSpecialistCeiling.digest;
-/** Whether a capability and verb are inside the Specialist ceiling. */
-export function withinSpecialistCeiling(capabilityId: unknown, verb: unknown): boolean {
-  return specialistCeiling.some(
-    (row) => row.capabilityId === capabilityId && (row.verbs as readonly unknown[]).includes(verb),
-  );
-}
-/**
- * A specialist's capabilities (ADR-0027 item 10): the pairs of the tools its eligible
- * skills declare that the specialist context offers, inside the ceiling, grouped by
- * capability in ceiling order. Never from the skill ids the model picked; a tool outside the
- * ceiling throws TOOL_OUTSIDE_CEILING.
- */
-export function specialistCapabilities(
-  tools: readonly string[],
-): readonly Current_CapabilityVerbs[] {
-  const offered = offeredTools("specialist", tools);
-  if (offered.length !== tools.length) throw new ToolCatalogueError("TOOL_OUTSIDE_CEILING");
-  const pairs = offered.map((name) => byName.get(name)!);
-  if (pairs.some((tool) => !withinSpecialistCeiling(tool.capabilityId, tool.verb)))
-    throw new ToolCatalogueError("TOOL_OUTSIDE_CEILING");
-  const rows: Current_CapabilityVerbs[] = [];
-  for (const row of specialistCeiling) {
-    const verbs = (row.verbs as readonly PermissionVerb[]).filter((verb) =>
-      pairs.some((tool) => tool.capabilityId === row.capabilityId && tool.verb === verb),
-    );
-    if (verbs.length) rows.push(Object.freeze({ capabilityId: row.capabilityId, verbs }));
-  }
-  if (rows.length > generatedSpecialistCeiling.maxCapabilities)
-    throw new ToolCatalogueError("TOOL_OUTSIDE_CEILING");
-  return Object.freeze(rows);
 }

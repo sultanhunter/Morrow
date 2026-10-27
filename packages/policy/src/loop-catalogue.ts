@@ -8,23 +8,30 @@
 //   rate; only the fixed prefix is cached) plus the effort's whole max_tokens at the output
 //   rate. An expected turn reads the 12,000-token prefix from the cache, except the first,
 //   which writes it.
-// - A run's turn limit is its kind's (6 for the Coordinator, 16 otherwise), lowered so that
-//   it times the worst-case turn fits the US$7 run backstop.
-// - A run holds the lowest of its turn limit times its worst-case turn, US$7 and its credit
-//   cap (a specialist's 5% of the grant; a look-for-work pass's per-agent daily cap, US$1.12
-//   in version 2, ADR-0036 item 7). A run whose hold cannot cover one worst-case turn, or two
-//   for a run that must call a tool (a specialist or a mandate run, look-for-work included),
-//   is not admitted: cap_below_turn.
+// - A run's turn limit is its kind's (6 for the Coordinator, 16 otherwise). ADR-0039 item 5:
+//   no money value lowers it (it was lowered so that it times the worst-case turn fit the
+//   US$7 run backstop, which ADR-0039 removed with the daily backstop and the look-for-work
+//   cap; loop version 2 carries none of them).
+// - Until ADR-0039 PR 2 replaces these rules with credit holds, a run holds the lower of its
+//   turn limit times its worst-case turn and its credit cap (a specialist's share of the
+//   grant, null when the run has none). A run whose hold cannot cover one worst-case turn, or
+//   two for a run that must call a tool (a specialist or a mandate run), is not admitted:
+//   cap_below_turn. Nothing on main admits a loop run.
 // - A turn starts only if the hold left covers it; it is the final turn (tool_choice none)
 //   when the hold left cannot also cover a final turn after it (cost_budget) or it is the
 //   last the limit allows.
-// - The daily backstop counts settled cost plus open holds and the new hold.
 // - A profile is never authority: none of this changes a tool, capability or cap.
 import type { Current_AgentRunKind, Current_RunHold } from "@morrow/contracts";
 import { modelCallBudgetMs, modelGatewayLimits } from "../../identity/src/broker-protocol.js";
 import { generatedLoopCatalogue } from "./generated/loop-catalogue";
 
 export type LoopProfileKind = "coordinator" | "specialist" | "installed";
+/**
+ * A loop run's kind for holds. "specialist" is no longer an AgentRunKind (ADR-0037 retired the
+ * kind; its contracts PR dropped it from agent-run@1): its hold, the 5% credit cap, stays here
+ * only until ADR-0039's contracts PR removes the money caps with this module's holds.
+ */
+export type LoopRunKind = Current_AgentRunKind | "specialist";
 export type LoopCatalogueStatus = "active" | "retired" | "proposed";
 export interface LoopSelectionKeys {
   readonly model: string;
@@ -44,6 +51,7 @@ export interface LoopEntry {
   /** modelCallBudgetMs at the effort's max_tokens (at most 600 s, the non-streaming ceiling). */
   readonly callBudgetMs: number;
 }
+/** RunHold@1's bindings; `run_backstop` is never produced since ADR-0039 (old records only). */
 export type HoldBinding = "turn_limit" | "run_backstop" | "credit_cap";
 export type RunHoldResult =
   | {
@@ -161,38 +169,31 @@ function limitsOf(version: number) {
   return v.limits;
 }
 /** A mandate run (look-for-work included) and a specialist must call a tool: two turns. */
-export function toolTurnsRequired(kind: Current_AgentRunKind): 1 | 2 {
+export function toolTurnsRequired(kind: LoopRunKind): 1 | 2 {
   if (!runKinds.includes(kind)) throw invalid();
   return kind === "mandate" || kind === "specialist" ? 2 : 1;
 }
-/** The kind's limit lowered so that it times the worst-case turn fits the run backstop. */
-export function turnLimit(entry: LoopEntry, kind: Current_AgentRunKind): number {
+/** The kind's turn limit: 6 for the Coordinator, 16 otherwise; no money value lowers it. */
+export function turnLimit(entry: LoopEntry, kind: LoopRunKind): number {
   if (!runKinds.includes(kind) || !entry || entry.worstCaseTurnUsd12 <= 0n) throw invalid();
   const limits = limitsOf(entry.catalogueVersion);
-  const kindLimit =
-    kind === "coordinator" ? limits.maxTurnsPerCoordinatorRun : limits.maxTurnsPerRun;
-  const fit = Number(usd12(limits.runCostCapUsd12) / entry.worstCaseTurnUsd12);
-  return Math.min(kindLimit, fit);
+  return kind === "coordinator" ? limits.maxTurnsPerCoordinatorRun : limits.maxTurnsPerRun;
 }
 /**
- * A run's hold (ADR-0026 item 4): the lowest of its turn limit times its worst-case turn,
- * the run backstop and its credit cap (null when the run has none), or cap_below_turn.
+ * A run's hold (ADR-0026 item 4, without ADR-0039's removed run backstop): the lower of its
+ * turn limit times its worst-case turn and its credit cap (null when the run has none), or
+ * cap_below_turn. ADR-0039 PR 2 replaces it with the credit hold of each step.
  */
 export function runHold(input: {
   readonly entry: LoopEntry;
-  readonly kind: Current_AgentRunKind;
+  readonly kind: LoopRunKind;
   readonly creditCapUsd12: bigint | null;
 }): RunHoldResult {
   const { entry, kind, creditCapUsd12 } = input;
   if (creditCapUsd12 !== null && !nonNegative(creditCapUsd12)) throw invalid();
   const limit = turnLimit(entry, kind);
-  const backstop = usd12(limitsOf(entry.catalogueVersion).runCostCapUsd12);
   let hold = BigInt(limit) * entry.worstCaseTurnUsd12;
   let binding: HoldBinding = "turn_limit";
-  if (backstop < hold) {
-    hold = backstop;
-    binding = "run_backstop";
-  }
   if (creditCapUsd12 !== null && creditCapUsd12 < hold) {
     hold = creditCapUsd12;
     binding = "credit_cap";
@@ -250,8 +251,8 @@ export function expectedRunUsd12(entry: LoopEntry, turns: number): bigint {
  * The vendor cost a share of the monthly grant buys under the margin rule (ADR-0026 items 4
  * and 5): the plan price after the fee, times the vendor share, times the cap's share. With
  * the 17.9% fee and the 50% share, 5% at US$149 is about US$3.06 (a specialist's cap) and 1%
- * about US$0.61 (the look-for-work cap until ADR-0036 item 7 replaced it with
- * lookForWorkDailyCapUsd12).
+ * about US$0.61 (the former look-for-work cap). ADR-0039 removes the specialist caps; PR 2
+ * removes this rule with RateCard@1's caps.
  */
 export function creditCapUsd12(input: {
   readonly planPriceUsd: string;
@@ -288,46 +289,6 @@ export function creditCapUsd12(input: {
       BigInt(capBasisPoints)) /
     10n ** 12n
   );
-}
-/** A version's per-agent daily look-for-work cap (ADR-0036 item 7), in 10^-12 USD. */
-export function lookForWorkDailyCapUsd12(version: number): bigint {
-  return usd12(limitsOf(version).lookForWorkDailyCostCapUsd12);
-}
-export type LookForWorkHoldResult =
-  | RunHoldResult
-  | { readonly ok: false; readonly code: "trigger_used" };
-/**
- * A look-for-work pass's hold (ADR-0024 item 6; ADR-0026 item 4 as ADR-0036 item 7 amends
- * it). One pass per agent a day: a second the same day is trigger_used (one run per trigger
- * key). The pass is a mandate run held under the version's per-agent daily cap, US$1.12 in
- * version 2, two worst-case turns at the installed default (Opus 5.5 at medium), in place of
- * 1% of the monthly grant: a profile whose two worst-case turns exceed it is cap_below_turn.
- * Build order PR 21's admission (admit_mandate_run) takes this rule; nothing admits a pass yet.
- */
-export function lookForWorkHold(input: {
-  readonly entry: LoopEntry;
-  readonly passesToday: number;
-}): LookForWorkHoldResult {
-  const { entry, passesToday } = input;
-  if (!entry || !Number.isSafeInteger(passesToday) || passesToday < 0) throw invalid();
-  if (passesToday > 0) return Object.freeze({ ok: false, code: "trigger_used" });
-  return runHold({
-    entry,
-    kind: "mandate",
-    creditCapUsd12: lookForWorkDailyCapUsd12(entry.catalogueVersion),
-  });
-}
-/** Whether a new hold fits the workspace's daily backstop (settled cost plus open holds). */
-export function fitsDailyBackstop(input: {
-  readonly catalogueVersion: number;
-  readonly settledUsd12: bigint;
-  readonly openHoldsUsd12: bigint;
-  readonly holdUsd12: bigint;
-}): boolean {
-  const { catalogueVersion, settledUsd12, openHoldsUsd12, holdUsd12 } = input;
-  if (![settledUsd12, openHoldsUsd12, holdUsd12].every(nonNegative)) throw invalid();
-  const cap = usd12(limitsOf(catalogueVersion).workspaceDailyCostCapUsd12);
-  return settledUsd12 + openHoldsUsd12 + holdUsd12 <= cap;
 }
 /** 10^-12 USD as numeric(20,8) text: a hold rounds up, a cost down. */
 export function usd12Text(units: bigint, rounding: "up" | "down"): string {

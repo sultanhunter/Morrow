@@ -78,7 +78,9 @@ export type BrokerMethod =
   // v1 PR 4 (ApiBroker): the undo check of one verified catalog_write operation.
   | "shopifyProductUndoCheck"
   // ConnectorBroker: the shop-specific app/uninstalled and app/scopes_update subscriptions.
-  | "shopifyWebhookSubscriptionsSync";
+  | "shopifyWebhookSubscriptionsSync"
+  // v1 PR 5 (ConnectorBroker): the read-back of a live installation's granted scopes.
+  | "shopifyConnectionCheck";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"

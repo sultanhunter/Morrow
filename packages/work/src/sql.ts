@@ -3,6 +3,7 @@ import { approvalStatements } from "./approvals/sql.js";
 import { billingStatements } from "./billing/sql.js";
 import { catalogStatements } from "./catalog/sql.js";
 import { loopStatements } from "./loop/sql.js";
+import { connectionHealthStatements } from "./connection-health/notices.js";
 import { connectionStatements } from "./connections/sql.js";
 import { inboxStatements } from "./inbox/sql.js";
 import { reviewStatements } from "./review/sql.js";
@@ -95,5 +96,7 @@ export const workStatements = Object.freeze({
   ...inboxStatements,
   // PR 20: shop knowledge and notebooks (migration 0052).
   ...knowledgeStatements,
+  // v1 PR 5: the viewer's open Reconnect items (the Inbox's seam; migration 0054).
+  ...connectionHealthStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

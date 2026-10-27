@@ -13,6 +13,7 @@
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { StagingError, fixedServerMessage, sqlState } from "./staging-common.mjs";
 import { ledgerRecord } from "./migration-chain.mjs";
+import { raiseRecordPath } from "./terms-raise.mjs";
 
 const identifier = /^[a-z_][a-z0-9_]{0,62}$/;
 const morrowRole = /^morrow_[a-z][a-z0-9_]{0,47}$/;
@@ -1171,16 +1172,25 @@ const termsStatements = Object.freeze({
   insert:
     "INSERT INTO morrow_billing.billing_terms(terms_revision, terms, offers, digest, recorded_at) VALUES ($1::bigint, $2::jsonb, $3::jsonb, $4::text, date_trunc('milliseconds', clock_timestamp()))",
 });
-/** One row per revision, in order: [revision, terms JSON, offers JSON, digest], all text. */
+/**
+ * One row per revision, in order: [revision, terms JSON, offers JSON, digest], all text. A
+ * revision may also name `ownerRecord` (review R2 of v1 build order PR 6: the owner's record
+ * of a raise of the operator credits), which seed-platform checks against the committed
+ * record and which is not part of the row or the digest.
+ */
 export function billingTermsSeedRows(revisions) {
   if (!Array.isArray(revisions) || revisions.length > 1000)
     throw new StagingError("STAGING_TERMS_INVALID");
   return Object.freeze(
     revisions.map((r, index) => {
+      const keys = r && typeof r === "object" ? Object.keys(r).sort().join() : null;
       if (
         !r ||
         typeof r !== "object" ||
-        Object.keys(r).sort().join() !== "digest,offers,terms" ||
+        (keys !== "digest,offers,terms" &&
+          (keys !== "digest,offers,ownerRecord,terms" ||
+            typeof r.ownerRecord !== "string" ||
+            !raiseRecordPath.test(r.ownerRecord))) ||
         !/^[a-f0-9]{64}$/.test(r.digest ?? "") ||
         r.terms?.termsRevision !== index + 1
       )
@@ -1194,10 +1204,12 @@ export function billingTermsSeedRows(revisions) {
     }),
   );
 }
-export async function seedBillingTerms({ connect, binding, administrator, rows }) {
-  checkAdministrator(administrator);
+// Seed rows as billingTermsSeedRows builds them: [revision, terms, offers, digest], all
+// text, revisions 1, 2, ... in order.
+function checkTermsRows(rows) {
   if (
     !Array.isArray(rows) ||
+    rows.length > 1000 ||
     !rows.every(
       (row, index) =>
         Array.isArray(row) &&
@@ -1207,6 +1219,27 @@ export async function seedBillingTerms({ connect, binding, administrator, rows }
     )
   )
     throw new StagingError("STAGING_TERMS_INVALID");
+}
+// The stored BillingTerms revisions must be the first revisions of `rows`, exactly: none
+// that `rows` lack (more stored than `rows` hold) and none that differs in its terms,
+// offers or digest. Read under the table's SHARE ROW EXCLUSIVE lock, which conflicts with
+// any insert until the transaction ends, so no revision lands between this read and what
+// the transaction does next. Run as morrow_work_owner. Returns the number stored.
+async function requireStoredTermsPrefix(connection, rows) {
+  await connection.exec(termsStatements.lock);
+  const [{ n } = {}] = await connection.query(termsStatements.count);
+  if (!Number.isSafeInteger(n) || n < 0 || n > rows.length)
+    throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+  for (const row of rows.slice(0, n)) {
+    const [same] = await connection.query(termsStatements.same, row);
+    if (same?.same !== "true")
+      throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+  }
+  return n;
+}
+export async function seedBillingTerms({ connect, binding, administrator, rows }) {
+  checkAdministrator(administrator);
+  checkTermsRows(rows);
   const connection = await connectChecked(connect, binding, administrator);
   const admin = administrator.name;
   const written = {
@@ -1223,16 +1256,7 @@ export async function seedBillingTerms({ connect, binding, administrator, rows }
           `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
         );
       await connection.exec("SET LOCAL ROLE morrow_work_owner");
-      await connection.exec(termsStatements.lock);
-      const [{ n } = {}] = await connection.query(termsStatements.count);
-      const stored = Number.isSafeInteger(n) ? n : 0;
-      if (stored > rows.length)
-        throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
-      for (const row of rows.slice(0, stored)) {
-        const [same] = await connection.query(termsStatements.same, row);
-        if (same?.same !== "true")
-          throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
-      }
+      const stored = await requireStoredTermsPrefix(connection, rows);
       const [before] = await connection.query(platformStatements.read);
       if (before === undefined) {
         await connection.query(platformStatements.insert, [platformEnvironment]);
@@ -1425,6 +1449,25 @@ export function testEntitlementReport(result, workspaceId) {
 // (STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE) before the definer runs.
 export const liveStoreWorkspaceStatement =
   "SELECT count(*)::int AS n FROM morrow_identity.shopify_apps WHERE live_store AND status = 'active' AND environment_id = $1::text AND invited_workspace_id = $2::text";
+// Inside the caller's open transaction: as morrow_identity_owner (granted for this step only
+// under the D4 SET-row protocol), exactly one active live-store app of this environment
+// invites `workspaceId`, or `code` is thrown before anything else runs.
+async function requireOwnerWorkspace(connection, administrator, workspaceId, code) {
+  const admin = administrator.name;
+  if (administrator.mode === "createrole")
+    await connection.exec(
+      `GRANT morrow_identity_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+    );
+  await connection.exec("SET LOCAL ROLE morrow_identity_owner");
+  const [owned] = await connection.query(liveStoreWorkspaceStatement, [
+    platformEnvironment,
+    workspaceId,
+  ]);
+  if (owned?.n !== 1) throw new StagingError(code);
+  await connection.exec("RESET ROLE");
+  if (administrator.mode === "createrole")
+    await connection.exec(`REVOKE morrow_identity_owner FROM ${admin} GRANTED BY ${admin}`);
+}
 export async function grantTestEntitlement({
   connect,
   binding,
@@ -1440,21 +1483,13 @@ export async function grantTestEntitlement({
     let outcome, report;
     try {
       await connection.exec("BEGIN");
-      if (requireLiveStoreWorkspace) {
-        if (administrator.mode === "createrole")
-          await connection.exec(
-            `GRANT morrow_identity_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
-          );
-        await connection.exec("SET LOCAL ROLE morrow_identity_owner");
-        const [owned] = await connection.query(liveStoreWorkspaceStatement, [
-          platformEnvironment,
+      if (requireLiveStoreWorkspace)
+        await requireOwnerWorkspace(
+          connection,
+          administrator,
           values[1],
-        ]);
-        if (owned?.n !== 1) throw new StagingError("STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE");
-        await connection.exec("RESET ROLE");
-        if (administrator.mode === "createrole")
-          await connection.exec(`REVOKE morrow_identity_owner FROM ${admin} GRANTED BY ${admin}`);
-      }
+          "STAGING_TEST_ENTITLEMENT_NOT_OWNER_WORKSPACE",
+        );
       if (administrator.mode === "createrole")
         await connection.exec(
           `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
@@ -1471,6 +1506,173 @@ export async function grantTestEntitlement({
       await connection.exec("COMMIT");
     } catch (error) {
       throw sqlFailure("STAGING_TEST_ENTITLEMENT_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return Object.freeze({ outcome, ...report });
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The renewal of the owner's test credits (`test-credits renew`; v1 build order PR 6;
+// ADR-0035 items 3 and 4; migration staging-test-credits-renewal). Until Shopify billing
+// exists, the owner's workspace keeps its test credits by renewing the operator grant once
+// per 30-day period: morrow_billing.operator_test_entitlement_renew, run as
+// morrow_work_owner under the D4 SET-row protocol after the same transaction has read, as
+// morrow_identity_owner, that the workspace is the one the environment's live-store app
+// invites. Its credits come only from the current terms' operator entry (P01.T04a R10, the
+// source of the grant's own credits): no input names an amount, and a raise is a new
+// staging BillingTerms revision. It tops the unspent credits up to them, writes the next
+// snapshot and never a payment row. Only `renewed` or `current` commits, after the closed result is
+// read; anything else commits nothing. A COMMIT that fails after `renewed` is an unknown
+// outcome: the rerun reads it back (`current` when it committed), never a blind retry.
+// Review T1 of PR 6 (the third review, of R1 to R3): the database's terms are trusted only
+// as far as they are the committed ones. `terms` are the staging revisions committed at
+// verified main (seed rows, each raise with its owner's record checked by the caller);
+// before the function runs, as morrow_work_owner under the terms table's lock, the stored
+// revisions must be exactly the first of them (the seed's own count and comparison), so a
+// revision written by hand outside the seed (0035's terms_guard admits one from the owner
+// role) is STAGING_SEED_DRIFT and is never funded.
+export const testCreditsOutcomes = Object.freeze([
+  "renewed",
+  "current",
+  "grant_missing",
+  "route_conflict",
+  "terms_missing",
+  "not_staging",
+  "invalid",
+  "denied",
+]);
+export const testCreditsRenewStatement =
+  "SELECT outcome, result FROM morrow_billing.operator_test_entitlement_renew($1, $2, $3, $4, $5)";
+const standingId = /^[a-z0-9][a-z0-9-]{0,40}$/;
+const creditText = /^[1-9][0-9]{0,17}$/;
+// Closed: exactly these five members. None is an amount; the credits are the terms'.
+const testCreditsInputKeys = "evidenceRef,grantApprovalRef,operatorId,standingApproval,workspaceId";
+export function testCreditsRenewInput(input) {
+  if (input === null || typeof input !== "object" || Array.isArray(input))
+    throw new StagingError("STAGING_USAGE");
+  const { operatorId, workspaceId, grantApprovalRef, standingApproval, evidenceRef } = input;
+  if (
+    Object.keys(input).sort().join() !== testCreditsInputKeys ||
+    typeof operatorId !== "string" ||
+    !recordId.test(operatorId) ||
+    typeof workspaceId !== "string" ||
+    !recordId.test(workspaceId) ||
+    typeof grantApprovalRef !== "string" ||
+    !testEntitlementApproval.test(grantApprovalRef) ||
+    typeof standingApproval !== "string" ||
+    !standingId.test(standingApproval) ||
+    typeof evidenceRef !== "string" ||
+    !liveEvidenceRef.test(evidenceRef)
+  )
+    throw new StagingError("STAGING_USAGE");
+  return Object.freeze([operatorId, workspaceId, grantApprovalRef, standingApproval, evidenceRef]);
+}
+const testCreditsResultKeys =
+  "addedUnits,available,billingAccountId,creditUnits,entitlementId,organizationId,period,periodEnd,periodStart,renewalId,snapshotRevision,termsRevision,walletRevision,workspaceId";
+const periodHours = 720;
+/** The definer's result for `workspaceId` and `outcome`, closed: ids, the period, credits and
+ * the terms revision they came from. */
+export function testCreditsReport(outcome, result, workspaceId) {
+  let value;
+  try {
+    value = JSON.parse(result);
+  } catch {
+    value = null;
+  }
+  const count = /^(0|[1-9][0-9]{0,17})$/;
+  const valid =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).sort().join() === testCreditsResultKeys &&
+    Object.entries(value).every(
+      ([key, v]) => typeof v === "string" || (key === "renewalId" && v === null),
+    ) &&
+    uuidText.test(value.entitlementId) &&
+    uuidText.test(value.billingAccountId) &&
+    recordId.test(value.organizationId) &&
+    value.workspaceId === workspaceId &&
+    /^(0|[1-9][0-9]{0,5})$/.test(value.period) &&
+    // Period 0 is the grant's own, which only `current` reports; a renewal names its record.
+    (value.period === "0"
+      ? outcome === "current" && value.renewalId === null
+      : typeof value.renewalId === "string" && uuidText.test(value.renewalId)) &&
+    creditText.test(value.creditUnits) &&
+    /^[1-9][0-9]{0,15}$/.test(value.termsRevision) &&
+    count.test(value.addedUnits) &&
+    BigInt(value.addedUnits) <= BigInt(value.creditUnits) &&
+    count.test(value.available) &&
+    /^[1-9][0-9]{0,15}$/.test(value.snapshotRevision) &&
+    // The grant's snapshot is revision 1; every renewal's is a later one.
+    (value.snapshotRevision === "1") === (value.period === "0") &&
+    /^[1-9][0-9]{0,15}$/.test(value.walletRevision) &&
+    utcMs.test(value.periodStart) &&
+    utcMs.test(value.periodEnd) &&
+    Date.parse(value.periodEnd) > Date.parse(value.periodStart) &&
+    (value.period === "0" ||
+      Date.parse(value.periodEnd) - Date.parse(value.periodStart) === periodHours * 3600000);
+  if (!valid) throw new StagingError("STAGING_TEST_CREDITS_RESULT_INVALID");
+  return Object.freeze({
+    entitlementId: value.entitlementId,
+    organizationId: value.organizationId,
+    workspaceId: value.workspaceId,
+    billingAccountId: value.billingAccountId,
+    renewalId: value.renewalId,
+    period: value.period,
+    periodStart: value.periodStart,
+    periodEnd: value.periodEnd,
+    creditUnits: value.creditUnits,
+    termsRevision: value.termsRevision,
+    addedUnits: value.addedUnits,
+    available: value.available,
+    snapshotRevision: value.snapshotRevision,
+    walletRevision: value.walletRevision,
+  });
+}
+export async function renewTestCredits({ connect, binding, administrator, input, terms }) {
+  checkAdministrator(administrator);
+  const values = testCreditsRenewInput(input ?? {});
+  checkTermsRows(terms);
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  try {
+    let outcome, report;
+    try {
+      await connection.exec("BEGIN");
+      await requireOwnerWorkspace(
+        connection,
+        administrator,
+        values[1],
+        "STAGING_TEST_CREDITS_NOT_OWNER_WORKSPACE",
+      );
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      await requireStoredTermsPrefix(connection, terms);
+      const [row] = await connection.query(testCreditsRenewStatement, [...values]);
+      outcome = testCreditsOutcomes.includes(row?.outcome) ? row.outcome : "unknown";
+      if (outcome !== "renewed" && outcome !== "current")
+        throw new StagingError("STAGING_TEST_CREDITS_REFUSED", { outcome });
+      report = testCreditsReport(outcome, row.result, values[1]);
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+    } catch (error) {
+      throw sqlFailure("STAGING_TEST_CREDITS_FAILED", error);
+    }
+    try {
+      await connection.exec("COMMIT");
+    } catch (error) {
+      // Nothing was written by `current`; a renewal's COMMIT that did not answer may have
+      // committed. Never reported as renewed: the rerun reads it back.
+      throw outcome === "renewed"
+        ? new StagingError("STAGING_TEST_CREDITS_OUTCOME_UNKNOWN", { period: report.period })
+        : sqlFailure("STAGING_TEST_CREDITS_FAILED", error);
     }
     await assertNoSetRows(connection);
     return Object.freeze({ outcome, ...report });

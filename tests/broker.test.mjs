@@ -515,11 +515,13 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   // build order PR 7 the computer's runtimeExecute and runtimeSweep (held while the runtime
   // switch is off, tests/broker-runtime.test.mjs); build order PR 11 modelTurn (held while the
   // agent-loop switch is off, tests/broker-agent-turn.test.mjs). The shop-specific webhook
-  // subscriptions give the connector shopifyWebhookSubscriptionsSync (a budget only).
+  // subscriptions give the connector shopifyWebhookSubscriptionsSync (a budget only), and v1
+  // PR 5 the read-back of an installation's granted scopes (shopifyConnectionCheck).
   assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
     "constructor",
     "health",
     "neonLease",
+    "shopifyConnectionCheck",
     "shopifyCredentialDestroy",
     "shopifyInstallComplete",
     "shopifyLaunchVerify",
@@ -623,9 +625,12 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   await failure(connector.shopifyCredentialDestroy("installation_1", "uninstalled", 1));
   await failure(connector.shopifyWebhookSubscriptionsSync());
   await failure(connector.shopifyWebhookSubscriptionsSync(15000, 1));
+  // v1 PR 5: the read-back takes exactly an installation id and a budget.
+  await failure(connector.shopifyConnectionCheck("installation_1"));
+  await failure(connector.shopifyConnectionCheck("installation_1", 1000, 1));
   assert.deepEqual(
     logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
-    Array(9).fill(["ConnectorBroker", "INPUT_INVALID"]),
+    Array(11).fill(["ConnectorBroker", "INPUT_INVALID"]),
   );
   // The test env carries no connector configuration: the sync is held, never run.
   logs.length = 0;
@@ -650,6 +655,9 @@ test("AC10: ApiBroker has exactly twelve prototype methods, arity checks and a 4
   // The token's destruction is the connector's (any recorded end) and the api's (a person's
   // disconnect only); never the orchestrator's.
   assert.equal(typeof new module.RuntimeBroker({}, env).shopifyCredentialDestroy, "undefined");
+  // v1 PR 5: the scopes read-back is the connector's alone.
+  assert.equal(typeof new module.ApiBroker({}, env).shopifyConnectionCheck, "undefined");
+  assert.equal(typeof new module.RuntimeBroker({}, env).shopifyConnectionCheck, "undefined");
   // shopifyRead is the api's and the orchestrator's, each with its own queries, never the
   // connector's; the orchestrator's checks its arity and refuses the api's queries.
   assert.equal(typeof connector.shopifyRead, "undefined");

@@ -24,6 +24,7 @@ import {
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
   decodeShopifyWebhookVerdict,
+  shopifyInstallationStates,
 } from "../packages/identity/src/broker-protocol.ts";
 import {
   createShopifyBroker,
@@ -2059,6 +2060,32 @@ test("stage line builder: exactly the allow-listed keys, closed values, never a 
     "unknown",
   );
   assert.equal(line({ method: "shopifyLaunchVerify", stage: "claim" }).stage, "unknown");
+});
+
+test("stage line: every launch installation state of the protocol is logged as itself", () => {
+  // PR 5 review finding F2 (after integration with main): the line's allow-list is the
+  // protocol's own list, so v1 PR 5's `reconnect` (a live installation that lacks a scope, or
+  // whose token Shopify refused) is logged, never null; anything else stays null.
+  assert.ok(shopifyInstallationStates.includes("reconnect"));
+  for (const installation of shopifyInstallationStates) {
+    const parsed = JSON.parse(
+      shopifyStageLine({
+        method: "shopifyLaunchVerify",
+        stage: "verify",
+        result: "refused",
+        reason: "hmac_mismatch",
+        installation,
+      }),
+    );
+    assert.equal(parsed.installation, installation, installation);
+    assert.equal(parsed.reason, "hmac_mismatch", installation);
+  }
+  for (const installation of ["reconnecting", "Reconnect", "", null, 1])
+    assert.equal(
+      JSON.parse(shopifyStageLine({ method: "shopifyLaunchVerify", installation })).installation,
+      null,
+      String(installation),
+    );
 });
 
 test("stage line: a throwing console changes no verdict", async () => {

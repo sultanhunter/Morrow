@@ -405,7 +405,35 @@
     },
     {
       "sequence": 53,
-      "file": "0053.agent-runs.sql",
+      "file": "0053.connection-health-identity.sql",
+      "sha256": "4bec18798a5f157e296bd8b5e027ab0eef850d0a01cbbd7bed734bbc05af1d5a",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/v1-connection-health.md"
+    },
+    {
+      "sequence": 54,
+      "file": "0054.connection-health-work.sql",
+      "sha256": "68d1577340cfed2d961c9aeb72b2d24cec4d18edc64b4befe58b0bd5d5a014b9",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-connection-health.md"
+    },
+    {
+      "sequence": 55,
+      "file": "0055.staging-test-credits-renewal.sql",
+      "sha256": "2b260a7706852787488924e042d5b9e5a5f0450ef477d86a6eb2db7497823e18",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/v1-renew-test-credits.md"
+    },
+    {
+      "sequence": 56,
+      "file": "0056.credits-only-catalogue.sql",
+      "sha256": "d3812e8d06a8dff5edfb6c45e4e172e7fa42930034b1a6f6ea75d621c38e965e",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
+    },
+    {
+      "sequence": 58,
+      "file": "0058.agent-runs.sql",
       "sha256": "ca2ccf4f897edd7688ac4c9e9df71ea2592df5e0c1928a8c3bc418e091a64fec",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/t4-agent-loop.md"

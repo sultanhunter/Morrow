@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "environment_kind": "staging",
-  "release": "morrow.specialist",
-  "switch": "off",
-  "observed_on": null,
-  "scope": "The reviewed specialist switch (ADR-0028 item 8; PR 10 commits it off). No Worker reads it yet: once Start exists, while off it answers 503 before any document, lock or reservation, and edge:check refuses a mixed state. It goes on by one reviewed commit after G9, G10 and a passing live eval of morrow.specialist. Production has no switch before the production custody ADR."
-}
