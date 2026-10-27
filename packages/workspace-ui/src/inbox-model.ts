@@ -65,7 +65,10 @@ export interface InboxView {
  * The Inbox preview (default off): the kinds whose backend isn't built yet, from fixtures
  * only. `run_question` is an agent's question from a run (the agent loop's inbox.ask,
  * PR 11); `reconnect` is ADR-0025 item 10's Reconnect after Shopify permissions changed
- * (PR 5). The HTTP build never composes `samples.inbox`.
+ * (PR 5); `zone_change` is ADR-0043 item 8's item when the shop's time zone changed (plan row
+ * SD12: the database raises it, schedule_zone_notices_open() answers it to its recipients,
+ * and each schedule moves only on a person's tap; its Inbox kind and the tap's route come
+ * with the routine screens). The HTTP build never composes `samples.inbox`.
  */
 export type InboxSampleView =
   | {
@@ -81,6 +84,15 @@ export type InboxSampleView =
       readonly id: Id;
       readonly missingPermissions: readonly string[];
       readonly stoppedAgents: readonly string[];
+      readonly since: string;
+    }
+  | {
+      readonly kind: "zone_change";
+      readonly id: Id;
+      /** The shop's new zone, a name of the closed IANA list. */
+      readonly toZone: string;
+      /** The schedules still in the old zone: each moves only on a person's tap. */
+      readonly pending: number;
       readonly since: string;
     };
 export interface InboxSamplesView {

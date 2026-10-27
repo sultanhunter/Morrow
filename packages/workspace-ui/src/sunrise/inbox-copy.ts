@@ -91,6 +91,13 @@ export const inboxCopy = {
     reconnectTitle: "Reconnect Shopify to give Morrow its new permissions",
     reconnectSub: (missing: readonly string[], stopped: readonly string[]) =>
       `Missing: ${missing.join(", ")} · Paused: ${stopped.join(", ")}`,
+    // ADR-0043 item 8's words. An IANA name as people read it ("America/St_Johns" is
+    // "America/St Johns"), as Settings › Notifications shows it.
+    zoneTitle: (zone: string) => `Your shop’s time zone changed to ${zone.replaceAll("_", " ")}`,
+    zoneSub: (pending: number) =>
+      pending === 1
+        ? "Move 1 schedule? It stays where it is until you move it."
+        : `Move ${pending} schedules? Each stays where it is until you move it.`,
   },
   // The exception screen (the route contract's `exception`, under the Inbox).
   detail: {

@@ -31,7 +31,12 @@ import {
   inboxTabCount,
   openItems,
 } from "../packages/workspace-ui/src/inbox-model.ts";
-import { InboxList, InboxRow, needsYouItems } from "../packages/workspace-ui/src/screens/inbox.tsx";
+import {
+  InboxList,
+  InboxRow,
+  SamplesCard,
+  needsYouItems,
+} from "../packages/workspace-ui/src/screens/inbox.tsx";
 import { NeedsYouCard } from "../packages/workspace-ui/src/screens/home.tsx";
 import { copy } from "../packages/workspace-ui/src/copy.ts";
 import { describeActivity, activityDay } from "../packages/workspace-ui/src/screens/activity.tsx";
@@ -42,6 +47,7 @@ import {
   readbackCount,
 } from "../packages/workspace-ui/src/screens/exception.tsx";
 import { inboxCopy } from "../packages/workspace-ui/src/sunrise/inbox-copy.ts";
+import { isIanaTimeZone } from "../packages/contracts/src/time-zones.ts";
 import { ServicesProvider } from "../packages/workspace-ui/src/services.tsx";
 import { recordingTransport, json } from "./fixtures/workspace-web.mjs";
 import { workGuardOrigin, workGuardSecret } from "./fixtures/work-guard-cases.mjs";
@@ -530,7 +536,23 @@ test("the fixture answers the boards' states from its own state", async () => {
   const preview = await createFixtureAdapter("inbox_preview").samples.inbox(ws);
   assert.deepEqual(
     preview.value.items.map((i) => i.kind),
-    ["run_question", "reconnect"],
+    ["run_question", "reconnect", "zone_change"],
+  );
+  // Plan row SD12 (ADR-0043 item 8): the zone-change item, a sample until its Inbox kind and
+  // the tap's route exist; its zone is one of the closed IANA list, in the record's words.
+  const zone = preview.value.items.find((i) => i.kind === "zone_change");
+  assert.equal(isIanaTimeZone(zone.toZone), true);
+  const samplesHtml = markup(h(SamplesCard, { samples: preview.value }));
+  assert.match(samplesHtml, /Your shop’s time zone changed to Asia\/Kolkata/);
+  assert.match(samplesHtml, /Move 3 schedules\? Each stays where it is until you move it\./);
+  assert.equal([...samplesHtml.matchAll(/class="nav-sample-tag"/g)].length, 3);
+  assert.equal(
+    inboxCopy.samples.zoneSub(1),
+    "Move 1 schedule? It stays where it is until you move it.",
+  );
+  assert.equal(
+    inboxCopy.samples.zoneTitle("America/St_Johns"),
+    "Your shop’s time zone changed to America/St Johns",
   );
   // The log pages: four at a time in activity_more, with a next cursor.
   const more = createFixtureAdapter("activity_more");

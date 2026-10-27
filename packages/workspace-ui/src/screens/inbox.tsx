@@ -222,7 +222,7 @@ function Filters({
 }
 
 /** The preview of kinds whose backend isn't built yet; every row says it is sample data. */
-function SamplesCard({ samples }: { readonly samples: InboxSamplesView }) {
+export function SamplesCard({ samples }: { readonly samples: InboxSamplesView }) {
   const titleId = useId();
   return (
     <section className="card inbox-samples" aria-labelledby={titleId}>
@@ -245,7 +245,7 @@ function SamplesCard({ samples }: { readonly samples: InboxSamplesView }) {
                   </span>
                 </span>
               </>
-            ) : (
+            ) : s.kind === "reconnect" ? (
               <>
                 <span className="row-lead" aria-hidden="true">
                   <Icon name="store" />
@@ -255,6 +255,16 @@ function SamplesCard({ samples }: { readonly samples: InboxSamplesView }) {
                   <span className="row-sub">
                     {t.samples.reconnectSub(s.missingPermissions, s.stoppedAgents)}
                   </span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="row-lead" aria-hidden="true">
+                  <Icon name="clock" />
+                </span>
+                <span className="row-text">
+                  <span className="row-title">{t.samples.zoneTitle(s.toZone)}</span>
+                  <span className="row-sub">{t.samples.zoneSub(s.pending)}</span>
                 </span>
               </>
             )}

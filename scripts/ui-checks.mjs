@@ -717,9 +717,11 @@ export const fixtureCases = [
     setup: async (page) => {
       await page.getByRole("heading", { name: "Coming soon to your Inbox" }).waitFor();
       expect(
-        (await page.locator(".inbox-samples .nav-sample-tag").count()) === 2,
+        (await page.locator(".inbox-samples .nav-sample-tag").count()) === 3,
         "samples_labelled",
       );
+      // Plan row SD12: the zone-change item in ADR-0043 item 8's words, a sample here.
+      await page.getByText("Your shop’s time zone changed to Asia/Kolkata").first().waitFor();
     },
   }),
   fixtureCase(

@@ -227,5 +227,12 @@ export const fixtureInboxSamples: InboxSamplesView = {
       stoppedAgents: ["Business Analyst"],
       since: t(23, 8, 0),
     },
+    {
+      kind: "zone_change",
+      id: "sample-zone-1",
+      toZone: "Asia/Kolkata",
+      pending: 3,
+      since: t(23, 9, 30),
+    },
   ],
 };
