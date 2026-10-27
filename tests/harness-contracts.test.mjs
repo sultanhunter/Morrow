@@ -25,19 +25,25 @@ import {
   contextThresholds,
 } from "../packages/policy/src/context-policy.ts";
 import { generatedContextPolicy } from "../packages/policy/src/generated/context-policy.ts";
+import { runContext } from "../packages/policy/src/tool-catalogue.ts";
 import {
   createFakeContextStore,
   createFakeModelGateway,
   FakeContextStoreError,
   FakeModelGatewayError,
+  replyBounds,
+  replyFit,
 } from "../packages/policy/src/fake-model-gateway.ts";
 import {
+  bytesPerTokenEstimate,
   contextPolicyDigest,
   generateContextPolicy,
   generatedContextPolicyPath,
   inspectContextPolicy,
   inspectContextPolicyRow,
   jcs,
+  maxOutputTokensRange,
+  toolResultBlockChars,
 } from "../scripts/generate-context-policy.mjs";
 
 const core = JSON.parse(readFileSync("docs/contracts/schemas/v1.1/core.schema.json", "utf8"));
@@ -436,6 +442,28 @@ test("ContextPolicy@1: the generator refuses a row a new epoch could not converg
   fails((r) => (r.newEpoch.keptTailBasisPoints = 4500), "the kept tail fits");
   fails((r) => (r.opening.pinnedKnowledgeTokens = 60000), "the opening budgets");
   fails((r) => (r.results.inlineTokens = 40000), "one inline result fits");
+  // Review R5: an inline result is kept whole in one tool result block, so it must fit the
+  // block's bound (ModelToolResultBlock's 256 KiB) as well as the per-turn budget: 70,000 tokens
+  // is 280,000 characters at the generator's own 4 a token.
+  assert.equal(
+    core.$defs.ModelToolResultBlock.properties.content.maxLength,
+    toolResultBlockChars,
+    "the generator reads the schema's bound",
+  );
+  fails((r) => {
+    r.results.inlineTokens = 70000;
+    r.results.perTurnBasisPoints = 3500;
+  }, "one inline result fits a tool result block");
+  assert.deepEqual(
+    inspectContextPolicyRow(
+      edit(row, (r) => {
+        r.results.inlineTokens = 65536;
+        r.results.perTurnBasisPoints = 3500;
+      }),
+    ),
+    [],
+    "65,536 tokens fill the block exactly",
+  );
   fails((r) => {
     r.results.previewTokens = 10000;
     r.results.inlineTokens = 5000;
@@ -537,17 +565,18 @@ test("ContextEpoch@1 and ContextCheckpoint@1: references, never copies; the chec
       "a valid validation with a code",
       edit(fallback, (c) => (c.validation = { result: "valid", code: "claims_approval" })),
     ],
-    // No model-written field can claim an approval, a consent, an apply or a payment.
+    // No model-written field can claim an approval, a consent, an apply or a payment, and no
+    // field states a proposal's or operation's state: the ledger renders those from SQL.
     ["an approval field", edit(fallback, (c) => (c.content.approved = [{ label: "p1" }]))],
-    ["a decision field", edit(fallback, (c) => (c.content.decisions = ["Ship it"]))],
-    ["a model-chosen label", edit(fallback, (c) => (c.content.facts[0].label = "price1"))],
+    ["a stated-state field", edit(fallback, (c) => (c.content.states = [{ label: "p1" }]))],
+    ["a model-chosen label", edit(fallback, (c) => (c.content.facts[0].refs = ["price1"]))],
+    ["a label of no record kind", edit(fallback, (c) => (c.content.done[0].refs = ["j1"]))],
+    ["a status outside the closed set", edit(fallback, (c) => (c.content.status = "applied"))],
+    ["a decision without its reason", edit(fallback, (c) => delete c.content.decisions[0].reason)],
+    ["a fact without its exact flag", edit(fallback, (c) => delete c.content.facts[0].exact)],
     [
-      "a stated state outside the closed set",
-      edit(fallback, (c) => (c.content.states[0].state = "applied")),
-    ],
-    [
-      "a quote over 1,000 characters",
-      edit(fallback, (c) => (c.content.discussed[0].quote.text = "x".repeat(1001))),
+      "more than 64 entries to reopen",
+      edit(fallback, (c) => (c.content.reopen = Array(65).fill(c.content.reopen[0]))),
     ],
     ["no audience", edit(fallback, (c) => delete c.audience)],
     [
@@ -566,11 +595,18 @@ test("ContextEpoch@1 and ContextCheckpoint@1: references, never copies; the chec
       ),
       code,
     );
-  // Labels are code's: one letter for the kind of record, then a number from 1.
-  for (const label of ["c17", "t3", "m1", "q2", "p1", "o4", "i9", "j1", "k2", "r5"])
+  // Labels are code's: one letter for the kind of record (memory.read's letter map, H5), then a
+  // number of at most six digits. A tool result's label is the c letter from 1.
+  for (const label of ["c17", "e2", "k1", "m1", "o4", "p1", "q2", "r5", "t3", "c999999"])
     assert.ok(valid("ContextLabel", label), label);
-  for (const label of ["c0", "x1", "C1", "p", "p1a", "p-1"])
+  for (const label of ["i9", "j1", "x1", "C1", "p", "p1a", "p-1", "c1234567"])
     assert.equal(valid("ContextLabel", label), false, label);
+  for (const label of ["c1", "c17", "c999999"]) {
+    assert.ok(valid("ToolResultLabel", label), label);
+    assert.ok(valid("ContextLabel", label), `${label} resolves in memory.read`);
+  }
+  for (const label of ["c0", "c1000000", "e1", "t1"])
+    assert.equal(valid("ToolResultLabel", label), false, label);
 });
 
 test("ContextLedger@1: SQL's records, with every in-flight operation shown as unknown", () => {
@@ -624,6 +660,418 @@ test("ContextLedger@1: SQL's records, with every in-flight operation shown as un
       }),
     ),
   );
+});
+
+// --- One set of records with H5's tool inputs (review R1; pull request 79) ----------------
+// H5 merges first. Until then these tests pin H5's definitions as read from its branch at
+// 1223051c; from the merge on they read H5's own definitions from core v1.1, so a change on
+// either side fails here instead of merging silently (docs/briefs/h6-harness-contracts.md,
+// "Merge order with H5").
+const h5 = (name) => core.$defs[name] ?? null;
+const h5Pinned = Object.freeze({
+  contextLabel: {
+    description:
+      "A code label in this context's own log (ADR-0041 items 10, 13 and 14): c a tool result (c17), e an earlier checkpoint, k a knowledge page, m a message, o a gateway operation, p a proposal, q a question, r a result item, t a turn. Labels resolve only inside their context.",
+    type: "string",
+    pattern: "^[cekmopqrt][0-9]{1,6}$",
+  },
+  memoryLayers: ["knowledge", "notebook", "person_memory", "conversation", "results", "plan"],
+  memoryReadKinds: [
+    "result_item",
+    "teammate_result",
+    "messages",
+    "label",
+    "knowledge_page",
+    "notebook_entry",
+    "person_memory",
+    "conversation_summary",
+  ],
+  runCompleteOutcomes: ["done", "partial", "nothing_found", "blocked", "cannot_do", "waiting"],
+  checkpointRequired: [
+    "objective",
+    "status",
+    "statusNote",
+    "done",
+    "inProgress",
+    "decisions",
+    "setAside",
+    "facts",
+    "difficulties",
+    "promised",
+    "nextSteps",
+    "reopen",
+  ],
+  teammateRecordKinds: [
+    "task",
+    "thread",
+    "artifact",
+    "knowledge_page",
+    "product",
+    "proposal",
+    "result_item",
+    "suggestion",
+    "knowledge_proposal",
+    "notebook_entry",
+    "message",
+    "person_memory",
+  ],
+  criterionReportStatuses: ["met", "not_met", "unknown"],
+  personMemoryKinds: ["preference", "instruction", "fact"],
+});
+const enumFrom = (name, pinned) => h5(name)?.enum ?? pinned;
+
+test("review R1: one ContextLabel, whose letters resolve in memory.read to the record kinds the ledger renders", () => {
+  // The same definition as H5's, which memory.read's label target names.
+  const label = core.$defs.ContextLabel;
+  assert.deepEqual(label, h5Pinned.contextLabel);
+  if (h5("MemoryReadTarget"))
+    assert.equal(h5("MemoryReadTarget").properties.label.anyOf[0].$ref, "#/$defs/ContextLabel");
+  // Each letter names one record kind in the definition both PRs share.
+  const kinds = {
+    c: "a tool result",
+    e: "an earlier checkpoint",
+    k: "a knowledge page",
+    m: "a message",
+    o: "a gateway operation",
+    p: "a proposal",
+    q: "a question",
+    r: "a result item",
+    t: "a turn",
+  };
+  for (const [letter, kind] of Object.entries(kinds))
+    assert.ok(label.description.includes(`${letter} ${kind}`), `${letter}: ${kind}`);
+  assert.equal(label.pattern, `^[${Object.keys(kinds).join("")}][0-9]{1,6}$`);
+  // The ledger labels each row with its own kind's letter, so memory.read of that label opens
+  // the same record: posts m, questions q, proposals p, operations o; records, calls and
+  // refusals by the tool call that made them (c), or none when another context made them.
+  const ledger = fakes.fakeContextLedger();
+  const sections = [
+    ["requests", "m", "q1"],
+    ["questions", "q", "m1"],
+    ["proposals", "p", "o1"],
+    ["operations", "o", "p1"],
+    ["records", "c", "r1"],
+    ["calls", "c", "k1"],
+    ["refusals", "c", "e1"],
+  ];
+  for (const [section, letter, wrong] of sections) {
+    assert.ok(ledger[section][0].label.startsWith(letter), section);
+    assert.equal(
+      valid(
+        "ContextLedger",
+        edit(ledger, (l) => (l[section][0].label = wrong)),
+      ),
+      false,
+      `${section} labelled ${wrong}`,
+    );
+  }
+  for (const section of ["records", "calls"])
+    assert.ok(
+      valid(
+        "ContextLedger",
+        edit(ledger, (l) => (l[section][0].label = null)),
+      ),
+      section,
+    );
+  refuses("ModelPostBlock", [
+    [
+      "a post labelled as a turn",
+      {
+        type: "post",
+        messageId: "m_1",
+        label: "t1",
+        authorPrincipalId: "p_1",
+        postedAt: "2026-10-26T09:00:00.000Z",
+        text: "x",
+      },
+    ],
+  ]);
+  // Every label a derived fake carries is one memory.read resolves.
+  const labels = [];
+  const walk = (value, key) => {
+    if (Array.isArray(value)) for (const v of value) walk(v, key);
+    else if (value && typeof value === "object")
+      for (const [k, v] of Object.entries(value)) walk(v, k);
+    else if (["label", "ref"].includes(key) && typeof value === "string") labels.push(value);
+    else if (key === "refs" && typeof value === "string") labels.push(value);
+  };
+  walk([
+    fakes.fakeContextLedger(),
+    fakes.fakeContextCheckpoint("fallback"),
+    fakes.fakeMemorySearchHits(),
+  ]);
+  assert.ok(labels.length > 10);
+  for (const value of labels) assert.ok(valid("ContextLabel", value), value);
+});
+
+test("review R1: memory.search's layers are the layers its hits name, and a hit is memory.read's target", () => {
+  assert.deepEqual(enumOf("MemoryLayer"), h5Pinned.memoryLayers);
+  assert.equal(core.$defs.MemorySearchHit.properties.layer.$ref, "#/$defs/MemoryLayer");
+  if (h5("ToolInputMemorySearch"))
+    assert.equal(h5("ToolInputMemorySearch").properties.layers.items.$ref, "#/$defs/MemoryLayer");
+  // Every kind a hit names is one memory.read opens.
+  const readKinds = enumFrom("MemoryReadKind", h5Pinned.memoryReadKinds);
+  const hitKinds = core.$defs.MemorySearchHit.properties.readKind.anyOf[0].enum;
+  for (const kind of hitKinds) assert.ok(readKinds.includes(kind), kind);
+  // One hit per layer, each opened as memory.read states its target.
+  const base = fakes.fakeMemorySearchHits()[0];
+  const perLayer = {
+    knowledge: [["knowledge_page", null]],
+    notebook: [["notebook_entry", null]],
+    person_memory: [["person_memory", null]],
+    conversation: [
+      ["messages", 7],
+      ["conversation_summary", null],
+    ],
+    results: [
+      ["result_item", null],
+      ["teammate_result", null],
+    ],
+    plan: [[null, null]],
+  };
+  assert.deepEqual(Object.keys(perLayer), h5Pinned.memoryLayers);
+  for (const [layer, targets] of Object.entries(perLayer))
+    for (const [readKind, position] of targets)
+      assert.ok(
+        valid("MemorySearchHit", { ...base, layer, readKind, position }),
+        `${layer}/${readKind}`,
+      );
+  refuses("MemorySearchHit", [
+    ["H6's old result_item layer", { ...base, layer: "result_item" }],
+    ["H6's old checkpoint layer", { ...base, layer: "checkpoint" }],
+    ["H6's old plan_note layer", { ...base, layer: "plan_note" }],
+    ["a results hit opened as a page", { ...base, layer: "results", readKind: "knowledge_page" }],
+    ["a plan hit opened by memory.read", { ...base, layer: "plan", readKind: "result_item" }],
+    [
+      "a message hit without its position",
+      { ...base, layer: "conversation", readKind: "messages" },
+    ],
+    ["a page hit with a position", { ...base, position: 3 }],
+    ["a label target", { ...base, readKind: "label" }],
+  ]);
+});
+
+test("review R1: context.checkpoint's input is a storable checkpoint body", () => {
+  // Every key H5's input requires, with every list filled: the body the fallback stores.
+  const input = {
+    objective: { text: "Clearer titles for the summer dresses", refs: ["m1"] },
+    status: "finishing",
+    statusNote: null,
+    done: [{ text: "Read 14 dresses", refs: ["c3"] }],
+    inProgress: [{ text: "Waiting on the owner", refs: ["p1", "o1"] }],
+    decisions: [{ decision: "Brand first", reason: "The owner asked", refs: ["m1", "q1"] }],
+    setAside: [{ option: "Descriptions", reason: "Out of scope", refs: [] }],
+    facts: [{ fact: "product:3", exact: true, refs: ["c3", "r1"] }],
+    difficulties: [{ problem: "Two titles were long", resolution: null, refs: ["t4"] }],
+    promised: [{ text: "Say when live", refs: ["p1"] }],
+    nextSteps: [{ text: "Review the set", refs: [] }],
+    reopen: [{ ref: "e1", why: "The earlier hand-off" }],
+  };
+  assert.ok(valid("ContextCheckpointContent", input));
+  const fallback = fakes.fakeContextCheckpoint("fallback");
+  assert.ok(valid("ContextCheckpoint", { ...fallback, content: input }));
+  assert.deepEqual(core.$defs.ContextCheckpointContent.required, h5Pinned.checkpointRequired);
+  assert.equal(core.$defs.CheckpointLine.properties.refs.items.$ref, "#/$defs/ContextLabel");
+  // From the merge on: one definition. ContextCheckpointContent is either a $ref to H5's input
+  // or the same properties, bounds and required keys.
+  const tool = h5("ToolInputContextCheckpoint");
+  if (tool) {
+    assert.ok(valid("ToolInputContextCheckpoint", input));
+    assert.ok(valid("ToolInputContextCheckpoint", fallback.content), "the fake is an input");
+    const body = core.$defs.ContextCheckpointContent;
+    if (body.$ref) assert.equal(body.$ref, "#/$defs/ToolInputContextCheckpoint");
+    else
+      for (const key of ["type", "properties", "required", "additionalProperties"])
+        assert.deepEqual(body[key], tool[key], key);
+  }
+});
+
+test("review R1: run.complete's outcomes, criteria and evidence are RunCompletion's", () => {
+  const outcomes = enumFrom("RunCompleteOutcome", h5Pinned.runCompleteOutcomes);
+  assert.deepEqual(outcomes, h5Pinned.runCompleteOutcomes, "H5 changed run.complete's outcomes");
+  const done = fakes.fakeRunCompletion("done");
+  const waiting = fakes.fakeRunCompletion("waiting");
+  for (const outcome of outcomes)
+    assert.ok(
+      valid("RunCompletion", { ...(outcome === "waiting" ? waiting : done), outcome }),
+      outcome,
+    );
+  for (const status of h5Pinned.criterionReportStatuses)
+    assert.ok(
+      valid(
+        "RunCompletion",
+        edit(done, (c) => (c.criteria[0].status = status)),
+      ),
+      status,
+    );
+  // Every record kind run.plan, run.complete and a verdict cite is evidence the records hold.
+  const kinds = enumFrom("TeammateRecordKind", h5Pinned.teammateRecordKinds);
+  for (const kind of kinds) assert.ok(valid("PlanEvidenceRef", { kind, id: "rec_1" }), kind);
+});
+
+test("review R1: the plan, its completion, a verdict and a suggestion hold as much as their tools accept", () => {
+  // H5's array bounds (read from its definitions once merged): the record is at least as large.
+  const h5Bound = (name, path, pinned) => {
+    let node = h5(name);
+    if (!node) return pinned;
+    for (const key of path) node = node?.[key];
+    return node;
+  };
+  const d = core.$defs;
+  const pairs = [
+    [
+      "plan criteria",
+      h5Bound("RunPlanSetInput", ["properties", "criteria", "maxItems"], 64),
+      d.RunPlan.properties.criteria.maxItems,
+    ],
+    [
+      "plan phases",
+      h5Bound("RunPlanSetInput", ["properties", "phases", "maxItems"], 64),
+      d.RunPlan.properties.phases.maxItems,
+    ],
+    [
+      "items per phase",
+      h5Bound("RunPlanPhaseInput", ["properties", "items", "maxItems"], 256),
+      d.RunPlan.properties.phases.items.properties.items.maxItems,
+    ],
+    [
+      "an item's criteria",
+      h5Bound("RunPlanItemInput", ["properties", "criteria", "maxItems"], 64),
+      d.PlanItem.properties.criteria.maxItems,
+    ],
+    [
+      "an item's dependencies",
+      h5Bound("RunPlanItemInput", ["properties", "dependsOn", "maxItems"], 64),
+      d.PlanItem.properties.dependsOn.maxItems,
+    ],
+    [
+      "an item's evidence",
+      h5Bound("TeammateRecordRefs", ["maxItems"], 256),
+      d.PlanItem.properties.evidence.maxItems,
+    ],
+    [
+      "follow-through items",
+      h5Bound("RunPlanSetInput", ["properties", "followThrough", "maxItems"], 64),
+      d.RunCompletion.properties.followThrough.maxItems,
+    ],
+    [
+      "criteria reported",
+      h5Bound("ToolInputRunComplete", ["properties", "criteria", "maxItems"], 64),
+      d.RunCompletion.properties.criteria.maxItems,
+    ],
+    [
+      "a criterion's evidence",
+      h5Bound("TeammateRecordRefs", ["maxItems"], 256),
+      d.RunCompletion.properties.criteria.items.properties.evidence.maxItems,
+    ],
+    [
+      "verdicts",
+      h5Bound("TeammateResultInput", ["properties", "verdicts", "maxItems"], 64),
+      d.ReviewVerdict.properties.criteria.maxItems,
+    ],
+    [
+      "a verdict's evidence",
+      h5Bound("TeammateRecordRefs", ["maxItems"], 256),
+      d.ReviewVerdict.properties.criteria.items.properties.evidence.maxItems,
+    ],
+    [
+      "a suggestion's title",
+      h5Bound("ToolInputMemorySuggest", ["properties", "title", "maxLength"], 120),
+      d.PersonMemorySuggestion.properties.title.maxLength,
+    ],
+    [
+      "a suggestion's text",
+      h5Bound("ToolInputMemorySuggest", ["properties", "text", "maxLength"], 1000),
+      d.PersonMemoryText.maxLength,
+    ],
+  ];
+  for (const [label, input, record] of pairs)
+    assert.ok(Number.isInteger(input) && record >= input, `${label}: ${record} >= ${input}`);
+  // memory.suggest's kind and title are kept, so the person saves the exact suggestion.
+  assert.deepEqual(
+    enumOf("PersonMemoryKind"),
+    enumFrom("PersonMemoryKind", h5Pinned.personMemoryKinds),
+  );
+  const suggestion = fakes.fakePersonMemorySuggestion();
+  for (const kind of h5Pinned.personMemoryKinds)
+    assert.ok(valid("PersonMemorySuggestion", { ...suggestion, kind }), kind);
+  refuses("PersonMemorySuggestion", [
+    ["no kind", edit(suggestion, (s) => delete s.kind)],
+    ["no title", edit(suggestion, (s) => delete s.title)],
+  ]);
+  // Text: H5's inputs set no lengths, so the records keep none beyond ADR-0040 item 4(c)'s
+  // person-facing bounds (understood 1 to 280 characters, steps of up to 80).
+  const long = "x".repeat(40000);
+  const plan = fakes.fakeRunPlan();
+  assert.ok(
+    valid(
+      "RunPlan",
+      edit(plan, (p) => {
+        p.objective = long;
+        p.criteria[0].text = long;
+        p.phases[0].title = long;
+        p.phases[0].items[0].title = long;
+        p.phases[1].items[1].droppedReason = long;
+        p.notes[0].text = long;
+      }),
+    ),
+    "long plan text",
+  );
+  assert.ok(valid("RunCompletion", { ...fakes.fakeRunCompletion("done"), reply: long }));
+  assert.ok(
+    valid(
+      "ContextLedger",
+      edit(fakes.fakeContextLedger(), (l) => (l.plan[0].title = long)),
+    ),
+  );
+  refuses("RunPlan", [
+    ["an understood line over 280 characters", { ...plan, understood: "x".repeat(281) }],
+    ["a step over 80 characters", edit(plan, (p) => (p.steps[0].title = "x".repeat(81)))],
+  ]);
+  // From the merge on, H5's run.plan input carries those two bounds and each step's owner, so a
+  // longer input is that call's invalid_input, never a record the store refuses.
+  const setInput = h5("RunPlanSetInput");
+  if (setInput) {
+    const understood = setInput.properties.understood.anyOf.find((n) => n.type === "string");
+    assert.ok(understood.maxLength <= 280, "understood bound at the merge");
+    const step = setInput.properties.steps.anyOf.find((n) => n.type === "array").items;
+    const title = step.properties?.title ?? step;
+    assert.ok(title.maxLength <= 80, "step bound at the merge");
+    assert.ok(step.properties?.by, "each step names who does it (ADR-0040 item 4(c))");
+  }
+  // A verdict keeps its reviewer's note per criterion (TeammateVerdictInput.note).
+  const verdict = fakes.fakeReviewVerdict("blocks");
+  assert.ok(valid("ReviewVerdict", { ...verdict, summary: long }));
+  assert.equal(typeof verdict.criteria[1].note, "string");
+  assert.equal(
+    valid(
+      "ReviewVerdict",
+      edit(verdict, (v) => delete v.criteria[1].note),
+    ),
+    false,
+  );
+});
+
+test("review R1: run kinds are ADR-0041 item 4's once H5 retires the specialist kind", () => {
+  const six = ["coordinator", "routed", "mandate", "call", "review", "upkeep"];
+  const kinds = enumOf("AgentRunKind");
+  for (const kind of six) assert.ok(kinds.includes(kind), kind);
+  // H5 (pull request 79) retires specialist with its specs (SpecialistBrief goes with it); from
+  // that merge on, the kinds are exactly ADR-0041 item 4's, a teammate call's run is a call run
+  // (not a routed run with a flag), and it is offered the call context's tools.
+  if (!core.$defs.SpecialistBrief) {
+    assert.deepEqual([...kinds].sort(), [...six].sort());
+    assert.equal(runContext("call", false), "call");
+  } else assert.throws(() => runContext("call", false));
+});
+
+test("the merge guard: core v1.1 names each definition once", () => {
+  // JSON.parse keeps the last of two equal keys, so a definition both PRs add (ContextLabel,
+  // MemoryLayer, CheckpointLine, PersonMemoryKind) would otherwise survive the merge twice.
+  const text = readFileSync("docs/contracts/schemas/v1.1/core.schema.json", "utf8");
+  const names = [...text.matchAll(/^ {4}"([A-Za-z0-9]+)": \{$/gm)].map((m) => m[1]);
+  assert.equal(names.length, Object.keys(core.$defs).length);
+  assert.equal(new Set(names).size, names.length, "a definition appears twice");
 });
 
 // --- Long-horizon jobs (ADR-0041 items 16 to 19) -----------------------------------------
@@ -789,10 +1237,64 @@ test("RunEvent@1 is content-free and typed by kind; JobStatus@1 is a projection 
     ["an approve control", { ...working, approve: true }],
     ["a model-written title", { ...working, title: { kind: "text", text: "Fixing titles" } }],
     ["a credit balance", { ...working, balance: "100" }],
+    // Review R3 (ADR-0040 item 5): checking overrides done, stopped and failed while any
+    // operation's outcome is unreconciled, and is never shown as done; so a card in one of those
+    // states has none, and a checking card has at least one.
+    ...["done", "stopped", "failed"].flatMap((state) =>
+      [1, 2].map((n) => [
+        `${state} with ${n} operation(s) unconfirmed`,
+        edit(fakes.fakeJobStatus(state), (j) => (j.counts.operationsUnconfirmed = n)),
+      ]),
+    ),
+    [
+      "checking with nothing unconfirmed",
+      edit(fakes.fakeJobStatus("checking"), (j) => (j.counts.operationsUnconfirmed = 0)),
+    ],
   ]);
+  // Every other state may hold an operation in flight.
+  for (const state of enumOf("JobState").filter((s) => !["done", "stopped", "failed"].includes(s)))
+    assert.ok(
+      valid(
+        "JobStatus",
+        edit(fakes.fakeJobStatus(state), (j) => (j.counts.operationsUnconfirmed = 1)),
+      ),
+      state,
+    );
 });
 
 // --- Memory (ADR-0041 items 25 to 30) -----------------------------------------------------
+test("review R4: every stored derived row carries read tags, an audience, its source subjects and taint", () => {
+  // ADR-0041 item 25: "every derived row (notebook entries, summaries, result items, plan
+  // revisions, checkpoints, ledger items) carries an audience and its source subjects"; a read
+  // passes only if the read tags allow it, the reader has live view of every source subject and
+  // the audience matches. Result items are H5's (pull request 79).
+  const rows = [
+    ["ContextCheckpoint", fakes.fakeContextCheckpoint()],
+    ["ContextLedger", fakes.fakeContextLedger()],
+    ["RunPlan", fakes.fakeRunPlan()],
+    ["ReviewVerdict", fakes.fakeReviewVerdict()],
+    ["ConversationSummary", fakes.fakeConversationSummary()],
+    ["NotebookEntryV2", fakes.fakeNotebookEntryV2()],
+  ];
+  const fields = ["readTags", "audience", "sourceSubjects", "taint"];
+  for (const [name, row] of rows) {
+    const def = core.$defs[name];
+    for (const field of fields) {
+      assert.ok(def.required.includes(field), `${name} requires ${field}`);
+      assert.equal(
+        valid(
+          name,
+          edit(row, (r) => delete r[field]),
+        ),
+        false,
+        `${name} without ${field}`,
+      );
+    }
+    assert.equal(def.properties.sourceSubjects.$ref, "#/$defs/SourceSubjects", name);
+    assert.equal(def.properties.audience.$ref, "#/$defs/Audience", name);
+  }
+});
+
 test("memory contracts: audience on every derived row, person memory only its person's, five queries", () => {
   const summary = fakes.fakeConversationSummary();
   refuses("ConversationSummary", [
@@ -1297,4 +1799,99 @@ test("the fake broker: compaction, a new epoch, the hard guard and the append-on
       row.outcome !== "end_turn" && row.outcome !== "tool_use",
       `row ${row.sequence}`,
     );
+});
+
+test("review R2: a healthy reply past a stored bound is incomplete and resent, never a protocol break", async () => {
+  // ADR-0041 item 8: only a protocol break (an unparseable reply, a different model id) ends the
+  // run. The fake broker's bounds are AssistantModelMessage's, and a reasoning block holds what
+  // the max_tokens range (128,000) produces at the generator's 4 bytes a token.
+  const assistant = core.$defs.AssistantModelMessage;
+  assert.equal(replyBounds.blocks, assistant.properties.content.maxItems);
+  assert.equal(replyBounds.textChars, core.$defs.ModelTextBlock.properties.text.maxLength);
+  const reasoning = core.$defs.ModelReasoningBlock.properties;
+  assert.equal(replyBounds.reasoningChars, reasoning.text.maxLength);
+  assert.equal(replyBounds.reasoningChars, reasoning.continuity.maxLength);
+  assert.ok(replyBounds.reasoningChars >= maxOutputTokensRange * bytesPerTokenEstimate);
+  const longest = maxOutputTokensRange * bytesPerTokenEstimate;
+  const use = (i) => ({
+    type: "tool_use",
+    id: `toolu_${i}`,
+    name: "products.read",
+    input: { productIds: null, titleContains: "dress", limit: 5 },
+  });
+  const reply = (...content) => ({ role: "assistant", content });
+  const thinking = {
+    type: "reasoning",
+    text: "x".repeat(longest),
+    continuity: "A".repeat(longest),
+    redacted: false,
+  };
+  const cases = [
+    // A reply as long as max_tokens allows: one text block of 512,000 characters.
+    [
+      "a text reply as long as max_tokens allows",
+      reply({ type: "text", text: "x".repeat(longest) }),
+      "incomplete",
+    ],
+    [
+      "a text block just past 32,000 characters",
+      reply({ type: "text", text: "x".repeat(32005) }),
+      "incomplete",
+    ],
+    ["65 tool calls", reply(...Array.from({ length: 65 }, (_, i) => use(i + 1))), "incomplete"],
+    ["129 blocks", reply(...Array(129).fill({ type: "text", text: "x" })), "incomplete"],
+    ["a long reasoning block", reply(thinking, { type: "text", text: "Done." }), "end_turn"],
+    [
+      "64 tool calls (code answers past 16 parallel_limit)",
+      reply(...Array.from({ length: 64 }, (_, i) => use(i + 1))),
+      "tool_use",
+    ],
+    // Shape breaches stay protocol breaks, however long the reply.
+    ["an unknown block", reply({ type: "image", data: "eA" }), "invalid_output"],
+    [
+      "a long text block with an extra key",
+      reply({ type: "text", text: "x".repeat(40000), cite: 1 }),
+      "invalid_output",
+    ],
+    ["a tool outside the catalogue", reply({ ...use(1), name: "sql.run" }), "invalid_output"],
+    ["no blocks", reply(), "invalid_output"],
+    ["a user turn", { role: "user", content: [{ type: "text", text: "x" }] }, "invalid_output"],
+  ];
+  for (const [label, value, expected] of cases) {
+    const store = createFakeContextStore();
+    store.grantLease("run_1", 1);
+    store.openEpoch("ctx_1", 1, opening);
+    store.attachRun("ctx_1", "run_1");
+    const gateway = createFakeModelGateway([{ reply: value }, { reply: text("Shorter.") }], {
+      store,
+    });
+    const sequence = store.append("ctx_1", { epoch: 1, purpose: "turn", input: null });
+    const before = store.expectedPrefixDigest("ctx_1", 1, sequence);
+    const first = await gateway.modelTurn(callOf(store, "ctx_1", "run_1", 1, sequence));
+    assert.equal(first.outcome, expected, label);
+    assert.equal(
+      replyFit(value),
+      { incomplete: "over_bound", invalid_output: "invalid" }[expected] ?? "fits",
+      label,
+    );
+    assert.ok(validateCurrentDefinition("ModelResultV2", first), label);
+    if (expected !== "incomplete") continue;
+    // Booked like a cut and never kept: the resend names the same prefix, and the run goes on.
+    assert.equal(first.message, null, label);
+    assert.ok(first.usage, `${label}: booked`);
+    store.recordOutcome("ctx_1", sequence, "incomplete");
+    const resent = store.append("ctx_1", {
+      epoch: 1,
+      purpose: "turn",
+      notices: [{ code: "output_cut", value: null }],
+      input: null,
+    });
+    assert.equal(
+      store.expectedPrefixDigest("ctx_1", 1, resent),
+      before,
+      `${label}: the cut reply is not in the prefix`,
+    );
+    const again = await gateway.modelTurn(callOf(store, "ctx_1", "run_1", 1, resent));
+    assert.equal(again.outcome, "end_turn", `${label}: resent`);
+  }
 });

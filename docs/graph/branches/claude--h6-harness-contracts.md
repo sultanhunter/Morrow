@@ -20,3 +20,11 @@ second PR.
 
 Merged main at 14644dec (pull request 89, OD-2026-10-26-12): AgentRunSafety@1 has no cost
 check-in and CheckInCode no cost; the slot wait is a send slot, with no per-person cap.
+
+Review R1 to R5 of c72b4688 (2026-10-27): H6's records accept what H5's tool inputs accept
+(ContextLabel, MemoryLayer, CheckpointLine and PersonMemoryKind are H5's byte for byte; the
+checkpoint body is context.checkpoint's input; nothing_found; H5's arrays, kinds and text), with
+a per-definition merge step in the brief; a healthy reply past a stored bound is incomplete, not
+a protocol break; JobStatus@1 is never done, stopped or failed with an operation unconfirmed;
+plans, verdicts and the ledger carry source subjects (the ledger also read tags and audience);
+the context policy generator refuses an inline bound a result block cannot hold.

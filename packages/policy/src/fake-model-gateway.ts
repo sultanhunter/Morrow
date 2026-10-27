@@ -15,10 +15,14 @@
 //     prefix_mismatch and nothing is sent; a reply's prefixDigest covers the newest row with the
 //     reply as its output, which is what the next call names once the orchestrator records it;
 //   - the hard guard: estimated input plus max_tokens above it is input_over_cap, non-terminal;
-//   - a reply outside the strict shapes (or with more than 64 tool calls) is invalid_output, a
-//     protocol break; a tool_use naming an unoffered tool, or one whose input breaks a limit of
-//     its ToolInput definition, is returned: the tool-call step answers it and the model
-//     corrects it (there is no final turn);
+//   - a reply whose blocks fall outside the strict shapes (an unknown block or tool, a wrong
+//     type, a missing or extra key) is invalid_output, a protocol break; a reply whose blocks
+//     parse but pass a stored bound of AssistantModelMessage (a text block over 32,000
+//     characters, more than 128 blocks or 64 tool calls) is incomplete, never a protocol break
+//     (ADR-0041 item 8): booked, never kept as history, and resent with output_cut; a tool_use
+//     naming an unoffered tool, or one whose input breaks a limit of its ToolInput definition,
+//     is returned: the tool-call step answers it and the model corrects it (there is no final
+//     turn);
 //   - a compaction call returns its block as compacted;
 //   - every result is a ModelResult@2 with the request's tokens per layout section.
 // Deterministic: no clock or randomness. Digests are SHA-256 of RFC 8785 text (canonicalDigest).
@@ -294,6 +298,70 @@ const usageOf = (usage: Current_ModelUsageV2 | undefined): Current_ModelUsageV2 
 const estimate = (value: unknown): number => Math.ceil(JSON.stringify(value).length / 4);
 // The safety range of tool calls in one reply; code runs 16 a turn and answers the rest.
 const maxToolUsesPerReply = 64;
+/**
+ * AssistantModelMessage's stored bounds (core v1.1; harness-contracts checks they match): the
+ * blocks of one reply, a text block's characters, and a reasoning block's text and continuity.
+ */
+export const replyBounds = Object.freeze({
+  blocks: 128,
+  toolUses: maxToolUsesPerReply,
+  textChars: 32000,
+  reasoningChars: 1048576,
+});
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const clamp = (value: unknown, length: number): unknown =>
+  typeof value === "string" ? value.slice(0, length) : value;
+/**
+ * How a parsed reply fits the stored message (ADR-0041 item 8). `fits`: a valid
+ * AssistantModelMessage within the tool-call range. `over_bound`: every block is in its strict
+ * shape, but the reply passes a stored bound (a block's length, the block count, the tool-call
+ * range): the outcome is incomplete, booked and resent with output_cut, never a protocol break.
+ * `invalid`: a block outside the strict shapes, a protocol break (invalid_output).
+ */
+export function replyFit(reply: unknown): "fits" | "over_bound" | "invalid" {
+  if (
+    !isRecord(reply) ||
+    Object.keys(reply).sort().join() !== "content,role" ||
+    reply.role !== "assistant" ||
+    !Array.isArray(reply.content) ||
+    reply.content.length < 1
+  )
+    return "invalid";
+  const content: readonly unknown[] = reply.content;
+  let over = content.length > replyBounds.blocks;
+  let uses = 0;
+  for (const block of content) {
+    if (!isRecord(block)) return "invalid";
+    // Each block is checked in its own shape with its length bounds lifted: a long block is
+    // still the block the provider sent.
+    const shaped =
+      block.type === "text"
+        ? validateCurrentDefinition("ModelTextBlock", {
+            ...block,
+            text: clamp(block.text, replyBounds.textChars),
+          })
+        : block.type === "reasoning"
+          ? validateCurrentDefinition("ModelReasoningBlock", {
+              ...block,
+              text: clamp(block.text, replyBounds.reasoningChars),
+              continuity: clamp(block.continuity, replyBounds.reasoningChars),
+            })
+          : block.type === "tool_use" && validateCurrentDefinition("ModelToolUseBlock", block);
+    if (!shaped) return "invalid";
+    if (block.type === "tool_use") uses += 1;
+    if (
+      (block.type === "text" && (block.text as string).length > replyBounds.textChars) ||
+      (block.type === "reasoning" &&
+        ((block.text as string).length > replyBounds.reasoningChars ||
+          (block.continuity as string).length > replyBounds.reasoningChars))
+    )
+      over = true;
+  }
+  if (uses > replyBounds.toolUses) over = true;
+  if (over) return "over_bound";
+  return validateCurrentDefinition("AssistantModelMessage", reply) ? "fits" : "invalid";
+}
 
 /**
  * A gateway that answers each call with the next scripted turn, reading the request from
@@ -400,10 +468,12 @@ export function createFakeModelGateway(
       });
     }
     if (call.purpose === "compaction") throw new FakeModelGatewayError("SCRIPT_MISMATCH");
-    if (!validateCurrentDefinition("AssistantModelMessage", next.reply))
-      return empty("invalid_output", { sectionTokens });
+    const fit = replyFit(next.reply);
+    if (fit === "invalid") return empty("invalid_output", { sectionTokens });
+    // A healthy reply past a stored bound: booked like a cut, never kept as history.
+    if (fit === "over_bound")
+      return empty("incomplete", { usage: usageOf(next.usage), sectionTokens });
     const uses = next.reply.content.filter((block) => block.type === "tool_use");
-    if (uses.length > maxToolUsesPerReply) return empty("invalid_output", { sectionTokens });
     return result({
       schemaVersion: 2,
       outcome: uses.length ? "tool_use" : "end_turn",

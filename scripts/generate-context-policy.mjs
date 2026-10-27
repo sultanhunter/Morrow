@@ -26,6 +26,9 @@ export const maxOutputTokensRange = 128000;
 // The byte estimate per token for the stored-message check (ADR-0041 item 12: 384 KiB holds the
 // per-turn budget and a full turn of previews).
 export const bytesPerTokenEstimate = 4;
+// ModelToolResultBlock's content bound in core v1.1 (256 KiB): the most one tool result block
+// holds, so an inline result, kept whole in its block, must fit it.
+export const toolResultBlockChars = 262144;
 
 const refuse = (code) => {
   throw Error("CONTEXT_POLICY_" + code);
@@ -99,6 +102,8 @@ export function inspectContextPolicyRow(row) {
     fail(`the opening budgets (${epochBudget} tokens) must fit the new epoch's target`);
   const perTurn = share(row.results.perTurnBasisPoints, W);
   if (row.results.inlineTokens > perTurn) fail("one inline result fits the per-turn budget");
+  if (row.results.inlineTokens * bytesPerTokenEstimate > toolResultBlockChars)
+    fail("one inline result fits a tool result block (256 KiB)");
   if (row.results.previewTokens > row.results.inlineTokens)
     fail("a preview is below the inline bound");
   if (

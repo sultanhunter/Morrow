@@ -53,6 +53,8 @@ const freeze = <T>(value: T): T => {
 const ids = fakeHarnessIds;
 /** The audience of everything derived from the Owner's private Morrow conversation. */
 const ownerAudience = { kind: "principal" as const, principalId: fakeIds.ownerPrincipalId };
+/** What the fork's derived rows came from: the owner's Morrow conversation. */
+const forkSubjects = [{ kind: "conversation" as const, id: ids.conversationId }];
 const productsTag: Current_ReadTag = {
   storeId: fakeIds.storeId,
   capability: "catalog.products.read",
@@ -63,7 +65,7 @@ const untainted = (): Current_DerivedTaint => ({ kinds: [], sourceCount: 0 });
 /** Listings' item i1: the titles it drafted from the 14 summer dresses it read. */
 const itemTaint = (): Current_DerivedTaint => ({ kinds: ["product"], sourceCount: 14 });
 /**
- * The fork's taint once it has read the products (c3), Listings' result (j1) and its item (i1),
+ * The fork's taint once it has read the products (c3), Listings' result (its call, c4) and its item (r1),
  * joined without loss (ADR-0027 item 5, ADR-0041 item 34): every row derived from the fork (its
  * checkpoint, ledger and plan, and the review of its proposals) carries at least this.
  */
@@ -212,8 +214,8 @@ export function fakeContextEpoch(kind: "initial" | "compaction" = "initial"): Cu
 }
 /**
  * The fork's hand-off at its first compaction: the fallback strategy's ContextCheckpoint@1
- * (narrative, facts cited by label, a promise, stated states that match SQL), or the provider
- * strategy's opaque compaction block with its readable summary.
+ * (context.checkpoint's input: narrative lines citing labels, exact values kept verbatim, a
+ * promise), or the provider strategy's opaque compaction block with its readable summary.
  */
 export function fakeContextCheckpoint(
   kind: "fallback" | "provider_compaction" = "fallback",
@@ -230,38 +232,50 @@ export function fakeContextCheckpoint(
     throughSequence: 135,
     summary:
       kind === "provider_compaction"
-        ? "Read 14 summer dresses (c3). Listings drafted titles (j1); 12 are proposed (p1)."
+        ? "Read 14 summer dresses (c3). Listings drafted titles (c4, r1); 12 are proposed (p1)."
         : null,
     // The provider's opaque block, kept here and sent first, unchanged, in epoch 2's request.
     block: kind === "provider_compaction" ? "Y29tcGFjdGlvbiBibG9jayBvZiBlcG9jaCAx" : null,
+    // context.checkpoint's input as the fork wrote it (ToolInputContextCheckpoint, H5): narrative
+    // lines citing labels, never a stated approval or apply; the ledger carries the exact facts.
     content:
       kind === "fallback"
         ? {
-            narrative:
-              "The owner asked for clearer titles for the summer dresses (m1). Listings read 14 " +
-              "dresses and drafted titles; two were set aside as already clear.",
-            facts: [
-              { label: "c3", value: "14 summer dresses, product:1 to product:14" },
-              { label: "j1", value: "Listings call finished: 12 drafts, 2 unchanged" },
+            objective: { text: "Clearer titles for the owner's summer dresses", refs: ["m1"] },
+            status: "waiting",
+            statusNote: "Waiting for the owner's decision on the proposal set (p1)",
+            done: [
+              { text: "Read 14 summer dresses, product:1 to product:14", refs: ["c3"] },
+              { text: "Listings drafted 12 titles; 2 were already clear", refs: ["c4", "r1"] },
             ],
-            discussed: [
+            inProgress: [{ text: "The proposal set waits for the owner", refs: ["p1"] }],
+            decisions: [
               {
-                topic: "Brand names in titles",
-                quote: { label: "m1", text: "Keep the brand name first." },
-                why: "The owner's standing style",
+                decision: "Brand name first in every title",
+                reason: "The owner asked for it",
+                refs: ["m1"],
               },
             ],
-            setAside: [{ what: "Rewriting descriptions", why: "Not part of the request" }],
+            setAside: [
+              { option: "Rewriting descriptions", reason: "Not part of the request", refs: [] },
+            ],
+            facts: [
+              { fact: "product:1 to product:14", exact: true, refs: ["c3"] },
+              { fact: "Sizes stay out of titles", exact: false, refs: ["q1"] },
+            ],
             difficulties: [],
-            promises: [{ text: "Say when the new titles are live", label: "p1" }],
-            nextSteps: ["Have the proposal set reviewed", "Wait for the approval and read-back"],
-            states: [{ label: "p1", state: "pending" }],
+            promised: [{ text: "Say when the new titles are live", refs: ["p1"] }],
+            nextSteps: [
+              { text: "Have the proposal set reviewed", refs: ["p1"] },
+              { text: "Wait for the approval and read-back", refs: ["p1"] },
+            ],
+            reopen: [{ ref: "r1", why: "The drafted titles, if the owner asks for changes" }],
           }
         : null,
     validation: { result: "valid", code: null },
     readTags: [productsTag],
     audience: ownerAudience,
-    sourceSubjects: [{ kind: "conversation", id: ids.conversationId }],
+    sourceSubjects: forkSubjects,
     taint: forkTaint(),
     createdAt: later(94),
     expiresAt: null,
@@ -313,10 +327,10 @@ export function fakeContextLedger(): Current_ContextLedger {
         unknown: true,
       },
     ],
-    records: [{ label: "r1", kind: "proposal", id: ids.proposalId }],
+    records: [{ label: "c5", kind: "proposal", id: ids.proposalId }],
     calls: [
       {
-        label: "j1",
+        label: "c4",
         callId: ids.callId,
         installationId: fakeIds.listingsInstallationId,
         state: "finished",
@@ -345,6 +359,9 @@ export function fakeContextLedger(): Current_ContextLedger {
       refusals: 0,
       plan: 0,
     },
+    readTags: [productsTag],
+    audience: ownerAudience,
+    sourceSubjects: forkSubjects,
   });
 }
 
@@ -442,6 +459,7 @@ export function fakeRunPlan(revision: 1 | 2 = 1): Current_RunPlan {
     change: done ? { kind: "requester_message", messageId: ids.followUpMessageId } : null,
     readTags: [productsTag],
     audience: ownerAudience,
+    sourceSubjects: forkSubjects,
     taint: forkTaint(),
     createdAt: done ? later(30) : at,
   });
@@ -532,6 +550,7 @@ export function fakeReviewVerdict(
         key: "titles_proposed",
         verdict: "pass",
         evidence: [{ ref: { kind: "proposal", id: ids.proposalId }, note: "" }],
+        note: null,
       },
       {
         key: "brand_first",
@@ -542,6 +561,7 @@ export function fakeReviewVerdict(
             note: blocks ? "Two titles put the fabric before the brand." : "",
           },
         ],
+        note: blocks ? "Fix the two titles and send the set again." : null,
       },
     ],
     outcome,
@@ -550,6 +570,7 @@ export function fakeReviewVerdict(
       : "Every proposed title starts with the brand name.",
     readTags: [productsTag],
     audience: ownerAudience,
+    sourceSubjects: forkSubjects,
     taint: forkTaint(),
     createdAt: later(98),
   });
@@ -767,6 +788,8 @@ export function fakePersonMemorySuggestion(): Current_PersonMemorySuggestion {
     runId: ids.mainThreadRunId,
     conversationId: ids.conversationId,
     messageId: ids.resultMessageId,
+    kind: "preference",
+    title: "Brand name first in titles",
     text: "Product titles start with the brand name.",
     scope: "private_chats",
     digest: fakeDigest("suggestion text"),
@@ -802,12 +825,17 @@ export function fakeNotebookEntryV2(): Current_NotebookEntryV2 {
     expiresAt: days(90),
   });
 }
-/** memory.search's hits for two queries, each naming its layer and trust class. */
+/**
+ * memory.search's hits for two queries, each naming its layer, its trust class and the
+ * memory.read target that opens it (readKind and id).
+ */
 export function fakeMemorySearchHits(): readonly Current_MemorySearchHit[] {
   return freeze([
     {
       layer: "knowledge",
+      readKind: "knowledge_page",
       id: ids.pageId,
+      position: null,
       label: null,
       query: 0,
       title: "Brand voice",
@@ -819,7 +847,9 @@ export function fakeMemorySearchHits(): readonly Current_MemorySearchHit[] {
     },
     {
       layer: "notebook",
+      readKind: "notebook_entry",
       id: ids.notebookEntryId,
+      position: null,
       label: null,
       query: 0,
       title: "Titles: brand first",
@@ -830,9 +860,11 @@ export function fakeMemorySearchHits(): readonly Current_MemorySearchHit[] {
       updatedAt: at,
     },
     {
-      layer: "result_item",
+      layer: "results",
+      readKind: "result_item",
       id: ids.itemId,
-      label: "i1",
+      position: null,
+      label: "r1",
       query: 1,
       title: "Summer dress titles",
       snippet: "product:3 Linen wrap dress → Morrow Linen Wrap Dress",

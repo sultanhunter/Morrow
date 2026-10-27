@@ -10539,12 +10539,12 @@
         "text": {
           "type": "string",
           "minLength": 0,
-          "maxLength": 65536
+          "maxLength": 1048576
         },
         "continuity": {
           "description": "Opaque provider continuity data, passed back unchanged within the context; deleted with the block.",
           "type": "string",
-          "maxLength": 65536,
+          "maxLength": 1048576,
           "pattern": "^[A-Za-z0-9+/=_-]*$"
         },
         "redacted": {
@@ -10598,7 +10598,7 @@
       "additionalProperties": false
     },
     "AssistantModelMessage": {
-      "description": "The model's side of one turn: text, reasoning and tool calls. A reply may hold up to 64 tool calls (the safety range); code runs ContextPolicy@1's 16 per turn (6 in flight) and answers the rest parallel_limit, re-issued next turn.",
+      "description": "The model's side of one turn: text, reasoning and tool calls. A reply may hold up to 64 tool calls (the safety range); code runs ContextPolicy@1's 16 per turn (6 in flight) and answers the rest parallel_limit, re-issued next turn. A reasoning block holds what the max_tokens range can produce (1 MiB). A reply whose blocks parse into these shapes but pass a stored bound (a text block over 32,000 characters, more than 128 blocks or 64 tool calls) is incomplete, never invalid_output (ADR-0041 item 8): recorded and booked, never kept as history, and the turn is resent with output_cut asking the model to split the work across turns or result items.",
       "type": "object",
       "properties": {
         "role": {
@@ -10715,7 +10715,7 @@
       ]
     },
     "ModelTurnOutcome": {
-      "description": "A model call's outcome (ADR-0041 item 8). end_turn and tool_use carry the reply (a tool_use naming an unoffered tool, or one whose input breaks a limit of its ToolInput definition, is answered with an error result and the model corrects it). compacted carries a compaction call's block. incomplete: the reply was cut at max_tokens, recorded and booked, never sent back as history; the turn is resent with an output_cut notice, and three cuts trip a detector. uncertain: the stream broke after it started; booked at its worst case and resent once in the step with a new hold, a second uncertain attempt parks with back-off. spend_limit parks the job until a person continues. input_over_cap is a non-terminal refusal (input plus max_tokens above half the model window) that forces compaction. invalid_output is a protocol break only (an unparseable reply, a reply outside the strict shapes, a different model id) and ends the run, free. not_sent, lease_refused and prefix_mismatch generated nothing and booked nothing.",
+      "description": "A model call's outcome (ADR-0041 item 8). end_turn and tool_use carry the reply (a tool_use naming an unoffered tool, or one whose input breaks a limit of its ToolInput definition, is answered with an error result and the model corrects it). compacted carries a compaction call's block. incomplete: the reply was cut at max_tokens, or it parses but passes a stored bound of AssistantModelMessage (a block's length, the block count, more than 64 tool calls); recorded and booked, never sent back as history; the turn is resent with an output_cut notice, and three cuts trip a detector. uncertain: the stream broke after it started; booked at its worst case and resent once in the step with a new hold, a second uncertain attempt parks with back-off. spend_limit parks the job until a person continues. input_over_cap is a non-terminal refusal (input plus max_tokens above half the model window) that forces compaction. invalid_output is a protocol break only (an unparseable reply, a block outside the strict shapes, a different model id) and ends the run, free; a reply past a bound is never one. not_sent, lease_refused and prefix_mismatch generated nothing and booked nothing.",
       "type": "string",
       "enum": [
         "end_turn",
@@ -15574,14 +15574,14 @@
       ]
     },
     "ToolResultLabel": {
-      "description": "A tool result's stable code label in its context (c17), shown at the head of the result and recalled with memory.read.",
+      "description": "A tool result's stable code label in its context (c17): ContextLabel's c letter with at most six digits, so memory.read's label target resolves it. Shown at the head of the result.",
       "type": "string",
-      "pattern": "^c[1-9][0-9]{0,8}$"
+      "pattern": "^c[1-9][0-9]{0,5}$"
     },
     "ContextLabel": {
-      "description": "A stable code label in one context's log (ADR-0041 items 10, 13 and 14), server-generated, never model-chosen: c a tool result, t a turn, m a message, q a question, p a proposal, o a gateway operation, i a result item, j a teammate call, k a checkpoint, r a record created. Summaries and checkpoints cite labels instead of restating approvals, proposals or operations.",
+      "description": "A code label in this context's own log (ADR-0041 items 10, 13 and 14): c a tool result (c17), e an earlier checkpoint, k a knowledge page, m a message, o a gateway operation, p a proposal, q a question, r a result item, t a turn. Labels resolve only inside their context.",
       "type": "string",
-      "pattern": "^[ctmqpoijkr][1-9][0-9]{0,8}$"
+      "pattern": "^[cekmopqrt][0-9]{1,6}$"
     },
     "TaintKinds": {
       "description": "Every taint kind a row or run carries (ADR-0041 item 34): the kinds of untrusted source it consumed, the same values as ModelUntrustedSource. Never truncated (room for every kind) and never shrinks.",
@@ -15839,7 +15839,15 @@
         },
         "label": {
           "description": "The message's label (m12).",
-          "$ref": "#/$defs/ContextLabel"
+          "allOf": [
+            {
+              "$ref": "#/$defs/ContextLabel"
+            },
+            {
+              "type": "string",
+              "pattern": "^m"
+            }
+          ]
         },
         "authorPrincipalId": {
           "description": "Always the run's requester: only the requester's own posts reach a run.",
@@ -16823,222 +16831,273 @@
         }
       ]
     },
-    "CheckpointStatedState": {
-      "description": "A proposal's or gateway operation's state as a checkpoint states it; the validator rejects any entry that differs from SQL.",
-      "type": "string",
-      "enum": [
-        "pending",
-        "approved",
-        "rejected",
-        "expired",
-        "cancelled",
-        "invalidated",
-        "submitted",
-        "verifying",
-        "verified",
-        "failed",
-        "uncertain"
-      ]
-    },
-    "ContextCheckpointContent": {
-      "description": "The fallback checkpoint's model-written body (context.checkpoint, ADR-0041 items 11 and 13). Strict-tool-use friendly: closed objects, every key required, null for none. Code refuses any field that claims an approval, a consent, an apply or a payment, any label it does not hold, any quote that is not an exact substring, any stated state that differs from SQL, and anything the customer identifier screen flags.",
+    "CheckpointLine": {
+      "description": "One checkpoint entry and the labels it cites.",
       "type": "object",
       "properties": {
-        "narrative": {
-          "description": "Narrative only: what happened, decisions and why, difficulties.",
+        "text": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 32000,
           "pattern": "\\S"
         },
-        "facts": {
-          "description": "Ids and exact values verbatim with their source labels.",
+        "refs": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "label": {
-                "$ref": "#/$defs/ContextLabel"
-              },
-              "value": {
-                "description": "An id or exact value, verbatim.",
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 1000,
-                "pattern": "\\S"
-              }
-            },
-            "required": [
-              "label",
-              "value"
-            ],
-            "additionalProperties": false
+            "$ref": "#/$defs/ContextLabel"
           },
           "minItems": 0,
-          "maxItems": 200
+          "maxItems": 32,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "text",
+        "refs"
+      ],
+      "additionalProperties": false
+    },
+    "ContextCheckpointContent": {
+      "description": "The fallback checkpoint's model-written body: context.checkpoint's input as the model wrote it (ToolInputContextCheckpoint, pull request 79: the same properties, bounds and required keys, so every input the tool accepts is a storable body; ADR-0041 items 11 and 13). Narrative only: it cites labels for the person's words, approvals, proposals and operations rather than restating them, and the ledger rewrites the exact facts from SQL. Before commit code refuses (MemoryValidation) any text that claims an approval, a consent, an apply or a payment, any label the context does not hold (unknown_label), any stated state of a proposal or operation label that differs from SQL (state_mismatch), any record id SQL does not hold, and anything the customer identifier screen flags. decisions cite the labels where they were discussed (refs); the exact-quote rule of item 13 holds for ConversationSummary@1.",
+      "type": "object",
+      "properties": {
+        "objective": {
+          "$ref": "#/$defs/CheckpointLine"
         },
-        "discussed": {
-          "description": "Decisions become discussed items, each with an exact quote.",
+        "status": {
+          "type": "string",
+          "enum": [
+            "in_progress",
+            "waiting",
+            "blocked",
+            "finishing"
+          ]
+        },
+        "statusNote": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "done": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckpointLine"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "inProgress": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckpointLine"
+          },
+          "minItems": 0,
+          "maxItems": 256
+        },
+        "decisions": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "topic": {
+              "decision": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 280,
                 "pattern": "\\S"
               },
-              "quote": {
-                "type": "object",
-                "properties": {
-                  "label": {
-                    "$ref": "#/$defs/ContextLabel"
-                  },
-                  "text": {
-                    "description": "An exact substring of the labelled source.",
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 1000,
-                    "pattern": "\\S"
-                  }
-                },
-                "required": [
-                  "label",
-                  "text"
-                ],
-                "additionalProperties": false
-              },
-              "why": {
+              "reason": {
                 "type": "string",
-                "minLength": 0,
-                "maxLength": 1000,
-                "pattern": "^[^\\u0000]*$"
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
               }
             },
             "required": [
-              "topic",
-              "quote",
-              "why"
+              "decision",
+              "reason",
+              "refs"
             ],
             "additionalProperties": false
           },
           "minItems": 0,
-          "maxItems": 50
+          "maxItems": 256
         },
         "setAside": {
-          "description": "What was tried and set aside.",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "what": {
+              "option": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 500,
                 "pattern": "\\S"
               },
-              "why": {
+              "reason": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 1000,
                 "pattern": "\\S"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
               }
             },
             "required": [
-              "what",
-              "why"
+              "option",
+              "reason",
+              "refs"
             ],
             "additionalProperties": false
           },
           "minItems": 0,
-          "maxItems": 50
+          "maxItems": 256
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "exact": {
+                "type": "boolean"
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "fact",
+              "exact",
+              "refs"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "maxItems": 256
         },
         "difficulties": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 1000,
-            "pattern": "\\S"
-          },
-          "minItems": 0,
-          "maxItems": 20
-        },
-        "promises": {
-          "type": "array",
-          "items": {
             "type": "object",
             "properties": {
-              "text": {
+              "problem": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 500,
                 "pattern": "\\S"
               },
-              "label": {
+              "resolution": {
                 "anyOf": [
                   {
-                    "$ref": "#/$defs/ContextLabel"
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
                   },
                   {
                     "type": "null"
                   }
                 ]
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ContextLabel"
+                },
+                "minItems": 0,
+                "maxItems": 32,
+                "uniqueItems": true
               }
             },
             "required": [
-              "text",
-              "label"
+              "problem",
+              "resolution",
+              "refs"
             ],
             "additionalProperties": false
           },
           "minItems": 0,
-          "maxItems": 20
+          "maxItems": 256
+        },
+        "promised": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CheckpointLine"
+          },
+          "minItems": 0,
+          "maxItems": 256
         },
         "nextSteps": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 500,
-            "pattern": "\\S"
+            "$ref": "#/$defs/CheckpointLine"
           },
           "minItems": 0,
-          "maxItems": 20
+          "maxItems": 256
         },
-        "states": {
-          "description": "Stated states of proposal and operation labels, checked against SQL.",
+        "reopen": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "label": {
+              "ref": {
                 "$ref": "#/$defs/ContextLabel"
               },
-              "state": {
-                "$ref": "#/$defs/CheckpointStatedState"
+              "why": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
               }
             },
             "required": [
-              "label",
-              "state"
+              "ref",
+              "why"
             ],
             "additionalProperties": false
           },
           "minItems": 0,
-          "maxItems": 200
+          "maxItems": 64
         }
       },
       "required": [
-        "narrative",
-        "facts",
-        "discussed",
+        "objective",
+        "status",
+        "statusNote",
+        "done",
+        "inProgress",
+        "decisions",
         "setAside",
+        "facts",
         "difficulties",
-        "promises",
+        "promised",
         "nextSteps",
-        "states"
+        "reopen"
       ],
       "additionalProperties": false
     },
@@ -17318,7 +17377,16 @@
       "type": "object",
       "properties": {
         "label": {
-          "$ref": "#/$defs/ContextLabel"
+          "description": "The message's label (m1).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/ContextLabel"
+            },
+            {
+              "type": "string",
+              "pattern": "^m"
+            }
+          ]
         },
         "messageId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
@@ -17406,7 +17474,7 @@
       ]
     },
     "ContextLedger": {
-      "description": "ContextLedger@1 (ADR-0041 item 13; H6): what survives exactly. Rendered by code from SQL at every epoch start and placed after the summary and any kept tail, nearest the live work, with the line \"where the summary disagrees with these records, the records are right\". Unknown outcomes survive every compaction verbatim.",
+      "description": "ContextLedger@1 (ADR-0041 item 13; H6): what survives exactly. Rendered by code from SQL at every epoch start and placed after the summary and any kept tail, nearest the live work, with the line \"where the summary disagrees with these records, the records are right\". Unknown outcomes survive every compaction verbatim. Like every derived row (item 25) it carries the read tags, audience and source subjects of the records it renders: the context's audience, and the union of their read tags and subjects, so a view rebase re-checks it and a reader that may not see one of them cannot read it.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -17450,7 +17518,16 @@
             "type": "object",
             "properties": {
               "label": {
-                "$ref": "#/$defs/ContextLabel"
+                "description": "The question's label (q1).",
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/ContextLabel"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^q"
+                  }
+                ]
               },
               "questionId": {
                 "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
@@ -17497,7 +17574,16 @@
             "type": "object",
             "properties": {
               "label": {
-                "$ref": "#/$defs/ContextLabel"
+                "description": "The proposal's label (p1).",
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/ContextLabel"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^p"
+                  }
+                ]
               },
               "proposalId": {
                 "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
@@ -17536,7 +17622,16 @@
             "type": "object",
             "properties": {
               "label": {
-                "$ref": "#/$defs/ContextLabel"
+                "description": "The gateway operation's label (o1).",
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/ContextLabel"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^o"
+                  }
+                ]
               },
               "operationId": {
                 "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
@@ -17607,7 +17702,15 @@
             "type": "object",
             "properties": {
               "label": {
-                "$ref": "#/$defs/ContextLabel"
+                "description": "The label of the tool call that created the record in this context (c5); null when another context of the job created it. The record itself is named by kind and id.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ToolResultLabel"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "kind": {
                 "type": "string",
@@ -17645,7 +17748,15 @@
             "type": "object",
             "properties": {
               "label": {
-                "$ref": "#/$defs/ContextLabel"
+                "description": "The label of the tool call that dispatched the call in this context (agent.ask, a follow-up or an agent.map batch: c4); null when another context of the job dispatched it. memory.read opens its result by call id (teammate_result).",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ToolResultLabel"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "callId": {
                 "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
@@ -17783,7 +17894,6 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 200,
                 "pattern": "\\S"
               },
               "status": {
@@ -17862,6 +17972,15 @@
             "plan"
           ],
           "additionalProperties": false
+        },
+        "readTags": {
+          "$ref": "#/$defs/ReadTags"
+        },
+        "audience": {
+          "$ref": "#/$defs/Audience"
+        },
+        "sourceSubjects": {
+          "$ref": "#/$defs/SourceSubjects"
         }
       },
       "required": [
@@ -17880,7 +17999,10 @@
         "waits",
         "taint",
         "plan",
-        "omitted"
+        "omitted",
+        "readTags",
+        "audience",
+        "sourceSubjects"
       ],
       "additionalProperties": false
     },
@@ -17898,7 +18020,7 @@
       ]
     },
     "PlanEvidenceRef": {
-      "description": "Evidence a criterion cites; it must resolve to a record or item the run produced or was given, or the criterion becomes unverified.",
+      "description": "Evidence a criterion cites; it must resolve to a record or item the run produced or was given, or the criterion becomes unverified. The kinds are H6's (record, result_item, teammate_result, proposal, operation, message, label) and every record kind run.plan, run.complete and a review verdict cite (TeammateRecordKind, pull request 79).",
       "type": "object",
       "properties": {
         "kind": {
@@ -17910,7 +18032,16 @@
             "proposal",
             "operation",
             "message",
-            "label"
+            "label",
+            "task",
+            "thread",
+            "artifact",
+            "knowledge_page",
+            "product",
+            "suggestion",
+            "knowledge_proposal",
+            "notebook_entry",
+            "person_memory"
           ]
         },
         "id": {
@@ -17933,7 +18064,6 @@
         "text": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 500,
           "pattern": "\\S"
         },
         "check": {
@@ -18014,7 +18144,6 @@
         "title": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 200,
           "pattern": "\\S"
         },
         "status": {
@@ -18026,7 +18155,7 @@
             "$ref": "#/$defs/PlanKey"
           },
           "minItems": 0,
-          "maxItems": 20,
+          "maxItems": 64,
           "uniqueItems": true
         },
         "evidence": {
@@ -18035,7 +18164,7 @@
             "$ref": "#/$defs/PlanEvidenceRef"
           },
           "minItems": 0,
-          "maxItems": 64,
+          "maxItems": 256,
           "uniqueItems": true
         },
         "dependsOn": {
@@ -18044,7 +18173,7 @@
             "$ref": "#/$defs/PlanKey"
           },
           "minItems": 0,
-          "maxItems": 20,
+          "maxItems": 64,
           "uniqueItems": true
         },
         "droppedReason": {
@@ -18052,7 +18181,6 @@
             {
               "type": "string",
               "minLength": 1,
-              "maxLength": 500,
               "pattern": "\\S"
             },
             {
@@ -18124,7 +18252,6 @@
         "text": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 2000,
           "pattern": "\\S"
         }
       },
@@ -18163,7 +18290,7 @@
       "additionalProperties": false
     },
     "RunPlan": {
-      "description": "RunPlan@1 (ADR-0041 item 16; H6): one revision of a job's one plan, append-only in run_plan_revisions: an objective, frozen done criteria with check kinds, phases and items with statuses, evidence and dependencies, typed notes and follow-through items; for Morrow, the person-facing understood sentence and up to 6 steps. No field names a tool, capability, scope, store, model, recipient or limit.",
+      "description": "RunPlan@1 (ADR-0041 item 16; H6): one revision of a job's one plan, append-only in run_plan_revisions: an objective, frozen done criteria with check kinds, phases and items with statuses, evidence and dependencies, typed notes and follow-through items; for Morrow, the person-facing understood sentence and up to 6 steps. No field names a tool, capability, scope, store, model, recipient or limit. Its model-written text has no storage bound beyond what run.plan accepts (pull request 79); only ADR-0040 item 4(c)'s person-facing bounds hold (understood 1 to 280 characters, 1 to 6 steps of up to 80).",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -18193,7 +18320,6 @@
         "objective": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1000,
           "pattern": "\\S"
         },
         "criteria": {
@@ -18202,7 +18328,7 @@
             "$ref": "#/$defs/PlanCriterion"
           },
           "minItems": 1,
-          "maxItems": 20
+          "maxItems": 64
         },
         "phases": {
           "type": "array",
@@ -18215,7 +18341,6 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 120,
                 "pattern": "\\S"
               },
               "items": {
@@ -18224,7 +18349,7 @@
                   "$ref": "#/$defs/PlanItem"
                 },
                 "minItems": 1,
-                "maxItems": 200
+                "maxItems": 256
               }
             },
             "required": [
@@ -18235,7 +18360,7 @@
             "additionalProperties": false
           },
           "minItems": 1,
-          "maxItems": 20
+          "maxItems": 64
         },
         "notes": {
           "type": "array",
@@ -18321,6 +18446,9 @@
         "audience": {
           "$ref": "#/$defs/Audience"
         },
+        "sourceSubjects": {
+          "$ref": "#/$defs/SourceSubjects"
+        },
         "taint": {
           "$ref": "#/$defs/DerivedTaint"
         },
@@ -18345,6 +18473,7 @@
         "change",
         "readTags",
         "audience",
+        "sourceSubjects",
         "taint",
         "createdAt"
       ],
@@ -18374,11 +18503,12 @@
       ]
     },
     "RunCompletionOutcome": {
-      "description": "run.complete's outcome (ADR-0041 item 16): waiting posts the reply and opens follow-through waits; with an unknown outcome unreconciled only partial is allowed, naming it.",
+      "description": "run.complete's outcome (ADR-0041 items 16 and 23): every outcome its input takes (RunCompleteOutcome, pull request 79): done, partial, nothing_found (the work ran and found nothing to do), blocked, cannot_do, or waiting, which posts the reply and opens follow-through waits. With an unknown outcome unreconciled only partial is allowed, naming it.",
       "type": "string",
       "enum": [
         "done",
         "partial",
+        "nothing_found",
         "blocked",
         "cannot_do",
         "waiting"
@@ -18441,10 +18571,12 @@
                 "$ref": "#/$defs/PlanKey"
               },
               "status": {
+                "description": "met, not_met or unknown as the run reported it (TeammateCriterionReport); unverified when code could not resolve its evidence to records or items the run produced or was given.",
                 "type": "string",
                 "enum": [
                   "met",
                   "not_met",
+                  "unknown",
                   "unverified"
                 ]
               },
@@ -18454,7 +18586,7 @@
                   "$ref": "#/$defs/PlanEvidenceRef"
                 },
                 "minItems": 0,
-                "maxItems": 64,
+                "maxItems": 256,
                 "uniqueItems": true
               }
             },
@@ -18466,7 +18598,7 @@
             "additionalProperties": false
           },
           "minItems": 0,
-          "maxItems": 20
+          "maxItems": 64
         },
         "reply": {
           "description": "The reply code posts in the run's terminal transaction; null for a teammate call, which ends with its TeammateResult.",
@@ -18474,7 +18606,6 @@
             {
               "type": "string",
               "minLength": 1,
-              "maxLength": 32000,
               "pattern": "\\S"
             },
             {
@@ -18488,7 +18619,7 @@
             "$ref": "#/$defs/PlanKey"
           },
           "minItems": 0,
-          "maxItems": 20,
+          "maxItems": 64,
           "uniqueItems": true
         },
         "unknownOutcomes": {
@@ -18765,18 +18896,32 @@
                   "additionalProperties": false
                 },
                 "minItems": 0,
-                "maxItems": 16
+                "maxItems": 256
+              },
+              "note": {
+                "description": "The reviewer's note on this criterion (TeammateVerdictInput.note); null for none.",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "\\S"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
               "key",
               "verdict",
-              "evidence"
+              "evidence",
+              "note"
             ],
             "additionalProperties": false
           },
           "minItems": 1,
-          "maxItems": 20
+          "maxItems": 64
         },
         "outcome": {
           "description": "blocks when any criterion fails; no_objection otherwise. Never approval.",
@@ -18789,7 +18934,6 @@
         "summary": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 2000,
           "pattern": "\\S"
         },
         "readTags": {
@@ -18797,6 +18941,9 @@
         },
         "audience": {
           "$ref": "#/$defs/Audience"
+        },
+        "sourceSubjects": {
+          "$ref": "#/$defs/SourceSubjects"
         },
         "taint": {
           "$ref": "#/$defs/DerivedTaint"
@@ -18819,6 +18966,7 @@
         "summary",
         "readTags",
         "audience",
+        "sourceSubjects",
         "taint",
         "createdAt"
       ],
@@ -20354,7 +20502,8 @@
             "operationsUnconfirmed": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 100000
+              "maximum": 100000,
+              "description": "Operations of the request whose outcome is unreconciled (unknownOperationStatuses in packages/policy/src/harness.ts). Zero whenever the state is done, stopped or failed, and at least one while it is checking (ADR-0040 item 5: checking overrides those states while it lasts)."
             }
           },
           "required": [
@@ -20455,6 +20604,15 @@
             "properties": {
               "reason": {
                 "const": "operation_unconfirmed"
+              },
+              "counts": {
+                "type": "object",
+                "properties": {
+                  "operationsUnconfirmed": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
               }
             }
           }
@@ -20480,6 +20638,14 @@
             "properties": {
               "endedAt": {
                 "type": "string"
+              },
+              "counts": {
+                "type": "object",
+                "properties": {
+                  "operationsUnconfirmed": {
+                    "const": 0
+                  }
+                }
               }
             }
           }
@@ -20812,6 +20978,15 @@
       ],
       "additionalProperties": false
     },
+    "PersonMemoryKind": {
+      "description": "A suggested person memory's kind (ADR-0041 item 29): a preference, a standing instruction, or a fact about the person's work. Never a special category, contact details, a customer, card or government identifier or a credential (code refuses them).",
+      "type": "string",
+      "enum": [
+        "preference",
+        "instruction",
+        "fact"
+      ]
+    },
     "PersonMemorySuggestion": {
       "description": "PersonMemorySuggestion@1 (ADR-0041 item 29; H6): a suggestion Morrow or a handed-off teammate made with memory.suggest, a message part only the requester sees. Never saved silently: the person's confirmation of the exact digest is the gate. A run that read customer data makes none.",
       "type": "object",
@@ -20841,6 +21016,16 @@
         "messageId": {
           "description": "The message whose part carries it.",
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/PersonMemoryKind"
+        },
+        "title": {
+          "description": "memory.suggest's title, shown on the suggestion and kept with the memory.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
         },
         "text": {
           "$ref": "#/$defs/PersonMemoryText"
@@ -20878,6 +21063,8 @@
         "runId",
         "conversationId",
         "messageId",
+        "kind",
+        "title",
         "text",
         "scope",
         "digest",
@@ -21033,27 +21220,59 @@
       "additionalProperties": false
     },
     "MemoryLayer": {
-      "description": "The memory layers memory.search covers (ADR-0041 items 25 to 30).",
+      "description": "A layer memory.search may look in (ADR-0041 items 25 to 30): knowledge (approved shop knowledge pages), notebook (the agent's own notebook), person_memory (the requester's own memories, where each entry's scope allows), conversation (messages and verified summaries the requester can see), results (teammate results and result items this job received) and plan (this job's plan and its notes). Code filters by layer, audience and read tags before ranking.",
       "type": "string",
       "enum": [
         "knowledge",
         "notebook",
         "person_memory",
         "conversation",
-        "result_item",
-        "plan_note",
-        "checkpoint"
+        "results",
+        "plan"
       ]
     },
     "MemorySearchHit": {
-      "description": "MemorySearchHit@1 (ADR-0041 item 30; H6): one hit of memory.search's hybrid lexical search, filtered by layer, audience and read tags before ranking. The model reads the snippets and opens what it needs with memory.read; nothing in a hit is authority.",
+      "description": "MemorySearchHit@1 (ADR-0041 item 30; H6): one hit of memory.search's hybrid lexical search, filtered by layer, audience and read tags before ranking, in one of the layers memory.search takes (MemoryLayer). The model reads the snippets and opens what it needs with memory.read: readKind and id (and, for messages, position as both ends of the range) are that target, so a hit is opened exactly as memory.read's input states it; a plan hit is read whole with run.plan (readKind null). Nothing in a hit is authority.",
       "type": "object",
       "properties": {
         "layer": {
           "$ref": "#/$defs/MemoryLayer"
         },
+        "readKind": {
+          "description": "What memory.read opens for this hit, with id: the values of memory.read's kinds (MemoryReadKind, pull request 79) a hit can name. knowledge: knowledge_page; notebook: notebook_entry; person_memory: person_memory; conversation: messages (id the conversation, position the message) or conversation_summary; results: result_item (id the item) or teammate_result (id the call); plan: null.",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "result_item",
+                "teammate_result",
+                "messages",
+                "knowledge_page",
+                "notebook_entry",
+                "person_memory",
+                "conversation_summary"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "id": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "position": {
+          "description": "A message hit's position in its conversation; null for every other kind.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "label": {
           "anyOf": [
@@ -21063,7 +21282,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "The hit's label in this context's own log when it has one (a result item r2, a knowledge page k1, a message m4); null otherwise."
         },
         "query": {
           "description": "Which of the call's up to five queries matched.",
@@ -21101,7 +21321,9 @@
       },
       "required": [
         "layer",
+        "readKind",
         "id",
+        "position",
         "label",
         "query",
         "title",
@@ -21111,7 +21333,176 @@
         "score",
         "updatedAt"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "const": "knowledge"
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "readKind": {
+                "enum": [
+                  "knowledge_page"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "const": "notebook"
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "readKind": {
+                "enum": [
+                  "notebook_entry"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "const": "person_memory"
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "readKind": {
+                "enum": [
+                  "person_memory"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "const": "conversation"
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "readKind": {
+                "enum": [
+                  "messages",
+                  "conversation_summary"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "const": "results"
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "readKind": {
+                "enum": [
+                  "result_item",
+                  "teammate_result"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "const": "plan"
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "readKind": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "readKind": {
+                "const": "messages"
+              }
+            },
+            "required": [
+              "readKind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "integer"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
