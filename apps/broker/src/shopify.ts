@@ -14,7 +14,8 @@
 //     public distribution as a new vault credential kind); never retried (a code is single
 //     use). An expiring reply (expires_in, refresh_token or refresh_token_expires_in) or an
 //     online one (associated_user) is refused with its own closed reason, never stored.
-//   * Fixed Admin GraphQL documents (API version 2026-10): ShopIdentity at the install, and
+//   * Fixed Admin GraphQL documents (API version 2026-10): ShopIdentity at the install (with
+//     the shop's ianaTimezone since plan row SD12, mapped onto the closed zone list), and
 //     M2 PR-3's reads (shopifyReadDocuments: the shop identity, a collections page, a
 //     products page, one collection's products page and one product's listing fields).
 // Replies are bounded, redirects are never followed, and every failure is a fixed code:
@@ -22,13 +23,27 @@
 // carry a closed `reason` (fix-shopify-install-live) that the broker's stage line names;
 // `kind` alone decides every outcome.
 
+import { canonicalTimeZone } from "../../../packages/contracts/src/time-zones.js";
+
 export const shopifyApiVersion = "2026-10";
 export const shopifyRequestedScopes = Object.freeze(["read_products", "write_products"] as const);
 export const shopifyShopIdentityDocument =
-  "query ShopIdentity { shop { id myshopifyDomain plan { partnerDevelopment } } }";
+  "query ShopIdentity { shop { id myshopifyDomain ianaTimezone plan { partnerDevelopment } } }";
 export const shopifyReplyMaxBytes = 65536;
 
 const encoder = new TextEncoder();
+/** Shopify's ianaTimezone on the closed zone list (an old spelling mapped), or null. */
+export const shopifyZoneOf = (value: unknown): string | null => canonicalTimeZone(value);
+/** The zone record's closed outcomes (morrow_vault.shopify_zone_record; plan row SD12). */
+export const shopifyZoneRecordOutcomes = Object.freeze([
+  "recorded",
+  "unchanged",
+  "unrecognised",
+  "ineligible",
+  "not_found",
+  "invalid",
+  "denied",
+] as const);
 const shopPattern = /^[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com$/;
 const keyPattern = /^[a-z][a-z0-9_]{0,31}(\[\])?$/;
 
@@ -464,7 +479,18 @@ export async function shopifyAdminGraphql(
 }
 
 export type ShopifyIdentity =
-  | Readonly<{ kind: "identity"; shopId: string; domain: string; development: boolean }>
+  | Readonly<{
+      kind: "identity";
+      shopId: string;
+      domain: string;
+      development: boolean;
+      /**
+       * The shop's zone (plan row SD12; ADR-0043 item 8) on the closed list, or null when the
+       * reply has none the list knows: the install never fails for it, and the daily health
+       * read asks again.
+       */
+      ianaTimezone: string | null;
+    }>
   | Readonly<{ kind: "refused"; reason: ShopifyAdminReason }>;
 const shopGid = /^gid:\/\/shopify\/Shop\/([1-9][0-9]{0,19})$/;
 /**
@@ -498,17 +524,24 @@ export async function readShopifyIdentity(
   const match = typeof id === "string" ? shopGid.exec(id) : null;
   if (!match || typeof domain !== "string" || domain !== shop || typeof development !== "boolean")
     return Object.freeze({ kind: "refused", reason: "reply_shape" });
-  return Object.freeze({ kind: "identity", shopId: match[1]!, domain, development });
+  return Object.freeze({
+    kind: "identity",
+    shopId: match[1]!,
+    domain,
+    development,
+    ianaTimezone: shopifyZoneOf(own(s, "ianaTimezone")),
+  });
 }
 
 // v1 PR 5 (ADR-0025 item 10): the installation's granted scopes, read back with its own token
 // (deliveries of app/scopes_update can arrive out of order). One fixed Admin GraphQL document
-// with no variables; the reply keeps only the scope handles.
+// with no variables; the reply keeps only the scope handles and (plan row SD12, ADR-0043 item
+// 8: the daily health read) the shop's ianaTimezone, mapped onto the closed zone list.
 export const shopifyAccessScopesDocument =
-  "query AccessScopes { currentAppInstallation { accessScopes { handle } } }";
+  "query AccessScopes { currentAppInstallation { accessScopes { handle } } shop { ianaTimezone } }";
 export const shopifyAccessScopesMaxBytes = 16384;
 export type ShopifyAccessScopes =
-  | Readonly<{ kind: "scopes"; scopes: readonly string[] }>
+  | Readonly<{ kind: "scopes"; scopes: readonly string[]; ianaTimezone: string | null }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>;
 /**
@@ -544,7 +577,11 @@ export async function readShopifyAccessScopes(
   const handles = list.map((entry) => own(entry, "handle"));
   if (!handles.every((h): h is string => typeof h === "string" && /^[a-z][a-z_]{0,63}$/.test(h)))
     return unavailable;
-  return Object.freeze({ kind: "scopes", scopes: Object.freeze([...new Set(handles)].sort()) });
+  return Object.freeze({
+    kind: "scopes",
+    scopes: Object.freeze([...new Set(handles)].sort()),
+    ianaTimezone: shopifyZoneOf(own(own(reply.data, "shop"), "ianaTimezone")),
+  });
 }
 
 /** The webhook signature: base64 HMAC-SHA256 of the raw body, compared in constant time. */

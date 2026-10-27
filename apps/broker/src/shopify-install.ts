@@ -55,6 +55,10 @@
 //      uninstall is a fresh install (new ids, born unlinked: a person links it again), and
 //      the prepare (shopify_install_prepare_v2) destroys the earlier installations' leftover
 //      tokens in this same transaction, so a new token is never stored beside an old one.
+//      Plan row SD12: the same transaction records the shop's zone that step 6 read
+//      (ShopIdentity's ianaTimezone, on the closed zone list), at the install and at each
+//      re-authorisation; a zone the list does not know records nothing, and the install
+//      goes on.
 // The offline token never leaves the broker. A launch or install that does not succeed
 // logs one stage line of closed values (shopify-stage.ts: the step it stopped at, a closed
 // reason, where its last vault transaction ended and how long it took); nothing else here
@@ -115,6 +119,7 @@ import {
   shopifyQueryShapeReason,
   shopifyScopesExact,
   shopifyWebhookHmacPattern,
+  shopifyZoneRecordOutcomes,
   verifyShopifyQuery,
   verifyShopifyWebhookHmac,
   type ShopifyFetch,
@@ -773,6 +778,22 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
             (s.continuation !== "created" && s.continuation !== "none")
           )
             throw new VaultError("VAULT_RECORD_INVALID");
+          // Plan row SD12 (ADR-0043 item 8): the shop's zone from ShopIdentity, recorded for
+          // the installation's own tenant and store in this same transaction, at the install
+          // and at each re-authorisation (a reconnect). A zone off the closed list records
+          // nothing here; the daily health read asks again.
+          if (identity.ianaTimezone !== null) {
+            const z = row(
+              await query(vaultStatements.shopifyZoneRecord, [
+                p.installation_id as string,
+                identity.ianaTimezone,
+                s.outcome === "installed" ? "install" : "reauthorise",
+              ]),
+              ["outcome"],
+            );
+            if (!(shopifyZoneRecordOutcomes as readonly unknown[]).includes(z.outcome))
+              throw new VaultError("VAULT_RECORD_INVALID");
+          }
           return {
             outcome: s.outcome as ShopifyInstallOutcome,
             workspaceId: s.workspace_id as string,

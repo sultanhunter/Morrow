@@ -627,10 +627,34 @@ test("readShopifyAccessScopes: one fixed document; sorted unique handles, a 401 
     }));
   };
   const ok = await read(scopesReply(["write_products", "read_products", "write_products"]));
-  assert.deepEqual(ok.r, { kind: "scopes", scopes: ["read_products", "write_products"] });
+  assert.deepEqual(ok.r, {
+    kind: "scopes",
+    scopes: ["read_products", "write_products"],
+    ianaTimezone: null,
+  });
   assert.deepEqual(ok.calls[0].body, { query: shopifyAccessScopesDocument });
   assert.equal(ok.calls[0].url, `https://${shop}/admin/api/2026-10/graphql.json`);
-  assert.deepEqual((await read(scopesReply([]))).r, { kind: "scopes", scopes: [] });
+  assert.deepEqual((await read(scopesReply([]))).r, {
+    kind: "scopes",
+    scopes: [],
+    ianaTimezone: null,
+  });
+  // Plan row SD12: the same document reads the shop's zone (mapped onto the closed list); a
+  // zone the list does not know is null and never makes the scopes unavailable.
+  assert.match(shopifyAccessScopesDocument, /shop \{ ianaTimezone \}/);
+  const zoned = (ianaTimezone) => ({
+    data: {
+      currentAppInstallation: { accessScopes: [{ handle: "read_products" }] },
+      shop: { ianaTimezone },
+    },
+  });
+  assert.equal((await read(zoned("Asia/Calcutta"))).r.ianaTimezone, "Asia/Kolkata");
+  assert.equal((await read(zoned("Europe/London"))).r.ianaTimezone, "Europe/London");
+  assert.deepEqual((await read(zoned("Mars/Olympus_Mons"))).r, {
+    kind: "scopes",
+    scopes: ["read_products"],
+    ianaTimezone: null,
+  });
   assert.deepEqual((await read(401)).r, { kind: "refused" });
   for (const reply of [
     403,
@@ -670,6 +694,7 @@ async function checkerHarness({
   reply,
   lost,
   revision = "7",
+  zone = "recorded",
 } = {}) {
   const keyring = await createVaultKeyring("development", new Map([[1, kek]]));
   const token = "shpat_" + randomBytes(16).toString("hex");
@@ -721,6 +746,8 @@ async function checkerHarness({
               },
         ];
       if (text === vaultStatements.shopifyCheckRecord) return [{ outcome: record }];
+      // Plan row SD12: the shop's zone, recorded in the record's own transaction.
+      if (text === vaultStatements.shopifyZoneRecord) return [{ outcome: zone }];
       throw Error("unexpected statement");
     });
   };
@@ -809,6 +836,76 @@ test("the broker's read-back: closed inputs, the token for one fixed document, t
   assert.equal(closed.statements.length, 0);
   // The token never appears in a result.
   assert.ok(!JSON.stringify(ok.statements).includes(ok.token));
+});
+
+test("plan row SD12: the read-back records the shop's zone with the scopes, for the token read, in one transaction", async () => {
+  const env = brokerEnv();
+  const zoned = (ianaTimezone) => ({
+    data: {
+      currentAppInstallation: { accessScopes: [{ handle: "read_products" }] },
+      shop: { ianaTimezone },
+    },
+  });
+  const kind = (text) =>
+    text === vaultStatements.shopifyCheckResolve
+      ? "resolve"
+      : text === vaultStatements.shopifyCheckRecord
+        ? "record"
+        : text === vaultStatements.shopifyZoneRecord
+          ? "zone"
+          : "other";
+  // Recorded: the zone (an old spelling mapped) follows the record of the scopes.
+  const ok = await checkerHarness({ reply: zoned("Asia/Calcutta") });
+  assert.equal(
+    decodeShopifyConnectionCheck(await ok.checker.check(env, installationId, 8000)),
+    "observed",
+  );
+  assert.deepEqual(
+    ok.statements.map(([text, values]) => [kind(text), values]),
+    [
+      ["resolve", [installationId]],
+      ["record", [installationId, "3", "7", "observed", '["read_products"]']],
+      ["zone", [installationId, "Asia/Kolkata", "health"]],
+    ],
+  );
+  assert.equal(
+    vaultStatements.shopifyZoneRecord,
+    "SELECT morrow_vault.shopify_zone_record($1,$2,$3) AS outcome",
+  );
+  // Every closed outcome of the zone record leaves the check's own answer as it was.
+  for (const outcome of ["unchanged", "unrecognised", "ineligible", "not_found"]) {
+    const h = await checkerHarness({ reply: zoned("Europe/London"), zone: outcome });
+    assert.equal(
+      decodeShopifyConnectionCheck(await h.checker.check(env, installationId, 8000)),
+      "observed",
+      outcome,
+    );
+  }
+  // A zone the list does not know, a stale record or a refused token records no zone.
+  for (const [options, expected] of [
+    [{ reply: zoned("Mars/Olympus_Mons") }, "observed"],
+    [{ reply: zoned("Europe/London"), record: "stale" }, "stale"],
+    [{ reply: 401 }, "token_refused"],
+  ]) {
+    const h = await checkerHarness(options);
+    assert.equal(
+      decodeShopifyConnectionCheck(await h.checker.check(env, installationId, 8000)),
+      expected,
+    );
+    assert.ok(!h.statements.some(([text]) => kind(text) === "zone"), JSON.stringify(options));
+  }
+  // An answer outside the closed list is refused, as every vault reply is.
+  const bad = await checkerHarness({ reply: zoned("Europe/London"), zone: "moved" });
+  await assert.rejects(bad.checker.check(env, installationId, 8000), /VAULT_RECORD_INVALID/);
+  // A lost acknowledgement of that transaction is unavailable, never assumed recorded.
+  const lost = await checkerHarness({
+    reply: zoned("Europe/London"),
+    lost: vaultStatements.shopifyZoneRecord,
+  });
+  assert.equal(
+    decodeShopifyConnectionCheck(await lost.checker.check(env, installationId, 8000)),
+    "unavailable",
+  );
 });
 
 test("the connector's launch: an uninstalled app reinstalls, a reconnect re-authorises, a disconnect stays ineligible", async () => {

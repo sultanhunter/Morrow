@@ -19,7 +19,11 @@
 //      makes it stale, and nothing is recorded: an answer read before a narrowing never
 //      undoes it (PR 5 review finding F2); the cron asks again. A lost
 //      COMMIT acknowledgement is unavailable: the record is idempotent and the cron asks
-//      again; nothing is assumed either way.
+//      again; nothing is assumed either way. Plan row SD12 (ADR-0043 item 8): the same
+//      document reads the shop's ianaTimezone, and when the scopes were recorded for this
+//      token the same transaction records the zone (morrow_vault.shopify_zone_record, for
+//      the installation's own tenant and store). A changed zone moves no schedule: it raises
+//      one Inbox item, and only a person's tap moves each schedule.
 // The connector then reconciles the stops and the Reconnect item from the recorded state
 // (morrow_work.connector_health_reconcile). Nothing here logs; the token, the envelope and
 // Shopify's reply never cross the binding.
@@ -32,7 +36,11 @@ import {
 } from "../../../packages/identity/src/broker-protocol.js";
 import { BrokerHold, brokerCapabilities, invokeBrokerMethod } from "./capabilities.js";
 import type { VaultTransaction } from "./shopify-install.js";
-import { readShopifyAccessScopes, type ShopifyFetch } from "./shopify.js";
+import {
+  readShopifyAccessScopes,
+  shopifyZoneRecordOutcomes,
+  type ShopifyFetch,
+} from "./shopify.js";
 import { runVaultTransaction } from "./vault-database.js";
 import {
   VaultError,
@@ -200,6 +208,25 @@ export function createShopifyHealthChecker(deps: Readonly<ShopifyHealthDependenc
               !(checkRecordOutcomes as readonly unknown[]).includes(row.outcome)
             )
               throw new VaultError("VAULT_RECORD_INVALID");
+            // The shop's zone, read with this same token, beside its scopes.
+            if (
+              (row.outcome === "applied" || row.outcome === "unchanged") &&
+              scopes.kind === "scopes" &&
+              scopes.ianaTimezone !== null
+            ) {
+              const zoned = await query(vaultStatements.shopifyZoneRecord, [
+                installationId,
+                scopes.ianaTimezone,
+                "health",
+              ]);
+              const z = zoned.length === 1 ? zoned[0]! : undefined;
+              if (
+                !z ||
+                Object.keys(z).join(",") !== "outcome" ||
+                !(shopifyZoneRecordOutcomes as readonly unknown[]).includes(z.outcome)
+              )
+                throw new VaultError("VAULT_RECORD_INVALID");
+            }
             return row.outcome as string;
           },
         );

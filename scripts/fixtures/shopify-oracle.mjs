@@ -24,7 +24,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 
 export const shopifyOracleIdentityDocument =
-  "query ShopIdentity { shop { id myshopifyDomain plan { partnerDevelopment } } }";
+  "query ShopIdentity { shop { id myshopifyDomain ianaTimezone plan { partnerDevelopment } } }";
 
 export function createShopifyOracle({
   secret,
@@ -40,6 +40,9 @@ export function createShopifyOracle({
     scope: "write_products",
     // v1 PR 5: the scopes AccessScopes answers; null derives them from `scope`.
     accessScopes: null,
+    // Plan row SD12: the shop's ianaTimezone in ShopIdentity and AccessScopes (null leaves
+    // the field out of the reply).
+    ianaTimezone: "America/Toronto",
     fault: null,
     codes: new Map(),
     tokens: [],
@@ -217,6 +220,7 @@ export function createShopifyOracle({
           ].sort();
         return {
           currentAppInstallation: { accessScopes: granted.map((handle) => ({ handle })) },
+          ...(state.ianaTimezone === null ? {} : { shop: { ianaTimezone: state.ianaTimezone } }),
         };
       }
       default:
@@ -334,6 +338,7 @@ export function createShopifyOracle({
             shop: {
               id: `gid://shopify/Shop/${shopId}`,
               myshopifyDomain: shop,
+              ...(state.ianaTimezone === null ? {} : { ianaTimezone: state.ianaTimezone }),
               plan: { partnerDevelopment: state.development },
             },
           },

@@ -41,4 +41,8 @@ export const shopifyVaultStatements = Object.freeze({
     "SELECT outcome,organization_id,workspace_id,shop_domain,credential_id,credential_version,revision,kek_version,wrapped_key,sealed_value FROM morrow_vault.shopify_check_resolve($1)",
   shopifyCheckRecord:
     "SELECT morrow_vault.shopify_check_record($1,$2,$3,$4,NULLIF($5,'')) AS outcome",
+  // Plan row SD12 (migration schedules-shop-zone; ADR-0043 item 8): the shop's zone as the
+  // broker read it in ShopIdentity at the install or a re-authorisation, or in the daily
+  // health read, recorded for the installation's own tenant and store.
+  shopifyZoneRecord: "SELECT morrow_vault.shopify_zone_record($1,$2,$3) AS outcome",
 } as const);

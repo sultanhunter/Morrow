@@ -117,6 +117,8 @@ async function fakeVault(options = {}) {
     inbox: new Map(),
     recorded: [],
     destroyOutcome: "destroyed",
+    // Plan row SD12: every zone record's values.
+    zones: [],
   };
   const handlers = {
     [vaultStatements.appSecretGet]: ([key]) =>
@@ -236,6 +238,11 @@ async function fakeVault(options = {}) {
             },
       ];
     },
+    [vaultStatements.shopifyZoneRecord]: (v) => {
+      db.events.push("zone");
+      db.zones.push(v);
+      return [{ outcome: options.zoneOutcome ?? "recorded" }];
+    },
     [vaultStatements.shopifyInstallStore]: (v) => {
       db.events.push("store");
       const [
@@ -325,6 +332,7 @@ function shopifyFake(db, options = {}) {
         shop: {
           id: "gid://shopify/Shop/987",
           myshopifyDomain: shop,
+          ...(options.ianaTimezone === undefined ? {} : { ianaTimezone: options.ianaTimezone }),
           plan: { partnerDevelopment: options.development ?? true },
         },
       },
@@ -723,6 +731,71 @@ test("install: a relaunch re-authorises the same installation with the next cred
     await h.broker.installComplete(h.env, appKey, callback(state), sha(state), 9000),
   );
   assert.deepEqual(linked, { outcome: "reauthorised", workspaceId, continuationToken: null });
+});
+
+// Plan row SD12 (ADR-0043 item 8): the shop's zone from ShopIdentity, recorded in the store
+// transaction at the install ("install") and at each re-authorisation ("reauthorise"), for the
+// installation the prepare named; a zone off the closed list records nothing and the install
+// goes on; an answer outside the zone record's closed outcomes refuses, as any vault reply does.
+test("install: the shop's zone is recorded in the store transaction at the install and each re-authorisation", async () => {
+  const h = await harness({ ianaTimezone: "Asia/Calcutta" });
+  for (const expected of ["installed", "reauthorised"]) {
+    const state = newState();
+    openState(h.db, state);
+    const result = decodeShopifyInstallResult(
+      await h.broker.installComplete(h.env, appKey, callback(state), sha(state), 9000),
+    );
+    assert.equal(result.outcome, expected);
+  }
+  assert.deepEqual(h.db.zones, [
+    ["11111111-1111-4111-8111-111111111111", "Asia/Kolkata", "install"],
+    ["11111111-1111-4111-8111-111111111111", "Asia/Kolkata", "reauthorise"],
+  ]);
+  // One transaction: the zone follows the store, with nothing between them.
+  assert.deepEqual(h.db.events.slice(0, 6), [
+    "claim",
+    "exchange",
+    "identity",
+    "prepare",
+    "store",
+    "zone",
+  ]);
+  // A zone the list does not know (or none) records nothing; the install goes on.
+  for (const ianaTimezone of ["Mars/Olympus_Mons", undefined]) {
+    const u = await harness({ ianaTimezone });
+    const state = newState();
+    openState(u.db, state);
+    const result = decodeShopifyInstallResult(
+      await u.broker.installComplete(u.env, appKey, callback(state), sha(state), 9000),
+    );
+    assert.equal(result.outcome, "installed");
+    assert.deepEqual(u.db.zones, []);
+    assert.deepEqual(u.db.events, ["claim", "exchange", "identity", "prepare", "store"]);
+  }
+  // Each closed outcome of the record leaves the install as it was.
+  for (const zoneOutcome of ["unchanged", "unrecognised", "ineligible"]) {
+    const z = await harness({ ianaTimezone: "Europe/London", zoneOutcome });
+    const state = newState();
+    openState(z.db, state);
+    const result = decodeShopifyInstallResult(
+      await z.broker.installComplete(z.env, appKey, callback(state), sha(state), 9000),
+    );
+    assert.equal(result.outcome, "installed", zoneOutcome);
+  }
+  // Any other answer is a malformed vault reply: the install does not report success.
+  const bad = await harness({ ianaTimezone: "Europe/London", zoneOutcome: "moved" });
+  const badState = newState();
+  openState(bad.db, badState);
+  let refused = false;
+  try {
+    const result = decodeShopifyInstallResult(
+      await bad.broker.installComplete(bad.env, appKey, callback(badState), sha(badState), 9000),
+    );
+    refused = result.outcome !== "installed";
+  } catch {
+    refused = true;
+  }
+  assert.ok(refused);
 });
 
 test("install refusals stop before the exchange, or store nothing after it", async () => {

@@ -371,13 +371,14 @@ test("the code exchange: once, offline and non-expiring; uncertain after sending
   assert.equal(none.calls.length, 0);
 });
 
-test("ShopIdentity: one fixed document; development flag, id and domain; THROTTLED waits once", async () => {
-  const reply = (development, domain = "dev.myshopify.com") =>
+test("ShopIdentity: one fixed document; development flag, id, domain and zone; THROTTLED waits once", async () => {
+  const reply = (development, domain = "dev.myshopify.com", ianaTimezone) =>
     json({
       data: {
         shop: {
           id: "gid://shopify/Shop/1234",
           myshopifyDomain: domain,
+          ...(ianaTimezone === undefined ? {} : { ianaTimezone }),
           plan: { partnerDevelopment: development },
         },
       },
@@ -394,7 +395,29 @@ test("ShopIdentity: one fixed document; development flag, id and domain; THROTTL
     shopId: "1234",
     domain: "dev.myshopify.com",
     development: true,
+    ianaTimezone: null,
   });
+  assert.match(shopifyShopIdentityDocument, / ianaTimezone /);
+  // Plan row SD12: the shop's zone on the closed list (an old spelling mapped); a zone the list
+  // does not know, or any other value, is null and never refuses the identity.
+  for (const [zone, expected] of [
+    ["America/Toronto", "America/Toronto"],
+    ["Asia/Calcutta", "Asia/Kolkata"],
+    ["Europe/Kiev", "Europe/Kyiv"],
+    ["US/Eastern", null],
+    ["Mars/Olympus_Mons", null],
+    [42, null],
+    [null, null],
+  ]) {
+    const z = await readShopifyIdentity(
+      fakeFetch([reply(true, "dev.myshopify.com", zone)]).fetcher,
+      "dev.myshopify.com",
+      "t",
+      Date.now() + 5000,
+    );
+    assert.equal(z.kind, "identity", String(zone));
+    assert.equal(z.ianaTimezone, expected, String(zone));
+  }
   assert.equal(f.calls[0].url, "https://dev.myshopify.com/admin/api/2026-10/graphql.json");
   assert.deepEqual(JSON.parse(f.calls[0].init.body), { query: shopifyShopIdentityDocument });
   assert.equal(f.calls[0].init.headers["x-shopify-access-token"], "tok");
