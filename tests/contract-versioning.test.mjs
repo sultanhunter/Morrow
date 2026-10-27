@@ -145,6 +145,8 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
       ["definition", "CriteriaList", "ADR-0033"],
       ["definition", "Goal", "ADR-0033"],
       ["capability_body", "workspace.routine.configure.input", "ADR-0033"],
+      // Plan row SD12: Schedule@1 replaces v1's never-stored cron Schedule (ADR-0043 item 7).
+      ["definition", "Schedule", "ADR-0043"],
     ],
   );
   const prefixes = {
@@ -355,6 +357,7 @@ test("AC11: product code cannot validate or type a replaced v1 definition", () =
     "AgentInstallation",
     "CriteriaList",
     "Goal",
+    "Schedule",
   ]);
   const check = (path, code) => inspectSupersededUse(path, code, replaced);
   assert.deepEqual(
@@ -374,6 +377,11 @@ test("AC11: product code cannot validate or type a replaced v1 definition", () =
   assert.deepEqual(check("apps/api/src/x.ts", 'x.validateDefinition("core", "Approval", v);'), [
     "SUPERSEDED_CONTRACT_USE:apps/api/src/x.ts:Approval",
   ]);
+  // Plan row SD12: v1's cron Schedule is replaced; product code reads Schedule@1 only.
+  assert.deepEqual(
+    check("packages/work/src/x.ts", 'import type { Core_Schedule } from "@morrow/contracts";'),
+    ["SUPERSEDED_CONTRACT_USE:packages/work/src/x.ts:Schedule"],
+  );
   // The current selectors, the exact v1.1 selector and other v1 names are fine.
   for (const code of [
     'validateCurrentDefinition("Proposal", value);',
