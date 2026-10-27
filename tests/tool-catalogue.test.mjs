@@ -1,31 +1,42 @@
-// PR 10: ToolCatalogue@1 (ADR-0027 items 2, 3 and 8), the Specialist ceiling (ADR-0028 item
-// 2) and the committed-off agent switches (ADR-0027 item 11, ADR-0028 item 8). The safety tests
-// of the build order's PR 10: no tool takes SQL, a URL, a store, a recipient, a credential or a
-// model; validators are generated ahead of time; the old formats stay unchanged.
+// PR 10: ToolCatalogue@1 (ADR-0027 items 2, 3 and 8) and the committed-off agent switches
+// (ADR-0027 item 11); ADR-0037 PR 2 and plan row H5 (ADR-0041 item 24): catalogue version 4
+// (Morrow's orchestration tools agent.ask, agent.map, agent.message, agent.cancel, agent.route
+// and agent.propose for Morrow only; structured briefs without a character cap; the call
+// context; the memory tools memory.search, memory.read and memory.suggest and the harness tools
+// run.plan, run.complete, run.wait, result.write and context.checkpoint, which hold no
+// capability and are offered by context) and the teammate-call and agent-card switches, with
+// the Specialist ceiling and its switch retired. The safety tests of the build order's PR 10:
+// no tool takes SQL, a URL, a store, a recipient, a credential or a model; validators are
+// generated ahead of time; the old formats stay unchanged.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  cardToolsException,
   coordinatorToolNames,
+  everyContextToolNames,
   forbiddenInputName,
   generateAgentPlatform,
-  generatedSpecialistCeilingPath,
   generatedToolCataloguePath,
   inspectAgentPlatformSwitches,
-  inspectSpecialistCeiling,
   inspectToolCatalogue,
   jcs,
   strictModelSchema,
+  teammateItemToolName,
   toolModelInputName,
 } from "../scripts/generate-agent-platform.mjs";
 import {
   checkToolInput,
+  completionTool,
+  contextToolsForContext,
+  grantToolsForContext,
+  isContextTool,
   modelToolDefinitions,
   offeredTools,
+  isAgentTool,
   runContext,
-  specialistCapabilities,
-  specialistCeiling,
+  teammateItemTool,
   toolByWireName,
   toolCatalogue,
   toolCatalogueDigest,
@@ -33,45 +44,55 @@ import {
   toolEntry,
   ToolCatalogueError,
   toolsForContext,
-  withinSpecialistCeiling,
 } from "../packages/policy/src/tool-catalogue.ts";
-import { fakeSpecialistSpec } from "../packages/policy/src/agent-platform-fakes.ts";
+import {
+  fakeIds,
+  fakeListingsPackage,
+  fakeMemoryReadInput,
+  fakeTeammateBriefInput,
+} from "../packages/policy/src/agent-platform-fakes.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 const catalogue = read("docs/contracts/tool-catalogue.json");
-const ceiling = read("docs/contracts/specialist-ceiling.json");
 const capabilities = read("docs/contracts/capabilities.json").capabilities;
 const schemas = [
   read("docs/contracts/schemas/v1/core.schema.json"),
   read("docs/contracts/schemas/v1.1/core.schema.json"),
 ];
 const validate = (value) => validateCurrentDefinition("ToolCatalogue", value);
-const inspect = (c = catalogue, s = schemas, l = ceiling) =>
-  inspectToolCatalogue({ catalogue: c, capabilities, schemas: s, ceiling: l, validate });
+const inspect = (c = catalogue, s = schemas) =>
+  inspectToolCatalogue({ catalogue: c, capabilities, schemas: s, validate });
+const switches = () => [
+  read("docs/decisions/agent-loop-staging.json"),
+  read("docs/decisions/teammate-calls-staging.json"),
+  read("docs/decisions/agent-cards-staging.json"),
+];
 const tool = (c, name) => c.tools.find((t) => t.name === name);
 
 test("the generator reproduces the committed modules, which are data only", async () => {
   const first = await generateAgentPlatform();
   const second = await generateAgentPlatform();
   assert.deepEqual(first, second);
-  for (const path of [generatedToolCataloguePath, generatedSpecialistCeilingPath]) {
+  assert.deepEqual(Object.keys(first), [generatedToolCataloguePath]);
+  for (const path of [generatedToolCataloguePath]) {
     assert.equal(readFileSync(path, "utf8"), first[path], path);
     assert.doesNotMatch(first[path], /\bimport\b|\bfunction\b|=>|\beval\b|new Function/);
   }
 });
 
-test("the committed catalogue, ceiling and switches inspect clean", () => {
+test("the committed catalogue and switches inspect clean; the specialist files are gone", () => {
   assert.deepEqual(inspect(), []);
-  assert.deepEqual(inspectSpecialistCeiling(ceiling, capabilities), []);
-  assert.deepEqual(
-    inspectAgentPlatformSwitches(
-      read("docs/decisions/agent-loop-staging.json"),
-      read("docs/decisions/specialists-staging.json"),
-    ),
-    [],
-  );
+  assert.deepEqual(inspectAgentPlatformSwitches(...switches()), []);
   assert.ok(validate(catalogue));
+  // Version 3 is PR 20's (knowledge.propose and notebook.write); ADR-0037's tools are version 4.
+  assert.equal(catalogue.version, 4);
+  for (const path of [
+    "docs/contracts/specialist-ceiling.json",
+    "docs/decisions/specialists-staging.json",
+    "packages/policy/src/generated/specialist-ceiling.ts",
+  ])
+    assert.equal(existsSync(path), false, path);
 });
 
 test("the digest a run manifest pins is sha256 of the RFC 8785 text of the catalogue", () => {
@@ -108,6 +129,7 @@ for (const field of [
   "effort",
   "capabilityId",
   "scope",
+  "tools",
 ])
   test(`a tool input that takes ${field} is refused`, () => {
     assert.ok(forbiddenInputName.test(field), field);
@@ -183,19 +205,122 @@ for (const [name, change, expected] of [
     /support\.thread\.read: support tools only/,
   ],
   [
-    "customer mail for a specialist",
-    (c) => tool(c, "support.thread.read").contexts.push("specialist"),
-    /support\.thread\.read: (support tools only|a specialist tool must be inside)/,
+    // ADR-0037 item 3(a): a called teammate never reads customer mail, asks or posts.
+    "customer mail for a called teammate",
+    (c) => tool(c, "support.thread.read").contexts.push("call"),
+    /support\.thread\.read: support tools only/,
   ],
   [
-    "order reads for a specialist",
-    (c) => tool(c, "orders.summary").contexts.push("specialist"),
-    /orders\.summary: a specialist tool must be inside the Specialist ceiling/,
+    "a question to the person in a teammate call",
+    (c) => tool(c, "inbox.ask").contexts.push("call"),
+    /inbox\.ask: a called teammate never asks or posts to the person/,
   ],
   [
-    "task creation for a specialist",
-    (c) => tool(c, "task.create").contexts.push("specialist"),
-    /task\.create: a specialist tool must be inside the Specialist ceiling/,
+    "a post to the person in a teammate call",
+    (c) => tool(c, "message.post").contexts.push("call"),
+    /message\.post: a called teammate never asks or posts to the person/,
+  ],
+  [
+    // ADR-0037 item 2: depth 1, agent.* for Morrow only.
+    "agent.ask for an installed agent",
+    (c) => tool(c, "agent.ask").contexts.push("routed"),
+    /agent\.ask: agent tools belong to the Coordinator only \(depth 1\)/,
+  ],
+  [
+    "agent.message for a called teammate",
+    (c) => tool(c, "agent.message").contexts.push("call"),
+    /agent\.message: agent tools belong to the Coordinator only/,
+  ],
+  [
+    "agent.map in a hand-off",
+    (c) => tool(c, "agent.map").contexts.push("routed"),
+    /agent\.map: agent tools belong to the Coordinator only/,
+  ],
+  [
+    "agent.propose in a mandate run",
+    (c) => tool(c, "agent.propose").contexts.push("mandate"),
+    /agent\.propose: agent tools belong to the Coordinator only/,
+  ],
+  [
+    "a hand-off from a called teammate",
+    (c) => tool(c, "agent.route").contexts.push("call"),
+    /agent\.route: agent tools belong to the Coordinator only/,
+  ],
+  [
+    // ADR-0041 item 24: result items are a called teammate's, written with result.write.
+    "result items written outside a call",
+    (c) => tool(c, "result.write").contexts.unshift("routed"),
+    /result\.write: result items are written by called teammates only/,
+  ],
+  [
+    "no result.write in the catalogue's harness",
+    (c) => (tool(c, "result.write").family = "internal"),
+    /the catalogue must offer result\.write as a memory or harness tool/,
+  ],
+  [
+    "a call-only tool that is not result.write",
+    (c) => (tool(c, "proposal.listing").contexts = ["call"]),
+    /proposal\.listing: only result\.write is offered in the call context alone/,
+  ],
+  [
+    // ADR-0041 item 24: a memory or harness tool grants nothing and holds no capability.
+    "a harness tool with a capability",
+    (c) => {
+      tool(c, "run.plan").capabilityId = "workspace.artifact.edit";
+      tool(c, "run.plan").verb = "execute";
+    },
+    /run\.plan: a memory or harness tool holds no capability or verb/,
+  ],
+  [
+    "a memory tool with a capability",
+    (c) => {
+      tool(c, "memory.read").capabilityId = "workspace.artifact.read";
+      tool(c, "memory.read").verb = "view";
+    },
+    /memory\.read: a memory or harness tool holds no capability or verb/,
+  ],
+  [
+    "a grant tool without a capability",
+    (c) => {
+      tool(c, "work.read").capabilityId = null;
+      tool(c, "work.read").verb = null;
+    },
+    /work\.read: only a memory or harness tool holds no capability/,
+  ],
+  [
+    "a harness tool replayed as a read",
+    (c) => (tool(c, "run.plan").replayClass = "read"),
+    /run\.plan: a harness tool writes only its run's own rows/,
+  ],
+  [
+    "a memory suggestion in a teammate call",
+    (c) => tool(c, "memory.suggest").contexts.push("call"),
+    /memory\.suggest: a called teammate never asks or posts to the person/,
+  ],
+  [
+    "a memory suggestion in a mandate run",
+    (c) => (tool(c, "memory.suggest").contexts = ["coordinator", "routed", "mandate"]),
+    /memory\.suggest: a memory suggestion goes only to the person a job works for/,
+  ],
+  [
+    "a memory suggestion in look-for-work",
+    (c) => tool(c, "memory.suggest").contexts.push("look_for_work"),
+    /memory\.suggest: look-for-work offers only reads and suggestions/,
+  ],
+  [
+    "a wait in look-for-work",
+    (c) => tool(c, "run.wait").contexts.push("look_for_work"),
+    /run\.wait: look-for-work offers only reads and suggestions/,
+  ],
+  [
+    "a completion some context lacks",
+    (c) => (tool(c, "run.complete").contexts = ["coordinator", "call"]),
+    /run\.complete: offered in every context, in context order/,
+  ],
+  [
+    "a memory read some context lacks",
+    (c) => tool(c, "memory.read").contexts.pop(),
+    /memory\.read: offered in every context, in context order/,
   ],
   [
     "store reads for the Coordinator",
@@ -225,8 +350,8 @@ for (const [name, change, expected] of [
   ],
   [
     "an input definition outside the ToolInput names",
-    (c) => (tool(c, "specialist.draft").inputDefinition = "SpecialistBrief"),
-    /specialist\.draft: input definition must be a ToolInput definition/,
+    (c) => (tool(c, "agent.propose").inputDefinition = "AgentProposal"),
+    /agent\.propose: input definition must be a ToolInput definition/,
   ],
 ])
   test(`the tool catalogue refuses ${name}`, () => {
@@ -240,38 +365,121 @@ test("ADR-0027 item 8: the Coordinator's tools are exactly its fixed set; no sto
   for (const name of toolsForContext("coordinator")) {
     const entry = toolEntry(name);
     assert.notEqual(entry.family, "proposal", name);
-    assert.ok(!entry.capabilityId.startsWith("catalog."), name);
-    assert.ok(!entry.capabilityId.startsWith("support."), name);
-    assert.ok(!entry.capabilityId.startsWith("orders."), name);
+    for (const prefix of ["catalog.", "support.", "orders."])
+      assert.ok(!String(entry.capabilityId).startsWith(prefix), name);
   }
+  // ADR-0041 items 24 and 33: Morrow's memory and harness tools; it builds no result items.
+  assert.deepEqual(contextToolsForContext("coordinator"), [
+    "memory.search",
+    "memory.read",
+    "memory.suggest",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "context.checkpoint",
+  ]);
+  assert.ok(toolsForContext("coordinator").includes("knowledge.propose"), "question 15");
 });
 
 test("ADR-0024 item 6: look-for-work is reads and suggestions only", () => {
   const names = toolsForContext("look_for_work");
   assert.ok(names.includes("suggestion.create"));
-  for (const name of names)
+  for (const name of grantToolsForContext("look_for_work"))
     assert.ok(toolEntry(name).family === "read" || name === "suggestion.create", name);
+  // ADR-0041 item 24: its memory reads, and the harness tools that touch only its own run's
+  // plan, completion and checkpoint; never a wait, a result item or a memory suggestion.
+  assert.deepEqual(contextToolsForContext("look_for_work"), [
+    "memory.search",
+    "memory.read",
+    "run.plan",
+    "run.complete",
+    "context.checkpoint",
+  ]);
   assert.equal(runContext("mandate", true), "look_for_work");
   assert.throws(() => runContext("routed", true), ToolCatalogueError);
   assert.throws(() => runContext("operator", false), ToolCatalogueError);
-  // ADR-0041 item 4's call, review and upkeep kinds get their tool contexts with tool
-  // catalogue version 4 (H5); until then admission cannot give them tools.
-  for (const kind of ["call", "review", "upkeep"])
+  // ADR-0041 item 4: a call run is offered the call context's tools; review and upkeep runs
+  // stay refused until their contexts exist, so admission cannot give them tools.
+  assert.equal(runContext("call", false), "call");
+  for (const kind of ["review", "upkeep"])
     assert.throws(() => runContext(kind, false), ToolCatalogueError, kind);
 });
 
-test("a run is offered its release's declared tools inside its context, in catalogue order", () => {
+test("a run is offered its release's declared tools inside its context, then its context's tools, in catalogue order", () => {
   assert.deepEqual(offeredTools("routed", ["proposal.listing", "products.read", "agent.route"]), [
     "products.read",
     "proposal.listing",
+    "memory.search",
+    "memory.read",
+    "memory.suggest",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "context.checkpoint",
   ]);
   assert.deepEqual(offeredTools("look_for_work", ["proposal.listing", "products.read"]), [
     "products.read",
+    ...contextToolsForContext("look_for_work"),
   ]);
   assert.deepEqual(offeredTools("coordinator", null), toolsForContext("coordinator"));
-  for (const declared of [["sql.run"], ["products.read", "products.read"], null])
+  // A context tool is the context's to offer: a release that declares one is refused.
+  for (const declared of [
+    ["sql.run"],
+    ["products.read", "products.read"],
+    null,
+    ["products.read", "run.complete"],
+    ["memory.read"],
+  ])
     assert.throws(() => offeredTools("routed", declared), ToolCatalogueError, String(declared));
   assert.throws(() => offeredTools("coordinator", ["products.read"]), ToolCatalogueError);
+});
+
+test("ADR-0041 item 24: memory and harness tools hold no capability, grant nothing and are offered by context", () => {
+  assert.equal(toolCatalogue.length, 30);
+  const context = toolCatalogue.filter((t) => isContextTool(t.name)).map((t) => t.name);
+  assert.deepEqual(context, [
+    "memory.search",
+    "memory.read",
+    "memory.suggest",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "result.write",
+    "context.checkpoint",
+  ]);
+  for (const entry of toolCatalogue) {
+    const held = entry.capabilityId !== null && entry.verb !== null;
+    assert.equal(held, !isContextTool(entry.name), entry.name);
+    if (isContextTool(entry.name)) assert.ok(["memory", "harness"].includes(entry.family));
+    if (entry.family === "harness") assert.equal(entry.replayClass, "internal_write", entry.name);
+  }
+  // Every context offers a completion, its memory reads and a checkpoint, so a fork or a
+  // follow-up keeps the same tool prefix.
+  for (const ctx of ["coordinator", "routed", "mandate", "look_for_work", "call"]) {
+    for (const name of everyContextToolNames) assert.ok(toolsForContext(ctx).includes(name), ctx);
+    assert.deepEqual(
+      [...grantToolsForContext(ctx), ...contextToolsForContext(ctx)].sort(),
+      [...toolsForContext(ctx)].sort(),
+      ctx,
+    );
+  }
+  assert.equal(completionTool, "run.complete");
+  assert.equal(teammateItemTool, teammateItemToolName);
+  assert.equal(isContextTool("products.read"), false);
+  assert.equal(isContextTool("result.submit"), false, "retired: not a tool");
+  // The retired tools are gone from the catalogue and the enum.
+  for (const retired of ["agent.result.read", "result.submit", "specialist.draft"]) {
+    assert.equal(toolEntry(retired), null, retired);
+    assert.ok(!schemas[1].$defs.ToolName.enum.includes(retired), retired);
+  }
+  // The contract holds the rule too: a harness tool with a capability, or a grant tool
+  // without one, is no ToolDefinition.
+  const withCapability = { ...toolEntry("run.plan"), capabilityId: "workspace.artifact.edit" };
+  delete withCapability.inputSchema;
+  assert.equal(validateCurrentDefinition("ToolDefinition", withCapability), false);
+  const without = { ...toolEntry("work.read"), capabilityId: null, verb: null };
+  delete without.inputSchema;
+  assert.equal(validateCurrentDefinition("ToolDefinition", without), false);
 });
 
 test("the model sees strict, closed schemas under wire names, in a stable order", () => {
@@ -367,6 +575,42 @@ for (const [name, change, expected] of [
     (s) => s[1].$defs.ToolInputMessagePost.required.pop(),
     /message\.post: input is not strict-expressible: AGENT_PLATFORM_SCHEMA_OPTIONAL/,
   ],
+  // Review H5-6: RunToolCall@1's row names no capability or verb exactly for the memory and
+  // harness tools, and the capability and verb for every other tool.
+  [
+    "a RunToolCall row whose capability and verb may be null for any tool",
+    (s) => {
+      const row = s[1].$defs.RunToolCall;
+      row.allOf = row.allOf.filter((b) => b?.if?.properties?.tool === undefined);
+    },
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
+  [
+    "a RunToolCall branch missing a harness tool",
+    (s) => {
+      const branch = s[1].$defs.RunToolCall.allOf.find((b) => b?.if?.properties?.tool);
+      branch.if.properties.tool.enum = branch.if.properties.tool.enum.filter(
+        (n) => n !== "run.complete",
+      );
+    },
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
+  [
+    "a RunToolCall branch that names a grant tool",
+    (s) =>
+      s[1].$defs.RunToolCall.allOf
+        .find((b) => b?.if?.properties?.tool)
+        .if.properties.tool.enum.push("proposal.listing"),
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
+  [
+    "a RunToolCall branch whose other tools may name no capability",
+    (s) => {
+      const branch = s[1].$defs.RunToolCall.allOf.find((b) => b?.if?.properties?.tool);
+      branch.else.properties.capabilityId = { anyOf: [{ type: "null" }, { type: "string" }] };
+    },
+    /RunToolCall must name no capability or verb exactly for the memory and harness tools/,
+  ],
 ])
   test(`the tool catalogue refuses ${name}`, () => {
     const s = structuredClone(schemas);
@@ -430,85 +674,212 @@ test("a strict schema refuses what strict tool use cannot carry exactly", () => 
   );
 });
 
-test("ADR-0028 item 2: the Specialist ceiling is fixed ids, never the never-list", () => {
-  assert.ok(specialistCeiling.length >= 1 && specialistCeiling.length <= 16);
-  for (const [capabilityId, verb] of [
-    ["orders.read", "view"],
-    ["support.case.read", "view"],
-    ["support.reply.send", "propose"],
-    ["workspace.task.delegate", "delegate"],
-    ["workspace.task.create", "execute"],
-    ["workspace.task.assign", "execute"],
-    ["catalog.content.publish", "execute"],
-    ["catalog.content.publish", "approve"],
-    ["agents.installation.disable", "execute"],
-  ])
-    assert.equal(withinSpecialistCeiling(capabilityId, verb), false, capabilityId + " " + verb);
-  for (const [name, change] of [
-    ["order reads", (l) => l.capabilities.push({ capabilityId: "orders.read", verbs: ["view"] })],
-    [
-      "customer mail",
-      (l) => l.capabilities.push({ capabilityId: "support.case.read", verbs: ["view"] }),
-    ],
-    [
-      "delegation",
-      (l) => l.capabilities.push({ capabilityId: "workspace.task.delegate", verbs: ["delegate"] }),
-    ],
-    [
-      "task creation",
-      (l) => l.capabilities.push({ capabilityId: "workspace.task.create", verbs: ["execute"] }),
-    ],
-    [
-      "executing a publish",
-      (l) =>
-        (l.capabilities.find((r) => r.capabilityId === "catalog.content.publish").verbs = [
-          "propose",
-          "execute",
-        ]),
-    ],
-    [
-      "a human_only stop",
-      (l) =>
-        l.capabilities.push({ capabilityId: "agents.installation.disable", verbs: ["execute"] }),
-    ],
-    [
-      "17 ids",
-      (l) => {
-        while (l.capabilities.length < 17)
-          l.capabilities.push({ capabilityId: "workspace.knowledge.read", verbs: ["view"] });
-      },
-    ],
-  ]) {
-    const l = structuredClone(ceiling);
-    change(l);
-    assert.ok(inspectSpecialistCeiling(l, capabilities).length > 0, name);
-  }
-});
-
-test("ADR-0027 item 10: a specialist's capabilities come from its tools inside the ceiling", () => {
-  const spec = fakeSpecialistSpec();
-  const derived = specialistCapabilities(spec.tools);
-  assert.deepEqual(
-    [...derived].map((r) => r.capabilityId + ":" + r.verbs.join()).sort(),
-    [...spec.capabilities].map((r) => r.capabilityId + ":" + r.verbs.join()).sort(),
-  );
-  assert.throws(() => specialistCapabilities(["orders.summary"]), ToolCatalogueError);
-  assert.throws(() => specialistCapabilities(["agent.route"]), ToolCatalogueError);
-  assert.throws(() => specialistCapabilities(["proposal.reply"]), ToolCatalogueError);
-});
-
-test("ADR-0027 item 11, ADR-0028 item 8: both switches are committed off; on or extra keys fail", () => {
-  const loop = read("docs/decisions/agent-loop-staging.json");
-  const specialists = read("docs/decisions/specialists-staging.json");
-  assert.equal(loop.switch, "off");
-  assert.equal(specialists.switch, "off");
-  assert.equal(inspectAgentPlatformSwitches({ ...loop, switch: "on" }, specialists).length, 1);
-  assert.equal(inspectAgentPlatformSwitches(loop, { ...specialists, switch: "on" }).length, 1);
+test("ADR-0027 item 11, ADR-0037 item 9: the switches are committed off; on or extra keys fail", () => {
+  const [loop, calls, cards] = switches();
+  for (const record of [loop, calls, cards]) assert.equal(record.switch, "off");
+  assert.equal(calls.feature, "teammate_calls");
+  assert.equal(cards.feature, "agent_cards");
+  assert.equal(inspectAgentPlatformSwitches({ ...loop, switch: "on" }, calls, cards).length, 1);
+  assert.equal(inspectAgentPlatformSwitches(loop, { ...calls, switch: "on" }, cards).length, 1);
+  assert.equal(inspectAgentPlatformSwitches(loop, calls, { ...cards, switch: "on" }).length, 1);
   assert.equal(
-    inspectAgentPlatformSwitches({ ...loop, observed_on: "2026-10-26" }, specialists).length,
+    inspectAgentPlatformSwitches(loop, calls, { ...cards, observed_on: "2026-10-26" }).length,
     1,
   );
-  assert.equal(inspectAgentPlatformSwitches({ ...loop, key: "x" }, specialists).length, 1);
+  assert.equal(inspectAgentPlatformSwitches(loop, { ...calls, key: "x" }, cards).length, 1);
+  // Each record names its own feature: swapped files fail.
+  assert.equal(inspectAgentPlatformSwitches(loop, cards, calls).length, 2);
+  assert.equal(inspectAgentPlatformSwitches({ ...loop, key: "x" }, calls, cards).length, 1);
+});
+
+test("ADR-0037 item 2: no context but the Coordinator's offers an agent.* tool (depth 1)", () => {
+  const agentTools = toolCatalogue.filter((t) => t.name.startsWith("agent.")).map((t) => t.name);
+  assert.deepEqual(agentTools, [
+    "agent.route",
+    "agent.ask",
+    "agent.map",
+    "agent.message",
+    "agent.cancel",
+    "agent.propose",
+  ]);
+  for (const name of agentTools) {
+    assert.ok(isAgentTool(name), name);
+    assert.deepEqual([...toolEntry(name).contexts], ["coordinator"], name);
+  }
+  for (const context of ["routed", "mandate", "look_for_work", "call"])
+    for (const name of toolsForContext(context)) {
+      assert.ok(!isAgentTool(name), `${context} ${name}`);
+      assert.notEqual(toolEntry(name).capabilityId, "workspace.task.delegate", name);
+      assert.ok(!String(toolEntry(name).capabilityId).startsWith("agents."), name);
+    }
+  assert.equal(isAgentTool("agent.anything"), false);
+  assert.equal(toolEntry("specialist.draft"), null, "retired in version 4");
+  // Calls, maps, guidance, cancels and hand-offs are delegations on workspace.task.delegate;
+  // agent.propose a draft on agents.builder.describe. Reading a result is memory.read's.
+  assert.deepEqual(
+    agentTools.map((n) => {
+      const t = toolEntry(n);
+      return [t.family, t.capabilityId, t.verb];
+    }),
+    [
+      ...Array.from({ length: 5 }, () => ["coordination", "workspace.task.delegate", "delegate"]),
+      ["coordination", "agents.builder.describe", "execute"],
+    ],
+  );
+});
+
+test("ADR-0037 item 3(a), ADR-0041 item 24: a called teammate cannot talk to the person, writes result items and ends with run.complete", () => {
+  const call = toolsForContext("call");
+  assert.ok(call.includes(teammateItemTool) && call.includes(completionTool));
+  for (const name of [
+    "inbox.ask",
+    "message.post",
+    "support.thread.read",
+    "proposal.reply",
+    "memory.suggest",
+    "run.wait",
+    "knowledge.propose",
+  ])
+    assert.ok(!call.includes(name), name);
+  assert.deepEqual([...toolEntry(teammateItemTool).contexts], ["call"]);
+  // ADR-0041 item 4: a teammate call's run is kind call (not a routed run with a flag), and
+  // only a mandate run has a look-for-work pass.
+  assert.equal(runContext("call", false), "call");
+  assert.equal(runContext("routed", false), "routed");
+  for (const [kind, lookForWork] of [
+    ["call", true],
+    ["routed", true],
+    ["coordinator", true],
+    ["specialist", false],
+    ["review", false],
+    ["upkeep", false],
+  ])
+    assert.throws(() => runContext(kind, lookForWork), ToolCatalogueError, kind);
+  // H5's retired called flag: a caller still passing it is refused, never given the routed
+  // context's person-facing tools.
+  assert.throws(() => runContext("routed", false, true), ToolCatalogueError);
+  assert.throws(() => runContext("routed", false, false), ToolCatalogueError);
+  // A package declares grant tools only; every call of it is offered the call context's
+  // memory and harness tools, and nothing that reaches the person.
+  assert.deepEqual(offeredTools("call", fakeListingsPackage().tools), [
+    "knowledge.search",
+    "work.read",
+    "products.read",
+    "suggestion.create",
+    "report.write",
+    "proposal.listing",
+    "memory.search",
+    "memory.read",
+    "run.plan",
+    "run.complete",
+    "result.write",
+    "context.checkpoint",
+  ]);
+  assert.ok(!offeredTools("routed", fakeListingsPackage().tools).includes(teammateItemTool));
+});
+
+test("ADR-0037 item 3, ADR-0041 item 21: briefs and results are structured with no character cap", () => {
+  const long = "Long material. ".repeat(20000);
+  const brief = {
+    ...fakeTeammateBriefInput(),
+    objective: long,
+    details: long,
+    doneCriteria: [long],
+    approach: [long],
+  };
+  for (const name of ["agent.ask", "agent.route"]) {
+    const input =
+      name === "agent.ask"
+        ? { installationId: fakeIds.listingsInstallationId, mode: "ask", followUpOf: null, brief }
+        : { installationId: fakeIds.listingsInstallationId, brief };
+    assert.deepEqual(checkToolInput(name, input), { ok: true }, name);
+    // Structured and closed: a brief as plain text, or with an extra field, is refused.
+    assert.equal(checkToolInput(name, { ...input, brief: "do it" }).ok, false, name);
+    assert.equal(
+      checkToolInput(name, { ...input, brief: { ...brief, extra: ["orders.summary"] } }).ok,
+      false,
+      name,
+    );
+    assert.doesNotMatch(toolEntry(name).description, /once per/i, name);
+    // A brief names no tool, capability, scope, store, model or limit; the model never
+    // writes the requester's words (request is code's).
+    for (const field of ["request", "tools", "model", "storeId"])
+      assert.equal(
+        checkToolInput(name, { ...input, brief: { ...brief, [field]: null } }).ok,
+        false,
+        `${name} ${field}`,
+      );
+  }
+  // At least one done criterion (ADR-0041 item 21).
+  assert.equal(
+    checkToolInput("agent.route", {
+      installationId: fakeIds.listingsInstallationId,
+      brief: { ...brief, doneCriteria: [] },
+    }).ok,
+    false,
+  );
+  const core = schemas[1].$defs;
+  for (const name of [
+    "TeammateBrief",
+    "TeammateBriefInput",
+    "TeammateBriefLines",
+    "TeammateDoneCriteria",
+    "TeammateRequest",
+    "TeammateResultInput",
+    "TeammateFindingInput",
+    "TeammateTableInput",
+    "TeammateText",
+    "TeammateTable",
+    "TeammateNeedsInput",
+    "TeammateVerdictInput",
+    "ResultItemPageContent",
+    "ToolInputRunComplete",
+    "ToolInputAgentMessage",
+  ]) {
+    const { unit: _unit, ...rest } = core[name].properties ?? {};
+    assert.doesNotMatch(JSON.stringify({ ...core[name], properties: rest }), /maxLength/, name);
+  }
+  // memory.read opens a result item or a teammate's full result page by page, in place of
+  // agent.result.read.
+  assert.deepEqual(checkToolInput("memory.read", fakeMemoryReadInput()), { ok: true });
+  assert.equal(checkToolInput("memory.read", { ...fakeMemoryReadInput(), page: 0 }).ok, false);
+});
+
+const proposeInput = () => ({
+  name: "Restock Watch",
+  purpose: "Watch stock levels.",
+  instructions: "Suggest restocks.",
+  skillTexts: [],
+  skillIds: [],
+  tools: ["inventory.read"],
+  triggerKinds: [],
+});
+test("ADR-0037 item 4: agent.propose is the one input that names tools, by ToolName only", () => {
+  assert.deepEqual(
+    { ...cardToolsException },
+    {
+      tool: "agent.propose",
+      property: "tools",
+      items: "#/$defs/ToolName",
+    },
+  );
+  assert.deepEqual(checkToolInput("agent.propose", proposeInput()), { ok: true });
+  const s = structuredClone(schemas);
+  s[1].$defs.ToolInputAgentPropose.properties.tools.items = { type: "string" };
+  assert.match(
+    inspect(catalogue, s).join("\n"),
+    /agent\.propose: input takes a forbidden field tools/,
+  );
+  const c = structuredClone(catalogue);
+  tool(c, "agent.ask").inputDefinition = "ToolInputAgentPropose";
+  assert.match(inspect(c).join("\n"), /agent\.ask: input takes a forbidden field tools/);
+  // The model names no capability, scope, store, model or limit on a card.
+  for (const field of ["capabilities", "optionalScopes", "storeId", "model", "runLimits"])
+    assert.equal(
+      checkToolInput("agent.propose", { ...proposeInput(), [field]: [] }).ok,
+      false,
+      field,
+    );
 });
 
 test("the old formats stay: ModelCall@1, ModelResult@1 and the per-product catalogue are unchanged", async () => {

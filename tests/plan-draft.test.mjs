@@ -23,6 +23,7 @@ import {
   decideCoordinatorMention,
   decidePlanDraft,
   mentionRunTools,
+  pendingMorrowTools,
   planDraftDigest,
   planDraftFromToolInput,
   planDraftsRecord,
@@ -184,8 +185,9 @@ test("plan.draft is ToolCatalogue@1's: grants nothing, on workspace.conversation
   assert.ok(Object.isFrozen(planDraftTool));
   // A catalogue entry names no grant: a tool is one capability and verb, checked per call.
   assert.equal(Object.hasOwn(planDraftTool, "grants"), false);
-  // Version 2 added plan.draft; version 3 (PR 20) knowledge.propose and notebook.write.
-  assert.ok(toolCatalogueVersion >= 2, "a new tool is a new catalogue version");
+  // Version 2 added plan.draft; version 3 (PR 20) knowledge.propose and notebook.write;
+  // version 4 (ADR-0037) the teammate tools.
+  assert.equal(toolCatalogueVersion, 4, "a new tool is a new catalogue version (ADR-0037: 4)");
   const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
   const post = catalogue.capabilities.find((c) => c.id === planDraftTool.capabilityId);
   assert.equal(post.executor, "agent_direct_write");
@@ -294,10 +296,41 @@ test("the launch Coordinator subset leaves task.create out; the grant set keeps 
   assert.ok(coordinatorLaunchTools("on").includes("plan.draft"));
   assert.ok(!coordinatorLaunchTools("off").includes("plan.draft"), "absent while off");
   assert.ok(!coordinatorLaunchTools().includes("plan.draft"), "committed off");
+  // ADR-0037 item 9: the teammate tools follow their own switches, both committed off; tool
+  // catalogue version 4 puts agent.map, agent.message and agent.cancel beside agent.ask.
+  const team = (teammateCalls, agentCards) => ({ teammateCalls, agentCards });
+  const calls = ["agent.ask", "agent.map", "agent.message", "agent.cancel"];
+  for (const tool of [...calls, "agent.propose", "knowledge.propose"])
+    assert.ok(!coordinatorLaunchTools().includes(tool), tool + " committed off");
+  for (const tool of calls)
+    assert.ok(coordinatorLaunchTools("on", team("on", "off")).includes(tool), tool);
+  assert.ok(!coordinatorLaunchTools("on", team("on", "off")).includes("agent.propose"));
+  assert.ok(coordinatorLaunchTools("on", team("off", "on")).includes("agent.propose"));
+  for (const tool of calls)
+    assert.ok(!coordinatorLaunchTools("on", team("off", "on")).includes(tool), tool);
+  assert.ok(coordinatorLaunchTools("off", team("off", "off")).includes("agent.route"));
+  // Morrow's memory suggestions and knowledge proposals (OD-2026-10-26-7, question 15) are in
+  // catalogue version 4, but wait for the plan rows that build their paths (H12b, H12d).
+  assert.deepEqual([...pendingMorrowTools], ["memory.suggest", "knowledge.propose"]);
+  for (const tool of pendingMorrowTools) {
+    assert.ok(coordinatorGrantTools.includes(tool), tool);
+    assert.ok(!coordinatorLaunchTools("on", team("on", "on")).includes(tool), tool);
+  }
+  // The memory reads and harness tools grant nothing and sit behind the agent-loop switch.
+  for (const tool of [
+    "memory.search",
+    "memory.read",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "context.checkpoint",
+  ])
+    assert.ok(coordinatorLaunchTools("off", team("off", "off")).includes(tool), tool);
+  assert.ok(!coordinatorGrantTools.includes("result.write"), "Morrow builds no result items");
 });
 
-test("Morrow in an Ask: only under the envelope; never task.create, specialist.draft, inbox.ask", () => {
-  for (const tool of ["task.create", "specialist.draft", "inbox.ask"])
+test("Morrow in an Ask: only under the envelope; never task.create, agent.propose, inbox.ask", () => {
+  for (const tool of ["task.create", "agent.propose", "inbox.ask"])
     assert.ok(!askTools.includes(tool), tool);
   assert.deepEqual(turnTools(turn({ conversation: "ask", askEnvelope: false })), []);
   assert.deepEqual(
@@ -342,7 +375,7 @@ test("Morrow in an Ask: only under the envelope; never task.create, specialist.d
     }),
     "input_invalid",
   );
-  // The @Morrow run: no task.create, no agent.route, no specialist.draft, no inbox.ask.
+  // The @Morrow run: no task.create, no agent.route, no agent.propose, no inbox.ask.
   assert.deepEqual(
     [...mentionRunTools],
     ["knowledge.search", "work.read", "message.post", "plan.draft"],

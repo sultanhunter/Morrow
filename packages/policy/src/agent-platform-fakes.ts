@@ -1,11 +1,15 @@
-// Fakes of the agent-platform contracts (PR 10), so the agent loop (PR 11) and the Sunrise
-// screens (PRs 14 to 16) build against them before any backend exists. Plain data only: type
+// Fakes of the agent-platform contracts (PR 10; ADR-0037 PR 2 for teammates, result items and
+// agent cards; plan row H5 for ADR-0041's merged teammate contracts and tool catalogue version
+// 4's orchestration, memory and harness inputs), so the agent loop, teammate calls, the
+// agent-card packet and the Sunrise screens build against them before any backend exists. Plain data only: type
 // imports, no validator table, no I/O, clock or randomness, so a browser fixture may use it.
 // tests/agent-platform-contracts.test.mjs validates every fake against its contract, so a
 // fake cannot drift from the schema. Every id is synthetic; no real shop, person or address.
 import type {
   CurrentBilling_RateCard,
+  Current_AddToTeamDocument,
   Current_AgentPackage,
+  Current_AgentProposal,
   Current_SkillManifest,
   Current_AgentRunKind,
   Current_AgentRunManifest,
@@ -21,13 +25,29 @@ import type {
   Current_ModelProfileChange,
   Current_ModelProfileTarget,
   Current_ReportArtifact,
+  Current_ResultItem,
+  Current_ResultItemPage,
+  Current_RunTaint,
   Current_RunToolCall,
   Current_RunTurn,
   Current_SenderIdentity,
-  Current_SpecialistBrief,
-  Current_SpecialistSpec,
-  Current_SpecialistStartDocument,
   Current_SupportReplyParameters,
+  Current_TeammateBrief,
+  Current_TeammateBriefInput,
+  Current_TeammateResult,
+  Current_ToolInputAgentAsk,
+  Current_ToolInputAgentCancel,
+  Current_ToolInputAgentMap,
+  Current_ToolInputAgentMessage,
+  Current_ToolInputAgentPropose,
+  Current_ToolInputContextCheckpoint,
+  Current_ToolInputMemoryRead,
+  Current_ToolInputMemorySearch,
+  Current_ToolInputMemorySuggest,
+  Current_ToolInputResultWrite,
+  Current_ToolInputRunComplete,
+  Current_ToolInputRunPlan,
+  Current_ToolInputRunWait,
 } from "@morrow/contracts";
 
 /** The synthetic ids every fake shares. */
@@ -43,7 +63,14 @@ export const fakeIds = Object.freeze({
   listingsInstallationId: "inst_listings",
   listingsPrincipalId: "principal_listings",
   supportInstallationId: "inst_support",
-  specialistInstallationId: "inst_specialist_1",
+  inventoryInstallationId: "inst_inventory",
+  cardId: "card_fake_1",
+  callId: "call_fake_1",
+  messageId: "message_fake_1",
+  callRunId: "run_call_fake_1",
+  callTaskId: "task_call_fake_1",
+  toolUseId: "toolu_ask_fake_1",
+  itemId: "item_fake_1",
   mandateId: "mandate_listings_1",
   triggerId: "trigger_weekly_sweep_1",
   taskId: "task_fake_1",
@@ -95,7 +122,8 @@ export function fakeMandateRequester(): Current_MandateActorRef {
 // --- Model profiles (ADR-0027 item 12) ---------------------------------------------------
 /**
  * Each agent's profile at the proposed version 2 defaults, as Settings lists them: Morrow on
- * Opus 5.5 at high, every other kind on Opus 5.5 at medium (ADR-0036).
+ * Opus 5.5 at high, every other kind on Opus 5.5 at medium (ADR-0036), the default for new
+ * teammates included (ADR-0037 item 4).
  */
 export function fakeModelProfiles(): readonly {
   readonly target: Current_ModelProfileTarget;
@@ -107,7 +135,7 @@ export function fakeModelProfiles(): readonly {
       profile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
     },
     {
-      target: { kind: "specialist_default" },
+      target: { kind: "teammate_default" },
       profile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
     },
     {
@@ -174,52 +202,442 @@ export function fakeSupportReplyParameters(): Current_SupportReplyParameters {
   });
 }
 
-// --- Specialists (ADR-0027 item 10, ADR-0028) --------------------------------------------
-export function fakeSpecialistBrief(): Current_SpecialistBrief {
+// --- Teammates (ADR-0037 item 3(a); ADR-0041 items 19 to 24) -------------------------------
+/** A tainted run's taint: it read product text, and the result keeps the kind and the source. */
+export function fakeTaint(): Current_RunTaint {
   return freeze({
-    title: "Summer collection SEO check",
-    objective: "Check the SEO titles and descriptions of the summer collection and propose fixes.",
-    inputRefs: [{ kind: "task", id: fakeIds.taskId }],
-    doneCriteria: ["Every product in the collection has an SEO title under 70 characters."],
-    boundaries: ["Do not change prices or stock."],
-    skillIds: ["seo-audit"],
-    outputContractId: "report@1",
+    contextTaint: "untrusted_external",
+    kinds: ["product"],
+    sources: [{ source: "product", sourceId: "product:1001" }],
+    omittedSources: 0,
   });
 }
-export function fakeSpecialistSpec(): Current_SpecialistSpec {
+/** An untainted run's taint. */
+export function fakeCleanTaint(): Current_RunTaint {
+  return freeze({ contextTaint: "none", kinds: [], sources: [], omittedSources: 0 });
+}
+/** Morrow's structured brief to Listings as it writes it: no character cap, records by id. */
+export function fakeTeammateBriefInput(): Current_TeammateBriefInput {
+  return freeze({
+    objective: "Check the SEO titles and descriptions of the summer collection.",
+    details: "The person wants titles under 70 characters in the brand voice.",
+    doneCriteria: [
+      "Every product in the collection has been checked.",
+      "Every title over 70 characters has a proposal waiting for review.",
+    ],
+    boundaries: ["Do not change prices or stock."],
+    records: [
+      { kind: "task", id: fakeIds.taskId },
+      { kind: "product", id: "product:1001" },
+    ],
+    outputFormat: {
+      findingKinds: ["metric", "table"],
+      tableColumns: ["Product", "Proposed title"],
+      itemsExpected: false,
+      summaryDepth: "standard",
+    },
+    approach: ["Read the brand voice page first.", "Check every product, not a sample."],
+  });
+}
+/** The brief Listings receives: the input, the requester's own words (filled by code), ask mode. */
+export function fakeTeammateBrief(): Current_TeammateBrief {
+  return freeze({
+    ...structuredClone(fakeTeammateBriefInput()),
+    request: {
+      messageId: fakeIds.messageId,
+      text: "Can you fix the SEO titles on the summer dresses? Keep them short.",
+      readTags: [{ storeId: null, capability: "workspace.knowledge.read" }],
+    },
+    mode: "ask",
+    followUpOf: null,
+  });
+}
+/** agent.ask as Morrow writes it: a fresh call to Listings. */
+export function fakeAgentAskInput(): Current_ToolInputAgentAsk {
+  return freeze({
+    installationId: fakeIds.listingsInstallationId,
+    mode: "ask",
+    followUpOf: null,
+    brief: structuredClone(fakeTeammateBriefInput()),
+  });
+}
+/** agent.map over three products, one per batch. */
+export function fakeAgentMapInput(): Current_ToolInputAgentMap {
+  return freeze({
+    installationId: fakeIds.listingsInstallationId,
+    briefTemplate: { ...structuredClone(fakeTeammateBriefInput()), records: [] },
+    source: {
+      records: [
+        { kind: "product", id: "product:1001" },
+        { kind: "product", id: "product:1002" },
+        { kind: "product", id: "product:1003" },
+      ],
+      itemId: null,
+    },
+    batchSize: 1,
+  });
+}
+export function fakeAgentMessageInput(): Current_ToolInputAgentMessage {
+  return freeze({ callId: fakeIds.callId, text: "Focus on the linen dresses first." });
+}
+export function fakeAgentCancelInput(): Current_ToolInputAgentCancel {
+  return freeze({ callId: fakeIds.callId });
+}
+/** What Listings returns with run.complete's child form at the end of the call. */
+export function fakeRunCompleteChild(): Current_ToolInputRunComplete {
+  return freeze({
+    outcome: "done",
+    criteria: [
+      { index: 0, status: "met", evidence: [{ kind: "product", id: "product:1001" }] },
+      { index: 1, status: "met", evidence: [{ kind: "proposal", id: "proposal_fake_1" }] },
+    ],
+    reply: null,
+    result: {
+      summary: "Four of twelve products have SEO titles over 70 characters; proposals are ready.",
+      counts: { checked: 12, missing: 4, questions: 0 },
+      nextSteps: ["fill_fact"],
+      findings: [
+        {
+          kind: "metric",
+          title: "Titles over 70 characters",
+          detail: "",
+          records: [{ kind: "product", id: "product:1001" }],
+          value: 4,
+          unit: "products",
+          table: null,
+        },
+        {
+          kind: "table",
+          title: "Proposed titles",
+          detail: "Each proposal waits for a person's approval.",
+          records: [],
+          value: null,
+          unit: null,
+          table: {
+            columns: ["Product", "Proposed title"],
+            rows: [["product:1001", "Linen summer dress"]],
+          },
+        },
+      ],
+      needs: null,
+      items: [],
+      verdicts: [],
+    },
+  });
+}
+/** The TeammateResult@1 that child form becomes: everything inline (it fits). */
+export function fakeTeammateResult(): Current_TeammateResult {
+  const child = fakeRunCompleteChild();
+  const result = child.result!;
   return freeze({
     schemaVersion: 1,
     organizationId: fakeIds.organizationId,
     workspaceId: fakeIds.workspaceId,
-    storeId: fakeIds.storeId,
-    connectionId: fakeIds.connectionId,
-    parentTaskId: fakeIds.taskId,
-    parentTaskRevision: 3,
-    release: { id: "morrow.specialist", revision: 1, digest: fakeDigest("morrow.specialist@1") },
-    brief: fakeSpecialistBrief(),
-    tools: [
-      "knowledge.search",
-      "products.read",
-      "message.post",
-      "report.write",
-      "proposal.listing",
+    parentRunId: fakeIds.runId,
+    toolUseId: fakeIds.toolUseId,
+    callId: fakeIds.callId,
+    sequence: 1,
+    mode: "ask",
+    runId: fakeIds.callRunId,
+    taskId: fakeIds.callTaskId,
+    installationId: fakeIds.listingsInstallationId,
+    outcome: "done",
+    endReason: "completed",
+    counts: { ...result.counts },
+    nextSteps: [...result.nextSteps],
+    created: { kind: "list", records: [{ kind: "proposal", id: "proposal_fake_1" }] },
+    criteria: child.criteria.map((c) => ({
+      index: c.index,
+      status: c.status,
+      evidence: { kind: "list" as const, refs: c.evidence.map((r) => ({ ...r })) },
+    })),
+    verdicts: [],
+    next: "none",
+    needs: null,
+    unresolved: { kind: "list", subjects: [] },
+    plan: { itemsDone: 3, itemsTotal: 3 },
+    verification: { codeChecksPassed: 2, codeChecksFailed: 0, verifierVerdict: "not_run" },
+    checkpointId: null,
+    summary: { kind: "text", text: result.summary },
+    findings: result.findings.map((f) => ({
+      kind: f.kind,
+      title: f.title,
+      detail: { kind: "text" as const, text: f.detail },
+      records: f.records.map((r) => ({ ...r })),
+      value: f.value,
+      unit: f.unit,
+      table:
+        f.table === null
+          ? null
+          : {
+              kind: "table" as const,
+              columns: [...f.table.columns],
+              rows: f.table.rows.map((r) => [...r]),
+            },
+    })),
+    items: [],
+    readTags: [
+      { storeId: fakeIds.storeId, capability: "catalog.products.read" },
+      { storeId: null, capability: "workspace.knowledge.read" },
     ],
-    capabilities: [
-      { capabilityId: "catalog.products.read", verbs: ["view"] },
-      { capabilityId: "workspace.knowledge.read", verbs: ["view"] },
-      { capabilityId: "workspace.conversation.post", verbs: ["execute"] },
-      { capabilityId: "workspace.artifact.edit", verbs: ["execute"] },
-      { capabilityId: "catalog.content.publish", verbs: ["propose"] },
-    ],
-    dataClasses: ["catalog.products.read", "workspace.knowledge.read"],
-    modelProfile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
-    turnLimit: 12,
-    creditCap: "15",
-    runSeconds: 3600,
+    taint: fakeTaint(),
+    completedAt: later(3),
   });
 }
-export function fakeSpecialistStartDocument(): Current_SpecialistStartDocument {
-  const spec = fakeSpecialistSpec();
+/** A stored result item: a long summary from the call above, on its run's clock. */
+export function fakeResultItem(): Current_ResultItem {
+  return freeze({
+    schemaVersion: 1,
+    itemId: fakeIds.itemId,
+    organizationId: fakeIds.organizationId,
+    workspaceId: fakeIds.workspaceId,
+    runId: fakeIds.callRunId,
+    kind: "text",
+    mediaType: "text/plain",
+    title: "Summary",
+    sizeBytes: 9000,
+    pageCount: 2,
+    open: false,
+    sections: 1,
+    contentDigest: fakeDigest("item content"),
+    readTags: [{ storeId: fakeIds.storeId, capability: "catalog.products.read" }],
+    taint: fakeTaint(),
+    createdAt: later(2),
+    expiresAt: null,
+  });
+}
+/** The first page of that item, as memory.read returns it. */
+export function fakeResultItemPage(): Current_ResultItemPage {
+  return freeze({
+    schemaVersion: 1,
+    itemId: fakeIds.itemId,
+    kind: "text",
+    title: "Summary",
+    page: 1,
+    pageCount: 2,
+    content: { kind: "text", text: "Four of twelve products have SEO titles over 70 characters." },
+  });
+}
+
+// --- Memory and harness tool inputs (ADR-0041 item 24) -------------------------------------
+export function fakeMemorySearchInput(): Current_ToolInputMemorySearch {
+  return freeze({
+    queries: ["brand voice for titles", "summer collection"],
+    layers: ["knowledge", "results"],
+    limit: 10,
+  });
+}
+/** memory.read of a teammate's full result, its latest sequence. */
+export function fakeMemoryReadInput(): Current_ToolInputMemoryRead {
+  return freeze({
+    target: {
+      kind: "teammate_result",
+      id: fakeIds.callId,
+      label: null,
+      sequence: null,
+      fromPosition: null,
+      toPosition: null,
+    },
+    page: 1,
+  });
+}
+export function fakeMemorySuggestInput(): Current_ToolInputMemorySuggest {
+  return freeze({
+    kind: "preference",
+    title: "Short product titles",
+    text: "Keep product titles under 70 characters.",
+  });
+}
+/** Morrow's plan for the SEO job, set in its first turn. */
+export function fakeRunPlanInput(): Current_ToolInputRunPlan {
+  return freeze({
+    action: "set",
+    plan: {
+      objective: "Shorter SEO titles for the summer collection, ready for review.",
+      criteria: [
+        { text: "Every product in the collection has been checked.", check: "child_outcome" },
+        { text: "Every long title has a proposal waiting for review.", check: "proposal_state" },
+      ],
+      phases: [
+        {
+          title: "Check and propose",
+          items: [
+            {
+              itemKey: "check",
+              title: "Ask Listings to check the titles",
+              criteria: [0],
+              dependsOn: [],
+            },
+            {
+              itemKey: "review",
+              title: "Review the proposals",
+              criteria: [1],
+              dependsOn: ["check"],
+            },
+          ],
+        },
+      ],
+      followThrough: [],
+      understood: "You want shorter SEO titles on the summer dresses, in the brand voice.",
+      steps: [
+        { title: "Check every title", by: fakeIds.listingsInstallationId },
+        { title: "Draft shorter ones", by: fakeIds.listingsInstallationId },
+        { title: "Send them for your review", by: "morrow" },
+      ],
+    },
+    changes: null,
+  });
+}
+/** Morrow finishing that job with its reply. */
+export function fakeRunCompleteInput(): Current_ToolInputRunComplete {
+  return freeze({
+    outcome: "done",
+    criteria: [
+      { index: 0, status: "met", evidence: [{ kind: "task", id: fakeIds.callTaskId }] },
+      { index: 1, status: "met", evidence: [{ kind: "proposal", id: "proposal_fake_1" }] },
+    ],
+    reply: "Four titles were too long. Shorter ones are waiting for your review.",
+    result: null,
+  });
+}
+export function fakeRunWaitInput(): Current_ToolInputRunWait {
+  return freeze({
+    kind: "children",
+    match: "all",
+    callIds: null,
+    proposalIds: null,
+    until: null,
+  });
+}
+/** A called teammate starting a table item it will fill across turns. */
+export function fakeResultWriteInput(): Current_ToolInputResultWrite {
+  return freeze({
+    itemId: null,
+    title: "Proposed titles",
+    kind: "table",
+    mediaType: "text/csv",
+    columns: ["Product", "Proposed title"],
+    text: null,
+    rows: [["product:1001", "Linen summer dress"]],
+    close: false,
+  });
+}
+/** The fallback strategy's hand-off, citing labels instead of restating approvals. */
+export function fakeContextCheckpointInput(): Current_ToolInputContextCheckpoint {
+  return freeze({
+    objective: { text: "Shorter SEO titles for the summer collection.", refs: ["m1"] },
+    status: "waiting",
+    statusNote: "Listings is checking the titles.",
+    done: [{ text: "Plan set and Listings asked.", refs: ["c2", "c3"] }],
+    inProgress: [{ text: "Listings' check of twelve products.", refs: ["c3"] }],
+    decisions: [
+      { decision: "Check every product.", reason: "The person asked for all.", refs: ["m1"] },
+    ],
+    setAside: [],
+    facts: [{ fact: "product:1001 has a 92-character title.", exact: true, refs: ["c4"] }],
+    difficulties: [],
+    promised: [],
+    nextSteps: [{ text: "Review the proposals when the result arrives.", refs: [] }],
+    reopen: [{ ref: "c4", why: "The exact title lengths." }],
+  });
+}
+
+// --- Agent cards (ADR-0037 items 4 and 5) ------------------------------------------------
+/** What Morrow writes with agent.propose for a new teammate. */
+export function fakeAgentProposeInput(): Current_ToolInputAgentPropose {
+  return freeze({
+    name: "Restock Watch",
+    purpose: "Watch stock levels and suggest restocks before products sell out.",
+    instructions:
+      "You watch stock for this shop. When a product will run out within two weeks, suggest a restock with the numbers that show why.",
+    skillTexts: [
+      {
+        title: "Reading sell-through",
+        body: "Compare the last 30 days of units sold with stock on hand.",
+      },
+    ],
+    skillIds: [],
+    tools: ["knowledge.search", "inventory.read", "orders.summary", "suggestion.create"],
+    triggerKinds: ["schedule"],
+  });
+}
+/** The server facts a card is drafted with: the owner's request, an untainted run. */
+export function fakeCardFacts() {
+  return freeze({
+    cardId: fakeIds.cardId,
+    organizationId: fakeIds.organizationId,
+    workspaceId: fakeIds.workspaceId,
+    storeId: fakeIds.storeId,
+    connectionId: fakeIds.connectionId,
+    runId: fakeIds.runId,
+    requester: fakeOwner(),
+    skills: [
+      {
+        id: "seo-audit",
+        digest: fakeDigest("seo-audit skill"),
+        eligibleForWorkspaceAgents: true,
+        tools: ["knowledge.search", "products.read", "report.write", "proposal.listing"],
+      },
+    ],
+    runLimits: {
+      maxTurns: 12,
+      maxToolCallsPerTurn: 4,
+      maxToolCallsPerRun: 40,
+      maxQuestions: 2,
+      wallTimeSeconds: 1800,
+    },
+    modelProfile: { model: "claude_opus_5_5", effort: "medium", catalogueVersion: 2 },
+    taint: fakeCleanTaint(),
+    at,
+  });
+}
+/** The card code drafts from them: grants, scopes and the Owner-only kind derived in code. */
+export function fakeAgentProposal(): Current_AgentProposal {
+  const input = fakeAgentProposeInput();
+  const facts = fakeCardFacts();
+  return freeze({
+    schemaVersion: 1,
+    cardId: fakeIds.cardId,
+    revision: 1,
+    organizationId: fakeIds.organizationId,
+    workspaceId: fakeIds.workspaceId,
+    storeId: fakeIds.storeId,
+    connectionId: fakeIds.connectionId,
+    origin: "workspace",
+    draftedBy: { runId: fakeIds.runId, requester: fakeOwner() },
+    editedBy: null,
+    name: input.name,
+    purpose: input.purpose,
+    instructions: input.instructions,
+    skillTexts: input.skillTexts.map((s) => ({ ...s })),
+    skills: [],
+    tools: ["knowledge.search", "inventory.read", "orders.summary", "suggestion.create"],
+    capabilities: [
+      { capabilityId: "inventory.levels.read", verbs: ["view"] },
+      { capabilityId: "orders.read", verbs: ["view"] },
+      { capabilityId: "workspace.comment.create", verbs: ["execute"] },
+      { capabilityId: "workspace.knowledge.read", verbs: ["view"] },
+    ],
+    optionalScopes: ["read_orders"],
+    dataClasses: ["inventory.levels.read", "orders.read", "workspace.knowledge.read"],
+    customerData: "level1",
+    computer: false,
+    triggerKinds: ["schedule"],
+    runLimits: { ...facts.runLimits },
+    modelProfile: { ...facts.modelProfile },
+    ownerOnly: ["orders_or_customer"],
+    taint: fakeCleanTaint(),
+    draftedAt: at,
+    revisedAt: at,
+  });
+}
+/**
+ * The Add to team document for that card: the owner, a standalone session, 5 minutes. Its
+ * cardDigest is a placeholder (addToTeamDocument computes the card's own digest, a hash this
+ * module avoids).
+ */
+export function fakeAddToTeamDocument(): Current_AddToTeamDocument {
+  const card = fakeAgentProposal();
   return freeze({
     schemaVersion: 1,
     documentId: fakeIds.documentId,
@@ -228,20 +646,26 @@ export function fakeSpecialistStartDocument(): Current_SpecialistStartDocument {
     actor: fakeOwner(),
     sessionDigest: fakeDigest("session"),
     host: "standalone",
-    specDigest: fakeDigest("spec"),
-    parentTaskId: spec.parentTaskId,
-    parentTaskRevision: spec.parentTaskRevision,
-    release: spec.release,
-    capabilities: spec.capabilities,
-    dataClasses: spec.dataClasses,
-    modelProfile: spec.modelProfile,
-    turnLimit: spec.turnLimit,
-    creditCap: spec.creditCap,
-    runSeconds: spec.runSeconds,
+    cardId: card.cardId,
+    cardRevision: card.revision,
+    cardDigest: fakeDigest("card"),
+    storeId: card.storeId,
+    tools: [...card.tools],
+    capabilities: card.capabilities.map((c) => ({ ...c, verbs: [...c.verbs] })),
+    optionalScopes: [...card.optionalScopes],
+    dataClasses: [...card.dataClasses],
+    customerData: card.customerData,
+    triggerKinds: [...card.triggerKinds],
+    runLimits: { ...card.runLimits },
+    modelProfile: { ...card.modelProfile },
+    ownerOnly: [...card.ownerOnly],
+    taint: fakeCleanTaint(),
+    review: "solo_owner_phrase",
     issuedAt: at,
     expiresAt: later(5),
   });
 }
+
 export function fakeReportArtifact(): Current_ReportArtifact {
   return freeze({
     schemaVersion: 1,
@@ -336,7 +760,6 @@ export const fakeHarnessIds = Object.freeze({
   upkeepRunId: "run_upkeep_fake_1",
   routedContextId: "ctx_routed_fake_1",
   mandateContextId: "ctx_mandate_fake_1",
-  specialistContextId: "ctx_specialist_fake_1",
   planId: "plan_fake_1",
   proposalId: "proposal_fake_1",
   operationId: "op_fake_1",
@@ -371,7 +794,12 @@ const lineage = (
   continuesRunId: null,
   ...more,
 });
-/** A manifest of each run kind, at the record's defaults. */
+/**
+ * A manifest of each run kind (ADR-0041 item 4's six), at the record's defaults. Morrow's shows
+ * its version 4 launch tools with both team switches on; the routed, mandate and call lists end
+ * with their context's memory and harness tools (ADR-0041 item 24). A called teammate's run is
+ * kind call, offered the call context's tools; review and upkeep have no tool context yet.
+ */
 export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentRunManifest {
   const base = {
     schemaVersion: 1 as const,
@@ -385,7 +813,7 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
     sourceInboxId: null,
     envelopeId: fakeHarnessIds.envelopeId,
     systemTextDigest: fakeDigest("system text"),
-    toolCatalogueVersion: 1,
+    toolCatalogueVersion: 4,
     toolCatalogueDigest: fakeDigest("tool catalogue"),
     pins: fakeAgentRunPins(),
     specDigest: null,
@@ -400,7 +828,15 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
     "inbox.ask",
     "suggestion.create",
     "proposal.listing",
+    "memory.search",
+    "memory.read",
+    ...(kind === "routed" ? (["memory.suggest"] as const) : []),
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "context.checkpoint",
   ];
+  // The installed default, Opus 5.5 at medium.
   const listings = {
     storeId: fakeIds.storeId,
     connectionId: fakeIds.connectionId,
@@ -437,9 +873,18 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
           "work.read",
           "message.post",
           "inbox.ask",
-          "task.create",
           "agent.route",
-          "specialist.draft",
+          "agent.ask",
+          "agent.map",
+          "agent.message",
+          "agent.cancel",
+          "agent.propose",
+          "memory.search",
+          "memory.read",
+          "run.plan",
+          "run.complete",
+          "run.wait",
+          "context.checkpoint",
         ],
         modelProfile: { model: "claude_opus_5_5", effort: "high", catalogueVersion: 2 },
         safety: fakeAgentRunSafety("high"),
@@ -478,7 +923,22 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
         mandateId: null,
         triggerId: null,
         requester: fakeOwner(),
-        tools: ["knowledge.search", "products.read", "report.write"],
+        // The call context's offer for Listings' package (ADR-0037 item 3(a), ADR-0041 item 24):
+        // no question, post or memory suggestion to the person; result items and run.complete.
+        tools: [
+          "knowledge.search",
+          "work.read",
+          "products.read",
+          "suggestion.create",
+          "report.write",
+          "proposal.listing",
+          "memory.search",
+          "memory.read",
+          "run.plan",
+          "run.complete",
+          "result.write",
+          "context.checkpoint",
+        ],
       });
     case "review":
       // A fresh-context reviewer of Morrow's deliverable, at Morrow's effort (ADR-0041 item 19).
@@ -524,29 +984,6 @@ export function fakeAgentRunManifest(kind: Current_AgentRunKind): Current_AgentR
         requester: fakeOwner(),
         tools: ["notebook.write"],
       });
-    case "specialist": {
-      const spec = fakeSpecialistSpec();
-      return freeze({
-        ...base,
-        kind,
-        purpose: null,
-        storeId: fakeIds.storeId,
-        connectionId: fakeIds.connectionId,
-        taskId: fakeIds.childTaskId,
-        contextId: fakeHarnessIds.specialistContextId,
-        lineage: lineage(fakeIds.runId),
-        installationId: fakeIds.specialistInstallationId,
-        mandateId: null,
-        triggerId: null,
-        requester: fakeOwner(),
-        release: spec.release,
-        tools: spec.tools,
-        modelProfile: spec.modelProfile,
-        safety: fakeAgentRunSafety("medium"),
-        specDigest: fakeDigest("spec"),
-        dataClasses: spec.dataClasses,
-      });
-    }
   }
 }
 /** One turn of a routed Listings run that called products.read, in an open epoch. */
@@ -724,13 +1161,15 @@ export function fakeSkillManifest(): Current_SkillManifest {
     tools: ["knowledge.search", "products.read", "report.write", "proposal.listing"],
     dataClasses: ["catalog.products.read", "workspace.knowledge.read"],
     outputContracts: ["report@1"],
-    eligibleForSpecialists: true,
+    eligibleForWorkspaceAgents: true,
     bodyDigest: fakeDigest("seo-audit SKILL.md"),
   });
 }
 /**
- * Listings as an AgentPackage@1 on the loop. Its skill pin is a placeholder digest; a test
- * re-pins it with skillDigest (agent-package.ts), which needs a hash this module avoids.
+ * Listings as an AgentPackage@1 on the loop (origin first_party). It declares grant tools only:
+ * every call of it is offered the call context's run.complete and result.write (ADR-0041 item
+ * 24), so Morrow may call it. Its skill pin is a placeholder digest; a test re-pins it with
+ * skillDigest (agent-package.ts), which needs a hash this module avoids.
  */
 export function fakeListingsPackage(): Current_AgentPackage {
   return freeze({
@@ -738,8 +1177,11 @@ export function fakeListingsPackage(): Current_AgentPackage {
     id: "morrow.listings",
     revision: 2,
     kind: "installed",
+    origin: "first_party",
     title: "Listings",
     roleTextDigest: fakeDigest("listings role"),
+    instructions: null,
+    skillTexts: [],
     skills: [{ id: "seo-audit", digest: fakeDigest("seo-audit skill") }],
     tools: [
       "knowledge.search",
@@ -774,6 +1216,35 @@ export function fakeListingsPackage(): Current_AgentPackage {
     ],
     defaultProfile: { model: "claude_opus_5_5", effort: "medium" },
     evalDigest: fakeDigest("listings evals"),
+  });
+}
+
+/**
+ * The workspace package an approved card becomes (origin workspace). Its roleTextDigest is a
+ * placeholder; a test re-pins it with the digest of its instructions and skill text.
+ */
+export function fakeWorkspacePackage(): Current_AgentPackage {
+  const card = fakeAgentProposal();
+  return freeze({
+    schemaVersion: 1,
+    id: "workspace.restock_watch",
+    revision: 1,
+    kind: "installed",
+    origin: "workspace",
+    title: card.name,
+    roleTextDigest: fakeDigest("restock watch instructions"),
+    instructions: card.instructions,
+    skillTexts: card.skillTexts.map((s) => ({ ...s })),
+    skills: [],
+    tools: [...card.tools],
+    capabilities: card.capabilities.map((c) => ({ ...c, verbs: [...c.verbs] })),
+    optionalScopes: [...card.optionalScopes],
+    triggerKinds: [...card.triggerKinds],
+    customerData: card.customerData,
+    computer: false,
+    offeredProfiles: [{ model: "claude_opus_5_5", effort: "medium" }],
+    defaultProfile: { model: "claude_opus_5_5", effort: "medium" },
+    evalDigest: null,
   });
 }
 

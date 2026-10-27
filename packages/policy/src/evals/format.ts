@@ -15,10 +15,11 @@
 // binds each case's live slots to Morrow ids from a file outside the repository.
 //
 // The ADR-0037 tools (`agent.ask`, `agent.result.read`, `agent.propose`), the structured
-// `agent.route` brief, TeammateResult and the codes `insufficient_credits`,
-// `credits_exhausted`, `children_limit` and `customer_tagged` are not in the contracts yet
-// (ADR-0037 plan PR 2, ADR-0039 plan PR 2). Their shapes here are the working names and
-// provisional eval-local shapes, to be replaced by the contracts when those PRs land.
+// `agent.route` brief, TeammateResult and the refusals `insufficient_credits`,
+// `children_limit` and `result_customer_tagged` (here `customer_tagged`) are in the contracts
+// since ADR-0037 plan PR 2 (tool catalogue version 4); the end code `credits_exhausted` waits
+// for ADR-0039 plan PR 2. The shapes here are still the working names and provisional
+// eval-local shapes, to be replaced by the contracts when the eval world moves onto them.
 
 /** The current version of every eval format. */
 export const evalFormatVersion = 1;

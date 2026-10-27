@@ -48,7 +48,12 @@ import {
 
 const core = JSON.parse(readFileSync("docs/contracts/schemas/v1.1/core.schema.json", "utf8"));
 const coreV1 = JSON.parse(readFileSync("docs/contracts/schemas/v1/core.schema.json", "utf8"));
-const enumOf = (name) => (core.$defs[name] ?? coreV1.$defs[name]).enum;
+// A definition's enum, through a local alias (one definition under two names, as the H5 merge
+// leaves the records' names on H5's inputs).
+const enumOf = (name) => {
+  const definition = core.$defs[name] ?? coreV1.$defs[name];
+  return definition.$ref ? enumOf(definition.$ref.replace("#/$defs/", "")) : definition.enum;
+};
 const valid = (name, value) => validateCurrentDefinition(name, value);
 const edit = (value, change) => {
   const copy = structuredClone(value);
@@ -663,69 +668,23 @@ test("ContextLedger@1: SQL's records, with every in-flight operation shown as un
 });
 
 // --- One set of records with H5's tool inputs (review R1; pull request 79) ----------------
-// H5 merges first. Until then these tests pin H5's definitions as read from its branch at
-// 1223051c; from the merge on they read H5's own definitions from core v1.1, so a change on
-// either side fails here instead of merging silently (docs/briefs/h6-harness-contracts.md,
+// H5 merged first (966fed03); these tests read H5's own definitions from core v1.1, so a change
+// on either side fails here instead of merging silently (docs/briefs/h6-harness-contracts.md,
 // "Merge order with H5").
-const h5 = (name) => core.$defs[name] ?? null;
-const h5Pinned = Object.freeze({
-  contextLabel: {
-    description:
-      "A code label in this context's own log (ADR-0041 items 10, 13 and 14): c a tool result (c17), e an earlier checkpoint, k a knowledge page, m a message, o a gateway operation, p a proposal, q a question, r a result item, t a turn. Labels resolve only inside their context.",
-    type: "string",
-    pattern: "^[cekmopqrt][0-9]{1,6}$",
-  },
-  memoryLayers: ["knowledge", "notebook", "person_memory", "conversation", "results", "plan"],
-  memoryReadKinds: [
-    "result_item",
-    "teammate_result",
-    "messages",
-    "label",
-    "knowledge_page",
-    "notebook_entry",
-    "person_memory",
-    "conversation_summary",
-  ],
-  runCompleteOutcomes: ["done", "partial", "nothing_found", "blocked", "cannot_do", "waiting"],
-  checkpointRequired: [
-    "objective",
-    "status",
-    "statusNote",
-    "done",
-    "inProgress",
-    "decisions",
-    "setAside",
-    "facts",
-    "difficulties",
-    "promised",
-    "nextSteps",
-    "reopen",
-  ],
-  teammateRecordKinds: [
-    "task",
-    "thread",
-    "artifact",
-    "knowledge_page",
-    "product",
-    "proposal",
-    "result_item",
-    "suggestion",
-    "knowledge_proposal",
-    "notebook_entry",
-    "message",
-    "person_memory",
-  ],
-  criterionReportStatuses: ["met", "not_met", "unknown"],
-  personMemoryKinds: ["preference", "instruction", "fact"],
-});
-const enumFrom = (name, pinned) => h5(name)?.enum ?? pinned;
+const h5 = (name) => {
+  const definition = core.$defs[name];
+  assert.ok(definition, `${name}: H5's definition (pull request 79) is in core v1.1`);
+  return definition;
+};
+const enumFrom = (name) => h5(name).enum;
+const anyOfType = (node, type) => node.anyOf.find((branch) => branch.type === type);
 
 test("review R1: one ContextLabel, whose letters resolve in memory.read to the record kinds the ledger renders", () => {
-  // The same definition as H5's, which memory.read's label target names.
-  const label = core.$defs.ContextLabel;
-  assert.deepEqual(label, h5Pinned.contextLabel);
-  if (h5("MemoryReadTarget"))
-    assert.equal(h5("MemoryReadTarget").properties.label.anyOf[0].$ref, "#/$defs/ContextLabel");
+  // One definition: memory.read's label target, the checkpoint's lines and the ledger's rows
+  // name the same ContextLabel.
+  const label = h5("ContextLabel");
+  assert.equal(h5("MemoryReadTarget").properties.label.anyOf[0].$ref, "#/$defs/ContextLabel");
+  assert.equal(h5("CheckpointLine").properties.refs.items.$ref, "#/$defs/ContextLabel");
   // Each letter names one record kind in the definition both PRs share.
   const kinds = {
     c: "a tool result",
@@ -805,12 +764,11 @@ test("review R1: one ContextLabel, whose letters resolve in memory.read to the r
 });
 
 test("review R1: memory.search's layers are the layers its hits name, and a hit is memory.read's target", () => {
-  assert.deepEqual(enumOf("MemoryLayer"), h5Pinned.memoryLayers);
+  const layers = enumFrom("MemoryLayer");
   assert.equal(core.$defs.MemorySearchHit.properties.layer.$ref, "#/$defs/MemoryLayer");
-  if (h5("ToolInputMemorySearch"))
-    assert.equal(h5("ToolInputMemorySearch").properties.layers.items.$ref, "#/$defs/MemoryLayer");
+  assert.equal(h5("ToolInputMemorySearch").properties.layers.items.$ref, "#/$defs/MemoryLayer");
   // Every kind a hit names is one memory.read opens.
-  const readKinds = enumFrom("MemoryReadKind", h5Pinned.memoryReadKinds);
+  const readKinds = enumFrom("MemoryReadKind");
   const hitKinds = core.$defs.MemorySearchHit.properties.readKind.anyOf[0].enum;
   for (const kind of hitKinds) assert.ok(readKinds.includes(kind), kind);
   // One hit per layer, each opened as memory.read states its target.
@@ -829,7 +787,7 @@ test("review R1: memory.search's layers are the layers its hits name, and a hit 
     ],
     plan: [[null, null]],
   };
-  assert.deepEqual(Object.keys(perLayer), h5Pinned.memoryLayers);
+  assert.deepEqual(Object.keys(perLayer), layers);
   for (const [layer, targets] of Object.entries(perLayer))
     for (const [readKind, position] of targets)
       assert.ok(
@@ -870,25 +828,33 @@ test("review R1: context.checkpoint's input is a storable checkpoint body", () =
   assert.ok(valid("ContextCheckpointContent", input));
   const fallback = fakes.fakeContextCheckpoint("fallback");
   assert.ok(valid("ContextCheckpoint", { ...fallback, content: input }));
-  assert.deepEqual(core.$defs.ContextCheckpointContent.required, h5Pinned.checkpointRequired);
-  assert.equal(core.$defs.CheckpointLine.properties.refs.items.$ref, "#/$defs/ContextLabel");
-  // From the merge on: one definition. ContextCheckpointContent is either a $ref to H5's input
-  // or the same properties, bounds and required keys.
+  // One shape: ContextCheckpointContent is either a $ref to H5's input or the same properties,
+  // bounds and required keys, so every input the tool accepts is a storable body.
   const tool = h5("ToolInputContextCheckpoint");
-  if (tool) {
-    assert.ok(valid("ToolInputContextCheckpoint", input));
-    assert.ok(valid("ToolInputContextCheckpoint", fallback.content), "the fake is an input");
-    const body = core.$defs.ContextCheckpointContent;
-    if (body.$ref) assert.equal(body.$ref, "#/$defs/ToolInputContextCheckpoint");
-    else
-      for (const key of ["type", "properties", "required", "additionalProperties"])
-        assert.deepEqual(body[key], tool[key], key);
-  }
+  assert.ok(valid("ToolInputContextCheckpoint", input));
+  assert.ok(valid("ToolInputContextCheckpoint", fallback.content), "the fake is an input");
+  const body = core.$defs.ContextCheckpointContent;
+  if (body.$ref) assert.equal(body.$ref, "#/$defs/ToolInputContextCheckpoint");
+  else
+    for (const key of ["type", "properties", "required", "additionalProperties"])
+      assert.deepEqual(body[key], tool[key], key);
 });
 
 test("review R1: run.complete's outcomes, criteria and evidence are RunCompletion's", () => {
-  const outcomes = enumFrom("RunCompleteOutcome", h5Pinned.runCompleteOutcomes);
-  assert.deepEqual(outcomes, h5Pinned.runCompleteOutcomes, "H5 changed run.complete's outcomes");
+  const outcomes = enumFrom("RunCompleteOutcome");
+  assert.deepEqual(enumOf("RunCompletionOutcome"), outcomes, "the record keeps every outcome");
+  // One definition under both names: the records' vocabularies are run.plan's, run.complete's
+  // and the teammate result's, so neither side can change one alone.
+  for (const [record, input] of [
+    ["RunCompletionOutcome", "RunCompleteOutcome"],
+    ["PlanItemStatus", "RunPlanItemStatus"],
+    ["PlanCheckKind", "RunPlanCheckKind"],
+    ["LedgerNext", "TeammateNext"],
+    ["ContextCheckpointContent", "ToolInputContextCheckpoint"],
+  ]) {
+    h5(input);
+    assert.equal(core.$defs[record].$ref, `#/$defs/${input}`, record);
+  }
   const done = fakes.fakeRunCompletion("done");
   const waiting = fakes.fakeRunCompletion("waiting");
   for (const outcome of outcomes)
@@ -896,7 +862,8 @@ test("review R1: run.complete's outcomes, criteria and evidence are RunCompletio
       valid("RunCompletion", { ...(outcome === "waiting" ? waiting : done), outcome }),
       outcome,
     );
-  for (const status of h5Pinned.criterionReportStatuses)
+  const statuses = h5("TeammateCriterionReport").properties.status.enum;
+  for (const status of statuses)
     assert.ok(
       valid(
         "RunCompletion",
@@ -905,15 +872,14 @@ test("review R1: run.complete's outcomes, criteria and evidence are RunCompletio
       status,
     );
   // Every record kind run.plan, run.complete and a verdict cite is evidence the records hold.
-  const kinds = enumFrom("TeammateRecordKind", h5Pinned.teammateRecordKinds);
+  const kinds = enumFrom("TeammateRecordKind");
   for (const kind of kinds) assert.ok(valid("PlanEvidenceRef", { kind, id: "rec_1" }), kind);
 });
 
 test("review R1: the plan, its completion, a verdict and a suggestion hold as much as their tools accept", () => {
-  // H5's array bounds (read from its definitions once merged): the record is at least as large.
-  const h5Bound = (name, path, pinned) => {
+  // H5's array bounds, read from its definitions: the record is at least as large.
+  const h5Bound = (name, path) => {
     let node = h5(name);
-    if (!node) return pinned;
     for (const key of path) node = node?.[key];
     return node;
   };
@@ -921,79 +887,77 @@ test("review R1: the plan, its completion, a verdict and a suggestion hold as mu
   const pairs = [
     [
       "plan criteria",
-      h5Bound("RunPlanSetInput", ["properties", "criteria", "maxItems"], 64),
+      h5Bound("RunPlanSetInput", ["properties", "criteria", "maxItems"]),
       d.RunPlan.properties.criteria.maxItems,
     ],
     [
       "plan phases",
-      h5Bound("RunPlanSetInput", ["properties", "phases", "maxItems"], 64),
+      h5Bound("RunPlanSetInput", ["properties", "phases", "maxItems"]),
       d.RunPlan.properties.phases.maxItems,
     ],
     [
       "items per phase",
-      h5Bound("RunPlanPhaseInput", ["properties", "items", "maxItems"], 256),
+      h5Bound("RunPlanPhaseInput", ["properties", "items", "maxItems"]),
       d.RunPlan.properties.phases.items.properties.items.maxItems,
     ],
     [
       "an item's criteria",
-      h5Bound("RunPlanItemInput", ["properties", "criteria", "maxItems"], 64),
+      h5Bound("RunPlanItemInput", ["properties", "criteria", "maxItems"]),
       d.PlanItem.properties.criteria.maxItems,
     ],
     [
       "an item's dependencies",
-      h5Bound("RunPlanItemInput", ["properties", "dependsOn", "maxItems"], 64),
+      h5Bound("RunPlanItemInput", ["properties", "dependsOn", "maxItems"]),
       d.PlanItem.properties.dependsOn.maxItems,
     ],
     [
       "an item's evidence",
-      h5Bound("TeammateRecordRefs", ["maxItems"], 256),
+      h5Bound("TeammateRecordRefs", ["maxItems"]),
       d.PlanItem.properties.evidence.maxItems,
     ],
     [
       "follow-through items",
-      h5Bound("RunPlanSetInput", ["properties", "followThrough", "maxItems"], 64),
+      h5Bound("RunPlanSetInput", ["properties", "followThrough", "maxItems"]),
       d.RunCompletion.properties.followThrough.maxItems,
     ],
     [
       "criteria reported",
-      h5Bound("ToolInputRunComplete", ["properties", "criteria", "maxItems"], 64),
+      h5Bound("ToolInputRunComplete", ["properties", "criteria", "maxItems"]),
       d.RunCompletion.properties.criteria.maxItems,
     ],
     [
       "a criterion's evidence",
-      h5Bound("TeammateRecordRefs", ["maxItems"], 256),
+      h5Bound("TeammateRecordRefs", ["maxItems"]),
       d.RunCompletion.properties.criteria.items.properties.evidence.maxItems,
     ],
     [
       "verdicts",
-      h5Bound("TeammateResultInput", ["properties", "verdicts", "maxItems"], 64),
+      h5Bound("TeammateResultInput", ["properties", "verdicts", "maxItems"]),
       d.ReviewVerdict.properties.criteria.maxItems,
     ],
     [
       "a verdict's evidence",
-      h5Bound("TeammateRecordRefs", ["maxItems"], 256),
+      h5Bound("TeammateRecordRefs", ["maxItems"]),
       d.ReviewVerdict.properties.criteria.items.properties.evidence.maxItems,
     ],
     [
       "a suggestion's title",
-      h5Bound("ToolInputMemorySuggest", ["properties", "title", "maxLength"], 120),
+      h5Bound("ToolInputMemorySuggest", ["properties", "title", "maxLength"]),
       d.PersonMemorySuggestion.properties.title.maxLength,
     ],
     [
       "a suggestion's text",
-      h5Bound("ToolInputMemorySuggest", ["properties", "text", "maxLength"], 1000),
+      h5Bound("ToolInputMemorySuggest", ["properties", "text", "maxLength"]),
       d.PersonMemoryText.maxLength,
     ],
   ];
   for (const [label, input, record] of pairs)
     assert.ok(Number.isInteger(input) && record >= input, `${label}: ${record} >= ${input}`);
   // memory.suggest's kind and title are kept, so the person saves the exact suggestion.
-  assert.deepEqual(
-    enumOf("PersonMemoryKind"),
-    enumFrom("PersonMemoryKind", h5Pinned.personMemoryKinds),
-  );
+  assert.equal(h5("ToolInputMemorySuggest").properties.kind.$ref, "#/$defs/PersonMemoryKind");
+  assert.equal(core.$defs.PersonMemorySuggestion.properties.kind.$ref, "#/$defs/PersonMemoryKind");
   const suggestion = fakes.fakePersonMemorySuggestion();
-  for (const kind of h5Pinned.personMemoryKinds)
+  for (const kind of enumFrom("PersonMemoryKind"))
     assert.ok(valid("PersonMemorySuggestion", { ...suggestion, kind }), kind);
   refuses("PersonMemorySuggestion", [
     ["no kind", edit(suggestion, (s) => delete s.kind)],
@@ -1028,17 +992,39 @@ test("review R1: the plan, its completion, a verdict and a suggestion hold as mu
     ["an understood line over 280 characters", { ...plan, understood: "x".repeat(281) }],
     ["a step over 80 characters", edit(plan, (p) => (p.steps[0].title = "x".repeat(81)))],
   ]);
-  // From the merge on, H5's run.plan input carries those two bounds and each step's owner, so a
-  // longer input is that call's invalid_input, never a record the store refuses.
+  // H5's run.plan input carries those two bounds and each step's owner (the merge step), so a
+  // longer input is that call's invalid_input, never a record the store refuses: every input
+  // run.plan accepts is a storable plan's understood line and steps.
   const setInput = h5("RunPlanSetInput");
-  if (setInput) {
-    const understood = setInput.properties.understood.anyOf.find((n) => n.type === "string");
-    assert.ok(understood.maxLength <= 280, "understood bound at the merge");
-    const step = setInput.properties.steps.anyOf.find((n) => n.type === "array").items;
-    const title = step.properties?.title ?? step;
-    assert.ok(title.maxLength <= 80, "step bound at the merge");
-    assert.ok(step.properties?.by, "each step names who does it (ADR-0040 item 4(c))");
-  }
+  const understood = anyOfType(setInput.properties.understood, "string");
+  const stored = anyOfType(d.RunPlan.properties.understood, "string");
+  assert.equal(understood.maxLength, 280, "understood bound");
+  assert.equal(understood.maxLength, stored.maxLength, "the record's understood bound");
+  const steps = anyOfType(setInput.properties.steps, "array");
+  assert.equal(steps.maxItems, d.RunPlan.properties.steps.maxItems, "six steps");
+  assert.equal(steps.items.$ref, "#/$defs/RunPlanStepInput");
+  const step = h5("RunPlanStepInput");
+  assert.deepEqual(step.required, ["title", "by"], "each step names who does it (4(c))");
+  assert.equal(step.properties.title.maxLength, 80, "step bound");
+  assert.equal(step.properties.title.maxLength, d.PlanStepLine.properties.title.maxLength);
+  for (const value of fakes.fakeRunPlan().steps)
+    assert.ok(valid("RunPlanStepInput", value), "a stored step is a run.plan step");
+  for (const value of platform.fakeRunPlanInput().plan.steps)
+    assert.ok(valid("PlanStepLine", value), "a run.plan step is a stored step");
+  refuses("RunPlanStepInput", [
+    ["a step over 80 characters", { title: "x".repeat(81), by: "morrow" }],
+    ["a step with no owner", { title: "Check" }],
+    ["a plain title", "Check every title"],
+  ]);
+  // The model's strict shape gains only the owner: no bound it cannot take.
+  const model = h5("ToolModelInputRunPlan").properties.plan.anyOf[0].properties;
+  assert.deepEqual(model.steps.anyOf[0].items, {
+    type: "object",
+    additionalProperties: false,
+    properties: { title: { type: "string" }, by: { type: "string" } },
+    required: ["title", "by"],
+  });
+  assert.deepEqual(model.understood, { anyOf: [{ type: "string" }, { type: "null" }] });
   // A verdict keeps its reviewer's note per criterion (TeammateVerdictInput.note).
   const verdict = fakes.fakeReviewVerdict("blocks");
   assert.ok(valid("ReviewVerdict", { ...verdict, summary: long }));
@@ -1052,17 +1038,18 @@ test("review R1: the plan, its completion, a verdict and a suggestion hold as mu
   );
 });
 
-test("review R1: run kinds are ADR-0041 item 4's once H5 retires the specialist kind", () => {
+test("review R1: run kinds are ADR-0041 item 4's, H5 having retired the specialist kind", () => {
   const six = ["coordinator", "routed", "mandate", "call", "review", "upkeep"];
   const kinds = enumOf("AgentRunKind");
   for (const kind of six) assert.ok(kinds.includes(kind), kind);
-  // H5 (pull request 79) retires specialist with its specs (SpecialistBrief goes with it); from
-  // that merge on, the kinds are exactly ADR-0041 item 4's, a teammate call's run is a call run
-  // (not a routed run with a flag), and it is offered the call context's tools.
-  if (!core.$defs.SpecialistBrief) {
-    assert.deepEqual([...kinds].sort(), [...six].sort());
-    assert.equal(runContext("call", false), "call");
-  } else assert.throws(() => runContext("call", false));
+  // H5 (pull request 79) retired specialist with its specs; the kinds are exactly ADR-0041 item
+  // 4's, a teammate call's run is a call run (not a routed run with a flag), and it is offered
+  // the call context's tools.
+  assert.equal(core.$defs.SpecialistBrief, undefined, "H5 retired the specialist kind");
+  assert.deepEqual(kinds, six);
+  assert.equal(runContext("call", false), "call");
+  assert.throws(() => runContext("routed", false, true), "no called flag");
+  for (const kind of ["review", "upkeep"]) assert.throws(() => runContext(kind, false), kind);
 });
 
 test("the merge guard: core v1.1 names each definition once", () => {
@@ -1475,65 +1462,60 @@ test("the fork's derived fakes carry at least the taint of what they read and ci
   }
 });
 
-// The H5 merge step (docs/briefs/h6-harness-contracts.md): H5 (pull request 79) brings RunTaint.
-// The lead merges it first; this branch then merges main again and regenerates, and from then
-// on this test runs as written instead of skipping. A run that reads a derived row joins the
+// The H5 merge step (docs/briefs/h6-harness-contracts.md): H5 (pull request 79) brought
+// RunTaint, and this test runs from that merge on. A run that reads a derived row joins the
 // row's DerivedTaint into its RunTaint: an untainted row adds nothing; a tainted row adds every
 // kind it carries and its own kind (the kind it is read back as), itself as one inline source,
 // and its counted sources as omitted, so the reader never holds fewer kinds or sources.
-test(
-  "taint: a RunTaint joined from every derived fake keeps every kind",
-  { skip: core.$defs.RunTaint ? false : "RunTaint arrives with pull request 79 (H5)" },
-  () => {
-    const runTaint = core.$defs.RunTaint;
-    assert.equal(runTaint.properties.kinds.items.$ref, "#/$defs/ModelUntrustedSource");
-    assert.ok(runTaint.properties.kinds.maxItems >= core.$defs.TaintKinds.maxItems);
-    assert.ok(
-      runTaint.properties.omittedSources.maximum >=
-        core.$defs.DerivedTaint.properties.sourceCount.maximum,
-    );
-    const readDerivedRow = (rowKind, rowId, derived) =>
-      derived.kinds.length === 0
-        ? { contextTaint: "none", kinds: [], sources: [], omittedSources: 0 }
-        : {
-            contextTaint: "untrusted_external",
-            kinds: harness.taintKindOrder.filter(
-              (kind) => kind === rowKind || derived.kinds.includes(kind),
-            ),
-            sources: [{ source: rowKind, sourceId: rowId }],
-            omittedSources: derived.sourceCount,
-          };
-    const kinds = enumOf("ModelUntrustedSource");
-    const rows = [
-      ["run turn", platform.fakeRunTurn()],
-      ["fallback checkpoint", fakes.fakeContextCheckpoint("fallback")],
-      ["provider checkpoint", fakes.fakeContextCheckpoint("provider_compaction")],
-      ["ledger", fakes.fakeContextLedger()],
-      ["plan", fakes.fakeRunPlan(2)],
-      ["review", fakes.fakeReviewVerdict("blocks")],
-      ["conversation summary", fakes.fakeConversationSummary()],
-      ["notebook entry", fakes.fakeNotebookEntryV2()],
-      ...fakes.fakeMemorySearchHits().map((hit) => [`${hit.layer} hit`, hit]),
-      [
-        "every kind at the largest count",
-        {
-          taint: harness.joinTaint(
-            ...kinds.map((kind) => ({ kinds: [kind], sourceCount: 2_147_483_647 })),
+test("taint: a RunTaint joined from every derived fake keeps every kind", () => {
+  const runTaint = core.$defs.RunTaint;
+  assert.equal(runTaint.properties.kinds.items.$ref, "#/$defs/ModelUntrustedSource");
+  assert.ok(runTaint.properties.kinds.maxItems >= core.$defs.TaintKinds.maxItems);
+  assert.ok(
+    runTaint.properties.omittedSources.maximum >=
+      core.$defs.DerivedTaint.properties.sourceCount.maximum,
+  );
+  const readDerivedRow = (rowKind, rowId, derived) =>
+    derived.kinds.length === 0
+      ? { contextTaint: "none", kinds: [], sources: [], omittedSources: 0 }
+      : {
+          contextTaint: "untrusted_external",
+          kinds: harness.taintKindOrder.filter(
+            (kind) => kind === rowKind || derived.kinds.includes(kind),
           ),
-        },
-      ],
-    ];
-    for (const [name, row] of rows)
-      for (const rowKind of kinds) {
-        const joined = readDerivedRow(rowKind, "row_fake_1", row.taint);
-        assert.ok(valid("RunTaint", joined), `${name} read as ${rowKind}`);
-        for (const kind of row.taint.kinds)
-          assert.ok(joined.kinds.includes(kind), `${name}: ${kind}`);
-        assert.ok(joined.omittedSources + joined.sources.length >= row.taint.sourceCount, name);
-        assert.equal(joined.contextTaint === "none", row.taint.kinds.length === 0, name);
-      }
-  },
-);
+          sources: [{ source: rowKind, sourceId: rowId }],
+          omittedSources: derived.sourceCount,
+        };
+  const kinds = enumOf("ModelUntrustedSource");
+  const rows = [
+    ["run turn", platform.fakeRunTurn()],
+    ["fallback checkpoint", fakes.fakeContextCheckpoint("fallback")],
+    ["provider checkpoint", fakes.fakeContextCheckpoint("provider_compaction")],
+    ["ledger", fakes.fakeContextLedger()],
+    ["plan", fakes.fakeRunPlan(2)],
+    ["review", fakes.fakeReviewVerdict("blocks")],
+    ["conversation summary", fakes.fakeConversationSummary()],
+    ["notebook entry", fakes.fakeNotebookEntryV2()],
+    ...fakes.fakeMemorySearchHits().map((hit) => [`${hit.layer} hit`, hit]),
+    [
+      "every kind at the largest count",
+      {
+        taint: harness.joinTaint(
+          ...kinds.map((kind) => ({ kinds: [kind], sourceCount: 2_147_483_647 })),
+        ),
+      },
+    ],
+  ];
+  for (const [name, row] of rows)
+    for (const rowKind of kinds) {
+      const joined = readDerivedRow(rowKind, "row_fake_1", row.taint);
+      assert.ok(valid("RunTaint", joined), `${name} read as ${rowKind}`);
+      for (const kind of row.taint.kinds)
+        assert.ok(joined.kinds.includes(kind), `${name}: ${kind}`);
+      assert.ok(joined.omittedSources + joined.sources.length >= row.taint.sourceCount, name);
+      assert.equal(joined.contextTaint === "none", row.taint.kinds.length === 0, name);
+    }
+});
 
 // --- Message blocks and ModelResult@2's compaction (ADR-0041 items 8, 11, 13 and 15) -----
 test("message blocks: posts and state stay on the user side, notices are closed codes, and a compaction is its own outcome", () => {

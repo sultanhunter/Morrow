@@ -65,9 +65,9 @@ const untainted = (): Current_DerivedTaint => ({ kinds: [], sourceCount: 0 });
 /** Listings' item i1: the titles it drafted from the 14 summer dresses it read. */
 const itemTaint = (): Current_DerivedTaint => ({ kinds: ["product"], sourceCount: 14 });
 /**
- * The fork's taint once it has read the products (c3), Listings' result (its call, c4) and its item (r1),
- * joined without loss (ADR-0027 item 5, ADR-0041 item 34): every row derived from the fork (its
- * checkpoint, ledger and plan, and the review of its proposals) carries at least this.
+ * The fork's taint once it has read the products (c3), Listings' result (its call, c4) and its
+ * item (r1), joined without loss (ADR-0027 item 5, ADR-0041 item 34): every row derived from the
+ * fork (its checkpoint, ledger and plan, and the review of its proposals) carries at least this.
  */
 const forkTaint = (): Current_DerivedTaint =>
   joinTaint(
