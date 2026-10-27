@@ -16,6 +16,7 @@
     "./harness-fakes": "./src/harness-fakes.ts",
     "./loop-catalogue": "./src/loop-catalogue.ts",
     "./loop-prompts": "./src/loop-prompts.ts",
+    "./run-safety": "./src/run-safety.ts",
     "./teammate-fakes": "./src/teammate-fakes.ts",
     "./teammates": "./src/teammates.ts",
     "./tool-catalogue": "./src/tool-catalogue.ts",

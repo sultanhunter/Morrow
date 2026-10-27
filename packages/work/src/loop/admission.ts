@@ -1,7 +1,13 @@
-import type { Current_AgentRunManifest, Current_PlanStepRun } from "@morrow/contracts";
+import type {
+  Current_AgentRunManifest,
+  Current_AgentRunSafety,
+  Current_PlanStepRun,
+} from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
-import { defaultLoopProfile, loopEntry, type LoopEntry } from "@morrow/policy/loop-catalogue";
+import { contextPolicyRow } from "@morrow/policy/context-policy";
+import { defaultLoopProfile, loopEntry } from "@morrow/policy/loop-catalogue";
 import { routedSystemTextDigest } from "@morrow/policy/loop-prompts";
+import { runSafety } from "@morrow/policy/run-safety";
 import {
   offeredTools,
   toolCatalogueDigest,
@@ -9,18 +15,18 @@ import {
 } from "@morrow/policy/tool-catalogue";
 import type { StepRunIntent } from "@morrow/policy/projects";
 import { agentLoopOn, agentLoopVar } from "../../../identity/src/broker-protocol.js";
-import { generatedLoopCatalogue } from "../../../policy/src/generated/loop-catalogue.js";
 import { WorkSqlUnavailable, type WorkTx } from "../connection.js";
 import { canonicalJson } from "../digest.js";
 
-// Agent-run admission in code (ADR-0027 items 1, 6, 9 and 12, as ADR-0036 and ADR-0039
-// amend them), the part the api composes before cmd_agent_run_admit, which derives the same
-// caps and hold itself and refuses a manifest that differs (its CHECK proves the canonical
-// text is exactly the run's). No money cap admits or refuses a run (ADR-0039 item 1): no
-// US$ per-run or per-day backstop, look-for-work or unrecovered-cost cap; the credit hold
-// that will admit one is ADR-0039's PR 3, and the switch stays off until it exists. While
-// the agent-loop switch (docs/decisions/agent-loop-staging.json, committed off) is off,
-// nothing here is reached: admission answers switch_off before any statement, and the plan
+// Agent-run admission in code (ADR-0027 items 1, 6 and 12, as ADR-0036, ADR-0039 and ADR-0041
+// amend them; plan row H7a), the part the api composes before cmd_agent_run_admit, which
+// derives the same safety profile and pins itself and refuses a manifest that differs (its
+// trigger proves the canonical text is exactly the run's). A person's admission is the first
+// lease source of ADR-0041 item 7. No money cap and no turn, call or time limit admits or
+// refuses a run: credits are the only budget (ADR-0039; OD-2026-10-26-12), held by H8, and the
+// safety profile holds check-ins and safety ranges that ask a person, never limits that end
+// work. While the agent-loop switch (docs/decisions/agent-loop-staging.json, committed off) is
+// off, nothing here is reached: admission answers switch_off before any statement, and the plan
 // start's agent and specialist steps stay not_started with agent_loop_off.
 
 /** The agent-loop switch as the Workers compose it (the var MORROW_AGENT_LOOP, exactly "on"). */
@@ -32,52 +38,15 @@ export function agentLoopSwitchOf(env: unknown): AgentLoopSwitch {
   return descriptor && "value" in descriptor && descriptor.value === agentLoopOn ? "on" : "off";
 }
 
-/** The caps and the hold of a routed run, exactly as cmd_agent_run_admit derives them. */
-export interface RoutedRunCaps {
-  readonly turnLimit: number;
-  readonly holdUsd: string;
-  readonly worstCaseTurnUsd: string;
-  readonly maxToolCallsPerTurn: number;
-  readonly maxToolCallsPerRun: number;
-  readonly maxQuestions: number;
-  readonly maxInputTokensPerTurn: number;
-  readonly maxOutputTokensPerTurn: number;
-  readonly wallTimeSeconds: number;
-}
-// 10^-12 USD as numeric(20,8) text, rounded up (the SQL entry's worst case is rounded up).
-const usd8Up = (units: bigint) => (units + 9_999n) / 10_000n;
-const usdText = (usd8: bigint) =>
-  `${usd8 / 100_000_000n}.${String(usd8 % 100_000_000n).padStart(8, "0")}`;
 /**
- * A routed run's caps (ADR-0027 items 6 and 12, as ADR-0039 items 1 and 5 amend them): the
- * version's turn limit, never lowered by a money value; the hold the turn limit times the
- * entry's worst-case turn (rounded up to the cent's millionth, as SQL stores it): the most
- * the run's turns can cost, which every counted turn is booked against, never a cap (no
- * admission or turn is refused on it). The other limits are the version's.
+ * The harness, runner and renderer versions this build knows (ADR-0041 item 6: the manifest pins
+ * them, and an unknown version refuses admission). cmd_agent_run_admit writes exactly these.
  */
-export function routedRunCaps(entry: LoopEntry): RoutedRunCaps {
-  const limits = loopLimits(entry.catalogueVersion);
-  const worst8 = usd8Up(entry.worstCaseTurnUsd12);
-  if (worst8 <= 0n) throw Error("LOOP_ENTRY_INVALID");
-  const turnLimit = limits.maxTurnsPerRun;
-  const hold8 = BigInt(turnLimit) * worst8;
-  return Object.freeze({
-    turnLimit,
-    holdUsd: usdText(hold8),
-    worstCaseTurnUsd: usdText(worst8),
-    maxToolCallsPerTurn: limits.maxToolCallsPerTurn,
-    maxToolCallsPerRun: limits.maxToolCallsPerRun,
-    maxQuestions: limits.maxQuestionsPerRun,
-    maxInputTokensPerTurn: limits.maxInputTokensPerTurn,
-    maxOutputTokensPerTurn: entry.maxOutputTokens,
-    wallTimeSeconds: limits.wallTimeMinutes * 60,
-  });
-}
-function loopLimits(version: number) {
-  const v = generatedLoopCatalogue.versions.find((x) => x.version === version);
-  if (!v) throw Error("LOOP_VERSION_UNKNOWN");
-  return v.limits;
-}
+export const harnessVersions = Object.freeze({
+  harnessVersion: 1,
+  runnerVersion: 1,
+  rendererVersion: 1,
+});
 
 /**
  * The tools a routed run is offered (ADR-0027 item 3): the release's declared tools within
@@ -99,6 +68,11 @@ export interface RoutedManifestInput {
   readonly connectionId: string;
   /** The child task T' the run works on. */
   readonly childTaskId: string;
+  /** The routed run's job and its context (server ids, ADR-0041 items 4 and 5). */
+  readonly jobId: string;
+  readonly contextId: string;
+  /** The routed run's delegation envelope on T, which is its job envelope (ADR-0041 item 7). */
+  readonly envelopeId: string;
   readonly installationId: string;
   readonly requester: { readonly principalId: string; readonly membershipId: string };
   readonly release: { readonly id: string; readonly revision: number; readonly digest: string };
@@ -109,24 +83,28 @@ export interface RoutedManifestInput {
     readonly effort: string;
     readonly catalogueVersion: number;
   };
+  /** The context policy version the run pins (the active one; SQL refuses any other). */
+  readonly contextPolicyVersion: number;
   /** The database time admission reads first (ms precision). */
   readonly admittedAt: string;
 }
 /**
  * A routed run's AgentRunManifest@1 and its RFC 8785 text, validated with the generated
- * contract: ids, digests, codes, caps and the hold only (no content). Refused: an entry the
- * catalogue lacks (entry_not_offered), no tool.
+ * contract: ids, digests, codes, the lineage, the safety profile (its catalogue version's
+ * template with the entry's max_tokens) and the pinned versions only (no content, no cap).
+ * Refused: an entry the catalogue lacks (entry_not_offered), a version with no safety template
+ * or context policy row (version_unknown), no tool.
  */
 export function routedManifest(input: RoutedManifestInput):
   | {
       readonly ok: true;
       readonly manifest: Current_AgentRunManifest;
       readonly canonical: string;
-      readonly caps: RoutedRunCaps;
+      readonly safety: Current_AgentRunSafety;
     }
   | {
       readonly ok: false;
-      readonly code: "entry_not_offered" | "no_tools" | "invalid";
+      readonly code: "entry_not_offered" | "version_unknown" | "no_tools" | "invalid";
     } {
   const entry = loopEntry(
     input.profile.catalogueVersion,
@@ -134,7 +112,14 @@ export function routedManifest(input: RoutedManifestInput):
     input.profile.effort,
   );
   if (!entry) return Object.freeze({ ok: false as const, code: "entry_not_offered" as const });
-  const caps = routedRunCaps(entry);
+  const safety = runSafety(input.profile.catalogueVersion, entry.maxOutputTokens);
+  const policy = contextPolicyRow(
+    input.contextPolicyVersion,
+    input.profile.model,
+    input.profile.effort,
+  );
+  if (!safety || !policy)
+    return Object.freeze({ ok: false as const, code: "version_unknown" as const });
   if (input.tools.length === 0)
     return Object.freeze({ ok: false as const, code: "no_tools" as const });
   const manifest = {
@@ -146,7 +131,23 @@ export function routedManifest(input: RoutedManifestInput):
     storeId: input.storeId,
     connectionId: input.connectionId,
     kind: "routed",
+    purpose: null,
     taskId: input.childTaskId,
+    jobId: input.jobId,
+    contextId: input.contextId,
+    conversationId: null,
+    sourceInboxId: null,
+    lineage: {
+      rootRunId: input.runId,
+      parentRunId: null,
+      parentToolUseId: null,
+      callId: null,
+      depth: 0,
+      forkedFromRunId: null,
+      forkedAtSequence: null,
+      continuesRunId: null,
+    },
+    envelopeId: input.envelopeId,
     installationId: input.installationId,
     mandateId: null,
     triggerId: null,
@@ -165,16 +166,13 @@ export function routedManifest(input: RoutedManifestInput):
     toolCatalogueDigest,
     tools: [...input.tools],
     modelProfile: { ...input.profile },
-    caps: {
-      maxTurns: caps.turnLimit,
-      maxToolCallsPerTurn: caps.maxToolCallsPerTurn,
-      maxToolCallsPerRun: caps.maxToolCallsPerRun,
-      maxQuestions: caps.maxQuestions,
-      maxInputTokensPerTurn: caps.maxInputTokensPerTurn,
-      maxOutputTokensPerTurn: caps.maxOutputTokensPerTurn,
-      wallTimeSeconds: caps.wallTimeSeconds,
-      deadline: null,
-      holdUsd: caps.holdUsd,
+    safety,
+    pins: {
+      ...harnessVersions,
+      loopCatalogueVersion: input.profile.catalogueVersion,
+      contextPolicyVersion: policy.version,
+      contextPolicyDigest: policy.digest,
+      rateCardVersion: null,
     },
     specDigest: null,
     dataClasses: null,
@@ -186,7 +184,7 @@ export function routedManifest(input: RoutedManifestInput):
     ok: true as const,
     manifest: manifest as Current_AgentRunManifest,
     canonical: canonicalJson(manifest),
-    caps,
+    safety,
   });
 }
 /** An installed agent's default model profile in a loop version (ADR-0027 item 12). */
@@ -245,6 +243,7 @@ const admitRefusals = [
   "denied",
   "catalogue_inactive",
   "entry_not_offered",
+  "version_unknown",
   "entitlement",
   "no_billing_period",
 ] as const;
@@ -253,19 +252,21 @@ export type RoutedAdmission =
       readonly outcome: "applied";
       readonly runId: string;
       readonly childTaskId: string;
-      readonly turnLimit: number;
-      readonly holdUsd: string;
+      readonly jobId: string;
+      readonly contextId: string;
+      readonly safetyProfileVersion: number;
     }
   | {
       readonly outcome: "switch_off" | "no_tools" | (typeof admitRefusals)[number];
     };
 /**
- * A person's routed run of one installed agent (ADR-0027 items 1, 6 and 12), inside the
- * api's transaction after enter_context: the switch first (switch_off before any statement),
- * then the manifest in code, then cmd_agent_run_admit, which re-checks every rule and derives
- * the caps, the hold, the envelope and the billing facts itself (its CHECK proves the
- * manifest is the run's). Any refusal rolls the transaction back. The route that composes it
- * (and replays its command through begin_run_command) is PR 12's, behind the same switch.
+ * A person's routed run of one installed agent (ADR-0027 items 1, 6 and 12; ADR-0041 items 4
+ * to 7), inside the api's transaction after enter_context: the switch first (switch_off before
+ * any statement), then the manifest in code, then cmd_agent_run_admit, which re-checks every
+ * rule and derives the safety profile, the pins, the envelopes and the billing facts itself
+ * (its trigger proves the manifest is the run's), and writes the job, its context, the run and
+ * its first segment. Any refusal rolls the transaction back. The route that composes it (and
+ * replays its command through begin_run_command) is PR 12's, behind the same switch.
  */
 export async function admitRoutedRun(
   tx: WorkTx,
@@ -292,9 +293,12 @@ export async function admitRoutedRun(
     input.hopId,
     input.coordinatorPrincipalId,
     input.grantId,
+    input.jobId,
+    input.contextId,
     String(input.profile.catalogueVersion),
     input.profile.model,
     input.profile.effort,
+    String(input.contextPolicyVersion),
     JSON.stringify(input.tools),
     String(toolCatalogueVersion),
     toolCatalogueDigest,
@@ -320,16 +324,19 @@ export async function admitRoutedRun(
     result.runId !== input.runId ||
     result.childTaskId !== input.childTaskId ||
     result.status !== "queued" ||
-    result.turnLimit !== built.caps.turnLimit ||
-    result.holdUsd !== built.caps.holdUsd
+    result.jobId !== input.jobId ||
+    result.contextId !== input.contextId ||
+    result.safetyProfileVersion !== built.safety.profileVersion ||
+    result.contextPolicyVersion !== input.contextPolicyVersion
   )
     throw new WorkSqlUnavailable();
   return Object.freeze({
     outcome: "applied" as const,
     runId: input.runId,
     childTaskId: input.childTaskId,
-    turnLimit: built.caps.turnLimit,
-    holdUsd: built.caps.holdUsd,
+    jobId: input.jobId,
+    contextId: input.contextId,
+    safetyProfileVersion: built.safety.profileVersion,
   });
 }
 
@@ -345,11 +352,12 @@ const answerRefusals = [
   "stopped",
 ] as const;
 /**
- * The run's requester answers its open question (ADR-0027 item 1): the switch first, then
- * cmd_agent_run_answer, which checks that the actor is the run's requester, the question is
- * the run's open one within its 72 hours, no stop blocks the run and the store's connection
- * is current, and opens the resume lease (it grants nothing). The Inbox route that composes
- * it is PR 15's, behind the same switch.
+ * The run's requester answers its open question (ADR-0041 items 7 and 17: a person's act,
+ * the first lease source): the switch first, then cmd_agent_run_answer, which checks that the
+ * actor is the run's requester, the question is the run's open one while its wait lasts (7
+ * days), no stop blocks the run and every other admission check passes, opens the run lease
+ * (it grants nothing), resolves the wait and renews the job envelope. The Inbox route that
+ * composes it is PR 15's, behind the same switch.
  */
 export async function answerRunQuestion(
   tx: WorkTx,
@@ -369,7 +377,7 @@ export async function answerRunQuestion(
   if (
     typeof input.answer !== "string" ||
     !/\S/.test(input.answer) ||
-    [...input.answer].length > 2000
+    [...input.answer].length > 4000
   )
     return Object.freeze({ outcome: "invalid" as const });
   tx.markSubmitted();

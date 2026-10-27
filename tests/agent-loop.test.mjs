@@ -1,17 +1,21 @@
-// Build order PR 11 (ADR-0027 items 1-7 and 12): the agent loop in code, with every port a
-// fake (tests/fixtures/agent-loop-world.mjs stands in for migration agent-runs and the
-// broker's turn fence; lab:agent-loop proves the same runner against PostgreSQL 17).
-//   * Admission: the caps and the hold in code equal the SQL formula for every catalogue v2
-//     entry, with no money cap (ADR-0039); AgentRunManifest@1 is ids, digests, codes and caps
-//     only; the plan start admits nothing while the switch is off; the switch is exactly "on".
-//   * The runner: completion; tool calls checked in code at call time (validation, ids in
-//     scope, the authority decision, the handler) and recorded; untrusted results only as
-//     wrapped data that taints the run; a final turn calls no tool; an unoffered tool ends
-//     the run; an uncertain turn is resent at most once; a throttle resends the attempt; a
-//     lost reply is read back from what SQL recorded, never sent again; the question waits
-//     durably and the answer reaches the next turn; a stop interrupts the next step; the caps
-//     (turns, wall time; no money cap) end the run in code; step results carry ids and codes
-//     only.
+// Build order PR 11 (ADR-0027 items 1-7 and 12), as plan row H7a leaves it (ADR-0041): the
+// agent loop in code, with every port a fake (tests/fixtures/agent-loop-world.mjs stands in for
+// the PR 11 step definers and the broker's turn fence, which migration agent-runs no longer
+// carries: H7b's runner and H7c's broker replace them; lab:agent-runs proves the data model,
+// admission and the lease sources against PostgreSQL 17).
+//   * Admission: AgentRunManifest@1 is ids, digests, codes, the lineage, the safety profile
+//     (AgentRunSafety@1: check-ins and safety ranges, never a turn, call, time or money limit)
+//     and the pinned versions; an unknown context policy refuses; the plan start admits nothing
+//     while the switch is off; the switch is exactly "on".
+//   * The PR 11 runner, unreachable while the agent-loop switch is off (its harness_runner
+//     prerequisite waits for H7b): completion; tool calls checked in code at call time
+//     (validation, ids in scope, the authority decision, the handler) and recorded; untrusted
+//     results only as wrapped data that taints the run; a final turn calls no tool; an
+//     unoffered tool ends the run; an uncertain turn is resent at most once; a throttle resends
+//     the attempt; a lost reply is read back from what SQL recorded, never sent again; the
+//     question waits durably and the answer reaches the next turn; a stop interrupts the next
+//     step; its legacy caps (turns, wall time; no money cap) end the run in code; step results
+//     carry ids and codes only. H7b removes the final turn, the caps and the 4-call rule.
 //   * The tool seam: inbox.ask, the handler table, the operation each tool names, ids in
 //     scope, the authority's own refusals; the steps' SQL is source-fixed and its decoders
 //     accept only their closed shapes.
@@ -31,18 +35,22 @@ import {
   routedSystemTextDigest,
 } from "../packages/policy/src/loop-prompts.ts";
 import { createAgentAuthorityService } from "../packages/policy/src/agent-authority.ts";
+import { contextPolicyRow } from "../packages/policy/src/context-policy.ts";
+import { checkRunSafety } from "../packages/policy/src/harness.ts";
+import { runSafety, runSafetyProfile1 } from "../packages/policy/src/run-safety.ts";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
 import {
   toolCatalogueDigest,
   toolCatalogueVersion,
 } from "../packages/policy/src/tool-catalogue.ts";
+import * as admission from "../packages/work/src/loop/admission.ts";
 import {
   admitRoutedRun,
   agentLoopSwitchOf,
+  harnessVersions,
   installedProfile,
   planStepAdmitterOff,
   routedManifest,
-  routedRunCaps,
   routedTools,
 } from "../packages/work/src/loop/admission.ts";
 import {
@@ -84,6 +92,7 @@ import {
   inboxAskHandler,
 } from "../packages/work/src/loop/tools.ts";
 import { canonicalJson } from "../packages/work/src/digest.ts";
+import { parseModelCallV2 } from "../apps/broker/src/agent-turn-gateway.ts";
 import { agentWorld, ids, objectiveText, params, reply } from "./fixtures/agent-loop-world.mjs";
 import {
   at as kernelAt,
@@ -144,78 +153,71 @@ test("the system text is pinned by its SHA-256 and is the only text the broker m
   assert.match(routedSystemText, /approves exactly/);
 });
 
-test("caps and holds: code equals the SQL formula for every v2 entry, with no money cap (ADR-0039)", () => {
+test("the safety profile replaces the caps: no turn, call, question, time or money limit (ADR-0041; plan row H7a)", () => {
   const entries = loopEntries(2);
   assert.equal(entries.length, 9);
-  // Located by slug: the integration renumbers the migration to the next free number.
-  const row = JSON.parse(readFileSync("migrations/manifest.json", "utf8")).migrations.find((m) =>
-    m.file.endsWith(".agent-runs.sql"),
-  );
-  const migration = readFileSync("migrations/" + row.file, "utf8");
-  // The SQL formula, as cmd_agent_run_admit derives it: the version's 16 turns (never lowered
-  // by a money value) and turns * worst held, the worst case rounded up to numeric(20,8).
-  assert.match(migration, /v_turn_limit:=v\.max_turns_per_run;/);
-  assert.match(migration, /v_hold:=v_turn_limit\*e\.worst_case_turn_usd;/);
-  // ADR-0039 item 1: no US$7 per run, no US$25 a day, no look-for-work or unrecovered cap.
-  for (const gone of [
-    "run_cost_cap_usd",
-    "workspace_daily_cost_cap_usd",
-    "workspace_period_unrecovered_cost_cap_usd",
-    "look_for_work_daily_cost_cap",
-    "'daily_backstop'",
-    "'cap_below_turn'",
-    "'unrecovered_cost_cap'",
-  ])
-    assert.ok(!migration.includes(gone), gone);
-  // ADR-0039 item 9: cost_budget stays only for a step booked past its own hold (a counted
-  // call, not uncertain, past the worst-case turn): once at a turn's open, once at the fence.
-  // The run-wide hold left and its overflow stop nothing.
-  assert.equal(migration.split("'stop'::text,'cost_budget'::text").length, 2);
-  assert.equal(migration.split("v_outcome:='cost_budget'").length, 2);
-  assert.doesNotMatch(migration, /hold_usd-r\.booked_usd<|r\.overflow_usd>0/);
-  // Opus 5.5 at medium (every agent but Morrow, ADR-0036) gets its full 16 turns (was 12 under
-  // US$7), at high 16 (was 10): ADR-0039's Consequences.
-  const expected = {
-    "claude_sonnet_5_5/low": [16, "3.36000000"],
-    "claude_sonnet_5_5/medium": [16, "4.48000000"],
-    "claude_sonnet_5_5/high": [16, "5.12000000"],
-    "claude_opus_5_5/low": [16, "6.72000000"],
-    "claude_opus_5_5/medium": [16, "8.96000000"],
-    "claude_opus_5_5/high": [16, "10.24000000"],
-  };
+  // Admission derives no cap any more: the PR 11 caps and hold left with ADR-0041 item 3.
+  assert.equal("routedRunCaps" in admission, false);
   for (const entry of entries) {
-    const caps = routedRunCaps(entry);
-    const worst8 = (entry.worstCaseTurnUsd12 + 9_999n) / 10_000n;
-    const hold8 = 16n * worst8;
-    assert.equal(caps.turnLimit, 16, entry.model + entry.effort);
-    assert.equal(
-      caps.holdUsd,
-      `${hold8 / 100_000_000n}.${String(hold8 % 100_000_000n).padStart(8, "0")}`,
-    );
-    const want = expected[entry.model + "/" + entry.effort];
-    if (want) assert.deepEqual([caps.turnLimit, caps.holdUsd], want, entry.model + entry.effort);
-    // ADR-0027 item 6's limits, the effort's max_tokens and 30 minutes.
+    const safety = runSafety(2, entry.maxOutputTokens);
+    assert.ok(safety, entry.model + entry.effort);
+    assert.ok(validateCurrentDefinition("AgentRunSafety", safety));
+    assert.deepEqual(checkRunSafety(safety), []);
+    // The version's template with the entry's max_tokens (ADR-0041 item 8); nothing else varies.
+    assert.equal(safety.turn.maxOutputTokens, entry.maxOutputTokens);
     assert.deepEqual(
-      [
-        caps.maxToolCallsPerTurn,
-        caps.maxToolCallsPerRun,
-        caps.maxQuestions,
-        caps.maxInputTokensPerTurn,
-        caps.maxOutputTokensPerTurn,
-        caps.wallTimeSeconds,
-      ],
-      [4, 40, 2, 64000, entry.maxOutputTokens, 1800],
+      { ...safety, turn: { callBudgetMs: safety.turn.callBudgetMs } },
+      JSON.parse(JSON.stringify(runSafetyProfile1)),
     );
+    // No field is a limit that ends work: only check-ins, detectors, the envelope, the lease,
+    // waits, parks, back-off and segment rolls (each asks a person or parks).
+    assert.deepEqual(Object.keys(safety).sort(), [
+      "checkIns",
+      "creditsPark",
+      "detectors",
+      "envelope",
+      "lease",
+      "personWait",
+      "profileVersion",
+      "providerBackoff",
+      "schemaVersion",
+      "segments",
+      "turn",
+    ]);
+    for (const gone of [
+      "maxTurns",
+      "maxToolCallsPerTurn",
+      "maxToolCallsPerRun",
+      "maxQuestions",
+      "maxInputTokensPerTurn",
+      "wallTimeSeconds",
+      "deadline",
+      "holdUsd",
+      "costCheckIn",
+    ])
+      assert.ok(!JSON.stringify(safety).includes(`"${gone}"`), gone);
   }
-  // ADR-0027 item 12's worst-case turns: Sonnet low US$0.21, Opus high US$0.64.
-  assert.equal(
-    routedRunCaps(loopEntry(2, "claude_sonnet_5_5", "low")).worstCaseTurnUsd,
-    "0.21000000",
-  );
-  assert.equal(
-    routedRunCaps(loopEntry(2, "claude_opus_5_5", "high")).worstCaseTurnUsd,
-    "0.64000000",
-  );
+  // ADR-0041's seeds as OD-2026-10-26-12 amends them: check-ins at 1,000 turns, 10,000 tool
+  // calls, 24 hours active, 7 days, 32 children (no cost check-in); the envelope 24 hours
+  // active or 7 days; the 30-minute lease renewed below 20; person waits of 7 days.
+  const s = runSafety(2, 12000);
+  assert.deepEqual(s.checkIns, {
+    modelTurns: 1000,
+    toolCalls: 10000,
+    activeMs: 86_400_000,
+    sinceRequesterActMs: 604_800_000,
+    children: 32,
+  });
+  assert.deepEqual(s.envelope, { activeMs: 86_400_000, wallMs: 604_800_000 });
+  assert.deepEqual(s.lease, { ms: 1_800_000, renewBelowMs: 1_200_000 });
+  assert.deepEqual(s.personWait, { ms: 604_800_000, remindersMs: [86_400_000, 259_200_000] });
+  assert.equal(s.turn.callBudgetMs, 28 * 60_000);
+  // Unknown versions and values outside the safety ranges compose nothing.
+  assert.equal(runSafety(1, 12000), null);
+  assert.equal(runSafety(3, 12000), null);
+  assert.equal(runSafety(2, 128_001), null);
+  assert.equal(runSafety(2, 0), null);
+  assert.ok(runSafety(2, 128_000));
   // ADR-0036 item 1: Morrow (the Coordinator) on Opus 5.5 at high, every other agent kind on
   // Opus 5.5 at medium; an installed agent's default until PR 12's picker.
   assert.deepEqual(
@@ -232,21 +234,27 @@ test("caps and holds: code equals the SQL formula for every v2 entry, with no mo
   );
 });
 
-test("AgentRunManifest@1: ids, digests, codes and caps only; refusals substitute nothing", () => {
-  const input = {
-    runId: ids.run,
-    organizationId: ids.organization,
-    workspaceId: ids.workspace,
-    storeId: ids.store,
-    connectionId: ids.connection,
-    childTaskId: ids.child,
-    installationId: ids.installation,
-    requester: { principalId: ids.requester, membershipId: ids.membership },
-    release: { id: "morrow.listings", revision: 1, digest: "a".repeat(64) },
-    tools: ["inbox.ask"],
-    profile: installedProfile(2),
-    admittedAt: "2026-10-24T12:00:00.000Z",
-  };
+const manifestInput = Object.freeze({
+  runId: ids.run,
+  organizationId: ids.organization,
+  workspaceId: ids.workspace,
+  storeId: ids.store,
+  connectionId: ids.connection,
+  childTaskId: ids.child,
+  jobId: "00000000-0000-4000-8000-0000000000b1",
+  contextId: "00000000-0000-4000-8000-0000000000b2",
+  envelopeId: ids.envelope,
+  installationId: ids.installation,
+  requester: { principalId: ids.requester, membershipId: ids.membership },
+  release: { id: "morrow.listings", revision: 1, digest: "a".repeat(64) },
+  tools: ["inbox.ask"],
+  profile: installedProfile(2),
+  contextPolicyVersion: 1,
+  admittedAt: "2026-10-24T12:00:00.000Z",
+});
+
+test("AgentRunManifest@1: ids, digests, codes, lineage, the safety profile and pins; refusals substitute nothing", () => {
+  const input = manifestInput;
   const m = routedManifest(input);
   assert.equal(m.ok, true);
   assert.ok(validateCurrentDefinition("AgentRunManifest", m.manifest));
@@ -256,19 +264,48 @@ test("AgentRunManifest@1: ids, digests, codes and caps only; refusals substitute
   assert.equal(m.manifest.systemTextDigest, routedSystemTextDigest);
   assert.equal(m.manifest.toolCatalogueVersion, toolCatalogueVersion);
   assert.equal(m.manifest.toolCatalogueDigest, toolCatalogueDigest);
-  // The installed default, Opus 5.5 at medium (ADR-0036): 16 turns of US$0.56 at worst.
-  assert.deepEqual(m.manifest.caps, {
-    maxTurns: 16,
-    maxToolCallsPerTurn: 4,
-    maxToolCallsPerRun: 40,
-    maxQuestions: 2,
-    maxInputTokensPerTurn: 64000,
-    maxOutputTokensPerTurn: 12000,
-    wallTimeSeconds: 1800,
-    deadline: null,
-    holdUsd: "8.96000000",
+  // ADR-0041 items 4 to 7: a routed run is the root of its job, at depth 0, in its own job
+  // context, under the delegation envelope that is its job envelope.
+  assert.deepEqual(
+    [m.manifest.kind, m.manifest.purpose, m.manifest.jobId, m.manifest.contextId],
+    ["routed", null, input.jobId, input.contextId],
+  );
+  assert.deepEqual(m.manifest.lineage, {
+    rootRunId: ids.run,
+    parentRunId: null,
+    parentToolUseId: null,
+    callId: null,
+    depth: 0,
+    forkedFromRunId: null,
+    forkedAtSequence: null,
+    continuesRunId: null,
   });
-  // No request text, objective or name anywhere: ids, digests, codes and amounts.
+  assert.equal(m.manifest.envelopeId, ids.envelope);
+  assert.equal(m.manifest.sourceInboxId, null);
+  // The installed default, Opus 5.5 at medium: the safety profile with its 12,000 max_tokens
+  // (catalogue version 2 as proposed; H3 rewrites it), and no caps.
+  assert.equal("caps" in m.manifest, false);
+  assert.deepEqual(m.safety, runSafety(2, 12000));
+  assert.deepEqual(m.manifest.safety, m.safety);
+  const policy = contextPolicyRow(1, "claude_opus_5_5", "medium");
+  assert.deepEqual(m.manifest.pins, {
+    harnessVersion: 1,
+    runnerVersion: 1,
+    rendererVersion: 1,
+    loopCatalogueVersion: 2,
+    contextPolicyVersion: 1,
+    contextPolicyDigest: policy.digest,
+    rateCardVersion: null,
+  });
+  assert.deepEqual(
+    { ...harnessVersions },
+    {
+      harnessVersion: 1,
+      runnerVersion: 1,
+      rendererVersion: 1,
+    },
+  );
+  // No request text, objective or name anywhere: ids, digests, codes and values.
   assert.ok(!m.canonical.includes("Tidy"));
   assert.equal(
     routedManifest({ ...input, profile: { ...input.profile, effort: "xhigh" } }).code,
@@ -278,8 +315,18 @@ test("AgentRunManifest@1: ids, digests, codes and caps only; refusals substitute
     routedManifest({ ...input, profile: { ...input.profile, catalogueVersion: 1 } }).code,
     "entry_not_offered",
   );
+  // An unknown context policy, or one with no row for the entry's model and effort.
+  assert.equal(routedManifest({ ...input, contextPolicyVersion: 2 }).code, "version_unknown");
+  assert.equal(
+    routedManifest({
+      ...input,
+      profile: { model: "claude_sonnet_5_5", effort: "low", catalogueVersion: 2 },
+    }).code,
+    "version_unknown",
+  );
   assert.equal(routedManifest({ ...input, tools: [] }).code, "no_tools");
   assert.equal(routedManifest({ ...input, runId: "not a run" }).code, "invalid");
+  assert.equal(routedManifest({ ...input, jobId: "not a job" }).code, "invalid");
   // The offered tools: the release's declared ones within the routed context that this build
   // can dispatch, in catalogue order; a Coordinator-only tool is never offered.
   assert.deepEqual(
@@ -295,25 +342,13 @@ test("AgentRunManifest@1: ids, digests, codes and caps only; refusals substitute
   ]);
 });
 
-test("admission: no money refusal is a known outcome (ADR-0039); the switch before any statement", async () => {
+test("admission: a person's act, the switch before any statement; no money or limit refusal is a known outcome", async () => {
   const input = {
-    runId: ids.run,
-    organizationId: ids.organization,
-    workspaceId: ids.workspace,
-    storeId: ids.store,
-    connectionId: ids.connection,
-    childTaskId: ids.child,
-    installationId: ids.installation,
-    requester: { principalId: ids.requester, membershipId: ids.membership },
-    release: { id: "morrow.listings", revision: 1, digest: "a".repeat(64) },
-    tools: ["inbox.ask"],
-    profile: installedProfile(2),
-    admittedAt: "2026-10-24T12:00:00.000Z",
+    ...manifestInput,
     commandId: "00000000-0000-4000-8000-0000000000d1",
     requestDigest: "b".repeat(64),
     correlationId: "corr_1",
     parentTaskId: ids.task,
-    envelopeId: ids.envelope,
     hopId: "00000000-0000-4000-8000-0000000000e2",
     coordinatorPrincipalId: "agent_00000000-0000-4000-8000-0000000000c0",
     grantId: "00000000-0000-4000-8000-0000000000a1",
@@ -337,41 +372,84 @@ test("admission: no money refusal is a known outcome (ADR-0039); the switch befo
   const off = tx([]);
   assert.deepEqual(await admitRoutedRun(off, "off", input), { outcome: "switch_off" });
   assert.equal(off.sent.length, 0);
-  // Applied: the caps and hold SQL derived are the code's (16 turns of Opus 5.5 at medium).
-  const applied = tx([
-    {
-      outcome: "applied",
-      result: JSON.stringify({
-        runId: ids.run,
-        childTaskId: ids.child,
-        status: "queued",
-        turnLimit: 16,
-        holdUsd: "8.96000000",
-      }),
-    },
-  ]);
+  // Applied: SQL's job, context, safety profile version and context policy are the code's.
+  const result = {
+    runId: ids.run,
+    status: "queued",
+    childTaskId: ids.child,
+    jobId: input.jobId,
+    contextId: input.contextId,
+    catalogueVersion: 2,
+    model: "claude_opus_5_5",
+    effort: "medium",
+    safetyProfileVersion: 1,
+    contextPolicyVersion: 1,
+  };
+  const applied = tx([{ outcome: "applied", result: JSON.stringify(result) }]);
   assert.deepEqual(await admitRoutedRun(applied, "on", input), {
     outcome: "applied",
     runId: ids.run,
     childTaskId: ids.child,
-    turnLimit: 16,
-    holdUsd: "8.96000000",
+    jobId: input.jobId,
+    contextId: input.contextId,
+    safetyProfileVersion: 1,
   });
   assert.deepEqual(
     applied.sent.map(([name]) => name),
     ["cmdAgentRunAdmit"],
   );
-  // A refusal SQL returns rolls back; a money refusal is no longer one (ADR-0039 item 9):
-  // SQL never returns it, and the code would not take it as an answer.
-  const refused = tx([{ outcome: "entitlement", result: null }]);
-  assert.deepEqual(await admitRoutedRun(refused, "on", input), { outcome: "entitlement" });
-  assert.equal(refused.rolledBack, true);
-  for (const outcome of ["daily_backstop", "cap_below_turn", "unrecovered_cost_cap"])
+  // Ids, codes, digests and the canonical manifest only, in the definer's order.
+  const values = applied.sent[0][1];
+  assert.equal(values.length, 24);
+  assert.deepEqual(values.slice(12, 18), [
+    input.jobId,
+    input.contextId,
+    "2",
+    "claude_opus_5_5",
+    "medium",
+    "1",
+  ]);
+  assert.equal(values[22], routedManifest(input).canonical);
+  for (const changed of [
+    { jobId: "00000000-0000-4000-8000-0000000000b9" },
+    { contextId: "00000000-0000-4000-8000-0000000000b9" },
+    { safetyProfileVersion: 2 },
+    { contextPolicyVersion: 2 },
+  ])
+    await assert.rejects(
+      admitRoutedRun(
+        tx([{ outcome: "applied", result: JSON.stringify({ ...result, ...changed }) }]),
+        "on",
+        input,
+      ),
+      /WORK_SQL_UNAVAILABLE/,
+      JSON.stringify(changed),
+    );
+  // A refusal SQL returns rolls back; a money or limit refusal is no longer one (ADR-0039,
+  // ADR-0041 item 3): SQL never returns it, and the code would not take it as an answer.
+  for (const outcome of ["entitlement", "version_unknown", "catalogue_inactive"]) {
+    const refused = tx([{ outcome, result: null }]);
+    assert.deepEqual(await admitRoutedRun(refused, "on", input), { outcome });
+    assert.equal(refused.rolledBack, true);
+  }
+  for (const outcome of [
+    "daily_backstop",
+    "cap_below_turn",
+    "unrecovered_cost_cap",
+    "turn_limit",
+    "wall_time",
+  ])
     await assert.rejects(
       admitRoutedRun(tx([{ outcome, result: null }]), "on", input),
       /WORK_SQL_UNAVAILABLE/,
       outcome,
     );
+  // A version the build cannot compose refuses before any statement.
+  const unknown = tx([]);
+  assert.deepEqual(await admitRoutedRun(unknown, "on", { ...input, contextPolicyVersion: 9 }), {
+    outcome: "version_unknown",
+  });
+  assert.equal(unknown.sent.length, 0);
 });
 
 test('the plan start admits nothing while the switch is off; the switch is exactly "on"', async () => {
@@ -487,7 +565,18 @@ test("the conversation is append-only; untrusted results are wrapped data naming
     ["tool_result", "tool_result", "text"],
   );
   assert.equal(next.content[2].text, answerLabel + "Plain, please");
-  assert.ok(validateCurrentDefinition("UserModelMessage", next));
+  // H6's UserModelMessage labels every tool result (c17) and names its item: H7b's runner
+  // renders those from SQL, so the PR 11 runner's unlabelled block is not one (plan row H7a
+  // lists it for H7b); the PR 11 broker's hand check of its turn call takes it (below).
+  assert.equal(validateCurrentDefinition("UserModelMessage", next), false);
+  assert.ok(
+    validateCurrentDefinition("UserModelMessage", {
+      ...next,
+      content: next.content.map((b, i) =>
+        b.type === "tool_result" ? { ...b, label: "c" + (i + 1), itemId: null } : b,
+      ),
+    }),
+  );
   // An answer to another call, or none, adds nothing; results out of order are refused.
   assert.equal(nextTurnInput(row1, [{ toolUseId: "tu_9", answer: "x" }]).content.length, 2);
   assert.throws(
@@ -509,7 +598,10 @@ test("the conversation is append-only; untrusted results are wrapped data naming
   const messages = turnMessages([row1, row2], 2, 1);
   assert.equal(messages.length, 3);
   const call = await modelCall({ turn: 2, attempt: 1, sequence: 1, final: false, messages });
-  assert.ok(validateCurrentDefinition("ModelCallV2", call));
+  // The PR 11 turn call, as the PR 11 broker checks it by hand; H6's ids-only ModelCall@2 is
+  // H7c's broker's, so this whole-conversation call is not one (plan row H7a).
+  assert.ok(parseModelCallV2(JSON.stringify(call)));
+  assert.equal(validateCurrentDefinition("ModelCallV2", call), false);
   assert.equal(call.prefixDigest, await conversationDigest(messages.slice(0, 2)));
   // ModelCall@2 names no model, effort, tool list, limit, price or provider.
   assert.deepEqual(Object.keys(call).sort(), [
@@ -665,8 +757,9 @@ test("a run: a read checked in code, its untrusted result wrapped and tainting, 
   assert.equal(world.db.run.tainted, true);
   assert.equal(world.text8(world.db.run.booked8), "0.02000000");
   assert.equal(world.db.run.status, "succeeded");
-  // Every call was the run's own: no model, effort or tool list in it, the prefix chained.
-  for (const { call: c } of world.db.sends) assert.ok(validateCurrentDefinition("ModelCallV2", c));
+  // Every call was the run's own: no model, effort or tool list in it (the PR 11 broker's hand
+  // check of its turn call; H6's ids-only ModelCall@2 is H7c's), the prefix chained.
+  for (const { call: c } of world.db.sends) assert.ok(parseModelCallV2(JSON.stringify(c)));
   assert.equal(second.prefixDigest, await conversationDigest(second.messages.slice(0, 2)));
   assertNoContent(steps, ["Let me look", "nothing changed", "gid://"]);
 });

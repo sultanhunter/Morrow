@@ -1,18 +1,23 @@
-// Build order PR 11: an in-memory stand-in for one agent run's SQL (migration agent-runs) and
-// the broker's turn fence, so tests/agent-loop.test.mjs drives the real runner
-// (packages/work/src/loop/runner.ts) through every branch without PostgreSQL. It follows the
-// definers' rules closely enough for the runner (the turn and attempt order, the tool-call
-// begin, finish and replay, the questions, the wait and the resume lease, the hold and the
-// booking at the worst case when uncertain, never a money cap, and a step's own overflow,
-// a counted turn past the worst-case turn, which ends the run cost_budget: ADR-0039 items 1
-// and 9); lab:agent-loop proves the real definers.
+// Build order PR 11: an in-memory stand-in for one agent run's SQL and the broker's turn fence,
+// so tests/agent-loop.test.mjs drives the PR 11 runner (packages/work/src/loop/runner.ts)
+// through every branch without PostgreSQL. It follows the PR 11 definers' rules closely enough
+// for that runner (the turn and attempt order, the tool-call begin, finish and replay, the
+// questions, the wait and the resume lease, the hold and the booking at the worst case when
+// uncertain, never a money cap, and a step's own overflow, a counted turn past the worst-case
+// turn, which ends the run cost_budget: ADR-0039 items 1 and 9).
+// Plan row H7a: migration agent-runs now carries ADR-0041 item 4's data model and none of the
+// PR 11 step definers this world stands in for (agent_run_state, agent_turn_open and the rest);
+// H7b's runner replaces them and this runner, which stays behind the agent-loop switch (its
+// harness_runner prerequisite) until then. Its legacy caps (16 turns, 4 calls a turn and 40 a
+// run, 2 questions, 30 minutes, the hold) are this world's alone (legacyRunCaps): admission
+// derives no cap any more, and nothing outside these tests reads them.
 import { createHash } from "node:crypto";
-import { validateCurrentDefinition } from "../../packages/contracts/src/validation.ts";
 import { loopEntry } from "../../packages/policy/src/loop-catalogue.ts";
 import { routedSystemTextDigest } from "../../packages/policy/src/loop-prompts.ts";
 import { toolEntry } from "../../packages/policy/src/tool-catalogue.ts";
-import { routedRunCaps } from "../../packages/work/src/loop/admission.ts";
+import { generatedLoopCatalogue } from "../../packages/policy/src/generated/loop-catalogue.ts";
 import { conversationDigest, messageDigest } from "../../packages/work/src/loop/conversation.ts";
+import { parseModelCallV2 } from "../../apps/broker/src/agent-turn-gateway.ts";
 
 export const ids = Object.freeze({
   organization: "org_o",
@@ -38,6 +43,31 @@ const parse8 = (t) => {
 export const objectiveText = "Tidy the summer collection's product titles";
 
 /**
+ * The PR 11 runner's caps of a routed run, as its own (now removed) admission derived them from
+ * loop catalogue version 2's limits: the turn limit, the hold the turn limit times the entry's
+ * worst-case turn (rounded up to numeric(20,8)), the tool-call, question, token and wall-time
+ * limits. Test-only: ADR-0041 replaces every one of them (plan row H7b removes the runner that
+ * reads them), and no admission or SQL derives them.
+ */
+export function legacyRunCaps(entry) {
+  const limits = generatedLoopCatalogue.versions.find(
+    (v) => v.version === entry.catalogueVersion,
+  ).limits;
+  const worst8 = usd8(entry.worstCaseTurnUsd12);
+  return Object.freeze({
+    turnLimit: limits.maxTurnsPerRun,
+    holdUsd: text8(BigInt(limits.maxTurnsPerRun) * worst8),
+    worstCaseTurnUsd: text8(worst8),
+    maxToolCallsPerTurn: limits.maxToolCallsPerTurn,
+    maxToolCallsPerRun: limits.maxToolCallsPerRun,
+    maxQuestions: limits.maxQuestionsPerRun,
+    maxInputTokensPerTurn: limits.maxInputTokensPerTurn,
+    maxOutputTokensPerTurn: entry.maxOutputTokens,
+    wallTimeSeconds: limits.wallTimeMinutes * 60,
+  });
+}
+
+/**
  * One run's world. `script(call)` answers each send: {outcome, message?, usage?,
  * retryAfterMs?}, or {outcome: "lost"} (the broker's reply is lost after the close
  * committed: the step must read what SQL recorded). With `brokerSays: "uncertain"` the
@@ -60,7 +90,7 @@ export function agentWorld({
   leaseLeftMs = 1_800_000,
 } = {}) {
   const entry = loopEntry(2, model, effort);
-  const caps = routedRunCaps(entry);
+  const caps = legacyRunCaps(entry);
   const now = { ms: Date.UTC(2026, 9, 24, 12) };
   const db = {
     run: {
@@ -425,6 +455,14 @@ export function agentWorld({
         id: "00000000-0000-4000-8000-00000000c0" + String(db.calls.length).padStart(2, "0"),
       },
       retryAfterMs,
+      compacted: null,
+      cleared: null,
+      // ModelResult@2 as H6 edited it: a reply carries its request's tokens per section
+      // (H7c's broker counts them; this stand-in puts the whole input in the conversation).
+      sectionTokens:
+        (outcome === "end_turn" || outcome === "tool_use") && usage
+          ? { tools: 0, system: 0, workspace: 0, opening: 0, conversation: usage.inputTokens }
+          : null,
     });
   const ports = {
     async lease(ref, body) {
@@ -459,7 +497,9 @@ export function agentWorld({
     async modelTurn(leaseId, generation, callJson, budgetMs) {
       const call = JSON.parse(callJson);
       db.sends.push(Object.freeze({ call, budgetMs }));
-      if (!validateCurrentDefinition("ModelCallV2", call)) throw Error("BROKER_HELD");
+      // The PR 11 broker's own hand check of its whole-conversation turn call (H6's ids-only
+      // ModelCall@2 is H7c's).
+      if (parseModelCallV2(callJson) === null) throw Error("BROKER_HELD");
       if (
         db.stopped ||
         leaseId !== db.lease.leaseId ||
@@ -580,4 +620,7 @@ export const params = Object.freeze({
   organizationId: ids.organization,
   workspaceId: ids.workspace,
   runId: ids.run,
+  // AgentRunParams@1 as H6 edited it: the PR 11 runner's one segment (ADR-0041 item 6).
+  segment: 1,
+  incarnation: 1,
 });
