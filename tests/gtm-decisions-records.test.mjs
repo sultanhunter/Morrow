@@ -243,6 +243,18 @@ test("the plan puts the WhatsApp rows ahead of Plivo's, with no row renumbered",
   ])
     assert.ok(cs10cWhat.includes(text), text);
   assert.ok(row(plan, "CS10c")[6].includes("a log-redaction test"));
+  // The recheck of head 7ed01ae6 (nit-1, nit-2): the connection stop lists the reported spam
+  // flag as ADR-0042's Amendments do, and a semicolon ends the inbound drop rule.
+  assert.ok(
+    cs10cWhat.includes(
+      "a template paused or disabled, a reported spam flag, complaint or barring notice)",
+    ),
+  );
+  assert.ok(
+    cs10cWhat.includes(
+      "is dropped with no row, log or task; `profile.name`, button text, free text and media are dropped,",
+    ),
+  );
 
   // CS10d: a dedicated number (security-M1), the WhatsApp checklist (security-M2), the stops
   // (security-M3), the notice text (security-L2) and the Meta app's secret (security-L3).
