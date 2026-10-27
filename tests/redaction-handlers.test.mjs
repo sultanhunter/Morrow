@@ -33,6 +33,8 @@ test("every registered table is classified, and every store table has exactly on
       // M3 PR-2: the run's product snapshots and drafts.
       ["morrow_work.product_snapshots", "shop_redact", "delete_rows", "M2 PR-3"],
       ["morrow_work.run_drafts", "shop_redact", "delete_rows", "M2 PR-3"],
+      // SD4: the customers/data_request exports, erased in place.
+      ["morrow_work.customer_data_exports", "shop_redact", "empty_keep_digest", "SD4"],
     ],
   );
   assert.ok(Object.isFrozen(storeContentHandlers) && storeContentHandlers.every(Object.isFrozen));
@@ -48,6 +50,7 @@ test("every registered table is classified, and every store table has exactly on
       "morrow_identity.work_shopify_redact_identity",
       "morrow_identity.work_shopify_redact_identity",
       "morrow_work.parameters_redact_for_store",
+      "morrow_work.store_content_redact",
       "morrow_work.store_content_redact",
       "morrow_work.store_content_redact",
     ],
@@ -162,11 +165,55 @@ test("the check fails a new store table without a handler, and a stray or duplic
 });
 
 // SD3 (P09.T05b): the customer-content contract. No table is keyed by an order at this head,
-// so the registry is empty and S8 passes; each rule below fails a deliberately broken copy.
+// and SD4 registers the first keyed class (the data_request exports), so S8 passes; each rule
+// below fails a deliberately broken copy.
 test("SD3: an order-keyed table needs a customer handler that applies the listed-orders matcher", () => {
-  assert.deepEqual(customerContentHandlers, []);
-  assert.ok(Object.isFrozen(customerContentHandlers) && Object.isFrozen(customerKeyMatchers));
-  assert.deepEqual(customerKeyMatchers, { order_id: "listed_orders" });
+  assert.deepEqual(
+    customerContentHandlers.map((h) => [
+      h.table,
+      h.action,
+      [...h.matchers],
+      h.executor,
+      h.executable,
+    ]),
+    [
+      [
+        "morrow_work.customer_data_exports",
+        "empty_keep_digest",
+        ["listed_orders", "customer_id", "email", "phone"],
+        "morrow_work.customer_content_redact",
+        "SD4",
+      ],
+    ],
+  );
+  assert.ok(
+    Object.isFrozen(customerContentHandlers) &&
+      customerContentHandlers.every((h) => Object.isFrozen(h) && Object.isFrozen(h.matchers)) &&
+      Object.isFrozen(customerKeyMatchers),
+  );
+  assert.deepEqual(customerKeyMatchers, {
+    order_id: "listed_orders",
+    customer_id_digest: "customer_id",
+    email_digest: "email",
+    phone_digest: "phone",
+  });
+  // The export class without its customer handler, or with a matcher dropped, fails.
+  assert.deepEqual(contentProblems(storeContentHandlers, undefined, []), [
+    "CUSTOMER_KEYED_WITHOUT_HANDLER:morrow_work.customer_data_exports",
+  ]);
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, undefined, [
+      { ...customerContentHandlers[0], matchers: ["listed_orders", "customer_id", "email"] },
+    ]),
+    ["CUSTOMER_KEY_UNMATCHED:morrow_work.customer_data_exports:phone_digest"],
+  );
+  // And without its shop/redact handler.
+  assert.deepEqual(
+    contentProblems(
+      storeContentHandlers.filter((h) => h.table !== "morrow_work.customer_data_exports"),
+    ),
+    ["STORE_CONTENT_WITHOUT_HANDLER:morrow_work.customer_data_exports"],
+  );
   assert.deepEqual(contentClasses, ["none", "workspace", "store", "customer"]);
   const tables = (extra) => ({
     workTables: { ...workTables, ...extra },
@@ -187,10 +234,17 @@ test("SD3: an order-keyed table needs a customer handler that applies the listed
   });
   const orderRows = { order_rows: { content: "none", customerKeys: ["order_id"] } };
   // An order-keyed table without its handler fails; with it, passes.
-  assert.deepEqual(contentProblems(storeContentHandlers, tables(orderRows), []), [
-    "CUSTOMER_KEYED_WITHOUT_HANDLER:morrow_work.order_rows",
-  ]);
-  assert.deepEqual(contentProblems(storeContentHandlers, tables(orderRows), [handler()]), []);
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, tables(orderRows), customerContentHandlers),
+    ["CUSTOMER_KEYED_WITHOUT_HANDLER:morrow_work.order_rows"],
+  );
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, tables(orderRows), [
+      ...customerContentHandlers,
+      handler(),
+    ]),
+    [],
+  );
   // Malformed keys, a handler without the matcher its key needs, a handler for a table with
   // no key, an unregistered table, a duplicate and a malformed handler each fail.
   for (const [keys, code] of [
@@ -203,19 +257,27 @@ test("SD3: an order-keyed table needs a customer handler that applies the listed
       contentProblems(
         storeContentHandlers,
         tables({ order_rows: { content: "none", customerKeys: keys } }),
-        [],
+        customerContentHandlers,
       ),
       [code + ":morrow_work.order_rows"],
     );
   assert.deepEqual(
-    contentProblems(storeContentHandlers, tables({ order_rows: { content: "none" } }), [handler()]),
+    contentProblems(storeContentHandlers, tables({ order_rows: { content: "none" } }), [
+      ...customerContentHandlers,
+      handler(),
+    ]),
     ["CUSTOMER_HANDLER_FOR_UNKEYED_TABLE:morrow_work.order_rows"],
   );
-  assert.deepEqual(contentProblems(storeContentHandlers, tables({}), [handler()]), [
-    "CUSTOMER_HANDLER_UNREGISTERED_TABLE:morrow_work.order_rows",
-  ]);
   assert.deepEqual(
-    contentProblems(storeContentHandlers, tables(orderRows), [handler(), handler()]),
+    contentProblems(storeContentHandlers, tables({}), [...customerContentHandlers, handler()]),
+    ["CUSTOMER_HANDLER_UNREGISTERED_TABLE:morrow_work.order_rows"],
+  );
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, tables(orderRows), [
+      ...customerContentHandlers,
+      handler(),
+      handler(),
+    ]),
     ["CUSTOMER_HANDLER_DUPLICATE:morrow_work.order_rows"],
   );
   for (const change of [
@@ -231,7 +293,10 @@ test("SD3: an order-keyed table needs a customer handler that applies the listed
     { extra: true },
   ])
     assert.deepEqual(
-      contentProblems(storeContentHandlers, tables(orderRows), [handler(change)]),
+      contentProblems(storeContentHandlers, tables(orderRows), [
+        ...customerContentHandlers,
+        handler(change),
+      ]),
       [
         "CUSTOMER_HANDLER_INVALID:morrow_work.order_rows",
         "CUSTOMER_KEYED_WITHOUT_HANDLER:morrow_work.order_rows",
@@ -241,16 +306,24 @@ test("SD3: an order-keyed table needs a customer handler that applies the listed
   // A `content: customer` table needs a key (else nothing could find it), its customer
   // handler, and its shop/redact handler too.
   assert.deepEqual(
-    contentProblems(storeContentHandlers, tables({ notes: { content: "customer" } }), []),
+    contentProblems(
+      storeContentHandlers,
+      tables({ notes: { content: "customer" } }),
+      customerContentHandlers,
+    ),
     [
       "STORE_CONTENT_WITHOUT_HANDLER:morrow_work.notes",
       "CUSTOMER_CONTENT_UNMATCHABLE:morrow_work.notes",
     ],
   );
   const customerRows = { order_rows: { content: "customer", customerKeys: ["order_id"] } };
-  assert.deepEqual(contentProblems(storeContentHandlers, tables(customerRows), [handler()]), [
-    "STORE_CONTENT_WITHOUT_HANDLER:morrow_work.order_rows",
-  ]);
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, tables(customerRows), [
+      ...customerContentHandlers,
+      handler(),
+    ]),
+    ["STORE_CONTENT_WITHOUT_HANDLER:morrow_work.order_rows"],
+  );
   const shopRedact = {
     table: "morrow_work.order_rows",
     dataClass: "order_rows",
@@ -261,7 +334,10 @@ test("SD3: an order-keyed table needs a customer handler that applies the listed
     executable: "M2 PR-3",
   };
   assert.deepEqual(
-    contentProblems([...storeContentHandlers, shopRedact], tables(customerRows), [handler()]),
+    contentProblems([...storeContentHandlers, shopRedact], tables(customerRows), [
+      ...customerContentHandlers,
+      handler(),
+    ]),
     [],
   );
 });
@@ -274,6 +350,27 @@ test("SD3: S8's catalog rule: a column named for an order id needs its table to 
       "CUSTOMER_KEY_UNDECLARED:morrow_work.goals." + column,
     ]);
   for (const column of ["order", "orders", "ordering", "order_id_digest", "reorder_count", "id"])
+    assert.deepEqual(customerColumnProblems([["morrow_work.goals", column]]), [], column);
+  // SD4: the digest columns, each needing its own key.
+  for (const [column, key] of [
+    ["customer_id_digest", "customer_id_digest"],
+    ["customer_id_digests", "customer_id_digest"],
+    ["email_digest", "email_digest"],
+    ["recipient_email_digests", "email_digest"],
+    ["phone_digest", "phone_digest"],
+    ["dialled_phone_digest", "phone_digest"],
+  ])
+    assert.deepEqual(
+      customerColumnProblems([["morrow_work.goals", column]], {
+        workTables: { ...workTables, goals: { ...workTables.goals, customerKeys: ["order_id"] } },
+        billingTables,
+        vaultTables,
+        identityTables,
+      }),
+      ["CUSTOMER_KEY_UNDECLARED:morrow_work.goals." + column],
+      key,
+    );
+  for (const column of ["shop_digest", "document_digest", "digest", "phone", "email"])
     assert.deepEqual(customerColumnProblems([["morrow_work.goals", column]]), [], column);
   // A declared key passes.
   assert.deepEqual(

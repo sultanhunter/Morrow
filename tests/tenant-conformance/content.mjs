@@ -46,6 +46,10 @@ const keys = "action,dataClass,executable,executor,storeKey,table,trigger";
 export const customerKeys = Object.freeze(Object.keys(customerKeyMatchers));
 export const customerKeyColumns = Object.freeze([
   Object.freeze({ key: "order_id", column: /^(?:[a-z0-9_]+_)?order_ids?$/ }),
+  // SD4: the keyed digests of the customer id, email and phone.
+  Object.freeze({ key: "customer_id_digest", column: /^(?:[a-z0-9_]+_)?customer_id_digests?$/ }),
+  Object.freeze({ key: "email_digest", column: /^(?:[a-z0-9_]+_)?email_digests?$/ }),
+  Object.freeze({ key: "phone_digest", column: /^(?:[a-z0-9_]+_)?phone_digests?$/ }),
 ]);
 const customerActions = ["delete_rows", "blank_order_id", "empty_keep_digest", "erase_keep_digest"];
 const customerHandlerKeys = "action,dataClass,executable,executor,key,matchers,table,trigger";
@@ -72,7 +76,7 @@ export function contentProblems(
       typeof handler.storeKey !== "string" ||
       handler.storeKey.length < 3 ||
       !(handler.executor === null || /^[a-z_]+\.[a-z_]+(\(\))?$/.test(handler.executor)) ||
-      handler.executable !== "M2 PR-3"
+      !["M2 PR-3", "SD4"].includes(handler.executable)
     ) {
       problems.push("HANDLER_INVALID:" + table);
       continue;

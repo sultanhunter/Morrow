@@ -241,6 +241,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
         "connection_notices_open()": "morrow_work.connection_notices_open()",
         // v1 PR 5 review F3: the store a reinstall linked in place of an ended one.
         "store_reinstalled(text)": "morrow_work.store_reinstalled('store_probe')",
+        // SD4: the Owner's customers/data_request exports.
+        "customer_data_exports_open()": "morrow_work.customer_data_exports_open()",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(

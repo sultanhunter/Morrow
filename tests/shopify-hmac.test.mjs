@@ -19,6 +19,7 @@ import {
   verifyShopifyQuery,
   verifyShopifyWebhookHmac,
 } from "../apps/broker/src/shopify.ts";
+import { importCustomerDigestKey } from "../apps/broker/src/customer-digest.ts";
 
 // Shopify's documented example (Verify a request from Shopify: the OAuth callback query,
 // app secret "hush").
@@ -181,10 +182,13 @@ test("webhook HMAC is base64 over the raw bytes, compared in constant time", asy
     assert.equal(await verifyShopifyWebhookHmac(secret, body, bad), false);
 });
 
-test("compliance bodies are minimised to ids and a keyed customer digest", async () => {
+test("compliance bodies are minimised to ids and keyed customer digests", async () => {
   const secret = "app-secret";
+  // SD4: a customer request is minimised under the workspace's digest keys.
+  const keys = [await importCustomerDigestKey(1, new Uint8Array(32).fill(7))];
+  const minimise = (sec, topic, b, sh) => minimiseShopifyWebhook(sec, topic, b, sh, keys);
   const shop = "x.myshopify.com";
-  const redact = await minimiseShopifyWebhook(
+  const redact = await minimise(
     secret,
     "customers/redact",
     {
@@ -197,13 +201,16 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
   );
   // SD3: the listed order ids are kept (numeric ids, distinct, ascending), never the
   // customer's email or phone.
-  assert.deepEqual(Object.keys(redact).sort(), ["customerDigest", "ordersToRedact", "shopId"]);
+  assert.deepEqual(Object.keys(redact).sort(), ["customerDigests", "ordersToRedact", "shopId"]);
   assert.equal(redact.shopId, "954889");
-  assert.match(redact.customerDigest, /^[a-f0-9]{64}$/);
+  assert.match(redact.customerDigests[0].id, /^[a-f0-9]{64}$/);
+  assert.match(redact.customerDigests[0].email, /^[a-f0-9]{64}$/);
+  // A phone with no country code has no digest (E.164 only).
+  assert.equal(redact.customerDigests[0].phone, null);
   assert.deepEqual(redact.ordersToRedact, ["220458", "280263", "299938"]);
   assert.ok(Object.isFrozen(redact.ordersToRedact));
   assert.ok(!JSON.stringify(redact).includes("john") && !JSON.stringify(redact).includes("1199"));
-  const request = await minimiseShopifyWebhook(
+  const request = await minimise(
     secret,
     "customers/data_request",
     {
@@ -217,7 +224,7 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
   );
   assert.deepEqual(request, {
     shopId: "954889",
-    customerDigest: redact.customerDigest,
+    customerDigests: redact.customerDigests,
     dataRequestId: "9999",
     ordersRequested: ["299938"],
   });
@@ -225,7 +232,7 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
   // lexical; an empty list is a list.
   assert.deepEqual(
     (
-      await minimiseShopifyWebhook(
+      await minimise(
         secret,
         "customers/redact",
         {
@@ -241,7 +248,7 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
   );
   assert.deepEqual(
     (
-      await minimiseShopifyWebhook(
+      await minimise(
         secret,
         "customers/data_request",
         {
@@ -257,16 +264,11 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
     [],
   );
   assert.deepEqual(
-    await minimiseShopifyWebhook(
-      secret,
-      "shop/redact",
-      { shop_id: 954889, shop_domain: shop },
-      shop,
-    ),
+    await minimise(secret, "shop/redact", { shop_id: 954889, shop_domain: shop }, shop),
     { shopId: "954889" },
   );
   assert.deepEqual(
-    await minimiseShopifyWebhook(
+    await minimise(
       secret,
       "app/uninstalled",
       { id: 1, email: "a@b.c", myshopify_domain: shop },
@@ -274,12 +276,11 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
     ),
     { shopId: "1" },
   );
+  assert.deepEqual(await minimise(secret, "app/uninstalled", { id: 1, email: "a@b.c" }, shop), {
+    shopId: "1",
+  });
   assert.deepEqual(
-    await minimiseShopifyWebhook(secret, "app/uninstalled", { id: 1, email: "a@b.c" }, shop),
-    { shopId: "1" },
-  );
-  assert.deepEqual(
-    await minimiseShopifyWebhook(
+    await minimise(
       secret,
       "app/scopes_update",
       { previous: ["read_products"], current: ["write_products", "read_products"] },
@@ -373,19 +374,23 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
     ["app/scopes_update", { previous: [], current: ["Read"] }],
     ["app/scopes_update", { previous: [], current: [], shop_id: 1 }],
   ])
-    assert.equal(await minimiseShopifyWebhook(secret, topic, body, shop), null, topic);
+    assert.equal(await minimise(secret, topic, body, shop), null, topic);
   // A customer without an id is still a request to answer: its digest is null.
   assert.deepEqual(
-    await minimiseShopifyWebhook(
+    await minimise(
       secret,
       "customers/redact",
       { shop_id: 954889, shop_domain: shop, customer: { email: "x@y.z" }, orders_to_redact: [] },
       shop,
     ),
-    { shopId: "954889", customerDigest: null, ordersToRedact: [] },
+    {
+      shopId: "954889",
+      customerDigests: [{ version: 1, id: null, email: null, phone: null }],
+      ordersToRedact: [],
+    },
   );
   // The largest list is kept whole.
-  const most = await minimiseShopifyWebhook(
+  const most = await minimise(
     secret,
     "customers/redact",
     {

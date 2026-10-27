@@ -65,9 +65,10 @@ export const connectorSql = Object.freeze({
   deletionApply:
     "SELECT outcome,installation_id,credential,reason FROM morrow_work.connector_deletion_apply($1)",
   inboxStuck: "SELECT closed,stuck FROM morrow_work.connector_inbox_stuck()",
-  // SD3 (customer-deletion-work): the inbox's 7-day purge (counts: deleted, and expired rows
-  // kept for an open request or a pending apply).
-  privacyPurge: "SELECT purged,held FROM morrow_work.connector_privacy_purge()",
+  // SD3 and SD4 (customer-deletion-work): the clean-up job's clocks (counts: inbox deliveries
+  // deleted after 7 days, expired ones kept for an open request or a pending apply, and
+  // customers/data_request exports erased after 30 days).
+  privacyPurge: "SELECT purged,held,erased FROM morrow_work.connector_privacy_purge()",
   commit: "COMMIT",
   rollback: "ROLLBACK",
 });
@@ -151,9 +152,10 @@ export type DeletionApplyResult = Readonly<{
 export type InboxStuck = Readonly<{ closed: number; stuck: number }>;
 /**
  * SD3: inbox deliveries deleted on their 7-day clock (at most 500 a call), and expired ones
- * kept because their privacy request is open or their apply is still pending.
+ * kept because their privacy request is open or their apply is still pending. SD4: the
+ * customers/data_request exports erased on their 30-day clock (at most 100 a call).
  */
-export type PrivacyPurge = Readonly<{ purged: number; held: number }>;
+export type PrivacyPurge = Readonly<{ purged: number; held: number; erased: number }>;
 const reconcileOutcomes: readonly string[] = [
   "reconciled",
   "ended",
@@ -646,11 +648,18 @@ export function createConnectorDatabase(
     privacyPurge(budgetMs: number): Promise<PrivacyPurge> {
       return transaction(budgetMs, async (send) => {
         const rows = await send(connectorSql.privacyPurge);
-        const r = columns(rows.length === 1 ? rows[0] : undefined, "held,purged");
+        const r = columns(rows.length === 1 ? rows[0] : undefined, "erased,held,purged");
         const count = (v: unknown): v is number =>
           typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
-        if (!count(r.purged) || !count(r.held) || r.purged > 500) throw unavailable();
-        return Object.freeze({ purged: r.purged, held: r.held });
+        if (
+          !count(r.purged) ||
+          !count(r.held) ||
+          !count(r.erased) ||
+          r.purged > 500 ||
+          r.erased > 100
+        )
+          throw unavailable();
+        return Object.freeze({ purged: r.purged, held: r.held, erased: r.erased });
       });
     },
     privacyOverdue(budgetMs: number): Promise<PrivacyOverdue> {

@@ -57,7 +57,7 @@ export interface StoreContentHandler {
   /** The definer that runs it (never null since M2 PR-3: the conformance check refuses one). */
   readonly executor: string | null;
   /** The PR that made the handler executable, before the table held store content. */
-  readonly executable: "M2 PR-3";
+  readonly executable: "M2 PR-3" | "SD4";
 }
 
 export const storeContentHandlers: readonly StoreContentHandler[] = Object.freeze(
@@ -151,6 +151,19 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       executor: "morrow_work.store_content_redact",
       executable: "M2 PR-3",
     },
+    // SD4 (customer-deletion-work): a store's customers/data_request exports to the Owner
+    // (customer data, 30 days) are erased in place with the rest of its content, by shop/redact
+    // and the 48-hour deletion (0059 revises store_content_redact), keeping the document's
+    // digest, ids, counts and times. customers/redact erases one customer's (below).
+    {
+      table: "morrow_work.customer_data_exports",
+      dataClass: "data_request_exports",
+      trigger: "shop_redact",
+      action: "empty_keep_digest",
+      storeKey: "store_id: the store whose customer requested the export",
+      executor: "morrow_work.store_content_redact",
+      executable: "SD4",
+    },
   ].map((handler) => Object.freeze(handler as StoreContentHandler)),
 );
 
@@ -235,40 +248,55 @@ export const workspaceContentHandlers: readonly WorkspaceContentHandler[] = Obje
 
 // ---------------------------------------------------------------------------------------------
 // The customer-content cleanup contract (P09.T05; plan rows SD3 and SD4 of
-// docs/plan/store-data-foundation-implementation.md; ADR-0031 items 2 to 4 and its 2026-10-26
-// note on item 1; ADR-0042 items 15 and 24; ADR-0043 item 24). `customers/redact` names a
-// customer by keys, never by content: the order ids it lists. Every table that holds a row
-// keyed by one of them registers one handler here, on the matchers its keys need, in the
-// pull request that first writes it (G9), and S8 fails a keyed table without it:
+// docs/plan/store-data-foundation-implementation.md; docs/packets/P09.T05c.md; ADR-0031 items 2
+// to 4 and its 2026-10-26 note on item 1; ADR-0042 items 5, 15 and 24; ADR-0043 item 24).
+// `customers/redact` names a customer by keys, never by content: the order ids it lists, and the
+// broker's keyed digests (apps/broker/src/customer-digest.ts: HMAC-SHA-256 under every kept
+// version of the workspace's digest key in the broker vault) of the customer id, email and
+// phone it carries. Every table that holds a row keyed by one of them registers one handler
+// here, on the matchers its keys need, in the pull request that first writes it (G9), and S8
+// fails a keyed table without it:
 //
-//   key (registry `customerKeys`, column name)   matcher
-//   order_id (`order_id`, `*_order_id`, `order_ids`)  listed_orders: the ids the request lists
+//   key (registry `customerKeys`)  column names S8 reads            matcher
+//   order_id                       order_id, *_order_id, order_ids    listed_orders
+//   customer_id_digest             customer_id_digest(s)               customer_id
+//   email_digest                   email_digest(s)                     email
+//   phone_digest                   phone_digest(s)                     phone
 //
-// The handler runs in morrow_work.customer_content_redact (customer-deletion-work), the
-// registration surface: a revisable owner helper that the registering migration replaces,
-// adding the table to morrow_identity.customer_handler_tables() (the closed list a request's
-// evidence may name) in the same change. It runs only in the connector's customer redaction
-// context for the request's store (morrow.connector_customer), under the store's stop key held
-// exclusively; a writer of a keyed class takes that key shared, so a racing write commits first
-// and is redacted, or writes after. The request completes only when every handler reports zero
-// rows still matching; until then the delivery stays received, its request open, and its inbox
-// row (with the listed ids) outlives its 7-day clock.
+// A class stores a digest computed by the broker's input functions under the workspace's key,
+// so the request's digest of the same customer matches it. The handlers run in
+// morrow_work.customer_content_redact (customer-deletion-work), the registration surface: a
+// revisable owner helper that the registering migration replaces, with
+// morrow_work.customer_content_export (its rows for a customers/data_request export to the
+// Owner) and morrow_identity.customer_handler_tables() (the closed list a request's evidence may
+// name), in the same change. They run only in the connector's customer redaction context for the
+// request's store (morrow.connector_customer), under the store's stop key held exclusively; a
+// writer of a keyed class takes that key shared, so a racing write commits first and is
+// redacted, or writes after. A request completes only when every handler reports zero rows still
+// matching; until then the delivery stays received, its request open, and its inbox row (with the
+// listed ids and digests) outlives its 7-day clock.
 //
 // A `content: customer` table (customer data under ADR-0031's Terms: a 90-day clock, never
 // extended by a copy) also needs its shop/redact handler above, and must carry at least one key:
-// a class that no key can find is unmatchable and fails S8.
-export type CustomerKey = "order_id";
-export type CustomerMatcher = "listed_orders";
+// a class that no key can find is unmatchable and fails S8. A class that can hold a customer's
+// name typed as free text (H9d's harness classes: messages, run turns, checkpoints, summaries,
+// memory) registers here too; H9d adds the matcher that finds a name, as a new key, matcher and
+// match field, by forward migration (docs/packets/P09.T05c.md §5).
+export type CustomerKey = "order_id" | "customer_id_digest" | "email_digest" | "phone_digest";
+export type CustomerMatcher = "listed_orders" | "customer_id" | "email" | "phone";
 /** The matcher each key needs (S8 checks every key of a table against its handler). */
 export const customerKeyMatchers: Readonly<Record<CustomerKey, CustomerMatcher>> = Object.freeze({
   order_id: "listed_orders",
+  customer_id_digest: "customer_id",
+  email_digest: "email",
+  phone_digest: "phone",
 });
 export type CustomerContentAction =
   /** Delete the matching rows. */
   | "delete_rows"
   /** Blank the order id of a content-free row, keeping its codes and counts (ADR-0043 item 24). */
   | "blank_order_id"
-  /** Empty the stored content, keep its digest (a proposal's parameters). */
+  /** Empty the stored content, keep its digest (a proposal's parameters, an export). */
   | "empty_keep_digest"
   /** Erase the text in place, keep ids, digests and times. */
   | "erase_keep_digest";
@@ -289,10 +317,29 @@ export interface CustomerContentHandler {
   readonly executable: string;
 }
 /**
- * Every registered customer-content handler. None yet: no table is keyed by an order, a
- * customer id or a customer digest at this head; V1-PR22's order classes, CS8's order events,
- * SD9b's projections and the contact classes (CS9, CS12) register theirs.
+ * Every registered customer-content handler. SD4 registers the first: the customers/data_request
+ * exports to the Owner, keyed by every key of the request that made them. V1-PR22's order
+ * classes, CS8's order events, SD9b's projections, the contact classes (CS9, CS12) and H9d's
+ * harness classes register theirs.
  */
 export const customerContentHandlers: readonly CustomerContentHandler[] = Object.freeze(
-  [] as CustomerContentHandler[],
+  (
+    [
+      {
+        table: "morrow_work.customer_data_exports",
+        dataClass: "data_request_exports",
+        trigger: "customers_redact",
+        matchers: ["listed_orders", "customer_id", "email", "phone"],
+        action: "empty_keep_digest",
+        key: "store_id and any shared order id or digest: every unerased export of the customer in the request's store",
+        executor: "morrow_work.customer_content_redact",
+        executable: "SD4",
+      },
+    ] as const
+  ).map((handler) =>
+    Object.freeze({
+      ...handler,
+      matchers: Object.freeze([...handler.matchers]),
+    } as CustomerContentHandler),
+  ),
 );

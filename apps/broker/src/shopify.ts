@@ -22,6 +22,12 @@
 // carry a closed `reason` (fix-shopify-install-live) that the broker's stage line names;
 // `kind` alone decides every outcome.
 
+import {
+  customerDigests,
+  type CustomerDigestKey,
+  type CustomerDigestSet,
+} from "./customer-digest.js";
+
 export const shopifyApiVersion = "2026-10";
 export const shopifyRequestedScopes = Object.freeze(["read_products", "write_products"] as const);
 export const shopifyShopIdentityDocument =
@@ -558,7 +564,7 @@ export async function verifyShopifyWebhookHmac(
 }
 
 // The minimised body of a verified compliance or app webhook (spine §11): ids, scope names
-// and a keyed digest of the customer id only; never an email, phone, name or address. M2
+// and keyed customer digests only; never an email, phone, name or address. M2
 // PR-3: the body must be its topic's (the topic header is not signed, so a body of another
 // topic is refused rather than reread), and a body that names its shop must name the
 // header's shop. Null when the body is not one of its topic.
@@ -569,6 +575,13 @@ export async function verifyShopifyWebhookHmac(
 // order id tied to a customer's request is pseudonymous personal data, so they live only in
 // the inbox row, on its 7-day clock, until every handler has reported zero remaining; the
 // deletion registry's "orders listed" matcher reads them (packages/work/src/redaction.ts).
+//
+// SD4 (P09.T05c): the customer is kept only as `customerDigests`, one entry per kept version
+// of the workspace's digest key (apps/broker/src/customer-digest.ts): the keyed digests of the
+// customer id, the normalised email and the E.164 phone, each null when the payload has none.
+// They replace M2 PR-3's digest of the id under the app's own secret, which no later class
+// could compute; the redaction matcher compares them with the digests a class stored under the
+// same keys. A customers/* body without the workspace's keys is refused (Shopify retries).
 const idText = (value: unknown): string | null =>
   typeof value === "number" && Number.isSafeInteger(value) && value > 0
     ? String(value)
@@ -605,12 +618,16 @@ export async function minimiseShopifyWebhook(
   topic: string,
   body: unknown,
   shop: string,
-): Promise<Readonly<Record<string, string | readonly string[] | null>> | null> {
+  digestKeys: readonly CustomerDigestKey[] = [],
+): Promise<Readonly<
+  Record<string, string | readonly string[] | readonly CustomerDigestSet[] | null>
+> | null> {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
-  const customerDigest = async (customer: unknown) => {
-    const id = idText(own(customer, "id"));
-    return id === null ? null : shopifyHmacHex(secret, "morrow.shopify.customer.v1|" + id);
-  };
+  // SD4: the customer's keyed digests under every kept key version; never the customer itself.
+  const keyed = async (customer: unknown) =>
+    digestKeys.length === 0 || (customer !== null && typeof customer !== "object")
+      ? null
+      : customerDigests(digestKeys, customer);
   // A compliance body names its shop by id and domain; the domain must be the header's.
   const compliance = () => {
     const shopId = idText(own(body, "shop_id"));
@@ -647,9 +664,11 @@ export async function minimiseShopifyWebhook(
         has(body, "orders_to_redact")
       )
         return null;
+      const digests = await keyed(own(body, "customer"));
+      if (digests === null) return null;
       return Object.freeze({
         shopId,
-        customerDigest: await customerDigest(own(body, "customer")),
+        customerDigests: digests,
         dataRequestId,
         ordersRequested,
       });
@@ -665,11 +684,9 @@ export async function minimiseShopifyWebhook(
         has(body, "orders_requested")
       )
         return null;
-      return Object.freeze({
-        shopId,
-        customerDigest: await customerDigest(own(body, "customer")),
-        ordersToRedact,
-      });
+      const digests = await keyed(own(body, "customer"));
+      if (digests === null) return null;
+      return Object.freeze({ shopId, customerDigests: digests, ordersToRedact });
     }
     case "shop/redact": {
       const shopId = compliance();

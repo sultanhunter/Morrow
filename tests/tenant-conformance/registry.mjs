@@ -431,6 +431,30 @@ export const workTables = Object.freeze({
     ],
     content: "none",
   },
+  // SD4 (customer-deletion-work; ADR-0031 items 1 and 4): the customers/data_request export to
+  // the Owner, customer data on a 30-day clock, the first class registered on the customer
+  // redaction matchers. It keeps its request's match keys (order ids and the three digest
+  // kinds) so a later customers/redact finds it, and it is erased in place, never deleted. The
+  // session template is read-only (the Owner's customer_data_exports_open); only the
+  // connector's customer redaction context writes and erases one, shop/redact's redaction
+  // context erases a store's, and the clean-up job erases the expired ones.
+  customer_data_exports: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    commandRead: true,
+    policies: [
+      "connector_export_customer_erase",
+      "connector_export_customer_read",
+      "connector_export_expire",
+      "connector_export_expire_read",
+      "connector_export_redact_erase",
+      "connector_export_redact_read",
+      "connector_export_sweep",
+      "connector_export_write",
+    ],
+    content: "customer",
+    customerKeys: ["order_id", "customer_id_digest", "email_digest", "phone_digest"],
+  },
 });
 
 // API functions: SECURITY DEFINER, owned by the command role, EXECUTE for the api
@@ -714,7 +738,7 @@ export const workFunctions = Object.freeze({
     kind: "connector",
     grantees: ["morrow_connector_ingress"],
     crossTenant: true,
-    columns: ["purged", "held"],
+    columns: ["purged", "held", "erased"],
   },
   "customer_match_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "customer_match_of(text,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
@@ -723,6 +747,25 @@ export const workFunctions = Object.freeze({
     kind: "owner_helper",
     grantees: ["morrow_work_command"],
   },
+  // SD4 (customer-deletion-work): the digests of a match by kind, the export's row checks and
+  // guard, the export class's customers/redact handler, the data request's surface, and the
+  // Owner's read of the exports (session only).
+  "customer_match_digests(jsonb,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "customer_export_document_valid(jsonb,integer)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "customer_digest_list_valid(text[])": { kind: "check", grantees: ["morrow_work_command"] },
+  "customer_export_guard()": { kind: "trigger", grantees: [] },
+  "customer_data_exports_redact(text,text,text,jsonb)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "customer_content_export(text,text,text,jsonb)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "customer_data_exports_open()": { kind: "api", grantees: ["morrow_work_api"], read: true },
   // The reconcile itself (a revisable owner helper), the scopes each release needs and the
   // notice's row checks, the notice guard, and the api's read of the viewer's open items.
   "connection_health_reconcile(text,text,text,text)": {
@@ -1056,8 +1099,10 @@ export const bridgeFunctions = Object.freeze([
   // place of an ended one, called only by connection-health-work's store_reinstalled.
   "work_shopify_store_successor(text,text,text)",
   // SD3 (customer-deletion-identity): the inbox's 7-day purge, called only by
-  // customer-deletion-work's connector_privacy_purge.
+  // customer-deletion-work's connector_privacy_purge. SD4: the workspace an app invites, called
+  // only by customer-deletion-work's vault definers of the customer digest keys.
   "work_shopify_inbox_purge()",
+  "work_shopify_app_tenant(text,text)",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
@@ -1597,6 +1642,17 @@ export const vaultTables = Object.freeze({
       ["destroy_reason", "destroyed_at", "sealed_value", "status", "wrapped_key"],
     ),
   },
+  // SD4 (customer-deletion-work; ADR-0031 item 3, ADR-0042 item 5): the workspace's customer
+  // digest keys, one sealed row per kept version; the broker's two definers read and create
+  // them (version 1 at a workspace's first compliance request). No runtime role may erase one
+  // yet: workspace erasure (governance.privacy.erase) adds that grant with its own record.
+  customer_digest_keys: {
+    class: "vault_tenant",
+    parents: ["morrow_identity.workspaces"],
+    policies: [],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
 });
 // S7 (M2 PR-2a): the roles granted USAGE on each schema S7 covers, besides its owner.
 // An executor login's USAGE must also equal the schemas of the functions it executes.
@@ -1714,6 +1770,14 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // SD4 (customer-deletion-work): the workspace's customer digest keys, read and created for
+  // the workspace an app invites, and their guard.
+  "customer_digest_keys_get(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "customer_digest_key_create(text,text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "customer_digest_key_guard()": { kind: "trigger", grantees: [] },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -1883,6 +1947,9 @@ export const executorLogins = Object.freeze({
     // v1 PR 4 (catalog-undo).
     "morrow_vault.catalog_undo_record(text,text,text,text,text)",
     "morrow_vault.catalog_undo_resolve(text)",
+    // SD4 (customer-deletion-work).
+    "morrow_vault.customer_digest_key_create(text,text,text,text,text)",
+    "morrow_vault.customer_digest_keys_get(text,text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

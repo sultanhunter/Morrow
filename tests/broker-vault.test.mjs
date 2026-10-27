@@ -197,6 +197,78 @@ test("wrong additional data, KEK, KEK version or environment fails with one fixe
   );
 });
 
+// SD4 (P09.T05c; docs/packets/P09.T05c.md §4.1): a workspace's customer digest key, 32 random
+// bytes in morrow_vault.customer_digest_keys, is bound to its kind, its tenant and its version
+// (no record or subject id), so a row moved to another workspace or version never opens, and
+// it never opens as another kind's record of the same tenant. The definers' round trip is
+// lab:shopify-privacy phase X; the digests are tests/customer-digest.test.mjs.
+test("SD4: a customer digest key opens only as its workspace's version of that key", async () => {
+  const keyring = await createVaultKeyring("staging", new Map([[1, kek()]]));
+  const digestKey = (change = {}) => ({
+    kind: "customer_digest_key",
+    organizationId: "org_1",
+    workspaceId: "ws_1",
+    provider: "morrow",
+    version: 1,
+    ...change,
+  });
+  const material = randomBytes(vaultLimits.keyBytes);
+  const envelope = await sealVaultRecord(keyring, digestKey(), new Uint8Array(material));
+  // Both columns are exactly 60 bytes, the vault row's CHECKs.
+  assert.deepEqual([envelope.wrappedKey.length, envelope.sealedValue.length], [60, 60]);
+  assert.ok(!Buffer.from(envelope.sealedValue).includes(material));
+  assert.deepEqual(Buffer.from(await openVaultRecord(keyring, digestKey(), envelope)), material);
+  for (const change of [{ organizationId: "org_2" }, { workspaceId: "ws_2" }, { version: 2 }])
+    assert.equal(
+      await code(openVaultRecord(keyring, digestKey(change), envelope)),
+      "VAULT_OPEN_FAILED",
+    );
+  // Another kind of record of the same tenant never opens it, nor it another's.
+  assert.equal(await code(openVaultRecord(keyring, token(), envelope)), "VAULT_OPEN_FAILED");
+  const offline = await sealVaultRecord(keyring, token(), new Uint8Array(material));
+  assert.equal(await code(openVaultRecord(keyring, digestKey(), offline)), "VAULT_OPEN_FAILED");
+  // The additional data names the tenant and the version, with no record or subject id.
+  assert.equal(
+    read(vaultAdditionalData("staging", digestKey({ version: 3 }), 1, "seal")),
+    JSON.stringify([
+      "morrow.vault.v1",
+      "seal",
+      "staging",
+      "customer_digest_key",
+      "org_1",
+      "ws_1",
+      null,
+      null,
+      "morrow",
+      3,
+      1,
+    ]),
+  );
+  // A closed reference: versions 1 to 8, Morrow as its provider, no other field.
+  for (const change of [
+    { version: 0 },
+    { version: 9 },
+    { version: 1.5 },
+    { provider: "shopify" },
+    { credentialId: "credential_1" },
+    { workspaceId: "ws 1" },
+  ])
+    assert.throws(
+      () => vaultAdditionalData("staging", digestKey(change), 1, "seal"),
+      (e) => e instanceof VaultError && e.code === "VAULT_INPUT_INVALID",
+      JSON.stringify(change),
+    );
+  // The vault login sends only the registry's two fixed statements for these rows.
+  assert.equal(
+    vaultStatements.customerDigestKeysGet,
+    "SELECT outcome,organization_id,workspace_id,version,kek_version,wrapped_key,sealed_value FROM morrow_vault.customer_digest_keys_get($1,$2)",
+  );
+  assert.equal(
+    vaultStatements.customerDigestKeyCreate,
+    "SELECT morrow_vault.customer_digest_key_create($1,$2,$3,$4,$5) AS outcome",
+  );
+});
+
 test("KEK rotation: new seals use the newest KEK; older rows still open while it is held", async () => {
   const first = kek(),
     second = kek();

@@ -597,6 +597,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       stuck: 0,
       purged: 0,
       held: 0,
+      erased: 0,
     };
     let ids: readonly string[] = [];
     try {
@@ -712,12 +713,14 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
         log("morrow_connector_inbox", { code: "INBOX_STUCK_UNAVAILABLE", ...sqlStage(error) });
       }
       // SD3: the inbox's 7-day clock (ADR-0031 item 1): settled deliveries past it are
-      // deleted, a customer request's listed order ids with them; one whose privacy request is
-      // still open (or whose apply is pending) is kept, counted and logged.
+      // deleted, a customer request's listed order ids and digests with them; one whose privacy
+      // request is still open (or whose apply is pending) is kept, counted and logged. SD4: the
+      // customers/data_request exports past their 30 days are erased in place.
       try {
         const purge = await database.privacyPurge(connectorBudgets.pendingMs);
         counts.purged = purge.purged;
         counts.held = purge.held;
+        counts.erased = purge.erased;
         if (purge.held > 0)
           log("morrow_connector_inbox", { code: "INBOX_EXPIRED_HELD", deliveries: purge.held });
       } catch (error) {

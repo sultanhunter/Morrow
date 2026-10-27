@@ -384,7 +384,7 @@ function harness(answers = {}, limiters = undefined) {
     async privacyPurge(budget) {
       calls.push(["privacyPurge", budget]);
       if (answers.purgeThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
-      return answers.privacyPurge ?? { purged: 0, held: 0 };
+      return answers.privacyPurge ?? { purged: 0, held: 0, erased: 0 };
     },
   };
   const handler = createConnectorHandler({
@@ -1026,6 +1026,7 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
         stuck: 0,
         purged: 0,
         held: 0,
+        erased: 0,
       },
     );
     // An unavailable id read still runs the credential re-drive, the deadline check and the
@@ -1218,7 +1219,7 @@ test("v1 PR 5 cron (switch on): read-backs, then 48-hour deletions that wait for
         "throw",
       ],
       inboxStuck: { closed: 1, stuck: 2 },
-      privacyPurge: { purged: 7, held: 1 },
+      privacyPurge: { purged: 7, held: 1, erased: 2 },
     });
     counts = await h.handler.redrive();
   } finally {
@@ -1251,7 +1252,7 @@ test("v1 PR 5 cron (switch on): read-backs, then 48-hour deletions that wait for
     [3, 1, 1, 3, 1],
   );
   assert.deepEqual([counts.stuckClosed, counts.stuck], [1, 2]);
-  assert.deepEqual([counts.purged, counts.held], [7, 1]);
+  assert.deepEqual([counts.purged, counts.held, counts.erased], [7, 1, 2]);
   assert.deepEqual(
     logged.filter((row) => row.event !== "morrow_connector_redrive").map((row) => row.code),
     [

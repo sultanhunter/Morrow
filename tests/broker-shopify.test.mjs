@@ -155,6 +155,38 @@ async function fakeVault(options = {}) {
           : { outcome: "not_found", client_id: null, workspace_id: null, installation: null },
       ];
     },
+    // SD4: the workspace's customer digest keys (one in-memory workspace), created at its first
+    // customers/* request.
+    [vaultStatements.customerDigestKeysGet]: ([key, domain]) => {
+      db.events.push("keys");
+      const row = (outcome, extra = {}) => ({
+        outcome,
+        organization_id: null,
+        workspace_id: null,
+        version: null,
+        kek_version: null,
+        wrapped_key: null,
+        sealed_value: null,
+        ...extra,
+      });
+      if (key !== appKey || domain !== shop || !db.registered) return [row("not_found")];
+      if (!db.digestKey)
+        return [row("none", { organization_id: "org_lab", workspace_id: workspaceId })];
+      return [
+        row("found", {
+          organization_id: "org_lab",
+          workspace_id: workspaceId,
+          version: "1",
+          ...db.digestKey,
+        }),
+      ];
+    },
+    [vaultStatements.customerDigestKeyCreate]: ([key, domain, kekVersion, wrapped, sealed]) => {
+      db.events.push("key_create");
+      if (db.digestKey) return [{ outcome: "exists" }];
+      db.digestKey = { kek_version: kekVersion, wrapped_key: wrapped, sealed_value: sealed };
+      return [{ outcome: key === appKey && domain === shop ? "created" : "not_found" }];
+    },
     [vaultStatements.shopifyWebhookRecord]: ([key, domain, topic, webhookId, apiVersion, body]) => {
       db.events.push("record");
       db.recorded.push({ key, domain, topic, webhookId, apiVersion, body: JSON.parse(body) });
@@ -902,21 +934,47 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; recorded with i
   assert.equal(verdict.verdict, "recorded");
   assert.match(verdict.inboxId, /^[a-f0-9-]{36}$/);
   assert.equal(verdict.settled, false);
-  // One record statement, in the verifying transaction, with the minimised body only: the
-  // shop id, a keyed digest of the customer id and (SD3) the listed order ids, never the
+  // One verifying transaction: (SD4) the workspace's digest key, created at its first
+  // request and read back, then one record statement with the minimised body only: the shop
+  // id, the customer's keyed digests under that key and (SD3) the listed order ids, never the
   // email or phone.
   assert.equal(h.db.transactions, 1);
-  assert.deepEqual(h.db.events, ["record"]);
+  assert.deepEqual(h.db.events, ["keys", "key_create", "keys", "record"]);
   const recorded = h.db.recorded[0];
   assert.deepEqual(
     [recorded.key, recorded.domain, recorded.topic, recorded.webhookId, recorded.apiVersion],
     [appKey, shop, "customers/redact", "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043", "2026-10"],
   );
+  // The key the broker sealed opens only as this workspace's version 1, and the digests are
+  // HMAC-SHA-256 under it.
+  const digestKey = Buffer.from(
+    await openVaultRecord(
+      h.keyring,
+      {
+        kind: "customer_digest_key",
+        organizationId: "org_lab",
+        workspaceId,
+        provider: "morrow",
+        version: 1,
+      },
+      {
+        kekVersion: Number(h.db.digestKey.kek_version),
+        wrappedKey: Buffer.from(h.db.digestKey.wrapped_key, "hex"),
+        sealedValue: Buffer.from(h.db.digestKey.sealed_value, "hex"),
+      },
+    ),
+  );
+  const keyed = (input) => createHmac("sha256", digestKey).update(input).digest("hex");
   assert.deepEqual(recorded.body, {
     shopId: "987",
-    customerDigest: createHmac("sha256", secret)
-      .update("morrow.shopify.customer.v1|5")
-      .digest("hex"),
+    customerDigests: [
+      {
+        version: 1,
+        id: keyed("morrow.customer-id.v1|5"),
+        email: keyed("morrow.customer-email.v1|a@b.test"),
+        phone: null,
+      },
+    ],
     ordersToRedact: ["1", "2"],
   });
   assert.doesNotMatch(JSON.stringify(h.db.recorded), /a@b\.test|555-0100|"orders_/);
@@ -1025,7 +1083,7 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; recorded with i
     if (expected) assert.deepEqual(last, expected, topic);
     else {
       assert.deepEqual(Object.keys(last).sort(), [
-        "customerDigest",
+        "customerDigests",
         "dataRequestId",
         "ordersRequested",
         "shopId",

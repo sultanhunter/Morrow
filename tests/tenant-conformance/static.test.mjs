@@ -96,6 +96,12 @@ const brokerCatalogOperation =
   "((SESSION_USER = 'morrow_vault_broker'::name) AND ((operation_id)::text = current_setting('morrow.vault_catalog_operation'::text, true)))";
 const brokerCatalogTransition =
   "((SESSION_USER = 'morrow_vault_broker'::name) AND ((operation_id)::text = current_setting('morrow.vault_catalog_operation'::text, true)) AND (EXISTS ( SELECT 1\n   FROM morrow_work.operations o\n  WHERE (((o.organization_id)::text = (operation_transitions.organization_id)::text) AND ((o.workspace_id)::text = (operation_transitions.workspace_id)::text) AND ((o.id)::text = (operation_transitions.operation_id)::text) AND (o.kind = 'catalog_write'::text)))))";
+// SD4 (customer-deletion-work): the connector's customer redaction context (one org|ws|store)
+// and the clean-up job's per-export expiry context (one org|ws|id).
+const connectorCustomer =
+  "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_customer'::text, true)))";
+const connectorExport =
+  "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.connector_export'::text, true)))";
 // The exactly-checked extra policies (registry `policies`): [command, roles, qual, check].
 const extraPolicies = {
   lease_self: [
@@ -406,6 +412,44 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_connector_ingress'::name) AND (action = 'set'::text) AND (actor_kind = 'system'::text) AND (operator_id IS NULL) AND (scope = 'installation'::text) AND (reason_code = ANY (ARRAY['shopify_scope_missing'::text, 'shopify_token_refused'::text])) AND " +
       connectorAgentStore +
       ")",
+  ],
+  // SD4 (customer-deletion-work): the data_request exports. The connector's customer redaction
+  // context (one org|ws|store, written only by connector_inbox_apply_v2) writes and erases them;
+  // shop/redact's redaction context erases a store's; the clean-up job lists the unerased ones
+  // under its own sweep setting and erases each expired one under a setting naming its tenant
+  // and id alone.
+  connector_export_customer_read: ["SELECT", "{morrow_work_command}", connectorCustomer, null],
+  connector_export_write: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (erased_at IS NULL) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_customer'::text, true)))",
+  ],
+  connector_export_customer_erase: [
+    "UPDATE",
+    "{morrow_work_command}",
+    connectorCustomer,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (erased_reason = 'customer_redact'::text) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_customer'::text, true)))",
+  ],
+  connector_export_redact_read: ["SELECT", "{morrow_work_command}", connectorContent, null],
+  connector_export_redact_erase: [
+    "UPDATE",
+    "{morrow_work_command}",
+    connectorContent,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (erased_reason = 'shop_redact'::text) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_redact'::text, true)))",
+  ],
+  connector_export_sweep: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (erased_at IS NULL) AND (current_setting('morrow.connector_sweep'::text, true) = 'customer_exports'::text))",
+    null,
+  ],
+  connector_export_expire_read: ["SELECT", "{morrow_work_command}", connectorExport, null],
+  connector_export_expire: [
+    "UPDATE",
+    "{morrow_work_command}",
+    connectorExport,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (erased_reason = 'expired'::text) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.connector_export'::text, true)))",
   ],
   connector_health_lease_read: ["SELECT", "{morrow_work_command}", connectorHealthLease, null],
   connector_health_lease_revoke: [

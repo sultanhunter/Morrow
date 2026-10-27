@@ -189,7 +189,19 @@ test("constants SQL shares with TypeScript", () => {
   assert.equal(stopReasonCodes.scopesChanged, "shopify_scopes_changed");
   // The evidence admits exactly the handler tables (M3 PR-2's two among them), and its
   // actions.
-  const evidence = body(identity, "morrow_identity.privacy_evidence_valid(");
+  // The validator as the chain now holds it (SD4's customer-deletion-identity revises 0036's, adding
+  // its data_request exports to the closed list).
+  const latest = manifest.migrations
+    .map((m) => readFileSync("migrations/" + m.file, "utf8"))
+    .filter((t) =>
+      /CREATE (OR REPLACE )?FUNCTION morrow_identity\.privacy_evidence_valid\(/.test(t),
+    )
+    .at(-1)
+    .replace(
+      "CREATE OR REPLACE FUNCTION morrow_identity.privacy_evidence_valid(",
+      "CREATE FUNCTION morrow_identity.privacy_evidence_valid(",
+    );
+  const evidence = body(latest, "morrow_identity.privacy_evidence_valid(");
   const tables = /\(h->>'table'\) NOT IN \(([^)]*)\)/.exec(evidence)[1];
   assert.deepEqual(
     [...tables.matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]).sort(),

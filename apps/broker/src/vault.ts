@@ -14,6 +14,7 @@
 
 import { billingVaultStatements } from "./vault-statements-billing.js";
 import { catalogVaultStatements } from "./vault-statements-catalog.js";
+import { customerVaultStatements } from "./vault-statements-customer.js";
 import { modelVaultStatements } from "./vault-statements-model.js";
 import { runtimeVaultStatements } from "./vault-statements-runtime.js";
 import { shopifyVaultStatements } from "./vault-statements-shopify.js";
@@ -66,7 +67,11 @@ export class VaultError extends Error {
 // UUID the ledger ties to exactly one tenant) in place of the tenant pair, which the broker
 // does not hold when it seals: the ledger's send mark returns the operation id alone. A row
 // moved to another operation or tenant still fails to open, because its operation id would
-// have to change with it.
+// have to change with it. SD4 (P09.T05c; migration customer-deletion-work) adds a workspace's
+// customer digest key (ADR-0031 item 3; ADR-0042 item 5's per-workspace digest key): 32 random
+// bytes in morrow_vault.customer_digest_keys, one row per kept version, every version kept for
+// the workspace's life. Its additional data binds the tenant and the version; it has no record
+// or subject id of its own (both null), and its provider is Morrow itself.
 export type VaultRecordRef =
   | {
       readonly kind: "app_secret";
@@ -88,6 +93,13 @@ export type VaultRecordRef =
       readonly operationId: string;
       readonly provider: "e2b";
       readonly version: 1;
+    }
+  | {
+      readonly kind: "customer_digest_key";
+      readonly organizationId: string;
+      readonly workspaceId: string;
+      readonly provider: "morrow";
+      readonly version: number;
     };
 export interface VaultEnvelope {
   readonly kekVersion: number;
@@ -197,6 +209,22 @@ function parseRef(ref: unknown): VaultRecordRef {
       provider: "e2b",
       version: 1,
     });
+  if (
+    r.kind === "customer_digest_key" &&
+    names === "kind,organizationId,provider,version,workspaceId" &&
+    exact(recordIdPattern, r.organizationId) &&
+    exact(recordIdPattern, r.workspaceId) &&
+    r.provider === "morrow" &&
+    version(r.version) &&
+    (r.version as number) <= 8
+  )
+    return Object.freeze({
+      kind: "customer_digest_key",
+      organizationId: r.organizationId,
+      workspaceId: r.workspaceId,
+      provider: "morrow",
+      version: r.version as number,
+    });
   throw invalid();
 }
 
@@ -219,13 +247,17 @@ export function vaultAdditionalData(
     throw invalid();
   const r = parseRef(ref);
   const tenant =
-    r.kind === "shopify_offline_token" ? [r.organizationId, r.workspaceId] : [null, null];
+    r.kind === "shopify_offline_token" || r.kind === "customer_digest_key"
+      ? [r.organizationId, r.workspaceId]
+      : [null, null];
   const record =
     r.kind === "app_secret"
       ? [r.appKey, null]
       : r.kind === "e2b_envd_token"
         ? [r.operationId, r.operationId]
-        : [r.credentialId, r.subjectId];
+        : r.kind === "customer_digest_key"
+          ? [null, null]
+          : [r.credentialId, r.subjectId];
   return owned(
     encoder.encode(
       JSON.stringify([
@@ -432,7 +464,7 @@ export async function openVaultRecord(
 // vaultStatements is THE registry of statements the vault login may send: a frozen union
 // of per-PR maps, each in its own module (M2 PR-2: Shopify; M5 PR-1: billing; M3 PR-2: the
 // model gateway's fence; build order PR 7: the runtime ledger; v1 PR 3: the catalog
-// gateway's apply and read-back). The vault
+// gateway's apply and read-back; SD4: the workspace's customer digest keys). The vault
 // transport (vault-database.ts) refuses any other text.
 export const vaultStatements = Object.freeze({
   appSecretGet:
@@ -442,6 +474,7 @@ export const vaultStatements = Object.freeze({
   ...modelVaultStatements,
   ...runtimeVaultStatements,
   ...catalogVaultStatements,
+  ...customerVaultStatements,
 } as const);
 /** One fixed statement on a connection logged in as morrow_vault_broker. */
 export type VaultQuery = (

@@ -18,6 +18,10 @@
 // lists on its inbox row, a registered order-keyed class's listed rows are deleted in that
 // store only, the request completes only when every handler reports zero remaining, and the
 // clean-up job's purge deletes the ids after 7 days unless the request is still open;
+// X  (SD4) a request's customer is kept only as keyed digests under its workspace's own key in
+// the vault, a class keyed by them is matched by phone and email digest, a data request exports
+// the customer's rows to the Owner alone, and the export is erased by customers/redact, by
+// shop/redact (S10) and on its 30-day clock;
 // T  closed catalogue reads under a read lease, closed
 // variables, closed results, the vault resolution's refusals and the read budget;
 // U  app/uninstalled ends the installation, stops the connection, revokes its leases and
@@ -32,12 +36,17 @@
 // outbound requests. Owner-seeded synthetic fixtures only (two tenants, four linked
 // development stores); no provider, credential or merchant data. Runs in the CI pg-work
 // group. The local superuser is used only for fixtures and the shapes marked "sim".
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import canonicalize from "canonicalize";
 import { createShopifyBroker } from "../apps/broker/src/shopify-install.ts";
 import { createShopifyReader } from "../apps/broker/src/shopify-read.ts";
-import { sealVaultRecord, createVaultKeyring, vaultBytesHex } from "../apps/broker/src/vault.ts";
+import {
+  createVaultKeyring,
+  openVaultRecord,
+  sealVaultRecord,
+  vaultBytesHex,
+} from "../apps/broker/src/vault.ts";
 import { runVaultTransactionWithDriver } from "../apps/broker/src/vault-database.ts";
 import { createConnectorHandler } from "../apps/shopify-connector/worker/connector.ts";
 import { createConnectorDatabase } from "../apps/shopify-connector/worker/database.ts";
@@ -504,9 +513,12 @@ const report = await withWorkDatabase(
         dataRow?.status === "applied" &&
         dataRow.outcome === "none_held" &&
         Object.keys(dataRow.body).sort().join(",") ===
-          "customerDigest,dataRequestId,ordersRequested,shopId" &&
+          "customerDigests,dataRequestId,ordersRequested,shopId" &&
         same(dataRow.body.ordersRequested, ["1"]) &&
-        /^[a-f0-9]{64}$/.test(dataRow.body.customerDigest) &&
+        dataRow.body.customerDigests.length === 1 &&
+        ["id", "email", "phone"].every((k) =>
+          /^[a-f0-9]{64}$/.test(dataRow.body.customerDigests[0][k]),
+        ) &&
         dataRequestRows.length === 1 &&
         dataRequestRows[0].org === S.org &&
         dataRequestRows[0].ws === S.ws &&
@@ -539,7 +551,7 @@ const report = await withWorkDatabase(
     );
     const redactRow = inboxRows().find((r) => r.webhook_id === redact.webhookId);
     check(
-      "C2:a_redelivery_is_a_duplicate_and_customers_redact_completes_none_held",
+      "C2:a_redelivery_is_a_duplicate_and_customers_redact_completes_with_every_handler_at_zero",
       again.status === 200 &&
         inboxRows().filter((r) => r.webhook_id === dataRequest.webhookId).length === 1 &&
         requestsOf(dataRow.id).length === 1 &&
@@ -550,7 +562,10 @@ const report = await withWorkDatabase(
         redact.status === 200 &&
         redactRow?.status === "applied" &&
         requestsOf(redactRow.id)[0]?.status === "completed" &&
-        requestsOf(redactRow.id)[0]?.evidence.kind === "none_held",
+        requestsOf(redactRow.id)[0]?.evidence.kind === "customer_redacted" &&
+        same(requestsOf(redactRow.id)[0]?.evidence.handlers, [
+          { table: "morrow_work.customer_data_exports", action: "empty_keep_digest", rows: 0 },
+        ]),
       { again: again.status, sameRequestRow, requestsFor9001, redactRow },
     );
     check(
@@ -565,9 +580,9 @@ const report = await withWorkDatabase(
 
     // -------------------------------------------------------------------------
     // L (SD3): the order ids a request lists, the "orders listed" matcher and the 7-day clock.
-    // No class is keyed by an order at this head, so one is registered here as the pull request
-    // that first writes one would (sim: a superuser-created table, its handler in
-    // customer_content_redact and its name in customer_handler_tables).
+    // No class is keyed by an order at this head but SD4's exports, so one is registered here as
+    // the pull request that first writes one would (sim: a superuser-created table, its handler
+    // in customer_content_redact beside the exports' and its name in customer_handler_tables).
     phase("listed_orders");
     const orderBody = (s, orders, extra = {}) =>
       compliance(s, { customer, orders_to_redact: orders, ...extra });
@@ -575,14 +590,14 @@ const report = await withWorkDatabase(
     const listedOnly = await deliver(S, "customers/redact", orderBody(S, [1002, 1001, 1001]));
     const listedRow = lastRow(listedOnly);
     check(
-      "L1:a_redact_keeps_its_listed_order_ids_and_completes_none_held_while_no_class_is_keyed",
+      "L1:a_redact_keeps_its_listed_order_ids_and_completes_with_the_exports_handler_at_zero",
       listedOnly.status === 200 &&
         listedRow?.status === "applied" &&
-        listedRow.outcome === "none_held" &&
+        listedRow.outcome === "customer_redacted" &&
         same(listedRow.body.ordersToRedact, ["1001", "1002"]) &&
-        listedRow.body.customerDigest?.length === 64 &&
-        same(listedRow.effects, { request: "completed", orders: 2, handlers: 0 }) &&
-        requestsOf(listedRow.id)[0]?.evidence.kind === "none_held" &&
+        listedRow.body.customerDigests?.length === 1 &&
+        same(listedRow.effects, { request: "completed", orders: 2, handlers: 1, rows: 0 }) &&
+        requestsOf(listedRow.id)[0]?.evidence.kind === "customer_redacted" &&
         !JSON.stringify(listedRow).includes(customerEmail),
       { listedRow },
     );
@@ -590,7 +605,8 @@ const report = await withWorkDatabase(
  store_id text NOT NULL,order_id text NOT NULL,held boolean NOT NULL DEFAULT false);
 GRANT SELECT,DELETE ON morrow_work.lab_order_rows TO morrow_work_command;
 CREATE OR REPLACE FUNCTION morrow_identity.customer_handler_tables() RETURNS text[]
-LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$ SELECT ARRAY['morrow_work.lab_order_rows'] $$;
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT ARRAY['morrow_work.customer_data_exports','morrow_work.lab_order_rows'] $$;
 CREATE OR REPLACE FUNCTION morrow_work.customer_content_redact(p_org text,p_ws text,p_store_id text,p_match jsonb)
 RETURNS jsonb LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE n integer; r integer;
@@ -607,7 +623,8 @@ BEGIN
  GET DIAGNOSTICS n=ROW_COUNT;
  SELECT count(*)::integer INTO r FROM morrow_work.lab_order_rows t WHERE t.organization_id=p_org AND t.workspace_id=p_ws
   AND t.store_id=p_store_id AND t.order_id=ANY(morrow_work.customer_match_orders(p_match));
- RETURN jsonb_build_array(jsonb_build_object('table','morrow_work.lab_order_rows','action','delete_rows','rows',n,'remaining',r));
+ RETURN jsonb_build_array(morrow_work.customer_data_exports_redact(p_org,p_ws,p_store_id,p_match),
+  jsonb_build_object('table','morrow_work.lab_order_rows','action','delete_rows','rows',n,'remaining',r));
 END $$;`);
     const orderRow = (s, order, held = false) =>
       `(${literal(s.org)},${literal(s.ws)},${literal(s.store)},'${order}',${held})`;
@@ -635,7 +652,7 @@ END $$;`);
       redacted.status === 200 &&
         redactedRow?.status === "applied" &&
         redactedRow.outcome === "customer_redacted" &&
-        same(redactedRow.effects, { request: "completed", orders: 2, handlers: 1 }) &&
+        same(redactedRow.effects, { request: "completed", orders: 2, handlers: 2, rows: 0 }) &&
         same(orderRows(), [
           "store_priv:1003",
           "store_priv:4242:held",
@@ -647,7 +664,10 @@ END $$;`);
           schemaVersion: 1,
           kind: "customer_redacted",
           scopes: ["read_products", "write_products"],
-          handlers: [{ table: "morrow_work.lab_order_rows", action: "delete_rows", rows: 2 }],
+          handlers: [
+            { table: "morrow_work.customer_data_exports", action: "empty_keep_digest", rows: 0 },
+            { table: "morrow_work.lab_order_rows", action: "delete_rows", rows: 2 },
+          ],
           credential: "none",
           outstanding: [],
         }),
@@ -703,7 +723,9 @@ END $$;`);
         heldSettled?.status === "applied" &&
         heldSettled.outcome === "customer_redacted" &&
         requestsOf(heldRow.id)[0]?.status === "completed" &&
-        requestsOf(heldRow.id)[0]?.evidence.handlers[0]?.rows === 1 &&
+        requestsOf(heldRow.id)[0]?.evidence.handlers.find(
+          (h) => h.table === "morrow_work.lab_order_rows",
+        )?.rows === 1 &&
         !orderRows().some((r) => r.startsWith("store_priv:4242")) &&
         secondPurge.purged === 1 &&
         !inboxRows().some((r) => r.id === heldRow.id) &&
@@ -732,7 +754,7 @@ END $$;`);
       "L5:the_inbox_guard_deletes_nothing_inside_its_seven_days_or_still_received",
       freshRow?.status === "applied" &&
         freshRow.outcome === "customer_redacted" &&
-        requestsOf(freshRow.id)[0]?.evidence.handlers[0]?.rows === 0 &&
+        requestsOf(freshRow.id)[0]?.evidence.handlers.every((h) => h.rows === 0) &&
         lateRow?.status === "received" &&
         refusedDeletes &&
         latePurge.purged === 0 &&
@@ -743,35 +765,317 @@ END $$;`);
     );
     db.sql("UPDATE morrow_work.lab_order_rows SET held=false WHERE order_id='4243';");
     await connector.redrive();
-    // The handler's table, function and list go back to the head's (the registry is empty),
-    // from the migration's own text.
-    const workMigration = readFileSync(
-      "migrations/" +
-        manifest.migrations.find((m) => m.file.endsWith(".customer-deletion-work.sql")).file,
-      "utf8",
-    );
-    const helperStart = workMigration.indexOf(
-      "CREATE FUNCTION morrow_work.customer_content_redact(",
-    );
-    const helperText = workMigration.slice(
-      helperStart,
-      workMigration.indexOf("\nEND $$;\n", helperStart) + "\nEND $$;\n".length,
-    );
-    db.sql(`DROP TABLE morrow_work.lab_order_rows;
-CREATE OR REPLACE FUNCTION morrow_identity.customer_handler_tables() RETURNS text[]
-LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$ SELECT '{}'::text[] $$;`);
-    db.sql(
-      "SET ROLE morrow_work_owner;\n" +
-        helperText.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION"),
-    );
+    // The registration surface and its list go back to the head's (the exports alone), from the
+    // migrations' own text.
+    const migrationText = (slug) =>
+      readFileSync(
+        "migrations/" + manifest.migrations.find((m) => m.file.endsWith(slug)).file,
+        "utf8",
+      );
+    const functionText = (text, name) => {
+      const start = text.indexOf("CREATE FUNCTION " + name + "(");
+      const open = text.indexOf("$$", start);
+      const close = text.indexOf("$$;", open + 2);
+      if (start < 0 || open < 0 || close < 0) throw Error("SHOPIFY_PRIVACY_LAB_FUNCTION:" + name);
+      return text.slice(start, close + 3).replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+    };
+    const restoreRegistry = () => {
+      db.sql(
+        "SET ROLE morrow_identity_owner;\n" +
+          functionText(
+            migrationText(".customer-deletion-identity.sql"),
+            "morrow_identity.customer_handler_tables",
+          ),
+      );
+      db.sql(
+        "SET ROLE morrow_work_owner;\n" +
+          ["morrow_work.customer_content_redact", "morrow_work.customer_content_export"]
+            .map((name) => functionText(migrationText(".customer-deletion-work.sql"), name))
+            .join("\n"),
+      );
+    };
+    db.sql("DROP TABLE morrow_work.lab_order_rows;");
+    restoreRegistry();
     check(
-      "L6:the_registry_is_empty_again_and_a_redact_completes_none_held",
+      "L6:the_registry_is_the_heads_again_and_a_redact_completes_with_the_exports_handler",
       inboxRows().find((r) => r.id === lateRow.id)?.status === "applied" &&
-        helperStart > 0 &&
-        ownerRows("SELECT morrow_identity.customer_handler_tables()::text AS t")[0].t === "{}" &&
+        ownerRows("SELECT morrow_identity.customer_handler_tables()::text AS t")[0].t ===
+          "{morrow_work.customer_data_exports}" &&
         lastRow(await deliver(S, "customers/redact", orderBody(S, [4243])))?.outcome ===
-          "none_held",
+          "customer_redacted",
     );
+
+    // -------------------------------------------------------------------------
+    // X (SD4): the keyed digests under each workspace's key in the vault, a class keyed by them,
+    // the customers/data_request export to the Owner and its erasure by customers/redact and on
+    // its clock. The class is registered here as the pull request that first writes one would
+    // (sim: a superuser-created table keyed by an order and two digests, its handler and export
+    // in the registration surface, and its name in customer_handler_tables).
+    phase("customer_digests");
+    // The Owners (each organization's founding principal), as a website signup records them.
+    const signupProfile = "profile_privacy";
+    db.admin(
+      [
+        `INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,environment_id,application_id,client_id,issuer,token_profile_revision,token_profile_digest,record_revision,state) VALUES(${literal(signupProfile)},'workos','environment_${"C".repeat(26)}','app_${"C".repeat(26)}','client_${"C".repeat(26)}','https://api.workos.com/user_management/client_${"C".repeat(26)}',1,${literal("b".repeat(64))},1,'active');`,
+        ...[A, Y].map(
+          (p) =>
+            `INSERT INTO morrow_identity.organization_signups VALUES(${literal(p.principal)},${literal(randomUUID())},${literal(sha(p.principal))},${literal(signupProfile)},${literal(p.org)},${literal(p.workspace)},${literal(p.membership)},'owner-bootstrap-v1',clock_timestamp());`,
+        ),
+      ].join("\n"),
+    );
+    const keyRowsOf = (s) =>
+      workRows(
+        `SELECT version,status,octet_length(sealed_value) AS sealed FROM morrow_vault.customer_digest_keys WHERE organization_id=${literal(s.org)} AND workspace_id=${literal(s.ws)} ORDER BY version`,
+      );
+    // The workspace's version-1 key, opened as the broker opens it (the lab's keyring), to
+    // compute the digests a class would store.
+    async function workspaceKey(s) {
+      const r = workRows(
+        `SELECT kek_version,encode(wrapped_key,'hex') AS w,encode(sealed_value,'hex') AS v FROM morrow_vault.customer_digest_keys WHERE organization_id=${literal(s.org)} AND workspace_id=${literal(s.ws)} AND version=1`,
+      )[0];
+      return Buffer.from(
+        await openVaultRecord(
+          keyring,
+          {
+            kind: "customer_digest_key",
+            organizationId: s.org,
+            workspaceId: s.ws,
+            provider: "morrow",
+            version: 1,
+          },
+          {
+            kekVersion: Number(r.kek_version),
+            wrappedKey: Buffer.from(r.w, "hex"),
+            sealedValue: Buffer.from(r.v, "hex"),
+          },
+        ),
+      );
+    }
+    const keyed = (key, input) => createHmac("sha256", key).update(input).digest("hex");
+    const sKey = await workspaceKey(S);
+    const expectedDigests = (key) => ({
+      version: 1,
+      id: keyed(key, "morrow.customer-id.v1|" + customer.id),
+      email: keyed(key, "morrow.customer-email.v1|" + customerEmail),
+      phone: keyed(key, "morrow.customer-phone.v1|" + customer.phone),
+    });
+    check(
+      "X1:one_key_per_workspace_and_a_requests_customer_is_kept_only_as_keyed_digests",
+      same(keyRowsOf(S), [{ version: 1, status: "active", sealed: 60 }]) &&
+        keyRowsOf(T).length === 0 &&
+        same(redactRow.body.customerDigests, [expectedDigests(sKey)]) &&
+        same(dataRow.body.customerDigests, [expectedDigests(sKey)]) &&
+        !allText().includes(customerEmail) &&
+        !allText().includes("15550000000"),
+      { keys: keyRowsOf(S), body: redactRow.body },
+    );
+    // The same customer at another tenant's shop: that workspace's own key, so its digests
+    // link nothing across workspaces.
+    const tenantRedact = await deliver(T, "customers/redact", orderBody(T, []));
+    const tenantRow = lastRow(tenantRedact);
+    const tKey = await workspaceKey(T);
+    check(
+      "X2:another_workspace_gets_its_own_key_and_digests_that_match_nothing_of_the_first",
+      tenantRedact.status === 200 &&
+        tenantRow?.status === "applied" &&
+        same(keyRowsOf(T), [{ version: 1, status: "active", sealed: 60 }]) &&
+        same(tenantRow.body.customerDigests, [expectedDigests(tKey)]) &&
+        ["id", "email", "phone"].every(
+          (k) => tenantRow.body.customerDigests[0][k] !== redactRow.body.customerDigests[0][k],
+        ),
+      { tenantRow },
+    );
+    db.sql(`CREATE TABLE morrow_work.lab_contact_rows (organization_id text NOT NULL,workspace_id text NOT NULL,
+ store_id text NOT NULL,order_id text NOT NULL,phone_digest text,email_digest text,outcome text NOT NULL);
+GRANT SELECT,DELETE ON morrow_work.lab_contact_rows TO morrow_work_command;
+CREATE OR REPLACE FUNCTION morrow_identity.customer_handler_tables() RETURNS text[]
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT ARRAY['morrow_work.customer_data_exports','morrow_work.lab_contact_rows'] $$;
+CREATE OR REPLACE FUNCTION morrow_work.lab_contact_match(p_org text,p_ws text,p_store_id text,p_match jsonb)
+RETURNS SETOF morrow_work.lab_contact_rows LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+ SELECT t.* FROM morrow_work.lab_contact_rows t WHERE t.organization_id=p_org AND t.workspace_id=p_ws AND t.store_id=p_store_id
+  AND (t.order_id=ANY(morrow_work.customer_match_orders(p_match)) OR t.phone_digest=ANY(morrow_work.customer_match_digests(p_match,'phone'))
+   OR t.email_digest=ANY(morrow_work.customer_match_digests(p_match,'email')))
+$$;
+GRANT EXECUTE ON FUNCTION morrow_work.lab_contact_match(text,text,text,jsonb) TO morrow_work_command;
+CREATE OR REPLACE FUNCTION morrow_work.customer_content_redact(p_org text,p_ws text,p_store_id text,p_match jsonb)
+RETURNS jsonb LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+DECLARE n integer; r integer;
+BEGIN
+ IF NOT (session_user='morrow_connector_ingress'
+   AND pg_catalog.current_setting('morrow.connector_customer',true)=p_org||'|'||p_ws||'|'||p_store_id) THEN
+  RAISE EXCEPTION 'CUSTOMER_CONTENT_REDACT_UNAVAILABLE';
+ END IF;
+ DELETE FROM morrow_work.lab_contact_rows t WHERE (t.organization_id,t.workspace_id,t.store_id,t.order_id)
+  IN (SELECT m.organization_id,m.workspace_id,m.store_id,m.order_id FROM morrow_work.lab_contact_match(p_org,p_ws,p_store_id,p_match) m);
+ GET DIAGNOSTICS n=ROW_COUNT;
+ SELECT count(*)::integer INTO r FROM morrow_work.lab_contact_match(p_org,p_ws,p_store_id,p_match);
+ RETURN jsonb_build_array(morrow_work.customer_data_exports_redact(p_org,p_ws,p_store_id,p_match),
+  jsonb_build_object('table','morrow_work.lab_contact_rows','action','delete_rows','rows',n,'remaining',r));
+END $$;
+CREATE OR REPLACE FUNCTION morrow_work.customer_content_export(p_org text,p_ws text,p_store_id text,p_match jsonb)
+RETURNS jsonb LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+BEGIN
+ IF NOT (session_user='morrow_connector_ingress'
+   AND pg_catalog.current_setting('morrow.connector_customer',true)=p_org||'|'||p_ws||'|'||p_store_id) THEN
+  RAISE EXCEPTION 'CUSTOMER_CONTENT_EXPORT_UNAVAILABLE';
+ END IF;
+ RETURN jsonb_build_array(jsonb_build_object('table','morrow_work.lab_contact_rows','rows',
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('orderId',m.order_id,'outcome',m.outcome) ORDER BY m.order_id)
+   FROM morrow_work.lab_contact_match(p_org,p_ws,p_store_id,p_match) m),'[]'::jsonb)));
+END $$;`);
+    const otherPhone = "+15550000001";
+    const contactRow = (s, key, order, phone, email, outcome) =>
+      `(${literal(s.org)},${literal(s.ws)},${literal(s.store)},'${order}',${phone ? literal(keyed(key, "morrow.customer-phone.v1|" + phone)) : "NULL"},${email ? literal(keyed(key, "morrow.customer-email.v1|" + email)) : "NULL"},'${outcome}')`;
+    const gKey = sKey; // G is S's workspace: the same key.
+    const rKey = tKey; // R is T's workspace.
+    db.sql(
+      `INSERT INTO morrow_work.lab_contact_rows VALUES ${[
+        contactRow(S, sKey, 5001, customer.phone, null, "confirmed"),
+        contactRow(S, sKey, 5002, null, customerEmail, "cancelled"),
+        contactRow(S, sKey, 5003, otherPhone, null, "confirmed"),
+        contactRow(G, gKey, 5004, customer.phone, null, "confirmed"),
+        contactRow(R, rKey, 5005, customer.phone, null, "confirmed"),
+      ].join(",")};`,
+    );
+    const contactRows = () =>
+      db
+        .rows("SELECT store_id,order_id FROM morrow_work.lab_contact_rows ORDER BY order_id")
+        .map((r) => r.store_id + ":" + r.order_id);
+    const exportsAll = () =>
+      workRows(
+        "SELECT id::text,store_id::text AS store,data_request_id AS request,recipient_principal_id::text AS recipient,rows,document,erased_reason,cardinality(phone_digests) AS phones,cardinality(email_digests) AS emails,(expires_at=created_at+interval '30 days') AS clock FROM morrow_work.customer_data_exports ORDER BY created_at,id",
+      );
+    // The Owner's read through the api login's session context; anyone else reads nothing.
+    const exportsFor = (p) =>
+      JSON.parse(
+        db
+          .sql(
+            `BEGIN; SET LOCAL ROLE morrow_work_api; SELECT count(*) FROM morrow_work.enter_context(${literal(p.digest)},${literal(p.workspace)}); SELECT COALESCE(json_agg(row_to_json(e)),'[]')::text FROM morrow_work.customer_data_exports_open() e; COMMIT;`,
+            { user: "morrow_api_worker" },
+          )
+          .split("\n")
+          .at(-1),
+      );
+    const dataRequestFor = (s, id, extra = {}) =>
+      compliance(s, {
+        customer,
+        orders_requested: [],
+        data_request: { id },
+        ...extra,
+      });
+    const exported = await deliver(S, "customers/data_request", dataRequestFor(S, 9100));
+    const exportedRow = lastRow(exported);
+    const exportedRequest = requestsOf(exportedRow?.id ?? "")[0];
+    const [firstExport] = exportsAll();
+    const ownerView = exportsFor(A);
+    check(
+      "X3:a_data_request_exports_the_customers_rows_of_its_store_to_the_owner_only",
+      exported.status === 200 &&
+        exportedRow?.status === "applied" &&
+        exportedRow.outcome === "customer_exported" &&
+        same(exportedRow.effects, { request: "completed", orders: 0, handlers: 1, rows: 2 }) &&
+        same(exportedRequest?.evidence, {
+          schemaVersion: 1,
+          kind: "customer_exported",
+          scopes: ["read_products", "write_products"],
+          handlers: [{ table: "morrow_work.lab_contact_rows", action: "export_rows", rows: 2 }],
+          credential: "none",
+          outstanding: [],
+        }) &&
+        exportsAll().length === 1 &&
+        firstExport.store === S.store &&
+        firstExport.request === "9100" &&
+        firstExport.recipient === A.principal &&
+        firstExport.rows === 2 &&
+        firstExport.clock === true &&
+        firstExport.phones === 1 &&
+        firstExport.emails === 1 &&
+        same(firstExport.document, {
+          schemaVersion: 1,
+          dataRequestId: "9100",
+          classes: [
+            {
+              table: "morrow_work.lab_contact_rows",
+              rows: [
+                { orderId: "5001", outcome: "confirmed" },
+                { orderId: "5002", outcome: "cancelled" },
+              ],
+            },
+          ],
+        }) &&
+        ownerView.length === 1 &&
+        ownerView[0].export_id === firstExport.id &&
+        JSON.parse(ownerView[0].document).classes[0].rows.length === 2 &&
+        exportsFor(X).length === 0 &&
+        exportsFor(Y).length === 0 &&
+        !JSON.stringify(firstExport.document).includes(sKey.toString("hex").slice(0, 16)),
+      { exportedRow, exportedRequest, firstExport, ownerView },
+    );
+    // customers/redact by the customer's keys alone (no listed order): the customer's rows in
+    // the store and the export are gone; another customer's row and another store's stay.
+    const byDigests = await deliver(S, "customers/redact", orderBody(S, []));
+    const byDigestsRow = lastRow(byDigests);
+    const byDigestsRequest = requestsOf(byDigestsRow?.id ?? "")[0];
+    check(
+      "X4:a_redact_matches_by_phone_and_email_digest_and_erases_the_export_in_place",
+      byDigestsRow?.status === "applied" &&
+        byDigestsRow.outcome === "customer_redacted" &&
+        same(byDigestsRequest?.evidence.handlers, [
+          { table: "morrow_work.customer_data_exports", action: "empty_keep_digest", rows: 1 },
+          { table: "morrow_work.lab_contact_rows", action: "delete_rows", rows: 2 },
+        ]) &&
+        same(contactRows(), ["store_priv:5003", "store_scopes:5004", "store_redact:5005"]) &&
+        exportsAll()[0].erased_reason === "customer_redact" &&
+        exportsAll()[0].document === null &&
+        exportsAll()[0].phones === 0 &&
+        exportsFor(A).length === 0,
+      { byDigestsRequest, rows: contactRows(), exports: exportsAll() },
+    );
+    // A second customer's export expires on its 30-day clock (sim: backdated 31 days).
+    const otherCustomer = { id: 987650009999, email: "lab-other@example.test", phone: otherPhone };
+    const secondRequest = await deliver(
+      S,
+      "customers/data_request",
+      compliance(S, { customer: otherCustomer, orders_requested: [], data_request: { id: 9101 } }),
+    );
+    const secondExport = exportsAll().find((e) => e.request === "9101");
+    db.sql(
+      `SET session_replication_role=replica; UPDATE morrow_work.customer_data_exports SET created_at=created_at-interval '31 days',expires_at=expires_at-interval '31 days' WHERE id=${literal(secondExport?.id ?? "")}; SET session_replication_role=origin;`,
+    );
+    const expiry = await connectorDatabase.privacyPurge(10000);
+    check(
+      "X5:an_export_is_erased_when_its_thirty_days_pass",
+      secondRequest.status === 200 &&
+        secondExport?.rows === 1 &&
+        expiry.erased === 1 &&
+        exportsAll().find((e) => e.request === "9101")?.erased_reason === "expired" &&
+        exportsAll().find((e) => e.request === "9101")?.document === null &&
+        (await connectorDatabase.privacyPurge(10000)).erased === 0,
+      { secondExport, expiry },
+    );
+    // The same customer's request at R (T's workspace): an export for its Owner, Y, which R's
+    // shop/redact (phase S) erases with the rest of the store's content.
+    const rExport = await deliver(R, "customers/data_request", dataRequestFor(R, 9102));
+    const rExportRow = exportsAll().find((e) => e.request === "9102");
+    // A redelivery of the same data request under a new webhook id writes no second export.
+    const rAgain = await deliver(R, "customers/data_request", dataRequestFor(R, 9102));
+    check(
+      "X6:an_export_goes_to_its_own_workspaces_owner_and_a_redelivery_writes_no_second",
+      rExport.status === 200 &&
+        rExportRow?.recipient === Y.principal &&
+        rExportRow.store === R.store &&
+        rExportRow.rows === 1 &&
+        lastRow(rAgain)?.outcome === "duplicate_request" &&
+        exportsAll().filter((e) => e.request === "9102").length === 1 &&
+        exportsFor(Y).length === 1 &&
+        exportsFor(A).length === 0,
+      { rExportRow },
+    );
+    db.sql(
+      "DROP FUNCTION morrow_work.lab_contact_match(text,text,text,jsonb); DROP TABLE morrow_work.lab_contact_rows;",
+    );
+    restoreRegistry();
 
     // -------------------------------------------------------------------------
     // T: the catalogue reads.
@@ -1279,6 +1583,18 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$ SELECT '{}'::tex
         completedRun.dueMissed === 0,
       { completedRun, done },
     );
+    // SD4: R's customers/data_request export (phase X) is erased in place with the rest of the
+    // store's content (by the first, pending pass; the completing pass counts what it erased
+    // itself, as for every deletion handler), and its Owner reads nothing more.
+    check(
+      "S10:shop_redact_erases_the_stores_customer_exports_in_place",
+      done?.evidence?.handlers?.find((h) => h.table === "morrow_work.customer_data_exports")
+        ?.action === "empty_keep_digest" &&
+        exportsAll().find((e) => e.request === "9102")?.erased_reason === "shop_redact" &&
+        exportsAll().find((e) => e.request === "9102")?.document === null &&
+        exportsFor(Y).length === 0,
+      { done, exports: exportsAll() },
+    );
     const noInstallation = await deliver(S, "shop/redact", compliance(S, { shop_id: 999 }));
     const noneHeld = requestsOf(
       inboxRows().find((r) => r.webhook_id === noInstallation.webhookId)?.id ?? "",
@@ -1435,6 +1751,60 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$ SELECT '{}'::tex
           !asUser(user, "SELECT * FROM morrow_work.connector_privacy_purge();") &&
           !asUser(user, "SELECT * FROM morrow_identity.work_shopify_inbox_purge();"),
       ),
+    );
+    // SD4: the M2 PR-3 applier, which the connector's login can still call, answers customers/*
+    // "none held"; a redact of an installation now completes only with every registered
+    // handler named, so it is refused and changes nothing, and the current applier completes it.
+    const hookV1 = S.oracle.webhook("customers/redact", JSON.stringify(orderBody(S, [])));
+    const recordedV1 = decodeShopifyWebhookVerdict(
+      await broker.webhookVerify(
+        brokerEnv,
+        S.appKey,
+        JSON.stringify(hookV1.headers),
+        Buffer.from(hookV1.body).toString("base64"),
+      ),
+    );
+    const viaV1 = db.tryRun(
+      `SELECT outcome FROM morrow_work.connector_inbox_apply(${literal(recordedV1.inboxId ?? "")});`,
+      { user: "morrow_connector_ingress" },
+    );
+    const v1Open =
+      requestsOf(recordedV1.inboxId ?? "")[0]?.status === "open" &&
+      inboxRows().find((r) => r.id === recordedV1.inboxId)?.status === "received";
+    const viaV2 = await connectorDatabase.inboxApply(recordedV1.inboxId, 10000);
+    check(
+      "K6:the_m2_applier_cannot_complete_a_redact_without_every_registered_handler",
+      recordedV1.verdict === "recorded" &&
+        !viaV1.ok &&
+        v1Open &&
+        viaV2.outcome === "applied" &&
+        requestsOf(recordedV1.inboxId)[0]?.status === "completed" &&
+        requestsOf(recordedV1.inboxId)[0]?.evidence.handlers.some(
+          (h) => h.table === "morrow_work.customer_data_exports",
+        ),
+      { viaV1: viaV1.ok, v1Open, viaV2 },
+    );
+    // SD4: only the broker's login reads or creates a workspace's customer digest keys, and the
+    // api reads exports only through the Owner's definer.
+    check(
+      "K5:only_the_brokers_login_reaches_the_digest_keys_and_no_login_reads_an_export_directly",
+      ["morrow_connector_ingress", "morrow_api_worker", "morrow_runtime_executor"].every(
+        (user) =>
+          !asUser(
+            user,
+            `SELECT * FROM morrow_vault.customer_digest_keys_get(${literal(S.appKey)},${literal(S.shop)});`,
+          ) &&
+          !asUser(
+            user,
+            `SELECT morrow_vault.customer_digest_key_create(${literal(S.appKey)},${literal(S.shop)},'1','${"a".repeat(120)}','${"a".repeat(120)}');`,
+          ) &&
+          !asUser(user, "SELECT count(*) FROM morrow_work.customer_data_exports;") &&
+          !asUser(user, "SELECT count(*) FROM morrow_vault.customer_digest_keys;"),
+      ) &&
+        asUser(
+          "morrow_vault_broker",
+          `SELECT * FROM morrow_vault.customer_digest_keys_get(${literal(S.appKey)},${literal(S.shop)});`,
+        ),
     );
     // SD3: the connector's login runs the redaction surface only through its applier: it holds
     // no EXECUTE on the helper or the identity purge, and a context it writes reaches nothing.

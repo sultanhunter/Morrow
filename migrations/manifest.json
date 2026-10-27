@@ -434,16 +434,16 @@
     {
       "sequence": 58,
       "file": "0058.customer-deletion-identity.sql",
-      "sha256": "afe6df05e899513219759e1fd8f7945c98ae0f2a2251137b145b9e438b25e435",
+      "sha256": "6c27d13960cafeab89344e49debadfcf458bcc26115035b7426b41ad52b011e3",
       "executeAs": "morrow_identity_owner",
-      "reviewRef": "docs/briefs/sd3-keep-orders-to-redact.md"
+      "reviewRef": "docs/packets/P09.T05c.md"
     },
     {
       "sequence": 59,
       "file": "0059.customer-deletion-work.sql",
-      "sha256": "28c60045588a8cc1e6a4ce2fd30877d73e60e2cf3a62dff30ceb078f6f8d633e",
+      "sha256": "af5223b7af9d74d34e8b9f2c451ded17a7e8924bdad0c2d33e1efa8786c32116",
       "executeAs": "morrow_work_owner",
-      "reviewRef": "docs/briefs/sd3-keep-orders-to-redact.md"
+      "reviewRef": "docs/packets/P09.T05c.md"
     }
   ]
 }

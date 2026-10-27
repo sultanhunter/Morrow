@@ -106,6 +106,7 @@ import {
   type BrokerMethod,
   type BrokerVault,
 } from "./capabilities.js";
+import { workspaceCustomerDigestKeys, type CustomerDigestKey } from "./customer-digest.js";
 import {
   exchangeShopifyCode,
   minimiseShopifyWebhook,
@@ -879,11 +880,21 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
           } catch {
             return deny("invalid");
           }
+          // SD4 (P09.T05c): a customers/* request is kept only as keyed digests, under every
+          // kept version of the inviting workspace's digest key (created at its first request),
+          // read and opened in this same transaction. No app for the shop records nothing.
+          let digestKeys: readonly CustomerDigestKey[] = [];
+          if (topic === "customers/redact" || topic === "customers/data_request") {
+            const keys = await workspaceCustomerDigestKeys(vault.keyring, query, appKey, shop);
+            if (keys === null) return deny("refused");
+            digestKeys = keys;
+          }
           const minimised = await minimiseShopifyWebhook(
             secret.secret,
             topic as string,
             parsed,
             shop,
+            digestKeys,
           );
           if (!minimised) return deny("invalid");
           const r = row(
