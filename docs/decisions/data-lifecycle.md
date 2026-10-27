@@ -112,6 +112,12 @@ Undo, history and "Approve several at once" (v1 PR 4; migration 0050 catalog-und
 | `morrow_work.operation_undo_checks` | Content-free record of the broker's reads before an undo: the read snapshot's digest (the same content address `product_snapshots` and the undo proposal's `expectedSourceRevision` carry), per-field codes (`unchanged`, `changed`) and the time; never a value; 365 days | P09.T05 prunes after 365 days; no delete path exists |
 | `morrow_work.catalog_undos` | Content-free: one row per undo proposal naming the change it undoes, the check it was built from, the person and their command key; 365 days | P09.T05 prunes after 365 days; no delete path exists |
 
+Per-shop buckets for Shopify's API query cost (plan row SD5; migration shopify-query-cost). Shopify's rate limit, counted in its query-cost points: no money, no credits and no store content.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_work.rate_buckets` | Content-free runtime state: one row per (workspace, provider, subject), for Shopify one per store installation: ids, the bucket's capacity, restore rate and points with their times, and three counts (reads admitted, told to wait, THROTTLED replies); no shop domain or store data. Bounded by the number of installations; kept while the installation's workspace exists | Deleted with the workspace by P09.T05; no delete path exists |
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.

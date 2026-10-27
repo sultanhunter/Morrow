@@ -247,7 +247,10 @@ export function createShopifyOracle({
         if (Array.isArray(input.tags)) p.tags = [...input.tags];
         return {
           productUpdate: {
-            product: { id: "gid://shopify/Product/" + p.id, updatedAt: new Date(now()).toISOString() },
+            product: {
+              id: "gid://shopify/Product/" + p.id,
+              updatedAt: new Date(now()).toISOString(),
+            },
             userErrors: [],
           },
         };
@@ -361,7 +364,8 @@ export function createShopifyOracle({
           const at = now();
           b.available = Math.min(b.maximum, b.available + (b.restoreRate * (at - b.at)) / 1000);
           b.at = at;
-          const requestedQueryCost = shopifyOracleCosts[identity ? "ShopIdentity" : call.operation] ?? 2;
+          const requestedQueryCost =
+            shopifyOracleCosts[identity ? "ShopIdentity" : call.operation] ?? 2;
           const throttleStatus = () => ({
             maximumAvailable: b.maximum,
             currentlyAvailable: Math.floor(b.available),

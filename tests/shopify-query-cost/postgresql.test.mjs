@@ -43,10 +43,7 @@ import {
   shopifyQueryCostPolicy,
   takeShopifyQueryCost,
 } from "../../apps/broker/src/shopify-query-cost.ts";
-import {
-  shopifyAdminGraphqlOnce,
-  shopifyReadDocuments,
-} from "../../apps/broker/src/shopify.ts";
+import { shopifyAdminGraphqlOnce, shopifyReadDocuments } from "../../apps/broker/src/shopify.ts";
 import { shopifyAdminWrite, shopifyWriteDocuments } from "../../apps/broker/src/shopify-write.ts";
 import { brokerCapabilities } from "../../apps/broker/src/capabilities.ts";
 import { createVaultKeyring, sealVaultRecord, vaultBytesHex } from "../../apps/broker/src/vault.ts";
@@ -307,14 +304,17 @@ const quietly = async (body) => {
 async function catalogRead(p, s, route) {
   const response = await quietly(() =>
     catalog.fetch(
-      new Request(`${workFixtureOrigin}/workspace/${p.workspace}/stores/${s.store}/catalog/${route}`, {
-        headers: {
-          Cookie: "__Host-morrow_session=" + p.secret,
-          "Sec-Fetch-Site": "same-origin",
-          "Sec-Fetch-Mode": "cors",
-          "Sec-Fetch-Dest": "empty",
+      new Request(
+        `${workFixtureOrigin}/workspace/${p.workspace}/stores/${s.store}/catalog/${route}`,
+        {
+          headers: {
+            Cookie: "__Host-morrow_session=" + p.secret,
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Dest": "empty",
+          },
         },
-      }),
+      ),
       {},
       { waitUntil() {} },
     ),
@@ -338,8 +338,9 @@ test("Q1: only the broker's login runs the definers; it reaches no table or help
   }
   // Another session user (the local superuser here) is answered `denied` by the guard.
   assert.equal(
-    db.rows(`SELECT * FROM morrow_vault.shopify_query_cost_take(${literal(S.installation)},'person_read','2')`)[0]
-      .outcome,
+    db.rows(
+      `SELECT * FROM morrow_vault.shopify_query_cost_take(${literal(S.installation)},'person_read','2')`,
+    )[0].outcome,
     "denied",
   );
   for (const statement of [
@@ -386,7 +387,9 @@ test("Q2: the first take creates the bucket in the installation's tenant; bad in
       installation + " " + cls + " " + cost,
     );
   assert.equal(
-    db.rows("SELECT count(*)::int AS n FROM morrow_work.rate_buckets", { role: "morrow_work_owner" })[0].n,
+    db.rows("SELECT count(*)::int AS n FROM morrow_work.rate_buckets", {
+      role: "morrow_work_owner",
+    })[0].n,
     2,
   );
   assert.equal(bucketOf(S).revision, 2, "a refused take changes nothing");
@@ -448,16 +451,16 @@ test("Q4: the settle refunds, adopts Shopify's report, never keeps more than Sho
   b = bucketOf(S);
   assert.ok(b.available >= 120 && b.available <= 120.1, String(b.available));
   // THROTTLED refunds the whole charge, takes Shopify's count, and is counted.
-  assert.equal(
-    await settle(S, 27, { ...report({ available: 3 }), actual: null }, true),
-    "settled",
-  );
+  assert.equal(await settle(S, 27, { ...report({ available: 3 }), actual: null }, true), "settled");
   b = bucketOf(S);
   assert.ok(b.available >= 3 && b.available < 4, String(b.available));
   assert.equal(b.throttled, 1);
   // No report: the refund only (never more than capacity).
   setBucket(S, { capacity: 1000, rate: 1, available: 990 });
-  assert.equal(await settle(S, 27, { ...report(), available: null, maximum: null, restoreRate: null }, false), "settled");
+  assert.equal(
+    await settle(S, 27, { ...report(), available: null, maximum: null, restoreRate: null }, false),
+    "settled",
+  );
   b = bucketOf(S);
   assert.ok(b.available >= 997 && b.available <= 1000, String(b.available));
   assert.equal(b.capacity, 1000);
@@ -473,8 +476,9 @@ test("Q4: the settle refunds, adopts Shopify's report, never keeps more than Sho
     "'27','20','10','2000','100','yes'",
   ])
     assert.equal(
-      asBroker(`morrow_vault.shopify_query_cost_settle(${literal(S.installation)},${args}) AS outcome`)
-        .outcome,
+      asBroker(
+        `morrow_vault.shopify_query_cost_settle(${literal(S.installation)},${args}) AS outcome`,
+      ).outcome,
       "invalid",
       args,
     );
@@ -602,7 +606,10 @@ test("Q6: the catalogue route with the switch on: charged and settled; parked as
   const parked = await catalogRead(P.A, S, "collections");
   assert.equal(parked.status, 429, JSON.stringify(parked.body));
   assert.equal(parked.body.code, "rate_limited");
-  assert.ok(Number(parked.retryAfter) >= 120 && Number(parked.retryAfter) <= 128, parked.retryAfter);
+  assert.ok(
+    Number(parked.retryAfter) >= 120 && Number(parked.retryAfter) <= 128,
+    parked.retryAfter,
+  );
   assert.equal(parked.body.retryAfterSeconds, Number(parked.retryAfter));
   assert.equal(graphqlCalls(S).length, callsBefore, "nothing reached Shopify");
   assert.ok(consoleLines.some((l) => l.includes('"outcome":"read_parked"')));
@@ -635,7 +642,12 @@ test("Q8: tenant isolation: the session template reads its own tenant only and w
   const { S, T } = stores;
   const visible = (p) =>
     db
-      .sql(asCommandRole(p, "SELECT string_agg(subject_id::text,',' ORDER BY subject_id) FROM morrow_work.rate_buckets;"))
+      .sql(
+        asCommandRole(
+          p,
+          "SELECT string_agg(subject_id::text,',' ORDER BY subject_id) FROM morrow_work.rate_buckets;",
+        ),
+      )
       .split("\n")
       .at(-1);
   assert.equal(visible(P.A), [stores.B.installation, S.installation].sort().join(","));
@@ -716,10 +728,17 @@ test("Q10 and Q11: the SQL policy equals the broker's; the init line names the s
   assert.equal(init?.vault, true);
   // No token, password or KEK in any console line.
   const text = consoleLines.join("\n");
-  for (const secret of [kek, brokerEnv.MORROW_DB_PASSWORD_MORROW_VAULT_BROKER, ...Object.values(stores).map((s) => s.token)])
+  for (const secret of [
+    kek,
+    brokerEnv.MORROW_DB_PASSWORD_MORROW_VAULT_BROKER,
+    ...Object.values(stores).map((s) => s.token),
+  ])
     assert.ok(!text.includes(secret));
   assert.deepEqual(
-    decodeShopifyReadResult("collectionsPage", JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs: 5 })),
+    decodeShopifyReadResult(
+      "collectionsPage",
+      JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs: 5 }),
+    ),
     { schemaVersion: 1, outcome: "parked", retryAfterMs: 5 },
   );
 });

@@ -121,12 +121,30 @@ test("the take: one registered statement, closed inputs, closed rows", async () 
   );
   const cases = [
     [{ outcome: "admitted", wait_ms: "0" }, { kind: "admitted" }],
-    [{ outcome: "wait", wait_ms: "340" }, { kind: "wait", waitMs: 340 }],
-    [{ outcome: "wait", wait_ms: "3600000" }, { kind: "wait", waitMs: 3_600_000 }],
-    [{ outcome: "too_costly", wait_ms: null }, { kind: "refused", reason: "too_costly" }],
-    [{ outcome: "not_found", wait_ms: null }, { kind: "refused", reason: "not_found" }],
-    [{ outcome: "invalid", wait_ms: null }, { kind: "refused", reason: "invalid" }],
-    [{ outcome: "denied", wait_ms: null }, { kind: "refused", reason: "denied" }],
+    [
+      { outcome: "wait", wait_ms: "340" },
+      { kind: "wait", waitMs: 340 },
+    ],
+    [
+      { outcome: "wait", wait_ms: "3600000" },
+      { kind: "wait", waitMs: 3_600_000 },
+    ],
+    [
+      { outcome: "too_costly", wait_ms: null },
+      { kind: "refused", reason: "too_costly" },
+    ],
+    [
+      { outcome: "not_found", wait_ms: null },
+      { kind: "refused", reason: "not_found" },
+    ],
+    [
+      { outcome: "invalid", wait_ms: null },
+      { kind: "refused", reason: "invalid" },
+    ],
+    [
+      { outcome: "denied", wait_ms: null },
+      { kind: "refused", reason: "denied" },
+    ],
   ];
   for (const [rowValue, expected] of cases) {
     const q = fakeQuery([[rowValue]]);
@@ -134,14 +152,15 @@ test("the take: one registered statement, closed inputs, closed rows", async () 
       await takeShopifyQueryCost(q.query, ids.installation, "person_read", 27),
       expected,
     );
-    assert.deepEqual(q.sent, [
-      ["shopifyQueryCostTake", [ids.installation, "person_read", "27"]],
-    ]);
+    assert.deepEqual(q.sent, [["shopifyQueryCostTake", [ids.installation, "person_read", "27"]]]);
   }
   // Malformed rows are a VaultError, never an admission.
   for (const rows of [
     [],
-    [{ outcome: "admitted", wait_ms: "0" }, { outcome: "admitted", wait_ms: "0" }],
+    [
+      { outcome: "admitted", wait_ms: "0" },
+      { outcome: "admitted", wait_ms: "0" },
+    ],
     [{ outcome: "admitted", wait_ms: "5" }],
     [{ outcome: "admitted" }],
     [{ outcome: "admitted", wait_ms: "0", extra: 1 }],
@@ -220,7 +239,10 @@ test("the settle: Shopify's report as decimal text; values outside the safety ra
   for (const v of [0, 0.001, 99.999, 100, 1_000_000])
     assert.match(shopifyQueryCostSettleValues(1, report({ available: v }), false)[2], decimal);
   const q = fakeQuery([[{ outcome: "settled" }]]);
-  assert.equal(await settleShopifyQueryCost(q.query, ids.installation, 27, report(), false), "settled");
+  assert.equal(
+    await settleShopifyQueryCost(q.query, ids.installation, 27, report(), false),
+    "settled",
+  );
   assert.deepEqual(q.sent, [
     [
       "shopifyQueryCostSettle",
@@ -290,7 +312,9 @@ function scriptedCall({ takes, sends, settleFails = false, cls = "agent_read", b
   };
   return { call, events };
 }
-const data = (cost = { requested: 27, actual: 25, available: 900, maximum: 1000, restoreRate: 50 }) => ({
+const data = (
+  cost = { requested: 27, actual: 25, available: 900, maximum: 1000, restoreRate: 50 },
+) => ({
   reply: "data",
   cost,
   throttled: false,
@@ -319,7 +343,10 @@ test("a bucketed call: take, send once, settle from Shopify's report", async () 
     sends: [{ reply: "data", cost: null, throttled: false, answered: true }],
   });
   assert.deepEqual(await bucketedShopifyCall(quiet.call), { kind: "reply", reply: "data" });
-  assert.deepEqual(quiet.events, ["shopifyQueryCostTake:installation_cost,agent_read,27", "send:data"]);
+  assert.deepEqual(quiet.events, [
+    "shopifyQueryCostTake:installation_cost,agent_read,27",
+    "send:data",
+  ]);
   const failing = scriptedCall({ takes: [admitted], sends: [data()], settleFails: true });
   assert.deepEqual(await bucketedShopifyCall(failing.call), { kind: "reply", reply: "data" });
   // A reply Shopify never answered (a transport failure) is not settled either.
@@ -344,7 +371,11 @@ test("a bucketed call: a short wait in the broker, a long one parks unsent, a re
   assert.deepEqual(await bucketedShopifyCall(long.call), { kind: "parked", retryAfterMs: 2500 });
   assert.deepEqual(long.events, ["shopifyQueryCostTake:installation_cost,agent_read,27"]);
   // The same wait is spent by a person read within its budget, and parks past it.
-  const person = scriptedCall({ cls: "person_read", takes: [wait(2500), admitted], sends: [data()] });
+  const person = scriptedCall({
+    cls: "person_read",
+    takes: [wait(2500), admitted],
+    sends: [data()],
+  });
   assert.deepEqual(await bucketedShopifyCall(person.call), { kind: "reply", reply: "data" });
   assert.ok(person.events.includes("sleep:2500"));
   const late = scriptedCall({ cls: "person_read", budget: 4000, takes: [wait(2500)], sends: [] });
@@ -440,14 +471,28 @@ test("one attempt: data and THROTTLED carry Shopify's cost report; no time left 
     };
   };
   const ok = fetchOf({ data: { shop: { id: 1 } }, extensions });
-  const reply = await shopifyAdminGraphqlOnce(ok.fetch, shop, token, "query X { shop { id } }", {}, Date.now() + 5000);
+  const reply = await shopifyAdminGraphqlOnce(
+    ok.fetch,
+    shop,
+    token,
+    "query X { shop { id } }",
+    {},
+    Date.now() + 5000,
+  );
   assert.equal(reply.kind, "data");
   assert.deepEqual(reply.cost, shopifyCostReport({ extensions }));
   const throttled = fetchOf({
     errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
     extensions,
   });
-  const t = await shopifyAdminGraphqlOnce(throttled.fetch, shop, token, "query X { a }", {}, Date.now() + 5000);
+  const t = await shopifyAdminGraphqlOnce(
+    throttled.fetch,
+    shop,
+    token,
+    "query X { a }",
+    {},
+    Date.now() + 5000,
+  );
   assert.deepEqual(t, { kind: "throttled", cost: shopifyCostReport({ extensions }) });
   assert.equal(throttled.calls.length, 1, "one attempt: no wait, no resend");
   const late = fetchOf({ data: {} });
@@ -484,7 +529,11 @@ test("one attempt: data and THROTTLED carry Shopify's cost report; no time left 
               extensions: {
                 cost: {
                   requestedQueryCost: 27,
-                  throttleStatus: { currentlyAvailable: 2, restoreRate: 50, maximumAvailable: 1000 },
+                  throttleStatus: {
+                    currentlyAvailable: 2,
+                    restoreRate: 50,
+                    maximumAvailable: 1000,
+                  },
                 },
               },
             }
@@ -608,7 +657,16 @@ async function readerHarness(options = {}) {
   });
   const environment = env("switch" in options ? options.switch : "on");
   const readAs = (caller, query, variables, budget = 10000) =>
-    reader.read(environment, caller, lease, 1, "subject_1", query, JSON.stringify(variables), budget);
+    reader.read(
+      environment,
+      caller,
+      lease,
+      1,
+      "subject_1",
+      query,
+      JSON.stringify(variables),
+      budget,
+    );
   return { readAs, events, requests };
 }
 
@@ -652,11 +710,14 @@ test("switch on: a read the bucket cannot yet cover parks unsent; an agent parks
   assert.equal(person.requests.length, 1);
   // Past the person read's budget it parks too, as the catalogue routes' 429.
   const late = await readerHarness({ takes: [wait(9000)] });
-  assert.deepEqual(JSON.parse(await late.readAs("api", "collectionsPage", { after: null }, 10000)), {
-    schemaVersion: 1,
-    outcome: "parked",
-    retryAfterMs: 9000,
-  });
+  assert.deepEqual(
+    JSON.parse(await late.readAs("api", "collectionsPage", { after: null }, 10000)),
+    {
+      schemaVersion: 1,
+      outcome: "parked",
+      retryAfterMs: 9000,
+    },
+  );
   assert.equal(late.requests.length, 0);
 });
 
@@ -741,7 +802,10 @@ test("the protocol: a parked read is closed (1 ms to an hour, whole ms, no other
     { schemaVersion: 2, outcome: "parked", retryAfterMs: 10 },
     { schemaVersion: 1, outcome: "parked", retryAfterMs: 10, reason: "throttled" },
   ])
-    assert.throws(() => decodeShopifyReadResult("productContent", JSON.stringify(bad)), JSON.stringify(bad));
+    assert.throws(
+      () => decodeShopifyReadResult("productContent", JSON.stringify(bad)),
+      JSON.stringify(bad),
+    );
 });
 
 // ---------------------------------------------------------------------------
@@ -891,31 +955,39 @@ test("drift: the SQL policy equals the broker's, and the oracle prices the read 
     "defaults and the dearest document",
   );
   assert.ok(
-    f.includes(
-      `p_class NOT IN (${queryCostClasses.map((c) => `'${c}'`).join(",")})`,
-    ),
+    f.includes(`p_class NOT IN (${queryCostClasses.map((c) => `'${c}'`).join(",")})`),
     "the definer's closed class list",
   );
   assert.ok(f.includes(`least(${p.maxWaitMs},greatest(1,v_wait))`), "the longest wait");
   assert.ok(
-    f.includes(`capacity numeric(12,3) NOT NULL CHECK (capacity BETWEEN ${p.capacityRange[0]} AND ${p.capacityRange[1]})`),
+    f.includes(
+      `capacity numeric(12,3) NOT NULL CHECK (capacity BETWEEN ${p.capacityRange[0]} AND ${p.capacityRange[1]})`,
+    ),
   );
   assert.ok(
     f.includes(
       `restore_rate numeric(12,3) NOT NULL CHECK (restore_rate BETWEEN ${p.restoreRateRange[0]} AND ${p.restoreRateRange[1]})`,
     ),
   );
-  assert.ok(f.includes(`(p_available IS NOT NULL AND (p_available<0 OR p_available>${p.availableMax}))`));
+  assert.ok(
+    f.includes(`(p_available IS NOT NULL AND (p_available<0 OR p_available>${p.availableMax}))`),
+  );
   // Shares grow down the priority order: each class leaves more for those above it.
   const shares = queryCostClasses.map((c) => p.floorShare[c]);
-  assert.deepEqual([...shares].sort((a, b) => a - b), shares);
+  assert.deepEqual(
+    [...shares].sort((a, b) => a - b),
+    shares,
+  );
   assert.equal(p.floorShare.write, 0);
   // Every read document's known cost fits the default bucket in every class (never
   // too_costly before Shopify's first report).
   for (const [name, cost] of Object.entries(shopifyReadCosts)) {
     assert.ok(Number.isSafeInteger(cost) && cost >= 1 && cost <= p.maxCost, name);
     for (const cls of queryCostClasses)
-      assert.ok(p.defaultCapacity * p.floorShare[cls] + cost <= p.defaultCapacity, name + " " + cls);
+      assert.ok(
+        p.defaultCapacity * p.floorShare[cls] + cost <= p.defaultCapacity,
+        name + " " + cls,
+      );
   }
   // The lab's synthetic Shopify charges each read document what the broker takes.
   const operations = {
@@ -953,16 +1025,26 @@ test("migration shopify-query-cost: the broker's definers alone, tenant from the
     const body = f.slice(f.indexOf("CREATE FUNCTION morrow_vault." + definer));
     const end = body.indexOf("END $$;");
     const text = body.slice(0, end);
-    assert.ok(text.includes("SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp"), definer);
-    // The executor guard runs first; the tenant comes only from the installation row.
     assert.ok(
-      text.indexOf("work_executor_safe('morrow_vault_broker')") < text.indexOf("work_shopify_check_target"),
+      text.includes("SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp"),
       definer,
     );
-    assert.ok(text.includes("t.organization_id||'|'||t.workspace_id||'|shopify|'||p_installation_id"), definer);
+    // The executor guard runs first; the tenant comes only from the installation row.
+    assert.ok(
+      text.indexOf("work_executor_safe('morrow_vault_broker')") <
+        text.indexOf("work_shopify_check_target"),
+      definer,
+    );
+    assert.ok(
+      text.includes("t.organization_id||'|'||t.workspace_id||'|shopify|'||p_installation_id"),
+      definer,
+    );
     // The setting is cleared before the definer returns.
     assert.ok(text.includes("set_config('morrow.vault_rate_bucket','',true)"), definer);
-    assert.ok(!/p_(org|ws|organization|workspace)/.test(text.slice(0, text.indexOf("RETURNS"))), definer);
+    assert.ok(
+      !/p_(org|ws|organization|workspace)/.test(text.slice(0, text.indexOf("RETURNS"))),
+      definer,
+    );
     assert.ok(f.includes(`ALTER FUNCTION morrow_vault.${definer}(`), definer);
   }
   // The broker's context: its own login and exactly the one subject the definer named.
@@ -982,7 +1064,14 @@ test("migration shopify-query-cost: the broker's definers alone, tenant from the
   assert.ok(!/GRANT[^;]*DELETE[^;]*rate_buckets/.test(f));
   assert.ok(f.includes("BEFORE INSERT OR UPDATE OR DELETE ON morrow_work.rate_buckets"));
   // No money: the record names no credit, wallet or US$ column.
-  assert.ok(!/credit|wallet|usd|cost_usd/i.test(f.slice(f.indexOf("CREATE TABLE morrow_work.rate_buckets"), f.indexOf("CREATE UNIQUE INDEX rate_buckets_subject"))));
+  assert.ok(
+    !/credit|wallet|usd|cost_usd/i.test(
+      f.slice(
+        f.indexOf("CREATE TABLE morrow_work.rate_buckets"),
+        f.indexOf("CREATE UNIQUE INDEX rate_buckets_subject"),
+      ),
+    ),
+  );
   // A write never waits on the bucket; every other class waits below its share.
   assert.ok(f.includes("IF p_class='write' OR v_avail-p_cost>=v_floor THEN"));
 });

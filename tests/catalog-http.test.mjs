@@ -531,8 +531,7 @@ test("a parked read (the store's query-cost bucket) is 429 with Retry-After", as
       origin: workGuardOrigin,
       connector: db.connector,
       now: Date.now,
-      reader: readAll(JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs }))
-        .reader,
+      reader: readAll(JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs })).reader,
     });
     const { result, lines } = await quiet(t, () =>
       handler.fetch(request("GET", products), undefined, ctx),
@@ -554,8 +553,7 @@ test("a parked read (the store's query-cost bucket) is 429 with Retry-After", as
       origin: workGuardOrigin,
       connector: db.connector,
       now: Date.now,
-      reader: readAll(JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs }))
-        .reader,
+      reader: readAll(JSON.stringify({ schemaVersion: 1, outcome: "parked", retryAfterMs })).reader,
     });
     const { result } = await quiet(t, () =>
       handler.fetch(request("GET", products), undefined, ctx),

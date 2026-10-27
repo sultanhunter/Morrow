@@ -21,11 +21,7 @@ import {
   type WorkspaceRouteSpec,
 } from "../http-guard.js";
 import { workBodyLimits } from "../http-bodies.js";
-import {
-  workErrorResponse,
-  workRateLimitedResponse,
-  type WorkApiDependencies,
-} from "../http.js";
+import { workErrorResponse, workRateLimitedResponse, type WorkApiDependencies } from "../http.js";
 
 // The catalogue routes of the workspace API (M2 PR-3; the M2 brief's api routes; spine §4):
 // the collections and products of a linked store, for the Ask screen's picker. An internal

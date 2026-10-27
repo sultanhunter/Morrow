@@ -105,7 +105,11 @@ export async function takeShopifyQueryCost(
     "outcome,wait_ms",
   );
   if (row.outcome === "admitted" && row.wait_ms === "0") return Object.freeze({ kind: "admitted" });
-  if (row.outcome === "wait" && typeof row.wait_ms === "string" && /^[1-9][0-9]{0,6}$/.test(row.wait_ms)) {
+  if (
+    row.outcome === "wait" &&
+    typeof row.wait_ms === "string" &&
+    /^[1-9][0-9]{0,6}$/.test(row.wait_ms)
+  ) {
     const waitMs = Number(row.wait_ms);
     if (waitMs <= shopifyQueryCostPolicy.maxWaitMs) return Object.freeze({ kind: "wait", waitMs });
   }
@@ -124,11 +128,12 @@ export async function takeShopifyQueryCost(
 // (absent: the statement turns it into NULL). Shopify's values outside the table's safety
 // ranges are dropped, never clamped: the bucket keeps what it had.
 const decimal = (value: number | null, min: number, max: number) =>
-  value !== null && Number.isFinite(value) && value >= min && value <= max
-    ? value.toFixed(3)
-    : "";
+  value !== null && Number.isFinite(value) && value >= min && value <= max ? value.toFixed(3) : "";
 const points = (value: number | null) =>
-  value !== null && Number.isSafeInteger(value) && value >= 0 && value <= shopifyQueryCostPolicy.maxCost
+  value !== null &&
+  Number.isSafeInteger(value) &&
+  value >= 0 &&
+  value <= shopifyQueryCostPolicy.maxCost
     ? String(value)
     : "";
 /** The settle's text parameters for one reply: [charged, actual, available, maximum, rate, throttled]. */
