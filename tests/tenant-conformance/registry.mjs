@@ -425,6 +425,44 @@ export const workTables = Object.freeze({
     ],
     content: "none",
   },
+  // SD12 (schedules-shop-zone; ADR-0043 items 7 to 9): the shop's zone per store, Schedule@1
+  // records and their revisions, MandateTrigger@1 rows of kind schedule and the zone-change
+  // Inbox item. Ids, zone names from the closed list, local times, codes, counts and times
+  // only. The session template serves the api's reads and a person's override and move; the
+  // runtime executor's firing context (schedule_sweep, schedule_target, schedule_fire_*) and
+  // the vault broker's zone context (schedule_zone_vault*) each live under their own setting.
+  store_time_zones: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["schedule_zone_vault"],
+    content: "none",
+  },
+  schedules: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces", "agent_installations"],
+    policies: [
+      "schedule_fire_advance",
+      "schedule_fire_read",
+      "schedule_sweep",
+      "schedule_target",
+      "schedule_zone_vault_read",
+    ],
+    content: "none",
+  },
+  schedule_revisions: { class: "tenant_internal", parents: ["schedules"], content: "none" },
+  mandate_triggers: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces", "agent_installations", "schedule_revisions"],
+    commandRead: true,
+    policies: ["schedule_fire_triggers"],
+    content: "none",
+  },
+  schedule_zone_notices: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["schedule_zone_vault"],
+    content: "none",
+  },
 });
 
 // API functions: SECURITY DEFINER, owned by the command role, EXECUTE for the api
@@ -713,6 +751,57 @@ export const workFunctions = Object.freeze({
   // PR 5 review finding F3 (after integration with main): the store a reinstall linked in
   // place of an ended one, for the Inbox (session only, ids only).
   "store_reinstalled(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  // SD12 (schedules-shop-zone): the closed zone list and Schedule@1's checks, the slot
+  // arithmetic (the authority on when a schedule fires), the row guards, the shared step after
+  // a zone change, the runtime executor's due list (ids only) and firing pass, and the api's
+  // zone read, the Owner's override, the viewer's zone-change items and a person's move.
+  "iana_time_zones()": { kind: "check", grantees: ["morrow_work_command"] },
+  "time_zone_canonical(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "schedule_date_valid(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "schedule_time_minutes(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "schedule_body_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "schedule_offset_minutes(text,timestamp with time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "schedule_resolve_local(text,timestamp without time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "schedule_day_slots(jsonb,date)": { kind: "check", grantees: ["morrow_work_command"] },
+  "schedule_next_slot(jsonb,timestamp with time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "schedule_fire_plan(jsonb,timestamp with time zone,timestamp with time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "schedule_trigger_key(text,timestamp with time zone)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "schedule_ids_valid(jsonb,integer)": { kind: "check", grantees: ["morrow_work_command"] },
+  "store_time_zone_guard()": { kind: "trigger", grantees: [] },
+  "schedule_guard()": { kind: "trigger", grantees: [] },
+  "schedule_revision_record()": { kind: "trigger", grantees: [] },
+  "mandate_trigger_guard()": { kind: "trigger", grantees: [] },
+  "schedule_zone_notice_guard()": { kind: "trigger", grantees: [] },
+  "store_zone_apply(text,text,text,text,text,text,text,timestamp with time zone)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "schedule_tenants_due()": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+    crossTenant: true,
+    columns: ["schedule_id"],
+  },
+  "fire_due_schedules(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "store_time_zone(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "store_time_zone_set(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "schedule_zone_notices_open()": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "schedule_zone_move(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
   // M2 PR-3 (0037): the catalogue routes' read lease (session only).
   "catalog_read_lease(text,text)": { kind: "api", grantees: ["morrow_work_api"] },
   // The agent commands and their read definer.
@@ -1633,6 +1722,9 @@ export const vaultFunctions = Object.freeze({
     kind: "vault",
     grantees: ["morrow_vault_broker"],
   },
+  // SD12 (schedules-shop-zone): the shop's zone from Shopify's ianaTimezone, at the install,
+  // a re-authorisation and the daily health read.
+  "shopify_zone_record(text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   // M3 PR-2 (listings-runs): the model gateway's fence open and close (ids, digests, codes
   // and counts only; the broker's login).
   "model_call_begin(text,text,text,text,text,text,text,text)": {
@@ -1805,6 +1897,9 @@ export const executorLogins = Object.freeze({
     "morrow_work.run_snapshot_put(text,text)",
     "morrow_work.run_start()",
     "morrow_work.submit_agent_proposal(text,text,text,text,text,text,text,text,text)",
+    // SD12 (schedules-shop-zone): the cron's due list and firing pass.
+    "morrow_work.fire_due_schedules(text)",
+    "morrow_work.schedule_tenants_due()",
   ],
   morrow_vault_broker: [
     // M5 PR-1 (0029).
@@ -1833,6 +1928,8 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_check_record(text,text,text,text,text)",
     "morrow_vault.shopify_check_resolve(text)",
     "morrow_vault.shopify_install_prepare_v2(text,text,text,text)",
+    // SD12 (schedules-shop-zone).
+    "morrow_vault.shopify_zone_record(text,text,text)",
     // M3 PR-2 (listings-runs).
     "morrow_vault.model_call_begin(text,text,text,text,text,text,text,text)",
     "morrow_vault.model_call_end(text,text,text,text,text,text,text,text,text,text)",

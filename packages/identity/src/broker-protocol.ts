@@ -903,6 +903,12 @@ export function decodeShopifyConnectionCheck(text: unknown): ShopifyConnectionCh
 // scope-change, reinstall and token re-drive paths do not depend on it.
 export const connectionCleanupVar = "MORROW_CONNECTION_CLEANUP";
 export const connectionCleanupOn = "on";
+// Plan row SD12: the schedules-v2 switch (docs/decisions/schedules-v2-staging.json, committed
+// "off"; ADR-0043 item 25). The orchestrator's cron fires due schedules (fire_due_schedules)
+// only while its var is exactly "on"; any other value is off. The shop's zone is read and
+// recorded, and a zone change raises its Inbox item, whatever the switch.
+export const schedulesV2Var = "MORROW_SCHEDULES_V2";
+export const schedulesV2On = "on";
 
 // ---------------------------------------------------------------------------
 // Shop-specific webhook subscriptions (docs/briefs/shopify-shop-specific-webhooks.md). One

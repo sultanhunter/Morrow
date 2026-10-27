@@ -685,9 +685,16 @@ export function edgeVarNames(
   runtime = "off",
   apply = "off",
   cleanup = "off",
+  schedules = "off",
 ) {
   const modelVars = model === "on" ? edgeModelVarNames(worker, environment) : [];
-  if (worker === "orchestrator") return ["MORROW_ENVIRONMENT", ...modelVars];
+  // Plan row SD12: the schedules-v2 switch's var on the staging orchestrator while it is on.
+  if (worker === "orchestrator")
+    return [
+      "MORROW_ENVIRONMENT",
+      ...modelVars,
+      ...(schedules === "on" ? edgeSchedulesVarNames(worker, environment) : []),
+    ];
   if (environment !== "staging") return ["MORROW_ENVIRONMENT"];
   // v1 PR 1: the staging connector's two reviewed identifiers (its own origin and the
   // api's; the database binding byte-equal to the api's).
@@ -976,6 +983,38 @@ export function reviewedCleanupRecord(record) {
     typeof record.scope !== "string"
   )
     throw Error("EDGE_STAGING_CLEANUP_RECORD");
+  return Object.freeze({ switch: record.switch });
+}
+// Plan row SD12, the schedules-v2 switch (ADR-0043 item 25; committed off): its runtime image
+// is the var MORROW_SCHEDULES_V2 ("on") on the staging orchestrator alone; no secret. While it
+// is on the orchestrator's one-minute cron fires due schedules (fire_due_schedules: one pending
+// trigger row per slot, under the run's time budget). Its rows are admitted only by build
+// order PR 21's admit_mandate_run, which does not exist yet, so an "on" record is a problem
+// until that admission lands with its own reviewed prerequisite here (and, per plan row SD25,
+// its labs and G9 for the classes it writes). Development's committed config never carries
+// the var, and production has no switch.
+export const edgeSchedulesVar = "MORROW_SCHEDULES_V2";
+export const edgeSchedulesValue = "on";
+export const edgeSchedulesPrerequisites = Object.freeze({ mandateAdmission: false });
+export function edgeSchedulesVarNames(worker, environment) {
+  return environment === "staging" && worker === "orchestrator" ? [edgeSchedulesVar] : [];
+}
+// The reviewed staging schedules record (committed off): `switch` "off" until one reviewed
+// commit turns it "on" after its prerequisites. Returns the switch, or throws.
+export function reviewedSchedulesRecord(record, prerequisites = edgeSchedulesPrerequisites) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !== "environment_kind,schema_version,scope,switch" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    (record.switch !== "off" && record.switch !== "on") ||
+    typeof record.scope !== "string"
+  )
+    throw Error("EDGE_STAGING_SCHEDULES_RECORD");
+  if (record.switch === "on" && prerequisites.mandateAdmission !== true)
+    throw Error("EDGE_SCHEDULES_BEFORE_ADMISSION");
   return Object.freeze({ switch: record.switch });
 }
 // Build order PR 7, the runtime switch (ADR-0029 item 10; ADR-0035 item 6; committed off):
@@ -1432,6 +1471,7 @@ export async function verifyEdgeConfig({
   agentCardsPath = join(repositoryRoot, "docs/decisions/agent-cards-staging.json"),
   cleanupPath = join(repositoryRoot, "docs/decisions/connection-cleanup-staging.json"),
   liveEvalsPath = join(repositoryRoot, "docs/decisions/agent-evals-live.json"),
+  schedulesPath = join(repositoryRoot, "docs/decisions/schedules-v2-staging.json"),
   // fix-connector-cron-latency: the cron object's location hint, read from the connector's
   // source (worker/cron.ts) unless a test names another.
   connectorCronLocationHint,
@@ -1450,6 +1490,8 @@ export async function verifyEdgeConfig({
   const {
     connectionCleanupVar,
     connectionCleanupOn,
+    schedulesV2Var,
+    schedulesV2On,
     brokerRequiredSecretsFor,
     brokerStripeSecrets,
     stripeModeTest,
@@ -1529,6 +1571,27 @@ export async function verifyEdgeConfig({
     environment === "staging" && cleaned?.switch === "on" ? "on" : "off";
   if (connectionCleanupVar !== edgeCleanupVar || connectionCleanupOn !== edgeCleanupValue)
     problem("EDGE_CLEANUP_SWITCH_NAMES", "broker-protocol");
+  // Plan row SD12, the schedules-v2 switch: the same protocol, on the orchestrator alone, and
+  // refused on before mandate admission exists.
+  const schedulesRecord = readJson(schedulesPath);
+  let scheduled = null;
+  if (schedulesRecord === null)
+    problem("EDGE_STAGING_RECORD_UNREADABLE", "schedules-v2-staging.json");
+  else
+    try {
+      scheduled = reviewedSchedulesRecord(schedulesRecord);
+    } catch (error) {
+      problem(
+        error instanceof Error && error.message === "EDGE_SCHEDULES_BEFORE_ADMISSION"
+          ? "EDGE_SCHEDULES_BEFORE_ADMISSION"
+          : "EDGE_STAGING_SCHEDULES_RECORD",
+        "schedules-v2-staging.json",
+      );
+    }
+  const schedulesSwitch = (environment) =>
+    environment === "staging" && scheduled?.switch === "on" ? "on" : "off";
+  if (schedulesV2Var !== edgeSchedulesVar || schedulesV2On !== edgeSchedulesValue)
+    problem("EDGE_SCHEDULES_SWITCH_NAMES", "broker-protocol");
   // PR 18, the plan-drafts switch: refused on while the agent loop is off (ADR-0034 item 10).
   // PR 20, the shop-knowledge switch: refused on before its grants, the tools before the loop.
   const shopKnowledge = readJson(shopKnowledgePath);
@@ -1705,6 +1768,7 @@ export async function verifyEdgeConfig({
       const runtimeSwitched = runtimeSwitch(environment);
       const applySwitched = applySwitch(environment);
       const cleanupSwitched = cleanupSwitch(environment);
+      const schedulesSwitched = schedulesSwitch(environment);
       const varNames = edgeVarNames(
         worker.key,
         environment,
@@ -1713,6 +1777,7 @@ export async function verifyEdgeConfig({
         runtimeSwitched,
         applySwitched,
         cleanupSwitched,
+        schedulesSwitched,
       );
       if (
         vars === null ||
@@ -1727,7 +1792,8 @@ export async function verifyEdgeConfig({
         (varNames.includes(edgeRuntimeSwitchVar) &&
           vars[edgeRuntimeSwitchVar] !== runtimeSwitched) ||
         (varNames.includes(edgeApplyVar) && vars[edgeApplyVar] !== edgeApplyValue) ||
-        (varNames.includes(edgeCleanupVar) && vars[edgeCleanupVar] !== edgeCleanupValue)
+        (varNames.includes(edgeCleanupVar) && vars[edgeCleanupVar] !== edgeCleanupValue) ||
+        (varNames.includes(edgeSchedulesVar) && vars[edgeSchedulesVar] !== edgeSchedulesValue)
       )
         problem("EDGE_VARS", where);
       // Build order PR 7: no mixed runtime state. While off no Worker carries the runtime var
@@ -1961,6 +2027,7 @@ export async function verifyEdgeConfig({
     runtimeSwitch: runtimeSwitch("staging"),
     applySwitch: applySwitch("staging"),
     cleanupSwitch: cleanupSwitch("staging"),
+    schedulesSwitch: schedulesSwitch("staging"),
   };
 }
 

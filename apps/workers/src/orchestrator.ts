@@ -15,6 +15,7 @@ import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from 
 import { runListingsWorkflow } from "./listings-run.js";
 import { createRuntimePool } from "./runtime-pool.js";
 import { keepRuntimeSweep } from "./runtime-sweep.js";
+import { keepScheduleFiring, schedulesSwitchOn } from "./schedule-fire.js";
 
 // morrow-<env>-orchestrator (P04.T02a D8; M3 PR-2, mvp-architecture §2 steps 8, 9 and 15 and
 // §3). ListingsRunWorkflow replaces the placeholder MorrowWorkWorkflow: one instance per run,
@@ -114,6 +115,10 @@ export default {
       return;
     }
     const mapping = selected.mapping;
+    // Plan row SD12: due schedules fire only while the reviewed schedules-v2 switch is on
+    // (schedule-fire.ts), beside the pending starts and in transactions of their own.
+    if (schedulesSwitchOn(env))
+      keepScheduleFiring(createRuntimePool(mapping.binding, mapping.broker), ctx);
     const attempt = createRuntimeAttempt(stepBudgetMs, new AbortController().signal);
     let started = 0;
     try {

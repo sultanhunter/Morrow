@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "switch": "off",
+  "scope": "The reviewed schedules-v2 switch of the staging orchestrator (plan row SD12, docs/briefs/sd12-schedules-shop-zone.md; ADR-0043 items 7 to 9 and 25). Committed off: the orchestrator's one-minute cron fires no schedule, so no MandateTrigger@1 row of kind schedule is written. The shop's zone is still read from Shopify's ianaTimezone at the install, a re-authorisation and the daily health read, the Owner's override and a person's move still work, and a zone change still raises its Inbox item and moves nothing, whatever the switch. It is turned on only by one reviewed commit that sets switch to on and adds MORROW_SCHEDULES_V2 \"on\" to the staging orchestrator's vars, after build order PR 21's admit_mandate_run (the only reader of the rows it writes), lab:mandates and G9 for the classes it writes (plan row SD25's order); edge:check refuses an on record before that admission, and any mixed state. Production has no switch until the ADR-0007 item 9 custody ADR."
+}

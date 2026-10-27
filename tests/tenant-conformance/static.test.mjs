@@ -90,6 +90,12 @@ const brokerCatalogOperation =
   "((SESSION_USER = 'morrow_vault_broker'::name) AND ((operation_id)::text = current_setting('morrow.vault_catalog_operation'::text, true)))";
 const brokerCatalogTransition =
   "((SESSION_USER = 'morrow_vault_broker'::name) AND ((operation_id)::text = current_setting('morrow.vault_catalog_operation'::text, true)) AND (EXISTS ( SELECT 1\n   FROM morrow_work.operations o\n  WHERE (((o.organization_id)::text = (operation_transitions.organization_id)::text) AND ((o.workspace_id)::text = (operation_transitions.workspace_id)::text) AND ((o.id)::text = (operation_transitions.operation_id)::text) AND (o.kind = 'catalog_write'::text)))))";
+// SD12 (schedules-shop-zone): one tenant of the runtime executor's firing pass, and one store
+// of the vault broker's zone record.
+const scheduleFire =
+  "((SESSION_USER = 'morrow_runtime_executor'::name) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.schedule_fire'::text, true)))";
+const scheduleZone =
+  "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.schedule_zone'::text, true)))";
 // The exactly-checked extra policies (registry `policies`): [command, roles, qual, check].
 const extraPolicies = {
   lease_self: [
@@ -377,6 +383,32 @@ const extraPolicies = {
     null,
   ],
   connector_health_agents: ["SELECT", "{morrow_work_command}", connectorHealth, null],
+  // SD12 (schedules-shop-zone): the runtime executor's firing context (the due list across
+  // tenants while its definer's own setting is on, one schedule by id to find its tenant, then
+  // one tenant's schedules and the pending schedule trigger rows it writes) and the vault
+  // broker's zone context (one store's zone row and open notice, and its schedules, read only).
+  schedule_sweep: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND (status = 'active'::text) AND (current_setting('morrow.schedule_sweep'::text, true) = 'due'::text))",
+    null,
+  ],
+  schedule_target: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND ((id)::text = current_setting('morrow.schedule_target'::text, true)))",
+    null,
+  ],
+  schedule_fire_read: ["SELECT", "{morrow_work_command}", scheduleFire, null],
+  schedule_fire_advance: ["UPDATE", "{morrow_work_command}", scheduleFire, scheduleFire],
+  schedule_fire_triggers: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND (kind = 'schedule'::text) AND (status = 'pending'::text) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.schedule_fire'::text, true)))",
+  ],
+  schedule_zone_vault: ["ALL", "{morrow_work_command}", scheduleZone, scheduleZone],
+  schedule_zone_vault_read: ["SELECT", "{morrow_work_command}", scheduleZone, null],
   connector_health_stop_read: [
     "SELECT",
     "{morrow_work_command}",

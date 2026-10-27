@@ -193,6 +193,10 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_knowledge_reject(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_reject('${uuid}','${digest}','corr','${randomUUID()}','${digest}')`,
     "cmd_knowledge_delete(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_knowledge_delete('${uuid}','${digest}','corr','page_probe','1')`,
     "cmd_notebook_clear(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_notebook_clear('${uuid}','${digest}','corr','installation_probe','1')`,
+    // SD12 (schedules-shop-zone): the Owner's zone override and a person's move, every scalar
+    // well-formed, so only the missing context refuses.
+    "store_time_zone_set(text,text,text)": `SELECT outcome FROM morrow_work.store_time_zone_set('store_probe','America/Toronto','0')`,
+    "schedule_zone_move(text,text,text)": `SELECT outcome FROM morrow_work.schedule_zone_move('${randomUUID()}','${randomUUID()}','1')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -241,6 +245,9 @@ test("P1: with no context both roles see zero rows and every api function is ine
         "connection_notices_open()": "morrow_work.connection_notices_open()",
         // v1 PR 5 review F3: the store a reinstall linked in place of an ended one.
         "store_reinstalled(text)": "morrow_work.store_reinstalled('store_probe')",
+        // SD12: a store's zone and the viewer's open zone-change items.
+        "store_time_zone(text)": "morrow_work.store_time_zone('store_probe')",
+        "schedule_zone_notices_open()": "morrow_work.schedule_zone_notices_open()",
       }[signature];
       assert.ok(call, signature);
       const out = db.sql(
