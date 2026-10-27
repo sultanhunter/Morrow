@@ -885,6 +885,8 @@ test("ADR-0041 item 7's lease sources: renewal, wait resolution, upkeep admissio
   for (const piece of [
     "morrow_identity.work_lease_member_current(",
     "'envelope_expired'",
+    // The envelope's active time counts the running stretch not yet folded into active_ms.
+    "r.active_ms+CASE WHEN r.segment_started_at IS NULL THEN 0",
     "morrow_work.stop_active(",
     "x.status='published'",
     "'task_closed'",

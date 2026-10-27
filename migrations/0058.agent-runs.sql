@@ -1874,8 +1874,11 @@ BEGIN
  IF r.requester_membership_id IS NULL OR NOT morrow_identity.work_lease_member_current(p_org,p_ws,r.requester_principal_id,r.requester_membership_id) THEN
   RETURN 'lease_ended';
  END IF;
+ -- Active time includes the running stretch not yet folded into active_ms.
  IF NOT p_renewing AND (r.envelope_expires_at<=v_now
-   OR r.active_ms-r.envelope_active_base_ms>=(r.safety#>>'{envelope,activeMs}')::bigint) THEN
+   OR r.active_ms+CASE WHEN r.segment_started_at IS NULL THEN 0
+     ELSE greatest((extract(epoch FROM v_now-r.segment_started_at)*1000)::bigint,0) END
+    -r.envelope_active_base_ms>=(r.safety#>>'{envelope,activeMs}')::bigint) THEN
   RETURN 'envelope_expired';
  END IF;
  IF morrow_work.stop_active(p_org,p_ws,'run',r.connection_id,r.installation_id) THEN RETURN 'stopped'; END IF;
