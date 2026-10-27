@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "contract": "ContextPolicy@1",
+  "scope": "Context policy rows (ADR-0041 item 12; harness contracts, H6): one row per model and effort, versioned, with its eval record. Version 1 holds ADR-0041's seeds and is proposed: the context-fill sweep (ADR-0041 item 37, H18) sets the real values, separately at high and at medium, and a version becomes active only by one reviewed commit that names its eval record. scripts/generate-context-policy.mjs validates every row against ContextPolicy@1, checks the invariants a new epoch needs to converge, and generates packages/policy/src/generated/context-policy.ts with each row's digest, which a run manifest pins. No Worker reads it yet (H7d does).",
+  "active_version": null,
+  "versions": [
+    {
+      "version": 1,
+      "status": "proposed",
+      "eval_record": null,
+      "rows": [
+        {
+          "schemaVersion": 1,
+          "version": 1,
+          "model": "claude_opus_5_5",
+          "effort": "high",
+          "modelWindowTokens": 1000000,
+          "workingWindowTokens": 200000,
+          "clear": {
+            "fromBasisPoints": 5000,
+            "minimumBasisPoints": 1000,
+            "keepToolUses": 4
+          },
+          "compact": {
+            "atBasisPoints": 8000,
+            "backgroundFromBasisPoints": null,
+            "minimumCutBasisPoints": 4000
+          },
+          "newEpoch": {
+            "targetBasisPoints": 4000,
+            "keptTailBasisPoints": 1250
+          },
+          "opening": {
+            "factsTokens": 1000,
+            "teammatesTokens": 2000,
+            "pinnedKnowledgeTokens": 6000,
+            "personMemoryTokens": 2000,
+            "knowledgeIndexTokens": 4000,
+            "notebookIndexTokens": 2000,
+            "conversationSummariesTokens": 8000,
+            "ledgerBasisPoints": 500,
+            "checkpointBasisPoints": 600
+          },
+          "results": {
+            "inlineTokens": 24000,
+            "perTurnBasisPoints": 1500,
+            "previewTokens": 1000
+          },
+          "toolCalls": {
+            "perTurn": 16,
+            "inFlight": 6
+          },
+          "storedMessageBytes": 393216,
+          "hardGuardBasisPoints": 5000,
+          "recitation": {
+            "trigger": "on_change",
+            "tokens": 1000
+          },
+          "cache": {
+            "conversation": {
+              "system": "1h",
+              "rest": "1h"
+            },
+            "job": {
+              "system": "1h",
+              "rest": "1h"
+            },
+            "call": {
+              "system": "1h",
+              "rest": "5m"
+            },
+            "upkeep": {
+              "system": "1h",
+              "rest": "5m"
+            }
+          },
+          "evalRecord": null
+        },
+        {
+          "schemaVersion": 1,
+          "version": 1,
+          "model": "claude_opus_5_5",
+          "effort": "medium",
+          "modelWindowTokens": 1000000,
+          "workingWindowTokens": 200000,
+          "clear": {
+            "fromBasisPoints": 5000,
+            "minimumBasisPoints": 1000,
+            "keepToolUses": 4
+          },
+          "compact": {
+            "atBasisPoints": 8000,
+            "backgroundFromBasisPoints": null,
+            "minimumCutBasisPoints": 4000
+          },
+          "newEpoch": {
+            "targetBasisPoints": 4000,
+            "keptTailBasisPoints": 1250
+          },
+          "opening": {
+            "factsTokens": 1000,
+            "teammatesTokens": 2000,
+            "pinnedKnowledgeTokens": 6000,
+            "personMemoryTokens": 2000,
+            "knowledgeIndexTokens": 4000,
+            "notebookIndexTokens": 2000,
+            "conversationSummariesTokens": 8000,
+            "ledgerBasisPoints": 500,
+            "checkpointBasisPoints": 600
+          },
+          "results": {
+            "inlineTokens": 24000,
+            "perTurnBasisPoints": 1500,
+            "previewTokens": 1000
+          },
+          "toolCalls": {
+            "perTurn": 16,
+            "inFlight": 6
+          },
+          "storedMessageBytes": 393216,
+          "hardGuardBasisPoints": 5000,
+          "recitation": {
+            "trigger": "on_change",
+            "tokens": 1000
+          },
+          "cache": {
+            "conversation": {
+              "system": "1h",
+              "rest": "1h"
+            },
+            "job": {
+              "system": "1h",
+              "rest": "1h"
+            },
+            "call": {
+              "system": "1h",
+              "rest": "5m"
+            },
+            "upkeep": {
+              "system": "1h",
+              "rest": "5m"
+            }
+          },
+          "evalRecord": null
+        }
+      ]
+    }
+  ]
+}

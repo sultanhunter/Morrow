@@ -1741,7 +1741,17 @@ export const generatedToolCatalogue = {
                       {
                         type: "array",
                         items: {
-                          type: "string",
+                          type: "object",
+                          additionalProperties: false,
+                          properties: {
+                            title: {
+                              type: "string",
+                            },
+                            by: {
+                              type: "string",
+                            },
+                          },
+                          required: ["title", "by"],
                         },
                       },
                       {
@@ -2792,5 +2802,5 @@ export const generatedToolCatalogue = {
       },
     },
   ],
-  digest: "a05452b582d9adee5e80d98672e527872635f4c6888de60f8f2413d4423d0462",
+  digest: "01e1bce7204996011e706b6294ae25f277a47cfd29f23569eaef9e2732f34cdb",
 } as const;
