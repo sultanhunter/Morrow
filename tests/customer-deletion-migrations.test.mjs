@@ -42,7 +42,8 @@ const code = (row) =>
 test("the pair: consecutive forward rows, each as its owner, with its packet and digest", () => {
   assert.ok(identity && work);
   assert.equal(work.sequence, identity.sequence + 1);
-  // The next free numbers after pull request 92's 0057; the lead renumbers at merge.
+  // The reserved pair 0059 and 0060, after 0057 (pull request 92) and 0058 (pull request 64);
+  // the lead renumbers at merge if the order differs.
   assert.ok(identity.sequence >= 57);
   assert.equal(identity.executeAs, "morrow_identity_owner");
   assert.equal(work.executeAs, "morrow_work_owner");

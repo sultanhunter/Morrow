@@ -153,7 +153,7 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
     },
     // SD4 (customer-deletion-work): a store's customers/data_request exports to the Owner
     // (customer data, 30 days) are erased in place with the rest of its content, by shop/redact
-    // and the 48-hour deletion (0059 revises store_content_redact), keeping the document's
+    // and the 48-hour deletion (0060 revises store_content_redact), keeping the document's
     // digest, ids, counts and times. customers/redact erases one customer's (below).
     {
       table: "morrow_work.customer_data_exports",

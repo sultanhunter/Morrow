@@ -3,10 +3,10 @@ BEGIN;
 -- (docs/plan/store-data-foundation-implementation.md rows SD3 and SD4; ADR-0031 items 1 to 4
 -- and its 2026-10-26 note on item 1; ADR-0042 items 5, 15 and 24; ADR-0043 item 24;
 -- docs/briefs/sd3-keep-orders-to-redact.md and docs/packets/P09.T05c.md). Executes AS
--- morrow_work_owner, after customer-deletion-identity (0058). It adds:
+-- morrow_work_owner, after customer-deletion-identity (0059). It adds:
 --   * the redaction matcher (customer_match_of, customer_match_valid, customer_match_orders,
 --     customer_match_digests): one customers/* request's match, read only from the inbox row the
---     broker recorded (0058), never from a caller: the order ids it lists (SD3), and the keyed
+--     broker recorded (0059), never from a caller: the order ids it lists (SD3), and the keyed
 --     digests of the customer id, email and phone under every kept version of the workspace's
 --     digest key (SD4). Pure, IMMUTABLE, EXECUTE for the command role, so a registered class's
 --     handlers and policies can call them;
@@ -37,7 +37,7 @@ BEGIN;
 --     request completes only when every handler reports zero remaining; otherwise the delivery
 --     stays received, the cron re-drives it, and its inbox row outlives its 7 days. Every other
 --     topic is 0054's, unchanged;
---   * connector_privacy_purge(): the clean-up job's 7-day inbox purge (0058) and the data
+--   * connector_privacy_purge(): the clean-up job's 7-day inbox purge (0059) and the data
 --     request exports past their 30 days, each erased under its own tenant's context; run only
 --     while the connection clean-up switch is on (docs/decisions/connection-cleanup-staging.json).
 DO $$ BEGIN
@@ -99,7 +99,7 @@ BEGIN
  END LOOP;
  RETURN true;
 END $$;
--- The match of one inbox row's minimised body (0058's shapes): the order ids its request lists
+-- The match of one inbox row's minimised body (0059's shapes): the order ids its request lists
 -- (ordersToRedact or ordersRequested), and every non-null digest of its customerDigests, by
 -- kind. A row recorded before this migration (0036's shape) matches nothing: Morrow held no
 -- customer data then. NULL for any other topic or an invalid body.
@@ -569,7 +569,7 @@ BEGIN
   NOT IN ('settled','already_settled') THEN RAISE EXCEPTION 'CONNECTOR_SETTLE_REFUSED'; END IF;
  RETURN QUERY SELECT 'applied'::text,x.topic,x.installation_id,'none'::text,NULL::text;
 END $$;
--- The clean-up job's clocks (ADR-0031 item 1), counts only: the inbox's 7-day purge (0058:
+-- The clean-up job's clocks (ADR-0031 item 1), counts only: the inbox's 7-day purge (0059:
 -- deliveries deleted, and expired ones kept for an open request or a pending apply), then at
 -- most 100 data_request exports past their 30 days, each erased under a setting naming its own
 -- tenant and id (listed, ids only, under this definer's sweep setting).
@@ -628,7 +628,7 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- The broker's vault definers: SECURITY DEFINER, owned by the command role after the transfer,
 -- EXECUTE for morrow_vault_broker only (work_executor_safe). The tenant is the workspace the
--- app registered for the shop invites (0058's work_shopify_app_tenant), never a caller's.
+-- app registered for the shop invites (0059's work_shopify_app_tenant), never a caller's.
 -- Every kept version of that workspace's digest key, ascending, as hex; one row "none" with the
 -- tenant when it has none yet; or one row not_found, invalid or denied.
 CREATE FUNCTION morrow_vault.customer_digest_keys_get(p_app_key text,p_shop_domain text)

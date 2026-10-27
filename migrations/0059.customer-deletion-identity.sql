@@ -3,8 +3,9 @@ BEGIN;
 -- (docs/plan/store-data-foundation-implementation.md rows SD3 and SD4; ADR-0031 items 2 to 4
 -- and its 2026-10-26 note on item 1; ADR-0042 items 5, 15 and 24; ADR-0043 item 24;
 -- docs/briefs/sd3-keep-orders-to-redact.md and docs/packets/P09.T05c.md). Executes AS
--- morrow_identity_owner, after 0056 (credits-only-catalogue); pull request 92 holds 0057, and
--- the lead renumbers this pair at merge. It changes:
+-- morrow_identity_owner, after 0056 (credits-only-catalogue), as the reserved pair 0059 and 0060
+-- (0057 is pull request 92's, 0058 pull request 64's); the lead renumbers at merge if the order
+-- differs. It changes:
 --   * shopify_webhook_body_valid (0036), same signature: a customers/* request is kept as the
 --     order ids it lists (SD3: ordersToRedact, ordersRequested, each at most 20,000 distinct
 --     numeric ids, shopify_order_list_valid) and the customer's keyed digests (SD4:
@@ -240,7 +241,7 @@ CREATE INDEX shopify_webhook_inbox_expires ON morrow_identity.shopify_webhook_in
 
 -- ---------------------------------------------------------------------------
 -- The identity bridges: definers owned by the identity owner, EXECUTE for
--- morrow_work_command only (0059's connector definers call them).
+-- morrow_work_command only (0060's connector definers call them).
 -- The webhook record (0053), same signature, owner and ACL, with one change: a minimised
 -- body may be up to 512 KiB, for a request's list of up to 20,000 order ids (SD3). Every
 -- other rule is 0053's.
