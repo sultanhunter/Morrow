@@ -1,11 +1,13 @@
 // The owner's go-to-market decisions of 2026-10-27 (OD-2026-10-27-1): the answer "recommended" to
 // six decisions the lead proposed after a research report. These checks keep the records that
 // carry them consistent: WhatsApp first and Plivo voice second in ADR-0042, with the WhatsApp
-// provider still open; COD Confirmation the first India add-on, decided on or after 2027-01-31;
-// a private US$99 design-partner plan in ADR-0026 at the default plan's price per credit, with
-// US$149 still provisional; storefront audits outside Morrow (ADR-0035); and the Business
-// Analyst's weekly COD and RTO report as a launch deliverable in `mvp.md`, from Level 1 data only.
-// Pure: reads repository files only.
+// provider still open; COD Confirmation the first India add-on, decided on 2027-01-31; a private
+// US$99 design-partner plan in ADR-0026, its grant at the default plan's price per credit (the
+// lead's reading of item 5, not the owner's), with US$149 still provisional; storefront audits
+// outside Morrow until launch (ADR-0035); and the Business Analyst's weekly COD and RTO report as a
+// launch deliverable in `mvp.md`, from Level 1 data only. The review of pull request 94's head
+// 2a29987c (AI review, separate context, same model family) added the checks marked with its
+// finding ids. Pure: reads repository files only.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -124,9 +126,66 @@ test("ADR-0042: WhatsApp first on an INR-billed account, Plivo voice second, the
     "the draft CCPA guidelines on unsolicited communications",
   ])
     assert.ok(counsel.includes(question), question);
-  // Decision 2: the timing, with item 27 otherwise unchanged.
-  assert.ok(note.includes("It is the first India add-on after launch: on or after 2027-01-31"));
+  // Decision 2: the timing, with item 27 otherwise unchanged; the owner decides on the date
+  // (fidelity-M1).
+  assert.ok(
+    note.includes(
+      "It is the first India add-on after launch: on 2027-01-31 the owner decides, from the demand measured in the owner's meetings, whether to ask for it.",
+    ),
+  );
   assert.ok(note.includes("COD Confirmation stays an installable agent that is not built"));
+  // Decision 1 says only "a waitlist"; which provider each brand uses is the lead's suggestion
+  // (fidelity-L1).
+  assert.ok(!note.includes("records which provider each brand uses (OD-2026-10-27-1, decision 1)"));
+  assert.ok(
+    note.includes(
+      "The lead suggests that the waitlist, a sales record kept outside this repository, note which provider each brand uses; decision 1 says only that COD Confirmation is offered as a waitlist.",
+    ),
+  );
+
+  // What changes in the text above, with WhatsApp first: the notice kit (security-L2), item 3's
+  // auth method (security-L3), item 7's query-string refusal (security-L1), and item 25's
+  // qualification bullet, voice-only (security-M2).
+  const changed = between(
+    note,
+    "What this changes in the text above:",
+    "**An INR-billed account.**",
+  );
+  for (const text of [
+    "item 1's notice kit",
+    'item 3\'s "`api_secret` for the first entries"',
+    'item 7\'s "Requests with a query string, and GETs elsewhere, are refused"',
+    "Item 25's provider-qualification bullet describes the voice channel",
+    "item 17's inbound rules are its WhatsApp counterpart",
+  ])
+    assert.ok(changed.includes(text), text);
+
+  // The WhatsApp entry's switch waits for G9, and its qualification uses a dedicated number
+  // (security-M1).
+  const g9 = between(note, "**G9 for the WhatsApp entry.**", "**Stops for WhatsApp.**");
+  assert.ok(g9.includes("the WhatsApp entry's `service-entry:<entry>` also waits for G9"));
+  assert.ok(g9.includes("a dedicated number that no customer messages"));
+  // WhatsApp's own plan and connection stops (security-M3).
+  const stops = between(note, "**Stops for WhatsApp.**", "**If the provider is Meta's Cloud API");
+  for (const text of [
+    'a plan stop on stop-list opt-outs and "Not my order" taps as a share of delivered messages',
+    "Meta's quality rating or the number's status falls",
+    "a messaging-limit downgrade",
+    "an account restriction",
+    "a template paused or disabled",
+  ])
+    assert.ok(stops.includes(text), text);
+  // The voice step for orders without an opt-in waits for Plivo's consent term (security-M4).
+  assert.ok(
+    !note.includes("They need the voice channel, once its entry is approved, or a consent step"),
+  );
+  const consent = between(
+    note,
+    "Orders without a recorded WhatsApp opt-in",
+    "Item 26 proves a test number",
+  );
+  assert.ok(consent.includes("says how Plivo's consent term ([I11]) is met"));
+  assert.ok(consent.includes("before `service-entry:plivo-in` goes on, on the owner's store too"));
 
   // The answered question carries a dated pointer; the answer's own text is kept.
   const q4 = adr.split("\n").find((l) => l.startsWith("4. The first service: Plivo calls"));
@@ -170,9 +229,76 @@ test("the plan puts the WhatsApp rows ahead of Plivo's, with no row renumbered",
       cs16bDoes.indexOf("`service-entry:plivo-in`"),
   );
 
+  // CS10c: item 17's conditions in full (security-M2), the WhatsApp stops (security-M3), the
+  // handshake's query string (security-L1) and Morrow's own Meta app (security-L3).
+  const cs10cWhat = row(plan, "CS10c")[5];
+  for (const text of [
+    "Meta's status and category updates stop the plan at once",
+    "a sender whose digest matches an attempt sent on that connection in the last 24 hours",
+    "the one GET route that accepts a query string, with only `hub.mode`, `hub.verify_token` and `hub.challenge`",
+    "the query redacted in Workers logs and Logpush",
+    "the plan and connection stops for WhatsApp",
+    "Morrow's own Meta app as a Tech Provider",
+    "its app secret a broker-only secret the owner places with `wrangler secret put`",
+  ])
+    assert.ok(cs10cWhat.includes(text), text);
+  assert.ok(row(plan, "CS10c")[6].includes("a log-redaction test"));
+
+  // CS10d: a dedicated number (security-M1), the WhatsApp checklist (security-M2), the stops
+  // (security-M3), the notice text (security-L2) and the Meta app's secret (security-L3).
+  const [, , , , , cs10dWhat, cs10dGate] = row(plan, "CS10d");
+  assert.ok(cs10dWhat.includes("a dedicated number that no customer messages"));
+  assert.ok(cs10dWhat.includes("the WhatsApp notice text and the stop-reply wording"));
+  assert.ok(cs10dWhat.includes("the plan and connection stops for WhatsApp, with their values"));
+  assert.ok(cs10dWhat.includes("the auth method"));
+  for (const text of [
+    "the inbound drop rule",
+    "the stop list counted as an opt-out on every channel",
+    "a WABA or phone-number-id mismatch refused",
+    "Meta's template status and category updates stopping the plan at once",
+    "each stop",
+  ])
+    assert.ok(cs10dGate.includes(text), text);
+
+  // CS10b: Plivo's consent term settled before its switch (security-M4).
+  assert.ok(row(plan, "CS10b")[5].includes("how Plivo's consent term ([I11]) is met"));
+
+  // CS15a: a WhatsApp checklist of its own; the voice checks stay with the voice entry
+  // (security-M2).
+  const cs15a = row(plan, "CS15a")[5];
+  const whatsappChecks = between(cs15a, "For the WhatsApp entry:", "For the voice entry:");
+  for (const text of [
+    "the inbound drop rule",
+    "the stop list counted as an opt-out",
+    "a WABA or phone-number-id mismatch refused",
+    "Meta's template status and category updates stopping the plan at once",
+  ])
+    assert.ok(whatsappChecks.includes(text), text);
+  assert.ok(!whatsappChecks.includes("2-second"), "no voice opening for WhatsApp");
+  assert.ok(!whatsappChecks.includes("no inbound routing"), "WhatsApp has inbound routing");
+  assert.ok(between(cs15a, "For the voice entry:", null).includes("no inbound routing"));
+
+  // CS16b: the WhatsApp entry's switch waits for G9 (security-M1), and Plivo's for its consent
+  // term (security-M4).
+  const cs16bGate = row(plan, "CS16b")[3];
+  assert.ok(cs16bGate.includes("G9 also for the WhatsApp entry's `service-entry:<entry>`"));
+  assert.ok(
+    cs16bGate.includes("for `service-entry:plivo-in`, CS10b's answer on Plivo's consent term"),
+  );
+
   const actions = flat(between(plan, "## Owner actions in this plan", "## Not in these PRs"));
-  assert.ok(actions.includes("On or after 2027-01-31: decide, from the demand measured"));
+  assert.ok(actions.includes("On 2027-01-31: decide, from the demand measured")); // fidelity-M1
   assert.ok(actions.includes("with the four that OD-2026-10-27-1 adds"));
+  // security-L5: the four lines' "call plan" covers WhatsApp template messages.
+  assert.ok(
+    actions.includes(
+      'Since OD-2026-10-27-1, the "call plan" in the four lines covers WhatsApp template messages, the first channel',
+    ),
+  );
+  // security-L3: the owner's own Meta steps, if Meta's Cloud API is the provider.
+  assert.ok(actions.includes("business verification"));
+  // security-L2: WhatsApp's notice text and stop-reply wording.
+  assert.ok(actions.includes("the WhatsApp notice text and stop-reply wording"));
 });
 
 test("ADR-0026: a private US$99 plan for named design partners, its grant pro rata, US$149 still provisional", () => {
@@ -180,15 +306,49 @@ test("ADR-0026: a private US$99 plan for named design partners, its grant pro ra
   assert.ok(note.includes("US$99 a month, offered only to design partners the owner names"));
   assert.ok(note.includes("**US$149 stays the default ask, and stays provisional.**"));
   assert.ok(note.includes("This decision does not confirm US$149."));
-  assert.ok(note.includes("the default plan's grant times 99/149, rounded down to a whole credit"));
+  // money-M1: the grant follows whatever default price the owner confirms, not a fixed 149.
+  assert.ok(
+    note.includes(
+      "the default plan's grant times 99 divided by the default plan's monthly price (149 while US$149 stands), rounded down to a whole credit",
+    ),
+  );
+  assert.ok(!note.includes("99/149"));
+  // money-L1, fidelity-M2: the grant rule is the lead's reading of item 5, not the owner's answer.
+  assert.ok(
+    note.includes(
+      "**The private plan's grant has the default plan's price per credit** (the lead's reading of item 5, not part of the owner's answer, which the owner may correct).",
+    ),
+  );
   assert.ok(note.includes("This follows from item 5"));
-  assert.ok(note.includes("The owner can change it"));
   assert.ok(note.includes("must use at most 50% of the private plan's grant as well"));
   assert.ok(note.includes("the listing, and any website price, show the public plan only"));
   assert.ok(note.includes("[M30]") && note.includes("[M23]") && note.includes("[M27]"));
+  // money-L2: App Pricing, its current name, with the repository's source; no second product name.
+  assert.ok(note.includes("App Pricing carries one private plan: US$99 a month"));
+  assert.ok(
+    note.includes(
+      "App Pricing allows up to eight public plans and unlimited private plans ([Shopify App Pricing](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing), S147",
+    ),
+  );
+  assert.ok(
+    note.includes("each store can be authorized for up to eight of an app's private plans"),
+  );
+  assert.doesNotMatch(note, /managed[ -]pricing/i);
+  assert.doesNotMatch(flat(read(odPath)), /managed[ -]pricing/i);
+  // money-L3: the owner, not Claude, authorizes each partner's store.
   assert.ok(note.includes("The owner creates the private plan in the Partner Dashboard"));
+  assert.ok(
+    note.includes(
+      "authorizes each named partner's store for the private plan in the Partner Dashboard; Claude never does",
+    ),
+  );
   // Nowhere is US$149 recorded as confirmed.
   assert.doesNotMatch(flat(read(adr26Path)), /US\$149 (is|was) confirmed/);
+
+  // The OD's decision 4 paragraph carries the same reading and the owner's step.
+  const od4 = between(flat(read(odPath)), "**Decision 4, the India price.**", "**Decision 5");
+  assert.ok(od4.includes("the lead's reading of item 5, which the owner may correct"));
+  assert.ok(od4.includes("authorizes each named partner's store for the private plan"));
 });
 
 test("ADR-0035: storefront audits of prospects stay outside Morrow until the public launch", () => {
@@ -198,9 +358,10 @@ test("ADR-0035: storefront audits of prospects stay outside Morrow until the pub
       "Until the public launch, storefront audits of prospects are made outside Morrow.",
     ),
   );
+  // fidelity-L3: the ban is limited to the time before the public launch, as decision 6 says.
   assert.ok(
     note.includes(
-      "No other store's data, public storefront pages included, enters Morrow's environment",
+      "Until then, no other store's data, public storefront pages included, enters Morrow's environment",
     ),
   );
   assert.ok(note.includes("Lead lists and audits never enter this repository"));
@@ -209,14 +370,17 @@ test("ADR-0035: storefront audits of prospects stay outside Morrow until the pub
 test("mvp.md and its brief: the weekly COD and RTO report at launch, Level 1 only", () => {
   const mvp = read(mvpPath);
   const analyst = row(mvp, "Business Analyst")[1];
-  assert.ok(analyst.includes("a weekly COD and RTO report in rupees"));
+  // fidelity-L2: the shop's currency, not rupees for every shop.
+  const currency = "a weekly COD and RTO report in the shop's currency (rupees for Indian brands)";
+  assert.ok(analyst.includes(currency));
+  assert.ok(flat(read("docs/graph/agents/AG-business-analyst.md")).includes(currency));
   assert.ok(analyst.includes("Level 1 order reads only, so with no address and no pincode view"));
   assert.ok(row(mvp, "T12 Launch agents and evals")[1].includes("weekly COD and RTO report"));
   assert.ok(row(mvp, "T13 Shopify billing")[1].includes("a private US$99 plan's price and grant"));
   const notAtLaunch = flat(between(mvp, "## Not at launch", null));
   assert.ok(
     notAtLaunch.includes(
-      "COD Confirmation (ADR-0042) is the first India add-on after launch, not a launch agent: on or after 2027-01-31",
+      "COD Confirmation (ADR-0042) is the first India add-on after launch, not a launch agent: on 2027-01-31 the owner decides, from the demand measured in the owner's meetings, whether to ask for it",
     ),
   );
 
@@ -235,14 +399,40 @@ test("mvp.md and its brief: the weekly COD and RTO report at launch, Level 1 onl
   assert.ok(scope.includes("No model or tool writes a figure"));
   assert.ok(scope.includes("come with CS8's minimiser mappings"));
   assert.ok(flat(brief).includes("Not in it: a pincode or region view"));
+  // fidelity-L2: the shop's currency.
+  assert.ok(
+    flat(brief).includes("posts one report in the shop's currency (rupees for Indian brands)"),
+  );
+  assert.ok(!flat(brief).includes("in rupees"));
+  // security-L4: no courier view without a record that allows a fulfilment's tracking company.
+  assert.ok(!flat(brief).includes("by courier where present"));
+  assert.ok(
+    scope.includes(
+      "A courier view is not in this brief: a fulfilment's tracking company is in neither ADR-0025 item 6's kept fields nor ADR-0042 item 18's mappings",
+    ),
+  );
+  assert.ok(flat(brief).includes("a pincode, a fulfilment's tracking company)"));
 });
 
 test("the README rows name the amendment, and no record turns the undecided items into decisions", () => {
   const readme = read(readmePath);
-  for (const id of ["0026", "0035", "0042"]) {
-    const line = readme.split("\n").find((l) => l.startsWith(`| [${id}](`));
-    assert.ok(line.includes("(OD-2026-10-27-1, 2026-10-27:"), `README row ${id}`);
-  }
+  const readmeRow = (id) => readme.split("\n").find((l) => l.startsWith(`| [${id}](`));
+  for (const id of ["0026", "0035", "0042"])
+    assert.ok(readmeRow(id).includes("(OD-2026-10-27-1, 2026-10-27:"), `README row ${id}`);
+  // money-L1, fidelity-M2: the owner's part only, with the grant marked as the lead's reading.
+  const row26 = readmeRow("0026");
+  assert.ok(
+    row26.includes(
+      "item 1 amended by the owner (OD-2026-10-27-1, 2026-10-27: one private US$99 plan for design partners the owner names; US$149 stays the provisional default); its grant at the default plan's price per credit (the lead's reading of item 5, open to the owner's correction)",
+    ),
+  );
+  // fidelity-M1: decision 2's date is the owner's decision date, not an open start.
+  assert.ok(readmeRow("0042").includes("the owner deciding on 2027-01-31 whether to ask for it"));
+  for (const path of [odPath, adr42Path, planPath, mvpPath, readmePath, sheetPath])
+    assert.doesNotMatch(read(path), /on or after 2027-01-31|from 31 January/i, path);
+  assert.ok(
+    read(odPath).includes("COD Confirmation the first India add-on, decided on 31 January 2027"),
+  );
   // The spend, the lead lists and the report's other recommendations stay out of the records.
   for (const path of [adr42Path, adr26Path, adr35Path, planPath, mvpPath, briefPath]) {
     const text = read(path);

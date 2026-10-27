@@ -171,3 +171,4 @@ These came from the reviews of the draft or from general knowledge. Each needs a
 - A keyed phone digest and an order's contact outcomes are personal data in law, though pseudonymous (Context, item 15).
 - Until the DPDP Act's core duties start, the IT Act's section 43A and the 2011 SPDI Rules apply; CERT-In's reporting time; WhatsApp under the Telecommunications Act 2023; DPDP sections 9 and 16 (item 13, counsel's questions).
 - Plivo's outbound geo permissions and its transfer and recording settings, and whether each applies per sub-account (item 4 and the accepted residuals). The entry record confirms these from Plivo's own documentation.
+- If the shop uses Meta's Cloud API directly, Embedded Signup needs Morrow's own Meta app as a Tech Provider, whose app secret signs `X-Hub-Signature-256` and exchanges the signup code (Amendments of 2026-10-27, from the review of pull request 94). The WhatsApp entry record confirms it from Meta's documentation.
