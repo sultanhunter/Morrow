@@ -7,3 +7,11 @@ export type ScaffoldHealth = {
   mode: "scaffold";
 };
 export type * from "./generated/domain";
+// The closed IANA time zone list (ADR-0043 item 8): shops, schedules and the Owner's override.
+export {
+  canonicalTimeZone,
+  ianaTimeZoneAliases,
+  ianaTimeZoneData,
+  ianaTimeZones,
+  isIanaTimeZone,
+} from "./time-zones";

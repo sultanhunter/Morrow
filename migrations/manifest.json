@@ -430,6 +430,13 @@
       "sha256": "d3812e8d06a8dff5edfb6c45e4e172e7fa42930034b1a6f6ea75d621c38e965e",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
+    },
+    {
+      "sequence": 58,
+      "file": "0058.schedules-shop-zone.sql",
+      "sha256": "7d8099f330e233f8210170504034b27a2b3e4de1582934a78460eb1994b5884c",
+      "reviewRef": "docs/briefs/sd12-schedules-shop-zone.md",
+      "executeAs": "morrow_work_owner"
     }
   ]
 }

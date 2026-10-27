@@ -148,6 +148,13 @@
       "replaces": "capabilities:workspace.routine.configure.input",
       "reason": "A routine or recurring task names its goal record (goalId), and an alert also the goal's key (goalKey), so repeating work lives in its project (ADR-0033 item 8). A v1 body lacks both and is not a valid v1.1 body.",
       "adr": "ADR-0033"
+    },
+    {
+      "kind": "definition",
+      "name": "Schedule",
+      "replaces": "core:Schedule",
+      "reason": "Schedule@1: schemaVersion 1; four closed kinds (daily at up to four local times on 5-minute marks, weekly, monthly on a day 1 to 28 or the last, every 15 minutes to 12 hours) in place of v1's free cron expression, overlap and parallelism; the IANA zone from the closed list; missedRun; optional start and end dates. Daylight-saving and catch-up rules are fixed by ADR-0043 items 7 and 9 and computed in SQL. No v1 Schedule was ever stored, and a v1 schedule is not a valid Schedule@1.",
+      "adr": "ADR-0043"
     }
   ]
 }

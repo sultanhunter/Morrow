@@ -9,7 +9,8 @@
     "./validators/*": "./src/generated/validators/*.mjs",
     "./client": "./src/client.ts",
     "./routes": "./src/routes.ts",
-    "./work-permissions": "./src/work-permissions.ts"
+    "./work-permissions": "./src/work-permissions.ts",
+    "./time-zones": "./src/time-zones.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

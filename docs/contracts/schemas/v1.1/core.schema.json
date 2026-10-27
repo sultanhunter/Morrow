@@ -20250,6 +20250,262 @@
         "nextSteps",
         "reopen"
       ]
+    },
+    "IanaTimeZone": {
+      "description": "An IANA time zone name (ADR-0043 item 8). Code checks it against the closed list (packages/contracts/src/time-zones.ts), whose SQL twin is morrow_work.iana_time_zones(); a legacy alias is mapped to its zone before anything stores it.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$"
+    },
+    "ScheduleLocalTime": {
+      "description": "A local time on a 5-minute mark, 24-hour HH:MM (ADR-0043 item 7).",
+      "type": "string",
+      "pattern": "^([01][0-9]|2[0-3]):[0-5][05]$"
+    },
+    "ScheduleLocalDate": {
+      "description": "A local calendar date in the schedule's zone, YYYY-MM-DD; code refuses a day the month does not have.",
+      "type": "string",
+      "pattern": "^(20[2-9][0-9])-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "NullableScheduleLocalDate": {
+      "description": "An optional first or last local date (inclusive), or null.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScheduleLocalDate"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ScheduleMissedRun": {
+      "description": "What happens to slots that fell due while nothing fired (downtime, a stop, a late cron): skip fires a slot only inside its 5-minute on-time window and drops the older ones; run_latest_once fires the latest missed slot once, inside the 24-hour replay horizon, and drops the rest. Reports use run_latest_once.",
+      "type": "string",
+      "enum": [
+        "skip",
+        "run_latest_once"
+      ]
+    },
+    "ScheduleDayOfWeek": {
+      "type": "string",
+      "enum": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat",
+        "sun"
+      ]
+    },
+    "ScheduleDaily": {
+      "description": "Every day at up to four local times.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "daily"
+        },
+        "times": {
+          "description": "One to four local times, ascending and at least 15 minutes apart, also across midnight (code checks the order and the spacing).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScheduleLocalTime"
+          },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "timeZone": {
+          "$ref": "#/$defs/IanaTimeZone"
+        },
+        "missedRun": {
+          "$ref": "#/$defs/ScheduleMissedRun"
+        },
+        "startDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        },
+        "endDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "times",
+        "timeZone",
+        "missedRun",
+        "startDate",
+        "endDate"
+      ],
+      "additionalProperties": false
+    },
+    "ScheduleWeekly": {
+      "description": "On the given days of the week at one local time.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "weekly"
+        },
+        "daysOfWeek": {
+          "description": "One to seven days in week order, Monday first (code checks the order).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScheduleDayOfWeek"
+          },
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true
+        },
+        "time": {
+          "$ref": "#/$defs/ScheduleLocalTime"
+        },
+        "timeZone": {
+          "$ref": "#/$defs/IanaTimeZone"
+        },
+        "missedRun": {
+          "$ref": "#/$defs/ScheduleMissedRun"
+        },
+        "startDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        },
+        "endDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "daysOfWeek",
+        "time",
+        "timeZone",
+        "missedRun",
+        "startDate",
+        "endDate"
+      ],
+      "additionalProperties": false
+    },
+    "ScheduleMonthly": {
+      "description": "On one day of each month at one local time.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "monthly"
+        },
+        "dayOfMonth": {
+          "description": "A day from 1 to 28, or last (the month's last day).",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 28
+            },
+            {
+              "const": "last"
+            }
+          ]
+        },
+        "time": {
+          "$ref": "#/$defs/ScheduleLocalTime"
+        },
+        "timeZone": {
+          "$ref": "#/$defs/IanaTimeZone"
+        },
+        "missedRun": {
+          "$ref": "#/$defs/ScheduleMissedRun"
+        },
+        "startDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        },
+        "endDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "dayOfMonth",
+        "time",
+        "timeZone",
+        "missedRun",
+        "startDate",
+        "endDate"
+      ],
+      "additionalProperties": false
+    },
+    "ScheduleEvery": {
+      "description": "Every step through the local day.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "every"
+        },
+        "everyMinutes": {
+          "description": "15, 30 or 60 minutes, or 2, 3, 4, 6 or 12 hours. The slots are the local times from midnight on that step (00:00, then every step), so each step divides the day.",
+          "type": "integer",
+          "enum": [
+            15,
+            30,
+            60,
+            120,
+            180,
+            240,
+            360,
+            720
+          ]
+        },
+        "timeZone": {
+          "$ref": "#/$defs/IanaTimeZone"
+        },
+        "missedRun": {
+          "$ref": "#/$defs/ScheduleMissedRun"
+        },
+        "startDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        },
+        "endDate": {
+          "$ref": "#/$defs/NullableScheduleLocalDate"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "everyMinutes",
+        "timeZone",
+        "missedRun",
+        "startDate",
+        "endDate"
+      ],
+      "additionalProperties": false
+    },
+    "Schedule": {
+      "description": "Schedule@1 (ADR-0043 item 7; plan row SD12): one contract for mandate routines, reports and policy triggers, closed and digested with RFC 8785. Every schedule stores its zone, and its slots are local times in it. Daylight saving: a local time that does not exist fires at the next valid minute, and a repeated hour fires once, at its first occurrence. Nothing runs more often than every 15 minutes. Code-written once schedules (ADR-0043 item 9, amending ADR-0041 items 7 and 20) and standing requests on this contract (amending ADR-0040 item 12) wait for plan row SD2's dated notes, so once is not a kind here. Replaces v1 Schedule (a cron expression), which nothing stored.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ScheduleDaily"
+        },
+        {
+          "$ref": "#/$defs/ScheduleWeekly"
+        },
+        {
+          "$ref": "#/$defs/ScheduleMonthly"
+        },
+        {
+          "$ref": "#/$defs/ScheduleEvery"
+        }
+      ]
     }
   }
 }
