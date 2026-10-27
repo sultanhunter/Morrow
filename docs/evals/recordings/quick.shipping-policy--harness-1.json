@@ -3,7 +3,7 @@
   "caseId": "quick.shipping-policy",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "064e47c90537941dccbdd002035cac8921528c40aa4c619d05267bb9da41594e",
+  "basisDigest": "6ad98a0831ab9ec6bb0f1a31370f64389bbb0ff8f55c599fc454c58a4875cc12",
   "runs": [
     {
       "runKey": "root",

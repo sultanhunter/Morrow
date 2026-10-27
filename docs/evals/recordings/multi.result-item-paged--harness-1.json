@@ -3,7 +3,7 @@
   "caseId": "multi.result-item-paged",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "f6ff6d608a12beeb7dfd303b4de4a7b7cc80e315c8d48c2342b18b0edc01eb9f",
+  "basisDigest": "b4939230457170b3d82eafb5d9d66523592e5a1b807e3e331b1c4f96a24c3d8f",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want every order from last week with its total.",
                   "steps": [
-                    "get orders",
-                    "answer"
+                    {
+                      "title": "get orders",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

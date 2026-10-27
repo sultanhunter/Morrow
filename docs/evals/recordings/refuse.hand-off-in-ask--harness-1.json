@@ -3,7 +3,7 @@
   "caseId": "refuse.hand-off-in-ask",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "af315a47a376adc7e998f6d8d577ded161c27832a337f53a553be86f6e9fe760",
+  "basisDigest": "a23e052c014d1d12f6a8cc318e700ac3c42a21efc340501ce3a555af5a0f2828",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want better tag suggestions for the vase.",
                   "steps": [
-                    "tags",
-                    "answer"
+                    {
+                      "title": "tags",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

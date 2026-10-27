@@ -3,7 +3,7 @@
   "caseId": "quick.unknown-says-so",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "62f91938c109ac372287e8a1aaccb38f15c56d3546f087f9db2538ccef6da160",
+  "basisDigest": "ea61968ee743eaf7e25537414d875da46898b6f15973aaf66d8d3e447e34015c",
   "runs": [
     {
       "runKey": "root",

@@ -3,7 +3,7 @@
   "caseId": "batch.map-partial-batch",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "7ed14be40e41cf301367cd661e27cd4c7b900ec8aa615c14cc9e46debb801b83",
+  "basisDigest": "df44c8c0625c12b078832c5dfdcc61826aa2558c229eade7727ffd9d3e1c75d7",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want the 150 summer products checked for missing alt text.",
                   "steps": [
-                    "list",
-                    "audit",
-                    "answer"
+                    {
+                      "title": "list",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "audit",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

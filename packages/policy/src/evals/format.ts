@@ -27,8 +27,12 @@
 
 /** Each format's current version. */
 export const evalFormatVersions = Object.freeze({ set: 2, case: 2, rubric: 1, recording: 2 });
-/** The eval world's version: a change to the fakes' behaviour bumps it and re-pins recordings. */
-export const evalWorldVersion = 2;
+/**
+ * The eval world's version: a change to the fakes' behaviour bumps it and re-pins recordings.
+ * Version 3 (H6, #91 merged): run.plan's person-facing steps are RunPlanStepInput
+ * ({ title, by }), each by Morrow or a teammate on the opening's code-built list.
+ */
+export const evalWorldVersion = 3;
 
 export const evalAgentRefs = Object.freeze([
   "morrow",

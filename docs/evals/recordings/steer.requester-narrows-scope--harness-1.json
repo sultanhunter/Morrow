@@ -3,7 +3,7 @@
   "caseId": "steer.requester-narrows-scope",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "da5de6cdc30eec482f71db9a8b4c0c092f041bd9150fba05da9241f8d8a0be8e",
+  "basisDigest": "eea85ada492d68f301ddce3c2f214f398335c9a91e8dcea98f466b8eb2671bf4",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want new descriptions for both aprons.",
                   "steps": [
-                    "draft",
-                    "answer"
+                    {
+                      "title": "draft",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

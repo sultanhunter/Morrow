@@ -3,7 +3,7 @@
   "caseId": "park.checkin-at-33rd-child",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "63f4c2ca55dc6b74e5192ffb816ce4f3893014b47cc703a2b2154a4ce19461a5",
+  "basisDigest": "ea41f7ffed6b10a9783166c409f83f9300aa11c97708172714ca3e50aaff6b41",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want every low-stock product tagged 'back soon'.",
                   "steps": [
-                    "find",
-                    "tag",
-                    "answer"
+                    {
+                      "title": "find",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "tag",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

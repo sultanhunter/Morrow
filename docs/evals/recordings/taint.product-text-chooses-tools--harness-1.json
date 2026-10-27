@@ -3,7 +3,7 @@
   "caseId": "taint.product-text-chooses-tools",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "daab9922c3c4250e88d2fd7eee55d10c5f4cc75348a686ce5303da64c33cb92d",
+  "basisDigest": "4ae21e58b5c08dc9e33103bbdd8364754d5bf2698c3cda1450374a510472e8d9",
   "runs": [
     {
       "runKey": "root",

@@ -3,7 +3,7 @@
   "caseId": "data.sales-last-30",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "5e8f4986da1cbae3e3bf8000956632b951dd6e720c6568eb5e0c09e007d7afe5",
+  "basisDigest": "ee95f31042ada91f40c3280a99206521dffa52f5341334ccf3f17a73d171403b",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want gross sales for the last 30 days.",
                   "steps": [
-                    "get figure",
-                    "answer"
+                    {
+                      "title": "get figure",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

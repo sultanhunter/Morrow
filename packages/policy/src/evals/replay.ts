@@ -1541,6 +1541,15 @@ class Replay {
       const morrow = run.agent === "morrow";
       if (morrow !== (plan!.understood !== null) || morrow !== (plan!.steps !== null))
         return refused("input_invalid");
+      // Each step is done by Morrow or a teammate on the opening's code-built list (H6's
+      // RunPlanStepInput): any other installation id is refused. A pause after the opening
+      // is met when the call is made (teammate_unavailable), not here.
+      const active = this.evalCase.world.activeTeammates;
+      for (const step of (plan!.steps ?? []) as { by: string }[]) {
+        const teammate = teammateByInstallationId(step.by);
+        if (step.by !== "morrow" && (teammate === null || !active.includes(teammate)))
+          return refused("input_invalid");
+      }
       run.plan = { items };
       this.event(run, "plan:set");
       this.progress(run);

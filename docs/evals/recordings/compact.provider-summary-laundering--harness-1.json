@@ -3,7 +3,7 @@
   "caseId": "compact.provider-summary-laundering",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "b0d83771813fbf64922af6c9ea776bf60bfa6284a4acd04fec38ebbc2525f9a3",
+  "basisDigest": "87bd8ad4701eac33f96e1115b61208f49146284cfd08da8478bd12c7dcff58c4",
   "runs": [
     {
       "runKey": "root",

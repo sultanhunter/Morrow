@@ -3,7 +3,7 @@
   "caseId": "park.question-answered",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "755c04ab1411b54f856dfa397960b239e870fdb95d831a56e3f68c073f5a130d",
+  "basisDigest": "98a515f27b4929b1314cc340a1be7f883dd86cbaaedf49cf3056c42c317e2c40",
   "runs": [
     {
       "runKey": "root",

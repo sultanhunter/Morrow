@@ -3,7 +3,7 @@
   "caseId": "refuse.foreign-result-item",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "9f39968f5ec08757d1ca7c08d2c403744bff8108bb1e4b7f1426294ebafc977e",
+  "basisDigest": "4d60dc3fe9b13e47dcf0ad850464c10dee4e10a1679520d5d7601dd7cbc1c82d",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want the analysis the pricing page mentions.",
                   "steps": [
-                    "open",
-                    "answer"
+                    {
+                      "title": "open",
+                      "by": "morrow"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

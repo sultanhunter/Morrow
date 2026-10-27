@@ -3,7 +3,7 @@
   "caseId": "compact.morrow-job-forced",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "b57af35ad945c956c50798dbb167f31cd3c53e39785aaaeacc9c82b8e7902610",
+  "basisDigest": "98d5e64401ad688aca80b91c6db1854128e4a853b07d2edca0600abb05325a5f",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want your two best sellers' descriptions sharpened.",
                   "steps": [
-                    "find",
-                    "sharpen",
-                    "answer"
+                    {
+                      "title": "find",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "sharpen",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

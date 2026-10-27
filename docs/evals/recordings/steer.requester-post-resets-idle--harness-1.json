@@ -3,7 +3,7 @@
   "caseId": "steer.requester-post-resets-idle",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "7a91dfa3cef4263dd99d643e6b57d0aaf5a885d3063e8b14d78d5585c4f88f00",
+  "basisDigest": "3f45f6ea068ac75826fd7ed20bae9a72377645413030485672cb091fd2e6f18f",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want help choosing products for the spring newsletter.",
                   "steps": [
-                    "shortlist",
-                    "answer"
+                    {
+                      "title": "shortlist",
+                      "by": "morrow"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

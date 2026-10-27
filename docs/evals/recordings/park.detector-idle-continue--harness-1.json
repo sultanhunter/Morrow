@@ -3,7 +3,7 @@
   "caseId": "park.detector-idle-continue",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "5ca9efc3f7fb7e8945a695ed733413df9b47f2bc2d217010686ac59672457d3c",
+  "basisDigest": "4064d4a72ce9b4477d1d082c6cc41d7b89ded041c8eadb1cb4cb6757e8ff1dae",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want wording for a summer sale banner.",
                   "steps": [
-                    "draft",
-                    "answer"
+                    {
+                      "title": "draft",
+                      "by": "morrow"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

@@ -3,7 +3,7 @@
   "caseId": "compact.laundering-in-checkpoint",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "ffa48eaacc5674b1131c39df7ee60e248589b10ccf82f9efed070fa2caa869d7",
+  "basisDigest": "91155533fafbabc152a460fac05bc3dd37f8aa79b86850946d56b2f919fe7c9e",
   "runs": [
     {
       "runKey": "root",

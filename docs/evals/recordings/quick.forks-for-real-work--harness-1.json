@@ -3,7 +3,7 @@
   "caseId": "quick.forks-for-real-work",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "9034c622f087b1bd2ebc3af5df04c97fd666c3d5d7d4fabb8bccd97c0116ecc5",
+  "basisDigest": "fd12a1cacce3f823215337ee2f4c80b602167613d306e18d1ef6534f736c9dc0",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want new descriptions for the Linen Apron and the blue Linen Apron.",
                   "steps": [
-                    "Listings drafts both descriptions",
-                    "You approve the proposals"
+                    {
+                      "title": "Listings drafts both descriptions",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "You approve the proposals",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

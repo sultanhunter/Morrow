@@ -3,7 +3,7 @@
   "caseId": "multi.analyst-then-listings",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "0f93d2f5e9f1a1b7f38b7f236580505c7b88db0b879724c0e29a013dfe72b2e7",
+  "basisDigest": "6461fcbb08665c2b5fdf7be31be2cc03804317ff4247296df214acb7e19e427c",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want this month's best seller found and its description improved.",
                   "steps": [
-                    "find best seller",
-                    "draft description",
-                    "answer"
+                    {
+                      "title": "find best seller",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "draft description",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

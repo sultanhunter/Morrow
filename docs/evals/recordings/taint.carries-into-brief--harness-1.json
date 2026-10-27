@@ -3,7 +3,7 @@
   "caseId": "taint.carries-into-brief",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "a64f0aff3dccee4e822f7464ad4ee01bd649acf3c0e52c38f5c6531bd132e188",
+  "basisDigest": "ad13cb41223d29a5050ed5e91c3cf158b7044b8ff4bb511737c9d1ceb42b8523",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want the mug description rewritten in your brand voice.",
                   "steps": [
-                    "voice",
-                    "draft",
-                    "answer"
+                    {
+                      "title": "voice",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "draft",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

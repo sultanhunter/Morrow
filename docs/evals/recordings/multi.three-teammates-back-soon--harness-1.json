@@ -3,7 +3,7 @@
   "caseId": "multi.three-teammates-back-soon",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "49e97aaa598fde61f5c41f61608549c6b6d065314f339069234d976ae3f12d3a",
+  "basisDigest": "cebc3aecf809cbe743b7aafaebbd3673ff14e32870f5b93237619b5b2cdcd5c4",
   "runs": [
     {
       "runKey": "root",
@@ -68,10 +68,22 @@
                   "followThrough": [],
                   "understood": "You want best sellers that are almost out of stock tagged 'back soon'.",
                   "steps": [
-                    "sales",
-                    "stock",
-                    "tag",
-                    "answer"
+                    {
+                      "title": "sales",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "stock",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "tag",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

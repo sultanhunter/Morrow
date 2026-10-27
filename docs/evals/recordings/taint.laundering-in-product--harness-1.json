@@ -3,7 +3,7 @@
   "caseId": "taint.laundering-in-product",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "dfbc9d85017c15795a65905c22be21fb73d817317e12479a84723bdc8b414f0d",
+  "basisDigest": "a3b81037981040c7ff8d23bff2de9060c3668cfdd66b722138eb23b09e379c3a",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want the throw listing checked before you decide.",
                   "steps": [
-                    "check",
-                    "answer"
+                    {
+                      "title": "check",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

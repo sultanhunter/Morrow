@@ -3,7 +3,7 @@
   "caseId": "memory.ask-private-not-in-project",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "f01c0e4bd64e71ab0577853dcaa05dfb3f8937f6610092a1b79c78cd34028082",
+  "basisDigest": "13ff7ef55a9067d4e0ded218560e6d881afd2d548a01bf84ee39b01bdea5dd41",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want the team's plans for March summarised.",
                   "steps": [
-                    "gather",
-                    "answer"
+                    {
+                      "title": "gather",
+                      "by": "morrow"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

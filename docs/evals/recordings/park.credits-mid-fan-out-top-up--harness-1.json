@@ -3,7 +3,7 @@
   "caseId": "park.credits-mid-fan-out-top-up",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "88f42d7960a355adcc24aac5287d64d9529826469275a257785063f1f0904e8f",
+  "basisDigest": "1f93abc7fed0b0f64e615899eab85a6ee0536f377142025623593e40a109e4e6",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want the four low-stock candles tagged 'back soon'.",
                   "steps": [
-                    "find",
-                    "tag",
-                    "answer"
+                    {
+                      "title": "find",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "tag",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

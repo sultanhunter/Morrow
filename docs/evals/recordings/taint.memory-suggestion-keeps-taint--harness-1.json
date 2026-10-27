@@ -3,7 +3,7 @@
   "caseId": "taint.memory-suggestion-keeps-taint",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "d7d023cd01826dd22fe102aa98d43b0ebacca2f78cafe2f9aa6299ad242f539b",
+  "basisDigest": "802fbc4b2ea02c33f2f7127f1f293bdbd4b3f6dca7ce9aab9caa3e627c7c06df",
   "runs": [
     {
       "runKey": "root",

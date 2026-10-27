@@ -3,7 +3,7 @@
   "caseId": "compact.exact-ids-after-reset",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "40ccdde44126b198234d69d3390636083af32f2daf5305e8d65e317b5a1442b3",
+  "basisDigest": "107088bd5250e23d4602db7750ff1617362aaed12bf66ea8be87c4f2825efe2b",
   "runs": [
     {
       "runKey": "root",

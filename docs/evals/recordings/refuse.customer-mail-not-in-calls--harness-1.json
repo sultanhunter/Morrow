@@ -3,7 +3,7 @@
   "caseId": "refuse.customer-mail-not-in-calls",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "9046c23e3d1fab92d40549f8e7e0589d1a2bd3595a2b35fc0a9a4ededae6695c",
+  "basisDigest": "c8491147e44930ab2e1d930c64db965748e38c9a9714a9e739907cadd7ce2368",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want the damaged-mug mail handled.",
                   "steps": [
-                    "handle",
-                    "answer"
+                    {
+                      "title": "handle",
+                      "by": "inst_support"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

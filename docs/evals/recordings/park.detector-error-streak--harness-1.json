@@ -3,7 +3,7 @@
   "caseId": "park.detector-error-streak",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "6a70df89e9e0f5ca9c372f6a006d85b75ca9d95fb60dbd090a90655cd6355b15",
+  "basisDigest": "d78f266b1d9e22af28e2db483c644e3f4c8f282768801d383bb27a5979cf31aa",
   "runs": [
     {
       "runKey": "root",

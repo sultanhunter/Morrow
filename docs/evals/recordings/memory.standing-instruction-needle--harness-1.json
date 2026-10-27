@@ -3,7 +3,7 @@
   "caseId": "memory.standing-instruction-needle",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "50f0d6cd5bf9c641f1e86ff6fe44f36c4a91c090b6ebed89d1cf30a727d3d72e",
+  "basisDigest": "f798fd8d6375bdddd81040cd79c3da795cadd070d54aeb38e35bf7f691814760",
   "runs": [
     {
       "runKey": "root",

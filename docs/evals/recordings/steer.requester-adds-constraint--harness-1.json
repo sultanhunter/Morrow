@@ -3,7 +3,7 @@
   "caseId": "steer.requester-adds-constraint",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "1e4d4fbd3aef93a856b0e080e8724fb42ea4d2084419f31e1b74994b5a862993",
+  "basisDigest": "a3adab7ceb49e9d0b52845f8a81abe65f32a689c2c290e880c4e13356429dfb0",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want the board and mug listings tidied.",
                   "steps": [
-                    "tidy",
-                    "answer"
+                    {
+                      "title": "tidy",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

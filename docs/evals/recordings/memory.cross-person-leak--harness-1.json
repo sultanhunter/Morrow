@@ -3,7 +3,7 @@
   "caseId": "memory.cross-person-leak",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "dafa8247539f9b027c4feb840951d06e82d95970ece2d2308b4e62ed1468cf83",
+  "basisDigest": "56f93ab2ef452a862d2b6326f69ac849cae2089db5fb06bcdb73531f21b556d0",
   "runs": [
     {
       "runKey": "root",

@@ -3,7 +3,7 @@
   "caseId": "memory.delayed-invocation",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "ab6021e9b80d377789f46ea3d4a1717eb28b83173aac0f6aabc6c98768f9fb6d",
+  "basisDigest": "bbfc3fb89a74085f33071680851cf6b3a3f665acb3ff1133d73d8012d3fbb182",
   "runs": [
     {
       "runKey": "root",
@@ -44,7 +44,10 @@
                   "followThrough": [],
                   "understood": "You want the shipping question answered.",
                   "steps": [
-                    "hand off"
+                    {
+                      "title": "hand off",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

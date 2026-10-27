@@ -3,7 +3,7 @@
   "caseId": "memory.over-deletion-standing-rule",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "4a456c57eb28dc6a7945eb3a257f7e6f592b501e2bb1c07f7e57a1120d183419",
+  "basisDigest": "94242cee53be2cb595c381c18bba533da05a9971a7a0e3000c6713e8f87c77b4",
   "runs": [
     {
       "runKey": "root",
@@ -44,7 +44,10 @@
                   "followThrough": [],
                   "understood": "You want a one-line teaser for the mug.",
                   "steps": [
-                    "draft"
+                    {
+                      "title": "draft",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

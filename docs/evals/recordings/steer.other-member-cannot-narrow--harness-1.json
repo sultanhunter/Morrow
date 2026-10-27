@@ -3,7 +3,7 @@
   "caseId": "steer.other-member-cannot-narrow",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "fb17619951bdb012187c2f36a494754b57d806e5578cc8d5fa9cb242e0669cd4",
+  "basisDigest": "a7670831d942294879e368ddd2a2217002262519f91f681d2ebea1d9c0ad9c54",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want the vase and the soap tagged 'gift'.",
                   "steps": [
-                    "tag",
-                    "answer"
+                    {
+                      "title": "tag",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

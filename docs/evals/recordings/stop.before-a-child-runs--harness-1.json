@@ -3,7 +3,7 @@
   "caseId": "stop.before-a-child-runs",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "6a4fc9a2469444f61f30d1cc9f496c04a39daf38d9ca1da5c066a14e6f91eb85",
+  "basisDigest": "ec9d896029c162538c3d26450dcd665f87490eac1517223c929c71749ce0a073",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want every kitchen description rewritten.",
                   "steps": [
-                    "draft",
-                    "answer"
+                    {
+                      "title": "draft",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

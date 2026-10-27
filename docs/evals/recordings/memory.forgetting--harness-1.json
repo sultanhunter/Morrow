@@ -3,7 +3,7 @@
   "caseId": "memory.forgetting",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "f7a1c0a5c0cf2628c1966f61cd36b16ac86fb550da925e1c191a1918a2aae2d3",
+  "basisDigest": "efb303d15b8ff9aa5e8e83815ccb65548e8d8fde2faf051c55708f5df56e6961",
   "runs": [
     {
       "runKey": "root",

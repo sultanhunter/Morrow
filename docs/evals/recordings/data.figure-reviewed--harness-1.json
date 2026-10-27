@@ -3,7 +3,7 @@
   "caseId": "data.figure-reviewed",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "43c5738d5605ceb469e0a8befe0c0a5ef1586a6491c210cfc7385d4682cf42c4",
+  "basisDigest": "5a3bffbb90da0ce19a242f478b6f657f02cd7230d7c5b4129e4e557b6a1edaaa",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want last week's best sales day, to plan a promotion.",
                   "steps": [
-                    "find day",
-                    "check figure",
-                    "answer"
+                    {
+                      "title": "find day",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "check figure",
+                      "by": "morrow"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

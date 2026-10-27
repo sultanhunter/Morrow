@@ -3,7 +3,7 @@
   "caseId": "memory.summary-injection",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "116d6b567d994344fa9dc81fdbcdaaa790d9cfd71203a5342a47c45ad19c6662",
+  "basisDigest": "c7544f311b4c2c6fb924fbf805e13519c0b2a9e48024438686019a9b7dbb208c",
   "runs": [
     {
       "runKey": "root",

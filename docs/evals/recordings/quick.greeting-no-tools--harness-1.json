@@ -3,7 +3,7 @@
   "caseId": "quick.greeting-no-tools",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "cb7e9179be394abe18393006cebef43635f3bc0963e434af486774834c67db94",
+  "basisDigest": "9a99e46951beb74993f1e1762182cfdea8a8ee13b303c9c5cb0219fb5c4bbcd6",
   "runs": [
     {
       "runKey": "root",

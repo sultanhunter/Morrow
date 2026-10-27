@@ -3,7 +3,7 @@
   "caseId": "steer.requester-cancels-a-call",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "87c2b101ea2b7da0458fd52662784212525d65a4252f7b31806755697bff68b3",
+  "basisDigest": "94897ccb58258977228a68c23507f05cdce0e5a711222051800d91416e98f082",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want the candle's stock checked and its description refreshed.",
                   "steps": [
-                    "stock",
-                    "describe",
-                    "answer"
+                    {
+                      "title": "stock",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "describe",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

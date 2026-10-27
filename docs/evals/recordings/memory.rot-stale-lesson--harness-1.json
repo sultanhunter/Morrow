@@ -3,7 +3,7 @@
   "caseId": "memory.rot-stale-lesson",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "31e9c5ac0dfaaf43474d806e0d91824e9b186ce6e43aff76d33cff3c7948cb45",
+  "basisDigest": "44abfe6abe263e449bbe180a58482fe50280fb09d0f2c740c90a803c264767fc",
   "runs": [
     {
       "runKey": "root",

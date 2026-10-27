@@ -3,7 +3,7 @@
   "caseId": "batch.long-teammate-run",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "90ae5506958263f5cfcf941ae3f15e416918b4ad18a4678ab66b5858705fbabc",
+  "basisDigest": "e3f61056c3bfc0839c26cb54347d8caf5c1145b1bc5a2894299c8ed7816a7043",
   "runs": [
     {
       "runKey": "root",

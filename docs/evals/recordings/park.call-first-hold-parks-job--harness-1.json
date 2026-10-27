@@ -3,7 +3,7 @@
   "caseId": "park.call-first-hold-parks-job",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "6c428efcdda703937ebcde18b91e1ee867491b13e166563cd914fed052160f78",
+  "basisDigest": "3767e4652c007509c153bae4c169895ae35c1ff4b0f967a15036a5a71446451e",
   "runs": [
     {
       "runKey": "root",
@@ -68,10 +68,22 @@
                   "followThrough": [],
                   "understood": "You want sales, stock and listing health for the Oak Serving Board.",
                   "steps": [
-                    "sales",
-                    "stock",
-                    "listing",
-                    "answer"
+                    {
+                      "title": "sales",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "stock",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "listing",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

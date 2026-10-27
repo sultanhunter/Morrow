@@ -3,7 +3,7 @@
   "caseId": "batch.twenty-calls-one-turn",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "5d19f5042900f3aa17d6e4378cc373755fbadcd94b75c040ec563f6b3921f490",
+  "basisDigest": "986ced668d4ae2994df531e55637b0e06d9d4f7c9797c21bf04084340932a370",
   "runs": [
     {
       "runKey": "root",

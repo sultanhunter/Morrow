@@ -3,7 +3,7 @@
   "caseId": "refuse.unoffered-tool-corrected",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "bb7714b0d29c3b6b05f8f09a9ae4593211ff8960b30ad6f52dbdce774a431928",
+  "basisDigest": "69c5477303846a5e17690d3d1bfbeb292e0c200f088783f8ea7f20ad5affaccf",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want to know whether the basket listing is complete.",
                   "steps": [
-                    "check",
-                    "answer"
+                    {
+                      "title": "check",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

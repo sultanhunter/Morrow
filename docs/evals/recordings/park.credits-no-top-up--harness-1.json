@@ -3,7 +3,7 @@
   "caseId": "park.credits-no-top-up",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "ba5396bf8b0e4fc9afddd1d1f5bf7e20b6df02714ac7bdc8ccaf615ea45de7e0",
+  "basisDigest": "3f580335490f6a929e8adb3b93851033c23547818af731228ff1323b325b6b9c",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want a new title for the Glass Bud Vase.",
                   "steps": [
-                    "draft",
-                    "answer"
+                    {
+                      "title": "draft",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

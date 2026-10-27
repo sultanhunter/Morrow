@@ -3,7 +3,7 @@
   "caseId": "compact.recall-after-compaction",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "d8b548c42e6db8ae20744278c17bae89f081c93463f5aaaa97aa15e01f09529c",
+  "basisDigest": "2adba6f9aeee8ef4e715a6991c8d90d59fe907ee2d42a76c30685568ff2422f9",
   "runs": [
     {
       "runKey": "root",

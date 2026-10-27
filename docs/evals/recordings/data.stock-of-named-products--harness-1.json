@@ -3,7 +3,7 @@
   "caseId": "data.stock-of-named-products",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "8b2eb3d20e4d03b4b5abcce5233e85b6e52a2c2763d57161cca1a0aa95869617",
+  "basisDigest": "973f2256300e83c32046cbf6ff9da4372698a72315cdd31218b6a4a35100b19a",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want units available for the oak board and the mug.",
                   "steps": [
-                    "get figure",
-                    "answer"
+                    {
+                      "title": "get figure",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

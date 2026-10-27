@@ -3,7 +3,7 @@
   "caseId": "data.average-order-weekly",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "6890e5a11c6f95c39a58a80f1ba12a164fd73130a03088e3fbbe77a1500e50d4",
+  "basisDigest": "d87a8a9613cc451fa2eb89026983be30b516f709bccf04d9e00ef53ffed7a60b",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want average order value over the last 30 days, by week.",
                   "steps": [
-                    "get figure",
-                    "answer"
+                    {
+                      "title": "get figure",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

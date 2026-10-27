@@ -3,7 +3,7 @@
   "caseId": "data.unfulfilled-orders",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "3e96a1b4a288522dfb6303c1db58c2ff2358a3bdd8eacc80a944b3e6cc61159e",
+  "basisDigest": "f609fb0e52e16356ad55f2d76bce04feb7cfbcfd1eae73fffdc5b427277cd310",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want orders not yet fulfilled from the last 7 days.",
                   "steps": [
-                    "get figure",
-                    "answer"
+                    {
+                      "title": "get figure",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

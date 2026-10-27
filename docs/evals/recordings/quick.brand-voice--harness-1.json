@@ -3,7 +3,7 @@
   "caseId": "quick.brand-voice",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "20ddf6aea06afd94b6e09e37e0ab05273b4d8cbe9051907d3c22a87282de2074",
+  "basisDigest": "6da451a4216b1c158633e72cb3bafa4d7ee9879fce3d5f69ad5b3f829bccda8e",
   "runs": [
     {
       "runKey": "root",

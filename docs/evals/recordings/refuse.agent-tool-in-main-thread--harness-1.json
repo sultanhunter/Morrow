@@ -3,7 +3,7 @@
   "caseId": "refuse.agent-tool-in-main-thread",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "9750675455ddd58b6ef36ccd056e8ec7cdbebc219189c3b6f4812311eeb7f855",
+  "basisDigest": "e08ca5a7a369a7fd8de9c261550c123d4d3725c500c6a26ac828a99a1d9e29e6",
   "runs": [
     {
       "runKey": "root",
@@ -95,8 +95,14 @@
                   "followThrough": [],
                   "understood": "You want last week's gross sales.",
                   "steps": [
-                    "sales",
-                    "answer"
+                    {
+                      "title": "sales",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

@@ -3,7 +3,7 @@
   "caseId": "batch.audit-200-products-map",
   "arm": "separate_calls@1",
   "origin": "authored",
-  "basisDigest": "fa43ec31477c91aaedbae4b414c541dd1be7cfcd2acc57d06451adbc40e71e2d",
+  "basisDigest": "2b4be238293abd180d88ccbe4130cb635d4fc7d7bb2b2d8174bd5fa4b5538f78",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want every product checked for missing photo alt text.",
                   "steps": [
-                    "list products",
-                    "audit",
-                    "answer"
+                    {
+                      "title": "list products",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "audit",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

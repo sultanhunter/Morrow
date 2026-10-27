@@ -3,7 +3,7 @@
   "caseId": "compact.needle-survives-two",
   "arm": "provider_context@1",
   "origin": "authored",
-  "basisDigest": "dc9e790ec473ca564626a3299e2c5942846fd47812c769b86b61c2175796ce6d",
+  "basisDigest": "69366e250548cf02474b5a532ca83302241c53c2db9d7135abac3c3042852c6d",
   "runs": [
     {
       "runKey": "root",

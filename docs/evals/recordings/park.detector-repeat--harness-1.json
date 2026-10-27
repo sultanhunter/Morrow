@@ -3,7 +3,7 @@
   "caseId": "park.detector-repeat",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "c00ebf8cad357b043e2aede49caed6e2fe7d022e67c81d973ee7623f504293bf",
+  "basisDigest": "4b19db07d2188b545da772914bdcf1d080c0508bd02dc75fe86a94a8fc922a66",
   "runs": [
     {
       "runKey": "root",

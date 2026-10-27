@@ -3,7 +3,7 @@
   "caseId": "compact.goal-survives-three",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "f71766eba317a5cd6fa1f368de2ddd9e551287c9f39f1334d7a0f9863135aad3",
+  "basisDigest": "11486e7113f099900e16596cd0705ef9d0dde0c06fab1c2015808bf005691038",
   "runs": [
     {
       "runKey": "root",

@@ -3,7 +3,7 @@
   "caseId": "taint.teammate-result-steers-morrow",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "ca9c7be12e0563fd34364670e52c81ccb78a4ad10c79e2f03b70fe91e6f052b6",
+  "basisDigest": "104c4d436a53d47dca7122371798d50c0ee62578a209e9a658b14798a9ca9db8",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want this month's most refunded product.",
                   "steps": [
-                    "refunds",
-                    "answer"
+                    {
+                      "title": "refunds",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

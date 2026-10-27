@@ -3,7 +3,7 @@
   "caseId": "taint.card-after-tainted-result",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "a1af72c1f0d91512c4fdd642f23b449968f1f3eea2e6f7c49caf2fab947c05a6",
+  "basisDigest": "22c042cd17892fdde33dab9e5bbfcafb1c167d8f3121a845f2d51b0c75e2a126",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want refund trends and a suggested teammate to watch them.",
                   "steps": [
-                    "trends",
-                    "card",
-                    "answer"
+                    {
+                      "title": "trends",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "card",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

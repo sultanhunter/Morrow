@@ -3,7 +3,7 @@
   "caseId": "multi.parallel-sales-and-stock",
   "arm": "sync_calls@1",
   "origin": "authored",
-  "basisDigest": "777902742de94d318031596ba57f37951a13cb673849a7560c7b4a7fac7fcc40",
+  "basisDigest": "a724d0829aac72612e2f0fe378e4ddf08b6b999e28f1385314003c3eb73bff3f",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want this month's best sellers that are low on stock.",
                   "steps": [
-                    "sales",
-                    "stock",
-                    "combine"
+                    {
+                      "title": "sales",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "stock",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "combine",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

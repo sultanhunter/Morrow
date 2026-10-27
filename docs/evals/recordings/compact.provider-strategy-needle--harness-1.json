@@ -3,7 +3,7 @@
   "caseId": "compact.provider-strategy-needle",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "c2072e33ea6a3f9f9c0b8b1af6385a76d6d73c090db83688b1f78531074bac33",
+  "basisDigest": "a3a4ce61a1ca5f4d209a1637e168ffe660e60ec3ca01e701fff9a4f042cc17cc",
   "runs": [
     {
       "runKey": "root",

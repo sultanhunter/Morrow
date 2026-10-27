@@ -3,7 +3,7 @@
   "caseId": "refuse.member-without-grant",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "ca6af1c76f269777f835bc529f3aacf77d9e845a6ac4404147e948ef99e165db",
+  "basisDigest": "2ff13f26621e69ed7300331e308573c34ec60535a4a5031841612a42fb4b7e2c",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want the mug retitled 'Big Mug'.",
                   "steps": [
-                    "draft",
-                    "answer"
+                    {
+                      "title": "draft",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

@@ -3,7 +3,7 @@
   "caseId": "batch.completion-gate-holds",
   "arm": "no_plan@1",
   "origin": "authored",
-  "basisDigest": "76e6d0ea51cd76b3ce94541daad1657ce7ebd08cdd4d98b776327fb02af31662",
+  "basisDigest": "26a140c312dddae2481deeeebfafac863ea636cb2bf229d215ae8e493588519b",
   "runs": [
     {
       "runKey": "root",

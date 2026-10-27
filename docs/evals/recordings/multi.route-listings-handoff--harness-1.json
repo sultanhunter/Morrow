@@ -3,7 +3,7 @@
   "caseId": "multi.route-listings-handoff",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "7122bcf9811777445f08a3c3791f9bef54e166fda2c45a5031fd4087b4516419",
+  "basisDigest": "4391190c723cb6be2889b7252db4b48066ddc93fa9524f4353d7abff39e96cc3",
   "runs": [
     {
       "runKey": "root",
@@ -44,7 +44,10 @@
                   "followThrough": [],
                   "understood": "You want Listings to own improving the Oak Serving Board page.",
                   "steps": [
-                    "hand off"
+                    {
+                      "title": "hand off",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

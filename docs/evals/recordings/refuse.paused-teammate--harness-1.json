@@ -3,7 +3,7 @@
   "caseId": "refuse.paused-teammate",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "e870ebb5040beaf6566a75edca8d3f18929ab1cd012522424d0ed53a3254eb29",
+  "basisDigest": "32c96d3719d252c16ce7ee6f9d37fada7ab29f977f4466824f4f267e432d3116",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want Listings to refresh the towel description.",
                   "steps": [
-                    "draft",
-                    "answer"
+                    {
+                      "title": "draft",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

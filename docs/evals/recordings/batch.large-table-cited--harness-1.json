@@ -3,7 +3,7 @@
   "caseId": "batch.large-table-cited",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "888c826510278a906c600fedbf886b563a87100fdb76c06008082d88472c8dcf",
+  "basisDigest": "b945c02e7f6b5b9e7c243844003270cc66c38357572fd2594855591e40746655",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want every order line from the last 60 days.",
                   "steps": [
-                    "export",
-                    "answer"
+                    {
+                      "title": "export",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

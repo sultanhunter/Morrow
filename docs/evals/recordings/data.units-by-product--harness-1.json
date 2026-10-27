@@ -3,7 +3,7 @@
   "caseId": "data.units-by-product",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "cdd4d7584baf905b3448140782f96413af5a5e389c81f8d857ea3490575ea1b3",
+  "basisDigest": "7984a9cf85e2b8e9b9ac92a150ecf0703f9f269174fe122f627ce21dc7bc07a5",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want units sold of the best seller in the last 30 days.",
                   "steps": [
-                    "get figure",
-                    "answer"
+                    {
+                      "title": "get figure",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

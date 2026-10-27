@@ -3,7 +3,7 @@
   "caseId": "quick.task-status",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "2559877745941f943750b625d81edc3f059bf57a71391eeee7f4b5833bb30e7f",
+  "basisDigest": "809ace2adf01437d7ae9cefb80469d0e7298ef30ad12b526c0a578089eba1a84",
   "runs": [
     {
       "runKey": "root",

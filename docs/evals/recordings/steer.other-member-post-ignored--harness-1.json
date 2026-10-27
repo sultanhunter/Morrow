@@ -3,7 +3,7 @@
   "caseId": "steer.other-member-post-ignored",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "2794a1f197cbf3f9323307b833b7eb9bdafe285a18e52348303de695a433608d",
+  "basisDigest": "0a5a930105784cdab02f942960e7af92b2a5d8c102765317072e20b477d83f1f",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want a new description for the Wool Throw.",
                   "steps": [
-                    "draft",
-                    "answer"
+                    {
+                      "title": "draft",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

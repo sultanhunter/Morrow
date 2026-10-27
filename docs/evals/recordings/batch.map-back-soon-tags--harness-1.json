@@ -3,7 +3,7 @@
   "caseId": "batch.map-back-soon-tags",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "cd58f63d7db457ba283e0309a441b22bd5ed9c399d88e52dbc89d8c4779e276b",
+  "basisDigest": "a69ae30e1a86f13e13e5428ec2662a03f1264e1d79d2deb8a8482ddd9a949352",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want products under 5 in stock tagged 'back soon'.",
                   "steps": [
-                    "find low",
-                    "tag",
-                    "answer"
+                    {
+                      "title": "find low",
+                      "by": "inst_inventory"
+                    },
+                    {
+                      "title": "tag",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

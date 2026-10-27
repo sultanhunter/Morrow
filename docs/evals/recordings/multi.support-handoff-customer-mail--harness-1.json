@@ -3,7 +3,7 @@
   "caseId": "multi.support-handoff-customer-mail",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "a0588d36c9098cf2e2fef3aaf28bb49860e40f86022f7649359ac5ef64beafb2",
+  "basisDigest": "f60cda4bac668b438446a0e4faf3c85f6809fa79f5a87fed0276e3290fd26ded",
   "runs": [
     {
       "runKey": "root",
@@ -44,7 +44,10 @@
                   "followThrough": [],
                   "understood": "You want Support to handle the late-order mail.",
                   "steps": [
-                    "hand off"
+                    {
+                      "title": "hand off",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

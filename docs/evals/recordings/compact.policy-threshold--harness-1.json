@@ -3,7 +3,7 @@
   "caseId": "compact.policy-threshold",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "279ed52c642c787a878f7011b258dcf55c0fa9e550c527b5ac6932aa1bc0ebf3",
+  "basisDigest": "6e701284fcf50beaec809201ed1689fdc6c7545a9623c777a40d3c56f46d1354",
   "runs": [
     {
       "runKey": "root",

@@ -3,7 +3,7 @@
   "caseId": "multi.review-catches-wrong-figure",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "8ff4f429305d14f4d1e6b46964aaef6a4fdd95b670a8ca29eac07f29404fcb49",
+  "basisDigest": "4a0958044edc524fd692379bc043e9eb2368e08b8daafd6e0fde88fa3ac52ed6",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want last week's gross sales, checked, for your accountant.",
                   "steps": [
-                    "get total",
-                    "review",
-                    "answer"
+                    {
+                      "title": "get total",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "review",
+                      "by": "morrow"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

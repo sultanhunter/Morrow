@@ -3,7 +3,7 @@
   "caseId": "taint.notebook-lesson-keeps-taint",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "eb1cd1c01ebeb3ddd116e91134eccc0a07891a38374bb4bcf7fc7198200f695b",
+  "basisDigest": "1bfcd4c35a3785e6e1cf0af8b316c97420bb00e4967ceb81fd1f82d44ad5cde5",
   "runs": [
     {
       "runKey": "root",

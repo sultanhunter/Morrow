@@ -3,7 +3,7 @@
   "caseId": "data.refunds-30",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "fdd82c186dcd0c86aa82474169f57b97b25e701cb713998e5c3ff7a60d456bcd",
+  "basisDigest": "25c0d5ca0a729478675892ec4988720e1e78cdaf9bc9cbd03b57e71d34a0dc23",
   "runs": [
     {
       "runKey": "root",
@@ -52,8 +52,14 @@
                   "followThrough": [],
                   "understood": "You want refunds in the last 30 days.",
                   "steps": [
-                    "get figure",
-                    "answer"
+                    {
+                      "title": "get figure",
+                      "by": "inst_business_analyst"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

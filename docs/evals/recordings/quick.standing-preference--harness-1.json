@@ -3,7 +3,7 @@
   "caseId": "quick.standing-preference",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "8c070cee3fbfd7f0657a503019309a3f6413706c5cb46fa624baca3665785f89",
+  "basisDigest": "8ce4694dc87bbf56e68f6009cef046aa200ee3b6c7ac3d54ffdf93f489af9107",
   "runs": [
     {
       "runKey": "root",

@@ -3,7 +3,7 @@
   "caseId": "data.analyst-direct",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "8a8ee433b114dabb958e270450d4e5c0e81c87f0474c168b289b57d70aabb001",
+  "basisDigest": "fc645c648150b333f3e96227d5af7c81e499e793e03a6bb22909f088bf87a4a3",
   "runs": [
     {
       "runKey": "root",

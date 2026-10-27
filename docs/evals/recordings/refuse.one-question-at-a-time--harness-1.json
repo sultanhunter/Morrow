@@ -3,7 +3,7 @@
   "caseId": "refuse.one-question-at-a-time",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "8f8af88c14a40b0e1d39c2637380a2582274e26dc8b22c550dca1cc7785d9bec",
+  "basisDigest": "f8be5073d6228b2d0f5a674a31fa19422ef4f1057e0bef98bbd5df3cc6492b9a",
   "runs": [
     {
       "runKey": "root",

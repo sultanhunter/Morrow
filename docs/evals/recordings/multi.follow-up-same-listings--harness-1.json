@@ -3,7 +3,7 @@
   "caseId": "multi.follow-up-same-listings",
   "arm": "harness@1",
   "origin": "authored",
-  "basisDigest": "0c913f16a9b52a105ebb79c496851f93a2f69b2be1e7b76ed8532fd5bf15d765",
+  "basisDigest": "d13d4b1be92c89a1b7c357787e7ddfcc4896543a54f9a05c64e337824a7b069e",
   "runs": [
     {
       "runKey": "root",
@@ -60,9 +60,18 @@
                   "followThrough": [],
                   "understood": "You want thin kitchen descriptions found and rewritten.",
                   "steps": [
-                    "find thin",
-                    "fix thin",
-                    "answer"
+                    {
+                      "title": "find thin",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "fix thin",
+                      "by": "inst_listings"
+                    },
+                    {
+                      "title": "answer",
+                      "by": "morrow"
+                    }
                   ]
                 },
                 "changes": null

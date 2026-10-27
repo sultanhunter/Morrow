@@ -10,6 +10,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import * as evals from "../packages/policy/src/evals/index.ts";
+import { fakeAgentRunSafety } from "../packages/policy/src/agent-platform-fakes.ts";
+import { contextPolicyRow } from "../packages/policy/src/context-policy.ts";
 import { loadEvalLibrary, readEvalFiles, replayAll } from "../scripts/agent-evals.mjs";
 import { repositoryRoot } from "../scripts/artifacts.mjs";
 import { inspectSecrets } from "../scripts/delivery-checks.mjs";
@@ -147,6 +149,59 @@ test("the CI replay: every case passes under the primary arm, deterministically;
 });
 
 // --- The world drops the old rules (ADR-0041 items 3, 8, 9 and 18) --------------------------
+test("the eval world's seeds are H6's records: AgentRunSafety@1 and ContextPolicy v1", () => {
+  // The world's safety profile, context seeds and max_tokens match what admission pins (H6),
+  // so a change to either record fails here until the world follows it (with a re-pin).
+  for (const effort of ["high", "medium"]) {
+    const safety = fakeAgentRunSafety(effort);
+    const policy = contextPolicyRow(1, "claude_opus_5_5", effort);
+    assert.ok(policy, effort);
+    const world = evals.evalSafetyProfile;
+    assert.deepEqual(
+      {
+        toolCallsPerTurn: world.toolCallsPerTurn,
+        checkIns: { ...world.checkIns },
+        repeat: { ...world.detectors.repeat },
+        errorStreak: { ...world.detectors.errorStreak },
+        idleTurns: world.detectors.idleTurns,
+        alternationSteps: world.detectors.alternationSteps,
+        outputCuts: world.detectors.outputCuts,
+        maxTokens: evals.evalWalletRules.maxTokens[effort],
+      },
+      {
+        toolCallsPerTurn: policy.toolCalls.perTurn,
+        checkIns: {
+          modelTurns: safety.checkIns.modelTurns,
+          toolCalls: safety.checkIns.toolCalls,
+          children: safety.checkIns.children,
+        },
+        repeat: {
+          nudge: safety.detectors.repetition.nudgeAt,
+          trip: safety.detectors.repetition.tripAt,
+        },
+        errorStreak: {
+          nudge: safety.detectors.errorStreak.nudgeAt,
+          trip: safety.detectors.errorStreak.tripAt,
+        },
+        idleTurns: safety.detectors.idleTurns.tripAt,
+        alternationSteps: safety.detectors.alternation.tripAfterSteps,
+        outputCuts: safety.detectors.outputCut.tripAt,
+        maxTokens: safety.turn.maxOutputTokens,
+      },
+      effort,
+    );
+    assert.deepEqual(
+      { ...evals.evalContextPolicy },
+      {
+        workingWindow: policy.workingWindowTokens,
+        compactAtShare: policy.compact.atBasisPoints / 10000,
+        progressGuardShare: policy.compact.minimumCutBasisPoints / 10000,
+      },
+      effort,
+    );
+  }
+});
+
 test("no turn limit and no final turn: a teammate's 22-turn run completes with tools to the end", async () => {
   const id = "batch.long-teammate-run";
   const trace = await replay(caseOf(id), recordingOf(id));
@@ -201,6 +256,45 @@ test("an unoffered tool gets an error result and the model corrects it; nothing 
   assert.equal(child.turns[1].calls[0].refusal, "not_offered");
   assert.equal(child.endCode, "completed");
   assert.equal((await score(caseOf(id), recordingOf(id))).status, "pass");
+});
+
+test("run.plan's steps name Morrow or a teammate on the opening's list (H6's RunPlanStepInput)", async () => {
+  // A paused teammate on the opening's list may own a step; the pause is met at the call.
+  const id = "refuse.paused-teammate";
+  assert.deepEqual([...caseOf(id).world.paused], ["listings"]);
+  const steps = (r) => r.runs[0].turns[0].calls[0].input.plan.steps;
+  assert.deepEqual(
+    steps(recordingOf(id)).map((s) => s.by),
+    ["inst_listings", "morrow"],
+  );
+  const kept = await replay(caseOf(id), recordingOf(id));
+  assert.equal(kept.stale, null);
+  assert.equal(root(kept).turns[0].calls[0].refusal, null);
+  assert.equal(root(kept).turns[0].calls[1].refusal, "teammate_unavailable");
+  // A teammate not on the list, or an id that is no teammate's, is input_invalid.
+  for (const by of ["inst_inventory", "inst_somebody"]) {
+    const other = edit(recordingOf(id), (r) => {
+      steps(r)[0].by = by;
+      r.runs[0].turns[0].calls[0].expect = {
+        outcome: "invalid_input",
+        refusal: "input_invalid",
+        children: [],
+      };
+    });
+    const trace = await replay(caseOf(id), evals.parseEvalRecording(other));
+    assert.equal(root(trace).turns[0].calls[0].refusal, "input_invalid", by);
+  }
+  // The shape before H6, a string step, is refused by the full definition.
+  const strings = edit(recordingOf(id), (r) => {
+    r.runs[0].turns[0].calls[0].input.plan.steps = ["draft", "answer"];
+    r.runs[0].turns[0].calls[0].expect = {
+      outcome: "invalid_input",
+      refusal: "input_invalid",
+      children: [],
+    };
+  });
+  const old = await replay(caseOf(id), evals.parseEvalRecording(strings));
+  assert.equal(root(old).turns[0].calls[0].refusal, "input_invalid");
 });
 
 test("an empty wallet parks the whole job: no final turn, no ending, nothing drawn while parked", async () => {
