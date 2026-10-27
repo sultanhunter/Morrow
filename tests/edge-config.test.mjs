@@ -2211,7 +2211,6 @@ test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allow
     "packages/work/src/loop/tools.ts",
     "packages/policy/src/tool-catalogue.ts",
     "packages/policy/src/generated/tool-catalogue.ts",
-    "packages/policy/src/generated/specialist-ceiling.ts",
   ])
     assert.ok(orchestratorPackageAllowlist.includes(path), path);
   for (const path of [
@@ -2968,6 +2967,36 @@ test("PR 11: the committed agent-loop record is off with no prerequisite recorde
   for (const environment of ["development", "production"])
     for (const worker of ["api", "broker", "orchestrator", "connector"])
       assert.deepEqual(edgeAgentLoopVarNames(worker, environment), [], worker);
+});
+
+// Plan row H7a: the PR 11 runner (its final turn, timeCovers, the 4-call rule and incomplete ->
+// cost_budget) contradicts ADR-0041 and H7b replaces it, so the switch cannot go on before
+// H7b's runner is recorded, whatever else is: edge:check and verify both refuse it.
+test("H7a: the agent-loop switch stays off until harness_runner is recorded, every other prerequisite recorded", () => {
+  assert.ok(edgeAgentLoopPrerequisites.includes("harness_runner"));
+  assert.ok(agentLoopPrerequisites.includes("harness_runner"));
+  assert.equal(committedLoop.prerequisites.harness_runner, null);
+  const teammateCalls = JSON.parse(
+    readFileSync("docs/decisions/teammate-calls-staging.json", "utf8"),
+  );
+  const agentCards = JSON.parse(readFileSync("docs/decisions/agent-cards-staging.json", "utf8"));
+  const on = structuredClone(committedLoop);
+  on.switch = "on";
+  loopRecorded(on);
+  on.prerequisites.harness_runner = null;
+  const { evidenceRoot } = loopRecords((r) => {
+    loopRecorded(r);
+    r.switch = "on";
+    r.prerequisites.harness_runner = null;
+  });
+  assert.throws(() => reviewedAgentLoopRecord(on, evidenceRoot), /EDGE_AGENT_LOOP_PREREQUISITES/);
+  assert.notDeepEqual(inspectAgentPlatformSwitches(on, teammateCalls, agentCards), []);
+  // Recorded with its evidence, the same record passes both.
+  const recorded = structuredClone(on);
+  loopRecorded(recorded);
+  const full = loopRecords(loopRecorded).evidenceRoot;
+  assert.deepEqual({ ...reviewedAgentLoopRecord(recorded, full) }, { switch: "on" });
+  assert.deepEqual(inspectAgentPlatformSwitches(recorded, teammateCalls, agentCards), []);
 });
 
 test("PR 11 (review F2 of 2026-10-26): edge:check and verify give one verdict on the agent-loop record", () => {

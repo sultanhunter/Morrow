@@ -1,6 +1,5 @@
 import type {
   Current_AssistantModelMessage,
-  Current_ModelCallV2,
   Current_ModelMessage,
   Current_ModelUntrustedSource,
   Current_ReadTag,
@@ -106,14 +105,32 @@ export function turnMessages(
   messages.push(current.input as Current_ModelMessage);
   return Object.freeze(messages);
 }
-/** ModelCall@2 of one send: closed; it names no model, effort, tool list, limit or price. */
+/**
+ * The build order PR 11 turn call this runner sends (the broker's parseModelCallV2 checks it by
+ * hand). H6 edited ModelCall@2 to ids and digests only (ADR-0041 item 8: the broker assembles
+ * the request from SQL); H7b's runner and H7c's broker adopt that contract, and this shape, with
+ * its whole conversation and its final turn, goes with them. It is reached only while the
+ * agent-loop switch is on, which its harness_runner prerequisite refuses until H7b (plan row
+ * H7a).
+ */
+export interface LegacyTurnCall {
+  readonly schemaVersion: 2;
+  readonly purpose: "agent_turn";
+  readonly turn: number;
+  readonly attempt: number;
+  readonly sequence: number;
+  readonly final: boolean;
+  readonly prefixDigest: string | null;
+  readonly messages: readonly Current_ModelMessage[];
+}
+/** One send of the PR 11 runner: closed; it names no model, effort, tool list, limit or price. */
 export async function modelCall(input: {
   readonly turn: number;
   readonly attempt: number;
   readonly sequence: number;
   readonly final: boolean;
   readonly messages: readonly Current_ModelMessage[];
-}): Promise<Current_ModelCallV2> {
+}): Promise<LegacyTurnCall> {
   const { turn, attempt, sequence, final, messages } = input;
   return Object.freeze({
     schemaVersion: 2,
@@ -124,7 +141,7 @@ export async function modelCall(input: {
     final,
     prefixDigest: turn === 1 ? null : await conversationDigest(messages.slice(0, -1)),
     messages: [...messages],
-  }) as Current_ModelCallV2;
+  });
 }
 
 /** The tools whose results carry a store's or a person's outside content (ADR-0027 item 5). */

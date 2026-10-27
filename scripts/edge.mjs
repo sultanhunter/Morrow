@@ -496,10 +496,9 @@ export const orchestratorPackageAllowlist = Object.freeze([
   // max_tokens); the broker ships the same file.
   "packages/policy/src/generated/model-catalogue.ts",
   // Build order PR 11: AgentRunWorkflow's pure policy: the tool catalogue (each tool's entry
-  // and input check) with its generated data and the Specialist ceiling. The loop catalogue's
-  // rules left the runner with ADR-0039 (no money cap: a turn's caps are the turn limit and
-  // the time); prompts and admission stay the api's.
-  "packages/policy/src/generated/specialist-ceiling.ts",
+  // and input check) with its generated data (main's ADR-0037 PR 2 retired the Specialist
+  // ceiling). The loop catalogue's rules left the runner with ADR-0039 (no money cap); prompts,
+  // the safety profile and admission stay the api's.
   "packages/policy/src/generated/tool-catalogue.ts",
   "packages/policy/src/index.ts",
   "packages/policy/src/json-boundary.ts",
@@ -1006,11 +1005,15 @@ export function reviewedCleanupRecord(record) {
 // ({recorded_on, evidence}, the evidence a docs/evidence/ file that exists). `shared_wallet`
 // (ADR-0039, its PR 3): loop turns and Listings' products hold and draw credits from the
 // workspace's one wallet; credits are the only spend limit, so no loop run runs before it.
+// `harness_runner` (plan row H7a): the PR 11 runner on this branch contradicts ADR-0041 (its
+// final turn, timeCovers, the 4-call rule, incomplete -> cost_budget) and stays off the
+// reachable path until H7b's runner on the new data model is recorded.
 export const edgeAgentLoopVar = "MORROW_AGENT_LOOP";
 export const edgeAgentLoopValue = "on";
 export const edgeAgentLoopPrerequisites = Object.freeze([
   "catalogue_version_2_confirmed",
   "gateway_reservations_stops",
+  "harness_runner",
   "lab_agent_loop",
   "shared_wallet",
   "store_content_cleanup",

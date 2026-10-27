@@ -165,6 +165,8 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step un
         organizationId: "org_o",
         workspaceId: "ws_w",
         runId: "00000000-0000-4000-8000-0000000000aa",
+        segment: 1,
+        incarnation: 1,
       };
       for (const env of [
         { MORROW_ENVIRONMENT: "staging" },
@@ -178,19 +180,26 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step un
       ]) {
         const workflow = new module.AgentRunWorkflow({}, env);
         await assert.rejects(
-          workflow.run({ payload: params, timestamp: new Date(), instanceId: params.runId }, step),
+          workflow.run(
+            { payload: params, timestamp: new Date(), instanceId: params.runId + "-s1-i1" },
+            step,
+          ),
           (error) =>
             error.constructor.name === "NonRetryableError" && error.message === "dispatch_disabled",
         );
       }
       assert.equal(steps, 0);
       // Both switches with every binding: enabled; a payload that is not AgentRunParams@1, or
-      // whose run is not the instance id, is refused before any step.
+      // whose run and segment are not the instance id (<runId>-s<segment>-i<incarnation>,
+      // ADR-0041 item 6), is refused before any step.
       const enabled = new module.AgentRunWorkflow({}, { ...full, ...loop, BROKER: agentBroker });
+      const instance = params.runId + "-s1-i1";
       for (const [payload, instanceId] of [
-        [{}, params.runId],
-        [{ ...params, extra: 1 }, params.runId],
-        [params, "00000000-0000-4000-8000-0000000000bb"],
+        [{}, instance],
+        [{ ...params, extra: 1 }, instance],
+        [params, params.runId],
+        [params, "00000000-0000-4000-8000-0000000000bb-s1-i1"],
+        [params, params.runId + "-s1-i2"],
       ])
         await assert.rejects(
           enabled.run({ payload, timestamp: new Date(), instanceId }, step),
@@ -353,7 +362,16 @@ test("the agent Workflow's body: ids-only payload, the reviewed step options and
     organizationId: "org_o",
     workspaceId: "ws_w",
     runId,
+    segment: 1,
+    incarnation: 1,
   };
+  // ADR-0041 item 6's instance id: <runId>-s<segment>-i<incarnation>; the PR 11 runner runs
+  // segment 1, incarnation 1 only (plan row H7a).
+  const instance = runId + "-s1-i1";
+  assert.deepEqual(
+    { ...module.legacyAgentRunStart({ organizationId: "org_o", workspaceId: "ws_w", runId }) },
+    { id: instance, params },
+  );
   const configs = [];
   const step = {
     async do(name, config, body) {
@@ -361,7 +379,7 @@ test("the agent Workflow's body: ids-only payload, the reviewed step options and
       return body();
     },
   };
-  const event = (p = params, instanceId = runId) => ({
+  const event = (p = params, instanceId = instance) => ({
     payload: p,
     instanceId,
     timestamp: new Date(),
@@ -423,9 +441,13 @@ test("the agent Workflow's body: ids-only payload, the reviewed step options and
     (error) => error.message === "dispatch_disabled",
   );
   for (const [p, id] of [
-    [{}, runId],
-    [{ ...params, workflow: "listings-run@1" }, runId],
-    [params, "00000000-0000-4000-8000-0000000000bb"],
+    [{}, instance],
+    [{ ...params, workflow: "listings-run@1" }, instance],
+    [params, runId],
+    [params, "00000000-0000-4000-8000-0000000000bb-s1-i1"],
+    // The PR 11 runner runs segment 1, incarnation 1 only: H7b's runner rolls segments.
+    [{ ...params, segment: 2 }, runId + "-s2-i1"],
+    [{ ...params, incarnation: 2 }, runId + "-s1-i2"],
   ])
     await assert.rejects(
       module.runAgentWorkflow(

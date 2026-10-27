@@ -20,7 +20,7 @@ import {
 } from "../../../packages/work/src/runs/workflow.js";
 import { runtimeProductReadAvailable } from "../../../packages/identity/src/broker-protocol.js";
 import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from "./environment.js";
-import { agentAnswerEvent, runAgentWorkflow } from "./agent-run.js";
+import { agentAnswerEvent, legacyAgentRunStart, runAgentWorkflow } from "./agent-run.js";
 import { runListingsWorkflow } from "./listings-run.js";
 import { createRuntimePool } from "./runtime-pool.js";
 import { keepRuntimeSweep } from "./runtime-sweep.js";
@@ -186,21 +186,15 @@ export default {
       if (mapping.agentRuns !== null && selected.agentPorts !== null)
         for (const a of agents.value)
           try {
+            // The PR 11 runner's one segment (<runId>-s1-i1); H7b's segment rolls, wakes
+            // (w-<waitSeq>) and sweep replace this start and answer event.
+            const start = legacyAgentRunStart(a);
             if (a.resume) {
-              const instance = await mapping.agentRuns.get(a.runId);
+              const instance = await mapping.agentRuns.get(start.id);
               await instance.sendEvent({ type: agentAnswerEvent, payload: {} });
               agentWoken += 1;
             } else {
-              await mapping.agentRuns.create({
-                id: a.runId,
-                params: {
-                  schemaVersion: 1,
-                  workflow: "agent-run@1",
-                  organizationId: a.organizationId,
-                  workspaceId: a.workspaceId,
-                  runId: a.runId,
-                },
-              });
+              await mapping.agentRuns.create({ id: start.id, params: start.params });
               agentStarted += 1;
             }
           } catch {

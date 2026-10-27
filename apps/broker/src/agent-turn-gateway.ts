@@ -174,7 +174,13 @@ export interface ModelCallV2 {
   readonly prefixDigest: string | null;
   readonly messages: readonly { readonly role: string; readonly content: readonly unknown[] }[];
 }
-/** ModelCall@2, checked by hand (the contract's closed shape, bounds and conversation order). */
+/**
+ * The build order PR 11 turn call, checked by hand (its closed shape, bounds and conversation
+ * order). H6 edited the ModelCall@2 contract to ids and digests only (ADR-0041 item 8: the
+ * broker assembles the request from SQL); H7c's broker adopts it, and this whole-conversation
+ * shape goes with this gateway. Reached only while the agent-loop switch is on, which its
+ * harness_runner prerequisite refuses until H7b (plan row H7a).
+ */
 export function parseModelCallV2(text: unknown): ModelCallV2 | null {
   if (typeof text !== "string" || encoder.encode(text).length > modelTurnLimits.callMaxBytes)
     return null;
@@ -377,6 +383,8 @@ function turnResult(
   retryAfterMs: number | null,
 ): string {
   const reply = outcome === "end_turn" || outcome === "tool_use";
+  // ModelResult@2 as H6 edited it: this PR 11 broker never compacts, clears or counts sections
+  // (H7c's streaming broker does), so those three are null.
   return JSON.stringify({
     schemaVersion: 2,
     outcome,
@@ -385,6 +393,9 @@ function turnResult(
     prefixDigest: reply ? prefixDigest : null,
     traceRef: callId === null ? null : { kind: "model_call", id: callId },
     retryAfterMs,
+    compacted: null,
+    cleared: null,
+    sectionTokens: null,
   });
 }
 

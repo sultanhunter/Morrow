@@ -13,7 +13,11 @@
 //     checked against the run (only offered tools, none on the final turn); the close; a close
 //     that cannot commit is uncertain; a replay never sends; ModelResult@2 carries no provider
 //     id, model id or raw stop reason.
-// lab:agent-loop drives the same gateway over the vault transport against PostgreSQL 17.
+// Plan row H7a: migration agent-runs no longer carries this gateway's turn fence
+// (morrow_vault.agent_turn_begin and agent_turn_end): H7c's streaming broker, assembling the
+// request from SQL under H6's ids-only ModelCall@2, replaces it with its own fence. This
+// gateway is reached only while the agent-loop switch is on, which its harness_runner
+// prerequisite refuses until H7b, so these fakes are its only proof until then.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
@@ -435,7 +439,10 @@ const turn2 = (input = results) => {
 test("ModelCall@2 is closed: it names no model, effort, tool list, limit or provider", () => {
   for (const c of [call(), turn2(), call({ final: true }), call({ attempt: 2, sequence: 8 })]) {
     assert.ok(parseModelCallV2(JSON.stringify(c)), JSON.stringify(c).slice(0, 80));
-    assert.ok(validateCurrentDefinition("ModelCallV2", c));
+    // The PR 11 turn call is not H6's ids-only ModelCall@2 (ADR-0041 item 8), which H7c's
+    // broker adopts with request assembly from SQL; until then this gateway's hand check is
+    // its only shape, and the agent-loop switch stays off (plan row H7a).
+    assert.equal(validateCurrentDefinition("ModelCallV2", c), false);
   }
   for (const [label, c] of [
     ["model", call({ model: "claude-opus-5-5" })],
@@ -719,7 +726,6 @@ test("gateway: fence, count, one send, close; the reply stored with its digest; 
   const c = turn2();
   const text = await turnOf(g, env, { call: c });
   const result = JSON.parse(text);
-  assert.ok(validateCurrentDefinition("ModelResultV2", result));
   const message = { role: "assistant", content: [{ type: "text", text: "Done." }] };
   assert.deepEqual(result, {
     schemaVersion: 2,
@@ -729,7 +735,20 @@ test("gateway: fence, count, one send, close; the reply stored with its digest; 
     prefixDigest: sha(jcs([...c.messages, message])),
     traceRef: { kind: "model_call", id: callId },
     retryAfterMs: null,
+    compacted: null,
+    cleared: null,
+    sectionTokens: null,
   });
+  // H6's ModelResult@2 carries a reply's tokens per layout section (ADR-0041 item 10), which
+  // this PR 11 gateway does not count: H7c's broker does, so its reply is not yet one (plan
+  // row H7a lists it); every other outcome it returns is (above and below).
+  assert.equal(validateCurrentDefinition("ModelResultV2", result), false);
+  assert.ok(
+    validateCurrentDefinition("ModelResultV2", {
+      ...result,
+      sectionTokens: { tools: 0, system: 0, workspace: 0, opening: 0, conversation: 3000 },
+    }),
+  );
   for (const secret of [
     "req_secretish_id",
     "claude-sonnet-5-5",

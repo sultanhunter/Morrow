@@ -436,6 +436,10 @@ export async function runTurn(
       continue;
     }
     if (result.outcome === "prefix_mismatch") return end("prefix_mismatch");
+    // ModelResult@2's H6 outcomes this runner never asks for (H7b's runner and H7d's context
+    // engine handle them): a refused lease interrupts the step, a compaction is not its own.
+    if (result.outcome === "lease_refused") return interrupted("denied");
+    if (result.outcome === "compacted") return end("provider_error");
     outcome = result.outcome;
     message = result.message;
   }
@@ -831,3 +835,18 @@ export function parseAgentRunParams(value: unknown): Current_AgentRunParams | nu
     ? (value as Current_AgentRunParams)
     : null;
 }
+/**
+ * One segment's Workflow instance id (ADR-0041 item 6; AgentRunParams@1 as H6 edited it):
+ * `<runId>-s<segment>-i<incarnation>`, the id SQL records as the run's workflow_instance_id.
+ */
+export function agentRunInstanceId(
+  params: Pick<Current_AgentRunParams, "runId" | "segment" | "incarnation">,
+): string {
+  return `${params.runId}-s${params.segment}-i${params.incarnation}`;
+}
+/**
+ * The one segment this PR 11 runner runs in: segment 1, incarnation 1, as admission records it.
+ * It never rolls a segment and never starts another incarnation; H7b's runner does both (plan
+ * row H7a lists it), behind the agent-loop switch's harness_runner prerequisite until then.
+ */
+export const legacyAgentRunSegment = Object.freeze({ segment: 1, incarnation: 1 } as const);

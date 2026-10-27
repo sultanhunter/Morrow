@@ -534,6 +534,7 @@ export function runToolCallCapabilityBranch(contextToolNames, row) {
 export const agentLoopPrerequisites = Object.freeze([
   "catalogue_version_2_confirmed",
   "gateway_reservations_stops",
+  "harness_runner",
   "lab_agent_loop",
   "shared_wallet",
   "store_content_cleanup",
