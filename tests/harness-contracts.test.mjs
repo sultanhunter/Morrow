@@ -1464,8 +1464,9 @@ test("taint: one vocabulary, ModelUntrustedSource's kinds, on every derived row 
 test("the fork's derived fakes carry at least the taint of what they read and cite", () => {
   const ids = platform.fakeHarnessIds;
   const item = fakes.fakeMemorySearchHits().find((hit) => hit.id === ids.itemId);
-  assert.ok(item.taint.kinds.length > 0, "Listings' item i1 is untrusted");
-  // What the fork read: the products (c3), Listings' result (j1) and the item it opened (i1).
+  assert.ok(item.taint.kinds.length > 0, "Listings' item r1 is untrusted");
+  // What the fork read: the products (c3), Listings' result (its call, c4) and the item it
+  // opened (r1).
   const consumed = harness.joinTaint(
     { kinds: ["product"], sourceCount: 14 },
     { kinds: ["teammate_result"], sourceCount: 1 },

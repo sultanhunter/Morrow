@@ -62,7 +62,7 @@ const productsTag: Current_ReadTag = {
 const projectId = "project_fake_1";
 /** Nothing untrusted behind the row: the requester's own words and SQL's records only. */
 const untainted = (): Current_DerivedTaint => ({ kinds: [], sourceCount: 0 });
-/** Listings' item i1: the titles it drafted from the 14 summer dresses it read. */
+/** Listings' item r1: the titles it drafted from the 14 summer dresses it read. */
 const itemTaint = (): Current_DerivedTaint => ({ kinds: ["product"], sourceCount: 14 });
 /**
  * The fork's taint once it has read the products (c3), Listings' result (its call, c4) and its
