@@ -97,24 +97,25 @@ export function toolEntry(name: unknown): ToolEntry | null {
 export function toolByWireName(wireName: unknown): ToolEntry | null {
   return typeof wireName === "string" ? (byWire.get(wireName) ?? null) : null;
 }
+// The run kinds that have a tool context (ADR-0041 item 4): a teammate call's run is kind call,
+// offered the call context's tools. Review and upkeep runs stay refused until their contexts
+// exist (H7 and H12), so admission cannot give them tools.
+const kindContexts: readonly ToolContext[] = ["coordinator", "routed", "mandate", "call"];
 /**
- * The context a run's tools come from. Look-for-work is a mandate run's pass; a teammate call
- * is a routed run (ADR-0037 item 2) offered the call context's tools.
+ * The context a run's tools come from. Look-for-work is a mandate run's pass. A caller still
+ * passing H5's retired third argument (a called flag) is refused, never given the routed
+ * context's person-facing tools.
  */
-export function runContext(
-  kind: Current_AgentRunKind,
-  lookForWork: boolean,
-  called = false,
-): ToolContext {
+export function runContext(kind: Current_AgentRunKind, lookForWork: boolean): ToolContext {
+  const context = kindContexts.find((c) => c === kind);
   if (
-    !["coordinator", "routed", "mandate"].includes(kind) ||
+    arguments.length !== 2 ||
+    context === undefined ||
     typeof lookForWork !== "boolean" ||
-    typeof called !== "boolean" ||
-    (lookForWork && kind !== "mandate") ||
-    (called && (kind !== "routed" || lookForWork))
+    (lookForWork && kind !== "mandate")
   )
     throw invalid();
-  return lookForWork ? "look_for_work" : called ? "call" : kind;
+  return lookForWork ? "look_for_work" : context;
 }
 /**
  * A called teammate's result item tool (ADR-0041 items 22 and 24): the call context's only. It

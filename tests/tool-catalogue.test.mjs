@@ -398,6 +398,11 @@ test("ADR-0024 item 6: look-for-work is reads and suggestions only", () => {
   assert.equal(runContext("mandate", true), "look_for_work");
   assert.throws(() => runContext("routed", true), ToolCatalogueError);
   assert.throws(() => runContext("operator", false), ToolCatalogueError);
+  // ADR-0041 item 4: a call run is offered the call context's tools; review and upkeep runs
+  // stay refused until their contexts exist, so admission cannot give them tools.
+  assert.equal(runContext("call", false), "call");
+  for (const kind of ["review", "upkeep"])
+    assert.throws(() => runContext(kind, false), ToolCatalogueError, kind);
 });
 
 test("a run is offered its release's declared tools inside its context, then its context's tools, in catalogue order", () => {
@@ -737,15 +742,23 @@ test("ADR-0037 item 3(a), ADR-0041 item 24: a called teammate cannot talk to the
   ])
     assert.ok(!call.includes(name), name);
   assert.deepEqual([...toolEntry(teammateItemTool).contexts], ["call"]);
-  assert.equal(runContext("routed", false, true), "call");
+  // ADR-0041 item 4: a teammate call's run is kind call (not a routed run with a flag), and
+  // only a mandate run has a look-for-work pass.
+  assert.equal(runContext("call", false), "call");
   assert.equal(runContext("routed", false), "routed");
-  for (const [kind, lookForWork, called] of [
-    ["mandate", false, true],
-    ["coordinator", false, true],
-    ["mandate", true, true],
-    ["specialist", false, false],
+  for (const [kind, lookForWork] of [
+    ["call", true],
+    ["routed", true],
+    ["coordinator", true],
+    ["specialist", false],
+    ["review", false],
+    ["upkeep", false],
   ])
-    assert.throws(() => runContext(kind, lookForWork, called), ToolCatalogueError, kind);
+    assert.throws(() => runContext(kind, lookForWork), ToolCatalogueError, kind);
+  // H5's retired called flag: a caller still passing it is refused, never given the routed
+  // context's person-facing tools.
+  assert.throws(() => runContext("routed", false, true), ToolCatalogueError);
+  assert.throws(() => runContext("routed", false, false), ToolCatalogueError);
   // A package declares grant tools only; every call of it is offered the call context's
   // memory and harness tools, and nothing that reaches the person.
   assert.deepEqual(offeredTools("call", fakeListingsPackage().tools), [
