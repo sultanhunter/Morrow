@@ -632,6 +632,10 @@ CREATE POLICY schedule_fire_advance ON morrow_work.schedules FOR UPDATE TO morro
 CREATE POLICY schedule_fire_triggers ON morrow_work.mandate_triggers FOR INSERT TO morrow_work_command
  WITH CHECK (session_user='morrow_runtime_executor' AND kind='schedule' AND status='pending'
   AND organization_id::text||'|'||workspace_id::text=pg_catalog.current_setting('morrow.schedule_fire',true));
+-- INSERT ... ON CONFLICT reads the arbiter row, so the pass sees its own tenant's trigger rows.
+CREATE POLICY schedule_fire_triggers_read ON morrow_work.mandate_triggers FOR SELECT TO morrow_work_command
+ USING (session_user='morrow_runtime_executor'
+  AND organization_id::text||'|'||workspace_id::text=pg_catalog.current_setting('morrow.schedule_fire',true));
 -- The vault broker's zone context: morrow.schedule_zone names one org|ws|store, whose zone row,
 -- open notice and schedules shopify_zone_record reads and writes (schedules read only).
 CREATE POLICY schedule_zone_vault ON morrow_work.store_time_zones TO morrow_work_command
@@ -735,8 +739,8 @@ CREATE FUNCTION morrow_work.fire_due_schedules(p_schedule_id text)
 RETURNS TABLE(outcome text,examined text,fired text,duplicate text,dropped text,ended text,more text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
-DECLARE t record; s record; p record; v_now timestamptz; n integer; v_examined integer:=0; v_fired integer:=0; v_duplicate integer:=0;
- v_dropped integer:=0; v_ended integer:=0; v_more boolean:=false;
+DECLARE t record; s record; p record; v_now timestamptz; n integer; v_found boolean; v_examined integer:=0; v_fired integer:=0;
+ v_duplicate integer:=0; v_dropped integer:=0; v_ended integer:=0; v_more boolean:=false;
 BEGIN
  PERFORM pg_catalog.set_config('morrow.schedule_sweep','',true),pg_catalog.set_config('morrow.schedule_target','',true),
   pg_catalog.set_config('morrow.schedule_fire','',true),pg_catalog.set_config('morrow.schedule_zone','',true);
@@ -748,8 +752,9 @@ BEGIN
  END IF;
  PERFORM pg_catalog.set_config('morrow.schedule_target',p_schedule_id,true);
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id INTO t FROM morrow_work.schedules x WHERE x.id=p_schedule_id;
+ v_found:=FOUND;
  PERFORM pg_catalog.set_config('morrow.schedule_target','',true);
- IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,'0','0','0','0','0','false'; RETURN; END IF;
+ IF NOT v_found THEN RETURN QUERY SELECT 'not_found'::text,'0','0','0','0','0','false'; RETURN; END IF;
  PERFORM pg_catalog.set_config('morrow.schedule_fire',t.organization_id||'|'||t.workspace_id,true);
  v_now:=morrow_work.db_now();
  FOR s IN SELECT x.id::text AS id,x.revision,x.store_id::text AS store_id,x.installation_id::text AS installation_id,x.body,x.next_slot_at,

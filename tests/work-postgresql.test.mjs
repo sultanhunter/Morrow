@@ -344,10 +344,14 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   // billing lab; M3 PR-1 its listings authority lab (its run-credits lab rides pg-linking);
   // M2 PR-3 its webhooks, privacy and catalogue-read lab; M3 PR-2 its listings runs lab; v1
   // PR 2 its "Disconnect store" lab; build order PR 7 its runtime operations lab; v1 PR 5 its
-  // connection health lab, last.
+  // connection health lab; plan row SD12 its schedules lab (lab:mandates), last.
   assert.equal(
     pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs && npm run lab:disconnect-store && npm run lab:connection-health",
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority && npm run lab:shopify-privacy && npm run lab:listings-runs && npm run lab:disconnect-store && npm run lab:connection-health && npm run lab:mandates",
+  );
+  assert.equal(
+    pkg.scripts["lab:mandates"],
+    "node --import tsx --test --test-concurrency=1 tests/mandates/postgresql.test.mjs",
   );
   assert.equal(
     pkg.scripts["lab:connection-health"],

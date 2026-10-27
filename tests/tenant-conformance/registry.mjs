@@ -454,7 +454,7 @@ export const workTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces", "agent_installations", "schedule_revisions"],
     commandRead: true,
-    policies: ["schedule_fire_triggers"],
+    policies: ["schedule_fire_triggers", "schedule_fire_triggers_read"],
     content: "none",
   },
   schedule_zone_notices: {

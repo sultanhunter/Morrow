@@ -407,6 +407,7 @@ const extraPolicies = {
     null,
     "((SESSION_USER = 'morrow_runtime_executor'::name) AND (kind = 'schedule'::text) AND (status = 'pending'::text) AND ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.schedule_fire'::text, true)))",
   ],
+  schedule_fire_triggers_read: ["SELECT", "{morrow_work_command}", scheduleFire, null],
   schedule_zone_vault: ["ALL", "{morrow_work_command}", scheduleZone, scheduleZone],
   schedule_zone_vault_read: ["SELECT", "{morrow_work_command}", scheduleZone, null],
   connector_health_stop_read: [
