@@ -32,7 +32,7 @@ export async function sha256Hex(text: string): Promise<string> {
 
 /**
  * The digest a recording is bound to: the case's inputs (entry, request, fixtures and world)
- * and the eval world's version. Expectations, titles and the rubric are not inputs, so
+ * and the eval world's version. Expectations, probes, titles and the rubric are not inputs, so
  * changing them never makes a recording stale; any other change does.
  */
 export async function recordingBasisDigest(evalCase: EvalCase): Promise<string> {

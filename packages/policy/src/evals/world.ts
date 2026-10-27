@@ -1,20 +1,30 @@
-// The eval world's fixed data (ADR-0037 item 10): the agents, the tools each design offers
-// them, the run limits and the fake wallet's prices. Pure data and checks; the replay
-// (replay.ts) runs a case in it. Everything here is a fake for the replay: the run limits
-// are catalogue version 2's proposed values (ADR-0027 item 6; ADR-0039 item 5), and the
-// credit prices are invented round numbers, since rate card v1 is not published (ADR-0039
-// item 3). Nothing here is a money cap: the wallet's balance is the only spend limit
-// (ADR-0039 item 1).
+// The eval world's fixed data, version 2 (ADR-0041; harness plan row H18): the agents, the
+// tools each run is offered (tool catalogue version 4, item 24), the safety profile (item 18's
+// check-ins and detectors and item 12's per-turn calls), the context policy's seeds (item 12)
+// and the fake wallet (item 9). Pure data and checks; the replay (replay.ts) runs a case in it.
+//
+// What version 2 removed (item 3, "safety never ends work early"): the turn limits (6 for
+// Morrow, 16 for a teammate) and the final turn with no tools; the 4-calls-per-turn rule
+// (16 calls run per turn, extras answered `parallel_limit` and re-issued next turn); the
+// 40-calls-per-run rule (a check-in at 10,000 calls parks the job); the final-turn reserve and
+// `credits_exhausted` (an empty wallet parks the whole job until a top-up, item 9); and an
+// unoffered or invalid tool_use ending the run (it gets an error result, item 8).
+//
+// Everything here is a fake for the replay: the safety values are ADR-0041's seeds, which the
+// catalogue may tune with evidence; the credit prices are invented round numbers (rate card v1
+// is not published, ADR-0039 item 3). Nothing here is a money cap: the wallet's balance is the
+// only spend limit (ADR-0039 item 1, OD-2026-10-26-12).
 import { fakeIds } from "../agent-platform-fakes";
 import {
   checkToolInput,
+  isAgentTool,
   isContextTool,
   offeredTools,
   toolEntry,
-  toolsForContext,
+  type ToolContext,
+  type ToolEntry,
 } from "../tool-catalogue";
-import type { EvalAgentRef, EvalDesign, EvalTeammateRef, EvalToolName } from "./format";
-import { evalCatalogueTools } from "./format";
+import type { EvalAgentRef, EvalArm, EvalTeammateRef } from "./format";
 
 /** Each teammate's installation id in the eval world (synthetic, as agent-platform-fakes'). */
 export const evalInstallationIds: Readonly<Record<EvalTeammateRef, string>> = Object.freeze({
@@ -30,291 +40,211 @@ export function teammateByInstallationId(id: unknown): EvalTeammateRef | null {
 }
 
 /**
- * The tools each first-party teammate's package declares in the eval world (provisional:
- * the launch packages are build order PRs 22 to 25). A teammate never holds an `agent.*`
- * tool (ADR-0037 item 2, depth 1).
+ * The grant tools each first-party teammate's package declares in the eval world (provisional:
+ * the launch packages are build order PRs 22 to 25). Context tools (memory and harness) are
+ * never declared: every run gets its context's set. A teammate never holds an `agent.*` tool
+ * (ADR-0037 item 2, depth 1).
  */
-export const evalTeammateTools: Readonly<Record<EvalTeammateRef, readonly EvalToolName[]>> =
+export const evalTeammateTools: Readonly<Record<EvalTeammateRef, readonly string[]>> =
   Object.freeze({
     listings: Object.freeze([
       "knowledge.search",
       "products.read",
       "message.post",
+      "inbox.ask",
       "suggestion.create",
       "proposal.listing",
-    ] as const),
+      "notebook.write",
+    ]),
     business_analyst: Object.freeze([
       "knowledge.search",
       "products.read",
       "orders.summary",
       "message.post",
+      "inbox.ask",
       "suggestion.create",
       "report.write",
-    ] as const),
+      "notebook.write",
+    ]),
     inventory: Object.freeze([
       "products.read",
       "inventory.read",
       "orders.summary",
       "message.post",
+      "inbox.ask",
       "suggestion.create",
-    ] as const),
+      "notebook.write",
+    ]),
     support: Object.freeze([
       "knowledge.search",
       "support.thread.read",
       "message.post",
+      "inbox.ask",
       "proposal.reply",
-    ] as const),
+      "notebook.write",
+    ]),
   });
 
 /**
- * How a tool is served: from the tool catalogue, a provisional ADR-0037 shape, or
- * `catalogue_v2`: catalogue version 2's one-way `agent.route` (a string brief of at most
- * 2,000 characters, once per run), which handoff_only@1 replays. Catalogue version 4 (ADR-0037's
- * contracts) replaced that input with a structured brief, so the world keeps its shape here.
+ * The kind of a run in the eval world (ADR-0041 item 4's kinds as a case uses them):
+ * `conversation`, Morrow's main thread in a person's Ask; `job`, Morrow's job (a project
+ * request or a fork of the main thread); `routed`, a teammate's job (asked directly, or a
+ * hand-off); `call`, a called teammate (an agent.ask, a follow-up or an agent.map batch);
+ * `review`, a review run of a teammate's view verbs (agent.ask with mode review).
  */
-export type EvalToolSource = "catalogue" | "provisional" | "catalogue_v2";
-export interface EvalToolSpec {
-  readonly name: EvalToolName;
-  readonly source: EvalToolSource;
-  readonly capabilityId: string;
-  readonly verb: string;
+export type EvalRunKind = "conversation" | "job" | "routed" | "call" | "review";
+export const evalRunContext: Readonly<Record<EvalRunKind, ToolContext>> = Object.freeze({
+  conversation: "coordinator",
+  job: "coordinator",
+  routed: "routed",
+  call: "call",
+  review: "call",
+});
+
+/**
+ * What each arm changes in the world. Arms that differ only in a live round (recitation and
+ * clearing are prompt and request choices the replay cannot see) change nothing here.
+ */
+export interface EvalArmRules {
+  readonly planTool: boolean;
+  readonly mapTool: boolean;
+  readonly reviewMode: boolean;
+  readonly followUps: boolean;
+  readonly asyncCalls: boolean;
 }
-const catalogueSpec = (name: EvalToolName): EvalToolSpec => {
-  const entry = toolEntry(name);
-  if (!entry) throw Error("EVAL_WORLD_TOOL_UNKNOWN:" + name);
-  // The world serves grant tools only; a memory or harness tool (catalogue version 4, ADR-0041
-  // item 24) holds no capability and is not in this world's format yet (plan row H18).
-  if (entry.capabilityId === null || entry.verb === null)
-    throw Error("EVAL_WORLD_TOOL_NO_CAPABILITY:" + name);
+export function evalArmRules(arm: EvalArm): EvalArmRules {
   return Object.freeze({
-    name,
-    source: "catalogue",
-    capabilityId: entry.capabilityId,
-    verb: entry.verb,
+    planTool: arm !== "no_plan@1",
+    mapTool: arm !== "separate_calls@1",
+    reviewMode: arm !== "no_review@1",
+    followUps: arm !== "fresh_calls@1",
+    asyncCalls: arm !== "sync_calls@1",
   });
-};
-const provisionalSpecs: Readonly<Record<string, EvalToolSpec>> = Object.freeze({
-  // ADR-0037 item 1: `agent.ask` on workspace.task.delegate, like `agent.route`.
-  "agent.ask": {
-    name: "agent.ask",
-    source: "provisional",
-    capabilityId: "workspace.task.delegate",
-    verb: "delegate",
-  },
-  // ADR-0037 item 3: `agent.route` with a structured brief and no once-per-run limit.
-  "agent.route": {
-    name: "agent.route",
-    source: "provisional",
-    capabilityId: "workspace.task.delegate",
-    verb: "delegate",
-  },
-  // ADR-0037 item 1 names no capability for it ("grants nothing else"); a read here.
-  "agent.result.read": {
-    name: "agent.result.read",
-    source: "provisional",
-    capabilityId: "workspace.artifact.read",
-    verb: "view",
-  },
-  // ADR-0037 item 1: `agent.propose` on agents.builder.describe, granting nothing.
-  "agent.propose": {
-    name: "agent.propose",
-    source: "provisional",
-    capabilityId: "agents.builder.describe",
-    verb: "execute",
-  },
-});
+}
 
-// handoff_only@1's hand-off: catalogue version 2's agent.route, on the same capability and verb.
-const handoffOnlyRoute: EvalToolSpec = Object.freeze({
-  name: "agent.route",
-  source: "catalogue_v2",
-  capabilityId: "workspace.task.delegate",
-  verb: "delegate",
-});
-
-const morrowCatalogueTools = [
-  "knowledge.search",
-  "work.read",
-  "message.post",
-  "task.create",
-] as const;
-/** The tools a run is offered, by agent, run kind and design. */
-export type EvalRunKind = "coordinator" | "routed" | "called";
+/**
+ * The tools a run is offered, by agent, run kind and arm, in catalogue order. Morrow has no
+ * package: its fixed set is the coordinator context's. A teammate gets its declared grant tools
+ * intersected with its context's, plus the context's memory and harness tools (ADR-0041 item
+ * 24); a review run only the `view` verbs of those, plus memory reads and run.complete.
+ */
 export function evalOfferedTools(
   agent: EvalAgentRef,
   kind: EvalRunKind,
-  design: EvalDesign,
-): ReadonlyMap<string, EvalToolSpec> {
-  const specs: EvalToolSpec[] = [];
+  arm: EvalArm,
+): ReadonlyMap<string, ToolEntry> {
+  const rules = evalArmRules(arm);
+  const context = evalRunContext[kind];
+  let names: readonly string[];
   if (agent === "morrow") {
-    if (kind !== "coordinator") throw Error("EVAL_WORLD_KIND");
-    specs.push(...morrowCatalogueTools.map(catalogueSpec));
-    if (design === "teammates@1")
-      specs.push(
-        provisionalSpecs["agent.route"]!,
-        provisionalSpecs["agent.ask"]!,
-        provisionalSpecs["agent.result.read"]!,
-        provisionalSpecs["agent.propose"]!,
-      );
-    else specs.push(handoffOnlyRoute);
+    if (kind !== "conversation" && kind !== "job") throw Error("EVAL_WORLD_KIND");
+    names = offeredTools("coordinator", null);
   } else {
-    if (kind === "coordinator") throw Error("EVAL_WORLD_KIND");
-    // A called teammate cannot talk to the person (ADR-0037 item 3(a)): no posts or questions.
-    const declared = evalTeammateTools[agent].filter(
-      (tool) => kind === "routed" || tool !== "message.post",
-    );
-    specs.push(...declared.map(catalogueSpec));
+    if (kind === "conversation" || kind === "job") throw Error("EVAL_WORLD_KIND");
+    names = offeredTools(context, [...evalTeammateTools[agent]]);
+    if (kind === "review")
+      names = names.filter((name) => {
+        const entry = toolEntry(name)!;
+        return isContextTool(name)
+          ? ["memory.search", "memory.read", "run.complete"].includes(name)
+          : entry.verb === "view";
+      });
   }
-  return new Map(specs.map((spec) => [spec.name as string, spec]));
-}
-// Drift guards, run once at load: every catalogue tool the world serves is in the catalogue
-// with the context it is served in, so a catalogue change cannot silently widen what an eval
-// agent is offered.
-{
-  const coordinator = toolsForContext("coordinator") as readonly string[];
-  for (const tool of [...morrowCatalogueTools, "agent.route"])
-    if (!coordinator.includes(tool)) throw Error("EVAL_WORLD_DRIFT:coordinator:" + tool);
-  // handoff_only@1's fixed hand-off keeps the catalogue's capability and verb for agent.route.
-  const route = toolEntry("agent.route");
-  if (route?.capabilityId !== handoffOnlyRoute.capabilityId || route.verb !== handoffOnlyRoute.verb)
-    throw Error("EVAL_WORLD_DRIFT:agent.route");
-  for (const [agent, tools] of Object.entries(evalTeammateTools)) {
-    // Catalogue version 4 also offers the context's memory and harness tools, which this world
-    // does not serve yet (plan row H18): only the declared grant tools are compared.
-    if (offeredTools("routed", [...tools]).filter((t) => !isContextTool(t)).length !== tools.length)
-      throw Error("EVAL_WORLD_DRIFT:routed:" + agent);
-    if (tools.some((tool) => !(evalCatalogueTools as readonly string[]).includes(tool)))
-      throw Error("EVAL_WORLD_DRIFT:catalogue:" + agent);
-  }
+  const kept = names.filter(
+    (name) => (rules.planTool || name !== "run.plan") && (rules.mapTool || name !== "agent.map"),
+  );
+  return new Map(kept.map((name) => [name, toolEntry(name)!]));
 }
 
-/** Run limits: catalogue version 2's proposed values (ADR-0027 item 6, ADR-0039 item 5). */
-export const evalRunLimits = Object.freeze({
-  turns: Object.freeze({ morrow: 6, teammate: 16 }),
-  toolCallsPerTurn: 4,
-  toolCallsPerRun: 40,
-  /** The delegation kernel's bound (`maximumChildren`), unchanged by ADR-0037 item 3. */
-  childrenPerEnvelope: 32,
+// Drift guards, run once at load: every tool the world serves is in the catalogue, in the
+// context it is served in, and no teammate is ever offered an agent.* tool.
+{
+  for (const [agent, tools] of Object.entries(evalTeammateTools)) {
+    for (const tool of tools)
+      if (!toolEntry(tool) || isContextTool(tool) || isAgentTool(tool))
+        throw Error("EVAL_WORLD_DRIFT:" + agent + ":" + tool);
+    for (const kind of ["routed", "call", "review"] as const)
+      for (const name of evalOfferedTools(agent as EvalTeammateRef, kind, "harness@1").keys())
+        if (isAgentTool(name)) throw Error("EVAL_WORLD_DRIFT:depth:" + agent);
+  }
+  if (evalOfferedTools("listings", "call", "harness@1").has("message.post"))
+    throw Error("EVAL_WORLD_DRIFT:call_post");
+}
+
+/**
+ * The safety profile (AgentRunSafety@1's seeds, ADR-0041 items 12 and 18). Backstops and
+ * detectors park the job with a check-in; none ends it. Catalogue values, tuned by evidence.
+ */
+export interface EvalSafetyProfile {
+  /** Calls run per turn; extras are answered `parallel_limit` and re-issued next turn. */
+  readonly toolCallsPerTurn: number;
+  readonly checkIns: {
+    readonly modelTurns: number;
+    readonly toolCalls: number;
+    /** The kernel's children per envelope (ADR-0041 item 21). */
+    readonly children: number;
+  };
+  readonly detectors: {
+    readonly repeat: { readonly nudge: number; readonly trip: number };
+    readonly errorStreak: { readonly nudge: number; readonly trip: number };
+    readonly idleTurns: number;
+    readonly alternationSteps: number;
+    readonly outputCuts: number;
+  };
+}
+export const evalSafetyProfile: EvalSafetyProfile = Object.freeze({
+  toolCallsPerTurn: 16,
+  checkIns: Object.freeze({ modelTurns: 1000, toolCalls: 10000, children: 32 }),
+  detectors: Object.freeze({
+    repeat: Object.freeze({ nudge: 3, trip: 4 }),
+    errorStreak: Object.freeze({ nudge: 3, trip: 5 }),
+    idleTurns: 3,
+    alternationSteps: 8,
+    outputCuts: 3,
+  }),
+});
+
+/** ContextPolicy v1's seeds the world uses (ADR-0041 item 12). */
+export const evalContextPolicy = Object.freeze({
+  workingWindow: 200_000,
+  compactAtShare: 0.8,
+  /** A compaction must cut at least 40% (the progress guard). */
+  progressGuardShare: 0.4,
 });
 
 /**
- * The fake wallet (ADR-0039 item 2). Whole credits; metered use in micro-credits. Prices are
- * invented for the replay. The two readings still open with the owner
- * (Q-adr-0039-carried-out-values) are built as proposed and switchable here: the final-turn
- * reserve (items 2(d), 2(e)) and failed runs drawing their metered use (item 2(g)).
+ * The fake wallet (ADR-0041 item 9; ADR-0039). Metered use in micro-credits. A turn holds its
+ * input at the input rate and `max_tokens` (32,000 at `medium`, 64,000 at `high`, item 8) at
+ * the output rate, and draws its metered use after it; a booking above the hold is
+ * `cost_budget`, the only end tied to money. When a hold cannot be covered, the whole job parks
+ * on credits and resumes on a top-up; nothing is drawn while parked. A failed ending caused by
+ * Morrow or the provider is refunded at settlement (OD-2026-10-26-2). Prices are invented.
  */
 export interface EvalWalletRules {
-  readonly worstCaseTurnCredits: { readonly morrow: number; readonly teammate: number };
   readonly microCreditsPerToken: { readonly input: number; readonly output: number };
-  readonly finalTurnReserve: boolean;
-  readonly failedRunsDraw: boolean;
+  readonly maxTokens: { readonly medium: number; readonly high: number };
 }
 export const evalWalletRules: EvalWalletRules = Object.freeze({
-  worstCaseTurnCredits: Object.freeze({ morrow: 10, teammate: 8 }),
-  microCreditsPerToken: Object.freeze({ input: 500, output: 2500 }),
-  finalTurnReserve: true,
-  failedRunsDraw: true,
+  microCreditsPerToken: Object.freeze({ input: 1000, output: 5000 }),
+  maxTokens: Object.freeze({ medium: 32_000, high: 64_000 }),
 });
 export const microPerCredit = 1_000_000;
+/** ADR-0041 item 2: Morrow at `high`, every other agent at `medium`. */
+export const evalEffort = (agent: EvalAgentRef): "medium" | "high" =>
+  agent === "morrow" ? "high" : "medium";
 
-// --- Tool inputs --------------------------------------------------------------------------
+/** The tool-call step's full input check (ADR-0027 item 2): catalogue version 4's definitions. */
+export function evalInputValid(tool: string, input: unknown): boolean {
+  return checkToolInput(tool, input).ok;
+}
+
 /**
- * One recorded call's input check, as the loop makes it (ADR-0027 item 2): `shape` is the
- * strict shape the model is given (types, enums, required keys, closed objects): outside it
- * the reply is invalid output, which ends the run. `limits` is the full definition: a breach
- * is that call's invalid_input. Catalogue tools use catalogue version 2's definitions; the
- * provisional tools their working shapes below.
+ * The code's claim screen on model-written text (ADR-0041 item 13): a summary, checkpoint or
+ * reply that says an approval, a consent, an apply or a payment happened. The eval world's
+ * stand-in for H7d's validator, which also compares stated states with SQL.
  */
-export type EvalInputCheck = "ok" | "shape" | "limits";
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
-const exactKeys = (value: Record<string, unknown>, keys: readonly string[]) =>
-  Object.keys(value).sort().join(",") === [...keys].sort().join(",");
-const strings = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
-function briefCheck(value: unknown): EvalInputCheck {
-  if (!isObject(value) || !exactKeys(value, ["installationId", "brief"])) return "shape";
-  const brief = value.brief;
-  if (typeof value.installationId !== "string" || !isObject(brief)) return "shape";
-  if (!exactKeys(brief, ["objective", "recordIds", "fields"])) return "shape";
-  if (typeof brief.objective !== "string" || !strings(brief.recordIds)) return "shape";
-  const fields = brief.fields;
-  if (
-    !Array.isArray(fields) ||
-    !fields.every(
-      (f) =>
-        isObject(f) &&
-        exactKeys(f, ["name", "value"]) &&
-        typeof f.name === "string" &&
-        typeof f.value === "string",
-    )
-  )
-    return "shape";
-  // ADR-0037 item 3(a): structured, with no character cap on the objective or a field.
-  const fieldNames = (fields as { name: string }[]).map((f) => f.name);
-  if (
-    !/^inst_[a-z][a-z0-9_]{1,40}$/.test(value.installationId) ||
-    brief.objective.length < 1 ||
-    brief.recordIds.length > 64 ||
-    new Set(brief.recordIds).size !== brief.recordIds.length ||
-    brief.recordIds.some((id) => id.length < 1 || id.length > 64) ||
-    fields.length > 32 ||
-    new Set(fieldNames).size !== fieldNames.length ||
-    fieldNames.some((name) => !/^[a-z][a-z0-9_]{0,31}$/.test(name))
-  )
-    return "limits";
-  return "ok";
-}
-function resultReadCheck(value: unknown): EvalInputCheck {
-  if (!isObject(value) || !exactKeys(value, ["itemId", "page"])) return "shape";
-  if (typeof value.itemId !== "string" || typeof value.page !== "number") return "shape";
-  if (!Number.isInteger(value.page)) return "shape";
-  if (!/^item_[a-z0-9_-]{1,59}$/.test(value.itemId) || value.page < 1 || value.page > 1000)
-    return "limits";
-  return "ok";
-}
-/** Catalogue version 2's agent.route input: an Id and a string brief of 1 to 2,000 characters. */
-function handoffRouteCheck(value: unknown): EvalInputCheck {
-  if (!isObject(value) || !exactKeys(value, ["installationId", "brief"])) return "shape";
-  if (typeof value.installationId !== "string" || typeof value.brief !== "string") return "shape";
-  const length = [...value.brief].length;
-  if (
-    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.installationId) ||
-    length < 1 ||
-    length > 2000 ||
-    !/\S/.test(value.brief)
-  )
-    return "limits";
-  return "ok";
-}
-/** ADR-0037 item 5: never on a card: `agent.*`, `workspace.task.delegate` or human-only. */
-const cardTools: readonly string[] = evalCatalogueTools.filter((tool) => tool !== "agent.route");
-function proposeCheck(value: unknown): EvalInputCheck {
-  const keys = ["name", "purpose", "instructions", "tools", "skillIds"];
-  if (!isObject(value) || !exactKeys(value, keys)) return "shape";
-  const { name, purpose, instructions, tools, skillIds } = value;
-  if (typeof name !== "string" || typeof purpose !== "string" || typeof instructions !== "string")
-    return "shape";
-  if (!strings(tools) || !strings(skillIds)) return "shape";
-  if (
-    name.length < 1 ||
-    name.length > 60 ||
-    purpose.length < 1 ||
-    purpose.length > 300 ||
-    instructions.length < 1 ||
-    tools.length < 1 ||
-    tools.length > 16 ||
-    new Set(tools).size !== tools.length ||
-    tools.some((tool) => !cardTools.includes(tool)) ||
-    skillIds.length > 8
-  )
-    return "limits";
-  return "ok";
-}
-export function checkEvalToolInput(spec: EvalToolSpec, input: unknown): EvalInputCheck {
-  if (spec.source === "catalogue") return checkToolInput(spec.name, input).ok ? "ok" : "limits";
-  if (spec.source === "catalogue_v2") return handoffRouteCheck(input);
-  if (spec.name === "agent.ask" || spec.name === "agent.route") return briefCheck(input);
-  if (spec.name === "agent.result.read") return resultReadCheck(input);
-  return proposeCheck(input);
+const claimPattern =
+  /\b(?<!\bnot )(?<!n't )(?:owner|person|they|she|he|it|was|were|been|has|have|had|is|are|already)\s+(?:already\s+)?(?:approved|consented|applied|paid)\b|\b(?<!\bnot )approved by\b|\bapproval (?:was |has been |is )?(?:given|granted|received)\b|\bgo-ahead\b/i;
+export function evalClaimsApproval(text: string): boolean {
+  return claimPattern.test(text);
 }
