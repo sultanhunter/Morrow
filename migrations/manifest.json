@@ -432,8 +432,8 @@
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
     },
     {
-      "sequence": 58,
-      "file": "0058.schedules-shop-zone.sql",
+      "sequence": 62,
+      "file": "0062.schedules-shop-zone.sql",
       "sha256": "e522fe23272e69114fb47d6d3f523fbabd1a5471b5432a059f157b445da58b54",
       "reviewRef": "docs/briefs/sd12-schedules-shop-zone.md",
       "executeAs": "morrow_work_owner"
