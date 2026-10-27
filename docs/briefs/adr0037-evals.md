@@ -1,6 +1,7 @@
 # ADR-0037 PR 9: agent evals (the case format, the CI replay and the first golden set)
 
 - Status: brief, built 2026-10-25 on `claude/adr0037-evals` from `main` at `66689751` (#72, ADR-0037 merged). Decisions: [ADR-0037](../decisions/adr/ADR-0037-main-agent-and-scoped-subagents.md) item 10 (evals before folding or splitting; designs compared task by task) and item 9 (no switch goes on before a passing eval round), ADR-0027 (the loop's checks in code, the run limits, "each release passing its recorded evals"), ADR-0035 item 4 (live rounds under the standing approval) and [ADR-0039](../decisions/adr/ADR-0039-credits-only-spend-limit.md) (credits are the only spend limit; merged in #75 and taken in with `origin/main` on 2026-10-26). Plan: [adr-0037-implementation.md](../plan/adr-0037-implementation.md) row 9.
+- 2026-10-27: harness plan row H18 replaces this brief's formats, eval world and `golden@1` with version 2 (`golden@2`, ADR-0041 item 37): see [h18-eval-format.md](h18-eval-format.md). This brief stays as the record of PR #81.
 - Change class: routine (ADR-0002). A test harness, data files and one operator command; no migration (none on this branch; `main` holds 0001 to 0052 since #68), contract, capability, grant, provider, retention or Worker change. One new switch, `docs/decisions/agent-evals-live.json`, committed off with an `edge:check` guard. No live provider is called.
 
 ## Goal
