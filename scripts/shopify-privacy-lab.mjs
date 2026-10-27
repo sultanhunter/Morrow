@@ -14,7 +14,11 @@
 //              (morrow_api_worker) with the reader as its ApiBroker.
 // It proves: W  only signature-verified deliveries are recorded, under the registry's tenant
 // for the verified shop (never a tenant the sender names); C  customers/* complete "none
-// held" and keep no customer value; T  closed catalogue reads under a read lease, closed
+// held" and keep no customer value; L  (SD3) a customers/* request keeps the order ids it
+// lists on its inbox row, a registered order-keyed class's listed rows are deleted in that
+// store only, the request completes only when every handler reports zero remaining, and the
+// clean-up job's purge deletes the ids after 7 days unless the request is still open;
+// T  closed catalogue reads under a read lease, closed
 // variables, closed results, the vault resolution's refusals and the read budget;
 // U  app/uninstalled ends the installation, stops the connection, revokes its leases and
 // destroys the token (idempotent, tenant-local); G  scope changes (v1 PR 5: the connection
@@ -85,9 +89,14 @@ function check(name, passed, detail) {
   return passed === true;
 }
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const files = [".shopify-privacy-identity.sql", ".shopify-privacy-work.sql"].map(
-  (slug) => manifest.migrations.find((m) => m.file.endsWith(slug))?.file,
-);
+// SD3 (P09.T05b): the customer deletion pair, located by slug like M2 PR-3's (the lead may
+// renumber them at merge).
+const files = [
+  ".shopify-privacy-identity.sql",
+  ".shopify-privacy-work.sql",
+  ".customer-deletion-identity.sql",
+  ".customer-deletion-work.sql",
+].map((slug) => manifest.migrations.find((m) => m.file.endsWith(slug))?.file);
 if (files.some((f) => !f)) throw Error("SHOPIFY_PRIVACY_LAB_MIGRATIONS_REQUIRED");
 const sourceDigests = Object.fromEntries(
   [
@@ -345,6 +354,21 @@ const report = await withWorkDatabase(
     const reader = createShopifyReader({ transaction, fetch: shopifyFetch, now: () => Date.now() });
     const faults = { destroy: false };
     const destroyCalls = [];
+    // The connector's own database (its login, its fixed statements): the handler below uses
+    // it, and phase L calls the clean-up job's purge through it directly (SD3).
+    const connectorDatabase = createConnectorDatabase(
+      binding,
+      {
+        neonLease: async () =>
+          JSON.stringify({
+            schemaVersion: 1,
+            password: "lab-" + randomBytes(12).toString("hex"),
+          }),
+      },
+      bridged,
+      Date.now,
+      NoSocket,
+    );
     const connector = createConnectorHandler({
       configuration: { origin: connectorOrigin, apiOrigin: workFixtureOrigin },
       broker: {
@@ -359,19 +383,7 @@ const report = await withWorkDatabase(
           return broker.credentialDestroy(brokerEnv, installationId, reason);
         },
       },
-      database: createConnectorDatabase(
-        binding,
-        {
-          neonLease: async () =>
-            JSON.stringify({
-              schemaVersion: 1,
-              password: "lab-" + randomBytes(12).toString("hex"),
-            }),
-        },
-        bridged,
-        Date.now,
-        NoSocket,
-      ),
+      database: connectorDatabase,
       limiters: null,
     });
     // One delivery through the connector's /webhooks; the waitUntil work is awaited before
@@ -491,7 +503,9 @@ const report = await withWorkDatabase(
       dataRequest.status === 200 &&
         dataRow?.status === "applied" &&
         dataRow.outcome === "none_held" &&
-        Object.keys(dataRow.body).sort().join(",") === "customerDigest,dataRequestId,shopId" &&
+        Object.keys(dataRow.body).sort().join(",") ===
+          "customerDigest,dataRequestId,ordersRequested,shopId" &&
+        same(dataRow.body.ordersRequested, ["1"]) &&
         /^[a-f0-9]{64}$/.test(dataRow.body.customerDigest) &&
         dataRequestRows.length === 1 &&
         dataRequestRows[0].org === S.org &&
@@ -547,6 +561,216 @@ const report = await withWorkDatabase(
         !ownerRows(
           "SELECT string_agg(column_name,',') AS c FROM information_schema.columns WHERE table_schema='morrow_identity' AND table_name='privacy_requests'",
         )[0].c.includes("customer"),
+    );
+
+    // -------------------------------------------------------------------------
+    // L (SD3): the order ids a request lists, the "orders listed" matcher and the 7-day clock.
+    // No class is keyed by an order at this head, so one is registered here as the pull request
+    // that first writes one would (sim: a superuser-created table, its handler in
+    // customer_content_redact and its name in customer_handler_tables).
+    phase("listed_orders");
+    const orderBody = (s, orders, extra = {}) =>
+      compliance(s, { customer, orders_to_redact: orders, ...extra });
+    const lastRow = (r) => inboxRows().find((x) => x.webhook_id === r.webhookId);
+    const listedOnly = await deliver(S, "customers/redact", orderBody(S, [1002, 1001, 1001]));
+    const listedRow = lastRow(listedOnly);
+    check(
+      "L1:a_redact_keeps_its_listed_order_ids_and_completes_none_held_while_no_class_is_keyed",
+      listedOnly.status === 200 &&
+        listedRow?.status === "applied" &&
+        listedRow.outcome === "none_held" &&
+        same(listedRow.body.ordersToRedact, ["1001", "1002"]) &&
+        listedRow.body.customerDigest?.length === 64 &&
+        same(listedRow.effects, { request: "completed", orders: 2, handlers: 0 }) &&
+        requestsOf(listedRow.id)[0]?.evidence.kind === "none_held" &&
+        !JSON.stringify(listedRow).includes(customerEmail),
+      { listedRow },
+    );
+    db.sql(`CREATE TABLE morrow_work.lab_order_rows (organization_id text NOT NULL,workspace_id text NOT NULL,
+ store_id text NOT NULL,order_id text NOT NULL,held boolean NOT NULL DEFAULT false);
+GRANT SELECT,DELETE ON morrow_work.lab_order_rows TO morrow_work_command;
+CREATE OR REPLACE FUNCTION morrow_identity.customer_handler_tables() RETURNS text[]
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$ SELECT ARRAY['morrow_work.lab_order_rows'] $$;
+CREATE OR REPLACE FUNCTION morrow_work.customer_content_redact(p_org text,p_ws text,p_store_id text,p_match jsonb)
+RETURNS jsonb LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+DECLARE n integer; r integer;
+BEGIN
+ IF p_org IS NULL OR p_ws IS NULL OR p_store_id IS NULL OR NOT morrow_work.customer_match_valid(p_match) THEN
+  RAISE EXCEPTION 'CUSTOMER_CONTENT_REDACT_INVALID';
+ END IF;
+ IF NOT (session_user='morrow_connector_ingress'
+   AND pg_catalog.current_setting('morrow.connector_customer',true)=p_org||'|'||p_ws||'|'||p_store_id) THEN
+  RAISE EXCEPTION 'CUSTOMER_CONTENT_REDACT_UNAVAILABLE';
+ END IF;
+ DELETE FROM morrow_work.lab_order_rows t WHERE t.organization_id=p_org AND t.workspace_id=p_ws AND t.store_id=p_store_id
+  AND t.order_id=ANY(morrow_work.customer_match_orders(p_match)) AND NOT t.held;
+ GET DIAGNOSTICS n=ROW_COUNT;
+ SELECT count(*)::integer INTO r FROM morrow_work.lab_order_rows t WHERE t.organization_id=p_org AND t.workspace_id=p_ws
+  AND t.store_id=p_store_id AND t.order_id=ANY(morrow_work.customer_match_orders(p_match));
+ RETURN jsonb_build_array(jsonb_build_object('table','morrow_work.lab_order_rows','action','delete_rows','rows',n,'remaining',r));
+END $$;`);
+    const orderRow = (s, order, held = false) =>
+      `(${literal(s.org)},${literal(s.ws)},${literal(s.store)},'${order}',${held})`;
+    db.sql(
+      `INSERT INTO morrow_work.lab_order_rows VALUES ${[
+        orderRow(S, 1001),
+        orderRow(S, 1002),
+        orderRow(S, 1003),
+        orderRow(S, 4242, true),
+        orderRow(G, 1001),
+        orderRow(T, 1001),
+      ].join(",")};`,
+    );
+    const orderRows = () =>
+      db
+        .rows(
+          "SELECT store_id,order_id,held FROM morrow_work.lab_order_rows ORDER BY store_id,order_id",
+        )
+        .map((r) => r.store_id + ":" + r.order_id + (r.held ? ":held" : ""));
+    const redacted = await deliver(S, "customers/redact", orderBody(S, [1002, 1001]));
+    const redactedRow = lastRow(redacted);
+    const redactedRequest = requestsOf(redactedRow?.id ?? "")[0];
+    check(
+      "L2:a_listed_orders_rows_are_deleted_in_its_store_only_and_the_request_completes_with_them",
+      redacted.status === 200 &&
+        redactedRow?.status === "applied" &&
+        redactedRow.outcome === "customer_redacted" &&
+        same(redactedRow.effects, { request: "completed", orders: 2, handlers: 1 }) &&
+        same(orderRows(), [
+          "store_priv:1003",
+          "store_priv:4242:held",
+          "store_scopes:1001",
+          "store_tenant:1001",
+        ]) &&
+        redactedRequest?.status === "completed" &&
+        same(redactedRequest.evidence, {
+          schemaVersion: 1,
+          kind: "customer_redacted",
+          scopes: ["read_products", "write_products"],
+          handlers: [{ table: "morrow_work.lab_order_rows", action: "delete_rows", rows: 2 }],
+          credential: "none",
+          outstanding: [],
+        }),
+      { redactedRow, redactedRequest, rows: orderRows() },
+    );
+    // A handler that still holds a listed order's row keeps the request open: the delivery
+    // stays received, nothing is completed, and its order ids stay on the inbox row.
+    const heldRedact = await deliver(S, "customers/redact", orderBody(S, [4242]));
+    const heldRow = lastRow(heldRedact);
+    const heldOpen =
+      heldRedact.status === 200 &&
+      heldRedact.applied === "pending" &&
+      heldRow?.status === "received" &&
+      same(heldRow.body.ordersToRedact, ["4242"]) &&
+      requestsOf(heldRow.id)[0]?.status === "open" &&
+      orderRows().includes("store_priv:4242:held");
+    // The 7-day clock (sim: both deliveries backdated eight days past their receipt). The
+    // clean-up job's purge (the connector's own login and statement) deletes the completed
+    // one, its listed ids with it, and keeps the open one.
+    const backdateDays = (id, days) =>
+      db.sql(
+        `SET session_replication_role=replica; UPDATE morrow_identity.shopify_webhook_inbox SET received_at=received_at-interval '${days} days',expires_at=expires_at-interval '${days} days' WHERE id=${literal(id)}; SET session_replication_role=origin;`,
+      );
+    const notPurged = await connectorDatabase.privacyPurge(10000);
+    for (const row of [listedRow, redactedRow, heldRow]) backdateDays(row.id, 8);
+    const firstPurge = await connectorDatabase.privacyPurge(10000);
+    const afterFirst = inboxRows().map((r) => r.id);
+    check(
+      "L3:after_seven_days_a_completed_requests_ids_are_purged_and_an_open_requests_are_kept",
+      heldOpen &&
+        notPurged.purged === 0 &&
+        notPurged.held === 0 &&
+        firstPurge.purged === 2 &&
+        firstPurge.held === 1 &&
+        !afterFirst.includes(listedRow.id) &&
+        !afterFirst.includes(redactedRow.id) &&
+        afterFirst.includes(heldRow.id) &&
+        requestsOf(redactedRow.id)[0]?.status === "completed" &&
+        !ownerRows("SELECT body::text AS b FROM morrow_identity.shopify_webhook_inbox").some((r) =>
+          r.b.includes('"1002"'),
+        ),
+      { heldOpen, notPurged, firstPurge, heldRow },
+    );
+    // The handler lets the row go; the cron's re-drive applies the delivery again (it is past
+    // the two-minute window), the request completes, and the next purge deletes it.
+    db.sql("UPDATE morrow_work.lab_order_rows SET held=false WHERE order_id='4242';");
+    const heldRedrive = await connector.redrive();
+    const heldSettled = inboxRows().find((r) => r.id === heldRow.id);
+    const secondPurge = await connectorDatabase.privacyPurge(10000);
+    check(
+      "L4:the_request_completes_only_when_every_handler_reports_zero_and_is_then_purged",
+      heldRedrive.applied >= 1 &&
+        heldSettled?.status === "applied" &&
+        heldSettled.outcome === "customer_redacted" &&
+        requestsOf(heldRow.id)[0]?.status === "completed" &&
+        requestsOf(heldRow.id)[0]?.evidence.handlers[0]?.rows === 1 &&
+        !orderRows().some((r) => r.startsWith("store_priv:4242")) &&
+        secondPurge.purged === 1 &&
+        !inboxRows().some((r) => r.id === heldRow.id) &&
+        requestsOf(heldRow.id).length === 1,
+      { heldRedrive, heldSettled, secondPurge },
+    );
+    // The guard refuses every other deletion: a delivery inside its 7 days, and one still
+    // received (even when past them); the inbox keeps its own guard rules.
+    db.sql("INSERT INTO morrow_work.lab_order_rows VALUES " + orderRow(S, 4243, true) + ";");
+    const fresh = await deliver(S, "customers/redact", orderBody(S, [7]));
+    const freshRow = lastRow(fresh);
+    const late = await deliver(S, "customers/redact", orderBody(S, [4243]));
+    const lateRow = lastRow(late);
+    backdateDays(lateRow.id, 8);
+    const asIdentityOwner = (text) => db.tryRun("SET ROLE morrow_identity_owner;\n" + text).ok;
+    const refusedDeletes =
+      !asIdentityOwner(
+        `DELETE FROM morrow_identity.shopify_webhook_inbox WHERE id=${literal(freshRow.id)};`,
+      ) &&
+      !asIdentityOwner(
+        `DELETE FROM morrow_identity.shopify_webhook_inbox WHERE id=${literal(lateRow.id)};`,
+      ) &&
+      !asIdentityOwner("TRUNCATE morrow_identity.shopify_webhook_inbox;");
+    const latePurge = await connectorDatabase.privacyPurge(10000);
+    check(
+      "L5:the_inbox_guard_deletes_nothing_inside_its_seven_days_or_still_received",
+      freshRow?.status === "applied" &&
+        freshRow.outcome === "customer_redacted" &&
+        requestsOf(freshRow.id)[0]?.evidence.handlers[0]?.rows === 0 &&
+        lateRow?.status === "received" &&
+        refusedDeletes &&
+        latePurge.purged === 0 &&
+        latePurge.held === 1 &&
+        inboxRows().some((r) => r.id === freshRow.id) &&
+        inboxRows().some((r) => r.id === lateRow.id),
+      { freshRow, lateRow, refusedDeletes, latePurge },
+    );
+    db.sql("UPDATE morrow_work.lab_order_rows SET held=false WHERE order_id='4243';");
+    await connector.redrive();
+    // The handler's table, function and list go back to the head's (the registry is empty),
+    // from the migration's own text.
+    const workMigration = readFileSync(
+      "migrations/" +
+        manifest.migrations.find((m) => m.file.endsWith(".customer-deletion-work.sql")).file,
+      "utf8",
+    );
+    const helperStart = workMigration.indexOf(
+      "CREATE FUNCTION morrow_work.customer_content_redact(",
+    );
+    const helperText = workMigration.slice(
+      helperStart,
+      workMigration.indexOf("\nEND $$;\n", helperStart) + "\nEND $$;\n".length,
+    );
+    db.sql(`DROP TABLE morrow_work.lab_order_rows;
+CREATE OR REPLACE FUNCTION morrow_identity.customer_handler_tables() RETURNS text[]
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,pg_temp AS $$ SELECT '{}'::text[] $$;`);
+    db.sql(
+      "SET ROLE morrow_work_owner;\n" +
+        helperText.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION"),
+    );
+    check(
+      "L6:the_registry_is_empty_again_and_a_redact_completes_none_held",
+      inboxRows().find((r) => r.id === lateRow.id)?.status === "applied" &&
+        helperStart > 0 &&
+        ownerRows("SELECT morrow_identity.customer_handler_tables()::text AS t")[0].t === "{}" &&
+        lastRow(await deliver(S, "customers/redact", orderBody(S, [4243])))?.outcome ===
+          "none_held",
     );
 
     // -------------------------------------------------------------------------
@@ -1206,8 +1430,25 @@ const report = await withWorkDatabase(
           !asUser(user, `SELECT * FROM morrow_work.connector_inbox_apply(${literal(anyInbox)});`) &&
           !asUser(user, "SELECT * FROM morrow_work.connector_inbox_pending();") &&
           !asUser(user, "SELECT * FROM morrow_work.connector_credentials_pending();") &&
-          !asUser(user, "SELECT * FROM morrow_work.connector_privacy_overdue();"),
+          !asUser(user, "SELECT * FROM morrow_work.connector_privacy_overdue();") &&
+          // SD3: the purge, and the identity purge and redaction surface behind it.
+          !asUser(user, "SELECT * FROM morrow_work.connector_privacy_purge();") &&
+          !asUser(user, "SELECT * FROM morrow_identity.work_shopify_inbox_purge();"),
       ),
+    );
+    // SD3: the connector's login runs the redaction surface only through its applier: it holds
+    // no EXECUTE on the helper or the identity purge, and a context it writes reaches nothing.
+    check(
+      "K4:the_connectors_login_cannot_run_the_customer_redaction_or_the_purge_directly",
+      !asUser(
+        "morrow_connector_ingress",
+        `BEGIN; SELECT set_config('morrow.connector_customer',${literal(`${A.org}|${A.workspace}|store_priv`)},true);\nSELECT morrow_work.customer_content_redact(${literal(A.org)},${literal(A.workspace)},'store_priv','{"orders":["1"]}');\nCOMMIT;`,
+      ) &&
+        !asUser(
+          "morrow_connector_ingress",
+          "SELECT * FROM morrow_identity.work_shopify_inbox_purge();",
+        ) &&
+        asUser("morrow_connector_ingress", "SELECT * FROM morrow_work.connector_privacy_purge();"),
     );
     check(
       "K2:no_login_ends_an_installation_or_destroys_a_token_directly",
@@ -1291,7 +1532,7 @@ writeArtifact("labs/shopify-privacy.json", {
   limitations: [
     "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data. Shopify is the synthetic oracle (scripts/fixtures/shopify-oracle.mjs), shaped from Shopify's documentation; its payloads and documents are verified against the pinned 2026-10 schema and recorded development-store fixtures only after the owner-approved smoke.",
     "The connector, broker and catalogue handlers run in Node over psql bridges logged in as each login, not in workerd over the Neon transport (lab:shopify-connect-workers runs the connector's webhook path in workerd).",
-    "The store installations, store-link read grants, app secrets and sealed tokens are owner-seeded (lab:shopify-install proves the install and link that write them). Shapes marked sim: inbox rows backdated past the cron's two-minute window.",
+    "The store installations, store-link read grants, app secrets and sealed tokens are owner-seeded (lab:shopify-install proves the install and link that write them). Shapes marked sim: inbox rows backdated past the cron's two-minute window and past their 7-day clock; phase L's order-keyed class (SD3), a superuser-created table registered in customer_content_redact and customer_handler_tables as the pull request that first writes such a class would, then restored to the head's empty registry.",
     "No catalog proposal exists in this lab's stores, so the proposal-parameters handler empties zero rows here; lab:listings-authority P6 proves it on real proposals through the same connector path.",
     "A person's disconnect (governance.connection.disconnect) is not in this PR: it waits on the owner's ADR-0022 amendments for its grant and its kill-switch record.",
   ],

@@ -903,7 +903,8 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; recorded with i
   assert.match(verdict.inboxId, /^[a-f0-9-]{36}$/);
   assert.equal(verdict.settled, false);
   // One record statement, in the verifying transaction, with the minimised body only: the
-  // shop id and a keyed digest of the customer id (never the email, phone or order ids).
+  // shop id, a keyed digest of the customer id and (SD3) the listed order ids, never the
+  // email or phone.
   assert.equal(h.db.transactions, 1);
   assert.deepEqual(h.db.events, ["record"]);
   const recorded = h.db.recorded[0];
@@ -916,8 +917,9 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; recorded with i
     customerDigest: createHmac("sha256", secret)
       .update("morrow.shopify.customer.v1|5")
       .digest("hex"),
+    ordersToRedact: ["1", "2"],
   });
-  assert.doesNotMatch(JSON.stringify(h.db.recorded), /a@b\.test|555-0100|"orders/);
+  assert.doesNotMatch(JSON.stringify(h.db.recorded), /a@b\.test|555-0100|"orders_/);
   // A redelivery is the same row, reported with whether it is settled.
   const again = decodeShopifyWebhookVerdict(
     await h.broker.webhookVerify(h.env, appKey, headers(), raw),
@@ -1022,8 +1024,14 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; recorded with i
     const last = h.db.recorded.at(-1).body;
     if (expected) assert.deepEqual(last, expected, topic);
     else {
-      assert.deepEqual(Object.keys(last).sort(), ["customerDigest", "dataRequestId", "shopId"]);
+      assert.deepEqual(Object.keys(last).sort(), [
+        "customerDigest",
+        "dataRequestId",
+        "ordersRequested",
+        "shopId",
+      ]);
       assert.equal(last.dataRequestId, "77");
+      assert.deepEqual(last.ordersRequested, ["7"]);
     }
   }
   assert.doesNotMatch(JSON.stringify(h.db.recorded), /a@b\.test|o@x\.test|"Dev"/);

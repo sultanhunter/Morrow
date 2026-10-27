@@ -771,6 +771,9 @@ Build bulk bootstrap, checkpointed imports, verified webhook inboxes, deletion t
 
 5. **P09.T05 Revocation and privacy.** Implement scope loss, uninstall, reinstall and the mandatory compliance topics for existing credentials, work records, projections and artifacts. Publish durable cleanup and revocation contracts for later consumers. **P09.A05:** Given removal or redaction, when current consumers process it, then forbidden access stops and completion evidence records outstanding consumers. **Done:** current lifecycle evidence and pending production-access gates; packages 10, 12 and 18 must qualify real downstream propagation before launch.
 
+   Lettered children (plan rows of `docs/plan/store-data-foundation-implementation.md`; routine lettered splits, ADR-0002):
+
+   - **P09.T05b Keep the listed order ids (row SD3).** Brief `docs/briefs/sd3-keep-orders-to-redact.md`. The `customers/redact` minimiser keeps `orders_to_redact`, and `customers/data_request` keeps `orders_requested`, as numeric order ids on the inbox row's 7-day clock (a forward migration); the deletion registry gains the "orders listed" matcher every order-keyed class registers with, and S8 fails an order-keyed table without it; the clean-up job purges settled inbox rows past their 7 days, keeping any whose request is still open. **Acceptance:** `lab:shopify-privacy` (a listed order's rows deleted in its store only; the ids gone after 7 days), S8 and `migration-history.test.mjs`.
 ## 10 Merchant context and governed measurement
 
 Implement source authority by domain, exact money values, currencies, reporting timezones, product identity, and metric definitions. Add approved knowledge, source records, lessons, hypotheses, responsibility context, and permission-aware retrieval with freshness metadata.

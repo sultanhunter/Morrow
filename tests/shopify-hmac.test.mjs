@@ -11,6 +11,7 @@ import {
   exchangeShopifyCode,
   expandShopifyScopes,
   minimiseShopifyWebhook,
+  shopifyComplianceOrdersMax,
   parseShopifyQuery,
   readShopifyIdentity,
   shopifyScopesExact,
@@ -194,10 +195,14 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
     },
     shop,
   );
-  assert.deepEqual(Object.keys(redact).sort(), ["customerDigest", "shopId"]);
+  // SD3: the listed order ids are kept (numeric ids, distinct, ascending), never the
+  // customer's email or phone.
+  assert.deepEqual(Object.keys(redact).sort(), ["customerDigest", "ordersToRedact", "shopId"]);
   assert.equal(redact.shopId, "954889");
   assert.match(redact.customerDigest, /^[a-f0-9]{64}$/);
-  assert.ok(!JSON.stringify(redact).includes("john") && !JSON.stringify(redact).includes("299938"));
+  assert.deepEqual(redact.ordersToRedact, ["220458", "280263", "299938"]);
+  assert.ok(Object.isFrozen(redact.ordersToRedact));
+  assert.ok(!JSON.stringify(redact).includes("john") && !JSON.stringify(redact).includes("1199"));
   const request = await minimiseShopifyWebhook(
     secret,
     "customers/data_request",
@@ -214,7 +219,43 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
     shopId: "954889",
     customerDigest: redact.customerDigest,
     dataRequestId: "9999",
+    ordersRequested: ["299938"],
   });
+  // SD3: duplicates collapse, digit strings are accepted and the order is numeric, not
+  // lexical; an empty list is a list.
+  assert.deepEqual(
+    (
+      await minimiseShopifyWebhook(
+        secret,
+        "customers/redact",
+        {
+          shop_id: 954889,
+          shop_domain: shop,
+          customer: { id: 1 },
+          orders_to_redact: [10, "9", 10, "100000000000000000"],
+        },
+        shop,
+      )
+    ).ordersToRedact,
+    ["9", "10", "100000000000000000"],
+  );
+  assert.deepEqual(
+    (
+      await minimiseShopifyWebhook(
+        secret,
+        "customers/data_request",
+        {
+          shop_id: 954889,
+          shop_domain: shop,
+          customer: {},
+          orders_requested: [],
+          data_request: { id: 1 },
+        },
+        shop,
+      )
+    ).ordersRequested,
+    [],
+  );
   assert.deepEqual(
     await minimiseShopifyWebhook(
       secret,
@@ -264,6 +305,70 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
       { shop_id: 954889, shop_domain: shop, customer: {}, data_request: { id: 1 } },
     ],
     ["customers/data_request", { shop_id: 954889, shop_domain: shop, customer: { id: 1 } }],
+    // SD3: a request's order list is required, numeric and bounded; a list Morrow cannot read
+    // is refused (Shopify retries), never recorded as empty. A body may not carry the other
+    // request's list.
+    ["customers/redact", { shop_id: 954889, shop_domain: shop, customer: { id: 1 } }],
+    [
+      "customers/redact",
+      { shop_id: 954889, shop_domain: shop, customer: { id: 1 }, orders_to_redact: [0] },
+    ],
+    [
+      "customers/redact",
+      { shop_id: 954889, shop_domain: shop, customer: { id: 1 }, orders_to_redact: ["#1001"] },
+    ],
+    [
+      "customers/redact",
+      { shop_id: 954889, shop_domain: shop, customer: { id: 1 }, orders_to_redact: [1.5] },
+    ],
+    [
+      "customers/redact",
+      { shop_id: 954889, shop_domain: shop, customer: { id: 1 }, orders_to_redact: "1" },
+    ],
+    [
+      "customers/redact",
+      {
+        shop_id: 954889,
+        shop_domain: shop,
+        customer: { id: 1 },
+        orders_to_redact: Array.from({ length: shopifyComplianceOrdersMax + 1 }, (_, i) => i + 1),
+      },
+    ],
+    [
+      "customers/redact",
+      {
+        shop_id: 954889,
+        shop_domain: shop,
+        customer: { id: 1 },
+        orders_to_redact: [],
+        orders_requested: [],
+      },
+    ],
+    [
+      "customers/data_request",
+      { shop_id: 954889, shop_domain: shop, customer: { id: 1 }, data_request: { id: 1 } },
+    ],
+    [
+      "customers/data_request",
+      {
+        shop_id: 954889,
+        shop_domain: shop,
+        customer: { id: 1 },
+        data_request: { id: 1 },
+        orders_requested: [Number.MAX_SAFE_INTEGER + 2],
+      },
+    ],
+    [
+      "customers/data_request",
+      {
+        shop_id: 954889,
+        shop_domain: shop,
+        customer: { id: 1 },
+        data_request: { id: 1 },
+        orders_requested: [],
+        orders_to_redact: [],
+      },
+    ],
     ["app/scopes_update", { previous: ["read_products"] }],
     ["app/scopes_update", { previous: [], current: ["Read"] }],
     ["app/scopes_update", { previous: [], current: [], shop_id: 1 }],
@@ -277,8 +382,22 @@ test("compliance bodies are minimised to ids and a keyed customer digest", async
       { shop_id: 954889, shop_domain: shop, customer: { email: "x@y.z" }, orders_to_redact: [] },
       shop,
     ),
-    { shopId: "954889", customerDigest: null },
+    { shopId: "954889", customerDigest: null, ordersToRedact: [] },
   );
+  // The largest list is kept whole.
+  const most = await minimiseShopifyWebhook(
+    secret,
+    "customers/redact",
+    {
+      shop_id: 954889,
+      shop_domain: shop,
+      customer: { id: 1 },
+      orders_to_redact: Array.from({ length: shopifyComplianceOrdersMax }, (_, i) => 5e12 + i),
+    },
+    shop,
+  );
+  assert.equal(most.ordersToRedact.length, shopifyComplianceOrdersMax);
+  assert.equal(most.ordersToRedact[0], "5000000000000");
 });
 
 // A recording fetch over fixed replies.

@@ -558,16 +558,41 @@ export async function verifyShopifyWebhookHmac(
 }
 
 // The minimised body of a verified compliance or app webhook (spine §11): ids, scope names
-// and a keyed digest of the customer id only; never an email, phone, name, address or order
-// id. M2 PR-3: the body must be its topic's (the topic header is not signed, so a body of
-// another topic is refused rather than reread), and a body that names its shop must name the
+// and a keyed digest of the customer id only; never an email, phone, name or address. M2
+// PR-3: the body must be its topic's (the topic header is not signed, so a body of another
+// topic is refused rather than reread), and a body that names its shop must name the
 // header's shop. Null when the body is not one of its topic.
+//
+// SD3 (P09.T05b; ADR-0031's 2026-10-26 note on item 1; ADR-0043 item 24): a customers/*
+// request also keeps the order ids it lists, `orders_to_redact` as `ordersToRedact` and
+// `orders_requested` as `ordersRequested`. Order ids are not customer data (CLAUDE.md), but an
+// order id tied to a customer's request is pseudonymous personal data, so they live only in
+// the inbox row, on its 7-day clock, until every handler has reported zero remaining; the
+// deletion registry's "orders listed" matcher reads them (packages/work/src/redaction.ts).
 const idText = (value: unknown): string | null =>
   typeof value === "number" && Number.isSafeInteger(value) && value > 0
     ? String(value)
     : typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value)
       ? value
       : null;
+/** The most order ids one compliance request may list (SD3; morrow_identity's validator). */
+export const shopifyComplianceOrdersMax = 20000;
+// A request's order list: present, an array of numeric ids (numbers or digit strings), at
+// most shopifyComplianceOrdersMax; kept distinct and in ascending numeric order, as text.
+// Null when absent or malformed, so the whole request is refused and Shopify retries it:
+// a list Morrow could not read is never recorded as an empty one.
+const orderIdList = (value: unknown): readonly string[] | null => {
+  if (!Array.isArray(value) || value.length > shopifyComplianceOrdersMax) return null;
+  const ids = new Set<string>();
+  for (const entry of value) {
+    const id = idText(entry);
+    if (id === null) return null;
+    ids.add(id);
+  }
+  return Object.freeze(
+    [...ids].sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)),
+  );
+};
 const scopeList = (value: unknown) =>
   Array.isArray(value) &&
   value.length <= 32 &&
@@ -613,17 +638,38 @@ export async function minimiseShopifyWebhook(
     case "customers/data_request": {
       const shopId = compliance();
       const dataRequestId = idText(own(own(body, "data_request"), "id"));
-      if (shopId === null || dataRequestId === null || !has(body, "customer")) return null;
+      const ordersRequested = orderIdList(own(body, "orders_requested"));
+      if (
+        shopId === null ||
+        dataRequestId === null ||
+        ordersRequested === null ||
+        !has(body, "customer") ||
+        has(body, "orders_to_redact")
+      )
+        return null;
       return Object.freeze({
         shopId,
         customerDigest: await customerDigest(own(body, "customer")),
         dataRequestId,
+        ordersRequested,
       });
     }
     case "customers/redact": {
       const shopId = compliance();
-      if (shopId === null || !has(body, "customer") || has(body, "data_request")) return null;
-      return Object.freeze({ shopId, customerDigest: await customerDigest(own(body, "customer")) });
+      const ordersToRedact = orderIdList(own(body, "orders_to_redact"));
+      if (
+        shopId === null ||
+        ordersToRedact === null ||
+        !has(body, "customer") ||
+        has(body, "data_request") ||
+        has(body, "orders_requested")
+      )
+        return null;
+      return Object.freeze({
+        shopId,
+        customerDigest: await customerDigest(own(body, "customer")),
+        ordersToRedact,
+      });
     }
     case "shop/redact": {
       const shopId = compliance();

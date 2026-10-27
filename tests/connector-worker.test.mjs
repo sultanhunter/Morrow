@@ -380,6 +380,12 @@ function harness(answers = {}, limiters = undefined) {
       if (answers.stuckThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
       return answers.inboxStuck ?? { closed: 0, stuck: 0 };
     },
+    // SD3: the inbox's 7-day purge.
+    async privacyPurge(budget) {
+      calls.push(["privacyPurge", budget]);
+      if (answers.purgeThrows) throw new Error("CONNECTOR_SQL_UNAVAILABLE");
+      return answers.privacyPurge ?? { purged: 0, held: 0 };
+    },
   };
   const handler = createConnectorHandler({
     configuration: { origin, apiOrigin },
@@ -1018,6 +1024,8 @@ test("cron: the ids-only re-drives apply received rows, then destroy pending tok
         deleted: 0,
         stuckClosed: 0,
         stuck: 0,
+        purged: 0,
+        held: 0,
       },
     );
     // An unavailable id read still runs the credential re-drive, the deadline check and the
@@ -1210,6 +1218,7 @@ test("v1 PR 5 cron (switch on): read-backs, then 48-hour deletions that wait for
         "throw",
       ],
       inboxStuck: { closed: 1, stuck: 2 },
+      privacyPurge: { purged: 7, held: 1 },
     });
     counts = await h.handler.redrive();
   } finally {
@@ -1232,6 +1241,8 @@ test("v1 PR 5 cron (switch on): read-backs, then 48-hour deletions that wait for
       "deletion:installation_e",
       "deletion:installation_f",
       "inboxStuck:3000",
+      // SD3: the inbox's 7-day purge, last.
+      "privacyPurge:3000",
     ],
   );
   assert.equal(h.calls.find((c) => c[0] === "destroy")[2], "uninstalled");
@@ -1240,6 +1251,7 @@ test("v1 PR 5 cron (switch on): read-backs, then 48-hour deletions that wait for
     [3, 1, 1, 3, 1],
   );
   assert.deepEqual([counts.stuckClosed, counts.stuck], [1, 2]);
+  assert.deepEqual([counts.purged, counts.held], [7, 1]);
   assert.deepEqual(
     logged.filter((row) => row.event !== "morrow_connector_redrive").map((row) => row.code),
     [
@@ -1249,9 +1261,11 @@ test("v1 PR 5 cron (switch on): read-backs, then 48-hour deletions that wait for
       "DELETION_INELIGIBLE",
       "DELETION_UNAVAILABLE",
       "INBOX_STUCK",
+      "INBOX_EXPIRED_HELD",
     ],
   );
   assert.equal(logged.find((row) => row.code === "INBOX_STUCK").deliveries, 2);
+  assert.equal(logged.find((row) => row.code === "INBOX_EXPIRED_HELD").deliveries, 1);
   // Ids never reach a log line.
   assert.ok(!JSON.stringify(logged).includes("installation_"));
   // A deletion whose token cannot be destroyed now stays pending for the next run.

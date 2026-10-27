@@ -20,7 +20,13 @@ import {
   workRoles,
   workTables,
 } from "./registry.mjs";
-import { contentProblems, contentSchemas, registeredTables } from "./content.mjs";
+import {
+  contentProblems,
+  contentSchemas,
+  customerColumnProblems,
+  registeredTables,
+} from "./content.mjs";
+import { customerContentHandlers } from "../../packages/work/src/redaction.ts";
 import { conformanceReport, recordConformance } from "./report.mjs";
 import { morrowSetRowsSql } from "../../scripts/fixtures/createrole-administrator.mjs";
 
@@ -1098,5 +1104,27 @@ test("S8: content classes and the store-content cleanup handlers", () => {
     [...live].sort(),
   );
   assert.deepEqual(contentProblems(), []);
+  // SD3 (P09.T05b): every live column named for a customer key (an order id) belongs to a
+  // table that declares the key, so an order-keyed table cannot land without its customer
+  // handler (contentProblems above). And the closed list a customers/* request's evidence may
+  // name is exactly the registry's customer handlers.
+  const columns = db
+    .rows(
+      `SELECT n.nspname||'.'||c.relname AS name,a.attname AS column FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid WHERE c.relkind IN ('r','p') AND a.attnum>0 AND NOT a.attisdropped AND n.nspname IN (${contentSchemas.map((schema) => `'${schema}'`).join(",")})`,
+    )
+    .map((r) => [r.name, r.column]);
+  assert.ok(columns.length > 500);
+  assert.deepEqual(customerColumnProblems(columns), []);
+  assert.deepEqual(customerColumnProblems([...columns, ["morrow_work.goals", "order_id"]]), [
+    "CUSTOMER_KEY_UNDECLARED:morrow_work.goals.order_id",
+  ]);
+  assert.deepEqual(
+    db
+      .rows("SELECT to_jsonb(morrow_identity.customer_handler_tables()) AS t", {
+        role: "morrow_identity_owner",
+      })[0]
+      .t.sort(),
+    customerContentHandlers.map((h) => h.table).sort(),
+  );
   recordConformance("S8", true);
 });

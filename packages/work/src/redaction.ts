@@ -232,3 +232,67 @@ export const workspaceContentHandlers: readonly WorkspaceContentHandler[] = Obje
     ] as const
   ).map((handler) => Object.freeze(handler as WorkspaceContentHandler)),
 );
+
+// ---------------------------------------------------------------------------------------------
+// The customer-content cleanup contract (P09.T05; plan rows SD3 and SD4 of
+// docs/plan/store-data-foundation-implementation.md; ADR-0031 items 2 to 4 and its 2026-10-26
+// note on item 1; ADR-0042 items 15 and 24; ADR-0043 item 24). `customers/redact` names a
+// customer by keys, never by content: the order ids it lists. Every table that holds a row
+// keyed by one of them registers one handler here, on the matchers its keys need, in the
+// pull request that first writes it (G9), and S8 fails a keyed table without it:
+//
+//   key (registry `customerKeys`, column name)   matcher
+//   order_id (`order_id`, `*_order_id`, `order_ids`)  listed_orders: the ids the request lists
+//
+// The handler runs in morrow_work.customer_content_redact (customer-deletion-work), the
+// registration surface: a revisable owner helper that the registering migration replaces,
+// adding the table to morrow_identity.customer_handler_tables() (the closed list a request's
+// evidence may name) in the same change. It runs only in the connector's customer redaction
+// context for the request's store (morrow.connector_customer), under the store's stop key held
+// exclusively; a writer of a keyed class takes that key shared, so a racing write commits first
+// and is redacted, or writes after. The request completes only when every handler reports zero
+// rows still matching; until then the delivery stays received, its request open, and its inbox
+// row (with the listed ids) outlives its 7-day clock.
+//
+// A `content: customer` table (customer data under ADR-0031's Terms: a 90-day clock, never
+// extended by a copy) also needs its shop/redact handler above, and must carry at least one key:
+// a class that no key can find is unmatchable and fails S8.
+export type CustomerKey = "order_id";
+export type CustomerMatcher = "listed_orders";
+/** The matcher each key needs (S8 checks every key of a table against its handler). */
+export const customerKeyMatchers: Readonly<Record<CustomerKey, CustomerMatcher>> = Object.freeze({
+  order_id: "listed_orders",
+});
+export type CustomerContentAction =
+  /** Delete the matching rows. */
+  | "delete_rows"
+  /** Blank the order id of a content-free row, keeping its codes and counts (ADR-0043 item 24). */
+  | "blank_order_id"
+  /** Empty the stored content, keep its digest (a proposal's parameters). */
+  | "empty_keep_digest"
+  /** Erase the text in place, keep ids, digests and times. */
+  | "erase_keep_digest";
+export interface CustomerContentHandler {
+  /** schema.table, as the tenant-conformance registry names it. */
+  readonly table: string;
+  /** The class of ADR-0031 item 1 (or of the record that adds it). */
+  readonly dataClass: string;
+  readonly trigger: "customers_redact";
+  /** Every matcher this handler applies: at least the ones its table's keys need. */
+  readonly matchers: readonly CustomerMatcher[];
+  readonly action: CustomerContentAction;
+  /** How the handler finds the matching rows. */
+  readonly key: string;
+  /** The registration surface that runs it. */
+  readonly executor: "morrow_work.customer_content_redact";
+  /** The pull request that registered it, before the table held a keyed row. */
+  readonly executable: string;
+}
+/**
+ * Every registered customer-content handler. None yet: no table is keyed by an order, a
+ * customer id or a customer digest at this head; V1-PR22's order classes, CS8's order events,
+ * SD9b's projections and the contact classes (CS9, CS12) register theirs.
+ */
+export const customerContentHandlers: readonly CustomerContentHandler[] = Object.freeze(
+  [] as CustomerContentHandler[],
+);

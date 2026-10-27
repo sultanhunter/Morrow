@@ -65,6 +65,9 @@ export const connectorSql = Object.freeze({
   deletionApply:
     "SELECT outcome,installation_id,credential,reason FROM morrow_work.connector_deletion_apply($1)",
   inboxStuck: "SELECT closed,stuck FROM morrow_work.connector_inbox_stuck()",
+  // SD3 (customer-deletion-work): the inbox's 7-day purge (counts: deleted, and expired rows
+  // kept for an open request or a pending apply).
+  privacyPurge: "SELECT purged,held FROM morrow_work.connector_privacy_purge()",
   commit: "COMMIT",
   rollback: "ROLLBACK",
 });
@@ -121,6 +124,8 @@ export interface ConnectorDatabase {
   deletionsDue(budgetMs: number): Promise<readonly string[]>;
   deletionApply(installationId: string, budgetMs: number): Promise<DeletionApplyResult>;
   inboxStuck(budgetMs: number): Promise<InboxStuck>;
+  // SD3 (customer-deletion-work).
+  privacyPurge(budgetMs: number): Promise<PrivacyPurge>;
 }
 /** Open privacy requests past their target and past their due time, across tenants. */
 export type PrivacyOverdue = Readonly<{ targetMissed: number; dueMissed: number }>;
@@ -144,6 +149,11 @@ export type DeletionApplyResult = Readonly<{
 }>;
 /** v1 PR 5: stuck scope-change deliveries closed, and every delivery still stuck. */
 export type InboxStuck = Readonly<{ closed: number; stuck: number }>;
+/**
+ * SD3: inbox deliveries deleted on their 7-day clock (at most 500 a call), and expired ones
+ * kept because their privacy request is open or their apply is still pending.
+ */
+export type PrivacyPurge = Readonly<{ purged: number; held: number }>;
 const reconcileOutcomes: readonly string[] = [
   "reconciled",
   "ended",
@@ -631,6 +641,16 @@ export function createConnectorDatabase(
           typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
         if (!count(r.closed) || !count(r.stuck) || r.closed > 20) throw unavailable();
         return Object.freeze({ closed: r.closed, stuck: r.stuck });
+      });
+    },
+    privacyPurge(budgetMs: number): Promise<PrivacyPurge> {
+      return transaction(budgetMs, async (send) => {
+        const rows = await send(connectorSql.privacyPurge);
+        const r = columns(rows.length === 1 ? rows[0] : undefined, "held,purged");
+        const count = (v: unknown): v is number =>
+          typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+        if (!count(r.purged) || !count(r.held) || r.purged > 500) throw unavailable();
+        return Object.freeze({ purged: r.purged, held: r.held });
       });
     },
     privacyOverdue(budgetMs: number): Promise<PrivacyOverdue> {

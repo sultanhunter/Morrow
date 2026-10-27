@@ -25,7 +25,13 @@ export const workRoles = Object.freeze({
 // the operator in platform audit rows; never a store's content) or "store" (a store's
 // content, identity or credential): every "store" table, in every schema the registry
 // covers (identityTables included), has exactly one cleanup handler in
-// packages/work/src/redaction.ts (S8). `commandDelete: "connector_redact"` (M3 PR-2
+// packages/work/src/redaction.ts (S8). SD3 (P09.T05b): a fourth class, "customer" (customer
+// data under ADR-0031's Terms, on a 90-day clock), which needs a shop/redact handler too, and
+// an optional `customerKeys` (["order_id"]: rows keyed by an order a customers/redact request
+// can list): every keyed table has exactly one customer handler in redaction.ts
+// customerContentHandlers applying each key's matcher, a "customer" table must declare a key,
+// and a live column named for a key (an `order_id`) must belong to a table that declares it
+// (S8). `commandDelete: "connector_redact"` (M3 PR-2
 // integrated with M2 PR-3) marks the one exception to "no runtime DELETE": the command role
 // holds DELETE on that store-content table for shop/redact's connector context alone, which
 // a RESTRICTIVE FOR DELETE policy (connector_content_delete_only) enforces; S3 and S4 check
@@ -699,6 +705,24 @@ export const workFunctions = Object.freeze({
     crossTenant: true,
     columns: ["closed", "stuck"],
   },
+  // SD3 (customer-deletion-work): the inbox's 7-day purge for the cron (counts only), the
+  // match of one customers/* request (pure checks a registered class's handlers and policies
+  // call), and the customer redaction's registration surface (a revisable owner helper, run
+  // only in the connector's customer redaction context). connector_inbox_apply_v2 above is
+  // replaced with the same ACL.
+  "connector_privacy_purge()": {
+    kind: "connector",
+    grantees: ["morrow_connector_ingress"],
+    crossTenant: true,
+    columns: ["purged", "held"],
+  },
+  "customer_match_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "customer_match_of(text,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "customer_match_orders(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "customer_content_redact(text,text,text,jsonb)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
   // The reconcile itself (a revisable owner helper), the scopes each release needs and the
   // notice's row checks, the notice guard, and the api's read of the viewer's open items.
   "connection_health_reconcile(text,text,text,text)": {
@@ -1031,6 +1055,9 @@ export const bridgeFunctions = Object.freeze([
   // PR 5 review finding F3 (after integration with main): the store a reinstall linked in
   // place of an ended one, called only by connection-health-work's store_reinstalled.
   "work_shopify_store_successor(text,text,text)",
+  // SD3 (customer-deletion-identity): the inbox's 7-day purge, called only by
+  // customer-deletion-work's connector_privacy_purge.
+  "work_shopify_inbox_purge()",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
 // (0014): the staging test entitlement's operator function (0035) runs as the owner and
@@ -1782,6 +1809,8 @@ export const executorLogins = Object.freeze({
     "morrow_work.connector_inbox_apply_v2(text)",
     "morrow_work.connector_inbox_stuck()",
     "morrow_work.connector_notices_due()",
+    // SD3 (customer-deletion-work): the inbox's 7-day purge.
+    "morrow_work.connector_privacy_purge()",
   ],
   morrow_runtime_executor: [
     "morrow_work.delegation_facts(text,text,text)",

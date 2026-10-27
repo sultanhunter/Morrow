@@ -568,7 +568,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   // 30-day due time, each logged with a fixed code an alert can match. Then the shop-specific
   // webhook subscriptions, when the run still has their whole budget. v1 PR 5: then the open
   // Reconnect items, and, with the clean-up switch on, the read-backs due, the 48-hour
-  // deletions due and the stuck deliveries (each loop stops at the run's deadline).
+  // deletions due and the stuck deliveries (each loop stops at the run's deadline), and
+  // (SD3) the inbox's 7-day purge.
   // fix-connector-cron-latency: each step that fails logs its stage (an id read on
   // morrow_connector_cron, the others on their own lines), and the run's line adds its
   // duration (elapsedMs: seconds far from the database, well under one beside it).
@@ -594,6 +595,8 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       deleted: 0,
       stuckClosed: 0,
       stuck: 0,
+      purged: 0,
+      held: 0,
     };
     let ids: readonly string[] = [];
     try {
@@ -707,6 +710,19 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       } catch (error) {
         counts.unavailable++;
         log("morrow_connector_inbox", { code: "INBOX_STUCK_UNAVAILABLE", ...sqlStage(error) });
+      }
+      // SD3: the inbox's 7-day clock (ADR-0031 item 1): settled deliveries past it are
+      // deleted, a customer request's listed order ids with them; one whose privacy request is
+      // still open (or whose apply is pending) is kept, counted and logged.
+      try {
+        const purge = await database.privacyPurge(connectorBudgets.pendingMs);
+        counts.purged = purge.purged;
+        counts.held = purge.held;
+        if (purge.held > 0)
+          log("morrow_connector_inbox", { code: "INBOX_EXPIRED_HELD", deliveries: purge.held });
+      } catch (error) {
+        counts.unavailable++;
+        log("morrow_connector_inbox", { code: "INBOX_PURGE_UNAVAILABLE", ...sqlStage(error) });
       }
     }
     log("morrow_connector_redrive", {

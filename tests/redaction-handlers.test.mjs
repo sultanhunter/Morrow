@@ -2,8 +2,17 @@
 // check runs as S8 of the static tenant-conformance suite against the migrated catalog.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { storeContentHandlers } from "../packages/work/src/redaction.ts";
-import { contentProblems, registeredTables } from "./tenant-conformance/content.mjs";
+import {
+  customerContentHandlers,
+  customerKeyMatchers,
+  storeContentHandlers,
+} from "../packages/work/src/redaction.ts";
+import {
+  contentClasses,
+  contentProblems,
+  customerColumnProblems,
+  registeredTables,
+} from "./tenant-conformance/content.mjs";
 import {
   billingTables,
   identityTables,
@@ -150,4 +159,130 @@ test("the check fails a new store table without a handler, and a stray or duplic
   assert.deepEqual(contentProblems(extra({ table: "morrow_work.y", executable: "M3 PR-1" })), [
     "HANDLER_INVALID:morrow_work.y",
   ]);
+});
+
+// SD3 (P09.T05b): the customer-content contract. No table is keyed by an order at this head,
+// so the registry is empty and S8 passes; each rule below fails a deliberately broken copy.
+test("SD3: an order-keyed table needs a customer handler that applies the listed-orders matcher", () => {
+  assert.deepEqual(customerContentHandlers, []);
+  assert.ok(Object.isFrozen(customerContentHandlers) && Object.isFrozen(customerKeyMatchers));
+  assert.deepEqual(customerKeyMatchers, { order_id: "listed_orders" });
+  assert.deepEqual(contentClasses, ["none", "workspace", "store", "customer"]);
+  const tables = (extra) => ({
+    workTables: { ...workTables, ...extra },
+    billingTables,
+    vaultTables,
+    identityTables,
+  });
+  const handler = (change = {}) => ({
+    table: "morrow_work.order_rows",
+    dataClass: "order_rows",
+    trigger: "customers_redact",
+    matchers: ["listed_orders"],
+    action: "delete_rows",
+    key: "order_id: the rows of each listed order",
+    executor: "morrow_work.customer_content_redact",
+    executable: "SD3",
+    ...change,
+  });
+  const orderRows = { order_rows: { content: "none", customerKeys: ["order_id"] } };
+  // An order-keyed table without its handler fails; with it, passes.
+  assert.deepEqual(contentProblems(storeContentHandlers, tables(orderRows), []), [
+    "CUSTOMER_KEYED_WITHOUT_HANDLER:morrow_work.order_rows",
+  ]);
+  assert.deepEqual(contentProblems(storeContentHandlers, tables(orderRows), [handler()]), []);
+  // Malformed keys, a handler without the matcher its key needs, a handler for a table with
+  // no key, an unregistered table, a duplicate and a malformed handler each fail.
+  for (const [keys, code] of [
+    [[], "CUSTOMER_KEYS_INVALID"],
+    [["order_id", "order_id"], "CUSTOMER_KEYS_INVALID"],
+    [["order_number"], "CUSTOMER_KEYS_INVALID"],
+    ["order_id", "CUSTOMER_KEYS_INVALID"],
+  ])
+    assert.deepEqual(
+      contentProblems(
+        storeContentHandlers,
+        tables({ order_rows: { content: "none", customerKeys: keys } }),
+        [],
+      ),
+      [code + ":morrow_work.order_rows"],
+    );
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, tables({ order_rows: { content: "none" } }), [handler()]),
+    ["CUSTOMER_HANDLER_FOR_UNKEYED_TABLE:morrow_work.order_rows"],
+  );
+  assert.deepEqual(contentProblems(storeContentHandlers, tables({}), [handler()]), [
+    "CUSTOMER_HANDLER_UNREGISTERED_TABLE:morrow_work.order_rows",
+  ]);
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, tables(orderRows), [handler(), handler()]),
+    ["CUSTOMER_HANDLER_DUPLICATE:morrow_work.order_rows"],
+  );
+  for (const change of [
+    { matchers: [] },
+    { matchers: ["listed_orders", "listed_orders"] },
+    { matchers: ["names"] },
+    { trigger: "shop_redact" },
+    { action: "ignore" },
+    { executor: "morrow_work.store_content_redact" },
+    { executable: "" },
+    { key: "" },
+    { dataClass: "Order rows" },
+    { extra: true },
+  ])
+    assert.deepEqual(
+      contentProblems(storeContentHandlers, tables(orderRows), [handler(change)]),
+      [
+        "CUSTOMER_HANDLER_INVALID:morrow_work.order_rows",
+        "CUSTOMER_KEYED_WITHOUT_HANDLER:morrow_work.order_rows",
+      ],
+      JSON.stringify(change),
+    );
+  // A `content: customer` table needs a key (else nothing could find it), its customer
+  // handler, and its shop/redact handler too.
+  assert.deepEqual(
+    contentProblems(storeContentHandlers, tables({ notes: { content: "customer" } }), []),
+    [
+      "STORE_CONTENT_WITHOUT_HANDLER:morrow_work.notes",
+      "CUSTOMER_CONTENT_UNMATCHABLE:morrow_work.notes",
+    ],
+  );
+  const customerRows = { order_rows: { content: "customer", customerKeys: ["order_id"] } };
+  assert.deepEqual(contentProblems(storeContentHandlers, tables(customerRows), [handler()]), [
+    "STORE_CONTENT_WITHOUT_HANDLER:morrow_work.order_rows",
+  ]);
+  const shopRedact = {
+    table: "morrow_work.order_rows",
+    dataClass: "order_rows",
+    trigger: "shop_redact",
+    action: "delete_rows",
+    storeKey: "store_id: the store the order belongs to",
+    executor: "morrow_work.store_content_redact",
+    executable: "M2 PR-3",
+  };
+  assert.deepEqual(
+    contentProblems([...storeContentHandlers, shopRedact], tables(customerRows), [handler()]),
+    [],
+  );
+});
+
+test("SD3: S8's catalog rule: a column named for an order id needs its table to declare the key", () => {
+  assert.deepEqual(customerColumnProblems([]), []);
+  // Every shape the rule reads as an order id, and names it does not.
+  for (const column of ["order_id", "subject_order_id", "order_ids", "listed_order_ids"])
+    assert.deepEqual(customerColumnProblems([["morrow_work.goals", column]]), [
+      "CUSTOMER_KEY_UNDECLARED:morrow_work.goals." + column,
+    ]);
+  for (const column of ["order", "orders", "ordering", "order_id_digest", "reorder_count", "id"])
+    assert.deepEqual(customerColumnProblems([["morrow_work.goals", column]]), [], column);
+  // A declared key passes.
+  assert.deepEqual(
+    customerColumnProblems([["morrow_work.order_rows", "order_id"]], {
+      workTables: { ...workTables, order_rows: { content: "none", customerKeys: ["order_id"] } },
+      billingTables,
+      vaultTables,
+      identityTables,
+    }),
+    [],
+  );
 });

@@ -303,6 +303,8 @@ test("latency: where the cron runs, every step misses its 3 s (the 12:41 lines);
       deleted: 0,
       stuckClosed: 0,
       stuck: 0,
+      purged: 0,
+      held: 0,
       elapsedMs: 15000,
     },
   ]);
@@ -369,6 +371,8 @@ test("latency: where the cron runs, every step misses its 3 s (the 12:41 lines);
       deleted: 0,
       stuckClosed: 0,
       stuck: 0,
+      purged: 0,
+      held: 0,
       // Three transactions of 13 x 25 ms, then the sync's three and Shopify's 450 ms, then
       // v1 PR 5's Reconnect list, one more transaction of 13 x 25 ms (2725 ms, logged in
       // 50 ms steps).

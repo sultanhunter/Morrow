@@ -430,6 +430,20 @@
       "sha256": "d3812e8d06a8dff5edfb6c45e4e172e7fa42930034b1a6f6ea75d621c38e965e",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
+    },
+    {
+      "sequence": 58,
+      "file": "0058.customer-deletion-identity.sql",
+      "sha256": "afe6df05e899513219759e1fd8f7945c98ae0f2a2251137b145b9e438b25e435",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/sd3-keep-orders-to-redact.md"
+    },
+    {
+      "sequence": 59,
+      "file": "0059.customer-deletion-work.sql",
+      "sha256": "28c60045588a8cc1e6a4ce2fd30877d73e60e2cf3a62dff30ceb078f6f8d633e",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/sd3-keep-orders-to-redact.md"
     }
   ]
 }
