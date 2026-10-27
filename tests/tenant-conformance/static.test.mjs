@@ -411,34 +411,37 @@ const extraPolicies = {
       ")",
   ],
 };
-// Build order PR 11 (0053 agent-runs): the broker's two turn definers reach, as the broker's
-// login only, the one run (and call) their own transaction-local settings name; the runtime
-// login's cron and lease lookup read queued and running runs only.
-const brokerAgentRun = (column) =>
-  `((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (${column})::text) = current_setting('morrow.vault_agent_run'::text, true)))`;
-extraPolicies.broker_agent_run = [
-  "ALL",
-  "{morrow_work_command}",
-  brokerAgentRun("id"),
-  brokerAgentRun("id"),
-];
-extraPolicies.broker_agent_turn = [
-  "ALL",
-  "{morrow_work_command}",
-  brokerAgentRun("run_id"),
-  brokerAgentRun("run_id"),
-];
-extraPolicies.broker_agent_call = [
-  "ALL",
-  "{morrow_work_command}",
-  "((SESSION_USER = 'morrow_vault_broker'::name) AND (((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_agent_run'::text, true)) OR ((id)::text = current_setting('morrow.vault_agent_call'::text, true))))",
-  brokerAgentRun("run_id"),
-];
+// Plan row H7a (0058 agent-runs): the runtime login's cross-tenant reads, ids and codes only
+// and read only (open runs, open waits, pending or admitted upkeep triggers), and the one run
+// lease insert its definers may make (a renewal, a resolvable wait's resume, an upkeep
+// admission), each checked by agent_lease_issuable against its run or trigger.
+const runtimeRead = (column, values) =>
+  `((SESSION_USER = 'morrow_runtime_executor'::name) AND (${column} = ANY (ARRAY[${values
+    .map((v) => `'${v}'::text`)
+    .join(", ")}])))`;
 extraPolicies.runtime_agent_open = [
   "SELECT",
   "{morrow_work_command}",
-  "((SESSION_USER = 'morrow_runtime_executor'::name) AND (status = ANY (ARRAY['queued'::text, 'running'::text, 'waiting'::text])))",
+  runtimeRead("status", ["queued", "running", "waiting"]),
   null,
+];
+extraPolicies.runtime_wait_open = [
+  "SELECT",
+  "{morrow_work_command}",
+  runtimeRead("state", ["open", "resolvable"]),
+  null,
+];
+extraPolicies.runtime_upkeep_read = [
+  "SELECT",
+  "{morrow_work_command}",
+  runtimeRead("state", ["pending", "admitted"]),
+  null,
+];
+extraPolicies.lease_agent_issue = [
+  "INSERT",
+  "{morrow_work_command}",
+  null,
+  "((SESSION_USER = 'morrow_runtime_executor'::name) AND morrow_work.agent_lease_issuable((organization_id)::text, (workspace_id)::text, kind, (subject_id)::text, (store_id)::text, (connection_id)::text, (installation_id)::text, (initiator_principal_id)::text, (initiator_membership_id)::text))",
 ];
 // The only restrictive policies; every other policy is permissive.
 const restrictivePolicies = new Set(["connector_content_delete_only"]);

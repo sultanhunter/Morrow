@@ -106,11 +106,15 @@ export const workTables = Object.freeze({
     // stop set by the connector's applier revokes that connection's leases). v1 PR 5
     // (connection-health-work): connector_health_lease_read and _revoke (a system
     // installation stop of a scope change revokes that agent's run and operation leases).
+    // Plan row H7a (0058): lease_agent_issue, the run leases the runtime definers issue
+    // (a renewal, a resolvable wait's resume, an upkeep admission), each checked against its
+    // run or trigger by agent_lease_issuable.
     policies: [
       "connector_health_lease_read",
       "connector_health_lease_revoke",
       "connector_lease_read",
       "connector_lease_revoke",
+      "lease_agent_issue",
       "lease_broker_resolve",
       "lease_member_revoke",
       "lease_pending",
@@ -364,17 +368,17 @@ export const workTables = Object.freeze({
     parents: ["morrow_identity.workspaces"],
     content: "workspace",
   },
-  // Build order PR 11 (0053 agent-runs, ADR-0027): the agent loop's catalogue and tool
-  // catalogue (platform rows the command role reads), and one agent run's records. The run,
-  // its tool calls and the broker's turn fence hold ids, digests, codes and amounts only;
-  // run_turns is the only place loop content lives (the request, Morrow's replies and tool
-  // results: no tool that reads a store's content is composed until it has its store-content
-  // cleanup handler, a prerequisite of the loop switch), and a question holds the text the
-  // agent and the requester wrote, on run_turns' clock (90 days after the run ends; review
-  // R3). The run steps reach them under the run lease
-  // (tenant_lease); the broker's two turn definers reach the one run (and call) their own
-  // transaction-local settings name (broker_agent_*); the runtime login's cron and lease
-  // lookup read open (queued, running and waiting) runs only (runtime_agent_open).
+  // Plan row H7a (0058 agent-runs; ADR-0041 item 4's one data model): the agent loop's
+  // catalogues and context policies (platform rows the command role reads), and the records of
+  // jobs, contexts and runs. Content lives only in run_turns, checkpoints, plan revisions,
+  // teammate results, result items and their pages, and questions (text people and agents
+  // wrote: no tool that reads a store's content is composed until these have their
+  // store-content cleanup handlers, the loop switch's store_content_cleanup prerequisite);
+  // every other table holds ids, codes, counts, digests and times. A person's acts write them
+  // in the session context and the run steps and runtime definers under the run lease
+  // (tenant_lease); the runtime login's cross-tenant reads are open runs, open waits and
+  // pending upkeep triggers, ids and codes only (runtime_agent_open, runtime_wait_open,
+  // runtime_upkeep_read). The api reads its tenant's runs and jobs column by column.
   loop_catalogue_versions: {
     class: "platform",
     parents: [],
@@ -393,38 +397,53 @@ export const workTables = Object.freeze({
     policies: ["platform_command_read"],
     content: "none",
   },
+  context_policy_versions: {
+    class: "platform",
+    parents: [],
+    policies: ["platform_command_read"],
+    content: "none",
+  },
+  jobs: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    content: "none",
+  },
+  agent_contexts: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces", "jobs", "agent_installations"],
+    lease: true,
+    content: "none",
+  },
+  context_epochs: {
+    class: "tenant_internal",
+    parents: ["agent_contexts"],
+    lease: true,
+    content: "none",
+  },
   agent_runs: {
     class: "tenant_readable",
     parents: [
       "morrow_identity.workspaces",
+      "jobs",
+      "agent_runs",
+      "agent_contexts",
       "tasks",
       "agent_installations",
       "work_envelopes",
       "delegation_hops",
       "work_leases",
+      "agent_calls",
+      "run_waits",
     ],
     lease: true,
-    policies: ["broker_agent_run", "runtime_agent_open"],
+    policies: ["runtime_agent_open"],
     content: "none",
   },
-  run_turns: {
+  agent_calls: {
     class: "tenant_internal",
-    parents: ["agent_runs"],
+    parents: ["jobs", "agent_runs", "agent_contexts", "agent_installations"],
     lease: true,
-    policies: ["broker_agent_turn"],
-    content: "workspace",
-  },
-  run_tool_calls: {
-    class: "tenant_internal",
-    parents: ["agent_runs"],
-    lease: true,
-    content: "none",
-  },
-  agent_model_calls: {
-    class: "tenant_internal",
-    parents: ["run_turns"],
-    lease: true,
-    policies: ["broker_agent_call"],
     content: "none",
   },
   agent_run_questions: {
@@ -432,6 +451,104 @@ export const workTables = Object.freeze({
     parents: ["agent_runs"],
     lease: true,
     content: "workspace",
+  },
+  run_waits: {
+    class: "tenant_internal",
+    parents: ["agent_runs", "jobs", "agent_run_questions"],
+    lease: true,
+    policies: ["runtime_wait_open"],
+    content: "none",
+  },
+  context_checkpoints: {
+    class: "tenant_internal",
+    parents: ["context_epochs", "agent_runs"],
+    lease: true,
+    content: "workspace",
+  },
+  run_turns: {
+    class: "tenant_internal",
+    parents: ["context_epochs", "agent_runs"],
+    lease: true,
+    content: "workspace",
+  },
+  run_tool_calls: {
+    class: "tenant_internal",
+    parents: ["agent_runs", "agent_contexts"],
+    lease: true,
+    content: "none",
+  },
+  agent_model_calls: {
+    class: "tenant_internal",
+    parents: ["run_turns"],
+    lease: true,
+    content: "none",
+  },
+  run_plans: {
+    class: "tenant_internal",
+    parents: ["jobs", "agent_runs"],
+    lease: true,
+    content: "none",
+  },
+  run_plan_revisions: {
+    class: "tenant_internal",
+    parents: ["run_plans", "agent_runs"],
+    lease: true,
+    content: "workspace",
+  },
+  run_events: {
+    class: "tenant_internal",
+    parents: ["agent_runs"],
+    lease: true,
+    content: "none",
+  },
+  teammate_results: {
+    class: "tenant_internal",
+    parents: ["agent_calls", "agent_runs"],
+    lease: true,
+    content: "workspace",
+  },
+  result_items: {
+    class: "tenant_internal",
+    parents: ["agent_runs", "agent_calls"],
+    lease: true,
+    content: "workspace",
+  },
+  result_item_pages: {
+    class: "tenant_internal",
+    parents: ["result_items"],
+    lease: true,
+    content: "workspace",
+  },
+  run_detector_state: {
+    class: "tenant_internal",
+    parents: ["agent_runs"],
+    lease: true,
+    content: "none",
+  },
+  run_segments: {
+    class: "tenant_internal",
+    parents: ["agent_runs"],
+    lease: true,
+    content: "none",
+  },
+  run_taint_sources: {
+    class: "tenant_internal",
+    parents: ["agent_runs"],
+    lease: true,
+    content: "none",
+  },
+  run_memory_reads: {
+    class: "tenant_internal",
+    parents: ["agent_runs"],
+    lease: true,
+    content: "none",
+  },
+  upkeep_triggers: {
+    class: "tenant_internal",
+    parents: ["agent_installations", "agent_runs"],
+    lease: true,
+    policies: ["runtime_upkeep_read"],
+    content: "none",
   },
   // PR 20 (0052, shop knowledge and notebooks). Pages, versions and pending proposals hold
   // text people type or accept (never a store's content and never customer data: the
@@ -966,23 +1083,48 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_work_api"],
     command: "plan.start",
   },
-  // Build order PR 11 (0053 agent-runs). Pure functions of the CHECKs.
+  // Plan row H7a (0058 agent-runs). Pure functions of the CHECKs.
+  "harness_ms(timestamp with time zone)": { kind: "check", grantees: ["morrow_work_command"] },
+  "harness_jcs(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "loop_user_message_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "loop_assistant_message_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
-  "loop_tool_results_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "loop_choices_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   // Admission's envelope and hop scope fields: the offered tools' field scopes.
   "loop_tool_fields(text[])": { kind: "check", grantees: ["morrow_work_command"] },
-  "agent_manifest_matches(text,text,text,text,text,text,text,text,text,text,text,bigint,text,text,integer,text,text[],integer,text,text,integer,integer,integer,integer,integer,integer,integer,numeric,timestamp with time zone)":
-    { kind: "check", grantees: ["morrow_work_command"] },
+  "harness_audience_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "harness_source_subjects_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "harness_derived_taint_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "harness_run_taint_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "harness_section_tokens_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "harness_notices_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "agent_safety_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "agent_safety_compose(jsonb,integer)": { kind: "check", grantees: ["morrow_work_command"] },
+  "run_wait_condition_valid(text,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "agent_manifest_matches(text,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "job_guard()": { kind: "trigger", grantees: [] },
+  "agent_context_guard()": { kind: "trigger", grantees: [] },
+  "context_epoch_guard()": { kind: "trigger", grantees: [] },
+  "harness_expiry_guard()": { kind: "trigger", grantees: [] },
   "agent_run_guard()": { kind: "trigger", grantees: [] },
+  "agent_call_guard()": { kind: "trigger", grantees: [] },
+  "agent_run_question_guard()": { kind: "trigger", grantees: [] },
+  "run_wait_guard()": { kind: "trigger", grantees: [] },
   "run_turn_guard()": { kind: "trigger", grantees: [] },
   "run_tool_call_guard()": { kind: "trigger", grantees: [] },
   "agent_model_call_guard()": { kind: "trigger", grantees: [] },
-  "agent_run_question_guard()": { kind: "trigger", grantees: [] },
-  // Revisable owner helpers: the uncertain fence close (booked at the worst case), the run
-  // end (reasoning removed, expiry set, envelope and hop revoked) and the stale-run close.
-  "agent_turn_close_uncertain(text,text,text)": {
+  "run_plan_guard()": { kind: "trigger", grantees: [] },
+  "result_item_guard()": { kind: "trigger", grantees: [] },
+  "run_detector_state_guard()": { kind: "trigger", grantees: [] },
+  "run_segment_guard()": { kind: "trigger", grantees: [] },
+  "upkeep_trigger_guard()": { kind: "trigger", grantees: [] },
+  // Revisable owner helpers: a run event appended to its root's stream, admission's checks
+  // again for an admitted run, and the run end (open calls uncertain, the wait closed, the
+  // envelope and hop revoked, the job ended).
+  "agent_run_event(text,text,text,text,text,text,text,bigint)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "agent_run_admission_check(text,text,text,boolean)": {
     kind: "owner_helper",
     grantees: ["morrow_work_command"],
   },
@@ -990,53 +1132,69 @@ export const workFunctions = Object.freeze({
     kind: "owner_helper",
     grantees: ["morrow_work_command"],
   },
-  "agent_runs_close_stale(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
-  // The command role's INVOKER helper: the entered run lease's agent run, locked.
+  // The command role's INVOKER helpers: the entered run lease's agent run, locked; and the
+  // check of lease_agent_issue (a run lease only for a renewal, a resolvable wait or a pending
+  // upkeep trigger, exactly its run's or trigger's).
   "agent_run_entered()": { kind: "helper", grantees: [] },
-  // Admission and the requester's answer (the api).
-  "cmd_agent_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)":
+  "agent_lease_issuable(text,text,text,text,text,text,text,text,text)": {
+    kind: "helper",
+    grantees: [],
+  },
+  // Admission and the requester's answer (the api; a person's act).
+  "cmd_agent_run_admit(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)":
     { kind: "api", grantees: ["morrow_work_api"], command: "run.admit" },
   "cmd_agent_run_answer(text,text,text,text,text)": {
     kind: "api",
     grantees: ["morrow_work_api"],
     command: "question.answer",
   },
-  // The cron's ids-only list of queued agent runs (cross-tenant, as pending_starts) and the
-  // ids-only lookup of one open run's current lease and status, which AgentRunParams@1 (ids
-  // only) names by its tenant and run; it grants nothing (enter_lease decides).
+  // The cron's ids-only list of unstarted agent-run leases and the sweep's ids-only wake
+  // candidates (cross-tenant, as pending_starts), the ids-only lease lookup and wait resolution
+  // and upkeep admission that name their tenant, and the steps under the run lease.
   "agent_run_pending_starts()": {
     kind: "runtime",
     grantees: ["morrow_runtime_executor"],
     crossTenant: true,
     columns: ["organization_id", "workspace_id", "run_id", "lease_id", "generation", "resume"],
   },
+  "agent_run_wake_candidates()": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+    crossTenant: true,
+    columns: [
+      "organization_id",
+      "workspace_id",
+      "run_id",
+      "segment",
+      "incarnation",
+      "wait_sequence",
+      "action",
+    ],
+  },
   "agent_run_resume_lease(text,text,text)": {
     kind: "runtime",
     grantees: ["morrow_runtime_executor"],
     tenantParameters: ["p_organization_id", "p_workspace_id"],
   },
-  // The run steps under the run lease.
+  "agent_run_resume(text,text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+    tenantParameters: ["p_organization_id", "p_workspace_id"],
+  },
+  "admit_upkeep_run(text,text,text)": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+    tenantParameters: ["p_organization_id", "p_workspace_id"],
+  },
   "agent_run_start()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_run_state()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_run_objective()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_run_conversation()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_run_answers()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_turn_open(text,text,text,text,text,text,text,text)": {
+  "agent_run_lease_renew(text,text,text)": {
     kind: "runtime",
     grantees: ["morrow_runtime_executor"],
   },
-  "agent_turn_settle(text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_tool_call_begin(text,text,text,text,text)": {
+  "agent_run_segment_roll(text,text,text)": {
     kind: "runtime",
     grantees: ["morrow_runtime_executor"],
   },
-  "agent_tool_call_finish(text,text,text,text,text,text,text,text)": {
-    kind: "runtime",
-    grantees: ["morrow_runtime_executor"],
-  },
-  "agent_question_ask(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_run_wait()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
-  "agent_run_finish(text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   // PR 20 (0052). Pure functions of the CHECKs.
   "knowledge_tags_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
   "knowledge_sources_valid(jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
@@ -1820,16 +1978,6 @@ export const vaultFunctions = Object.freeze({
   },
   "catalog_context_clear()": { kind: "owner_helper", grantees: ["morrow_work_command"] },
   "catalog_send_refusal(text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
-  // Build order PR 11 (0053 agent-runs): the agent loop's turn fence open and close (the
-  // broker's login; ids, digests, codes, counts, and the reply stored with the close).
-  "agent_turn_begin(text,text,text,text,text,text,text,text,text)": {
-    kind: "vault",
-    grantees: ["morrow_vault_broker"],
-  },
-  "agent_turn_end(text,text,text,text,text,text,text,text,text,text,text,text)": {
-    kind: "vault",
-    grantees: ["morrow_vault_broker"],
-  },
   // v1 PR 4 (0050 catalog-undo): the undo check's resolution and record, keyed by one
   // operation id as the read-back is.
   "catalog_undo_resolve(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
@@ -1955,21 +2103,16 @@ export const executorLogins = Object.freeze({
     "morrow_work.run_snapshot_put(text,text)",
     "morrow_work.run_start()",
     "morrow_work.submit_agent_proposal(text,text,text,text,text,text,text,text,text)",
-    // Build order PR 11 (0053 agent-runs): the agent run steps and the cron's two lookups.
-    "morrow_work.agent_question_ask(text,text,text)",
-    "morrow_work.agent_run_answers()",
-    "morrow_work.agent_run_conversation()",
-    "morrow_work.agent_run_finish(text)",
-    "morrow_work.agent_run_objective()",
+    // Plan row H7a (0058 agent-runs): the cron's and the sweep's lists, the Workflow's lease
+    // lookup and entry, renewal, wait resolution, upkeep admission and segment rolls.
+    "morrow_work.admit_upkeep_run(text,text,text)",
+    "morrow_work.agent_run_lease_renew(text,text,text)",
     "morrow_work.agent_run_pending_starts()",
+    "morrow_work.agent_run_resume(text,text,text,text)",
     "morrow_work.agent_run_resume_lease(text,text,text)",
+    "morrow_work.agent_run_segment_roll(text,text,text)",
     "morrow_work.agent_run_start()",
-    "morrow_work.agent_run_state()",
-    "morrow_work.agent_run_wait()",
-    "morrow_work.agent_tool_call_begin(text,text,text,text,text)",
-    "morrow_work.agent_tool_call_finish(text,text,text,text,text,text,text,text)",
-    "morrow_work.agent_turn_open(text,text,text,text,text,text,text,text)",
-    "morrow_work.agent_turn_settle(text,text)",
+    "morrow_work.agent_run_wake_candidates()",
   ],
   morrow_vault_broker: [
     // M5 PR-1 (0029).
@@ -2016,9 +2159,6 @@ export const executorLogins = Object.freeze({
     "morrow_vault.catalog_write_begin(text,text,text,text,text)",
     "morrow_vault.catalog_write_end(text,text,text,text)",
     "morrow_vault.catalog_write_resolve(text)",
-    // Build order PR 11 (0053 agent-runs).
-    "morrow_vault.agent_turn_begin(text,text,text,text,text,text,text,text,text)",
-    "morrow_vault.agent_turn_end(text,text,text,text,text,text,text,text,text,text,text,text)",
     // v1 PR 4 (catalog-undo).
     "morrow_vault.catalog_undo_record(text,text,text,text,text)",
     "morrow_vault.catalog_undo_resolve(text)",

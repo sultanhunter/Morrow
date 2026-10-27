@@ -1,10 +1,12 @@
-// Build order PR 11 (ADR-0027): static checks of the agent-runs migration (located by slug,
-// never by number: integration renumbers it), its manifest row, the runner contract, FORCE
-// RLS on every new table, the content classes (ids and codes in the run, its tool calls and
-// the broker's fence; content only in run_turns and the questions), explicit per-function
-// ACLs, the catalogue v2 and ToolCatalogue rows against the generated data (drift), the
-// retention CHECKs, the conformance registry and the switch record. The behaviour is proved
-// against PostgreSQL 17 by lab:agent-loop and lab:tenant-conformance.
+// Plan row H7a (ADR-0041 item 4, with items 3, 5 to 7, 9, 12 to 14, 16, 17, 20 and 28 to 34):
+// static checks of the agent-runs migration (located by slug, never by number: the lead
+// renumbers it at merge), its manifest row, the runner contract, FORCE RLS on every table of the
+// one data model, the content classes, the CHECKs as safety ranges only, the closed codes against
+// H6's contracts (drift), the catalogues, safety template and context policy against the
+// generated data (drift), the runtime definers (ids only, one call each, executable only by
+// morrow_runtime_executor), the lease sources, the retention clocks, the conformance registry
+// and the switch record. The behaviour is proved against PostgreSQL 17 by lab:agent-runs (one
+// case per lease source of ADR-0041 item 7's table) and lab:tenant-conformance.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -12,18 +14,15 @@ import { readFileSync } from "node:fs";
 import { migrationSqlViolations } from "../scripts/migration-sql.mjs";
 import { loadMigrationChain } from "../scripts/migration-chain.mjs";
 import { agentLoopPrerequisites } from "../scripts/generate-agent-platform.mjs";
-import {
-  executorLogins,
-  vaultFunctions,
-  workFunctions,
-  workTables,
-} from "./tenant-conformance/registry.mjs";
+import { executorLogins, workFunctions, workTables } from "./tenant-conformance/registry.mjs";
 import { generatedLoopCatalogue } from "../packages/policy/src/generated/loop-catalogue.ts";
 import { generatedToolCatalogue } from "../packages/policy/src/generated/tool-catalogue.ts";
-import { loopEntries } from "../packages/policy/src/loop-catalogue.ts";
-import { routedRunCaps } from "../packages/work/src/loop/admission.ts";
-import { toolFieldScopes } from "../packages/work/src/loop/authority.ts";
+import { generatedContextPolicy } from "../packages/policy/src/generated/context-policy.ts";
+import { replyStoredBytes } from "../packages/policy/src/fake-model-gateway.ts";
+import { runSafetyProfile1 } from "../packages/policy/src/run-safety.ts";
+import { canonicalJson } from "../packages/work/src/digest.ts";
 import { agentRunSql } from "../packages/work/src/loop/steps.ts";
+import { loopStatements } from "../packages/work/src/loop/sql.ts";
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 const code = (text) => text.replace(/--.*$/gm, "");
@@ -32,40 +31,112 @@ const slug = "agent-runs";
 const row = manifest.migrations.find((m) => m.file.endsWith("." + slug + ".sql"));
 const text = readFileSync("migrations/" + row.file, "utf8");
 const sql = code(text);
-const newTables = [
+const core = JSON.parse(readFileSync("docs/contracts/schemas/v1.1/core.schema.json", "utf8")).$defs;
+const contractEnum = (name) => {
+  assert.ok(core[name]?.enum, name);
+  return [...core[name].enum];
+};
+const platformTables = [
   "loop_catalogue_versions",
   "loop_catalogue_entries",
   "tool_catalogue_entries",
+  "context_policy_versions",
+];
+// ADR-0041 item 4's one data model (the memory tables are H12's; ADR-0040's conversation
+// tables are P07.T03's).
+const tenantTables = [
+  "jobs",
+  "agent_contexts",
+  "context_epochs",
   "agent_runs",
+  "agent_calls",
+  "agent_run_questions",
+  "run_waits",
+  "context_checkpoints",
   "run_turns",
   "run_tool_calls",
   "agent_model_calls",
-  "agent_run_questions",
+  "run_plans",
+  "run_plan_revisions",
+  "run_events",
+  "teammate_results",
+  "result_items",
+  "result_item_pages",
+  "run_detector_state",
+  "run_segments",
+  "run_taint_sources",
+  "run_memory_reads",
+  "upkeep_triggers",
 ];
+const newTables = [...platformTables, ...tenantTables];
+// Content lives only here (the registry's class workspace); every other table holds ids,
+// codes, counts, digests and times.
+const contentTables = [
+  "agent_run_questions",
+  "context_checkpoints",
+  "run_turns",
+  "run_plan_revisions",
+  "teammate_results",
+  "result_items",
+  "result_item_pages",
+];
+// The runtime definers ADR-0041 names, and the Workflow's entry lookups.
+const runtimeDefiners = [
+  "agent_run_lease_renew",
+  "agent_run_resume",
+  "admit_upkeep_run",
+  "agent_run_wake_candidates",
+  "agent_run_segment_roll",
+];
+const entryLookups = ["agent_run_pending_starts", "agent_run_resume_lease", "agent_run_start"];
 const tableBody = (name) => {
   const start = sql.indexOf("CREATE TABLE morrow_work." + name + " (");
   assert.ok(start >= 0, name);
   return sql.slice(start, sql.indexOf("\n);", start));
 };
-const fnBody = (schema, name) => {
-  const start = sql.indexOf(`CREATE FUNCTION ${schema}.${name}(`);
+const fnBody = (name) => {
+  const start = sql.indexOf(`CREATE FUNCTION morrow_work.${name}(`);
   assert.ok(start >= 0, name);
   const open = sql.indexOf("$$", start);
   return sql.slice(start, sql.indexOf("$$", open + 2) + 2);
 };
+// The quoted values of `<column> IN (...)` in a table's body (or any text), in order.
+const inList = (body, column) => {
+  const found = new RegExp(
+    "(?<![a-z_])" + column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " (?:NOT )?IN \\(",
+  ).exec(body);
+  assert.ok(found, column);
+  const open = found.index + found[0].length - 1;
+  let depth = 0;
+  let end = open;
+  for (; end < body.length; end++) {
+    if (body[end] === "(") depth++;
+    if (body[end] === ")" && --depth === 0) break;
+  }
+  return [...body.slice(open, end).matchAll(/'([a-z_.]+)'/g)].map((m) => m[1]);
+};
+const columns = (name) =>
+  [...tableBody(name).matchAll(/^ ([a-z_0-9]+) ([a-z_.]+(?:\[\])?)/gm)]
+    .filter((m) => !["PRIMARY", "FOREIGN", "UNIQUE", "CONSTRAINT"].includes(m[1]))
+    .map((m) => ({ name: m[1], type: m[2] }));
 
-test("manifest: the last row, executeAs the work owner, its brief and digest, no prerequisites", () => {
+test("manifest: the last row, executeAs the work owner, its packet and digest, no prerequisites", () => {
   assert.ok(row);
   assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
   assert.equal(row, manifest.migrations.at(-1));
-  assert.deepEqual(
-    [row.executeAs, row.reviewRef],
-    ["morrow_work_owner", "docs/briefs/t4-agent-loop.md"],
-  );
+  assert.deepEqual([row.executeAs, row.reviewRef], ["morrow_work_owner", "docs/packets/H7a.md"]);
+  assert.ok(readFileSync(row.reviewRef, "utf8").includes("# H7a"));
   assert.equal(row.sha256, sha(text));
   assert.equal(row.prerequisites, undefined);
   const before = (s) => manifest.migrations.find((m) => m.file.endsWith("." + s + ".sql"));
-  for (const s of ["listings-runs", "runtime-operations", "projects-goal-measures"])
+  for (const s of [
+    "listings-runs",
+    "runtime-operations",
+    "projects-goal-measures",
+    "shop-knowledge",
+    "connection-health-work",
+    "credits-only-catalogue",
+  ])
     assert.ok(before(s).sequence < row.sequence, s);
   const chain = loadMigrationChain();
   assert.equal(chain.find((e) => e.sequence === row.sequence).executeAs, "morrow_work_owner");
@@ -88,35 +159,42 @@ test("the runner contract: one transaction, fixed prerequisites, pinned paths, n
   assert.doesNotMatch(sql, /CREATE ROLE|ALTER ROLE|GRANT morrow_[a-z_]+ TO/);
   assert.doesNotMatch(sql, /BYPASSRLS|NO FORCE ROW LEVEL SECURITY|DISABLE ROW LEVEL/);
   assert.doesNotMatch(sql, /schema_migrations|migration_history/i);
-  // It changes no shared CHECK: run.admit and question.answer are recorded already.
-  assert.doesNotMatch(sql, /ALTER TABLE morrow_work\.(commands|outbox_events|tasks)/);
-  // CREATE on the schemas only for the ownership transfer, revoked before the end.
-  const grant = sql.indexOf(
-    "GRANT CREATE ON SCHEMA morrow_work,morrow_vault TO morrow_work_command;",
-  );
-  const revoke = sql.indexOf(
-    "REVOKE CREATE ON SCHEMA morrow_work,morrow_vault FROM morrow_work_command;",
-  );
+  // It changes no shared CHECK or table: run.admit and question.answer are recorded already.
+  assert.doesNotMatch(sql, /ALTER TABLE morrow_work\.(commands|outbox_events|tasks|work_leases)/);
+  // Nothing in the vault: the broker's turn fence is H7c's (plan row H7a).
+  assert.doesNotMatch(sql, /morrow_vault\./);
+  // CREATE on the schema only for the ownership transfer, revoked before the end.
+  const grant = sql.indexOf("GRANT CREATE ON SCHEMA morrow_work TO morrow_work_command;");
+  const revoke = sql.indexOf("REVOKE CREATE ON SCHEMA morrow_work FROM morrow_work_command;");
   assert.ok(grant > 0 && revoke > grant);
   assert.ok(
     sql
       .slice(grant, revoke)
       .split("\n")
       .slice(1, -1)
-      .every((l) => /^ ?(ALTER FUNCTION|text\)|$)/.test(l.trim()) || l.startsWith(" text")),
+      .every((l) => /^(ALTER FUNCTION| text,|$)/.test(l)),
   );
 });
 
-test("FORCE RLS on every new table, tenant policies from the session or the lease, no DELETE", () => {
+test("ADR-0041 item 4's one data model: every table FORCE RLS, tenant policies from the session or the lease, no DELETE", () => {
   const created = [...sql.matchAll(/CREATE TABLE morrow_work\.([a-z_]+) \(/g)].map((m) => m[1]);
   assert.deepEqual(created, newTables);
-  const loop =
-    /FOREACH t IN ARRAY ARRAY\[([^\]]*)\] LOOP\s+EXECUTE format\('ALTER TABLE morrow_work\.%I ENABLE ROW LEVEL SECURITY',t\);\s+EXECUTE format\('ALTER TABLE morrow_work\.%I FORCE ROW LEVEL SECURITY',t\);/.exec(
-      sql,
-    );
-  assert.deepEqual(
-    [...loop[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]),
+  const loops = [...sql.matchAll(/FOREACH t IN ARRAY ARRAY\[([^\]]*)\] LOOP/g)].map((m) =>
+    [...m[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]),
+  );
+  // ENABLE + FORCE + the owner policy on all; the platform read on the four platform tables;
+  // the session and lease templates on every tenant table; the api's read on runs and jobs;
+  // the append-only triggers on all.
+  assert.deepEqual(loops, [
     newTables,
+    platformTables,
+    tenantTables,
+    ["agent_runs", "jobs"],
+    newTables,
+  ]);
+  assert.match(
+    sql,
+    /EXECUTE format\('ALTER TABLE morrow_work\.%I ENABLE ROW LEVEL SECURITY',t\);\s+EXECUTE format\('ALTER TABLE morrow_work\.%I FORCE ROW LEVEL SECURITY',t\);/,
   );
   assert.match(
     sql,
@@ -126,130 +204,297 @@ test("FORCE RLS on every new table, tenant policies from the session or the leas
     sql,
     /CREATE POLICY tenant_lease ON morrow_work\.%I TO morrow_work_command\s+USING \(\(organization_id::text,workspace_id::text\)=\(SELECT c\.organization_id,c\.workspace_id FROM morrow_work\.current_lease\(\) c\)\)/,
   );
-  // The broker's policies need its own login and its own transaction-local setting.
-  for (const name of ["broker_agent_run", "broker_agent_turn", "broker_agent_call"])
+  assert.match(sql, /CREATE TRIGGER append_only BEFORE DELETE ON morrow_work\.%I/);
+  assert.match(sql, /CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_work\.%I/);
+  // Composite tenant keys on every tenant table.
+  for (const t of tenantTables) {
+    const body = tableBody(t);
     assert.match(
-      sql,
-      new RegExp(
-        `CREATE POLICY ${name} ON morrow_work\\.[a-z_]+ TO morrow_work_command\\s+USING \\(session_user=''morrow_vault_broker'' AND`,
-      ),
-      name,
+      body,
+      /^ organization_id morrow_work\.record_id NOT NULL,\n workspace_id morrow_work\.record_id NOT NULL,/m,
+      t,
     );
-  // Append-only: no DELETE or TRUNCATE on any new table, and no grant of either.
+    assert.match(body, /PRIMARY KEY \(organization_id,workspace_id,/, t);
+  }
+  // The runtime login's cross-tenant reads are SELECT only, ids and codes of open rows.
+  for (const [policy, table, filter] of [
+    ["runtime_agent_open", "agent_runs", "status IN ('queued','running','waiting')"],
+    ["runtime_wait_open", "run_waits", "state IN ('open','resolvable')"],
+    ["runtime_upkeep_read", "upkeep_triggers", "state IN ('pending','admitted')"],
+  ])
+    assert.ok(
+      sql.includes(
+        `CREATE POLICY ${policy} ON morrow_work.${table} FOR SELECT TO morrow_work_command\n USING (session_user='morrow_runtime_executor' AND ${filter});`,
+      ),
+      policy,
+    );
+  // The only run lease the runtime definers insert: agent_lease_issuable's three shapes.
   assert.match(
     sql,
-    /FOREACH t IN ARRAY ARRAY\['loop_catalogue_versions','loop_catalogue_entries','tool_catalogue_entries','agent_runs','run_turns','run_tool_calls',\s*'agent_model_calls','agent_run_questions'\] LOOP\s+EXECUTE format\('CREATE TRIGGER append_only BEFORE DELETE/,
+    /CREATE POLICY lease_agent_issue ON morrow_work\.work_leases FOR INSERT TO morrow_work_command\s+WITH CHECK \(session_user='morrow_runtime_executor' AND morrow_work\.agent_lease_issuable\(/,
   );
-  assert.match(sql, /CREATE TRIGGER no_truncate BEFORE TRUNCATE/);
-  // The api reads only agent_runs, column by column: no manifest text, lease, envelope, hop,
-  // digest, request or command; nothing of the turns, calls, fence or questions.
+  // Every table and its parents are in the conformance registry, with the right content class.
+  for (const t of newTables) assert.ok(workTables[t], t);
+  for (const t of tenantTables) assert.equal(workTables[t].lease, true, t);
+  assert.deepEqual(
+    newTables.filter((t) => workTables[t].content === "workspace"),
+    contentTables,
+  );
+  // The api reads only agent_runs and jobs, column by column: no manifest text, lease,
+  // envelope, wait, taint, digest, request or command.
   const apiGrants = [
-    ...sql.matchAll(/GRANT ([^;]*?) ON morrow_work\.([a-z_]+) TO morrow_work_api;/g),
+    ...sql.matchAll(/GRANT SELECT \(([^)]*)\)\s+ON morrow_work\.([a-z_]+) TO morrow_work_api;/g),
   ];
   assert.deepEqual(
     apiGrants.map((m) => m[2]),
-    ["agent_runs"],
+    ["agent_runs", "jobs"],
   );
-  const columns = /SELECT \(([^)]*)\)/
-    .exec(apiGrants[0][1])[1]
-    .split(",")
-    .map((c) => c.trim());
+  assert.doesNotMatch(
+    sql,
+    /GRANT (?!SELECT \(|EXECUTE ON FUNCTION morrow_work\.cmd_agent_run_admit\()[^;]*TO morrow_work_api;/,
+  );
+  const runColumns = apiGrants[0][1].split(",").map((c) => c.trim());
   for (const hidden of [
     "manifest_canonical",
     "manifest_digest",
     "lease_id",
     "envelope_id",
+    "work_envelope_id",
     "hop_id",
-    "prefix_digest",
+    "wait_id",
+    "taint",
+    "read_tags",
+    "safety",
     "request_digest",
     "command_id",
     "system_text_digest",
     "tools",
+    "workflow_instance_id",
   ])
-    assert.ok(!columns.includes(hidden), hidden);
-  assert.ok(columns.includes("hold_usd") && columns.includes("ended_reason"));
+    assert.ok(!runColumns.includes(hidden), hidden);
+  assert.ok(runColumns.includes("ended_reason") && runColumns.includes("credits_drawn"));
 });
 
-test("content lives only in run_turns and the questions; the rest is ids, digests, codes and amounts", () => {
-  // Free text or JSON columns, per table.
-  const free = (name) =>
-    [...tableBody(name).matchAll(/^ ([a-z_]+) (jsonb|text)\b/gm)]
-      .map((m) => m[1])
-      .filter(
-        (c) =>
-          !/_id$|_key$|^(kind|status|outcome|refusal|verb|replay_class|tool|provider|ended_reason|release_id|record_kind|tools|raw_stop_reason|provider_model_id|provider_request_id|tool_use_id|capability_id|effort_key|model_key)$/.test(
-            c,
-          ),
+test("content lives only in the content tables; the rest is ids, codes, counts, digests and times", () => {
+  // Text or JSON columns of a content-free table are ids, codes, digests, or metadata whose
+  // CHECK bounds it to ids and codes (read tags, taint, audience, subjects, sections, notices,
+  // the safety profile and policy, a wait's condition, an epoch's opening of references, the
+  // detectors' ring and counters, the manifest proven to be the run's own columns).
+  const metadata = new Set([
+    "read_tags",
+    "taint",
+    "audience",
+    "source_subjects",
+    "section_tokens",
+    "notices",
+    "safety",
+    "safety_template",
+    "policy",
+    "condition",
+    "opening",
+    "ring",
+    "counters",
+    "manifest_canonical",
+    "tools",
+    "contexts",
+  ]);
+  const codeLike =
+    /_id$|_ids$|_key$|_kind$|_code$|^(code|kind|status|state|outcome|refusal|verb|replay_class|tool|provider|ended_reason|scope|origin|purpose|reason|mode|label|raw_stop_reason|source|next|validation_result|validation_code|change_kind|cache_ttl|resolution_lease_source|family|workflow_instance_id|parent_tool_use_id|tool_use_id|media_type)$/;
+  for (const t of newTables.filter((x) => !contentTables.includes(x))) {
+    const free = columns(t)
+      .filter((c) => /^(text|jsonb|text\[\])$/.test(c.type))
+      .map((c) => c.name)
+      .filter((c) => !codeLike.test(c) && !metadata.has(c));
+    assert.deepEqual(free, [], t);
+  }
+  // run_events: no JSON at all (ADR-0041 item 36).
+  assert.ok(columns("run_events").every((c) => c.type !== "jsonb"));
+  // The content columns, by table.
+  const contentColumns = (t) =>
+    columns(t)
+      .filter((c) => /^(text|jsonb)$/.test(c.type))
+      .map((c) => c.name)
+      .filter((c) => !codeLike.test(c) && !metadata.has(c));
+  assert.deepEqual(contentColumns("run_turns"), ["input", "output"]);
+  assert.deepEqual(contentColumns("agent_run_questions"), ["question", "choices", "answer"]);
+  assert.deepEqual(contentColumns("context_checkpoints"), ["summary", "block", "content"]);
+  assert.deepEqual(contentColumns("run_plan_revisions"), ["plan"]);
+  assert.deepEqual(contentColumns("teammate_results"), ["result"]);
+  assert.deepEqual(contentColumns("result_items"), ["title", "columns"]);
+  assert.deepEqual(contentColumns("result_item_pages"), ["content"]);
+  // Derived content rows carry an audience and their source subjects (ADR-0041 item 25).
+  for (const t of ["context_checkpoints", "run_plan_revisions", "teammate_results", "result_items"])
+    for (const c of ["read_tags", "audience", "source_subjects", "taint"])
+      assert.ok(
+        columns(t).some((x) => x.name === c),
+        t + "." + c,
       );
-  assert.deepEqual(free("agent_runs"), ["manifest_canonical"]);
-  assert.deepEqual(free("run_tool_calls"), []);
-  assert.deepEqual(free("agent_model_calls"), []);
-  assert.deepEqual(free("run_turns"), ["input", "output", "tool_results", "read_tags"]);
-  assert.deepEqual(free("agent_run_questions"), ["question", "choices", "answer"]);
-  // The manifest's CHECK proves its canonical text is exactly the run's own columns.
+  // The manifest's trigger proves its canonical text is exactly the run's own columns.
+  assert.match(
+    fnBody("agent_run_guard"),
+    /NOT morrow_work\.agent_manifest_matches\(NEW\.manifest_canonical,to_jsonb\(NEW\)\)/,
+  );
   assert.match(
     tableBody("agent_runs"),
-    /CONSTRAINT agent_runs_manifest CHECK \(manifest_digest::text=morrow_work\.sha256_text\(manifest_canonical\)\s+AND morrow_work\.agent_manifest_matches\(/,
+    /CONSTRAINT agent_runs_manifest CHECK \(manifest_digest::text=morrow_work\.sha256_text\(manifest_canonical\)\)/,
   );
-  // Retention (ADR-0031 item 1): turns 90 days after the run ends (at least 90 after made),
-  // tool calls 365 days; the run end strips reasoning blocks.
-  assert.match(tableBody("run_turns"), /expires_at>=created_at\+interval '90 days'/);
-  assert.match(tableBody("run_tool_calls"), /expires_at=started_at\+interval '365 days'/);
-  const end = fnBody("morrow_work", "agent_run_end");
-  assert.match(end, /WHERE b->>'type'<>'reasoning'/);
-  assert.match(end, /expires_at=greatest\(t\.expires_at,v_now\+interval '90 days'\)/);
-  // A question's answer by: 72 hours.
-  assert.match(tableBody("agent_run_questions"), /answer_by=created_at\+interval '72 hours'/);
-  // The read definers return content inside a step only, to the runtime login alone.
-  for (const name of ["agent_run_objective", "agent_run_conversation", "agent_run_answers"])
-    assert.ok(workFunctions[name + "()"].grantees.join() === "morrow_runtime_executor", name);
 });
 
-test("catalogue v2 in SQL is the generated catalogue's, committed proposed (drift), with no money cap", () => {
+test("CHECKs are safety ranges only (ADR-0041 Values): no turn, call, question, time or money limit", () => {
+  // Turns 1 to 100,000 (a run's turns and its counter).
+  assert.match(
+    tableBody("run_turns"),
+    /^ turn integer NOT NULL CHECK \(turn BETWEEN 1 AND 100000\),$/m,
+  );
+  assert.match(
+    tableBody("agent_runs"),
+    /turns_taken bigint NOT NULL CHECK \(turns_taken BETWEEN 0 AND 100000\)/,
+  );
+  // Tool calls per turn 1 to 64: ordinals 0 to 63 and at most 64 tool_use blocks in a reply.
+  assert.match(
+    tableBody("run_tool_calls"),
+    /ordinal integer NOT NULL CHECK \(ordinal BETWEEN 0 AND 63\)/,
+  );
+  assert.match(fnBody("loop_assistant_message_valid"), /WHERE b->>'type'='tool_use'\)<=64/);
+  // max_output_tokens up to 128,000; a call budget up to 1,800,000 ms.
+  for (const t of ["agent_runs", "loop_catalogue_entries", "agent_model_calls"])
+    assert.match(
+      tableBody(t),
+      /max_output_tokens integer NOT NULL CHECK \(max_output_tokens BETWEEN 1 AND 128000\)/,
+      t,
+    );
+  for (const t of ["run_turns", "agent_model_calls"])
+    assert.match(
+      tableBody(t),
+      /budget_ms integer NOT NULL CHECK \(budget_ms BETWEEN 1000 AND 1800000\)/,
+      t,
+    );
+  assert.match(
+    tableBody("agent_runs"),
+    /call_budget_ms integer NOT NULL CHECK \(call_budget_ms BETWEEN 1000 AND 1800000\)/,
+  );
+  // A wait on a person lasts 1 to 365 days; any other at most 365 days.
+  assert.match(
+    tableBody("run_waits"),
+    /WHEN kind IN \('question','checkin','detector','credits'\)\s+THEN lapses_at IS NOT NULL AND lapses_at BETWEEN opened_at\+interval '1 day' AND opened_at\+interval '365 days'/,
+  );
+  assert.match(
+    fnBody("agent_safety_valid"),
+    /\(p#>>'\{personWait,ms\}'\)::bigint NOT BETWEEN 86400000 AND 31536000000/,
+  );
+  // The stored message (384 KiB, ContextPolicy@1's storedMessageBytes) and the reply's own
+  // stored size (H6's carry-forward N3): 4 MiB of jsonb text, twice replyStoredBytes' compact
+  // JSON, so every reply replyFit lets through fits.
+  assert.match(fnBody("loop_user_message_valid"), /octet_length\(p::text\)>393216/);
+  assert.match(fnBody("loop_assistant_message_valid"), /octet_length\(p::text\)>4194304/);
+  assert.equal(2 * replyStoredBytes, 4194304);
+  for (const row of generatedContextPolicy.versions.flatMap((v) => v.rows))
+    assert.equal(row.storedMessageBytes, 393216);
+  // No limit column anywhere: no turn, tool-call, question or wall-time limit, no final turn,
+  // no hold, booking or money cap (credits are the only budget, held by H8).
+  const gone =
+    /^ (turn_limit|max_turns_per_run|max_turns_per_coordinator_run|max_tool_calls_per_turn|max_tool_calls_per_run|max_questions_per_run|question_wait_hours|wall_time_minutes|wall_time_ms|max_input_tokens_per_turn|final|hold_usd|booked_usd|overflow_usd|worst_case_turn_usd|cost_usd|answer_by|deadline|run_cost_cap_usd|workspace_daily_cost_cap_usd) /m;
+  for (const t of newTables) assert.doesNotMatch(tableBody(t), gone, t);
+  // The credit columns of ADR-0039 PR 3 (whole credits; H8 fills them under the wallet's lock).
+  for (const c of ["credits_held", "credits_drawn", "credits_refunded", "credits_absorbed"])
+    assert.match(
+      tableBody("agent_runs"),
+      new RegExp(`^ ${c} bigint NOT NULL CHECK \\(${c} BETWEEN 0 AND 999999999999999999\\),$`, "m"),
+      c,
+    );
+  for (const c of ["credits_held", "credits_drawn"])
+    assert.match(tableBody("agent_model_calls"), new RegExp(`^ ${c} bigint CHECK`, "m"), c);
+  // No definer writes a limit ending: the old limit reasons stay in the CHECKs' enums for old
+  // records only, and no definer refuses or ends a run on a limit or on money.
+  const bodies = [...sql.matchAll(/CREATE FUNCTION morrow_work\.([a-z_]+)\(/g)]
+    .map((m) => m[1])
+    .filter((name) => !name.endsWith("_valid"))
+    .map((name) => fnBody(name))
+    .join("\n");
+  for (const reason of [
+    "turn_limit",
+    "tool_call_limit",
+    "question_limit",
+    "wall_time",
+    "deadline",
+    "credits_exhausted",
+    "cost_budget",
+    "budget_exhausted",
+    "daily_backstop",
+    "cap_below_turn",
+    "unrecovered_cost_cap",
+    "insufficient_credits",
+  ])
+    assert.ok(!bodies.includes(`'${reason}'`), reason);
+});
+
+test("the closed codes are H6's contracts (drift): end reasons, kinds, waits, events, notices, sources", () => {
+  const same = (actual, name, label = name) => assert.deepEqual(actual, contractEnum(name), label);
+  const runs = tableBody("agent_runs");
+  same(inList(runs, "ended_reason"), "AgentRunEndReason");
+  same(inList(runs, "kind"), "AgentRunKind");
+  same(inList(runs, "purpose"), "AgentRunPurpose");
+  same(inList(tableBody("agent_contexts"), "scope"), "ContextScope");
+  same(inList(tableBody("context_epochs"), "kind"), "ContextEpochKind");
+  same(inList(tableBody("run_turns"), "purpose"), "ModelCallPurpose", "run_turns.purpose");
+  same(inList(tableBody("agent_model_calls"), "purpose"), "ModelCallPurpose", "model call purpose");
+  same(inList(tableBody("run_turns"), "outcome"), "ModelTurnOutcome", "run_turns.outcome");
+  same(inList(tableBody("agent_model_calls"), "outcome"), "ModelTurnOutcome", "model call outcome");
+  same(inList(tableBody("run_tool_calls"), "outcome"), "ToolCallOutcome");
+  same(inList(tableBody("run_tool_calls"), "refusal"), "ToolRefusalCode");
+  const waits = tableBody("run_waits");
+  same(inList(waits, "kind"), "RunWaitKind");
+  same(inList(waits, "resolution_code"), "RunWaitResolution");
+  assert.deepEqual(
+    inList(waits, "resolvable_code"),
+    contractEnum("RunWaitResolution").filter((c) => !["stopped", "lapsed", "released"].includes(c)),
+  );
+  same(inList(waits, "resolution_lease_source"), "LeaseSource");
+  same(inList(tableBody("run_events"), "kind"), "RunEventKind");
+  same(inList(tableBody("teammate_results"), "outcome"), "TeammateOutcome");
+  same(inList(tableBody("teammate_results"), "next"), "TeammateNext");
+  same(inList(tableBody("result_items"), "kind"), "ResultItemKind");
+  same(inList(fnBody("harness_notices_valid"), "(n->>'code')"), "ModelNoticeCode");
+  same(inList(fnBody("loop_user_message_valid"), "(b->>'kind')"), "ModelStateKind");
+  // Every untrusted source list (data blocks, taint kinds, taint sources) is ModelUntrustedSource.
+  same(inList(fnBody("loop_user_message_valid"), "(b->>'source')"), "ModelUntrustedSource");
+  same(inList(fnBody("harness_derived_taint_valid"), "(k#>>'{}')"), "ModelUntrustedSource");
+  same(inList(tableBody("run_taint_sources"), "source"), "ModelUntrustedSource");
+  // A wait's condition names its own kind, for every kind.
+  const condition = fnBody("run_wait_condition_valid");
+  for (const kind of contractEnum("RunWaitKind")) assert.ok(condition.includes(`'${kind}'`), kind);
+});
+
+test("catalogues, the safety template and the context policy are the generated data (drift), all proposed", () => {
+  // Loop catalogue version 2: the generated digest, proposed, no limit or money column, and
+  // AgentRunSafety@1's template (without the entry's max_tokens) in place of AgentRunCaps.
   const v = generatedLoopCatalogue.versions.find((x) => x.version === 2);
   assert.equal(v.status, "proposed");
   assert.equal(generatedLoopCatalogue.activeVersion, null);
-  // The digest and the stop conditions only (ADR-0039 items 1 and 5): no run, daily,
-  // look-for-work or unrecovered-cost cap column, whatever the generated data still carries.
-  const versionRow =
-    /VALUES \(2,'proposed','([a-f0-9]{64})',([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\);/.exec(
-      sql,
-    );
-  assert.ok(versionRow);
-  const l = v.limits;
   assert.deepEqual(
-    [versionRow[1], ...versionRow.slice(2).map(Number)],
-    [
-      v.digest,
-      l.maxInputTokensPerTurn,
-      l.maxTurnsPerRun,
-      l.maxTurnsPerCoordinatorRun,
-      l.maxToolCallsPerTurn,
-      l.maxToolCallsPerRun,
-      l.maxQuestionsPerRun,
-      l.questionWaitHours,
-      l.wallTimeMinutes,
-    ],
-  );
-  const versions = tableBody("loop_catalogue_versions");
-  assert.doesNotMatch(versions, /cost_cap|usd/);
-  assert.deepEqual(
-    [...versions.matchAll(/^ ([a-z_0-9]+) /gm)].map((m) => m[1]),
+    columns("loop_catalogue_versions").map((c) => c.name),
     [
       "version",
       "status",
       "digest",
-      "max_input_tokens_per_turn",
-      "max_turns_per_run",
-      "max_turns_per_coordinator_run",
-      "max_tool_calls_per_turn",
-      "max_tool_calls_per_run",
-      "max_questions_per_run",
-      "question_wait_hours",
-      "wall_time_minutes",
+      "safety_profile_version",
+      "safety_template",
+      "safety_template_digest",
     ],
   );
-  // The models and efforts, rates in 10^-12 USD per token, the worst case rounded up.
+  const version =
+    /SELECT 2,'proposed','([a-f0-9]{64})',1,t::jsonb,morrow_work\.sha256_text\(t\)\nFROM \(VALUES \('(\{[^']*\})'\)\) v\(t\);/.exec(
+      sql,
+    );
+  assert.ok(version);
+  assert.equal(version[1], v.digest);
+  assert.equal(version[2], canonicalJson(runSafetyProfile1));
+  assert.deepEqual(JSON.parse(version[2]), JSON.parse(JSON.stringify(runSafetyProfile1)));
+  assert.match(
+    tableBody("loop_catalogue_versions"),
+    /morrow_work\.agent_safety_valid\(morrow_work\.agent_safety_compose\(safety_template,1\)\)/,
+  );
+  // The models and efforts, rates in 10^-12 USD per token (metering's prices, never a cap).
   const models = [
     ...sql.matchAll(
       /\('(claude_[a-z0-9_]+)','([a-z0-9-]+)',([0-9]+)(?:::bigint)?,([0-9]+)(?:::bigint)?,([0-9]+)(?:::bigint)?,([0-9]+)(?:::bigint)?,[0-9]\)/g,
@@ -280,120 +525,290 @@ test("catalogue v2 in SQL is the generated catalogue's, committed proposed (drif
     efforts,
     v.efforts.map((e) => [e.key, e.maxOutputTokens]),
   );
-  assert.match(
-    sql,
-    /ceil\(\(64000::numeric\*m\.cache_write\+e\.max_output_tokens::numeric\*m\.output\)\/10000\)\/100000000/,
-  );
-  // No xhigh or max (ADR-0027 item 12); nine entries; every call budget within 600 s.
-  assert.equal(loopEntries(2).length, 9);
-  assert.ok(loopEntries(2).every((e) => e.callBudgetMs <= 600_000));
-  // The SQL worst case equals the code's for every entry (what admission compares).
-  for (const e of loopEntries(2)) {
-    const m = models.find((x) => x.key === e.model).usd12PerToken;
-    const units = 64000n * BigInt(m.cacheWrite) + BigInt(e.maxOutputTokens) * BigInt(m.output);
-    const u8 = (units + 9_999n) / 10_000n;
-    assert.equal(
-      routedRunCaps(e).worstCaseTurnUsd,
-      `${u8 / 100_000_000n}.${String(u8 % 100_000_000n).padStart(8, "0")}`,
-    );
-  }
-});
-
-test("ToolCatalogue rows in SQL are the generated catalogue's: pairs, replay classes, contexts", () => {
-  const rows = [
+  // ToolCatalogue@1 version 4: each tool's family, pair, replay class and contexts.
+  const tools = [
     ...sql.matchAll(
-      /\(([0-9]+),'([a-z.]+)','([a-z._]+)','([a-z]+)','([a-z_]+)',ARRAY\[([^\]]*)\]\)/g,
+      /\(([0-9]+),'([a-z.]+)','([a-z]+)',(?:'([a-z._]+)'|NULL),(?:'([a-z]+)'|NULL),'([a-z_]+)',ARRAY\[([^\]]*)\]\)/g,
     ),
   ].map((m) => ({
     version: Number(m[1]),
     name: m[2],
-    capabilityId: m[3],
-    verb: m[4],
-    replayClass: m[5],
-    contexts: [...m[6].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]),
+    family: m[3],
+    capabilityId: m[4] ?? null,
+    verb: m[5] ?? null,
+    replayClass: m[6],
+    contexts: [...m[7].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]),
   }));
   assert.deepEqual(
-    rows,
+    tools,
     generatedToolCatalogue.tools.map((t) => ({
       version: generatedToolCatalogue.version,
       name: t.name,
+      family: t.family,
       capabilityId: t.capabilityId,
       verb: t.verb,
       replayClass: t.replayClass,
       contexts: [...t.contexts],
     })),
   );
-  // No tool has an external effect: the store change is a proposal for the gateway.
-  for (const r of rows)
-    assert.ok(["view", "propose", "execute", "delegate"].includes(r.verb), r.name);
+  // The harness and memory tools grant nothing; no tool has an external effect.
+  for (const t of tools) {
+    assert.equal(["memory", "harness"].includes(t.family), t.capabilityId === null, t.name);
+    assert.ok(
+      t.verb === null || ["view", "propose", "execute", "delegate"].includes(t.verb),
+      t.name,
+    );
+  }
+  // ContextPolicy@1 version 1: every generated row, its digest the SHA-256 of its RFC 8785
+  // text, which SQL recomputes in its CHECK; proposed, so admission takes none.
+  const policyRows = [
+    ...sql.matchAll(
+      /\(1,'(claude_[a-z0-9_]+)','([a-z]+)','(proposed|active|retired)','(\{[^']*\})'\)/g,
+    ),
+  ];
+  const generated = generatedContextPolicy.versions.find((x) => x.version === 1);
+  assert.equal(generated.status, "proposed");
+  assert.equal(generatedContextPolicy.activeVersion, null);
+  assert.deepEqual(
+    policyRows.map((m) => [m[1], m[2], m[3]]),
+    generated.rows.map((r) => [r.model, r.effort, "proposed"]),
+  );
+  for (const [i, m] of policyRows.entries()) {
+    const { digest, ...policy } = generated.rows[i];
+    assert.equal(m[4], canonicalJson(policy), m[1] + m[2]);
+    assert.equal(sha(m[4]), digest, m[1] + m[2]);
+  }
+  assert.match(
+    tableBody("context_policy_versions"),
+    /digest::text=morrow_work\.sha256_text\(morrow_work\.harness_jcs\(policy\)\)/,
+  );
+  // Admission takes only active rows of each.
+  const admit = fnBody("cmd_agent_run_admit");
+  assert.ok(
+    admit.includes(
+      "FROM morrow_work.loop_catalogue_versions y WHERE y.version=p_catalogue_version::integer AND y.status='active'",
+    ),
+  );
+  assert.ok(
+    admit.includes("AND x.model_key=p_model AND x.effort_key=p_effort AND x.status='active'"),
+  );
 });
 
-test("definers: command-owned, explicit ACLs, ids only; the runtime lookups and the broker's fence", () => {
-  // Every function has its PUBLIC revoke (in the ACL loop or by name).
+test("definers: command-owned, explicit ACLs, ids only; the runtime definers executable only by the runtime login", () => {
+  // Every function has its PUBLIC revoke and is registered with its kind and grantees.
   const looped = new Set(
     [...sql.matchAll(/p\.proname IN \(([^)]*)\)/g)].flatMap((m) =>
       [...m[1].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]),
     ),
   );
-  for (const [, schema, name] of sql.matchAll(/CREATE FUNCTION ([a-z_]+)\.([a-z_]+)\(/g))
+  for (const [, name] of sql.matchAll(/CREATE FUNCTION morrow_work\.([a-z_]+)\(/g)) {
+    assert.ok(looped.has(name), name);
     assert.ok(
-      looped.has(name) || new RegExp(`REVOKE ALL ON FUNCTION ${schema}\\.${name}\\(`).test(sql),
+      Object.keys(workFunctions).some((k) => k.startsWith(name + "(")),
       name,
     );
-  // Every new function is registered with its kind and grantees.
-  for (const [, schema, name] of sql.matchAll(/CREATE FUNCTION ([a-z_]+)\.([a-z_]+)\(/g)) {
-    const registry = schema === "morrow_vault" ? vaultFunctions : workFunctions;
-    assert.ok(
-      Object.keys(registry).some((k) => k.startsWith(name + "(")),
-      schema + "." + name,
-    );
   }
-  for (const t of newTables) assert.ok(workTables[t], t);
-  // The runtime login executes exactly the step definers the code sends.
-  const steps = Object.values(agentRunSql).map((s) => /FROM morrow_work\.([a-z_]+)\(/.exec(s)[1]);
-  for (const name of steps)
+  // The runtime definers and entry lookups: SECURITY DEFINER, owned by the command role,
+  // EXECUTE for morrow_runtime_executor alone (one GRANT), ids and codes in, ids and codes out.
+  const runtimeGrant = /GRANT EXECUTE ON FUNCTION ([^;]*) TO morrow_runtime_executor;/.exec(sql)[1];
+  const granted = [...runtimeGrant.matchAll(/morrow_work\.([a-z_]+)\(/g)].map((m) => m[1]).sort();
+  assert.deepEqual(granted, [...runtimeDefiners, ...entryLookups].sort());
+  assert.equal(sql.split("TO morrow_runtime_executor;").length, 2);
+  for (const name of [...runtimeDefiners, ...entryLookups]) {
+    const fn = fnBody(name);
+    assert.match(fn, /SECURITY DEFINER/, name);
+    assert.match(
+      sql,
+      new RegExp(`ALTER FUNCTION morrow_work\\.${name}\\([^)]*\\) OWNER TO morrow_work_command;`),
+      name,
+    );
+    const params = fn.slice(fn.indexOf("(") + 1, fn.indexOf(")"));
+    assert.match(params, /^(p_[a-z_]+ text)?(,p_[a-z_]+ text)*$/, name);
+    assert.doesNotMatch(params, /jsonb|principal|membership|actor|role|sql|lease_id/, name);
+    const registered = Object.entries(workFunctions).find(([k]) => k.startsWith(name + "("))[1];
+    assert.deepEqual(registered.grantees, ["morrow_runtime_executor"], name);
+    assert.equal(registered.kind, "runtime", name);
     assert.ok(
       executorLogins.morrow_runtime_executor.some((f) => f.startsWith("morrow_work." + name + "(")),
       name,
     );
-  assert.ok(
-    executorLogins.morrow_vault_broker.some((f) => f.startsWith("morrow_vault.agent_turn_begin(")),
-  );
-  // The step definers find their run only through the entered lease (agent_run_entered);
-  // none takes a tenant, actor or run id but the two ids-only lookups.
-  for (const name of [
-    "agent_run_start",
-    "agent_run_state",
-    "agent_run_objective",
-    "agent_run_conversation",
-    "agent_run_answers",
-    "agent_turn_open",
-    "agent_turn_settle",
-    "agent_tool_call_begin",
-    "agent_tool_call_finish",
-    "agent_question_ask",
-    "agent_run_wait",
-    "agent_run_finish",
-  ]) {
-    const fn = fnBody("morrow_work", name);
-    assert.match(fn, /morrow_work\.agent_run_entered\(\)/, name);
-    const params = fn.slice(fn.indexOf("(") + 1, fn.indexOf(")"));
-    assert.doesNotMatch(params, /organization|workspace|principal|membership|run_id|lease/, name);
   }
-  assert.deepEqual(workFunctions["agent_run_resume_lease(text,text,text)"].tenantParameters, [
-    "p_organization_id",
-    "p_workspace_id",
-  ]);
-  // The broker's fence resolves the lease (resolve_call, purpose model) under the stop
-  // interlock before it reads the run; the close needs no lease.
-  const begin = fnBody("morrow_vault", "agent_turn_begin");
+  // Those that take no tenant find their run only through the entered run lease
+  // (agent_run_entered, which also takes the run's lock); those that name a tenant check the
+  // runtime login and refuse inside a session or a lease.
+  for (const name of ["agent_run_lease_renew", "agent_run_segment_roll", "agent_run_start"])
+    assert.match(fnBody(name), /FROM morrow_work\.agent_run_entered\(\)/, name);
+  for (const name of ["agent_run_resume", "admit_upkeep_run"]) {
+    const fn = fnBody(name);
+    assert.match(fn, /work_executor_safe\('morrow_runtime_executor'\)/, name);
+    assert.match(fn, /current_setting\('morrow\.work_session_digest',true\),''\)<>''/, name);
+    assert.match(fn, /current_setting\('morrow\.work_lease_id',true\),''\)<>''/, name);
+    assert.deepEqual(
+      workFunctions[Object.keys(workFunctions).find((k) => k.startsWith(name + "("))]
+        .tenantParameters,
+      ["p_organization_id", "p_workspace_id"],
+    );
+  }
+  // The cross-tenant lists are STABLE: they read and never write or issue a lease.
+  for (const name of ["agent_run_wake_candidates", "agent_run_pending_starts"]) {
+    const fn = fnBody(name);
+    assert.match(fn, /LANGUAGE plpgsql STABLE SECURITY DEFINER/, name);
+    assert.doesNotMatch(fn, /INSERT|UPDATE|lease_open|enter_lease/, name);
+    assert.ok(workFunctions[name + "()"].crossTenant, name);
+  }
+  // The api's two commands, a person's act: EXECUTE for the api alone.
+  assert.match(
+    sql,
+    /GRANT EXECUTE ON FUNCTION morrow_work\.cmd_agent_run_admit\([a-z,\s]*\),\s+morrow_work\.cmd_agent_run_answer\(text,text,text,text,text\) TO morrow_work_api;/,
+  );
+  assert.deepEqual(
+    workFunctions[Object.keys(workFunctions).find((k) => k.startsWith("cmd_agent_run_admit("))]
+      .grantees,
+    ["morrow_work_api"],
+  );
+  // The api's statement sends exactly the definer's parameters.
+  const admitParams = fnBody("cmd_agent_run_admit")
+    .match(/\(([^)]*)\)\nRETURNS/)[1]
+    .split(",").length;
+  assert.equal(admitParams, 24);
+  assert.equal(loopStatements.cmdAgentRunAdmit.split("$").length - 1, admitParams);
+});
+
+test("the PR 11 step definers and the broker's fence are gone: H7b's runner and H7c's broker replace them", () => {
+  // The PR 11 runner's statements name definers this migration does not create (it stays off
+  // the reachable path: the agent-loop switch's harness_runner prerequisite), except its start
+  // and its two lookups, which keep their shapes.
+  const created = new Set(
+    [...sql.matchAll(/CREATE FUNCTION morrow_work\.([a-z_]+)\(/g)].map((m) => m[1]),
+  );
+  const named = Object.fromEntries(
+    Object.entries(agentRunSql).map(([k, s]) => [k, /FROM morrow_work\.([a-z_]+)\(/.exec(s)[1]]),
+  );
+  assert.deepEqual(
+    Object.entries(named)
+      .filter(([, fn]) => created.has(fn))
+      .map(([k]) => k)
+      .sort(),
+    ["pendingStarts", "resumeLease", "start"],
+  );
+  assert.deepEqual(
+    Object.values(named)
+      .filter((fn) => !created.has(fn))
+      .sort(),
+    [
+      "agent_question_ask",
+      "agent_run_answers",
+      "agent_run_conversation",
+      "agent_run_finish",
+      "agent_run_objective",
+      "agent_run_state",
+      "agent_run_wait",
+      "agent_tool_call_begin",
+      "agent_tool_call_finish",
+      "agent_turn_open",
+      "agent_turn_settle",
+    ],
+  );
+  for (const fn of [
+    "agent_runs_close_stale",
+    "agent_turn_close_uncertain",
+    "agent_turn_begin",
+    "agent_turn_end",
+  ])
+    assert.ok(!sql.includes(fn), fn);
+  // The broker's vault statements name a fence no migration creates.
+  const vault = readFileSync("apps/broker/src/vault-statements-model.ts", "utf8");
+  assert.match(vault, /morrow_vault\.agent_turn_begin\(/);
+  for (const file of manifest.migrations.map((m) => m.file))
+    assert.ok(
+      !readFileSync("migrations/" + file, "utf8").includes(
+        "FUNCTION morrow_vault.agent_turn_begin(",
+      ),
+      file,
+    );
+});
+
+test("admission is a person's act: the safety profile and pins derived in SQL, no limit or money refusal", () => {
+  const admit = fnBody("cmd_agent_run_admit");
+  for (const piece of [
+    "morrow_work.command_prelude(p_command_id,p_request_digest)",
+    "'catalogue_inactive'",
+    "'entry_not_offered'",
+    "'version_unknown'",
+    "v_safety:=morrow_work.agent_safety_compose(v.safety_template,e.max_output_tokens);",
+    "subscription_key !~ '^morrow:operator_entitlement:'",
+    "'no_billing_period'",
+    "morrow_work.lease_open('run',p_run_id,p_store_id,s.connection_id,i.id)",
+    "morrow_work.stop_active(",
+    "'routed'=ANY(t.contexts)",
+    "morrow_work.loop_tool_fields(v_tools)",
+    "'run.admitted','person_act'",
+    // The job envelope: 7 days and 24 hours active from now (the safety profile's).
+    "v_admitted+(v_safety#>>'{envelope,wallMs}')::bigint*interval '1 millisecond'",
+    // Segment 1, incarnation 1, its instance id.
+    "p_run_id||'-s1-i1'",
+  ])
+    assert.ok(admit.includes(piece), piece);
+  for (const gone of [
+    "turn_limit",
+    "hold",
+    "worst_case",
+    "daily",
+    "unrecovered",
+    "wall_time",
+    "agent_runs_close_stale",
+  ])
+    assert.ok(!admit.includes(gone), gone);
+  // It writes the job, its context (one writer, one per job and agent), the run and segment 1.
+  for (const table of ["jobs", "agent_contexts", "agent_runs", "run_segments"])
+    assert.ok(admit.includes("INSERT INTO morrow_work." + table + "("), table);
+  assert.match(
+    sql,
+    /CREATE UNIQUE INDEX agent_runs_one_writer ON morrow_work\.agent_runs \(organization_id,workspace_id,context_id\)\s+WHERE status IN \('queued','running','waiting'\);/,
+  );
+  assert.match(
+    sql,
+    /CREATE UNIQUE INDEX agent_contexts_one_per_job_agent ON morrow_work\.agent_contexts/,
+  );
+  assert.match(
+    sql,
+    /CREATE UNIQUE INDEX run_waits_one_open ON morrow_work\.run_waits \(organization_id,workspace_id,run_id\) WHERE state IN \('open','resolvable'\);/,
+  );
+  // Only routed and upkeep runs are written here: mandate, call, review, coordinator (forks)
+  // and standing-request runs are admitted by later rows' definers (H10, H11, H17, ADR-0024's).
+  const kinds = [
+    ...sql.matchAll(
+      /INSERT INTO morrow_work\.agent_runs\([^)]*\)\s+VALUES \([^,]*,[^,]*,[^,]*,1,'([a-z]+)'/g,
+    ),
+  ].map((m) => m[1]);
+  assert.deepEqual(kinds.sort(), ["routed", "upkeep"]);
+  for (const fn of [
+    "admit_mandate_agent_run",
+    "admit_standing_request_run",
+    "agent_call_admit",
+    "admit_review_run",
+  ])
+    assert.ok(!sql.includes(fn), fn);
+  // source_inbox_id and conversation_id land without their foreign keys: P07.T03's
+  // conversations and conversation_inbox have not landed (plan row H4).
+  assert.match(tableBody("agent_runs"), /^ source_inbox_id morrow_work\.record_id,$/m);
+  assert.doesNotMatch(sql, /REFERENCES morrow_work\.(conversations|conversation_inbox|messages)/);
+});
+
+test("ADR-0041 item 7's lease sources: renewal, wait resolution, upkeep admission, the sweep, the answer", () => {
+  // Per-step renewal: superseded first (no write), admission's checks again, the envelope's
+  // expiry checks the run in, any other failure ends it; a new lease <run>:l<n>; the entered
+  // one released.
+  const renew = fnBody("agent_run_lease_renew");
   const order = [
-    "work_executor_safe('morrow_vault_broker')",
-    "pg_advisory_xact_lock_shared",
-    "morrow_vault.resolve_call(p_lease_id,p_generation,'model'",
-    "morrow.vault_agent_run",
-    "INSERT INTO morrow_work.agent_model_calls",
-  ].map((n) => begin.indexOf(n));
+    "'superseded'",
+    "morrow_work.agent_run_admission_check(e.organization_id,e.workspace_id,e.run_id,false)",
+    "IF v_reason='envelope_expired' THEN",
+    '\'checkin\',\'{"kind":"checkin","code":"envelope"}\'::jsonb',
+    "morrow_work.agent_run_end(e.organization_id,e.workspace_id,e.run_id,'cancelled',v_reason)",
+    "e.run_id||':l'||(r.lease_renewals+1)",
+    "v_end:=morrow_work.lease_release();",
+  ].map((p) => renew.indexOf(p));
   assert.ok(
     order.every((i) => i > 0),
     JSON.stringify(order),
@@ -402,294 +817,125 @@ test("definers: command-owned, explicit ACLs, ids only; the runtime lookups and 
     [...order].sort((a, b) => a - b),
     order,
   );
-  const end = fnBody("morrow_vault", "agent_turn_end");
-  assert.doesNotMatch(end, /resolve_call/);
-  // Never promoted: an uncertain close books the worst case, a late close is already_closed.
-  assert.match(end, /IF v_outcome='uncertain' THEN v_cost:=r\.worst_case_turn_usd;/);
-  assert.match(end, /'already_closed'/);
-  // Admission: the switch is the Worker's; SQL takes only an active catalogue version and
-  // derives the caps, the hold, the envelope's pairs and the billing facts itself.
-  const admit = fnBody("morrow_work", "cmd_agent_run_admit");
+  // Wait resolution: never a question; refused with no write past the envelope; the lease
+  // entered, then admission's checks, then the wait resolved with its lease source.
+  const resume = fnBody("agent_run_resume");
+  const steps = [
+    "w.kind='question' THEN NULL",
+    "RETURN QUERY SELECT 'envelope_expired'",
+    "INSERT INTO morrow_work.work_leases",
+    "morrow_work.enter_lease(v_lease,'1')",
+    "morrow_work.agent_run_admission_check(p_organization_id,p_workspace_id,p_run_id,false)",
+    "resolution_lease_source='wait_resume'",
+  ].map((p) => resume.indexOf(p));
+  assert.ok(
+    steps.every((i) => i > 0),
+    JSON.stringify(steps),
+  );
+  assert.deepEqual(
+    [...steps].sort((a, b) => a - b),
+    steps,
+  );
+  // Upkeep admission: one pending trigger, the requester's lease entered first, the upkeep
+  // tool set fixed in SQL, the trigger skipped when the agent is no longer active.
+  const upkeep = fnBody("admit_upkeep_run");
   for (const piece of [
-    "y.status='active'",
-    "'catalogue_inactive'",
-    "subscription_key !~ '^morrow:operator_entitlement:'",
-    "'no_billing_period'",
-    "morrow_work.agent_runs_close_stale(",
-    "morrow_work.lease_open('run'",
+    "'admitted_before'",
+    "v_run||':u:'||p_trigger_id",
+    "ARRAY['notebook.write','memory.search','memory.read','run.complete']",
+    "ARRAY['memory.read','run.complete']",
+    "SET state='skipped'",
+    "'run.admitted','upkeep_admission'",
+  ])
+    assert.ok(upkeep.includes(piece), piece);
+  assert.match(sql, /CREATE UNIQUE INDEX upkeep_triggers_one_open ON morrow_work\.upkeep_triggers/);
+  // The sweep lists one action per open run and issues no lease: resume, check_in, lapse,
+  // close_lapsed (a lease expired unrenewed) and wake (only while the lease is unexpired).
+  const sweep = fnBody("agent_run_wake_candidates");
+  for (const action of ["'lapse'", "'check_in'", "'resume'", "'close_lapsed'", "'wake'"])
+    assert.ok(sweep.includes(action), action);
+  assert.match(
+    sweep,
+    /a\.status='running' AND a\.lease_expires_at>pg_catalog\.clock_timestamp\(\)/,
+  );
+  // The requester's answer: a person's act that resumes the run and renews its envelope.
+  const answer = fnBody("cmd_agent_run_answer");
+  for (const piece of [
+    "morrow_work.agent_run_admission_check(p.organization_id,p.workspace_id,r.id,true)",
+    "morrow_work.lease_open('run',r.id||':w'||w.wait_sequence",
+    "resolution_lease_source='person_act'",
+    "envelope_active_base_ms=x.active_ms",
+  ])
+    assert.ok(answer.includes(piece), piece);
+  // Segment rolls: <run>-s<segment+1>-i<incarnation>, replay-safe, another incarnation superseded.
+  const roll = fnBody("agent_run_segment_roll");
+  for (const piece of [
+    "'rolled_before'",
+    "'superseded'",
+    "e.run_id||'-s'||v_next||'-i'||r.incarnation",
+  ])
+    assert.ok(roll.includes(piece), piece);
+  assert.match(
+    tableBody("agent_runs"),
+    /CHECK \(workflow_instance_id=id::text\|\|'-s'\|\|segment\|\|'-i'\|\|incarnation\)/,
+  );
+  // Admission's checks: the member, the envelope, stops, the installation and release, the
+  // tasks and the delegation envelope and hop.
+  const check = fnBody("agent_run_admission_check");
+  for (const piece of [
+    "morrow_identity.work_lease_member_current(",
+    "'envelope_expired'",
     "morrow_work.stop_active(",
-    "'routed'=ANY(t.contexts)",
-    "v_turn_limit:=v.max_turns_per_run;",
-    "v_hold:=v_turn_limit*e.worst_case_turn_usd;",
+    "x.status='published'",
+    "'task_closed'",
+    "FROM morrow_work.work_envelopes x",
+    "FROM morrow_work.delegation_hops x",
   ])
-    assert.ok(admit.includes(piece), piece);
+    assert.ok(check.includes(piece), piece);
 });
 
-test("ADR-0039: no money cap in admission or at a turn's open; the stop conditions stay", () => {
-  // Admission counts no daily backstop or unrecovered cost and refuses nothing for money: it
-  // reads no listings reservation, booking or unrecovered ledger and takes no run_reserve lock.
-  const admit = code(fnBody("morrow_work", "cmd_agent_run_admit"));
-  for (const gone of [
-    "'cap_below_turn'",
-    "'daily_backstop'",
-    "'unrecovered_cost_cap'",
-    "run_cost_cap_usd",
-    "workspace_daily_cost_cap_usd",
-    "workspace_period_unrecovered_cost_cap_usd",
-    "vendor_cost_reservations",
-    "run_cost_bookings",
-    "unrecovered_costs",
-    "morrow.billing.run_reserve",
+test("retention: content on its epoch's 90-day clock, content-free records 365 days", () => {
+  for (const t of [
+    "context_checkpoints",
+    "run_turns",
+    "run_plan_revisions",
+    "teammate_results",
+    "result_items",
+    "result_item_pages",
   ])
-    assert.ok(!admit.includes(gone), gone);
-  assert.doesNotMatch(sql, /run_cost_cap_usd|workspace_daily_cost_cap_usd|unrecovered_cost/);
-  // A turn's open and the broker's fence check the turn limit, the wall time, the attempt and
-  // the fence; neither stops for the run's hold left or its overflow, and `final` is the
-  // limit's (a step's own overflow still stops: the next test).
-  const open = code(fnBody("morrow_work", "agent_turn_open"));
-  const begin = code(fnBody("morrow_vault", "agent_turn_begin"));
-  for (const fn of [open, begin]) {
-    assert.doesNotMatch(fn, /hold_usd|booked_usd|r\.overflow_usd/);
-    assert.match(fn, /turn_limit/);
-  }
-  assert.match(open, /'stop'::text,'turn_limit'::text/);
-  assert.match(open, /'stop'::text,'wall_time'::text/);
+    assert.match(tableBody(t), /expires_at>=created_at\+interval '90 days'/, t);
   assert.match(
-    open,
-    /IF \(p_final='true'\)<>\(v_turn>=r\.turn_limit\) THEN\s+RETURN QUERY SELECT 'invalid'/,
+    tableBody("agent_run_questions"),
+    /CHECK \(expires_at>=created_at\+interval '90 days'\)/,
   );
-  // Every counted turn is still booked, an uncertain one at its worst case, and what passes
-  // the run's hold is overflow: recorded, never dropped (and never a stop by itself).
-  const end = fnBody("morrow_vault", "agent_turn_end");
-  assert.match(end, /v_booked:=least\(v_cost,greatest\(r\.hold_usd-r\.booked_usd,0\)\);/);
-  assert.match(end, /v_overflow:=v_cost-v_booked;/);
-  assert.match(end, /overflow_usd=x\.overflow_usd\+v_overflow/);
-  // The prerequisite: no loop run before the shared wallet's credit holds (ADR-0039 PR 3).
-  assert.ok(agentLoopPrerequisites.includes("shared_wallet"));
-  assert.ok(!agentLoopPrerequisites.includes("shared_daily_backstop"));
+  assert.match(
+    fnBody("agent_run_question_guard"),
+    /NEW\.expires_at<>NEW\.created_at\+interval '90 days'/,
+  );
+  assert.match(tableBody("context_epochs"), /expires_at>=closed_at\+interval '90 days'/);
+  for (const [t, clock] of [
+    ["run_tool_calls", "expires_at=started_at+interval '365 days'"],
+    ["run_waits", "expires_at=opened_at+interval '365 days'"],
+    ["run_events", "expires_at=at+interval '365 days'"],
+    ["run_segments", "expires_at=started_at+interval '365 days'"],
+    ["run_taint_sources", "expires_at=joined_at+interval '365 days'"],
+    ["run_memory_reads", "expires_at=read_at+interval '365 days'"],
+    ["upkeep_triggers", "expires_at=created_at+interval '365 days'"],
+    ["run_detector_state", "expires_at>=updated_at+interval '365 days'"],
+    ["jobs", "expires_at=ended_at+interval '365 days'"],
+    ["agent_calls", "expires_at=ended_at+interval '365 days'"],
+  ])
+    assert.ok(tableBody(t).includes(clock), t);
+  // Thinking goes when it stops being sent: a turn's reply may lose only its reasoning blocks.
+  assert.match(fnBody("run_turn_guard"), /WHERE b->>'type'<>'reasoning'/);
 });
 
-test("ADR-0039 item 9 (review F1 of 2026-10-26): a step booked past its own hold ends the run cost_budget", () => {
-  // A step overflow: a counted call, not uncertain, whose cost passed the worst-case turn (the
-  // step's own hold). An uncertain call is booked at exactly the worst case, so never one.
-  const stepOverflow = "x.counted AND x.outcome<>'uncertain' AND x.cost_usd>r.worst_case_turn_usd";
-  // The close books it in full and returns the flag; the run-wide overflow stays a record.
-  const end = fnBody("morrow_vault", "agent_turn_end");
-  assert.match(
-    end,
-    /RETURNS TABLE\(outcome text,recorded_outcome text,cost_usd text,overflow boolean,step_overflow boolean\)/,
-  );
-  const counted = end.slice(
-    end.indexOf(" IF v_counted THEN"),
-    end.indexOf("UPDATE morrow_work.agent_model_calls x SET status='closed'"),
-  );
-  assert.match(
-    counted,
-    /v_step_overflow:=v_outcome<>'uncertain' AND v_cost>r\.worst_case_turn_usd;/,
-  );
-  assert.match(end, /cost_usd=v_cost,/);
-  assert.match(end, /v_overflow>0,\s+v_step_overflow;/);
-  // The run's state carries it to the code (turnCaps and the reply's check end the run).
-  const state = fnBody("morrow_work", "agent_run_state");
-  assert.match(state, /prefix_digest text,step_overflow text\)/);
-  assert.ok(state.includes(stepOverflow + ")::text;"), "state");
-  assert.match(
-    agentRunSql.state,
-    /,prefix_digest,step_overflow FROM morrow_work\.agent_run_state\(\)$/,
-  );
-  // A turn's open stops cost_budget after a replayed open's answer and before either
-  // attempt's checks: no attempt opens once a step overflowed.
-  const open = fnBody("morrow_work", "agent_turn_open");
-  const at = open.indexOf(stepOverflow);
-  assert.ok(at > open.indexOf("'opened_before'"), "after the replayed open");
-  assert.ok(at < open.indexOf(" IF v_attempt=1 THEN"), "before the attempt checks");
-  assert.ok(at < open.indexOf("INSERT INTO morrow_work.run_turns"), "before the insert");
-  assert.match(
-    open.slice(at),
-    /^x\.counted AND x\.outcome<>'uncertain' AND x\.cost_usd>r\.worst_case_turn_usd\) THEN\s+RETURN QUERY SELECT 'stop'::text,'cost_budget'::text; RETURN;/,
-  );
-  assert.equal(open.split("'cost_budget'").length, 2);
-  // The broker's fence refuses a new call after it (defence in depth: nothing is sent).
-  const begin = fnBody("morrow_vault", "agent_turn_begin");
-  const fence = begin.indexOf(stepOverflow);
-  assert.ok(fence > 0 && fence < begin.indexOf("INSERT INTO morrow_work.agent_model_calls"));
-  assert.match(begin.slice(fence), /^[^;]*\) THEN v_outcome:='cost_budget';/);
-  // Nothing else in the migration stops a run for money: the other two are the end reason's
-  // CHECK and agent_run_finish's closed list.
-  assert.equal(sql.split("'cost_budget'").length - 1, 4);
-});
-
-test("review fixes: settle before a resend, a replayable wait, the uncounted call, the scope, one open question", () => {
-  // F1: attempt 2 books an expired open call of attempt 1 as uncertain before it checks
-  // attempt 1's outcome (defence in depth: the runner settles against SQL first).
-  const open = fnBody("morrow_work", "agent_turn_open");
-  const attempt2 = open.slice(open.indexOf(" ELSE\n"), open.indexOf("v_now:=morrow_work.db_now()"));
-  assert.match(
-    attempt2,
-    /x\.attempt=1 AND x\.status='started'\s+AND x\.started_at\+make_interval\(secs=>x\.budget_ms\/1000\.0\+60\)<=pg_catalog\.clock_timestamp\(\) LOOP\s+PERFORM morrow_work\.agent_turn_close_uncertain\(/,
-  );
-  assert.ok(
-    attempt2.indexOf("agent_turn_close_uncertain") < attempt2.indexOf("x.outcome='uncertain'"),
-  );
-  // F2: the lookup names an open run's status, a waiting run's too, and the runtime login
-  // reads exactly the open runs.
-  const lookup = fnBody("morrow_work", "agent_run_resume_lease");
-  assert.match(lookup, /RETURNS TABLE\(lease_id text,generation text,status text\)/);
-  assert.match(lookup, /a\.status IN \('queued','running','waiting'\)/);
-  assert.match(
-    sql,
-    /CREATE POLICY runtime_agent_open ON morrow_work\.agent_runs FOR SELECT TO morrow_work_command\s+USING \(session_user=''morrow_runtime_executor'' AND status IN \(''queued'',''running'',''waiting''\)\)/,
-  );
-  // F3: a call is born counted or not; an unfinished uncounted call is refused again, never
-  // resumed, and can only finish refused with its code.
-  const calls = tableBody("run_tool_calls");
-  assert.match(calls, /^ counted boolean NOT NULL,$/m);
-  assert.match(
-    calls,
-    /CONSTRAINT run_tool_calls_counted CHECK \(counted OR outcome IS NULL OR \(outcome='refused' AND refusal IN \('not_offered','tool_call_limit'\)\)\)/,
-  );
-  const begin = fnBody("morrow_work", "agent_tool_call_begin");
-  const replayed = begin.slice(
-    begin.indexOf(" IF FOUND THEN"),
-    begin.indexOf("SELECT x.capability_id"),
-  );
-  assert.ok(
-    replayed.indexOf("IF c.outcome IS NULL AND NOT c.counted THEN") > 0 &&
-      replayed.indexOf("IF c.outcome IS NULL AND NOT c.counted THEN") <
-        replayed.indexOf("'resumed'"),
-  );
-  assert.match(
-    replayed,
-    /RETURN QUERY SELECT 'refuse'::text,CASE WHEN NOT p_tool=ANY\(r\.tools\) THEN 'not_offered' ELSE 'tool_call_limit' END/,
-  );
-  assert.match(begin, /p_input_digest,\s+v_refusal IS NULL,NULL,NULL/);
-  // F4: the envelope's and the hop's scope fields are the offered tools' (drift: the SQL
-  // map is authority.ts's toolFieldScopes, entry for entry).
-  const fields = fnBody("morrow_work", "loop_tool_fields");
-  const map = Object.fromEntries(
-    [...fields.matchAll(/WHEN '([a-z.]+)' THEN ARRAY\[([^\]]*)\]/g)].map((m) => [
-      m[1],
-      [...m[2].matchAll(/'([^']+)'/g)].map((x) => x[1]),
-    ]),
-  );
-  assert.deepEqual(map, toolFieldScopes);
-  assert.match(fields, /ELSE ARRAY\[\]::text\[\] END/);
-  assert.match(fields, /ORDER BY q\.f COLLATE "C"/);
-  const admit = fnBody("morrow_work", "cmd_agent_run_admit");
-  assert.match(
-    admit,
-    /v_scope:=jsonb_set\(morrow_work\.listings_scope\(p\.organization_id,p\.workspace_id,p_store_id,s\.connection_id\),'\{fields\}',\s+morrow_work\.loop_tool_fields\(v_tools\)\);/,
-  );
-  assert.equal(admit.match(/v_scope:=/g).length, 1);
-  assert.deepEqual(workFunctions["loop_tool_fields(text[])"], {
-    kind: "check",
-    grantees: ["morrow_work_command"],
-  });
-  // F6: at most one open question per run, in the definer and as a unique index.
-  const ask = fnBody("morrow_work", "agent_question_ask");
-  assert.match(
-    ask,
-    /IF r\.questions_asked>=r\.questions_limit OR EXISTS\(SELECT 1 FROM morrow_work\.agent_run_questions x WHERE x\.organization_id=r\.organization_id\s+AND x\.workspace_id=r\.workspace_id AND x\.run_id=r\.id AND x\.status='open'\) THEN\s+RETURN QUERY SELECT 'question_limit'/,
-  );
-  assert.match(ask, /WHEN unique_violation THEN RETURN QUERY SELECT 'question_limit'/);
-  assert.match(
-    sql,
-    /CREATE UNIQUE INDEX agent_run_questions_one_open ON morrow_work\.agent_run_questions \(organization_id,workspace_id,run_id\) WHERE status='open';/,
-  );
-});
-
-test("review R1: a turn attempt's caps are fixed at its open and the fence takes them", () => {
-  // R1: each attempt carries the caps it was opened with, never changed afterwards.
-  const turns = tableBody("run_turns");
-  assert.match(turns, /^ final boolean NOT NULL,$/m);
-  assert.match(
-    turns,
-    /^ budget_ms integer NOT NULL CHECK \(budget_ms BETWEEN 1000 AND 600000\),$/m,
-  );
-  const turnGuard = fnBody("morrow_work", "run_turn_guard");
-  const turnMutable = /v_mutable text\[\]:=ARRAY\[([^\]]*)\]/.exec(turnGuard)[1];
-  for (const column of ["final", "budget_ms", "input", "input_digest"])
-    assert.ok(!turnMutable.includes("'" + column + "'"), column);
-  const turnUpdate =
-    /GRANT UPDATE \(([^)]*)\) ON morrow_work\.run_turns TO morrow_work_command;/.exec(sql)[1];
-  for (const column of ["final", "budget_ms"])
-    assert.ok(!turnUpdate.split(",").includes(column), column);
-  // The open stores them; the same input and caps again is opened_before, other caps a
-  // conflict; a new attempt's final must be SQL's own derivation (the last turn the limit
-  // allows).
-  const open = fnBody("morrow_work", "agent_turn_open");
-  assert.match(
-    open,
-    /^CREATE FUNCTION morrow_work\.agent_turn_open\(p_turn text,p_attempt text,p_final text,p_budget_ms text,p_input text,p_input_digest text,\s+p_untrusted text,p_read_tags text\)/,
-  );
-  assert.match(
-    open,
-    /CASE WHEN t\.input_digest=p_input_digest AND t\.final=\(p_final='true'\) AND t\.budget_ms=v_budget THEN 'opened_before'\s+ELSE 'conflict' END/,
-  );
-  assert.match(
-    open,
-    /IF \(p_final='true'\)<>\(v_turn>=r\.turn_limit\) THEN\s+RETURN QUERY SELECT 'invalid'/,
-  );
-  assert.match(open, /p_untrusted='true',p_final='true',v_budget,NULL,NULL,/);
-  // The found row is answered before any cap is checked again (a replayed step).
-  assert.ok(open.indexOf("'opened_before'") < open.indexOf("'turn_limit'"));
-  assert.ok(open.indexOf("'opened_before'") < open.indexOf("'wall_time'"));
-  assert.match(
-    fnBody("morrow_work", "agent_run_conversation"),
-    /RETURNS TABLE\(turn text,attempt text,final text,budget_ms text,input text,/,
-  );
-  assert.match(agentRunSql.conversation, /^SELECT turn,attempt,final,budget_ms,input,/);
-  // The broker's fence takes the attempt as opened: its final and budget, or turn_state.
-  assert.match(
-    fnBody("morrow_vault", "agent_turn_begin"),
-    /OR v_turn<>r\.turns_taken OR t\.final<>\(p_final='true'\)\s+OR t\.budget_ms<>v_budget THEN v_outcome:='turn_state';/,
-  );
-});
-
-test("review R3: every loop table holding content is on run_turns' clock, the questions too", () => {
-  // Every loop table holding content (the registry's class workspace) has run_turns' clock:
-  // a non-null expiry, at least 90 days after it is made, moved by the run's end to 90 days
-  // after it.
-  const end = fnBody("morrow_work", "agent_run_end");
-  const content = newTables.filter((t) => workTables[t].content === "workspace");
-  assert.deepEqual(content, ["run_turns", "agent_run_questions"]);
-  for (const t of content) {
-    const body = tableBody(t);
-    assert.match(
-      body,
-      /^ expires_at timestamptz NOT NULL CHECK \(expires_at=date_trunc\('milliseconds',expires_at\) AND isfinite\(expires_at\)\),$/m,
-      t,
-    );
-    assert.match(body, /expires_at>=created_at\+interval '90 days'/, t);
-    const alias = t === "run_turns" ? "t" : "q";
-    assert.ok(end.includes(`expires_at=greatest(${alias}.expires_at,v_now+interval '90 days')`), t);
-  }
-  // Every question of the run (answered ones too) moves with the run's end; an open one is
-  // also closed.
-  const questionsEnd = end.slice(end.indexOf("UPDATE morrow_work.agent_run_questions"));
-  assert.match(
-    questionsEnd,
-    /^UPDATE morrow_work\.agent_run_questions q SET status=CASE WHEN q\.status<>'open' THEN q\.status WHEN q\.answer_by<=v_now THEN 'expired'\s+ELSE 'cancelled' END,expires_at=greatest\(q\.expires_at,v_now\+interval '90 days'\)\s+WHERE q\.organization_id=p_org AND q\.workspace_id=p_ws AND q\.run_id=p_run_id;/,
-  );
-  // Born 90 days after it is asked; the expiry only moves later; the command role may move it.
-  assert.match(
-    fnBody("morrow_work", "agent_question_ask"),
-    /created_at,answer_by,answered_at,expires_at\)\s+VALUES \([^;]*v_now,\s+v_now\+interval '72 hours',NULL,v_now\+interval '90 days'\);/,
-  );
-  const questionGuard = fnBody("morrow_work", "agent_run_question_guard");
-  assert.match(questionGuard, /'resume_lease_id','answered_at',\s+'expires_at'\]/);
-  assert.match(questionGuard, /NEW\.expires_at<>NEW\.created_at\+interval '90 days'/);
-  assert.match(questionGuard, /OR NEW\.expires_at<OLD\.expires_at/);
-  assert.match(
-    sql,
-    /GRANT UPDATE \(status,answer,answered_by_principal_id,answered_by_membership_id,resume_lease_id,answered_at,expires_at\)\s+ON morrow_work\.agent_run_questions TO morrow_work_command;/,
-  );
-});
-
-test("the agent-loop switch record is committed off with every prerequisite unrecorded", () => {
+test("the agent-loop switch record is committed off with every prerequisite unrecorded, harness_runner among them", () => {
   const record = JSON.parse(readFileSync("docs/decisions/agent-loop-staging.json", "utf8"));
   assert.equal(record.switch, "off");
   assert.equal(record.workflow, "agent-run@1");
   assert.deepEqual(Object.keys(record.prerequisites).sort(), [...agentLoopPrerequisites].sort());
+  assert.ok(agentLoopPrerequisites.includes("harness_runner"));
   assert.ok(Object.values(record.prerequisites).every((p) => p === null));
+  assert.match(record.scope, /harness_runner: plan row H7b's runner/);
 });
