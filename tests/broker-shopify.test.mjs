@@ -735,8 +735,9 @@ test("install: a relaunch re-authorises the same installation with the next cred
 
 // Plan row SD12 (ADR-0043 item 8): the shop's zone from ShopIdentity, recorded in the store
 // transaction at the install ("install") and at each re-authorisation ("reauthorise"), for the
-// installation the prepare named; a zone off the closed list records nothing and the install
-// goes on; an answer outside the zone record's closed outcomes refuses, as any vault reply does.
+// installation the prepare named (the database maps it onto the closed list); a value that is
+// not zone-shaped records nothing and the install goes on; an answer outside the zone record's
+// closed outcomes refuses, as any vault reply does.
 test("install: the shop's zone is recorded in the store transaction at the install and each re-authorisation", async () => {
   const h = await harness({ ianaTimezone: "Asia/Calcutta" });
   for (const expected of ["installed", "reauthorised"]) {
@@ -748,8 +749,8 @@ test("install: the shop's zone is recorded in the store transaction at the insta
     assert.equal(result.outcome, expected);
   }
   assert.deepEqual(h.db.zones, [
-    ["11111111-1111-4111-8111-111111111111", "Asia/Kolkata", "install"],
-    ["11111111-1111-4111-8111-111111111111", "Asia/Kolkata", "reauthorise"],
+    ["11111111-1111-4111-8111-111111111111", "Asia/Calcutta", "install"],
+    ["11111111-1111-4111-8111-111111111111", "Asia/Calcutta", "reauthorise"],
   ]);
   // One transaction: the zone follows the store, with nothing between them.
   assert.deepEqual(h.db.events.slice(0, 6), [
@@ -760,8 +761,8 @@ test("install: the shop's zone is recorded in the store transaction at the insta
     "store",
     "zone",
   ]);
-  // A zone the list does not know (or none) records nothing; the install goes on.
-  for (const ianaTimezone of ["Mars/Olympus_Mons", undefined]) {
+  // A value that is not zone-shaped (or none) records nothing; the install goes on.
+  for (const ianaTimezone of ["Europe London", 7, undefined]) {
     const u = await harness({ ianaTimezone });
     const state = newState();
     openState(u.db, state);

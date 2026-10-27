@@ -15,15 +15,13 @@
 //     use). An expiring reply (expires_in, refresh_token or refresh_token_expires_in) or an
 //     online one (associated_user) is refused with its own closed reason, never stored.
 //   * Fixed Admin GraphQL documents (API version 2026-10): ShopIdentity at the install (with
-//     the shop's ianaTimezone since plan row SD12, mapped onto the closed zone list), and
+//     the shop's ianaTimezone since plan row SD12, a closed zone-shaped name), and
 //     M2 PR-3's reads (shopifyReadDocuments: the shop identity, a collections page, a
 //     products page, one collection's products page and one product's listing fields).
 // Replies are bounded, redirects are never followed, and every failure is a fixed code:
 // no provider text, token, secret or value reaches a log, an error or a verdict. Refusals
 // carry a closed `reason` (fix-shopify-install-live) that the broker's stage line names;
 // `kind` alone decides every outcome.
-
-import { canonicalTimeZone } from "../../../packages/contracts/src/time-zones.js";
 
 export const shopifyApiVersion = "2026-10";
 export const shopifyRequestedScopes = Object.freeze(["read_products", "write_products"] as const);
@@ -32,8 +30,14 @@ export const shopifyShopIdentityDocument =
 export const shopifyReplyMaxBytes = 65536;
 
 const encoder = new TextEncoder();
-/** Shopify's ianaTimezone on the closed zone list (an old spelling mapped), or null. */
-export const shopifyZoneOf = (value: unknown): string | null => canonicalTimeZone(value);
+/**
+ * Shopify's ianaTimezone as a closed input: a zone-shaped name of at most 64 characters, or
+ * null. The database maps it onto the closed zone list (morrow_work.time_zone_canonical, an
+ * old spelling such as Asia/Calcutta to its zone) and records nothing for a name off the list.
+ */
+const shopifyZonePattern = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+){0,2}$/;
+export const shopifyZoneOf = (value: unknown): string | null =>
+  typeof value === "string" && value.length <= 64 && shopifyZonePattern.test(value) ? value : null;
 /** The zone record's closed outcomes (morrow_vault.shopify_zone_record; plan row SD12). */
 export const shopifyZoneRecordOutcomes = Object.freeze([
   "recorded",
@@ -485,9 +489,9 @@ export type ShopifyIdentity =
       domain: string;
       development: boolean;
       /**
-       * The shop's zone (plan row SD12; ADR-0043 item 8) on the closed list, or null when the
-       * reply has none the list knows: the install never fails for it, and the daily health
-       * read asks again.
+       * The shop's zone (plan row SD12; ADR-0043 item 8) as a zone-shaped name, or null when
+       * the reply has none: the install never fails for it, and the daily health read asks
+       * again. The database maps it onto the closed list.
        */
       ianaTimezone: string | null;
     }>
@@ -536,7 +540,7 @@ export async function readShopifyIdentity(
 // v1 PR 5 (ADR-0025 item 10): the installation's granted scopes, read back with its own token
 // (deliveries of app/scopes_update can arrive out of order). One fixed Admin GraphQL document
 // with no variables; the reply keeps only the scope handles and (plan row SD12, ADR-0043 item
-// 8: the daily health read) the shop's ianaTimezone, mapped onto the closed zone list.
+// 8: the daily health read) the shop's ianaTimezone as a zone-shaped name.
 export const shopifyAccessScopesDocument =
   "query AccessScopes { currentAppInstallation { accessScopes { handle } } shop { ianaTimezone } }";
 export const shopifyAccessScopesMaxBytes = 16384;

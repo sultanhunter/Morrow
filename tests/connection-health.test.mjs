@@ -639,8 +639,9 @@ test("readShopifyAccessScopes: one fixed document; sorted unique handles, a 401 
     scopes: [],
     ianaTimezone: null,
   });
-  // Plan row SD12: the same document reads the shop's zone (mapped onto the closed list); a
-  // zone the list does not know is null and never makes the scopes unavailable.
+  // Plan row SD12: the same document reads the shop's zone (a closed zone-shaped name; the
+  // database maps it onto the list); any other value is null and never makes the scopes
+  // unavailable.
   assert.match(shopifyAccessScopesDocument, /shop \{ ianaTimezone \}/);
   const zoned = (ianaTimezone) => ({
     data: {
@@ -648,9 +649,9 @@ test("readShopifyAccessScopes: one fixed document; sorted unique handles, a 401 
       shop: { ianaTimezone },
     },
   });
-  assert.equal((await read(zoned("Asia/Calcutta"))).r.ianaTimezone, "Asia/Kolkata");
+  assert.equal((await read(zoned("Asia/Calcutta"))).r.ianaTimezone, "Asia/Calcutta");
   assert.equal((await read(zoned("Europe/London"))).r.ianaTimezone, "Europe/London");
-  assert.deepEqual((await read(zoned("Mars/Olympus_Mons"))).r, {
+  assert.deepEqual((await read(zoned("Europe London"))).r, {
     kind: "scopes",
     scopes: ["read_products"],
     ianaTimezone: null,
@@ -854,7 +855,7 @@ test("plan row SD12: the read-back records the shop's zone with the scopes, for 
         : text === vaultStatements.shopifyZoneRecord
           ? "zone"
           : "other";
-  // Recorded: the zone (an old spelling mapped) follows the record of the scopes.
+  // Recorded: the zone follows the record of the scopes (the database maps Asia/Calcutta).
   const ok = await checkerHarness({ reply: zoned("Asia/Calcutta") });
   assert.equal(
     decodeShopifyConnectionCheck(await ok.checker.check(env, installationId, 8000)),
@@ -865,7 +866,7 @@ test("plan row SD12: the read-back records the shop's zone with the scopes, for 
     [
       ["resolve", [installationId]],
       ["record", [installationId, "3", "7", "observed", '["read_products"]']],
-      ["zone", [installationId, "Asia/Kolkata", "health"]],
+      ["zone", [installationId, "Asia/Calcutta", "health"]],
     ],
   );
   assert.equal(
@@ -881,9 +882,9 @@ test("plan row SD12: the read-back records the shop's zone with the scopes, for 
       outcome,
     );
   }
-  // A zone the list does not know, a stale record or a refused token records no zone.
+  // A value that is not zone-shaped, a stale record or a refused token records no zone.
   for (const [options, expected] of [
-    [{ reply: zoned("Mars/Olympus_Mons") }, "observed"],
+    [{ reply: zoned("Europe London") }, "observed"],
     [{ reply: zoned("Europe/London"), record: "stale" }, "stale"],
     [{ reply: 401 }, "token_refused"],
   ]) {

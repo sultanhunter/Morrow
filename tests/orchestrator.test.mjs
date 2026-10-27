@@ -189,6 +189,77 @@ test("AC21: the cron starts nothing while dispatch is disabled", async (t) => {
   assert.ok(lines.includes('{"event":"morrow_orchestrator_dispatch_disabled"}'));
 });
 
+// Plan row SD12: the cron fires due schedules only while MORROW_SCHEDULES_V2 is exactly "on"
+// (committed off), in transactions of its own beside the pending starts, and logs counts only.
+test("SD12: the cron fires schedules only while the schedules-v2 switch is exactly on", async (t) => {
+  const module = await load(t, "apps/workers/src/orchestrator.ts");
+  const saved = process.env;
+  process.env = {};
+  t.after(() => (process.env = saved));
+  const binding = JSON.stringify({
+    schemaVersion: 1,
+    environment: "staging",
+    projectId: "lab-project",
+    branchId: "br-lab-branch",
+    hostname: "ep-lab-endpoint.c-1.us-east-1.aws.neon.tech",
+    database: "morrow",
+  });
+  const run = async (extra) => {
+    let leased = 0;
+    const lines = [];
+    const pending = [];
+    const original = console.log;
+    console.log = (line) => lines.push(line);
+    try {
+      await module.default.scheduled(
+        { scheduledTime: 60_000 * 7 },
+        {
+          MORROW_ENVIRONMENT: "staging",
+          MORROW_MODEL_PROVIDER: "anthropic",
+          MORROW_DATABASE_BINDING_JSON: binding,
+          BROKER: {
+            fetch() {},
+            // Every transaction's password lease is refused: nothing reaches a database.
+            neonLease: () => (leased++, Promise.reject(Error("x"))),
+            modelRespond() {},
+            shopifyRead() {},
+          },
+          LISTINGS_RUN: { create: () => Promise.resolve() },
+          ...extra,
+        },
+        { waitUntil: (p) => pending.push(p) },
+      );
+      await Promise.all(pending);
+    } finally {
+      console.log = original;
+    }
+    return { leased, lines: lines.map((l) => JSON.parse(l)) };
+  };
+  const off = await run({});
+  assert.ok(!off.lines.some((l) => l.event === "morrow_orchestrator_schedules"));
+  for (const value of ["On", "true", "1"]) {
+    const other = await run({ MORROW_SCHEDULES_V2: value });
+    assert.ok(!other.lines.some((l) => l.event === "morrow_orchestrator_schedules"), value);
+    assert.equal(other.leased, off.leased, value);
+  }
+  const on = await run({ MORROW_SCHEDULES_V2: "on" });
+  const line = on.lines.find((l) => l.event === "morrow_orchestrator_schedules");
+  assert.deepEqual(line, {
+    event: "morrow_orchestrator_schedules",
+    outcome: "unavailable",
+    tenants: 0,
+    passes: 0,
+    fired: 0,
+    duplicate: 0,
+    dropped: 0,
+    ended: 0,
+    unavailable: 1,
+    unfinished: 0,
+  });
+  // One more lease asked for: the due list's own transaction.
+  assert.equal(on.leased, off.leased + 1);
+});
+
 test("the orchestrator's environment is deny-all: no credential, no production, the switch's exact value", async (t) => {
   const { mapOrchestratorEnvironment } = await import("../apps/workers/src/environment.ts");
   // workerd never populates process.env (nodejs_compat_do_not_populate_process_env); Node does.

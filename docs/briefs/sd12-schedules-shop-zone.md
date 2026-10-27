@@ -36,6 +36,7 @@ One schedule contract for mandate routines, reports and policy triggers, in the 
 2. tzdata currency: PostgreSQL fires, Workers and browsers preview. Their tz databases differ today for Morocco's zones and for America/Vancouver, America/Edmonton and America/Yellowknife (Node's ICU 2026a against the lab image's 2026c), so a preview there can disagree with the firing. Neon's tzdata version and its zone names (every zone of the list must exist there, or the CHECK and `AT TIME ZONE` fail) must be checked on staging before the switch goes on.
 3. No production writer of schedules yet: `workspace.routine.configure` and `routine.draft` arrive with PR 21 and SD15, which also bind ScheduleRef's RFC 8785 digest; the lab seeds schedules as the owner. The api's override and move have no route or screen beyond the fixture; the Inbox kind for the zone item is the workspace's.
 4. The orchestrator fires only while its database binding is mapped (today that needs the model-provider switch, already on in staging).
+5. The daily health read runs only while v1 PR 5's connection clean-up switch is on (committed off), so until then the zone is read at the install and each reconnect; a shop whose zone changes in Shopify in between is noticed at its next reconnect or once that switch goes on. A store installed before this change has no zone row until one of those reads (the Owner's override works without one).
 
 ## Test checklist
 

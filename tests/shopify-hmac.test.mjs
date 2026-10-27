@@ -398,14 +398,17 @@ test("ShopIdentity: one fixed document; development flag, id, domain and zone; T
     ianaTimezone: null,
   });
   assert.match(shopifyShopIdentityDocument, / ianaTimezone /);
-  // Plan row SD12: the shop's zone on the closed list (an old spelling mapped); a zone the list
-  // does not know, or any other value, is null and never refuses the identity.
+  // Plan row SD12: the shop's zone as a closed zone-shaped name (the database maps it onto the
+  // closed list); any other value is null and never refuses the identity.
   for (const [zone, expected] of [
     ["America/Toronto", "America/Toronto"],
-    ["Asia/Calcutta", "Asia/Kolkata"],
-    ["Europe/Kiev", "Europe/Kyiv"],
-    ["US/Eastern", null],
-    ["Mars/Olympus_Mons", null],
+    ["Asia/Calcutta", "Asia/Calcutta"],
+    ["America/Argentina/Buenos_Aires", "America/Argentina/Buenos_Aires"],
+    ["UTC", "UTC"],
+    ["Asia/Kolkata; DROP", null],
+    ["../etc/passwd", null],
+    ["A/b/c/d", null],
+    ["A".repeat(65), null],
     [42, null],
     [null, null],
   ]) {
