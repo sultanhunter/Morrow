@@ -28,3 +28,11 @@ a per-definition merge step in the brief; a healthy reply past a stored bound is
 a protocol break; JobStatus@1 is never done, stopped or failed with an operation unconfirmed;
 plans, verdicts and the ledger carry source subjects (the ledger also read tags and audience);
 the context policy generator refuses an inline bound a result block cannot hold.
+
+Merged main at 966fed03 (pull request 79, H5) definition by definition: one copy of
+ContextLabel, MemoryLayer, CheckpointLine, PersonMemoryKind and ModelUntrustedSource; five
+records aliased to H5's same-bodied inputs; AgentRunKind is ADR-0041 item 4's six, with
+runContext giving a call run the call context; run.plan's understood (280) and steps (80, with
+their owner) are its own limits. The fix check's N1 (a stored plan note keeps its refs) and N4
+(labels) are applied; N2 (item 13's reading) is for the owner and N3 (a reply's stored size) is
+carried to H7.
