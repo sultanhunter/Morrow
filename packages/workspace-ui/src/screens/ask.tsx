@@ -251,6 +251,7 @@ export function AskScreen({ workspace }: { readonly workspace: WorkspaceView }) 
             value={request}
             onChange={setRequest}
             hint={copy.ask.requestHint}
+            standing={copy.customerDetails.standing}
             maxLength={8192}
             disabled={busy || taskId !== null}
             required

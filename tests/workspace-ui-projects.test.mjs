@@ -649,6 +649,37 @@ test("screens: Ask Morrow privately opens a private Ask, never the Listings run 
   assert.match(screen, /askComposed && overview\.kind === "ok" && overview\.value\.actions\.ask/);
 });
 
+test("H9a: every composer that writes to an agent carries the standing line, read with the field", async () => {
+  // ADR-0041 item 31: the screen cannot detect a customer's name, so the composer says it.
+  const port = createFixtureAdapter("projects_preview");
+  const tote = (await port.projects.get(ws, "project-tote")).value;
+  const html = render(
+    h(ProjectConversation, { ws, project: tote, version: 0, onChanged() {}, onAskPrivately: null }),
+  );
+  const field = /<textarea id="([^"]+)"[^>]*aria-describedby="\1-standing"[^>]*>/.exec(html);
+  assert.ok(field, html);
+  assert.match(
+    html,
+    new RegExp(
+      `<small id="${field[1]}-standing" class="field-standing">Don(?:'|&#x27;)t include customers(?:'|&#x27;) names or contact details\\.</small>`,
+    ),
+  );
+  // The other composers to an agent: the private Ask and its free answer, a new project's
+  // request to Morrow, an answer to an agent's question, and a Listings request.
+  for (const [file, count] of [
+    ["packages/workspace-ui/src/projects/project-conversation.tsx", 1],
+    ["packages/workspace-ui/src/projects/ask-conversation.tsx", 2],
+    ["packages/workspace-ui/src/projects/new-project.tsx", 1],
+    ["packages/workspace-ui/src/screens/inbox.tsx", 1],
+    ["packages/workspace-ui/src/screens/ask.tsx", 1],
+  ])
+    assert.equal(
+      readFileSync(file, "utf8").split("standing={copy.customerDetails.standing}").length - 1,
+      count,
+      file,
+    );
+});
+
 test("screens: health words are a glyph and a word, plain words have no badge", () => {
   const badge = render(h(HealthWord, { health: { word: "on_track", reason: null } }));
   assert.match(badge, /pj-badge pj-badge-success/);

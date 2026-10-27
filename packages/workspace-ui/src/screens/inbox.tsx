@@ -406,6 +406,7 @@ function AnswerForm({
         value={text}
         onChange={setText}
         hint={copy.question.answerHint}
+        standing={copy.customerDetails.standing}
         error={checked && !valid ? copy.outcome.invalid : null}
         disabled={command.busy}
         maxLength={answerLimit}

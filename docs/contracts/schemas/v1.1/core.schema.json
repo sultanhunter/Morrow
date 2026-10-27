@@ -9976,7 +9976,7 @@
       ]
     },
     "ToolRefusalCode": {
-      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20: customer_data (a run that read customer data proposes no shop knowledge) and pending_limit (a workspace holds at most 50 pending knowledge proposals).",
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20: customer_data (a run that read customer data proposes no shop knowledge; H9a, ADR-0041 item 31: also a text the model wrote that holds a customer identifier, refused before commit) and pending_limit (a workspace holds at most 50 pending knowledge proposals).",
       "type": "string",
       "enum": [
         "not_offered",
@@ -14353,6 +14353,44 @@
       },
       "required": [
         "text"
+      ]
+    },
+    "CustomerDataKind": {
+      "description": "Which kind of customer identifier the customer identifier screen found (ADR-0041 item 31; H9a; until P09.T05 Morrow keeps no customer details). email: an email address, also obfuscated (bracketed (at) and (dot), HTML or percent escapes, full-width or zero-width characters), or spaced or written out with an address-like local part or a personal mail provider; phone: a phone number (international, national with its trunk prefix or grouping, after a phone word, or a tel: or WhatsApp link); street_address: a house number with a street, a street type with a name and a number, a PO box, a unit and street pair, or a postcode or ZIP in its place; customer_gid: a Shopify customer id (a Customer, CustomerAddress, MailingAddress, CustomerPaymentMethod, CustomerSegmentMember or CompanyContact GID, plain, percent-encoded or base64, a customer link in the Shopify admin, customer:<id>, or a numeric customer id after the word customer); listed_email: a looser email form whose keyed digest is on the customer email list (the broker holds the key; the list is empty until P09.T05). Order numbers and order GIDs are not customer data and never match. A customer name typed as free text cannot be detected.",
+      "type": "string",
+      "enum": [
+        "email",
+        "phone",
+        "street_address",
+        "customer_gid",
+        "listed_email"
+      ]
+    },
+    "CustomerScreenRefusal": {
+      "description": "CustomerScreenRefusal@1 (ADR-0041 item 31, ADR-0040 item 2; H9a): the content-free refusal of the customer identifier screen, the same for a post (delivery not_started, code customer_data, safe message \"Morrow can't keep customer details yet. Remove them and send again.\") and for a text a model wrote that code refused before commit. It names the kinds found, sorted in CustomerDataKind's order, never the text or what matched. Nothing of the refused text is stored, logged or sent.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "code": {
+          "const": "customer_data"
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CustomerDataKind"
+          },
+          "minItems": 1,
+          "maxItems": 5,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "code",
+        "kinds"
       ]
     }
   }

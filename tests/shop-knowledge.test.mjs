@@ -366,6 +366,56 @@ test("notebook.write's checks in code: its own notebook, never customer data", (
     });
 });
 
+test("H9a: a customer identifier the model wrote is refused before the command (ADR-0041 item 31)", () => {
+  const refused = { ok: false, outcome: "refused", refusal: "customer_data" };
+  // In a proposal's title, text or a source's value; and in a notebook entry's text.
+  for (const input of [
+    proposeInput({ text: "Refunds go to jane.doe@example.com within a week." }),
+    proposeInput({ title: "Call +44 20 7946 0958" }),
+    proposeInput({ text: "Returns: post them to 221B Baker Street." }),
+    proposeInput({ sources: [{ kind: "note", value: "gid://shopify/Customer/7234567890123" }] }),
+    proposeInput({ text: "Write to jane (at) example (dot) com" }),
+  ])
+    assert.deepEqual(decideKnowledgePropose(input, run()), refused, JSON.stringify(input));
+  for (const text of [
+    "Jane prefers WhatsApp: 0300-1234567",
+    "Customer 7234567890123 asked for a gift wrap.",
+    "jane&#64;example.com",
+    // Tool output copied as key=value or CSV, and glued forms (H9A-R2).
+    "customer_phone=+923001234567",
+    "phone=+14155552671",
+    "tel=03001234567",
+    "Jane,03001234567,Lahore",
+    "name,phone\nJane,+14155552671",
+    "Ph#03001234567",
+    "ph.03001234567",
+    "Jane/03001234567",
+    // A glued label, or a map link (H9A-R3).
+    "ship_to=221B Baker Street",
+    "Pin: https://maps.google.com/?q=221B+Baker+Street,+London+NW1+6XE",
+  ])
+    assert.deepEqual(decideNotebookWrite({ text }, run()), refused, text);
+  // Order numbers, order and product ids, prices and dates are not customer data.
+  const fine = "Order #1042 (gid://shopify/Order/5123456789012) shipped 2026-10-20; $54.20.";
+  assert.equal(decideKnowledgePropose(proposeInput({ text: fine }), run()).ok, true);
+  assert.equal(decideNotebookWrite({ text: fine }, run()).ok, true);
+  // A task source is a Morrow UUID; one with digit-led groups is an id, not a phone (H9A-R4).
+  const taskId = "31415926-5358-4abc-9def-0123456789ab";
+  assert.equal(
+    decideKnowledgePropose(proposeInput({ sources: [{ kind: "task", value: taskId }] }), run()).ok,
+    true,
+  );
+  assert.equal(
+    decideNotebookWrite({ text: `Task ${taskId} is waiting on photos.` }, run()).ok,
+    true,
+  );
+  // An invalid input stays invalid_input: the screen runs on a valid input only.
+  assert.equal(
+    decideNotebookWrite({ text: "jane@example.com", installationId: "i" }, run()).outcome,
+    "invalid_input",
+  );
+});
+
 test("a run's reads hand back their content's read tags, and a later write carries them (review R1)", async () => {
   // ADR-0031 item 6: a run's read tags are the union of its tool results' tags, and they only
   // narrow. A page's tags can be wider than the tool's own (an accepted proposal adds the

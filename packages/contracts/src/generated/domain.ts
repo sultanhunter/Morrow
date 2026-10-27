@@ -670,6 +670,8 @@ export type CoreV1_1_ToolInputKnowledgePropose = { "pageId": (Core_Id | null); "
 export type CoreV1_1_ToolInputNotebookWrite = { "text": CoreV1_1_NotebookText; };
 export type CoreV1_1_ToolModelInputKnowledgePropose = { "pageId": (string | null); "kind": "brand_voice" | "policy" | "product_fact" | "supplier" | "decision"; "title": string; "text": string; "sources": Array<{ "kind": "product" | "task" | "note"; "value": string; }>; };
 export type CoreV1_1_ToolModelInputNotebookWrite = { "text": string; };
+export type CoreV1_1_CustomerDataKind = "email" | "phone" | "street_address" | "customer_gid" | "listed_email";
+export type CoreV1_1_CustomerScreenRefusal = { "schemaVersion": 1; "code": "customer_data"; "kinds": Array<CoreV1_1_CustomerDataKind>; };
 export type CapabilityV1_1_ads_campaign_pause_input = { "campaigns": CoreV1_1_CampaignRefs; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_agents_installation_disable_input = { "installationId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_governance_membership_revoke_input = { "membershipId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
@@ -830,7 +832,9 @@ export interface CurrentDefinitions {
   "CriteriaList": CoreV1_1_CriteriaList;
   "CrossHostResume": Core_CrossHostResume;
   "Currency": Core_Currency;
+  "CustomerDataKind": CoreV1_1_CustomerDataKind;
   "CustomerDataLevel": CoreV1_1_CustomerDataLevel;
+  "CustomerScreenRefusal": CoreV1_1_CustomerScreenRefusal;
   "DataClass": CoreV1_1_DataClass;
   "DataClasses": CoreV1_1_DataClasses;
   "Date": Core_Date;
@@ -1275,7 +1279,9 @@ export type Current_CreditsPerProductCeiling = CoreV1_1_CreditsPerProductCeiling
 export type Current_CriteriaList = CoreV1_1_CriteriaList;
 export type Current_CrossHostResume = Core_CrossHostResume;
 export type Current_Currency = Core_Currency;
+export type Current_CustomerDataKind = CoreV1_1_CustomerDataKind;
 export type Current_CustomerDataLevel = CoreV1_1_CustomerDataLevel;
+export type Current_CustomerScreenRefusal = CoreV1_1_CustomerScreenRefusal;
 export type Current_DataClass = CoreV1_1_DataClass;
 export type Current_DataClasses = CoreV1_1_DataClasses;
 export type Current_Date = Core_Date;

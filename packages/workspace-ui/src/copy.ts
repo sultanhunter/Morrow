@@ -270,6 +270,13 @@ export const copy = {
   inbox: {
     title: "Inbox",
   },
+  // H9a (ADR-0041 item 31, ADR-0040 item 2): the standing line under every composer that
+  // writes to an agent, and the refusal a post holding customer details gets. The same words
+  // as @morrow/policy's customer-screen (tests/customer-screen.test.mjs pins them).
+  customerDetails: {
+    standing: "Don't include customers' names or contact details.",
+    refused: "Morrow can't keep customer details yet. Remove them and send again.",
+  },
   question: {
     title: "Question",
     back: "Back to Inbox",

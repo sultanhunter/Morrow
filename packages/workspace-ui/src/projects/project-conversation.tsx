@@ -8,6 +8,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { Id } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
 import { Button, TextArea } from "../components/controls";
+import { copy } from "../copy";
 import { StateView, outcomeState } from "../components/feedback";
 import { CommandFeedback } from "../screens/entry";
 import { projectsCopy } from "./copy";
@@ -200,6 +201,7 @@ export function ProjectConversation({
             label={c.messageLabel}
             value={text}
             onChange={setText}
+            standing={copy.customerDetails.standing}
             error={checked && !valid ? c.invalid : null}
             disabled={command.busy}
             maxLength={messageLimit}

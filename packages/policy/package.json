@@ -13,6 +13,7 @@
     "./loop-catalogue": "./src/loop-catalogue.ts",
     "./tool-catalogue": "./src/tool-catalogue.ts",
     "./billing-state": "./src/billing-state.ts",
+    "./customer-screen": "./src/customer-screen.ts",
     "./connection-authority": "./src/connection-authority.ts",
     "./kill-switch": "./src/kill-switch.ts",
     "./model-catalogue": "./src/model-catalogue.ts",
