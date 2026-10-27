@@ -3,7 +3,8 @@ BEGIN;
 -- ADR-0044; docs/briefs/sd5-shopify-query-cost.md): per-shop buckets for Shopify's API query
 -- cost. Shopify's rate limit, counted in Shopify's GraphQL query-cost points, never money:
 -- nothing here holds, draws or checks credits (ADR-0039, OD-2026-10-26-12).
--- Executes AS morrow_work_owner, after 0056 (credits-only-catalogue). No external effect:
+-- Executes AS morrow_work_owner, as 0061 after 0056 (credits-only-catalogue); 0057 to 0060 are
+-- reserved for other open branches, and nothing here depends on them. No external effect:
 -- nothing here sends a request; the broker calls the two definers around each fixed Shopify
 -- document while its switch (MORROW_SHOPIFY_QUERY_COST, docs/decisions/
 -- shopify-query-cost-staging.json) is on, and the switch is committed off.

@@ -432,9 +432,9 @@
       "reviewRef": "docs/briefs/adr-0039-credits-catalogue.md"
     },
     {
-      "sequence": 57,
-      "file": "0057.shopify-query-cost.sql",
-      "sha256": "04384ae60df586cfdef8bc9e76947bea4de8bb938db9ea9f57ce4559cd727fae",
+      "sequence": 61,
+      "file": "0061.shopify-query-cost.sql",
+      "sha256": "03eb19bacd9f241f6a156fb3d2e67d57933618c0f637af39e4386fc341a7a1e4",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/sd5-shopify-query-cost.md"
     }

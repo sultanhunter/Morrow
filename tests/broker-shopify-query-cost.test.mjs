@@ -924,12 +924,24 @@ test("edge:check: the query-cost record and the staging broker's var agree, or i
 // ---------------------------------------------------------------------------
 // The migration against the broker's constants.
 test("migration shopify-query-cost: a forward work-owner migration after 0056, with its brief", () => {
-  // Written as the next free number on main (0057; pull request 92 also holds 0057, so the
-  // lead renumbers whichever merges second); found by slug.
-  assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");
-  const previous = manifest.migrations.find((m) => m.sequence === row.sequence - 1);
-  assert.ok(previous, "the row before it");
-  assert.match(sql, /^-- Executes AS morrow_work_owner, after 0056 \(credits-only-catalogue\)\./m);
+  // Its reserved number is 0061 (0057 to 0060 belong to other open branches; the lead
+  // renumbers at merge if the order differs); found by slug, so a renumbering keeps this test.
+  const sequence = String(row.sequence).padStart(4, "0");
+  assert.equal(row.file, sequence + "." + slug + ".sql");
+  // It comes after 0056, the live head it needs, wherever the open branches land.
+  const index = manifest.migrations.indexOf(row);
+  assert.ok(index > 0, "a row before it");
+  assert.ok(row.sequence > manifest.migrations[index - 1].sequence);
+  assert.ok(
+    manifest.migrations.slice(0, index).some((m) => m.file === "0056.credits-only-catalogue.sql"),
+  );
+  assert.match(
+    sql,
+    new RegExp(
+      `^-- Executes AS morrow_work_owner, as ${sequence} after 0056 \\(credits-only-catalogue\\);`,
+      "m",
+    ),
+  );
   assert.equal(row.executeAs, "morrow_work_owner");
   assert.equal(row.sha256, createHash("sha256").update(sql).digest("hex"));
   assert.equal(row.reviewRef, "docs/briefs/sd5-shopify-query-cost.md");
