@@ -410,12 +410,28 @@ test("H9a: a customer identifier the model wrote is refused before the command (
     // A glued label, or a map link (H9A-R3).
     "ship_to=221B Baker Street",
     "Pin: https://maps.google.com/?q=221B+Baker+Street,+London+NW1+6XE",
+    // A phone column after a numeric one, or a phone right after a number (H9A-2R1).
+    "order_number,phone\n1042,03001234567",
+    "1042 03001234567",
+    // Double percent-encoding, and a map link without its scheme (H9A-2R3).
+    "jane%2540example.com",
+    "maps.google.com/?q=221B+Baker+Street",
   ])
     assert.deepEqual(decideNotebookWrite({ text }, run()), refused, text);
   // Order numbers, order and product ids, prices and dates are not customer data.
   const fine = "Order #1042 (gid://shopify/Order/5123456789012) shipped 2026-10-20; $54.20.";
   assert.equal(decideKnowledgePropose(proposeInput({ text: fine }), run()).ok, true);
   assert.equal(decideNotebookWrite({ text: fine }, run()).ok, true);
+  // A Sheets tab link's "#gid=" and a legacy admin id are ids, not phones (H9A-2R2).
+  for (const text of [
+    "Supplier price list: https://docs.google.com/spreadsheets/d/1AbC/edit#gid=2063456789",
+    "Restock from docs.google.com/spreadsheets/d/1AbC/edit?gid=2063456789#gid=2063456789",
+    "The tote collection: https://admin.shopify.com/store/my-shop/collections/2612345678",
+  ]) {
+    const input = proposeInput({ kind: "supplier", title: "Supplier", text });
+    assert.equal(decideKnowledgePropose(input, run()).ok, true, text);
+    assert.equal(decideNotebookWrite({ text }, run()).ok, true, text);
+  }
   // A task source is a Morrow UUID; one with digit-led groups is an id, not a phone (H9A-R4).
   const taskId = "31415926-5358-4abc-9def-0123456789ab";
   assert.equal(

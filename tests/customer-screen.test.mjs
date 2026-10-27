@@ -64,6 +64,10 @@ test("emails: plain, obfuscated, spaced and written out", () => {
     "jane&amp;#64;example.com",
     "jane&#xFF20;example.com",
     "&#106;ane&#64;example.com",
+    // Percent-encoded twice or three times, also inside a link's query (H9A-2R3).
+    "jane%2540example.com",
+    "jane%252540example.com",
+    "https://shop.example.com/account/login?return_url=%2Fpages%2Fx%3Femail%3Djane%2540example.com",
     // Bracketed at and dot.
     "jane (at) example (dot) com",
     "jane [at] example [dot] com",
@@ -122,9 +126,35 @@ test("phones: international, national, grouped, after a phone word, and in links
     "ph.03001234567",
     "Jane/03001234567",
     "Number.03001234567",
-    // In a link's path or query (H9A-R3).
+    // In a link's path or query (H9A-R3), also without its scheme (H9A-2R3); a "+" that starts a
+    // value is a plus sign, so a bare international number needs no key (H9A-2R2).
     "https://example.com/contact?phone=03001234567",
     "https://example.com/call/+44+20+7946+0958",
+    "https://example.com/c?to=+14155552671",
+    "https://example.com/c?n=03001234567",
+    "https://example.com/c?whatsapp=%2B923001234567",
+    "example.com/contact?phone=2125550187",
+    // A link whose whole content is one number reads it as the text would, so a dotted name read
+    // as a bare host hides no phone (H9A-2R2 with H9A-2R3).
+    "jane.doe/4155552671",
+    "Contact: jane.doe/4155552671.",
+    "(jane.doe/4155552671)",
+    "https://example.com/4155552671",
+    "config.json?14155552671",
+    // Right after or before another number (H9A-2R1): a CSV row whose phone column follows a
+    // numeric one, and a phone merged with a number by one space or tab.
+    "order_number,phone\n1042,03001234567",
+    "#1042,+923001234567",
+    "Order 1042,+14155552671",
+    "1042,0300-1234567",
+    "1042 03001234567",
+    "1042\t03001234567",
+    "Order 1042 03001234567",
+    "03001234567 1042",
+    "1042 0300 1234567",
+    "Jane 1042 020 7946 0958",
+    "1042 (212) 555-0187",
+    "+92 300 1234567 1042",
   ]);
 });
 
@@ -166,6 +196,9 @@ test("street addresses: shapes in several languages, PO boxes, units and postcod
     "https://www.google.com/maps/search/?api=1&query=12%20Baker%20Street",
     "www.google.com/maps?q=12+Main+Street+Springfield",
     "https://maps.example.com/?q=12%2BBaker%2BStreet",
+    // A map link without its scheme (H9A-2R3).
+    "maps.google.com/?q=221B+Baker+Street",
+    "maps.apple.com/?q=12+Main+St",
   ]);
 });
 
@@ -180,9 +213,11 @@ test("customer ids: GIDs in every encoding, admin links, record ids and numeric 
     "gid://shopify/CustomerSegmentMember/42",
     "gid://shopify/CompanyContact/42",
     "gid%3A%2F%2Fshopify%2FCustomer%2F7234567890123",
+    "gid%253A%252F%252Fshopify%252FCustomer%252F7234567890123",
     btoa(gid),
     btoa(gid).replace(/=+$/, ""),
     "https://admin.shopify.com/store/my-shop/customers/7234567890123",
+    "admin.shopify.com/store/my-shop/customers/7234567890123",
     "https://my-shop.myshopify.com/admin/customers/7234567890123",
     "/admin/api/2026-10/customers/7234567890123.json",
     "customer:7234567890123",
@@ -252,6 +287,27 @@ test("not customer data: orders, products, money, dates, codes and ordinary sent
     "https://shop.example.com/blogs/news/12-main-street-sale",
     "https://shop.example.com/products/tote?variant=4123456789012&utm_source=x",
     "3-pack Rose Gardens prints",
+    // Inside a link, a bare number shaped like a North American phone is an id: a Sheets tab, a
+    // legacy admin id, with or without the scheme (H9A-2R2, H9A-2R3).
+    "https://docs.google.com/spreadsheets/d/1AbC/edit#gid=2063456789",
+    "docs.google.com/spreadsheets/d/1AbC/edit#gid=2063456789",
+    "https://docs.google.com/spreadsheets/d/1AbC/edit?gid=2063456789#gid=2063456789",
+    "https://admin.shopify.com/store/my-shop/collections/2612345678",
+    "admin.shopify.com/store/my-shop/collections/2612345678",
+    "https://my-shop.myshopify.com/admin/collections/2612345678.json",
+    // Numbers next to numbers that are not phones (H9A-2R1): a CSV row of an order, a list of
+    // order numbers, UPCs and EANs read in groups, IBAN digits, a card and tracking numbers,
+    // also where the pattern cuts a 22-digit number into runs that meet the next number.
+    "order_number,total,quantity\n1042,12500.00,3",
+    "1042,1043,1044",
+    "0 01234 56789 0",
+    "3 04615 24470 3",
+    "2 03522 98003 4",
+    "GB82 WEST 1234 5698 7654 32",
+    "GB03 TRCF 2887 0740 0946 28",
+    "Card 4111 1111 1111 1111",
+    "Shipped 9400 1000 0412 3456 7801 23",
+    "9277 6389 1875 6133 0762 68\t6548 1655",
   ])
     assert.deepEqual(screenCustomerText(text), { ok: true }, JSON.stringify(text));
   // A phone beside a record id is still a phone.
@@ -261,7 +317,8 @@ test("not customer data: orders, products, money, dates, codes and ordinary sent
 });
 
 test("what it cannot see: a customer's name typed as free text (ADR-0041 item 31)", () => {
-  // The gap the standing line and message redaction narrow, and the owner decides.
+  // The gap the standing line and message redaction narrow. OD-2026-10-26-10 decided it: P09.T05's
+  // deletion path comes first, and row H9d (a P09.T05 child) owns matching a typed name.
   for (const text of ["Jane Smith asked for a refund", "Reply to Amina Khan about her parcel"])
     assert.deepEqual(screenCustomerText(text), { ok: true });
 });
@@ -401,6 +458,18 @@ test("bounds: closed inputs, refused sizes, and every structured string screened
     () => screenCustomerTexts(Array(5).fill("x".repeat(customerScreenLimits.textChars))),
     /TOO_LONG/,
   );
+  // The bounds count what the scans read, not only the raw text (H9A-2R4): NFKC makes U+FDFA
+  // eighteen characters, and a decoded reference expands again, so a text under the raw bound
+  // can be over it once folded or decoded.
+  const expands = "\uFDFA".normalize("NFKC").length;
+  assert.equal(expands, 18);
+  const atBound = Math.floor(customerScreenLimits.textChars / expands);
+  assert.equal(screenCustomerText("\uFDFA".repeat(atBound)).ok, true);
+  assert.throws(() => screenCustomerText("\uFDFA".repeat(atBound + 1)), /TOO_LONG/);
+  assert.throws(() => screenCustomerText("&#xFDFA;".repeat(atBound + 1)), /TOO_LONG/);
+  assert.throws(() => screenCustomerText("&amp;#xFDFA;".repeat(atBound + 1)), /TOO_LONG/);
+  // Across a call: each text within its own bound, their folds over the call's.
+  assert.throws(() => screenCustomerTexts(Array(5).fill("\uFDFA".repeat(atBound))), /TOO_LONG/);
   assert.throws(() => screenCustomerTexts(Array(customerScreenLimits.texts + 1).fill("")), /INPUT/);
   assert.throws(() => screenCustomerTexts(["x", 1]), /CUSTOMER_SCREEN_INPUT/);
   assert.throws(() => screenCustomerTexts("x"), /CUSTOMER_SCREEN_INPUT/);
@@ -434,8 +503,9 @@ test("linear time: a mebibyte of adversarial text is screened in bounded time", 
   // Every pattern is bounded; a quadratic one would take hours on these at the full bound. Each
   // shape (a head, a filler repeated, a tail; or numbered parts) is timed at a 64th, a 16th, a
   // quarter and all of the bound, so a quadratic pattern fails at the first size it overruns,
-  // within minutes, and never hangs the run (H9A-R1). The bound is wide for a loaded machine
-  // (each takes a few seconds there).
+  // within minutes, and never hangs the run (H9A-R1). The bound, 20 seconds of CPU time per
+  // shape and size, is ten times the slowest shape's. A shape that expands when folded or decoded
+  // is refused once its fold passes the bound, in the same time (H9A-2R4).
   const size = customerScreenLimits.textChars;
   const shapes = [
     ...[
@@ -481,6 +551,23 @@ test("linear time: a mebibyte of adversarial text is screened in bounded time", 
     ["", "31415926-5358-4abc-9def-0123456789ab ", ""],
     // Distinct links, each decoded and scanned on its own.
     (i) => `https://maps.example/?q=${i}+Main+x&p=${i * 7} `,
+    // Shapes that expand under NFKC or when decoded (H9A-2R4): U+FDFA folds to 18 characters.
+    ["1 ", "\uFDFA", ""],
+    ["1 ", "\uFDFA1 ", ""],
+    ["1 ", "&#xFDFA;", ""],
+    ["1 ", "%2540", ""],
+    // A link's content is decoded on its own, after the bound: a percent-encoded U+FDFA (nine
+    // characters) folds to eighteen there, so the links' contents are about twice the text.
+    (i) => `https://a.bc/${i}/${"1%EF%B7%BA".repeat(200)} `,
+    // Merged runs read again in parts, and comma-glued runs after a digit (H9A-2R1).
+    ["", "1 2 ", ""],
+    ["", "0412 ", ""],
+    ["", "1042 0300 123 ", ""],
+    ["", "1,0", ""],
+    // Bare hosts read as links (H9A-2R3): a long dotted run, short hosts, distinct bare links.
+    ["", "a.", "b/"],
+    ["", "a.bc ", ""],
+    (i) => `x${i}.co/?q=${i}+Main&gid=${2063456789 + i} `,
   ];
   const textOf = (shape, n) => {
     if (typeof shape === "function") {
@@ -491,16 +578,38 @@ test("linear time: a mebibyte of adversarial text is screened in bounded time", 
     const [head, fill, tail] = shape;
     return (head + fill.repeat(Math.ceil(n / fill.length))).slice(0, n - tail.length) + tail;
   };
+  // The bound is on this process's CPU time, not wall time: a quadratic pattern costs CPU wherever
+  // it runs, while a machine at load near 1,000 stretches wall time ten-fold or more (the slowest
+  // shape, 1.9 s of CPU, took 24 s of wall time there).
+  const timed = (text, name) => {
+    const started = process.cpuUsage();
+    try {
+      screenCustomerText(text);
+    } catch (error) {
+      // Only an overlong fold is refused; the screen answers everything else.
+      assert.match(error.message, /CUSTOMER_SCREEN_TEXT_TOO_LONG/, name);
+      assert.ok(text.normalize("NFKC").length > size || /&|%/.test(text), name);
+    }
+    const used = process.cpuUsage(started);
+    const ms = (used.user + used.system) / 1000;
+    assert.ok(ms < 20_000, `${name} at ${text.length} took ${Math.round(ms)} ms of CPU time`);
+  };
   for (const shape of shapes)
     for (const n of [size / 64, size / 16, size / 4, size]) {
       const text = textOf(shape, n);
       assert.equal(text.length, n);
-      const started = performance.now();
-      screenCustomerText(text);
-      const ms = performance.now() - started;
-      const name = typeof shape === "function" ? shape(0) : JSON.stringify(shape);
-      assert.ok(ms < 20_000, `${name} at ${n} took ${Math.round(ms)} ms`);
+      timed(text, typeof shape === "function" ? shape(0) : JSON.stringify(shape));
     }
+  // At the bound once folded: the longest text of each expanding unit whose fold is still within
+  // a mebibyte (58,256 raw characters of U+FDFA). It is screened, never refused as too long:
+  // `timed` accepts that refusal only for a fold over the bound or an escape.
+  for (const unit of ["\uFDFA", "\uFDFA1 "]) {
+    const units = Math.floor((size - 2) / unit.normalize("NFKC").length);
+    const text = `1 ${unit.repeat(units)}`;
+    assert.ok(text.normalize("NFKC").length <= size);
+    assert.ok(`${text}${unit}`.normalize("NFKC").length > size);
+    timed(text, `folded ${JSON.stringify(unit)}`);
+  }
 });
 
 test("the post command's entry point: not_started customer_data with the safe message", async () => {
@@ -635,6 +744,10 @@ test("the copy, exactly as ADR-0040 and ADR-0041 give it, and the module stays e
   // No I/O and nothing Node-only: it runs in the api, runtime and broker Workers.
   const source = readFileSync("packages/policy/src/customer-screen.ts", "utf8");
   assert.doesNotMatch(source, /from "node:|require\(|fetch\(|console\./);
+  // Its note on customer names follows the records: OD-2026-10-26-10 decided it, and row H9d owns
+  // name matching (H9A-2R5); nothing is left for the owner to decide there.
+  assert.match(source, /OD-2026-10-26-10[^]{0,120}H9d/);
+  assert.doesNotMatch(source, /owner decides/);
   assert.match(
     JSON.parse(readFileSync("packages/policy/package.json", "utf8")).exports["./customer-screen"],
     /customer-screen\.ts$/,

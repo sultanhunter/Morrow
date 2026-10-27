@@ -21,7 +21,9 @@ import type { Current_CustomerDataKind, Current_CustomerScreenRefusal } from "@m
 // email.
 // What it cannot find: a customer's name typed as free text ("Jane Smith asked for a refund")
 // matches no pattern, and Morrow holds no list of names to compare with. The composer's standing
-// line and message redaction narrow that gap; the owner decides the rest (ADR-0041 item 31).
+// line and message redaction narrow that gap (ADR-0041 item 31). OD-2026-10-26-10 decided the
+// rest: P09.T05's deletion path comes first, and row H9d of the harness plan (a P09.T05 child)
+// owns matching a typed name; this module matches no names.
 // What it also refuses: the shop's own contact details (its support address, its phone, its
 // shop address), which no pattern can tell from a customer's; owner question 23 approved the
 // screen for every email, phone and street address.
@@ -30,7 +32,9 @@ import type { Current_CustomerDataKind, Current_CustomerScreenRefusal } from "@m
 // alternations are fixed, a pattern that may start anywhere in a run never scans to the run's
 // end, and the email, customer id and address scans read a copy with every run of spaces and
 // tabs closed up to one space (H9A-R1; tests/customer-screen.test.mjs times long whitespace,
-// punctuation and link runs). The verdict names kinds only, never the text or what matched.
+// punctuation, link and expanding runs). The bounds hold on the folded and decoded copy the scans
+// read, not only on the raw text (H9A-2R4). The verdict names kinds only, never the text or what
+// matched.
 
 export type CustomerDataKind = Current_CustomerDataKind;
 export type CustomerScreenRefusal = Current_CustomerScreenRefusal;
@@ -171,8 +175,11 @@ const percentEscapes: Readonly<Record<string, string>> = Object.freeze({
   "23": "#",
   "28": "(",
   "29": ")",
+  // "%2540" is "%40" escaped again: "%25" decodes to "%" and the next pass reads the rest, the
+  // same as decodeURIComponent reads a link's content (H9A-2R3).
+  "25": "%",
 });
-const percentEscape = /%(40|2[eEfF0bB389]|3[aA])/gu;
+const percentEscape = /%(40|2[eEfF0bB3895]|3[aA])/gu;
 // Decimal digits of every script count as digits (an Urdu or Arabic phone number is a phone
 // number): NFKC folds the compatibility ones, and each other decimal digit becomes its value,
 // read from its place in its script's run of ten.
@@ -211,17 +218,34 @@ interface ScanCopies {
   readonly spaced: string;
   /** The same with every run of spaces and tabs closed up to one space. */
   readonly scan: string;
+  /** The longest copy the scans read: what the bounds count (H9A-2R4). */
+  readonly scanned: number;
+}
+// The bounds hold on what the scans read, not only on the raw text (H9A-2R4): NFKC can make a
+// character eighteen ("\uFDFA"), and a decoded reference can expand again ("&#xFDFA;"), so a
+// mebibyte of raw text could be scanned as almost nineteen. The fold and each decoding pass are
+// checked as they are made, so neither a scan nor a further pass reads a copy over textChars.
+function bounded(copy: string): string {
+  if (copy.length > customerScreenLimits.textChars) throw Error("CUSTOMER_SCREEN_TEXT_TOO_LONG");
+  return copy;
 }
 function scanCopies(text: string): ScanCopies {
-  const folded = fold(text);
+  const folded = bounded(fold(text));
   let current = folded;
+  let scanned = folded.length;
   for (let pass = 0; pass < decodePasses && /[&%]/u.test(current); pass += 1) {
-    const next = fold(unescaped(current));
+    const next = bounded(fold(unescaped(current)));
     if (next === current) break;
     current = next;
+    scanned = Math.max(scanned, next.length);
   }
   const decoded = plain(current);
-  return { folded, spaced: bracketsRead(decoded), scan: bracketsRead(closedUp(decoded)) };
+  return {
+    folded,
+    spaced: bracketsRead(decoded),
+    scan: bracketsRead(closedUp(decoded)),
+    scanned,
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -422,13 +446,23 @@ function scanCustomerIds(scan: string, found: Findings): void {
 // digits are an id, a UUID's leading groups a record id, never a grouped phone number (H9A-R4),
 // a date's digits a date), after the phone links among them (tel:, wa.me, WhatsApp's send link)
 // are read. What a link says is read on its own (H9A-R3): each link's path, query and fragment,
-// decoded ("+" a space, percent escapes read, each "/", "?", "&" and "#" a line break), is
-// masked and scanned for phones and addresses like a text of its own, so a map link's
-// "?q=221B+Baker+Street" or a "?phone=" is found, while an order link's ids still read as ids
-// and nothing in a link runs on into the text around it.
+// decoded ("+" a space unless it starts a value, percent escapes read, each "/", "?", "&" and
+// "#" a line break), is masked and scanned for phones and addresses like a text of its own, so
+// a map link's "?q=221B+Baker+Street" or a "?phone=" is found, while an order link's ids still
+// read as ids and nothing in a link runs on into the text around it. Inside a link, a bare
+// number shaped like a North American one is an id (a Sheets tab's "#gid=", a legacy admin id)
+// unless a phone word or key comes first or it is the link's whole content; a "+", "00" or
+// trunk 0 still makes it a phone (H9A-2R2). A link is "https://", "www." or a bare host with its top-level domain followed by
+// "/" or "?" ("maps.google.com/?q=..."; H9A-2R3); an email address's domain is not a link.
 const phoneLink =
   /\btel:[ \t]{0,8}(\+?[0-9][0-9 \t().-]{5,24}[0-9])|\bwa\.me\/\+?([0-9]{7,15})\b|\bwhatsapp\.com\/send\/?\?(?:[a-z_]{1,32}=[^&\s]{0,256}&){0,16}phone=\+?([0-9]{7,15})\b/giu;
-const linkPattern = /\b(?:https?:\/\/|www\.)[^\s<>"']{1,2048}/giu;
+// The bare host is bounded (at most eight labels of at most 63 characters) and starts only where
+// a host can start, so no start scans further than a host's length (H9A-R1).
+const hostLabel = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+const linkPattern = new RegExp(
+  `(?:\\b(?:https?:\\/\\/|www\\.)|(?<![\\p{L}\\p{N}._%+@/\\\\-])(?:${hostLabel}\\.){1,8}[a-z]{2,24}(?=[/?]))[^\\s<>"']{1,2048}`,
+  "giu",
+);
 const uuidPattern =
   /(?<![0-9A-Za-z])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9A-Za-z])/giu;
 const maskPatterns: readonly RegExp[] = Object.freeze([
@@ -464,7 +498,15 @@ function decodedPercents(run: string): string {
     return " ";
   }
 }
-/** A link's path, query and fragment, decoded, with its scheme and host left out. */
+// A "+" that starts a segment or a value is a plus sign ("?to=+14155552671", "/call/+44..."); any
+// other "+" is a space ("?q=221B+Baker+Street").
+const plusAsSpace = /(?<![/?&#=])\+/gu;
+/**
+ * A link's path, query and fragment, decoded, with its scheme and host left out. It can be up to
+ * about twice the link (a percent-encoded U+FDFA, nine characters, folds to eighteen), and a link
+ * is at most about 2 KiB, so the contents of a mebibyte stay linear in it (H9A-2R4; the
+ * linear-time test times that shape).
+ */
 function linkContent(link: string): string {
   let rest = link
     .slice(linkAuthority.exec(link)![0].length)
@@ -474,8 +516,13 @@ function linkContent(link: string): string {
     if (next === rest) break;
     rest = next;
   }
-  return plain(fold(rest.replace(linkDelimiters, "\n").replace(/\+/gu, " ")));
+  return plain(fold(rest.replace(plusAsSpace, " ").replace(linkDelimiters, "\n")));
 }
+// A link whose whole content is one bare number ("jane.doe/4155552671", "example.com/4155552671")
+// has no tab, collection or record path around it: the number reads as it would in the text, so
+// reading a dotted name as a bare host hides no phone (H9A-2R2 with H9A-2R3). A link keeps the
+// punctuation that ends a sentence or a bracket, so that may follow.
+const loneNumber = /^\n{1,4}[0-9]{7,17}[\n.,;:!)\]]{0,4}$/u;
 /**
  * The links of the folded text (whole, before an escaped space ends them) and of the scan copy,
  * each one's content once. Only a content with a digit can hold a phone or an address, and a
@@ -504,9 +551,11 @@ const phoneRun =
 // ("phone=+1...", "tel=0300..."), "," ("Jane,0300...", a CSV row), "/" ("Jane/0300...") or "."
 // ("ph.0300..."), unless a digit comes before the mark (a decimal, a list of numbers, a date);
 // and after "#" or "-" only when a phone word comes first ("Tel#0300...", "Phone-0300..."), since
-// "#1042" and "SKU-..." are ids. It is a second pass: a run the first pass reads is read as before.
+// "#1042" and "SKU-..." are ids. After a digit and a comma (a CSV row whose phone column follows a
+// numeric one, "1042,03001234567") only a strongly phone-shaped run counts (H9A-2R1). It is a
+// second pass: a run the first pass reads is read as before.
 const gluedPhoneRun =
-  /(?<![0-9][=,./#-])(?<=[=,./#-])\+?(?:\([0-9]{1,5}\)|[0-9])(?:[ \t.()-]{0,3}[0-9]){6,16}(?![\p{L}\p{N}_])/gu;
+  /(?<![0-9][=./#-])(?<=[=,./#-])\+?(?:\([0-9]{1,5}\)|[0-9])(?:[ \t.()-]{0,3}[0-9]){6,16}(?![\p{L}\p{N}_])/gu;
 // A phone word ends at anything but a letter or digit, so a key's parts count
 // ("customer_phone=", "phone_number:").
 const phoneWordBefore =
@@ -526,7 +575,19 @@ const unitAfter =
   /^[ \t]{0,2}(?:%|(?:units?|pcs|pieces?|items?|orders?|views?|visits?|customers?|sales|products?|usd|pkr|inr|eur|gbp|aed|sar|rs|rupees|dollars|times|days?|nights?)\b)/iu;
 const nanp = (ten: string) => /^[2-9][0-9]{2}[2-9][0-9]{6}$/u.test(ten);
 
-function phoneShaped(match: string, before: string, after: string, idBefore: RegExp): boolean {
+/**
+ * `bareNanp` is false inside a link's content: there a bare number shaped like a North American
+ * one is an id (a Sheets tab's "#gid=2063456789", "/collections/2612345678") unless a phone word
+ * or key comes first (H9A-2R2), or the number is the link's whole content (`loneNumber`). A "+",
+ * "00" or trunk 0 still reads as a phone.
+ */
+function phoneShaped(
+  match: string,
+  before: string,
+  after: string,
+  idBefore: RegExp,
+  bareNanp: boolean,
+): boolean {
   const digits = match.replace(/[^0-9]/gu, "");
   const international = match.startsWith("+") || match.startsWith("00");
   const body = match.replace(/^(?:\+|00)/u, "");
@@ -542,23 +603,91 @@ function phoneShaped(match: string, before: string, after: string, idBefore: Reg
   }
   if (digits.length < 10 || digits.length > 13) return false;
   if (groups.length > 1) return true;
-  if (digits.length === 10) return digits.startsWith("0") ? digits[1] !== "0" : nanp(digits);
+  if (digits.length === 10)
+    return digits.startsWith("0") ? digits[1] !== "0" : bareNanp && nanp(digits);
   if (digits.length === 11)
-    return digits.startsWith("0") ? digits[1] !== "0" : digits[0] === "1" && nanp(digits.slice(1));
+    return digits.startsWith("0")
+      ? digits[1] !== "0"
+      : bareNanp && digits[0] === "1" && nanp(digits.slice(1));
   return false;
 }
-function scanPhones(masked: string, found: Findings): void {
+
+// A phone written right after or before another number merges with it into one run that is not
+// phone-shaped ("1042 03001234567", "1042\t03001234567", "03001234567 1042"; H9A-2R1). Such a run
+// is read again in parts: each token between its runs of spaces or tabs, each prefix and each
+// suffix (a run holds at most seventeen digits, so at most sixteen boundaries). Only a strongly
+// phone-shaped part counts:
+//   * one led by "+" (only a prefix can be), with 8 to 15 digits;
+//   * in one token, one led by a trunk 0 with 10 or 11 digits ("03001234567", "0300-1234567"),
+//     or by "00" and a country code with 8 to 15 digits after it;
+//   * in two or three tokens, one led by a trunk 0 with 10 or 11 digits grouped the way national
+//     numbers are written ("0300 1234567", "020 7946 0958", "0412 345 678"), or a bracketed North
+//     American number ("(212) 555-0187").
+// A part in several tokens counts only when the run is the whole number (no digit right before
+// or after it: the pattern reads at most seventeen digits, so a long id read in groups, such as a
+// 22-digit tracking number, is cut into runs whose tails would otherwise pair up) and no id word
+// comes first. So a tracking number, a UPC or EAN, an IBAN's or a card's digits never split into
+// a phone: their groups are four digits or fewer, or one digit at an end.
+const runToken = /[^ \t]+/gu;
+const bracketedNanp = /^\([2-9][0-9]{2}\)[ \t]?[2-9][0-9]{2}[ \t.-]?[0-9]{4}$/u;
+const nationalGroups =
+  /^\(?0[1-9][0-9]{0,3}\)?(?:[ \t]+[0-9]{5,9}|[ \t]+[0-9]{3,4}[ \t]+[0-9]{3,4})$/u;
+function strongPhonePart(part: string, oneToken: boolean): boolean {
+  const digits = part.replace(/[^0-9]/gu, "").length;
+  if (part.startsWith("+")) return digits >= 8 && digits <= 15;
+  if (oneToken) {
+    if (/^\(?00[1-9]/u.test(part)) return digits >= 10 && digits <= 17;
+    return /^\(?0[1-9]/u.test(part) && (digits === 10 || digits === 11);
+  }
+  if (bracketedNanp.test(part)) return true;
+  return (
+    (digits === 10 || digits === 11) &&
+    nationalGroups.test(part) &&
+    !/^[0-9]{4}[ \t]+[0-9]{4}[ \t]/u.test(part)
+  );
+}
+function scanPhones(masked: string, found: Findings, bareNanp = true): void {
   if (!/[0-9]{3}/u.test(masked.replace(/[ \t.()-]/gu, ""))) return;
+  const beforeAt = (i: number) => masked.slice(Math.max(0, i - 40), i);
+  const afterAt = (i: number) => masked.slice(i, i + 16);
   const read = (m: RegExpExecArray | RegExpMatchArray, glued: boolean) => {
     const at = m.index!;
-    const before = masked.slice(Math.max(0, at - 40), at);
+    const run = m[0].trimEnd();
+    const before = beforeAt(at);
     if (glued && /[#-]$/u.test(before) && !phoneWordBefore.test(before)) return false;
-    return phoneShaped(
-      m[0].trimEnd(),
-      before,
-      masked.slice(at + m[0].length, at + m[0].length + 16),
-      glued ? idKeyBefore : idWordBefore,
-    );
+    const idBefore = glued ? idKeyBefore : idWordBefore;
+    const after = afterAt(at + run.length);
+    // After a digit and a comma, only a strongly phone-shaped run or part (H9A-2R1).
+    const strongOnly = glued && /[0-9],$/u.test(before);
+    const oneToken = (part: string) => !/[ \t]/u.test(part.trim());
+    if (
+      (!strongOnly || strongPhonePart(run.trim(), oneToken(run))) &&
+      phoneShaped(run, before, after, idBefore, bareNanp)
+    )
+      return true;
+    // The run's tokens; then each token, and (for a whole number after no id word) each prefix
+    // and suffix of two tokens or more.
+    const parts = [...run.matchAll(runToken)].map((t) => [t.index, t.index + t[0].length] as const);
+    if (parts.length < 2) return false;
+    const last = parts.length - 1;
+    const wholeNumber =
+      !idBefore.test(before) &&
+      !/[0-9][ \t.()-]{0,3}$/u.test(before) &&
+      !/^[ \t.()-]{0,3}[0-9]/u.test(after);
+    const windows: (readonly [number, number])[] = [];
+    for (let i = 0; i <= last; i += 1) {
+      const [start, end] = parts[i]!;
+      windows.push([start, end]);
+      if (wholeNumber && i > 0 && i < last)
+        windows.push([parts[0]![0], end], [start, parts[last]![1]]);
+    }
+    for (const [start, end] of windows) {
+      const part = run.slice(start, end);
+      if (!strongPhonePart(part, oneToken(part))) continue;
+      if (phoneShaped(part, beforeAt(at + start), afterAt(at + end), idBefore, bareNanp))
+        return true;
+    }
+    return false;
   };
   for (const m of masked.matchAll(phoneRun))
     if (read(m, false)) {
@@ -1179,9 +1308,13 @@ function inspect(texts: readonly string[]): Findings {
   for (const text of texts) {
     if (typeof text !== "string") throw Error("CUSTOMER_SCREEN_INPUT");
     if (text.length > customerScreenLimits.textChars) throw Error("CUSTOMER_SCREEN_TEXT_TOO_LONG");
-    total += text.length;
+    // The raw length bounds the fold's own work; the folded and decoded length bounds the scans'
+    // (H9A-2R4). Both count against the call's total.
+    if (total + text.length > customerScreenLimits.totalChars)
+      throw Error("CUSTOMER_SCREEN_TEXT_TOO_LONG");
+    const { folded, spaced, scan, scanned } = scanCopies(text);
+    total += Math.max(text.length, scanned);
     if (total > customerScreenLimits.totalChars) throw Error("CUSTOMER_SCREEN_TEXT_TOO_LONG");
-    const { folded, spaced, scan } = scanCopies(text);
     if (!mayHold.test(scan)) continue;
     scanEmails(scan, found);
     scanCustomerIds(scan, found);
@@ -1194,7 +1327,7 @@ function inspect(texts: readonly string[]): Findings {
     for (const content of linkContents(folded, scan)) {
       if (found.kinds.has("phone") && found.kinds.has("street_address")) break;
       const linkMasked = maskedCopy(content);
-      scanPhones(linkMasked, found);
+      scanPhones(linkMasked, found, loneNumber.test(content));
       scanAddresses(closedUp(linkMasked), found);
     }
   }
