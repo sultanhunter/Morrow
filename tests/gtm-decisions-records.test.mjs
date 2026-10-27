@@ -7,13 +7,17 @@
 // outside Morrow until launch (ADR-0035); and the Business Analyst's weekly COD and RTO report as a
 // launch deliverable in `mvp.md`, from Level 1 data only. The review of pull request 94's head
 // 2a29987c (AI review, separate context, same model family) added the checks marked with its
-// finding ids. Pure: reads repository files only.
+// finding ids. The owner's later answers of 2026-10-27 (OD-2026-10-27-2) choose the private plan's
+// grant, put design partners after results on the owner's own store and make the harness the
+// priority; the last test keeps that record and its dated notes in step. Pure: reads repository
+// files only.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const read = (path) => readFileSync(path, "utf8");
 const odPath = "docs/graph/decisions/OD-2026-10-27-1.md";
+const od2Path = "docs/graph/decisions/OD-2026-10-27-2.md";
 const adr42Path = "docs/decisions/adr/ADR-0042-connected-services-and-customer-contact.md";
 const adr26Path = "docs/decisions/adr/ADR-0026-billing-and-price.md";
 const adr35Path = "docs/decisions/adr/ADR-0035-build-v1-live.md";
@@ -458,4 +462,171 @@ test("the README rows name the amendment, and no record turns the undecided item
   assert.ok(proposed.some((line) => line.includes("call plan")));
   for (const line of proposed) assert.doesNotMatch(line, /Plivo|voice|WhatsApp/i);
   assert.doesNotMatch(read("CLAUDE.md"), /Plivo/);
+});
+
+// The owner's answers of 2026-10-27, exactly as written: the free text with its spelling, and the
+// chosen option's label.
+const od2Answers = [
+  "okay since I am going to use the morrow for my own store lets quickly make it work for our own store as i am going to do dropshipping on my own store using morrow then we will make it purchasable and ready for everyone else when it starts giving results.",
+  "Same price per credit (Recommended)",
+  "don't worry about the dropshipping store just build the best harness i will then iterate as i require in my store",
+];
+
+test("OD-2026-10-27-2: the owner's later answers, quoted exactly, with the lead's reading labelled and applied", () => {
+  const od = read(od2Path);
+  const front = between(od, "---\n", "\n---\n");
+  for (const line of [
+    "id: OD-2026-10-27-2",
+    "type: decision",
+    "status: recorded",
+    "date: 2026-10-27",
+    "by: owner",
+    "channel: chat",
+    "  refines: [OD-2026-10-27-1]",
+  ])
+    assert.ok(front.split("\n").includes(line), line);
+
+  // The answers, each a whole quoted line, exactly as written, and nothing else quoted.
+  const quoted = od.match(/^> .*$/gm).map((l) => l.slice(2));
+  assert.deepEqual(quoted, od2Answers);
+  const body = od.slice(od.indexOf("\n---\n", 4) + 5).trimStart();
+  assert.equal(body.split("\n")[0], `> ${od2Answers[0]}`);
+
+  // The questions, as asked, with the options offered.
+  const prose = flat(od);
+  for (const question of [
+    '"When should named design partners start using Morrow on the private US$99 plan?" The options offered were "On launch day (Recommended)" and "Pilot before launch".',
+    '"How many credits should the private US$99 plan include?"',
+    '"Which customers will your dropshipping store sell to?" The owner\'s answer: "Several markets".',
+    '"Where will the products come from?" The owner\'s answer: "Not decided yet".',
+    '"Which jobs should Morrow take on first for the store?"',
+    '"When an order comes in, should Morrow place the order with the supplier (spending money)?"',
+  ])
+    assert.ok(prose.includes(question), question.slice(0, 50));
+  // "yes ok" asked for an explanation, so it was not taken as a decision.
+  assert.ok(prose.includes('the lead did not treat "yes ok" as a decision'));
+
+  // The lead's reading is labelled as such and open to the owner's correction.
+  const reading = flat(between(od, "## The lead's reading", "## What this changes"));
+  assert.ok(
+    reading.includes("This is the lead's reading of the answers, open to the owner's correction."),
+  );
+  for (const text of [
+    "No design partner and no other store before Morrow gives results on the owner's own store.",
+    "only after that, and only with App Pricing (track T13).",
+    '"Pilot before launch" was not chosen.',
+    "ADR-0035 items 2 and 3 stand unchanged",
+    "It is now the owner's choice",
+    "nothing dropshipping-specific is built now",
+    "No supplier connector, no supplier-order placement and no new money path is decided",
+    "The 2027-01-31 COD decision date stands as recorded unless the owner moves it.",
+  ])
+    assert.ok(reading.includes(text), text);
+  const notDecided = flat(between(od, "## Not decided here", null));
+  assert.ok(notDecided.includes("What counts as results on the owner's store"));
+  assert.ok(
+    notDecided.includes("a supplier connector, placing orders with a supplier, a new money path"),
+  );
+
+  // OD-2026-10-27-1 is never edited: it does not know of the later record.
+  assert.ok(!read(odPath).includes("OD-2026-10-27-2"));
+
+  // ADR-0026: the grant now cites OD-2026-10-27-2 as the owner's choice; the earlier text stays.
+  const adr26 = amendment(read(adr26Path), "item 1 gains a private US$99 plan");
+  assert.ok(
+    adr26.includes(
+      "**The private plan's grant has the default plan's price per credit** (the lead's reading of item 5, not part of the owner's answer, which the owner may correct).",
+    ),
+  );
+  assert.ok(
+    adr26.includes(
+      "(Note of 2026-10-27: the owner has since chosen this grant, OD-2026-10-27-2; see the note below.)",
+    ),
+  );
+  const note26 = between(
+    adr26,
+    "**Note of 2026-10-27, later the same day (OD-2026-10-27-2).**",
+    null,
+  );
+  assert.ok(note26.includes('the owner chose "Same price per credit (Recommended)"'));
+  assert.ok(
+    note26.includes(
+      "is now the owner's choice (OD-2026-10-27-2), no longer only the lead's reading of item 5",
+    ),
+  );
+  assert.ok(
+    note26.includes("(the lead's reading of the owner's answer, open to the owner's correction)"),
+  );
+  assert.ok(
+    note26.includes(
+      "No design partner and no other store before Morrow gives results on the owner's own store",
+    ),
+  );
+  assert.ok(
+    note26.includes(
+      'ADR-0035 items 2 and 3 stand unchanged, and the "pilot before launch" path was not chosen',
+    ),
+  );
+
+  // ADR-0035: items 2 and 3 unchanged.
+  const adr35 = amendment(read(adr35Path), "storefront audits of prospects stay outside Morrow");
+  assert.ok(
+    adr35.includes(
+      "Note of 2026-10-27, later the same day (OD-2026-10-27-2): the note above and items 2 and 3 stand unchanged.",
+    ),
+  );
+  assert.ok(
+    adr35.includes(
+      'The "pilot before launch" path, which would have needed items 2 and 3 changed by a new ADR, was not chosen.',
+    ),
+  );
+
+  // The README rows, the plan's T13 and its dated priority note.
+  const readme = read(readmePath);
+  for (const id of ["0026", "0035"]) {
+    const line = readme.split("\n").find((l) => l.startsWith(`| [${id}](`));
+    assert.ok(
+      line.includes(
+        "no design partner before Morrow gives results on the owner's own store (OD-2026-10-27-2, 2026-10-27)",
+      ),
+      id,
+    );
+  }
+  const mvp = read(mvpPath);
+  assert.ok(
+    row(mvp, "T13 Shopify billing")[1].includes(
+      "the plan is offered only after Morrow gives results on the owner's own store (note of 2026-10-27, OD-2026-10-27-2)",
+    ),
+  );
+  const priority = flat(
+    between(mvp, "**Note of 2026-10-27: the priority (OD-2026-10-27-2).**", "## Cut rules"),
+  );
+  for (const text of [
+    '"just build the best harness"',
+    "Outreach to Indian brands and to design partners (OD-2026-10-27-1) waits for results on the owner's store",
+    "No supplier connector, supplier-order placement or other money path is decided; each would need its own record.",
+    "This note moves no date above",
+    "The reading of the owner's free-text answers is the lead's, open to the owner's correction.",
+  ])
+    assert.ok(priority.includes(text), text);
+  const actions = flat(
+    between(read(planPath), "## Owner actions in this plan", "## Not in these PRs"),
+  );
+  const planNote = between(
+    actions,
+    "Note of 2026-10-27, later the same day (OD-2026-10-27-2):",
+    "When you ask for the COD Confirmation agent:",
+  );
+  for (const text of [
+    '"just build the best harness"',
+    "In the lead's reading, open to your correction",
+    "outreach to Indian brands and to design partners waits for results on your own store",
+    "the 2027-01-31 date stands as recorded unless you move it",
+    "No supplier connector and no supplier-order money path is decided; each would need its own record",
+  ])
+    assert.ok(planNote.includes(text), text);
+
+  // No record turns the dropshipping answers into a built feature or a decided provider.
+  for (const path of [adr26Path, adr35Path, planPath, mvpPath, readmePath])
+    assert.doesNotMatch(read(path), /supplier connector (is|was) (decided|approved|chosen)/i, path);
 });
