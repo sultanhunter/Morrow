@@ -1,10 +1,12 @@
 // PR 10, "Contracts for the agent platform" (docs/briefs/agent-platform-contracts.md): the v1.1
 // definitions of ADR-0024 (mandates, the installation as requester, batch confirmation),
 // ADR-0026 (the rate card's shape, holds), ADR-0027 (agent-run@1, ModelCall@2 and
-// ModelResult@2, run_turns and run_tool_calls, model profiles), ADR-0028 (SpecialistSpec@1,
-// the Start document), ADR-0030 item 10 (sending addresses) and ADR-0031 (read tags), their
-// two new capabilities, and the fakes the loop and the screens build against. Pure: the
-// ahead-of-time validators only.
+// ModelResult@2, run_turns and run_tool_calls, model profiles), ADR-0030 item 10 (sending
+// addresses) and ADR-0031 (read tags), their two new capabilities, and the fakes the loop and
+// the screens build against; ADR-0037 PR 2's teammate, result-item and agent-card contracts,
+// with ADR-0028's specialist contracts retired; plan row H5's merged teammate contracts and
+// catalogue version 4's orchestration, memory and harness inputs (ADR-0041 items 16 to 24 and
+// 34). Pure: the ahead-of-time validators only.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -32,6 +34,12 @@ const edit = (value, change) => {
   return copy;
 };
 const digest = "a".repeat(64);
+const verdict = () => ({
+  index: 0,
+  verdict: "fail",
+  evidence: { kind: "list", refs: [{ kind: "product", id: "product:1001" }] },
+  note: { kind: "text", text: "The title is still 92 characters." },
+});
 
 test("every fake validates against its contract", () => {
   const cases = [
@@ -41,11 +49,32 @@ test("every fake validates against its contract", () => {
     ["RunRequester", fakes.fakeMandateRequester()],
     ["ModelProfileChange", fakes.fakeModelProfileChange()],
     ["SupportReplyParameters", fakes.fakeSupportReplyParameters()],
-    ["SpecialistBrief", fakes.fakeSpecialistBrief()],
-    ["ToolInputSpecialistDraft", fakes.fakeSpecialistBrief()],
-    ["SpecialistSpec", fakes.fakeSpecialistSpec()],
-    ["SpecialistStartDocument", fakes.fakeSpecialistStartDocument()],
     ["ReportArtifact", fakes.fakeReportArtifact()],
+    ["RunTaint", fakes.fakeTaint()],
+    ["RunTaint", fakes.fakeCleanTaint()],
+    ["TeammateBriefInput", fakes.fakeTeammateBriefInput()],
+    ["TeammateBrief", fakes.fakeTeammateBrief()],
+    ["ToolInputAgentAsk", fakes.fakeAgentAskInput()],
+    ["ToolInputAgentMap", fakes.fakeAgentMapInput()],
+    ["ToolInputAgentMessage", fakes.fakeAgentMessageInput()],
+    ["ToolInputAgentCancel", fakes.fakeAgentCancelInput()],
+    ["ToolInputRunComplete", fakes.fakeRunCompleteChild()],
+    ["ToolInputRunComplete", fakes.fakeRunCompleteInput()],
+    ["ToolInputRunPlan", fakes.fakeRunPlanInput()],
+    ["ToolInputRunWait", fakes.fakeRunWaitInput()],
+    ["ToolInputResultWrite", fakes.fakeResultWriteInput()],
+    ["ToolInputContextCheckpoint", fakes.fakeContextCheckpointInput()],
+    ["ToolInputMemorySearch", fakes.fakeMemorySearchInput()],
+    ["ToolInputMemoryRead", fakes.fakeMemoryReadInput()],
+    ["ToolInputMemorySuggest", fakes.fakeMemorySuggestInput()],
+    ["TeammateResult", fakes.fakeTeammateResult()],
+    ["ResultItem", fakes.fakeResultItem()],
+    ["ResultItemPage", fakes.fakeResultItemPage()],
+    ["ToolInputAgentPropose", fakes.fakeAgentProposeInput()],
+    ["AgentProposal", fakes.fakeAgentProposal()],
+    ["AddToTeamDocument", fakes.fakeAddToTeamDocument()],
+    ["AgentPackage", fakes.fakeWorkspacePackage()],
+    ["AgentPackage", fakes.fakeListingsPackage()],
     ["RunTurn", fakes.fakeRunTurn()],
     ["RunToolCall", fakes.fakeRunToolCall()],
     ["MandateDocument", fakes.fakeMandateDocument()],
@@ -57,7 +86,7 @@ test("every fake validates against its contract", () => {
       ["ModelProfileTarget", p.target],
       ["ModelProfile", p.profile],
     ]),
-    ...["coordinator", "routed", "mandate", "specialist"].map((kind) => [
+    ...["coordinator", "routed", "mandate"].map((kind) => [
       "AgentRunManifest",
       fakes.fakeAgentRunManifest(kind),
     ]),
@@ -65,9 +94,24 @@ test("every fake validates against its contract", () => {
   for (const [name, value] of cases) assert.ok(valid(name, value), name);
   assert.ok(validateCurrentBillingDefinition("RateCard", fakes.fakeRateCard()));
   // Fakes are frozen all the way down, and fresh per call.
-  const spec = fakes.fakeSpecialistSpec();
-  assert.ok(Object.isFrozen(spec) && Object.isFrozen(spec.brief.skillIds));
-  assert.notEqual(fakes.fakeSpecialistSpec(), spec);
+  const card = fakes.fakeAgentProposal();
+  assert.ok(Object.isFrozen(card) && Object.isFrozen(card.draftedBy.requester));
+  assert.notEqual(fakes.fakeAgentProposal(), card);
+  // ADR-0037 item 7: the specialist definitions are retired from v1.1.
+  for (const name of [
+    "SpecialistSpec",
+    "SpecialistStartDocument",
+    "SpecialistStartRefusal",
+    "SpecialistBrief",
+    "SpecialistInputRef",
+    "ToolInputSpecialistDraft",
+    // ADR-0041 item 24: memory.read and run.complete's child form replace them.
+    "ToolInputAgentResultRead",
+    "ToolInputResultSubmit",
+    "ToolModelInputAgentResultRead",
+    "ToolModelInputResultSubmit",
+  ])
+    assert.equal(core.$defs[name], undefined, name);
   // Synthetic data only: reserved example domains, no real shop.
   for (const s of fakes.fakeSenderIdentities()) assert.match(s.address, /@replies\.example\.com$/);
 });
@@ -177,7 +221,6 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
   const coordinator = fakes.fakeAgentRunManifest("coordinator");
   const routed = fakes.fakeAgentRunManifest("routed");
   const mandate = fakes.fakeAgentRunManifest("mandate");
-  const specialist = fakes.fakeAgentRunManifest("specialist");
   for (const [name, value] of [
     ["a coordinator with an installation", edit(coordinator, (m) => (m.installationId = "inst"))],
     [
@@ -190,17 +233,12 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
       edit(routed, (m) => (m.requester = fakes.fakeMandateRequester())),
     ],
     ["a routed run with a mandate", edit(routed, (m) => (m.mandateId = "mandate_x"))],
-    ["a specialist without its spec digest", edit(specialist, (m) => (m.specDigest = null))],
-    ["a specialist without data classes", edit(specialist, (m) => (m.dataClasses = null))],
-    [
-      "a specialist on wall time",
-      edit(specialist, (m) => {
-        m.caps.wallTimeSeconds = 1800;
-        m.caps.deadline = null;
-      }),
-    ],
-    // ADR-0027 item 6: the Coordinator, routed and mandate runs keep the 30-minute wall time;
-    // only a specialist runs on a deadline (ADR-0028 item 6).
+    // ADR-0037: the specialist kind retired; its spec digest and data classes are always null.
+    ["a specialist run", edit(routed, (m) => (m.kind = "specialist"))],
+    ["a spec digest", edit(routed, (m) => (m.specDigest = digest))],
+    ["data classes", edit(routed, (m) => (m.dataClasses = ["catalog.products.read"]))],
+    // ADR-0027 item 6: every run keeps the 30-minute wall time, a called teammate's included
+    // (ADR-0037 item 2); no run is on a deadline.
     ...[
       ["a coordinator", coordinator],
       ["a routed run", routed],
@@ -212,8 +250,8 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
         m.caps.deadline = "2026-10-26T10:00:00.000Z";
       }),
     ]),
-    // A routed run runs an installed agent, one per store (ADR-0028 item 1), and its tools act
-    // on "this job's store"; a mandate run's trigger and a specialist's spec name one too.
+    // A routed run runs an installed agent, one per store, and its tools act on "this job's
+    // store"; a mandate run's trigger names one too.
     ["a routed run without a store", edit(routed, (m) => (m.storeId = null))],
     ["a routed run without a connection", edit(routed, (m) => (m.connectionId = null))],
     [
@@ -225,8 +263,6 @@ test("ADR-0027 item 1: agent-run@1 params carry ids only, and the manifest binds
     ],
     ["a mandate run without a store", edit(mandate, (m) => (m.storeId = null))],
     ["a mandate run without a connection", edit(mandate, (m) => (m.connectionId = null))],
-    ["a specialist without a store", edit(specialist, (m) => (m.storeId = null))],
-    ["a specialist without a connection", edit(specialist, (m) => (m.connectionId = null))],
     ["caps with neither clock", edit(routed, (m) => (m.caps.wallTimeSeconds = null))],
     ["caps with both clocks", edit(routed, (m) => (m.caps.deadline = "2026-10-26T10:00:00.000Z"))],
     ["more than 16 turns", edit(routed, (m) => (m.caps.maxTurns = 17))],
@@ -403,6 +439,32 @@ test("ADR-0027 item 7: run_tool_calls rows hold ids, codes and digests only; a r
   );
   assert.equal(valid("RunToolCall", { ...row, outcome: null }), false, "in flight has no result");
   assert.equal(valid("RunToolCall", { ...row, resultBytes: 8193 }), false);
+  // Review H5-6: a grant tool's row names the capability and verb it used; a memory or harness
+  // tool's row names neither (ADR-0041 item 24), and never half of one.
+  const grant = { ...row, tool: "proposal.listing", capabilityId: "catalog.content.publish" };
+  assert.ok(valid("RunToolCall", { ...grant, verb: "propose" }));
+  assert.equal(valid("RunToolCall", { ...grant, capabilityId: null, verb: null }), false);
+  assert.equal(valid("RunToolCall", { ...grant, verb: null }), false, "a grant row names its verb");
+  assert.equal(valid("RunToolCall", { ...row, capabilityId: null }), false);
+  for (const tool of [
+    "memory.search",
+    "memory.read",
+    "memory.suggest",
+    "run.plan",
+    "run.complete",
+    "run.wait",
+    "result.write",
+    "context.checkpoint",
+  ]) {
+    assert.ok(valid("RunToolCall", { ...row, tool, capabilityId: null, verb: null }), tool);
+    assert.equal(valid("RunToolCall", { ...row, tool }), false, `${tool} names no capability`);
+    assert.equal(
+      valid("RunToolCall", { ...row, tool, capabilityId: "orders.read", verb: "view" }),
+      false,
+      tool,
+    );
+    assert.equal(valid("RunToolCall", { ...row, tool, capabilityId: null }), false, tool);
+  }
   // Turns keep content with read tags and an expiry (ADR-0031 item 1).
   const turn = fakes.fakeRunTurn();
   assert.equal(
@@ -431,7 +493,7 @@ test("ADR-0027 items 9 and 12: a profile is keys and a catalogue version; its re
   for (const target of [
     { kind: "installation", installationId: "inst_a" },
     { kind: "coordinator" },
-    { kind: "specialist_default" },
+    { kind: "teammate_default" },
   ])
     assert.ok(
       valid("ModelProfileRevision", {
@@ -442,6 +504,8 @@ test("ADR-0027 items 9 and 12: a profile is keys and a catalogue version; its re
     );
   assert.equal(valid("ModelProfileTarget", { kind: "coordinator", installationId: "x" }), false);
   assert.equal(valid("ModelProfileTarget", { kind: "member", principalId: "x" }), false);
+  // ADR-0037 item 4: the default for new teammates replaces the specialist default.
+  assert.equal(valid("ModelProfileTarget", { kind: "specialist_default" }), false);
   assert.equal(
     valid("ModelProfileChange", { ...fakes.fakeModelProfileChange(), prompt: "x" }),
     false,
@@ -449,31 +513,411 @@ test("ADR-0027 items 9 and 12: a profile is keys and a catalogue version; its re
   );
 });
 
-test("ADR-0028 items 2, 3 and 7: a specialist spec is bounded and its brief names no upload", () => {
-  const spec = fakes.fakeSpecialistSpec();
+test("ADR-0037 item 3(a): TeammateResult@1 is closed and structured; code sets the outcomes the teammate cannot", () => {
+  const result = fakes.fakeTeammateResult();
+  const long = "x".repeat(100000);
+  // No character cap in the contract: the 8 KiB bound is code's (teammates.ts), which moves
+  // what does not fit into result items instead of cutting it.
+  assert.ok(
+    valid(
+      "TeammateResult",
+      edit(result, (r) => (r.summary.text = long)),
+    ),
+  );
   for (const [name, change] of [
+    ["a field the result does not have", (r) => (r.model = "claude_opus_5_5")],
+    ["a model outcome on a stopped run", (r) => (r.endReason = "stopped")],
+    ["a model outcome without a summary", (r) => (r.summary = null)],
+    ["an outcome outside the list", (r) => (r.outcome = "approved")],
+    ["a next step outside the closed codes", (r) => r.nextSteps.push("publish_now")],
     [
-      "17 capabilities",
-      (s) => {
-        s.capabilities = Array.from({ length: 17 }, (_, i) => ({
-          capabilityId: "custom.cap_" + "abcdefghijklmnopq"[i],
-          verbs: ["view"],
-        }));
-      },
+      "a created record of another kind",
+      (r) => r.created.records.push({ kind: "grant", id: "g_1" }),
     ],
-    ["four skills", (s) => (s.brief.skillIds = ["a1", "b1", "c1", "d1"])],
-    ["no skill", (s) => (s.brief.skillIds = [])],
-    ["the customer data class", (s) => s.dataClasses.push("support.case.read")],
-    ["a run past 8 hours", (s) => (s.runSeconds = 28801)],
-    ["an upload input", (s) => s.brief.inputRefs.push({ kind: "upload", id: "upload_1" })],
-    ["an unknown output contract", (s) => (s.brief.outputContractId = "email@1")],
-    ["a model the brief chose", (s) => (s.brief.model = "claude_opus_5_5")],
+    ["created as a bare list", (r) => (r.created = [])],
+    ["no call id", (r) => delete r.callId],
+    ["sequence 0", (r) => (r.sequence = 0)],
+    ["a mode outside the list", (r) => (r.mode = "route")],
+    ["a next hint outside the codes", (r) => (r.next = "approve")],
+    ["a criterion status the model writes freely", (r) => (r.criteria[0].status = "approved")],
+    ["needs on a done result", (r) => (r.needs = { kind: "decision", question: null })],
+    ["verdicts on an ask", (r) => r.verdicts.push(verdict())],
+    ["an unknown verifier verdict", (r) => (r.verification.verifierVerdict = "approved")],
+    ["unresolved as a bare list", (r) => (r.unresolved = [])],
+    ["a finding of an unknown kind", (r) => (r.findings[0].kind = "instruction")],
+    ["a finding's text as a bare string", (r) => (r.findings[0].detail = "text")],
+    [
+      "an item without its size",
+      (r) => r.items.push({ itemId: "item_1", kind: "text", title: "T", pageCount: 1 }),
+    ],
+    ["tainted without a source", (r) => (r.taint.sources = [])],
+    ["tainted without a kind", (r) => (r.taint.kinds = [])],
+    ["taint without its count", (r) => delete r.taint.omittedSources],
+    [
+      "untainted with a source",
+      (r) =>
+        (r.taint = {
+          contextTaint: "none",
+          kinds: [],
+          sources: [{ source: "product", sourceId: null }],
+          omittedSources: 0,
+        }),
+    ],
+    [
+      "untainted with omitted sources",
+      (r) => (r.taint = { contextTaint: "none", kinds: [], sources: [], omittedSources: 3 }),
+    ],
   ])
-    assert.equal(valid("SpecialistSpec", edit(spec, change)), false, name);
-  const start = fakes.fakeSpecialistStartDocument();
-  assert.equal(valid("SpecialistStartDocument", { ...start, host: "email" }), false);
+    assert.equal(valid("TeammateResult", edit(result, change)), false, name);
+  // Uncapped: the created list and the unresolved list hold any number, or move to an item.
+  const many = Array.from({ length: 5000 }, (_, i) => ({ kind: "proposal", id: `p_${i}` }));
+  assert.ok(
+    valid(
+      "TeammateResult",
+      edit(result, (r) => (r.created.records = many)),
+    ),
+  );
+  assert.ok(
+    valid(
+      "TeammateResult",
+      edit(result, (r) => {
+        r.created = { kind: "item", itemId: "item_created", count: 5000 };
+        r.items.push({
+          itemId: "item_created",
+          kind: "text",
+          title: "Records created (5000)",
+          sizeBytes: 200000,
+          pageCount: 40,
+        });
+      }),
+    ),
+  );
+  // Counts are a safety range, not a cap on work (agent.map sums its batches).
+  assert.ok(
+    valid(
+      "TeammateResult",
+      edit(result, (r) => (r.counts.checked = 20000)),
+    ),
+  );
+  // A review result carries a verdict per criterion; it never approves.
+  const review = edit(result, (r) => {
+    r.mode = "review";
+    r.verdicts = [verdict()];
+  });
+  assert.ok(valid("TeammateResult", review));
   assert.equal(
-    valid("SpecialistStartDocument", { ...start, actor: fakes.fakeMandateRequester() }),
+    valid(
+      "TeammateResult",
+      edit(review, (r) => (r.verdicts[0].verdict = "approve")),
+    ),
+    false,
+  );
+  // Blocked and partial carry what the teammate needs, with every end reason.
+  for (const [outcome, endReason] of [
+    ["blocked", "completed"],
+    ["partial", "stopped"],
+    ["partial", "provider_error"],
+  ])
+    assert.ok(
+      valid(
+        "TeammateResult",
+        edit(result, (r) => {
+          r.outcome = outcome;
+          r.endReason = endReason;
+          r.needs = { kind: "information", question: { kind: "text", text: "Which collection?" } };
+          r.next = "ask_person";
+        }),
+      ),
+      `${outcome} ${endReason}`,
+    );
+  const ended = (outcome, endReason) =>
+    edit(result, (r) => {
+      r.outcome = outcome;
+      r.endReason = endReason;
+      r.summary = null;
+      r.findings = [];
+      r.nextSteps = [];
+      // Nothing produced: a run that created a record is partial, never one of these.
+      r.created = { kind: "list", records: [] };
+    });
+  assert.ok(valid("TeammateResult", ended("no_result", "turn_limit")));
+  assert.equal(
+    valid(
+      "TeammateResult",
+      edit(ended("stopped", "stopped"), (r) => r.created.records.push({ kind: "task", id: "t_1" })),
+    ),
+    false,
+    "work kept is partial, never stopped",
+  );
+  assert.ok(valid("TeammateResult", ended("no_result", "completed")), "ended without run.complete");
+  assert.ok(valid("TeammateResult", ended("stopped", "stopped")));
+  assert.ok(valid("TeammateResult", ended("failed", "provider_error")));
+  assert.equal(valid("TeammateResult", ended("stopped", "completed")), false);
+  assert.equal(
+    valid(
+      "TeammateResult",
+      edit(ended("no_result", "turn_limit"), (r) => (r.summary = { kind: "text", text: "x" })),
+    ),
+    false,
+    "a code outcome carries no model text",
+  );
+  // run.complete: the model chooses only its own outcomes, never a code outcome.
+  for (const outcome of ["stopped", "failed", "no_result"])
+    assert.equal(
+      valid("ToolInputRunComplete", { ...fakes.fakeRunCompleteChild(), outcome }),
+      false,
+      outcome,
+    );
+  // The child form names no record created, no taint, no read tags and no next hint: code's.
+  for (const field of ["created", "taint", "readTags", "next", "unresolved", "callId"])
+    assert.equal(
+      valid("ToolInputRunComplete", {
+        ...fakes.fakeRunCompleteChild(),
+        result: { ...fakes.fakeRunCompleteChild().result, [field]: [] },
+      }),
+      false,
+      field,
+    );
+});
+
+test("ADR-0041 item 21: the brief Morrow writes is TeammateBriefInput; code adds request, mode and followUpOf", () => {
+  const input = fakes.fakeTeammateBriefInput();
+  const brief = fakes.fakeTeammateBrief();
+  const { request, mode, followUpOf, ...written } = brief;
+  assert.deepEqual(written, input, "the brief is the input as written, plus code's fields");
+  assert.ok(request !== null && mode === "ask" && followUpOf === null);
+  // Morrow cannot write the requester's words, the mode or a follow-up into its brief.
+  for (const field of ["request", "mode", "followUpOf"])
+    assert.equal(valid("TeammateBriefInput", { ...input, [field]: null }), false, field);
+  assert.ok(valid("TeammateBrief", { ...brief, request: null }), "a mandate episode");
+  for (const mode of ["ask", "review", "route", "map_batch"])
+    assert.ok(valid("TeammateBrief", { ...brief, mode }), mode);
+  assert.equal(valid("TeammateBrief", { ...brief, mode: "approve" }), false);
+  assert.equal(valid("TeammateBriefInput", { ...input, doneCriteria: [] }), false);
+  assert.equal(
+    valid("TeammateBriefInput", { ...input, outputFormat: { ...input.outputFormat, tools: [] } }),
+    false,
+  );
+  assert.equal(
+    valid("TeammateRequest", { ...brief.request, author: fakes.fakeOwner() }),
+    false,
+    "authority comes from the envelope, never the request",
+  );
+});
+
+test("ADR-0041 item 34: RunTaint keeps every kind, 256 sources inline and a count of the rest", () => {
+  const kinds = core.$defs.ModelUntrustedSource.enum;
+  for (const source of [
+    "teammate_result",
+    "result_item",
+    "notebook_entry",
+    "conversation_summary",
+    "person_memory",
+    "context_checkpoint",
+    "thread_post",
+    "other_member",
+  ])
+    assert.ok(kinds.includes(source), source);
+  const sources = Array.from({ length: 256 }, (_, i) => ({
+    source: "product",
+    sourceId: `p_${i}`,
+  }));
+  const taint = {
+    contextTaint: "untrusted_external",
+    kinds: ["product"],
+    sources,
+    omittedSources: 0,
+  };
+  assert.ok(valid("RunTaint", taint));
+  assert.ok(valid("RunTaint", { ...taint, omittedSources: 100000 }));
+  assert.equal(
+    valid("RunTaint", { ...taint, sources: [...sources, { source: "product", sourceId: "p_x" }] }),
+    false,
+    "257 inline: the rest are counted",
+  );
+  assert.ok(valid("RunTaint", { ...taint, kinds: [...kinds] }), "every kind at once");
+  assert.equal(valid("RunTaint", { ...taint, kinds: ["product", "product"] }), false);
+  assert.equal(valid("RunTaint", { ...taint, omittedSources: -1 }), false);
+});
+
+test("ADR-0037 items 3(a) and 8: result items are run content with read tags, taint and closed text types", () => {
+  const item = fakes.fakeResultItem();
+  for (const [name, change] of [
+    ["a binary media type", (i) => (i.mediaType = "image/png")],
+    ["a URL", (i) => (i.url = "https://example.com/item")],
+    ["no read tags", (i) => delete i.readTags],
+    ["no taint", (i) => delete i.taint],
+    ["an unknown kind", (i) => (i.kind = "script")],
+  ])
+    assert.equal(valid("ResultItem", edit(item, change)), false, name);
+  assert.ok(valid("ResultItem", { ...item, expiresAt: "2027-01-24T09:00:00.000Z" }));
+  const page = fakes.fakeResultItemPage();
+  assert.ok(
+    valid("ResultItemPage", {
+      ...page,
+      kind: "table",
+      content: { kind: "table", columns: ["A"], firstRow: 1, rows: [["1"]] },
+    }),
+  );
+  assert.equal(valid("ResultItemPage", { ...page, page: 0 }), false);
+  assert.equal(valid("ResultItemPage", { ...page, content: { kind: "html", text: "<b>" } }), false);
+});
+
+test("ADR-0037 items 4 and 5: an agent card is closed; code writes every grant, scope, limit and model", () => {
+  const card = fakes.fakeAgentProposal();
+  for (const [name, change] of [
+    ["a first-party origin", (c) => (c.origin = "first_party")],
+    ["Level 2 customer data", (c) => (c.customerData = "level2")],
+    ["an editor on Morrow's draft", (c) => (c.editedBy = fakes.fakeOwner())],
+    ["a second revision without its editor", (c) => (c.revision = 2)],
+    ["a URL", (c) => (c.url = "https://example.com")],
+    ["code", (c) => (c.code = "export default {}")],
+    ["a money cap", (c) => (c.runLimits.holdUsd = "7")],
+    ["instructions past the bound", (c) => (c.instructions = "x".repeat(16001))],
+    ["no tools", (c) => (c.tools = [])],
+    ["a store from text", (c) => (c.storeId = null)],
+    ["an unknown Owner-only kind", (c) => c.ownerOnly.push("everything")],
+  ])
+    assert.equal(valid("AgentProposal", edit(card, change)), false, name);
+  assert.ok(
+    valid(
+      "AgentProposal",
+      edit(card, (c) => {
+        c.revision = 2;
+        c.editedBy = fakes.fakeOwner();
+      }),
+    ),
+  );
+  const document = fakes.fakeAddToTeamDocument();
+  for (const [name, change] of [
+    ["an embedded host", (d) => (d.host = "shopify_admin")],
+    ["an installation as actor", (d) => (d.actor = fakes.fakeMandateRequester())],
+    ["no card digest", (d) => delete d.cardDigest],
+    ["a review path outside the list", (d) => (d.review = "one_tap")],
+  ])
+    assert.equal(valid("AddToTeamDocument", edit(document, change)), false, name);
+});
+
+test("ADR-0037 item 4: AgentPackage@1 has two origins; a workspace package carries its text and no eval", () => {
+  const workspace = fakes.fakeWorkspacePackage();
+  const listings = fakes.fakeListingsPackage();
+  for (const [name, value] of [
+    ["a workspace Coordinator", edit(workspace, (p) => (p.kind = "coordinator"))],
+    ["a workspace package without instructions", edit(workspace, (p) => (p.instructions = null))],
+    ["a workspace package with an eval digest", edit(workspace, (p) => (p.evalDigest = digest))],
+    ["a workspace package with Level 2", edit(workspace, (p) => (p.customerData = "level2"))],
+    ["first-party instructions", edit(listings, (p) => (p.instructions = "Do things."))],
+    ["first-party skill text", edit(listings, (p) => p.skillTexts.push({ title: "T", body: "B" }))],
+    ["the specialist kind", edit(listings, (p) => (p.kind = "specialist"))],
+    ["no origin", edit(listings, (p) => delete p.origin)],
+  ])
+    assert.equal(valid("AgentPackage", value), false, name);
+  assert.equal(
+    valid("SkillManifest", { ...fakes.fakeSkillManifest(), eligibleForSpecialists: true }),
+    false,
+  );
+});
+
+test("catalogue version 4's codes: teammate refusals, records and sources; route_used and the specialist spec retired", () => {
+  const refusals = core.$defs.ToolRefusalCode.enum;
+  assert.equal(refusals.includes("route_used"), false);
+  for (const code of [
+    "teammate_unavailable",
+    "children_limit",
+    "insufficient_credits",
+    "result_customer_tagged",
+    "item_not_received",
+    "page_out_of_range",
+    "hand_off_in_ask",
+    "card_tool_excluded",
+    "card_limit",
+  ])
+    assert.ok(refusals.includes(code), code);
+  // ADR-0041 item 34 and the harness tools.
+  for (const code of [
+    "parallel_limit",
+    "fork_first",
+    "retry_blocked",
+    "recall_out_of_scope",
+    "call_not_found",
+    "call_not_idle",
+    "milestone_too_soon",
+    "checkpoint_not_requested",
+    "plan_not_set",
+    "verification_failed",
+    "item_closed",
+  ])
+    assert.ok(refusals.includes(code), code);
+  const records = core.$defs.RunToolCallRecordRef.properties.kind.enum;
+  assert.equal(records.includes("specialist_spec"), false);
+  for (const kind of [
+    "agent_card",
+    "teammate_run",
+    "teammate_result",
+    "agent_call",
+    "agent_map",
+    "agent_message",
+    "memory_suggestion",
+    "run_plan_revision",
+    "run_completion",
+    "run_wait",
+    "result_item",
+    "context_checkpoint",
+  ])
+    assert.ok(records.includes(kind), kind);
+  for (const source of ["teammate_result", "result_item"])
+    assert.ok(core.$defs.ModelUntrustedSource.enum.includes(source), source);
+  assert.ok(valid("ModelUntrustedSource", "teammate_result"));
+  assert.ok(
+    valid("ModelToolUseBlock", {
+      type: "tool_use",
+      id: "toolu_ask_1",
+      name: "agent.ask",
+      input: fakes.fakeAgentAskInput(),
+    }),
+  );
+  // The model's brief is the input form: the code-filled brief is never a tool input.
+  assert.equal(
+    valid("ModelToolUseBlock", {
+      type: "tool_use",
+      id: "toolu_ask_1",
+      name: "agent.ask",
+      input: { ...fakes.fakeAgentAskInput(), brief: fakes.fakeTeammateBrief() },
+    }),
+    false,
+  );
+  for (const [name, input] of [
+    ["agent.map", fakes.fakeAgentMapInput()],
+    ["agent.message", fakes.fakeAgentMessageInput()],
+    ["agent.cancel", fakes.fakeAgentCancelInput()],
+    ["memory.search", fakes.fakeMemorySearchInput()],
+    ["memory.read", fakes.fakeMemoryReadInput()],
+    ["memory.suggest", fakes.fakeMemorySuggestInput()],
+    ["run.plan", fakes.fakeRunPlanInput()],
+    ["run.complete", fakes.fakeRunCompleteChild()],
+    ["run.wait", fakes.fakeRunWaitInput()],
+    ["result.write", fakes.fakeResultWriteInput()],
+    ["context.checkpoint", fakes.fakeContextCheckpointInput()],
+  ])
+    assert.ok(valid("ModelToolUseBlock", { type: "tool_use", id: "toolu_x_1", name, input }), name);
+  for (const retired of ["agent.result.read", "result.submit"])
+    assert.equal(
+      valid("ModelToolUseBlock", {
+        type: "tool_use",
+        id: "toolu_x_1",
+        name: retired,
+        input: { itemId: "item_1", page: 1 },
+      }),
+      false,
+      retired,
+    );
+  assert.equal(
+    valid("ModelToolUseBlock", {
+      type: "tool_use",
+      id: "toolu_ask_1",
+      name: "specialist.draft",
+      input: {},
+    }),
     false,
   );
   assert.equal(
