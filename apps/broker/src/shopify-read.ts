@@ -279,6 +279,8 @@ export function createShopifyReader(deps: Readonly<ShopifyReadDependencies>) {
         plaintext.fill(0);
       }
     };
+    // A resolved read with the switch on always carries its first take (step 2).
+    if (bucket !== null && take === null) throw new VaultError("VAULT_RECORD_INVALID");
     let token = "";
     let reply: ShopifyAdminReply;
     try {

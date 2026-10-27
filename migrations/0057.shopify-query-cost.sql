@@ -169,14 +169,20 @@ BEGIN
  IF NOT FOUND OR p_org IS NULL OR p_ws IS NULL OR p_subject IS NULL OR p_cost IS NULL OR p_cost<1 OR p_cost>p.max_cost THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::integer; RETURN;
  END IF;
- v_now:=date_trunc('milliseconds',clock_timestamp());
- INSERT INTO morrow_work.rate_buckets(organization_id,workspace_id,provider,subject_id,unit,capacity,restore_rate,available,as_of,
-  observed_at,admitted_count,waited_count,throttled_count,revision,created_at)
- VALUES (p_org,p_ws,p_provider,p_subject,p.unit,p.default_capacity,p.default_restore_rate,p.default_capacity,v_now,NULL,0,0,0,1,v_now)
- ON CONFLICT DO NOTHING;
  SELECT * INTO b FROM morrow_work.rate_buckets x
   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.provider=p_provider AND x.subject_id=p_subject FOR UPDATE;
- IF NOT FOUND THEN RAISE EXCEPTION 'RATE_BUCKET_INVALID'; END IF;
+ IF NOT FOUND THEN
+  -- The first take: the bucket at the defaults (a concurrent first take may win the insert;
+  -- either way the row is then locked here).
+  v_now:=date_trunc('milliseconds',clock_timestamp());
+  INSERT INTO morrow_work.rate_buckets(organization_id,workspace_id,provider,subject_id,unit,capacity,restore_rate,available,as_of,
+   observed_at,admitted_count,waited_count,throttled_count,revision,created_at)
+  VALUES (p_org,p_ws,p_provider,p_subject,p.unit,p.default_capacity,p.default_restore_rate,p.default_capacity,v_now,NULL,0,0,0,1,v_now)
+  ON CONFLICT DO NOTHING;
+  SELECT * INTO b FROM morrow_work.rate_buckets x
+   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.provider=p_provider AND x.subject_id=p_subject FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'RATE_BUCKET_INVALID'; END IF;
+ END IF;
  v_now:=greatest(date_trunc('milliseconds',clock_timestamp()),b.as_of);
  v_avail:=round(least(b.capacity,b.available+b.restore_rate*extract(epoch FROM (v_now-b.as_of))),3);
  v_floor:=b.capacity*p.floor_share;
