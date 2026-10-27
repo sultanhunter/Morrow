@@ -449,7 +449,13 @@ export function fakeRunPlan(revision: 1 | 2 = 1): Current_RunPlan {
         ],
       },
     ],
-    notes: [{ kind: "decision", text: "Brand name first, as the owner asked in m1." }],
+    notes: [
+      {
+        kind: "decision",
+        text: "Brand name first, as the owner asked in m1.",
+        refs: [{ kind: "message", id: ids.messageId }],
+      },
+    ],
     understood: "You'd like clearer titles for your summer dresses, with the brand name first.",
     steps: [
       { title: "Read your summer dresses", by: fakeIds.listingsInstallationId },

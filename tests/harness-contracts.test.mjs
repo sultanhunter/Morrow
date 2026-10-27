@@ -1052,6 +1052,42 @@ test("review R1: run kinds are ADR-0041 item 4's, H5 having retired the speciali
   for (const kind of ["review", "upkeep"]) assert.throws(() => runContext(kind, false), kind);
 });
 
+test("review N1: a stored plan note keeps the records run.plan's note cites", () => {
+  // RunPlanNoteInput's refs (H5) are stored on the note, never dropped: at least as many, of
+  // every record kind the input names, under the same note kinds.
+  const input = h5("RunPlanNoteInput");
+  const note = core.$defs.PlanNote;
+  assert.equal(input.properties.refs.$ref, "#/$defs/TeammateRecordRefs");
+  assert.ok(note.required.includes("refs"));
+  assert.ok(note.properties.refs.maxItems >= h5("TeammateRecordRefs").maxItems, "the count");
+  assert.equal(note.properties.refs.items.$ref, "#/$defs/PlanEvidenceRef");
+  assert.equal(note.properties.kind.$ref, input.properties.kind.$ref, "one note vocabulary");
+  // Every note run.plan accepts, with the most refs of every kind, is a storable note.
+  const kinds = enumFrom("TeammateRecordKind");
+  const refs = Array.from({ length: h5("TeammateRecordRefs").maxItems }, (_, i) => ({
+    kind: kinds[i % kinds.length],
+    id: `rec_${i}`,
+  }));
+  for (const kind of enumFrom("RunPlanNoteKind")) {
+    const written = { kind, text: "The CSV export has no SEO fields.", refs };
+    assert.ok(valid("RunPlanNoteInput", written), kind);
+    assert.ok(valid("PlanNote", written), kind);
+  }
+  const plan = fakes.fakeRunPlan();
+  assert.ok(plan.notes[0].refs.length > 0, "the fake plan's note cites its message");
+  refuses("RunPlan", [
+    ["a note without its refs", edit(plan, (p) => delete p.notes[0].refs)],
+    [
+      "a note with a ref of no record kind",
+      edit(plan, (p) => (p.notes[0].refs = [{ kind: "sql", id: "x" }])),
+    ],
+    [
+      "a note with 257 refs",
+      edit(plan, (p) => (p.notes[0].refs = [...refs, { kind: "message", id: "rec_more" }])),
+    ],
+  ]);
+});
+
 test("the merge guard: core v1.1 names each definition once", () => {
   // JSON.parse keeps the last of two equal keys, so a definition both PRs add (ContextLabel,
   // MemoryLayer, CheckpointLine, PersonMemoryKind) would otherwise survive the merge twice.

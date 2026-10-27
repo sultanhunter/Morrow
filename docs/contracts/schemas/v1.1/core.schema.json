@@ -20391,7 +20391,7 @@
       ]
     },
     "PlanNote": {
-      "description": "A typed note: the run's memory of its own work, beside the ledger (ADR-0041 item 26).",
+      "description": "A typed note: the run's memory of its own work, beside the ledger (ADR-0041 item 26), with the records run.plan's note cites (RunPlanNoteInput.refs), so a stored note drops none.",
       "type": "object",
       "properties": {
         "kind": {
@@ -20401,11 +20401,21 @@
           "type": "string",
           "minLength": 1,
           "pattern": "\\S"
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlanEvidenceRef"
+          },
+          "minItems": 0,
+          "maxItems": 256,
+          "uniqueItems": true
         }
       },
       "required": [
         "kind",
-        "text"
+        "text",
+        "refs"
       ],
       "additionalProperties": false
     },
