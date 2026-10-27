@@ -33,6 +33,7 @@ import {
   FakeModelGatewayError,
   replyBounds,
   replyFit,
+  replyStoredBytes,
 } from "../packages/policy/src/fake-model-gateway.ts";
 import {
   bytesPerTokenEstimate,
@@ -953,6 +954,14 @@ test("review R1: the plan, its completion, a verdict and a suggestion hold as mu
   ];
   for (const [label, input, record] of pairs)
     assert.ok(Number.isInteger(input) && record >= input, `${label}: ${record} >= ${input}`);
+  // Review L2 of pull request 91: a criterion change's reason, which run.plan takes with no
+  // length, is stored with none (the record's 1,000-character bound refused what the tool took).
+  const changeReason = anyOfType(h5("RunPlanChange").properties.reason, "string");
+  const storedReason = d.RunPlan.properties.change.anyOf[0].oneOf.find(
+    (b) => b.properties.kind.const === "logged_reason",
+  ).properties.reason;
+  assert.equal(changeReason.maxLength, undefined, "run.plan's criterion-change reason");
+  assert.equal(storedReason.maxLength, changeReason.maxLength, "the stored reason's bound");
   // memory.suggest's kind and title are kept, so the person saves the exact suggestion.
   assert.equal(h5("ToolInputMemorySuggest").properties.kind.$ref, "#/$defs/PersonMemoryKind");
   assert.equal(core.$defs.PersonMemorySuggestion.properties.kind.$ref, "#/$defs/PersonMemoryKind");
@@ -975,7 +984,7 @@ test("review R1: the plan, its completion, a verdict and a suggestion hold as mu
         p.criteria[0].text = long;
         p.phases[0].title = long;
         p.phases[0].items[0].title = long;
-        p.phases[1].items[1].droppedReason = long;
+        p.phases[1].items[1].reason = long;
         p.notes[0].text = long;
       }),
     ),
@@ -1105,10 +1114,7 @@ test("RunPlan@1, RunCompletion@1 and ReviewVerdict@1: frozen criteria, a gate, a
       "a first revision with a change reason",
       edit(plan, (p) => (p.change = { kind: "logged_reason", reason: "x" })),
     ],
-    [
-      "a dropped item without its reason",
-      edit(plan, (p) => (p.phases[1].items[1].droppedReason = null)),
-    ],
+    ["a dropped item without its reason", edit(plan, (p) => (p.phases[1].items[1].reason = null))],
     ["no done criteria", edit(plan, (p) => (p.criteria = []))],
     ["an item naming a tool", edit(plan, (p) => (p.phases[0].items[0].tool = "products.read"))],
     [
@@ -1818,6 +1824,35 @@ test("the fake broker: compaction, a new epoch, the hard guard and the append-on
       row.outcome !== "end_turn" && row.outcome !== "tool_use",
       `row ${row.sequence}`,
     );
+});
+
+// H6's carry-forward N3, closed in plan row H7a: a reply has its own stored-size limit, sized
+// from the max_tokens range (not from the stored-message bound of results, which would cut
+// healthy high-effort replies), and replyFit answers over_bound above it, so run_turns never
+// stores a reply under a CHECK it can exceed. Without the limit every block below fits its own
+// bound and replyFit said fits.
+test("N3: a reply whose blocks each fit but whose stored size passes the reply limit is over_bound", () => {
+  assert.equal(replyStoredBytes, 2_097_152);
+  // Above the 128,000-token range at four bytes a token, with a reasoning block's continuity.
+  assert.ok(replyStoredBytes >= maxOutputTokensRange * bytesPerTokenEstimate + 1_048_576);
+  // Never the stored-message bound of results (384 KiB): high-effort replies pass it.
+  assert.ok(replyStoredBytes > generatedContextPolicy.versions[0].rows[0].storedMessageBytes);
+  const reply = (...content) => ({ role: "assistant", content });
+  const block = { type: "text", text: "x".repeat(32000) };
+  assert.equal(replyFit(reply(...Array(65).fill(block))), "fits");
+  assert.equal(replyFit(reply(...Array(66).fill(block))), "over_bound");
+  const thinking = {
+    type: "reasoning",
+    text: "x".repeat(1_048_576),
+    continuity: "",
+    redacted: false,
+  };
+  assert.equal(replyFit(reply(thinking, { type: "text", text: "Done." })), "fits");
+  assert.equal(replyFit(reply(thinking, thinking, { type: "text", text: "Done." })), "over_bound");
+  // Multi-byte text counts in UTF-8 bytes, as the stored jsonb does.
+  const wide = { type: "text", text: "é".repeat(32000) };
+  assert.equal(replyFit(reply(...Array(32).fill(wide))), "fits");
+  assert.equal(replyFit(reply(...Array(33).fill(wide))), "over_bound");
 });
 
 test("review R2: a healthy reply past a stored bound is incomplete and resent, never a protocol break", async () => {

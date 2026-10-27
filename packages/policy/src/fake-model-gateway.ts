@@ -308,6 +308,18 @@ export const replyBounds = Object.freeze({
   textChars: 32000,
   reasoningChars: 1048576,
 });
+/**
+ * A reply's own stored-size limit (H6's carry-forward N3, set with run_turns in migration
+ * agent-runs, plan row H7a): at most 2 MiB of compact JSON (UTF-8 bytes). It is sized from the
+ * max_tokens safety range, not from the stored-message bound of results (ContextPolicy@1's
+ * storedMessageBytes, 384 KiB), which would cut healthy high-effort replies: a 128,000-token
+ * reply at four bytes a token is 512,000 bytes, plus a reasoning block's continuity of up to
+ * 1 MiB, with room for JSON escapes. run_turns' CHECK holds PostgreSQL's jsonb text at twice this
+ * (4 MiB), because that text adds at most one space after each ':' and ',' of the compact form.
+ * Above it a reply is over_bound: incomplete, booked and resent with output_cut, never stored.
+ */
+export const replyStoredBytes = 2_097_152;
+const utf8Bytes = (text: string): number => new TextEncoder().encode(text).length;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const clamp = (value: unknown, length: number): unknown =>
@@ -316,7 +328,7 @@ const clamp = (value: unknown, length: number): unknown =>
  * How a parsed reply fits the stored message (ADR-0041 item 8). `fits`: a valid
  * AssistantModelMessage within the tool-call range. `over_bound`: every block is in its strict
  * shape, but the reply passes a stored bound (a block's length, the block count, the tool-call
- * range): the outcome is incomplete, booked and resent with output_cut, never a protocol break.
+ * range, or the reply's own stored size, replyStoredBytes): the outcome is incomplete, booked and resent with output_cut, never a protocol break.
  * `invalid`: a block outside the strict shapes, a protocol break (invalid_output).
  */
 export function replyFit(reply: unknown): "fits" | "over_bound" | "invalid" {
@@ -359,6 +371,7 @@ export function replyFit(reply: unknown): "fits" | "over_bound" | "invalid" {
       over = true;
   }
   if (uses > replyBounds.toolUses) over = true;
+  if (!over && utf8Bytes(JSON.stringify(reply)) > replyStoredBytes) over = true;
   if (over) return "over_bound";
   return validateCurrentDefinition("AssistantModelMessage", reply) ? "fits" : "invalid";
 }

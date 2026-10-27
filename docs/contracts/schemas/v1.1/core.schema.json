@@ -11259,7 +11259,7 @@
       ]
     },
     "ToolRefusalCode": {
-      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20 (catalogue version 3): customer_data (a run that read customer data proposes no shop knowledge) and pending_limit (a workspace holds at most 50 pending knowledge proposals). Catalogue version 4 (ADR-0037 item 3) drops route_used (no limit of one hand-off per run) and adds teammate_unavailable (not active, not on the code-built list, or the Coordinator), children_limit and insufficient_credits (kept for records written before ADR-0041: the 33rd child now checks the job in, and a first hold the wallet cannot cover parks the job, items 9 and 21), result_customer_tagged, item_not_received (an item from a result this run did not receive), page_out_of_range, hand_off_in_ask, card_tool_excluded and card_limit (10 active workspace-created agents). ADR-0041 item 34 adds parallel_limit (past a turn's tool calls; re-issued next turn), fork_first (agent.* in Morrow's main thread), retry_blocked (a dispatch over subjects with unknown outcomes), recall_out_of_scope (memory.read of a label not every part of which still passes), call_not_found and call_not_idle (agent.message, agent.cancel or a follow-up naming no call of this run, or one not idle), milestone_too_soon and checkpoint_not_requested (context.checkpoint outside a checkpoint fork); with the harness tools, plan_not_set (run.plan update or a job's run.complete before a plan), verification_failed (run.complete's gate, naming the criterion; the job continues) and item_closed (result.write to a closed item). Retired and kept only for old records: tool_call_limit (the 40-call rule) and deadline_passed.",
+      "description": "Why code refused a tool call (ADR-0027 item 2): every check runs before dispatch and any one failing refuses it. input_invalid goes only with the outcome invalid_input; every other code with refused. PR 20 (catalogue version 3): customer_data (a run that read customer data proposes no shop knowledge) and pending_limit (a workspace holds at most 50 pending knowledge proposals). Catalogue version 4 (ADR-0037 item 3) drops route_used (no limit of one hand-off per run) and adds teammate_unavailable (not active, not on the code-built list, or the Coordinator), children_limit and insufficient_credits (kept for records written before ADR-0041: the 33rd child now checks the job in, and a first hold the wallet cannot cover parks the job, items 9 and 21), result_customer_tagged, item_not_received (an item from a result this run did not receive), page_out_of_range, hand_off_in_ask, card_tool_excluded and card_limit (10 active workspace-created agents). ADR-0041 item 34 adds parallel_limit (past a turn's tool calls; re-issued next turn), fork_first (agent.* in Morrow's main thread), retry_blocked (a dispatch over subjects with unknown outcomes), recall_out_of_scope (memory.read of a label not every part of which still passes), call_not_found and call_not_idle (agent.message, agent.cancel or a follow-up naming no call of this run, or one not idle), milestone_too_soon and checkpoint_not_requested (context.checkpoint outside a checkpoint fork); with the harness tools, plan_not_set (run.plan update or a job's run.complete before a plan), verification_failed (run.complete's gate, naming the criterion; the job continues) and item_closed (result.write to a closed item). Retired and kept only for old records: tool_call_limit (the 40-call rule) and deadline_passed. Review L3 of pull request 91: plan_full (a run.plan set or update that would pass a bound of the stored RunPlan@1: 500 notes, 256 items in a phase with its follow-through items, 64 phases, 64 criteria), refused in code before anything is stored.",
       "type": "string",
       "enum": [
         "not_offered",
@@ -11301,7 +11301,8 @@
         "checkpoint_not_requested",
         "plan_not_set",
         "verification_failed",
-        "item_closed"
+        "item_closed",
+        "plan_full"
       ]
     },
     "RunToolCallRecordRef": {
@@ -18785,7 +18786,7 @@
       "additionalProperties": false
     },
     "ToolInputRunPlan": {
-      "description": "run.plan (catalogue version 4; ADR-0041 items 16 and 24): set the job's plan (once, in its first turn), update it, or read it whole. Harness: it grants nothing and writes only this job's plan revisions. Code rules: set takes plan, update takes changes (1 to 64), read takes neither.",
+      "description": "run.plan (catalogue version 4; ADR-0041 items 16 and 24): set the job's plan (once, in its first turn), update it, or read it whole. Harness: it grants nothing and writes only this job's plan revisions. Code rules: set takes plan, update takes changes (1 to 64), read takes neither. An update or set whose resulting plan would pass a bound of the stored RunPlan@1 (500 notes, 256 items in a phase, follow-through items joining the last phase, 64 phases, 64 criteria) is refused plan_full in code against the stored revision, before anything is written.",
       "type": "object",
       "properties": {
         "action": {
@@ -20290,7 +20291,7 @@
       ]
     },
     "PlanItem": {
-      "description": "One plan item; never deleted, and dropping one needs a reason.",
+      "description": "One plan item; never deleted. A blocked or dropped item keeps the model's reason, and a done one may (reason).",
       "type": "object",
       "properties": {
         "key": {
@@ -20331,7 +20332,8 @@
           "maxItems": 64,
           "uniqueItems": true
         },
-        "droppedReason": {
+        "reason": {
+          "description": "The model's reason for this item's status, as run.plan's item_status change accepts it (review L1 of pull request 91): required for blocked and dropped, optional for done, null for every other status (open, in_progress, needs_review and awaiting_person are code's, with no model reason).",
           "anyOf": [
             {
               "type": "string",
@@ -20362,7 +20364,7 @@
         "criteria",
         "evidence",
         "dependsOn",
-        "droppedReason",
+        "reason",
         "followThrough"
       ],
       "additionalProperties": false,
@@ -20372,7 +20374,10 @@
             "type": "object",
             "properties": {
               "status": {
-                "const": "dropped"
+                "enum": [
+                  "blocked",
+                  "dropped"
+                ]
               }
             },
             "required": [
@@ -20382,8 +20387,34 @@
           "then": {
             "type": "object",
             "properties": {
-              "droppedReason": {
+              "reason": {
                 "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "open",
+                  "in_progress",
+                  "needs_review",
+                  "awaiting_person"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "null"
               }
             }
           }
@@ -20448,7 +20479,7 @@
       "additionalProperties": false
     },
     "RunPlan": {
-      "description": "RunPlan@1 (ADR-0041 item 16; H6): one revision of a job's one plan, append-only in run_plan_revisions: an objective, frozen done criteria with check kinds, phases and items with statuses, evidence and dependencies, typed notes and follow-through items; for Morrow, the person-facing understood sentence and up to 6 steps. No field names a tool, capability, scope, store, model, recipient or limit. Its model-written text has no storage bound beyond what run.plan accepts (pull request 79); only ADR-0040 item 4(c)'s person-facing bounds hold (understood 1 to 280 characters, 1 to 6 steps of up to 80).",
+      "description": "RunPlan@1 (ADR-0041 item 16; H6): one revision of a job's one plan, append-only in run_plan_revisions: an objective, frozen done criteria with check kinds, phases and items with statuses, evidence and dependencies, typed notes and follow-through items; for Morrow, the person-facing understood sentence and up to 6 steps. No field names a tool, capability, scope, store, model, recipient or limit. Its model-written text has no storage bound beyond what run.plan accepts (pull request 79); only ADR-0040 item 4(c)'s person-facing bounds hold (understood 1 to 280 characters, 1 to 6 steps of up to 80). Code refuses a run.plan set or update whose result would pass one of this record's bounds (500 notes, 256 items in a phase, a follow-through item joining the last phase, 64 phases, 64 criteria) with plan_full before anything is stored, so no revision run.plan accepted fails at storage (review L3 of pull request 91).",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -20581,7 +20612,6 @@
                     "reason": {
                       "type": "string",
                       "minLength": 1,
-                      "maxLength": 1000,
                       "pattern": "\\S"
                     }
                   },

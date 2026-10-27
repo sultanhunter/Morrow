@@ -10,6 +10,9 @@ import {
   checkToolInputInContext,
   contextCheckpointInputValid,
   memoryReadInputValid,
+  planItemAfterStatus,
+  runPlanFits,
+  runPlanRecordBounds,
   resultWriteInputValid,
   runCompleteInputValid,
   runPlanChangeValid,
@@ -29,6 +32,9 @@ import {
   fakeRunPlanInput,
   fakeRunWaitInput,
 } from "../packages/policy/src/agent-platform-fakes.ts";
+import { fakeRunPlan } from "../packages/policy/src/harness-fakes.ts";
+import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
+import { readFileSync } from "node:fs";
 
 const ok = { ok: true };
 const invalid = { ok: false, outcome: "invalid_input", refusal: "input_invalid" };
@@ -494,4 +500,159 @@ test("agent.ask and agent.map through the step: a follow-up names no teammate; a
     checkToolInputInContext("run.complete", { ...fakeRunCompleteChild(), reply: "x" }, "call"),
     invalid,
   );
+});
+
+// Review L1 of pull request 91 (H6's lows, fixed in plan row H7a): every item_status change
+// run.plan accepts maps to a stored PlanItem that keeps the model's reason. Against H6's PlanItem
+// (droppedReason only, required only for dropped) a blocked item's reason was lost and a stored
+// item carrying `reason` was invalid.
+test("review L1: every item_status change run.plan accepts is a stored item that keeps its reason", () => {
+  const stored = fakeRunPlan(1);
+  const item = stored.phases[1].items[0];
+  let accepted = 0;
+  for (const status of ["done", "blocked", "dropped"])
+    for (const reason of [null, "Sizes missing for three dresses."])
+      for (const evidence of [[], [{ kind: "proposal", id: "proposal_fake_9" }]]) {
+        const c = change({ kind: "item_status", itemKey: item.key, status, reason, evidence });
+        if (!runPlanInputValid(update(c), "coordinator")) continue;
+        accepted += 1;
+        const after = planItemAfterStatus(item, c);
+        assert.notEqual(after, "plan_full");
+        assert.ok(validateCurrentDefinition("PlanItem", after), `${status} ${reason}`);
+        assert.equal(after.status, status);
+        assert.equal(after.reason, reason, "the model's reason is kept");
+        for (const ref of evidence)
+          assert.ok(after.evidence.some((e) => e.kind === ref.kind && e.id === ref.id));
+      }
+  // done with or without a reason, blocked and dropped with one, each with or without evidence.
+  assert.equal(accepted, 8);
+  // The record's own rule: a blocked or dropped item has its reason; code's statuses carry none.
+  for (const status of ["blocked", "dropped"])
+    assert.equal(validateCurrentDefinition("PlanItem", { ...item, status, reason: null }), false);
+  for (const status of ["open", "in_progress", "needs_review", "awaiting_person"])
+    assert.equal(validateCurrentDefinition("PlanItem", { ...item, status, reason: "x" }), false);
+  assert.ok(validateCurrentDefinition("PlanItem", { ...item, status: "done", reason: null }));
+  assert.equal(validateCurrentDefinition("PlanItem", { ...item, droppedReason: null }), false);
+});
+
+// Review L2: a criterion change's reason has one bound on the tool and on the record (neither
+// sets a length: records keep no bound on model-written text beyond ADR-0040 item 4(c)).
+test("review L2: a criterion-change reason run.plan accepts is a reason RunPlan@1 stores", () => {
+  const core = JSON.parse(readFileSync("docs/contracts/schemas/v1.1/core.schema.json", "utf8"));
+  const tool = core.$defs.RunPlanChange.properties.reason.anyOf.find((b) => b.type === "string");
+  const record = core.$defs.RunPlan.properties.change.anyOf[0].oneOf.find(
+    (b) => b.properties.kind.const === "logged_reason",
+  ).properties.reason;
+  assert.equal(record.maxLength, tool.maxLength);
+  assert.equal(tool.maxLength, undefined);
+  const reason = "x".repeat(1001);
+  const c = change({
+    kind: "change_criterion",
+    criterion: { index: 0, text: "Every dress checked.", check: "child_outcome" },
+    reason,
+  });
+  assert.ok(runPlanInputValid(update(c), "coordinator"));
+  const revision = { ...fakeRunPlan(2), change: { kind: "logged_reason", reason } };
+  assert.ok(validateCurrentDefinition("RunPlan", revision));
+});
+
+// Review L3: an update that would pass a bound of the stored record (500 notes, 256 items in a
+// phase) is refused in code with plan_full, never at storage.
+test("review L3: run.plan refuses plan_full before a revision would pass a record bound", () => {
+  const core = JSON.parse(readFileSync("docs/contracts/schemas/v1.1/core.schema.json", "utf8"));
+  const d = core.$defs;
+  // The bounds code holds are the record's, read back from the schema.
+  assert.deepEqual(runPlanRecordBounds, {
+    criteria: d.RunPlan.properties.criteria.maxItems,
+    phases: d.RunPlan.properties.phases.maxItems,
+    itemsPerPhase: d.RunPlan.properties.phases.items.properties.items.maxItems,
+    evidencePerItem: d.PlanItem.properties.evidence.maxItems,
+    notes: d.RunPlan.properties.notes.maxItems,
+  });
+  assert.ok(d.ToolRefusalCode.enum.includes("plan_full"));
+  const base = fakeRunPlan(1);
+  const withNotes = (n) => ({
+    ...base,
+    notes: Array.from({ length: n }, (_, i) => ({ kind: "finding", text: `Note ${i}`, refs: [] })),
+  });
+  const notes = (n) => update(...Array.from({ length: n }, () => change({ note: note() })));
+  // 499 + 1 fits and is storable; 500 + 1 is refused (as is 437 + 64).
+  assert.equal(runPlanFits(withNotes(499), notes(1)), "fits");
+  assert.ok(validateCurrentDefinition("RunPlan", withNotes(500)));
+  assert.equal(validateCurrentDefinition("RunPlan", withNotes(501)), false);
+  assert.equal(runPlanFits(withNotes(500), notes(1)), "plan_full");
+  assert.equal(runPlanFits(withNotes(437), notes(64)), "plan_full");
+  assert.ok(runPlanInputValid(notes(64), "coordinator"), "the tool's own shape accepts it");
+  // Items: phase 1 holds 3; 253 more fit, 254 do not; a follow-through item joins the last phase.
+  const item = (key) =>
+    change({
+      kind: "add_item",
+      phase: 1,
+      item: { itemKey: key, title: key, criteria: [], dependsOn: [] },
+    });
+  const full = {
+    ...base,
+    phases: [
+      base.phases[0],
+      {
+        ...base.phases[1],
+        items: Array.from({ length: 255 }, (_, i) => ({
+          ...base.phases[1].items[0],
+          key: `i${i}`,
+        })),
+      },
+    ],
+  };
+  assert.ok(validateCurrentDefinition("RunPlan", full));
+  assert.equal(runPlanFits(full, update(item("last"))), "fits");
+  assert.equal(runPlanFits(full, update(item("a"), item("b"))), "plan_full");
+  const promise = change({
+    kind: "add_follow_through",
+    followThrough: {
+      itemKey: "live",
+      title: "Live",
+      condition: "time",
+      id: null,
+      at: "2026-11-01T09:00:00.000Z",
+    },
+  });
+  assert.equal(runPlanFits(full, update(promise)), "fits");
+  assert.equal(runPlanFits(full, update(promise, item("a"))), "plan_full");
+  // Evidence an item would cite past its bound is refused too.
+  const cited = {
+    ...base,
+    phases: [
+      base.phases[0],
+      {
+        ...base.phases[1],
+        items: [
+          {
+            ...base.phases[1].items[0],
+            evidence: Array.from({ length: 256 }, (_, i) => ({ kind: "task", id: `task_${i}` })),
+          },
+        ],
+      },
+    ],
+  };
+  const doneWith = change({
+    kind: "item_status",
+    itemKey: base.phases[1].items[0].key,
+    status: "done",
+    evidence: [{ kind: "proposal", id: "proposal_fake_9" }],
+  });
+  assert.equal(runPlanFits(cited, update(doneWith)), "plan_full");
+  assert.equal(planItemAfterStatus(cited.phases[1].items[0], doneWith), "plan_full");
+  // A set whose last phase and follow-through items pass 256 is refused the same way.
+  const set = fakeRunPlanInput();
+  assert.equal(runPlanFits(null, set), "fits");
+  const crowded = edit(set, (p) => {
+    const last = p.plan.phases[p.plan.phases.length - 1];
+    last.items = Array.from({ length: 256 - p.plan.followThrough.length + 1 }, (_, i) => ({
+      ...last.items[0],
+      itemKey: `x${i}`,
+      dependsOn: [],
+    }));
+  });
+  assert.equal(runPlanFits(null, crowded), "plan_full");
+  assert.equal(runPlanFits(base, { action: "read", plan: null, changes: null }), "fits");
 });

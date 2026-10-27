@@ -10,6 +10,9 @@
 // the loop's dispatch checks every id against SQL (a plan's keys, a call's state, an item's
 // owner). Here only the shape of one input, and the context it is offered in.
 import type {
+  Current_PlanEvidenceRef,
+  Current_PlanItem,
+  Current_RunPlan,
   Current_RunPlanChange,
   Current_RunPlanFollowThroughInput,
   Current_RunPlanSetInput,
@@ -126,6 +129,102 @@ export function runPlanInputValid(
     case "read":
       return i.plan === null && i.changes === null;
   }
+}
+
+/**
+ * The bounds of a stored plan revision (RunPlan@1 and PlanItem; harness-contracts reads them back
+ * from the schema). They are safety ranges of the record, never a way to end work: a run.plan
+ * call whose result would pass one is refused plan_full before anything is stored (review L3 of
+ * pull request 91), so the model can tidy its plan (drop or finish items, keep notes shorter) and
+ * go on; no revision run.plan accepted fails at storage.
+ */
+export const runPlanRecordBounds = Object.freeze({
+  criteria: 64,
+  phases: 64,
+  itemsPerPhase: 256,
+  evidencePerItem: 256,
+  notes: 500,
+});
+/** Plan-tool refusals decided against the stored revision (ToolRefusalCode). */
+export type RunPlanFit = "fits" | "plan_full";
+
+/**
+ * One item_status change as the stored item keeps it (review L1 of pull request 91): the status
+ * the model set, its reason exactly as run.plan accepted it (required for blocked and dropped,
+ * optional for done), and the change's evidence joined to what the item already cites (a
+ * TeammateRecordRef's kinds are all PlanEvidenceRef kinds). Returns plan_full when the joined
+ * evidence would pass the item's bound. The caller has checked the change with
+ * runPlanChangeValid and that its item key names an item of the stored plan.
+ */
+export function planItemAfterStatus(
+  item: Current_PlanItem,
+  change: Current_RunPlanChange,
+): Current_PlanItem | "plan_full" {
+  if (change.kind !== "item_status" || change.status === null)
+    throw new TypeError("PLAN_CHANGE_NOT_STATUS");
+  const evidence: Current_PlanEvidenceRef[] = [...item.evidence];
+  for (const ref of change.evidence)
+    if (!evidence.some((e) => e.kind === ref.kind && e.id === ref.id))
+      evidence.push({ kind: ref.kind, id: ref.id });
+  if (evidence.length > runPlanRecordBounds.evidencePerItem) return "plan_full";
+  return { ...item, status: change.status, reason: change.reason, evidence };
+}
+
+/**
+ * Whether the plan a run.plan call would store fits RunPlan@1's bounds (review L3 of pull
+ * request 91). A set stores its follow-through items in its last phase; an update adds its notes
+ * to the stored revision's, its items to the phases they name, its follow-through items to the
+ * last phase, and its evidence to each item it changes. `stored` is the current revision (null
+ * before a set). An index or key that names nothing is not a fit question: the dispatch refuses
+ * it against SQL. "plan_full" is the call's refusal; nothing is written.
+ */
+export function runPlanFits(
+  stored: Current_RunPlan | null,
+  input: Current_ToolInputRunPlan,
+): RunPlanFit {
+  const bounds = runPlanRecordBounds;
+  if (input.action === "read") return "fits";
+  if (input.action === "set") {
+    const plan = input.plan!;
+    const last = plan.phases[plan.phases.length - 1]!;
+    return plan.criteria.length <= bounds.criteria &&
+      plan.phases.length <= bounds.phases &&
+      plan.phases.every((p) => p.items.length <= bounds.itemsPerPhase) &&
+      last.items.length + plan.followThrough.length <= bounds.itemsPerPhase
+      ? "fits"
+      : "plan_full";
+  }
+  if (stored === null) return "fits";
+  const items = stored.phases.map((p) => p.items.length);
+  const evidence = new Map<string, Set<string>>();
+  for (const phase of stored.phases)
+    for (const item of phase.items)
+      evidence.set(item.key, new Set(item.evidence.map((e) => `${e.kind}:${e.id}`)));
+  let notes = stored.notes.length;
+  for (const change of input.changes ?? []) {
+    switch (change.kind) {
+      case "add_note":
+        notes += 1;
+        break;
+      case "add_item":
+        if (change.phase !== null && change.phase < items.length) items[change.phase]! += 1;
+        break;
+      case "add_follow_through":
+        items[items.length - 1]! += 1;
+        break;
+      case "item_status": {
+        const cited = change.itemKey === null ? undefined : evidence.get(change.itemKey);
+        if (cited) for (const ref of change.evidence) cited.add(`${ref.kind}:${ref.id}`);
+        if (cited && cited.size > bounds.evidencePerItem) return "plan_full";
+        break;
+      }
+      case "change_criterion":
+        break;
+    }
+  }
+  return notes <= bounds.notes && items.every((n) => n <= bounds.itemsPerPhase)
+    ? "fits"
+    : "plan_full";
 }
 
 // --- run.complete (ADR-0041 items 16, 23 and 24) ----------------------------------------------
