@@ -3,18 +3,19 @@
 - Record: the owner-facing order of v1's PRs 1 to 26 under [ADR-0035](../decisions/adr/ADR-0035-build-v1-live.md) (build v1 live, accepted 2026-10-23). It runs side by side with the tracks of [mvp.md](mvp.md), which stay the plan from v1 to the public launch.
 - Written 2026-10-23 from `main` at `86cd845`, for the owner; added to the repository on 2026-10-24 with its words unchanged below this header and the progress table.
 - Changed 2026-10-25 for [ADR-0037](../decisions/adr/ADR-0037-main-agent-and-scoped-subagents.md) (Morrow as the main agent with scoped teammates; OD-2026-10-25-3 and OD-2026-10-25-4) and ADR-0039 (credits are the only spend limit, pull request 75), without changing either record: PR 26 ("Specialists") is replaced by ADR-0037's follow-up PRs ([adr-0037-implementation.md](adr-0037-implementation.md)); PR 12's "one active agent, once" becomes Morrow orchestrating teammates in any way at depth 1; PR 11's and PR 21's money caps become credit holds; PRs 2, 7, 10 and 18, already merged, gain notes where the later records change what they built.
-- Changed 2026-10-26 for [ADR-0041](../decisions/adr/ADR-0041-harness-foundations.md) (harness foundations) and [ADR-0040](../decisions/adr/ADR-0040-messaging-with-agents.md) (messaging with agents), both Accepted (OD-2026-10-26-7), and the owner's rule that the foundation is production grade, never an MVP (OD-2026-10-26-6), without changing either record: PR 11 becomes the harness foundation; PR 12 grows from M to L and splits into 12a (the backend) and 12b (the screens); PRs 15, 16, 20 and 21 gain the harness and messaging changes; the model list is Opus 5.5 only; each points to its rows in [harness-foundations-implementation.md](harness-foundations-implementation.md). Also that day the owner chose to build the P09.T05 customer-data deletion path first, with the new Morrow conversation off until it exists, and said that ADR 0042's COD Confirmation agent is an installable agent that is not built now.
+- Changed 2026-10-26 for [ADR-0041](../decisions/adr/ADR-0041-harness-foundations.md) (harness foundations) and [ADR-0040](../decisions/adr/ADR-0040-messaging-with-agents.md) (messaging with agents), both Accepted (OD-2026-10-26-7), and the owner's rule that the foundation is production grade, never an MVP (OD-2026-10-26-6), without changing either record: PR 11 becomes the harness foundation; PR 12 grows from M to L and splits into 12a (the backend) and 12b (the screens); PRs 15, 16, 20 and 21 gain the harness and messaging changes; the model list is Opus 5.5 only; each points to its rows in [harness-foundations-implementation.md](harness-foundations-implementation.md). Also that day the owner chose to build the P09.T05 customer-data deletion path first, with the new Morrow conversation off until it exists (OD-2026-10-26-10), and accepted [ADR-0042](../decisions/adr/ADR-0042-connected-services-and-customer-contact.md) (connected services and customer contact) as recommended, its COD Confirmation agent an installable agent that is not built now (OD-2026-10-26-9).
 - Changed again on 2026-10-26 for OD-2026-10-26-12 (credits are the only budget, pull request 89; the 2026-10-26 Amendments of ADR-0039, ADR-0040 and ADR-0041), without changing any record: PR 11 has no cost check-in and no pause on Morrow's provider spend, only an alert to you at 80% of your Anthropic monthly limit; PRs 12 and 21 have no per-person limit on requests or standing requests.
+- Changed 2026-10-27, after pull requests 86 (ADR-0042 Accepted; OD-2026-10-26-8 to OD-2026-10-26-10) and 79 (harness plan H5, the teammate contracts) merged, without changing any record: the owner's choices of 2026-10-26 cite their records; PR 12's safety tests add that the new conversation stays off until a customer's name typed into a message can be deleted (OD-2026-10-26-10, harness plan H9d); H5 is marked merged. ADR-0042's own lane in this file comes with row CS2 of [connected-services-implementation.md](connected-services-implementation.md).
 - Graph: each PR is a milestone node, `V1-PR01` to `V1-PR26` (`docs/graph/milestones/`), part of its tracks, delivering its features, waiting on its gates; a merged pull request whose title starts "v1 PR <n>:" implements it.
 
 ## Progress
 
-At `main` `14644dec`, 2026-10-26. ADR-0039's first code PR (#83: Listings' catalogue version 4, Opus 5.5 at medium and high, with no run or daily cap; migration 0056) and #89 (credits are the only budget, OD-2026-10-26-12; documents only) merged that day too; neither is one of the PRs below.
+At `main` `966fed03`, 2026-10-27. ADR-0039's first code PR (#83: Listings' catalogue version 4, Opus 5.5 at medium and high, with no run or daily cap; migration 0056) and #89 (credits are the only budget, OD-2026-10-26-12; documents only) merged on 2026-10-26, and #86 (ADR-0042 and its plan, OD-2026-10-26-8 to OD-2026-10-26-10; documents and tests only) and #79 (harness plan H5: the teammate contracts and tool catalogue version 4, ADR-0037's follow-up PR 2, which replaces part of PR 26) on 2026-10-27; none is one of the PRs below, and no PR below has merged since `2107859d`.
 
 | State | PRs |
 | --- | --- |
 | Merged | 1 (#50; its decision record ADR-0035 in #48), 2 (#53, "Disconnect store"; the Claude switch on with the owner's key in #73), 3 (#54), 4 (#67), 5 (#66), 6 (#80), 7 (#51), 8 (#63, switch off), 10 (#52), 14 (#55), 15 (#65), 16 (#56), 17 (#49, ADR-0033 and ADR-0034), 18 (#58), 19 (#57), 20 (#68) |
-| Building now | 11 (#64, held and rebuilt to ADR-0041 as rows H4 and H7a to H8 of the harness plan (on PR #64), after the contracts of H5 (PR #79) and H6) |
+| Building now | 11 (#64, held and rebuilt to ADR-0041 as rows H4 and H7a to H8 of the harness plan (on PR #64), after the contracts of H5 (PR #79, merged) and H6) |
 | Not started | 9, 12, 13, 21 to 25 |
 | Reshaped (2026-10-26) | 11, 12, 15, 16, 20 and 21, by ADR-0040 and ADR-0041 ([harness-foundations-implementation.md](harness-foundations-implementation.md)); merged PRs keep what they built and gain the changes as new rows |
 | Replaced (2026-10-25) | 26, by ADR-0037's follow-up PRs 1 to 10 ([adr-0037-implementation.md](adr-0037-implementation.md)), of which 2, 4, 5, 9 and 10 continue as harness plan rows since 2026-10-26 |
@@ -45,7 +46,7 @@ PR 1 records these rules in a one-page decision. Nothing below starts until you 
 - **One environment.** The copy already running on Cloudflare and Neon becomes production v1. It is called "staging" inside the code. We keep that name for now because renaming changes nothing you see.
 - **Your live store** connects through a private Shopify app made for your store only. No development stores.
 - **Product data first:** titles, descriptions, SEO and tags. Customer data comes only after Morrow can delete it on request. That rule stays. Other new kinds of data (order totals, for example) get their delete step in the PR that adds them where possible, and always before outside customers.
-  *2026-10-26: you chose to build that deletion path for customer data (P09.T05) first, as part of the foundation. The new Morrow conversation (ADR-0040) stays off until it exists.*
+  *2026-10-26: you chose to build that deletion path for customer data (P09.T05) first, as part of the foundation (OD-2026-10-26-10). The new Morrow conversation (ADR-0040) stays off until it exists and can also delete a customer's name typed into a message (harness plan H9d).*
 - **One standing yes** from you replaces asking each time for deploys, database updates, Claude calls and E2B runs within the spend caps, and the usual 300 test credits a month for your own workspace.
 - **Still a yes every time:**
   - every change to your store, which you give inside Morrow on the exact change, because the product works that way;
@@ -273,7 +274,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
 - **Runs in parallel with:** everything. It starts now.
 
 ### PR 11. The agent loop
-*2026-10-26: ADR-0041 makes this PR the harness foundation, built production grade with no shortcuts, as you asked that day. It is now rows H4 and H7a to H8 of [the harness plan](harness-foundations-implementation.md) (on PR #64), after the contracts of H5 (PR #79) and H6, as several PRs.*
+*2026-10-26: ADR-0041 makes this PR the harness foundation, built production grade with no shortcuts, as you asked that day. It is now rows H4 and H7a to H8 of [the harness plan](harness-foundations-implementation.md) (on PR #64), after the contracts of H5 (PR #79, merged 2026-10-27) and H6, as several PRs.*
 - **Delivers:**
   - **One durable job runner for every agent** (AgentRunWorkflow):
     - the model can call Morrow's tools;
@@ -309,7 +310,7 @@ Target: about a week and a half, early November, if reviews and your steps are q
   - Morrow's own rights are fixed: no store reads, no change proposals, no computer and no customer data.
   - Only a person starts Morrow. Morrow may call teammates and hand work off as many times as the work needs, in sequence or in parallel, at depth 1: each call or hand-off is one child job under Morrow's permission envelope, checked in code on its own against your rights, the teammate's grants, its owner's current rights, the store connection, the rules and the stops; a teammate never calls, hands off to or creates an agent. A job's calls are bounded by its safety check-ins (it pauses and asks you, never stops early), the workspace's credits and your stop, never by a money cap.
   - Only the person who asked can steer or stop a request. Other people's messages never reach or wake it; they enter later work only as marked data that names its author (ADR-0040 items 7, 8 and 13).
-  - A customer's email address, phone number, street address or customer id typed into a message is refused until the customer-data deletion path exists, and the box carries a line asking you not to type customers' names (ADR-0041 item 31).
+  - A customer's email address, phone number, street address or customer id typed into a message is refused until the customer-data deletion path exists, and the box carries a line asking you not to type customers' names (ADR-0041 item 31). The new conversation stays off until that path exists and its test shows a customer's name typed into a message is deleted with every copy when Shopify asks (OD-2026-10-26-10, harness plan H9d).
   - Stop on a request needs no second person, and agents can neither hold nor use it; the workspace stop for the Owner and Admins is lifted only by a reviewed step (ADR-0040 item 10).
   - The browser gets only hints, then pulls what you may see; nothing about another person's private conversation ever reaches you (ADR-0040 items 1 and 15).
   - Only the Owner can change an agent's effort, and Admins only for installed agents; nobody can pick a lower effort or another model.
@@ -437,9 +438,9 @@ Target: about a week and a half, early November, if reviews and your steps are q
 
 ## The other launch agents (PRs 22 to 25) and new teammates (PR 26, replaced)
 
-Each new Shopify permission needs one "Reconnect" approval in your Shopify admin, which works after PR 5. Order and customer data each need their own deletion path first; the customer-data path (P09.T05) is now built first, as part of the foundation (your choice of 2026-10-26).
+Each new Shopify permission needs one "Reconnect" approval in your Shopify admin, which works after PR 5. Order and customer data each need their own deletion path first; the customer-data path (P09.T05) is now built first, as part of the foundation (your choice of 2026-10-26, OD-2026-10-26-10).
 
-COD Confirmation (ADR 0042: calls to cash-on-delivery customers through your own calling service, under a call plan you approve) is an installable agent and is not built now (2026-10-26). It is not one of these PRs. You asked instead that the foundation be ready for agents like it: agents that read your store's live data, orders and customers included once their deletion paths exist, and act on store events and on schedules.
+COD Confirmation (ADR-0042, accepted 2026-10-26: calls to cash-on-delivery customers through your own calling service, under a call plan you approve) is an installable agent and is not built now (OD-2026-10-26-9). It is not one of these PRs. You asked instead that the foundation be ready for agents like it: agents that read your store's live data and act on store events and on schedules, with orders once their deletion path exists; customer details for any agent other than Support need a further decision record, which comes to you first (OD-2026-10-26-9). Its foundation is built now behind switches that stay off, and the agent only when you ask for it ([connected-services-implementation.md](connected-services-implementation.md)).
 
 ### PR 22. Business Analyst
 - **Delivers:**
@@ -519,7 +520,7 @@ Replaced on 2026-10-25. The temporary, weaker "specialist" is gone (ADR-0037): t
   - Each new kind of data has its deletion path first. Every new table is isolated per tenant.
   - The switches stay off until the deletion paths, the gateway, reservations and stops, the agent-loop switch and a passing eval round are in place.
 - **If it slips:** if the checkpoint (G11) is missed, or the permission packet is not merged by 2026-12-04 (G18), agent cards move to the first fast follow after launch; asking and handing off to the teammates we build stays.
-- **Runs in parallel with:** lanes D, E and G. Follow-up PR 9 merged (#81) and PR 2 is open (#79, now H5); teammate calls (H10) wait for the harness's runner, and Morrow's tools (H11a) come with PR 12a.
+- **Runs in parallel with:** lanes D, E and G. Follow-up PR 9 merged (#81), and PR 2's teammate contracts merged as H5 (#79, 2026-10-27), with H6's harness contracts still to come; teammate calls (H10) wait for the harness's runner, and Morrow's tools (H11a) come with PR 12a.
 
 ## Later, when you need it
 

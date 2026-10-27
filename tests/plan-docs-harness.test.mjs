@@ -4,10 +4,12 @@
 // every harness row they cite exists, no plan doc offers a model or effort the records
 // removed, the superseded follow-up rows point to the harness plan, and the owner's choices of
 // 2026-10-26 (the P09.T05 path first; COD Confirmation installable and not built now) are there,
-// and, since OD-2026-10-26-12, credits are the only budget in every one of them.
+// and, since OD-2026-10-26-12, credits are the only budget in every one of them. Since pull
+// request 86 merged (ADR-0042 Accepted, OD-2026-10-26-9; the customer-names gap decided,
+// OD-2026-10-26-10; harness plan row H9d) and pull request 79 (H5), they cite those records.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -194,7 +196,7 @@ test("PR 11 calls on PR #64 only the harness rows that change PR #64, after H5's
     const ids = harnessIds(m[1]);
     for (const id of ids)
       assert.match(harnessEntry.get(id).changes, /PR #64\b/, `${where}: ${id} changes PR #64`);
-    assert.match(text, /after the contracts of H5 \(PR #79\) and H6\b/, where);
+    assert.match(text, /after the contracts of H5 \(PR #79, merged[^)]*\) and H6\b/, where);
     cited.push(ids);
   }
   assert.deepEqual(cited[0], cited[1], "the progress table and PR 11's note cite the same rows");
@@ -292,4 +294,87 @@ test("credits are the only budget (OD-2026-10-26-12): no plan doc keeps a remove
     gone,
     /by OD-2026-10-26-12, the platform breaker's pause at 80%[^.]*the cost check-in\./,
   );
+});
+
+test("the plan docs follow pull request 86's records and H5's merge, citing ids that resolve", () => {
+  // Every OD and ADR id a plan doc cites resolves on main.
+  const adrFiles = new Set(
+    read("docs/decisions/adr/README.md")
+      .match(/ADR-\d{4}-[\w-]+\.md/g)
+      .map((name) => name.slice(0, 8)),
+  );
+  for (const [name, text] of Object.entries(docs)) {
+    for (const [id] of text.matchAll(/\bOD-\d{4}-\d{2}-\d{2}-\d+\b/g))
+      assert.ok(existsSync(join(repository, `docs/graph/decisions/${id}.md`)), `${name}: ${id}`);
+    for (const [id] of text.matchAll(/\bADR-\d{4}\b/g))
+      assert.ok(adrFiles.has(id), `${name}: ${id}`);
+    // ADR-0042 is Accepted (OD-2026-10-26-9): no plan doc still calls it pending or cites the
+    // owner's choices of 2026-10-26 without their records.
+    assert.doesNotMatch(text, /\bADR 0042\b/, `${name}: ADR-0042 by its id`);
+    assert.doesNotMatch(text, /being finalised|once merged/, `${name}: ADR-0042 pending`);
+    assert.doesNotMatch(text, /\(the owner, 2026-10-26\)/, `${name}: an uncited choice`);
+    // OD-2026-10-26-10 decided the customer-names gap of ADR-0041 item 31.
+    assert.doesNotMatch(
+      text,
+      /waits? for the owner's decision on the customer-names gap/,
+      `${name}: the customer-names gap as still open`,
+    );
+    // H5 merged as #79 (2026-10-27).
+    assert.doesNotMatch(text, /is open \(#79|#79[^)]*\bopen\b/, `${name}: #79 as open`);
+  }
+  assert.match(harnessEntry.get("H5").changes, /^PR #79\b/);
+  assert.match(row(docs.adr0037, "2"), /now harness plan H5\*\* \([^)]*merged 2026-10-27 as #79/);
+  assert.match(section("PR 26."), /PR 2's teammate contracts merged as H5 \(#79, 2026-10-27\)/);
+  assert.match(docs.mvp, /harness plan H5, merged 2026-10-27 \(#79\)/);
+
+  // mvp.md: G9 and the privacy rows follow OD-2026-10-26-10 and name H9d, the row that owns the
+  // typed-name case; the harness plan's H20 row gates async-conversations on that case.
+  assert.match(row(harnessPlan, "H20"), /OD-2026-10-26-10/);
+  assert.match(row(harnessPlan, "H20"), /\(H9d\)/);
+  const g9 = docs.mvp.split("\n").find((line) => line.startsWith("9. **G9, before real data:**"));
+  assert.ok(g9, "mvp.md's G9");
+  assert.match(g9, /`async-conversations` switch stays off until it exists and passes its tests/);
+  assert.match(g9, /H9d's `lab:shopify-privacy` case/);
+  assert.match(g9, /customer-names gap of ADR-0041 item 31 \(OD-2026-10-26-10\)/);
+  for (const prefix of ["| Privacy and operations |", "| T14 Privacy |"]) {
+    const line = docs.mvp.split("\n").find((l) => l.startsWith(prefix));
+    assert.ok(line, prefix);
+    assert.match(line, /P09\.T05[^|]*\(OD-2026-10-26-10\)[^|]*H9d/, prefix);
+  }
+  // G1 and the "Since 2026-10-26" note: ADR-0042 accepted, the CLAUDE.md words still the owner's.
+  const g1 = docs.mvp.split("\n").find((line) => line.startsWith("1. **G1, W0:**"));
+  assert.match(g1, /ADR-0042[^.]*accepted as recommended[^.]*\(OD-2026-10-26-9, pull request 86\)/);
+  assert.match(g1, /the owner's word-for-word confirmation/);
+  assert.match(g1, /customer-names gap of ADR-0041 item 31 \(OD-2026-10-26-10\)/);
+  const since = docs.mvp.split("\n").find((line) => line.startsWith("**Since 2026-10-26**"));
+  assert.match(
+    since,
+    /accepted \[ADR-0042\]\([^)]*\) \(connected services and customer contact\) as recommended \(OD-2026-10-26-9, pull request 86\)/,
+  );
+  assert.match(since, /approved in substance, their exact text waiting for the owner's/);
+  // ADR-0042's own changes to mvp.md and the build order are its plan's CS2, which exists.
+  const connected = read("docs/plan/connected-services-implementation.md");
+  assert.match(connected, /^\| CS2 \| Amendment notes and plan documents \|/m);
+  assert.match(since, /ADR-0042's own changes to this file[^.]*row CS2 of/);
+  // COD Confirmation: Accepted, not built now, and customer-level data for agents other than
+  // Support only through a further record (OD-2026-10-26-9).
+  const cod = docs.mvp.split("\n").find((line) => line.startsWith("**COD Confirmation**"));
+  assert.match(cod, /Accepted 2026-10-26 as recommended, OD-2026-10-26-9/);
+  assert.match(cod, /not built now \(OD-2026-10-26-9\)/);
+  assert.match(cod, /customer-level data for any agent other than Support needs a further record/);
+  assert.doesNotMatch(cod, /orders and customers included once their deletion paths exist/);
+
+  // The build order: the owner's choices cite their records, and PR 12's safety tests keep the
+  // conversation off until a typed name can be deleted (H9d).
+  assert.match(docs.order, /P09\.T05\) first, as part of the foundation \(OD-2026-10-26-10\)/);
+  assert.match(
+    section("PR 12."),
+    /stays off until that path exists and its test shows a customer's name typed into a message is deleted[^\n]*\(OD-2026-10-26-10, harness plan H9d\)/,
+  );
+  const codOrder = docs.order.split("\n").find((line) => line.startsWith("COD Confirmation ("));
+  assert.match(codOrder, /ADR-0042, accepted 2026-10-26/);
+  assert.match(codOrder, /not built now \(OD-2026-10-26-9\)/);
+  assert.match(codOrder, /customer details for any agent other than Support need a further/);
+  assert.doesNotMatch(codOrder, /orders and customers included once their deletion paths exist/);
+  assert.match(docs.order, /^At `main` `966fed03`, 2026-10-27\./m);
 });
