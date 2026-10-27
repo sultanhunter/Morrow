@@ -89,8 +89,8 @@ so if you want them otherwise.
      - The CLAUDE.md text above started from CLAUDE.md as it stands today, so it would have
        overwritten three of ADR 0042's four CLAUDE.md lines (its question 6) and dropped their
        call-plan exceptions. You approved those four lines in substance when you approved ADR 0042
-       (OD 2026-10-26-9, recorded on pull request 86), but their exact text was added to that
-       sheet after your answer, so it still waits for your word-for-word confirmation, and ADR
+       (OD-2026-10-26-9), but their exact text was added to that sheet, Q-adr-0042-owner-questions,
+       after your answer, so it still waits for your word-for-word confirmation, and ADR
        0042's CS2 commits it only then. The corrected text, under "Question 5: the corrected
        CLAUDE.md text" below, builds on those lines as CS2 will commit them. It comes back to you
        to confirm word for word; it lands as its own change after CS2's and changes nothing else
@@ -215,7 +215,7 @@ so if you want them otherwise.
 ## Question 5: the corrected CLAUDE.md text
 
 Three lines change, each shown as ADR 0042's CS2 will commit it ("Now") and as proposed. The
-"Now" text is ADR 0042's question 6 lines 1, 2 and 4, approved in substance by OD 2026-10-26-9 and
+"Now" text is ADR 0042's question 6 lines 1, 2 and 4, approved in substance by OD-2026-10-26-9 and
 still waiting for your word-for-word confirmation; you can confirm those four lines and these three
 in one message. The text is in plain blocks so that it can be confirmed exactly as it will be
 committed.
@@ -258,7 +258,7 @@ Change the owner's store only through Morrow's own flow: the owner approves the 
 
 ## Answered
 
-Answered 2026-10-26 (OD-2026-10-26-11): "recommended, and yes to the paid Neon plan": all 17 as recommended, so ADR-0043 and ADR-0044 are Accepted as recommended and the note on ADR-0031 item 1 is decided. Question 17 is answered (a), and the owner bought Neon's paid plan in Neon's own console the same day. The CLAUDE.md words of question 5, as corrected above, wait for the owner's confirmation word for word, as do ADR 0042's four lines they build on, which OD 2026-10-26-9 approved in substance only (question 6 of ADR 0042's decision sheet); the owner can confirm both sets in one message.
+Answered 2026-10-26 (OD-2026-10-26-11): "recommended, and yes to the paid Neon plan": all 17 as recommended, so ADR-0043 and ADR-0044 are Accepted as recommended and the note on ADR-0031 item 1 is decided. Question 17 is answered (a), and the owner bought Neon's paid plan in Neon's own console the same day. The CLAUDE.md words of question 5, as corrected above, wait for the owner's confirmation word for word, as do ADR 0042's four lines they build on, which OD-2026-10-26-9 approved in substance only (question 6 of Q-adr-0042-owner-questions); the owner can confirm both sets in one message.
 
 Questions 6 to 10 above are as the owner answered them. An editing slip dropped them from this sheet when the answer was recorded; they were restored, unchanged, on 2026-10-27.
 
@@ -274,7 +274,14 @@ The records' review (an AI review, separate context, same model family) ran on t
 
 A second review (an AI review, separate context, same model family) of 2026-10-27 found that the first round's question 10 fix, which combined waiting runs per agent and trigger, widened the answer, since an agent with two waiting triggers would have resumed as two runs; the rule above replaced it. Its other fixes make exact what was answered and widen nothing:
 
-- Question 9: "Stop customer contact" stops every contact capability that calls or messages someone and every action of a call plan, its order tags included, as ADR 0042 approved; it never blocks the contact controls or reading results, and a tag rule that is not a call plan keeps running. The one stop check works out the workspace and connections itself and treats an unknown or mismatched id as stopped.
+- Question 9: "Stop customer contact" stops every contact capability that calls or messages someone and every action of a call plan, its order tags included, as ADR 0042 approved; it never blocks the contact controls or reading results, and a tag rule that is not a call plan keeps running. The one stop check works out the workspace itself and treats an unknown or mismatched id as stopped (the third review below corrected how it finds connections).
 - Question 5: removing a tag is its own rule, paired with the rule that adds the tag and approved with it on one card; it removes only a tag its pair added, with no removal since.
 - Question 13: a person asking a question still names who answers, as today; only an agent's questions get their answerer from code.
 - Not asked (the schedule items): a job's follow-through for later ends with the job when a stop, a revoke, a kill switch, an authority failure or the mandate's end ends it, and runs only under the mandate it was written under; one over the hourly rate waits for the next slot. How late an event may arrive and still start work is a catalogue value: 24 hours by default, from 5 minutes to 24 hours.
+
+A third review (an AI review, separate context, same model family) of 2026-10-27 found five more defects and one optional pointer. Each fix narrows or makes exact what was answered and widens nothing:
+
+- Question 5: rules that change your store, and order tags written under them, stay switched off until CLAUDE.md's words are committed after you confirm them: ADR 0042's four lines for order tags, and question 5's three lines above for any action under a rule.
+- Question 9: the one stop check also takes the calling service connection that the job's own record names, so a stopped calling connection refuses a test call; a connection of another workspace counts as stopped; and the check also runs where a call's instructions are served.
+- Question 10: a combined trigger row keeps, for each trigger merged into it, which trigger it came from and its records.
+- Not asked (the schedule items): the plan's tests cover a job's follow-through for later that is ended when Stop AI work begins after its job finished, and a mandate taken over.

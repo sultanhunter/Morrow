@@ -8,7 +8,13 @@
 // combined run per installation (the records agree that no review fix widens the answer),
 // F4 a stopped run's `once` schedules, F5 a person's own respondent, F6 the shared stop
 // check's derived tenant and fail-closed ids, F7 the rate rule for rows with no ids and
-// `maxEventAge`'s value. Pure: no I/O beyond reading the repository files.
+// `maxEventAge`'s value. The third review (head b9c3b8ac) found five more and one optional
+// pointer, each held below as R3-1 to R3-6: R3-1 the switches that wait for the CLAUDE.md
+// commits, R3-2 the stop check's connection from the caller's own row, R3-3 a definer per login,
+// R3-4 the combined row's contract, R3-5 the `once` lab rows, R3-6 SD4's pointer to H9d. Also held:
+// L2 from pull request 86's review (H9d's lab case covers only the classes registered by then, and
+// H12a to H12c register theirs), and the graph ids that #86 put on `main`.
+// Pure: no I/O beyond reading the repository files.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -22,6 +28,8 @@ const plan = read("docs/plan/store-data-foundation-implementation.md");
 const decision = flat(read("docs/graph/decisions/OD-2026-10-26-11.md"));
 const sheet = flat(read("docs/graph/questions/Q-store-data-foundation.md"));
 const workApi = read("docs/contracts/work-api.md");
+const harness = read("docs/plan/harness-foundations-implementation.md");
+const csPlan = read("docs/plan/connected-services-implementation.md");
 
 /** One numbered Decision item ("N. **…"), up to the next item or heading. */
 const item = (text, n) => {
@@ -42,6 +50,12 @@ const row = (id) => {
   const line = plan.split("\n").find((l) => l.startsWith(`| ${id} |`));
   assert.ok(line, id);
   return line;
+};
+/** The cells of a plan table row whose first cell is `id`. */
+const cells = (text, id) => {
+  const lines = text.split("\n").filter((l) => l.startsWith(`| ${id} | `));
+  assert.equal(lines.length, 1, `exactly one row ${id}`);
+  return lines[0].replace(/^\| /, "").replace(/ \|$/, "").split(" | ");
 };
 /** A "## " section of a record, up to the next "## " heading. */
 const section = (text, heading) => {
@@ -216,7 +230,7 @@ test("F4: a run's open once schedules end with it, and fire only under the manda
   );
   assert.ok(
     row("SD12").includes(
-      "one written under a mandate revision since renewed or ended ends `cancelled` and admits nothing",
+      "one written under a mandate revision since renewed, taken over, revoked or ended ends `cancelled` and admits nothing",
     ),
   );
 });
@@ -255,27 +269,27 @@ test("F5: a person still names the respondent; only an installation's respondent
   assert.ok(row("SD19").includes("`respondentId` kept for people and refused from installations"));
 });
 
-test("F6: effect_stops_clear takes no tenant or connection, derives them, and treats an unknown or mismatched id as not clear", () => {
+test("F6: effect_stops_clear takes no tenant, derives it, and treats an unknown or mismatched id as not clear", () => {
   const check = item(adr43, 21);
   assert.ok(
     check.includes(
-      "**One shared check: `effect_stops_clear`** (installation, store, capability, policy)",
+      "**One shared check: `effect_stops_clear`** (installation, store, capability, policy, connection)",
     ),
   );
   assert.ok(!check.includes("(tenant, installation, capability, connection)"));
   assert.ok(
     check.includes(
-      "The definer takes no tenant and no connection: it derives the tenant from the installation's row",
+      "The definer takes no tenant: it derives the tenant from the installation's row",
     ),
   );
   assert.ok(
     check.includes(
-      "An unknown id, a store outside the installation's tenant, or a policy of another installation or store is not clear",
+      "An unknown id, a store or connection outside the installation's tenant, or a policy of another installation or store is not clear",
     ),
   );
   assert.ok(
     check.includes(
-      "`stops.test.mjs` rows: an installation of another tenant, an unknown installation, store or policy, and another installation's policy each report not clear",
+      "`stops.test.mjs` rows: an installation of another tenant, an unknown installation, store, policy or connection, another installation's policy and a connection of another tenant each report not clear",
     ),
   );
   assert.ok(
@@ -315,5 +329,243 @@ test("F7: every catalogue setting item 3 names has its value, and rows with no i
     row("SD12").includes(
       "a seventh in an hour waits for the next slot the rate allows and is never dropped",
     ),
+  );
+});
+
+test("R3-1: standing-policies and order-tag-writes wait for the CLAUDE.md commits, and the plan names CS16a and CS16b", () => {
+  const switches = item(adr43, 25);
+  assert.ok(
+    switches.includes(
+      "`order-tag-writes` also goes on only after ADR 0042's CS2 commits its four CLAUDE.md lines (ADR 0042 item 27), whichever plan row turns it on",
+    ),
+  );
+  assert.ok(
+    switches.includes(
+      "`standing-policies`, and `order-tag-writes` for a policy's tags, go on only after plan row SD2 commits question 5's three CLAUDE.md lines",
+    ),
+  );
+  assert.ok(
+    switches.includes("Each of those commits follows the owner's word-for-word confirmation"),
+  );
+  const [, , , startsAfter, csColumn, , , gatedBy] = cells(plan, "SD25");
+  assert.ok(
+    startsAfter.includes(
+      "for `order-tag-writes`, CS2's commit of ADR 0042's four CLAUDE.md lines (ADR 0042 item 27)",
+    ),
+  );
+  assert.ok(
+    startsAfter.includes(
+      "for `standing-policies`, and for `order-tag-writes` for a policy's tags, SD2's commit of question 5's three CLAUDE.md lines",
+    ),
+  );
+  assert.ok(startsAfter.includes("the owner's word-for-word confirmation"));
+  assert.ok(
+    gatedBy.includes("for `standing-policies` and `order-tag-writes`, the CLAUDE.md commits"),
+  );
+  // ADR 0042 item 27 holds `order-tag-writes` for CS2's commit, whichever row turns it on.
+  const adr42 = read("docs/decisions/adr/ADR-0042-connected-services-and-customer-contact.md");
+  assert.ok(flat(adr42).includes("whichever plan row turns it on"));
+  // One row turns on order-events and order-tag-writes; the CS rows find them on.
+  assert.ok(
+    csColumn.includes(
+      "this row turns on CS16a's `order-events` and the `order-tag-writes` of CS16b's list, whichever plan needs them first",
+    ),
+  );
+  assert.ok(cells(csPlan, "CS16b")[5].includes("`order-tag-writes`, if not already on (SD25"));
+  assert.ok(cells(csPlan, "CS16b")[3].includes("`order-tag-writes`"));
+  // #86 split CS16 in two; these records name CS16a or CS16b, never all of CS16.
+  for (const [name, text] of [
+    ["plan", plan],
+    ["ADR-0043", adr43],
+    ["OD-2026-10-26-11", decision],
+    ["Q-store-data-foundation", sheet],
+  ])
+    assert.deepEqual(flat(text).match(/\bCS16(?![ab'])\S*/g) ?? [], [], `${name} names bare CS16`);
+  assert.ok(plan.includes("  - CS16b's contact switches:"));
+  // The owner can see what waits for the confirmation.
+  assert.ok(
+    flat(plan).includes(
+      "Until both commits are on `main`, `standing-policies` and `order-tag-writes` stay off (SD25)",
+    ),
+  );
+});
+
+test("R3-2: the stop check takes the connection the caller's own row names, so a stopped voice connection refuses a test call", () => {
+  const check = item(adr43, 21);
+  assert.ok(
+    check.includes(
+      "The connection is the one the caller's own operation, sequence or attempt row names, such as the voice connection of a test call (`contact.test_call.place`), which has no policy",
+    ),
+  );
+  assert.ok(
+    check.includes(
+      "to the connection passed it adds the connections it derives, the store's Shopify connection and, for a `contact_plan` policy, the channel connections of the policy's active revision",
+    ),
+  );
+  assert.ok(
+    check.includes(
+      "a stopped voice connection (a barring notice, a spam flag or `reconnect_needed`) refuses a test call at the mark-started step and in the call-instruction route",
+    ),
+  );
+  assert.ok(check.includes("ADR 0042 item 14's call-instruction route"));
+  assert.ok(!check.includes("takes no tenant and no connection"));
+  // ADR 0042 checks every stop in the call-instruction route as well.
+  const adr42 = read("docs/decisions/adr/ADR-0042-connected-services-and-customer-contact.md");
+  assert.ok(
+    adr42.includes(
+      "All of them are checked in `admit_contact_attempt`, at the broker's mark-started step and in the call-instruction route.",
+    ),
+  );
+  const sd14 = row("SD14");
+  assert.ok(
+    sd14.includes(
+      "the connection the caller's own locked operation, sequence or attempt row names",
+    ),
+  );
+  assert.ok(sd14.includes("ADR 0042's call-instruction route"));
+  assert.ok(sd14.includes("a connection of another tenant is not clear"));
+  assert.ok(sd14.includes("a stopped voice connection refuses a test call"));
+});
+
+test("R3-3: each login reaches the stop check through a definer of its own, as ADR-0022 item 8 requires", () => {
+  const check = item(adr43, 21);
+  assert.ok(!check.includes("executable only by `morrow_runtime_executor`"));
+  assert.ok(check.includes("No login executes the function itself."));
+  assert.ok(
+    check.includes(
+      "Each caller's login reaches it through a definer of its own, guarded by `executor_memberships_closed(session_user)`",
+    ),
+  );
+  assert.ok(
+    check.includes(
+      "`morrow_runtime_executor` for the admissions, the writers of items 9, 10 and 17 and the monitor alerter",
+    ),
+  );
+  assert.ok(check.includes("`morrow_connector_ingress` for item 5's inbox-apply writer"));
+  assert.ok(
+    check.includes(
+      "`morrow_vault_broker` for the gateway's mark-started step and the call-instruction route, which run in the broker (ADR-0022 items 7 and 8)",
+    ),
+  );
+  // The logins named are the ones the code and ADR-0022 use today.
+  const adr22 = read("docs/decisions/adr/ADR-0022-mvp-contracts.md");
+  assert.ok(
+    adr22.includes(
+      "Each executes only its own definers, guarded by `executor_memberships_closed(session_user)`.",
+    ),
+  );
+  assert.ok(adr22.includes("Under a row lock the broker marks the send as started"));
+  const migration = flat(read("migrations/0054.connection-health-work.sql"));
+  assert.match(
+    migration,
+    /GRANT EXECUTE ON FUNCTION morrow_work\.connector_inbox_apply_v2\(text\),[^;]* TO morrow_connector_ingress;/,
+  );
+  const sd14 = row("SD14");
+  for (const login of [
+    "morrow_runtime_executor",
+    "morrow_connector_ingress",
+    "morrow_vault_broker",
+  ])
+    assert.ok(sd14.includes("`" + login + "`"), login);
+  assert.ok(sd14.includes("no login runs the function itself"));
+});
+
+test("R3-4: the trigger row contract holds a combined row's sources, each with its own overflow flag", () => {
+  assert.ok(
+    item(adr43, 5).includes(
+      "A combined row (item 22) holds, for each source merged into it, that source's revision, its trigger kind, its ids and its own `overflow` flag, within the row's 500-id cap; it too holds ids and closed codes only.",
+    ),
+  );
+  // The rule item 5 now has room for.
+  const resume = item(adr43, 22);
+  assert.ok(resume.includes("each with its source revision and kind"));
+  assert.ok(resume.includes("then `overflow` for that source"));
+  assert.ok(
+    row("SD15").includes(
+      "a combined row keeps each merged source's revision, kind, ids and `overflow` flag",
+    ),
+  );
+});
+
+test("R3-5: SD12's lab rows cover a finished run's once cancelled by a stop, and a mandate taken over", () => {
+  const firing = item(adr43, 9);
+  assert.ok(
+    firing.includes(
+      "Any stop over the installation (the platform, workspace or installation stop) likewise ends the installation's open `once` schedules when it begins, whether or not their run is still running",
+    ),
+  );
+  assert.ok(firing.includes("once that revision is renewed, taken over, revoked or ended"));
+  const [, , , , , , does, labs] = cells(plan, "SD12");
+  assert.ok(
+    does.includes(
+      "cancelled when any stop over the installation begins, whether or not their run has ended",
+    ),
+  );
+  assert.ok(
+    labs.includes(
+      "a `once` written by a completed run is cancelled when Stop AI work begins, and admits nothing after the stop is lifted",
+    ),
+  );
+  // Every way item 9 ends a mandate revision has its lab row.
+  const ends = /once that revision is (.+?), the schedule ends `cancelled`/.exec(firing);
+  assert.ok(ends, "item 9 lists how a revision ends");
+  assert.equal(ends[1], "renewed, taken over, revoked or ended");
+  assert.ok(
+    labs.includes(`one written under a mandate revision since ${ends[1]} ends \`cancelled\``),
+  );
+});
+
+test("R3-6: SD4 points to H9d, which starts after it and registers the harness classes on its matcher", () => {
+  const [, , , , csAndH] = cells(plan, "SD4");
+  assert.ok(
+    csAndH.includes(
+      "before H9d, which registers on SD4's matcher the harness classes that may hold a typed customer name",
+    ),
+  );
+  const [, , , h9dStartsAfter, , h9dDoes] = cells(harness, "H9d");
+  assert.ok(h9dStartsAfter.includes("SD4 of `docs/plan/store-data-foundation-implementation.md`"));
+  assert.ok(h9dDoes.includes("On SD4's matcher it registers every harness class"));
+});
+
+test("L2 (from #86): H9d's lab case covers the classes registered by then, and H12a to H12c register theirs", () => {
+  const [, , , startsAfter, , , gatedBy] = cells(harness, "H9d");
+  assert.ok(
+    gatedBy.includes(
+      "with its copies in each class registered by then: `run_turns` and checkpoints, and memory and summaries once H12a, H12b and H12c have registered theirs",
+    ),
+  );
+  assert.ok(
+    !gatedBy.includes("with its copies in `run_turns`, checkpoints, summaries and memory)"),
+  );
+  // H9d does not wait for the memory rows; each of them registers its own class.
+  for (const id of ["H12a", "H12b", "H12c"]) {
+    assert.ok(!startsAfter.includes(id), `H9d does not wait for ${id}`);
+    const does = cells(harness, id)[5];
+    assert.ok(
+      does.includes(
+        "registered `content: customer` on H9d's matcher and added to H9d's `lab:shopify-privacy` case (ADR-0031 item 4), otherwise H9d registers them",
+      ),
+      id,
+    );
+  }
+  assert.ok(cells(harness, "H12b")[5].includes("`person_memories`"));
+  assert.ok(cells(harness, "H12c")[5].includes("`conversation_summaries` registered"));
+});
+
+test("graph ids: the decision node and the sheet cite OD-2026-10-26-9 and Q-adr-0042-owner-questions, which exist on main", () => {
+  for (const [name, text] of [
+    ["OD-2026-10-26-11", decision],
+    ["Q-store-data-foundation", sheet],
+  ]) {
+    assert.ok(!text.includes("OD 2026-10-26-9"), `${name}: the workaround id`);
+    assert.ok(!text.includes("recorded on pull request 86"), `${name}: the PR note`);
+    assert.ok(!text.includes("ADR 0042's decision sheet"), `${name}: the unnamed sheet`);
+    assert.ok(text.includes("OD-2026-10-26-9"), `${name} cites OD-2026-10-26-9`);
+    assert.ok(text.includes("Q-adr-0042-owner-questions"), `${name} cites the sheet`);
+  }
+  assert.match(read("docs/graph/decisions/OD-2026-10-26-9.md"), /^id: OD-2026-10-26-9$/m);
+  assert.match(
+    read("docs/graph/questions/Q-adr-0042-owner-questions.md"),
+    /^id: Q-adr-0042-owner-questions$/m,
   );
 });
