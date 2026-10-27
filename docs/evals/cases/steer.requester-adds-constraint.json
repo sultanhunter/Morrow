@@ -12,7 +12,8 @@
   ],
   "gates": [
     "agent-loop",
-    "async-conversations"
+    "async-conversations",
+    "context-provider-strategy"
   ],
   "entry": {
     "agent": "morrow",

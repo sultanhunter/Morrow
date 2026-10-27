@@ -11,8 +11,9 @@
   ],
   "gates": [
     "agent-loop",
+    "agent-map",
     "agent-run-safety-v1",
-    "agent-map"
+    "context-provider-strategy"
   ],
   "entry": {
     "agent": "morrow",

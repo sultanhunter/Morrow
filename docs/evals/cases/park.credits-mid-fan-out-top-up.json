@@ -12,8 +12,9 @@
   ],
   "gates": [
     "agent-loop",
-    "run-credits",
-    "agent-map"
+    "agent-map",
+    "context-provider-strategy",
+    "run-credits"
   ],
   "entry": {
     "agent": "morrow",

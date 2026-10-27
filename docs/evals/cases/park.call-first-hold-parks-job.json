@@ -12,6 +12,7 @@
   ],
   "gates": [
     "agent-loop",
+    "context-provider-strategy",
     "run-credits"
   ],
   "entry": {

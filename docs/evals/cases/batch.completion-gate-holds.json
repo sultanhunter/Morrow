@@ -12,6 +12,7 @@
   "gates": [
     "agent-loop",
     "agent-run-safety-v1",
+    "context-provider-strategy",
     "tool-catalogue-v4"
   ],
   "entry": {

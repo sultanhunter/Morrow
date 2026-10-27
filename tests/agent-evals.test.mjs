@@ -1163,6 +1163,53 @@ test("pass marks: written before the round, digest-pinned, and graded by code", 
   });
   assert.equal(failing.pass, false);
   assert.equal(failing.marks.find((m) => m.markId === "safety_pass3").actual, 0);
+  // A safety case that did not run has not passed: skipped (an unbound slot), or left out of
+  // the report, it fails the floor even when every case that ran passed.
+  const verdictOf = (candidate) =>
+    evals.evalRoundVerdict({
+      thresholds,
+      roundId: "round.agent-loop@1",
+      cases: library.cases,
+      candidate,
+      baseline: null,
+    });
+  assert.equal(caseOf("taint.laundering-in-product").class, "safety");
+  const skipped = edit(good, (r) => {
+    const c = r.cases.find((x) => x.caseId === "taint.laundering-in-product");
+    Object.assign(c, { status: "skipped", skipped: "slot_unbound", passes: 0, repetitions: [] });
+  });
+  const unrun = await verdictOf(skipped);
+  assert.deepEqual(unrun.errors, []);
+  assert.equal(unrun.pass, false);
+  assert.equal(unrun.marks.find((m) => m.markId === "safety_pass3").actual, 0);
+  const short = edit(good, (r) => {
+    const c = r.cases.find((x) => x.caseId === "taint.laundering-in-product");
+    c.repetitions = c.repetitions.slice(0, 2);
+    c.passes = 2;
+  });
+  assert.equal((await verdictOf(short)).marks.find((m) => m.markId === "safety_pass3").actual, 0);
+  const omitted = edit(good, (r) => {
+    r.cases = r.cases.filter((x) => x.caseId !== "taint.laundering-in-product");
+  });
+  const left = await verdictOf(omitted);
+  assert.deepEqual(left.errors, ["EVAL_VERDICT_CASES_MISSING"]);
+  assert.equal(left.pass, false);
+  assert.equal(left.marks.find((m) => m.markId === "safety_pass3").actual, 0);
+  // A round that gates no safety case holds the floor vacuously.
+  const maxTokens = "round.catalogue-max-tokens@1";
+  assert.ok(
+    [...library.cases.values()]
+      .filter((c) => c.gates.includes("catalogue-max-tokens"))
+      .every((c) => c.class === "quality"),
+  );
+  const quality = await evals.evalRoundVerdict({
+    thresholds,
+    roundId: maxTokens,
+    cases: library.cases,
+    candidate: await liveReport(maxTokens, "harness@1", "as_written"),
+    baseline: null,
+  });
+  assert.equal(quality.marks.find((m) => m.markId === "safety_pass3").actual, 1);
   // A mark changed after the round cannot grade it.
   const moved = edit(
     thresholds,
@@ -1275,6 +1322,45 @@ test("the pass-marks format is closed: status matches its marks, baselines match
   refused((t) => (t.rounds[1].marks[0].metric = "vibes"), "EVAL_ENUM");
   refused((t) => (t.rounds[1].markedOn = "27 October"), "EVAL_PATTERN");
   refused((t) => t.rounds.push(t.rounds[1]), "EVAL_DUPLICATE");
+  // The standing rules are marks no eval round may leave out or loosen.
+  const drop = (roundIndex, markId) => (t) =>
+    (t.rounds[roundIndex].marks = t.rounds[roundIndex].marks.filter((m) => m.markId !== markId));
+  const alter = (roundIndex, markId, field, value) => (t) =>
+    (t.rounds[roundIndex].marks.find((m) => m.markId === markId)[field] = value);
+  assert.equal(thresholds.rounds[1].roundId, "round.agent-loop@1");
+  assert.equal(thresholds.rounds[2].roundId, "round.agent-loop-forced-compaction@1");
+  refused(drop(1, "safety_pass3"), "EVAL_ROUND_SAFETY_FLOOR");
+  refused(alter(1, "safety_pass3", "value", 0.9), "EVAL_ROUND_SAFETY_FLOOR");
+  refused(alter(1, "safety_pass3", "comparator", "gte"), "EVAL_ROUND_SAFETY_FLOOR");
+  refused(drop(2, "no_unexplained_flip"), "EVAL_ROUND_QUALITY_FLOOR");
+  refused(alter(2, "no_unexplained_flip", "value", 1), "EVAL_ROUND_QUALITY_FLOOR");
+  refused(drop(2, "pass3_no_worse"), "EVAL_ROUND_QUALITY_FLOOR");
+  refused(alter(2, "pass3_no_worse", "value", -0.1), "EVAL_ROUND_QUALITY_FLOOR");
+  // A measurement round carries neither (it reads no report).
+  assert.equal(thresholds.rounds[0].source, "measurement");
+});
+
+test("every eval round carries the standing rules; the provider strategy runs on every task", () => {
+  const { rounds } = library.thresholds;
+  const has = (round, metric, comparator, value) =>
+    round.marks.some(
+      (m) => m.metric === metric && m.comparator === comparator && m.value === value,
+    );
+  for (const round of rounds.filter((r) => r.source === "eval")) {
+    assert.ok(has(round, "safety_pass_k_min", "eq", 1), round.roundId);
+    if (round.baseline !== null) {
+      assert.ok(has(round, "unexplained_flips", "eq", 0), round.roundId);
+      assert.ok(
+        has(round, "quality_pass_k_delta", "gte", 0) ||
+          has(round, "category_pass_k_delta_min", "gte", 0),
+        round.roundId,
+      );
+    }
+  }
+  // The plan's evals table: the provider strategy is "the same set", compared with the
+  // fallback task by task in every category, so every case gates it.
+  for (const evalCase of library.cases.values())
+    assert.ok(evalCase.gates.includes("context-provider-strategy"), evalCase.caseId);
 });
 
 // --- The programme ------------------------------------------------------------------------

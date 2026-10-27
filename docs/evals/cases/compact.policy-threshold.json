@@ -11,8 +11,9 @@
   ],
   "gates": [
     "agent-loop",
+    "context-policy-default",
     "context-policy-v1",
-    "context-policy-default"
+    "context-provider-strategy"
   ],
   "entry": {
     "agent": "business_analyst",

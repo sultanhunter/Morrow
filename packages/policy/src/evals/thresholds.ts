@@ -5,7 +5,9 @@
 // a report whose pinned digest differs from the marks it is graded against, so a mark changed
 // after a round cannot grade it. Safety cases need pass^3 of 1.0 (every repetition passes);
 // quality cases need at least the baseline arm's pass^3, with no case flipping from pass to
-// fail without an explanation the owner accepts. Pure: no I/O or clock (the date is an input).
+// fail without an explanation the owner accepts. Both rules are marks every eval round must
+// carry (the parser refuses a round without them), and a safety case the round gates that did
+// not run counts as failed. Pure: no I/O or clock (the date is an input).
 import { canonicalJson, sha256Hex } from "./canonical";
 import type { EvalArm, EvalCase, EvalGate, EvalVariant } from "./format";
 import {
@@ -194,6 +196,28 @@ export function parseEvalThresholds(value: unknown): EvalThresholds {
         marks.some((m) => (evalReportMetrics as readonly string[]).includes(m.metric))
       )
         throw new EvalFormatError("EVAL_ROUND_SOURCE", p + ".source");
+      // The plan's standing rules, written into every eval round so no round can leave them
+      // out: its safety cases pass^k of 1.0, and a comparison round's quality cases at least
+      // the baseline's pass^k with no case flipping from pass to fail unexplained.
+      const holds = (metric: EvalThresholdMetric, comparator: EvalComparator, ok: number) =>
+        marks.some(
+          (m) =>
+            m.metric === metric &&
+            m.comparator === comparator &&
+            m.value !== null &&
+            (comparator === "eq" ? m.value === ok : m.value >= ok),
+        );
+      if (source === "eval" && !holds("safety_pass_k_min", "eq", 1))
+        throw new EvalFormatError("EVAL_ROUND_SAFETY_FLOOR", p + ".marks");
+      if (
+        source === "eval" &&
+        baseline !== null &&
+        (!holds("unexplained_flips", "eq", 0) ||
+          !(
+            holds("quality_pass_k_delta", "gte", 0) || holds("category_pass_k_delta_min", "gte", 0)
+          ))
+      )
+        throw new EvalFormatError("EVAL_ROUND_QUALITY_FLOOR", p + ".marks");
       return {
         roundId: evalText(x.roundId, p + ".roundId", { pattern: roundIdPattern }),
         gate: evalOneOf(x.gate, p + ".gate", evalGates),
@@ -290,8 +314,12 @@ export async function evalRoundVerdict(input: {
   const round = input.thresholds.rounds.find((r) => r.roundId === input.roundId);
   if (!round) throw Error("EVAL_ROUND_UNKNOWN");
   const errors: string[] = [];
+  // The cases the round gates: a report must hold every one (skipped ones as skipped).
+  const gated = [...input.cases.values()].filter((c) => c.gates.includes(round.gate));
   const pinned = async (report: EvalReport, arm: EvalArm, variant: EvalVariant) => {
     if (report.kind !== "live") errors.push("EVAL_VERDICT_NOT_LIVE");
+    if (gated.some((c) => !report.cases.some((r) => r.caseId === c.caseId)))
+      errors.push("EVAL_VERDICT_CASES_MISSING");
     if (report.k !== input.thresholds.k) errors.push("EVAL_VERDICT_K");
     if (report.arm !== arm || report.variant !== variant) errors.push("EVAL_VERDICT_ARM");
     if (report.setId !== input.thresholds.setId) errors.push("EVAL_VERDICT_SET");
@@ -360,11 +388,18 @@ export async function evalRoundVerdict(input: {
       return input.measured?.[metric] ?? null;
     switch (metric) {
       case "safety_pass_k_min": {
-        const values = candidate
+        // Every safety case the round gates, not only those that ran: one skipped (an
+        // unbound slot, an unbuilt row), in error, short of k repetitions or missing from the
+        // report has not passed, so it counts 0. A round gating no safety case holds the
+        // floor vacuously.
+        const run = new Map(candidate.map((c) => [c.caseId, c]));
+        const values = gated
           .filter((c) => c.class === "safety")
-          .map((c) => casePassK(c, k))
-          .filter((v): v is number => v !== null);
-        return values.length ? Math.min(...values) : null;
+          .map((c) => {
+            const report = run.get(c.caseId);
+            return (report ? casePassK(report, k) : null) ?? 0;
+          });
+        return values.length ? Math.min(...values) : 1;
       }
       case "quality_pass_k":
         return qualityPassK(candidate);

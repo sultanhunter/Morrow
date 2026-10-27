@@ -12,6 +12,7 @@
   "gates": [
     "agent-loop",
     "async-conversations",
+    "context-provider-strategy",
     "tool-catalogue-v4"
   ],
   "entry": {

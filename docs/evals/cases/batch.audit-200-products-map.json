@@ -13,7 +13,8 @@
     "agent-loop",
     "agent-map",
     "agent-run-safety-v1",
-    "catalogue-max-tokens"
+    "catalogue-max-tokens",
+    "context-provider-strategy"
   ],
   "entry": {
     "agent": "morrow",

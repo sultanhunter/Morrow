@@ -10,7 +10,8 @@
   ],
   "gates": [
     "agent-loop",
-    "agent-run-safety-v1"
+    "agent-run-safety-v1",
+    "context-provider-strategy"
   ],
   "entry": {
     "agent": "morrow",

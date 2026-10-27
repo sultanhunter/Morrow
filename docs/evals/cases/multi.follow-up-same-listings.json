@@ -11,8 +11,9 @@
   ],
   "gates": [
     "agent-loop",
-    "teammate-calls",
-    "follow-up-default"
+    "context-provider-strategy",
+    "follow-up-default",
+    "teammate-calls"
   ],
   "entry": {
     "agent": "morrow",

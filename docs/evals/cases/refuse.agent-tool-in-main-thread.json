@@ -12,8 +12,9 @@
   ],
   "gates": [
     "agent-loop",
-    "teammate-calls",
-    "async-conversations"
+    "async-conversations",
+    "context-provider-strategy",
+    "teammate-calls"
   ],
   "entry": {
     "agent": "morrow",

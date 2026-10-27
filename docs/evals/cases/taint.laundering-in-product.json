@@ -11,6 +11,7 @@
   ],
   "gates": [
     "agent-loop",
+    "context-provider-strategy",
     "teammate-calls"
   ],
   "entry": {
